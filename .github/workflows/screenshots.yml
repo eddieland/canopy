@@ -80,7 +80,7 @@ jobs:
 
       # Recompresses the images this run wrote with oxipng, losslessly: the same pixels, about a fifth smaller, so each
       # regeneration adds less to the history. Only those images, so the rest keep their bytes. A pinned release,
-      # checked against its digest; Ubuntu packages none.
+      # checked against its digest; Ubuntu packages none. `make screenshots` (ui/scripts/screenshots.sh) reads this pin.
       - name: Optimize the images written
         env:
           OXIPNG_VERSION: 10.0.0

@@ -75,13 +75,18 @@ worker_timeout_minutes = 45
 # all three take.
 # worker_cmd_prefix = "canopy-sandbox worker --read {definitions_dir} --"
 # worker_cmd_suffix = "--model provider/model"
-# Optional: commands the overseer may run beyond `canopy` and `treehouse status`, such as a tracker's CLI while its MCP
-# server is down. An allow in your runtime's own config cannot beat canopy's deny; these can (DESIGN §13). Only the
-# overseer takes any. canopy refuses a shell, an interpreter, a wrapper such as env or xargs, git, gh, curl, and its own
-# tools, and you answer for what an allowed command can do (TRUST_MODEL T1). Tell the overseer when to use them in
-# paths.overseer_instructions. `canopy agents` lists them.
+# Optional: commands an agent may run beyond its own bash rules, such as a tracker's CLI for the overseer while its MCP
+# server is down. An allow in your runtime's own config cannot beat canopy's deny; these can (DESIGN §13). The
+# overseer, planner, worker, and worker-private take them; the overseer runs only `canopy`, `treehouse status`, and
+# these, the planner only these, and a worker every command but those its rules deny, so for one an allow undoes a
+# deny, such as the private worker's of a tracker's CLI (TRUST_MODEL T6). canopy refuses a shell, an interpreter, a
+# wrapper such as env or xargs, git, gh, curl, and its own tools, and you answer for what an allowed command can do
+# (TRUST_MODEL T1). Tell the overseer when to use them in paths.overseer_instructions, and the planner and workers in
+# paths.worker_instructions. `canopy agents` lists them.
 # [runtime.allow_bash]
 # overseer = ["jira issue list *", "jira issue view *"]
+# planner = ["jira issue view *"]
+# worker-private = ["jira issue view *"]
 
 [loop]
 # `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
@@ -143,6 +148,9 @@ prompt_overrides = "~/.config/canopy/prompts"
 # <clone>/<workspace>/, with its status and approval, commits, and pushes to the clone's upstream (DESIGN §25). Plans
 # hold what planners read of your tickets: keep the repository private. `canopy archive DIR` does the copy by hand.
 # plan_archive = "~/src/plans"
+# Set false to archive into the clone's top level rather than <clone>/<workspace>/, for a repository that holds this
+# workspace's plans alone. Only what canopy wrote there is committed: each ticket's directory and its own README.md.
+# plan_archive_workspace_dir = true
 # Each plan goes with the prompt its planner was given, which carries your messages and standing instructions. Set
 # false to archive plans alone; `canopy archive DIR` copies prompts either way.
 # plan_archive_prompts = true

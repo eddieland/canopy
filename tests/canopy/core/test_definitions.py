@@ -636,7 +636,9 @@ def test_an_example_chores_agent_may_call_its_history_tool_too(agent: str) -> No
 
 def test_the_planner_has_no_shell_or_subagent_tools() -> None:
     frontmatter = (resources.agents_dir() / f"{agents.PLANNER}.md").read_text().split("---")[1]
-    for tool in ("bash", "task", "external_directory"):
+    # Its shell denies every command, but those `runtime.allow_bash` names for it, rendered after.
+    assert '\n  bash:\n    "*": deny\n' in frontmatter
+    for tool in ("task", "external_directory"):
         assert f"\n  {tool}: deny\n" in frontmatter
 
 
@@ -783,6 +785,44 @@ def test_the_overseer_may_run_the_commands_config_allows_it_and_its_snapshot_say
     assert definitions.digest(cfg) != definitions.digest(before)
     canopy_env.configure(canopy_env.user_file, {"runtime": {"allow_bash": {"overseer": []}}})
     assert definitions.digest(config.load(canopy_env.root, canopy_env.user_file)) == definitions.digest(before)
+
+
+def test_the_private_worker_may_run_the_tracker_reads_config_allows_it_and_no_more(canopy_env: CanopyEnv) -> None:
+    before = config.load(canopy_env.root, canopy_env.user_file)
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"allow_bash": {"worker-private": ["jira issue view *"]}}})
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    rendered = definitions.sources(cfg)
+    rules = _rules_in(rendered[f"agents/{agents.PRIVATE_WORKER}.md"].decode(), "bash")
+    assert rules[-1] == ("jira issue view *", "allow")
+    assert _allowed(rules, "jira issue view PROJ-1 --plain")
+    for refused in (
+        "jira issue comment add PROJ-1",
+        "acli jira workitem view PROJ-1",
+        "gh issue view 1",
+        "canopy tick",
+    ):
+        assert not _allowed(rules, refused), refused
+    shipped = definitions.sources(before)
+    assert [rel for rel in rendered if rendered[rel] != shipped[rel]] == [f"agents/{agents.PRIVATE_WORKER}.md"]
+
+
+def test_the_planner_may_run_the_tracker_reads_config_allows_it_and_no_more(canopy_env: CanopyEnv) -> None:
+    # A fallback for the tracker's MCP server while it is down: the planner reads the ticket with its CLI instead.
+    before = config.load(canopy_env.root, canopy_env.user_file)
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"allow_bash": {"planner": list(JIRA_CLI_READS)}}})
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    rendered = definitions.sources(cfg)
+    ruleset = _opencode_ruleset(rendered[f"agents/{agents.PLANNER}.md"].decode())
+    rules = _rules_in(rendered[f"agents/{agents.PLANNER}.md"].decode(), "bash")
+    assert rules == [("*", "deny"), *((pattern, "allow") for pattern in JIRA_CLI_READS)]
+    assert not _opencode_disabled(ruleset, "bash")
+    assert _allowed(rules, "jira issue view PROJ-1 --plain")
+    for refused in ("jira issue comment add PROJ-1", "acli jira workitem view PROJ-1", "git log", "canopy tick"):
+        assert not _allowed(rules, refused), refused
+    # It still writes nothing but its plan.
+    assert _opencode_action(ruleset, "edit", "desks/PROJ-1/notes.md") == "deny"
+    shipped = definitions.sources(before)
+    assert [rel for rel in rendered if rendered[rel] != shipped[rel]] == [f"agents/{agents.PLANNER}.md"]
 
 
 @pytest.mark.parametrize("agent", runtime_definitions.agent_names())

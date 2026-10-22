@@ -30,31 +30,30 @@ a reaction whose outcome is unknown is one to send again, never one that can pos
 It never approves, requests changes, resolves a thread, or deletes a review but the pending one it is handed, or one it
 opened and could not fill.
 
-Exit codes: 0 posted; 1 GitHub refused, or the outcome is unknown, as the `end` line says; 2 stdin is not usable, `gh`
-holds no token for the host, or a reply names a comment the PR has no thread for, and nothing was posted. A comment
-GitHub refuses, as on a line its diff of the PR does not show, posts nothing of the review, and the error names it.
+Exit codes: 0 posted; 1 GitHub refused, or the outcome is unknown, as the `end` line says; 2 stdin or the command line
+is not usable, `gh` holds no token for the host, or a reply names a comment the PR has no thread for, and nothing was
+posted. A comment GitHub refuses, as on a line its diff of the PR does not show, posts nothing of the review, and the
+error names it.
 """
 
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TextIO
 
+import click
+
 from canopy_github import (
     Client,
-    Endpoint,
     GitHubError,
+    Hosts,
     InputError,
     Ref,
-    Token,
     client_for,
     emit,
-    endpoint,
-    gh_token,
     items,
     number,
     obj,
@@ -224,31 +223,22 @@ class Out:
             self.ended = True
 
 
-def run(
-    argv: Sequence[str],
-    stdin: TextIO,
-    stdout: TextIO,
-    *,
-    endpoint_of: Endpoint = endpoint,
-    token_of: Token = gh_token,
-) -> int:
-    """Post what `stdin` holds, and print what was posted on `stdout`.
+@click.command("canopy-post-github", context_settings={"help_option_names": ["-h", "--help"]})
+@click.pass_context
+def main(ctx: click.Context) -> None:
+    """Post what the operator approved in canopy, word for word (DESIGN §29, §34).
 
-    `endpoint_of` and `token_of` map a host to its GraphQL endpoint and its token.
-
-    Returns:
-        The exit code: 0 posted, 1 refused or unknown, 2 nothing posted for want of usable input.
+    What to post is one JSON object on stdin; what was posted is JSON lines on stdout, the `end` line last.
     """
-    parser = argparse.ArgumentParser(prog="canopy-post-github", description=__doc__.split("\n", 1)[0])
-    parser.parse_args(argv)
-    out = Out(stdout)
+    hosts = ctx.find_object(Hosts) or Hosts()
+    out = Out(sys.stdout)
     try:
-        request = parse_request(read_input(stdin))
+        request = parse_request(read_input(sys.stdin))
         ref = request.pr if isinstance(request, Review) else request.issue
-        client = client_for(ref.host, endpoint_of, token_of)
+        client = client_for(ref.host, hosts.endpoint_of, hosts.token_of)
     except InputError as e:
         print(f"canopy-post-github: {e}", file=sys.stderr)  # noqa: T201
-        return 2
+        ctx.exit(2)
     try:
         login = _id(obj(client.query(_VIEWER, {}).get("viewer"), "viewer").get("login"), "viewer's login")
         out.line({"kind": "as", "login": login})
@@ -260,14 +250,13 @@ def run(
         # Refused before anything was opened, so nothing was posted.
         out.line({"kind": "end", "submitted": False})
         print(f"canopy-post-github: {e}", file=sys.stderr)  # noqa: T201
-        return 2
+        ctx.exit(2)
     except GitHubError as e:
         # Anything but an unknown submit failed before what it posted could be seen.
         if not out.ended and not isinstance(e, UnknownOutcomeError):
             out.line({"kind": "end", "submitted": False})
         print(f"canopy-post-github: {e}", file=sys.stderr)  # noqa: T201
-        return 1
-    return 0
+        ctx.exit(1)
 
 
 def parse_request(request: Mapping[str, object]) -> Review | IssueComment:
@@ -589,12 +578,3 @@ def post_comment(client: Client, comment: IssueComment, out: Out) -> None:
     node = obj(obj(data.get("commentEdge"), "commentEdge").get("node"), "comment")
     out.line({"kind": "comment", "id": number(node.get("fullDatabaseId")), "url": node.get("url")})
     out.line({"kind": "end", "submitted": True})
-
-
-def main() -> int:
-    """The `canopy-post-github` command.
-
-    Returns:
-        The exit code.
-    """
-    return run(sys.argv[1:], sys.stdin, sys.stdout)

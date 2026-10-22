@@ -1,7 +1,7 @@
 """Builds the web UI into canopy's wheel (D079), so an installed canopy always has it.
 
 The wheel carries ui/dist as `canopy/_data/ui`, where canopy.infra.resources finds it. When npm is on PATH and node
-meets ui/package.json's `engines.node` floor, the hook builds it first (`npm ci` if ui/node_modules is missing, then
+meets ui/package.json's `engines.node` floor, the hook builds it first (`npm ci` if ui/node_modules has no vite, then
 `npm run build`). Without a usable npm it bundles an existing ui/dist, and fails the build if there is none: a wheel
 without the UI is never built. So an install from git needs Node. Editable installs skip all of this: they read ui/dist
 from the checkout.
@@ -37,7 +37,9 @@ class UIBuildHook(BuildHookInterface):
         engines = json.loads((ui / "package.json").read_text())["engines"]["node"]
         npm, why = _usable_npm(engines)
         if npm is not None:
-            if not (ui / "node_modules").is_dir():
+            # Not whether node_modules exists: an interrupted `npm ci` leaves packages without .bin, and uv reuses its
+            # git checkout, so every later install would fail at `vite build`. `npm ci` wipes a partial tree first.
+            if not (ui / "node_modules" / ".bin" / "vite").exists():
                 subprocess.run([npm, "ci", "--no-audit", "--no-fund"], cwd=ui, check=True)
             subprocess.run([npm, "run", "build"], cwd=ui, check=True)
         if not index.is_file():

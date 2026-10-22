@@ -50,6 +50,7 @@ from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
+from canopy.reviews import waiting as review_waiting
 from canopy.runs import drafted, policy, reconcile
 from canopy.runs import tasks as task_starts
 from canopy.runtime import project_config, stdout
@@ -534,8 +535,7 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
         _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail)
     for remembered in memory_attention.items(ctx.conn, ctx.config):
         _harness_item(ctx, tick_id, remembered.ticket_key, remembered.reason, remembered.detail)
-    for draft in drafted.waiting(ctx.conn):
-        _harness_item(ctx, tick_id, draft.ticket_key, drafted.WAITING_REASON, draft.detail, repo=draft.repo)
+    _record_drafts(ctx, tick_id)
     for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
         _harness_item(ctx, tick_id, None, chore_view.FAILED_REASON, failed.detail, chore=failed.chore)
     _record_connector_failed(ctx, tick_id)
@@ -548,6 +548,15 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
             _harness_item(ctx, tick_id, None, "repo_missing", detail, repo=repo.name)
 
 
+def _record_drafts(ctx: Context, tick_id: int) -> None:
+    """Record the items of the drafts that wait on the operator: a run's replies (§29), and a review's (§34)."""
+    for draft in drafted.waiting(ctx.conn):
+        _harness_item(ctx, tick_id, draft.ticket_key, drafted.WAITING_REASON, draft.detail, repo=draft.repo)
+    # A review the operator asked for, and a draft staged or of unknown outcome, are about a PR no ticket owns.
+    for review in review_waiting.items(ctx.conn):
+        _harness_item(ctx, tick_id, None, review.reason, review.detail, pr=review.pr)
+
+
 def _harness_item(
     ctx: Context,
     tick_id: int,
@@ -557,10 +566,21 @@ def _harness_item(
     *,
     repo: str | None = None,
     chore: str | None = None,
+    pr: str | None = None,
 ) -> None:
     """Record an attention item the harness raises, marked as its own (DESIGN §37, TRUST_MODEL T5)."""
     action = f"{attention.ACTION_PREFIX}{reason}"
-    db.record_decision(ctx.conn, tick_id, key, action, detail, repo=repo, chore=chore, decider=Decider.HARNESS)
+    db.record_decision(
+        ctx.conn,
+        tick_id,
+        key,
+        action,
+        detail,
+        repo=repo,
+        chore=chore,
+        pr=pr,
+        decider=Decider.HARNESS,
+    )
 
 
 def _record_connector_failed(ctx: Context, tick_id: int) -> None:

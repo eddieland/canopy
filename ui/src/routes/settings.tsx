@@ -60,17 +60,22 @@ const THEMES: { value: ThemePreference; label: string; icon: LucideIcon }[] = [
 const LIGHT_PALETTES: { value: Palette<'light'>; label: string }[] = [
     { value: 'lavender', label: 'Lavender' },
     { value: 'off-white', label: 'Off-white' },
+    { value: 'sage', label: 'Sage' },
     { value: 'solarized', label: 'Solarized' },
     { value: 'nord', label: 'Nord' },
     { value: 'gruvbox', label: 'Gruvbox' },
+    { value: 'rose-pine', label: 'Rosé Pine' },
 ]
 
 const DARK_PALETTES: { value: Palette<'dark'>; label: string }[] = [
     { value: 'indigo', label: 'Indigo' },
     { value: 'grey', label: 'Grey' },
     { value: 'black', label: 'Black' },
+    { value: 'forest', label: 'Forest' },
+    { value: 'plum', label: 'Plum' },
     { value: 'solarized', label: 'Solarized' },
     { value: 'gruvbox', label: 'Gruvbox' },
+    { value: 'monokai', label: 'Monokai' },
 ]
 
 const SPEEDS: { value: TickerSpeed; label: string }[] = [
@@ -144,10 +149,11 @@ function ThemePanel() {
             </div>
             <PaletteRow theme="light" value={palettes.light} options={LIGHT_PALETTES}>
                 The light theme&apos;s neutrals: lavender, which tints the canvas with the accent&apos;s hue, a warm
-                off-white, or an editor scheme&apos;s light tones.
+                off-white, a soft sage, or an editor scheme&apos;s light tones.
             </PaletteRow>
             <PaletteRow theme="dark" value={palettes.dark} options={DARK_PALETTES}>
-                The dark theme&apos;s: an indigo slate, a plain grey, a near black, or a scheme&apos;s dark tones.
+                The dark theme&apos;s: an indigo slate, a plain grey, a near black, a deep forest green, a plum, or a
+                scheme&apos;s dark tones.
             </PaletteRow>
         </Panel>
     )
@@ -537,10 +543,10 @@ function ReviewsPanel() {
             <div className="flex items-center justify-between gap-4 p-3">
                 <div className="flex flex-col gap-1">
                     <p className="max-w-3xl text-sm text-muted-foreground">
-                        The personas a review you request on the Reviews page is written in, one review in each. Its
-                        form starts from them; you can still pick others for one request. The default leaves it to your
-                        config&apos;s <code className="font-mono text-xs">[personas] reviewer</code>. This choice is
-                        yours alone: the loop&apos;s own reviews never read it.
+                        The personas a review you request on the Reviews page, or from a PR&apos;s page, is written in,
+                        one review in each. Both start from them; you can still pick others for one request. The default
+                        leaves it to your config&apos;s <code className="font-mono text-xs">[personas] reviewer</code>.
+                        This choice is yours alone: the loop&apos;s own reviews never read it.
                     </p>
                     {left.length > 0 && (
                         <p className="max-w-3xl text-sm text-status-blocked" data-testid="review-personas-left">

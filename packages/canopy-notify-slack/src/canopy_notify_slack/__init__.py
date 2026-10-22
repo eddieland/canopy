@@ -18,17 +18,16 @@ Each thread starts with a post of the same shape, naming what it is about, and e
 A reply stays in its thread, unless `--broadcast` names what it holds, such as `--broadcast blocked` for a worker's
 question: then it is shown in the channel too.
 
-Exit codes: 0 posted (a 2xx reply, and `"ok": true` from the Web API); 1 the post failed, with Slack's reply on
-stderr; 2 the secret file, the channel, the threads file, or the message on stdin is not usable, saying which. canopy
-retries anything but 0 on its next tick.
+Exit codes: 0 posted (a 2xx reply, and `"ok": true` from the Web API); 1 the post failed, with Slack's reply on stderr;
+2 the command line, the secret file, the channel, the threads file, or the message on stdin is not usable, saying which.
+canopy retries anything but 0 on its next tick.
 
-Stdlib only, importing nothing from canopy: canopy runs it as a command, so the process that holds the journal and
-enforces the guards never opens a connection or reads this secret (D035).
+click for its command line (D025), and nothing from canopy: canopy runs it as a command, so the process that holds
+the journal and enforces the guards never opens a connection or reads this secret (D035).
 """
 
 from __future__ import annotations
 
-import argparse
 import fcntl
 import functools
 import hashlib
@@ -41,12 +40,14 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol, TextIO
+from typing import Protocol
+
+import click
 
 SLACK_PREFIX = "https://hooks.slack.com/"
 SLACK_API_URL = "https://slack.com/api/chat.postMessage"
@@ -61,6 +62,8 @@ _CHANNEL = re.compile(r"#?[A-Za-z0-9._-]{1,80}")
 # An emoji code (`:robot_face:`), with an optional skin tone (`:wave::skin-tone-3:`).
 _EMOJI = re.compile(r"(?::[a-z0-9_+'-]{1,100}:){1,2}")
 _MAX_USERNAME = 80
+# A name canopy gives a reason, such as `needs_reviewer`; a chore's finding names its own, which stays as written.
+_SNAKE = re.compile(r"[a-z]+(?:_[a-z]+)+")
 
 
 class SinkError(Exception):
@@ -215,7 +218,21 @@ def escape(text: object) -> str:
     Returns:
         `text` as a string on one line, its runs of whitespace made single spaces, and `&`, `<` and `>` escaped.
     """
-    return " ".join(str(text).split()).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return _escaped(" ".join(str(text).split()))
+
+
+def _escaped(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _reason(reason: object) -> str:
+    """An attention item's reason, escaped, a snake_case name such as `needs_reviewer` in words: `needs reviewer`.
+
+    Returns:
+        The escaped Slack text.
+    """
+    text = escape(reason)
+    return text.replace("_", " ") if _SNAKE.fullmatch(text) else text
 
 
 def _subject(ticket: object, repo: object) -> str:
@@ -269,16 +286,17 @@ def render(message: Mapping[str, object]) -> str:
             counts.append(f"{len(added)} new, {len(resolved)} resolved, {attention.get('open', 0)} open")
         for a in added:
             what = _named(_subject(a.get("ticket"), a.get("repo")), a.get("title"))
-            lines.append(f"+ {what} · {escape(a.get('reason'))}: {escape(a.get('detail'))}")
+            lines.append(f"+ {what} · {_reason(a.get('reason'))}: {escape(a.get('detail'))}")
         lines += [
-            f"- {_named(_subject(r.get('ticket'), r.get('repo')), r.get('title'))} · {escape(r.get('reason'))}"
+            f"- {_named(_subject(r.get('ticket'), r.get('repo')), r.get('title'))} · {_reason(r.get('reason'))}"
             + (" (dismissed)" if r.get("dismissed") is True else "")
             for r in resolved
         ]
     events = _dicts(message.get("events"))
     if events:
         counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
-    lines += [escape(e.get("line") or e.get("kind")) for e in events]
+    # Each event's first line as its block shows it, so a notification reads as the message does.
+    lines += [_event_lines(e)[0] for e in events]
     omitted = message.get("omitted")
     if isinstance(omitted, int) and omitted:
         lines.append(f"_... and {omitted} more: see `canopy status`_")
@@ -307,17 +325,26 @@ _SPENT = (
     ("plans", "plans"),
     ("chores", "chores"),
     ("reviews", "reviews"),
+    ("tasks", "tasks"),
     ("dry_run", "dry runs"),
 )
-_URL = re.compile(r"https?://[^\s|]+")
+# A URL in journal text: it runs to a space or an angle bracket, and starts a word or follows punctuation.
+_URL = re.compile(r"(?<![\w/])https?://[^\s<>]+")
+# What ends a sentence or wraps a URL, never the URL's own last character.
+_TRAILING = ".,:;!?'\"`*_~"
+_CLOSING = {")": "(", "]": "["}
 # A link canopy sends to a page of its web UI: a URL's own characters only, so it needs no escaping but `&`, and no `|`
 # can put a label of its own in it. The same class as `serve.url`'s check in canopy's config (`_UI_URL_RE`).
 _PAGE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
 _MAX_PAGE = 2000
+#: Each status a run, a chore's run, or a review's run ends with, as the emoji that leads its line.
 _STATUS_EMOJI = {
     "done": ":white_check_mark:",
+    "ok": ":white_check_mark:",
     "blocked": ":raising_hand:",
     "failed": ":x:",
+    "unknown": ":grey_question:",
+    "unpushed": ":warning:",
     "crashed": ":boom:",
     "timeout": ":hourglass:",
     "abandoned": ":wastebasket:",
@@ -347,12 +374,37 @@ def _context(*parts: str) -> Block:
 def _linked(text: object) -> str:
     """`text`, escaped, each URL in it a link that shows the URL itself.
 
-    A URL holding `|` stays text: in a link, what follows `|` is a label shown in the URL's place.
+    The punctuation around a URL stays out of its link: a trailing `.`, `:` or quote, and a `)` or `]` the URL does
+    not open. A URL holding `|` stays text: in a link, what follows `|` is a label shown in the URL's place.
 
     Returns:
         The escaped Slack text.
     """
-    return " ".join(f"<{word}>" if _URL.fullmatch(word) else word for word in escape(text).split(" "))
+    flat = " ".join(str(text).split())
+    out: list[str] = []
+    at = 0
+    for match in _URL.finditer(flat):
+        url = _trimmed(match.group())
+        if "|" in match.group() or url.endswith("//"):
+            continue
+        out += [_escaped(flat[at : match.start()]), f"<{_escaped(url)}>"]
+        at = match.start() + len(url)
+    return "".join([*out, _escaped(flat[at:])])
+
+
+def _trimmed(url: str) -> str:
+    """`url` without the punctuation that ends it in prose: what `_TRAILING` names, and an unopened `)` or `]`.
+
+    Returns:
+        The URL as it was meant.
+    """
+    while url:
+        last = url[-1]
+        if last in _TRAILING or (last in _CLOSING and url.count(last) > url.count(_CLOSING[last])):
+            url = url[:-1]
+        else:
+            break
+    return url
 
 
 def _open(page: object) -> str:
@@ -409,9 +461,15 @@ def _quote(label: str, text: object) -> str:
 
 
 def _counted(counts: object) -> str:
+    """Each name in `counts` after its count, the largest first: `23 ok, 1 error`.
+
+    Returns:
+        The escaped Slack text, or `none` when there are no counts.
+    """
     if not isinstance(counts, dict) or not counts:
         return "none"
-    return ", ".join(f"{escape(k)} {escape(v)}" for k, v in sorted(counts.items(), key=lambda kv: str(kv[0])))
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1] if isinstance(kv[1], int) else 0, str(kv[0])))
+    return ", ".join(f"{escape(v)} {_reason(k)}" for k, v in ordered)
 
 
 def _run_started(e: Mapping[str, object]) -> list[str]:
@@ -435,11 +493,65 @@ def _run_ended(e: Mapping[str, object]) -> list[str]:
     ]
 
 
+def _findings(count: object) -> str:
+    if not count:
+        return "no findings"
+    return f"{escape(count)} finding{'s' if count != 1 else ''}"
+
+
+def _plan_proposed(e: Mapping[str, object]) -> list[str]:
+    return [
+        f":clipboard: {_named(e.get('ticket'), e.get('title'))} · plan {escape(e.get('plan'))} waits on your approval",
+        f"_read it with_ `canopy show {escape(e.get('ticket'))}`",
+    ]
+
+
+def _plan_approved(e: Mapping[str, object]) -> list[str]:
+    which = "feedback plan" if e.get("feedback") is True else "plan"
+    return [
+        (
+            f":ballot_box_with_check: {_named(e.get('ticket'), e.get('title'))} · {which} {escape(e.get('plan'))} "
+            "approved by its planner"
+        ),
+        _quote("Why", e.get("reason")),
+    ]
+
+
+def _follow_ups_filed(e: Mapping[str, object]) -> list[str]:
+    given = e.get("follow_ups")
+    filed: list[tuple[str, object]] = [(str(k), v) for k, v in given.items()] if isinstance(given, dict) else []
+    count = e.get("count")
+    total = count if isinstance(count, int) and count > len(filed) else len(filed)
+    named = [f"*{escape(k)}*" + (f" ({escape(v)})" if v else "") for k, v in filed]
+    if total > len(filed):
+        named.append(f"{total - len(filed)} more")
+    return [
+        (
+            f":seedling: {_named(e.get('ticket'), e.get('title'))} · run {escape(e.get('run'))} filed {total} "
+            f"follow-up{'s' if total != 1 else ''}"
+        ),
+        ", ".join(named),
+        "_label or `canopy start` each one you want worked_",
+    ]
+
+
+def _task_ended(e: Mapping[str, object]) -> list[str]:
+    head = str(e.get("head") or "")[:12]
+    tickets = _lines(e.get("tickets"))
+    return [
+        _ended(e, f"*task {escape(e.get('task'))}* · run {escape(e.get('run'))}"),
+        _linked(e.get("pr")) if e.get("pr") else "",
+        _linked(e.get("summary")) if e.get("summary") else "",
+        _quote("Question", e.get("question")),
+        f"`{escape(e.get('branch'))}` at `{escape(head)}`" if e.get("branch") and head else "",
+        f"filed {', '.join(f'*{escape(t)}*' for t in tickets)}" if tickets else "",
+    ]
+
+
 def _chore_ended(e: Mapping[str, object]) -> list[str]:
-    findings = e.get("findings") or 0
     return [
         _ended(e, f"*chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}")
-        + f" · {escape(findings)} finding{'s' if findings != 1 else ''}",
+        + f" · {_findings(e.get('findings'))}",
         _linked(e.get("summary")) if e.get("summary") else "",
     ]
 
@@ -447,8 +559,7 @@ def _chore_ended(e: Mapping[str, object]) -> list[str]:
 def _review_ended(e: Mapping[str, object]) -> list[str]:
     ticket = f"{_named(e.get('ticket'), e.get('title'))} · " if e.get("ticket") else ""
     verdict = " ".join(escape(x) for x in (e.get("verdict"), e.get("impact")) if x)
-    findings = e.get("findings") or 0
-    counted = f" · {escape(findings)} finding{'s' if findings != 1 else ''}" if verdict else ""
+    counted = f" · {_findings(e.get('findings'))}" if verdict else ""
     return [
         _ended(e, f"{ticket}review run {escape(e.get('run'))}") + (f": {verdict}{counted}" if verdict else ""),
         _linked(e.get("pr")) if e.get("pr") else "",
@@ -481,6 +592,10 @@ def _test(e: Mapping[str, object]) -> list[str]:
 _EVENTS: dict[str, Callable[[Mapping[str, object]], list[str]]] = {
     "run.started": _run_started,
     "run.ended": _run_ended,
+    "plan.proposed": _plan_proposed,
+    "plan.approved": _plan_approved,
+    "follow_ups.filed": _follow_ups_filed,
+    "task.ended": _task_ended,
     "chore.ended": _chore_ended,
     "review.ended": _review_ended,
     "loop.failing": _loop_failing,
@@ -496,16 +611,25 @@ def _event(e: Mapping[str, object]) -> Block:
     Returns:
         The section block, its first line linking to the event's page in the web UI when canopy sent one.
     """
-    build = _EVENTS.get(str(e.get("kind")))
-    first, *rest = build(e) if build is not None else [_linked(e.get("line") or e.get("kind"))]
+    first, *rest = _event_lines(e)
     return _section(_with_open(first, e.get("ui")), *rest)
+
+
+def _event_lines(e: Mapping[str, object]) -> list[str]:
+    """One event's lines, the first naming what happened. A kind this sink does not know shows its text-format line.
+
+    Returns:
+        The escaped Slack lines, at least one.
+    """
+    build = _EVENTS.get(str(e.get("kind")))
+    return build(e) if build is not None else [_linked(e.get("line") or e.get("kind"))]
 
 
 def _attention(attention: Mapping[str, object]) -> list[Block]:
     out = [_added(a) for a in _dicts(attention.get("added"))]
     resolved = [
         f":heavy_check_mark: ~{_titled(_subject(r.get('ticket'), r.get('repo')), r.get('title'))}~ "
-        f"{escape(r.get('reason'))}" + (" (dismissed)" if r.get("dismissed") is True else "")
+        f"{_reason(r.get('reason'))}" + (" (dismissed)" if r.get("dismissed") is True else "")
         for r in _dicts(attention.get("resolved"))
     ]
     if resolved:
@@ -519,7 +643,7 @@ def _added(a: Mapping[str, object]) -> Block:
     Returns:
         The section block.
     """
-    what = f":bell: {_named(_subject(a.get('ticket'), a.get('repo')), a.get('title'))} · {escape(a.get('reason'))}"
+    what = f":bell: {_named(_subject(a.get('ticket'), a.get('repo')), a.get('title'))} · {_reason(a.get('reason'))}"
     return _section(
         _with_open(what, a.get("ui")),
         _linked(a.get("detail")) if a.get("detail") else "",
@@ -534,8 +658,9 @@ def _digest(digest: Mapping[str, object]) -> list[Block]:
     attention: dict[str, object] = {str(k): v for k, v in given.items()} if isinstance(given, dict) else {}
     needs_you = "nothing"
     if attention.get("open"):
-        needs_you = f"{escape(attention.get('open'))} open ({_counted(attention.get('by_reason'))})"
+        needs_you = f"{escape(attention.get('open'))} open"
         needs_you += f", oldest {escape(attention.get('oldest'))}" if attention.get("oldest") else ""
+        needs_you += f"\n{_counted(attention.get('by_reason'))}"
     fields = [
         f"*Ticks*\n{total} ({_counted(ticks)})",
         f"*Workers running*\n{escape(digest.get('running', 0))}",
@@ -550,30 +675,38 @@ def _digest(digest: Mapping[str, object]) -> list[Block]:
     out: list[Block] = [
         {
             "type": "section",
-            "text": _mrkdwn(f"*Digest* since {_when(digest.get('since'))}"),
+            "text": _mrkdwn(f":bar_chart: *Digest* since {_when(digest.get('since'))}"),
             "fields": [_mrkdwn(f) for f in fields],
         },
     ]
     runs = [
-        f"{_STATUS_EMOJI['done']} {_named(d.get('ticket'), d.get('title'))} "
-        f"{_linked(d.get('pr')) if d.get('pr') else ''}".rstrip()
+        f"{_STATUS_EMOJI['done']} {_named(d.get('ticket'), d.get('title'))}"
+        + (f" · {_linked(d.get('pr'))}" if d.get("pr") else "")
         for d in _dicts(digest.get("done"))[:_DIGEST_LISTED]
     ]
     runs += [
-        f"{_STATUS_EMOJI['blocked']} {_named(b.get('ticket'), b.get('title'))}" for b in _dicts(digest.get("blocked"))
+        f"{_STATUS_EMOJI['blocked']} {_named(b.get('ticket'), b.get('title'))} · blocked"
+        for b in _dicts(digest.get("blocked"))[:_DIGEST_LISTED]
     ]
     if runs:
-        out.append(_section(*runs[: 2 * _DIGEST_LISTED]))
+        out.append(_section(*runs))
     return out
 
 
-# What the digest's span cost: the total, then each kind that reported a cost, in the order canopy's text lists them.
+# What the digest's span cost: the total, then each kind that reported a cost, in the order canopy's text lists them,
+# the idle ticks' part of the overseer's beside it.
 def _spent(spent: Mapping[str, object]) -> str:
     total = spent.get("total")
     if not isinstance(total, int | float):
         return "none reported"
-    parts = [f"{name} {_usd(usd)}" for kind, name in _SPENT if isinstance(usd := spent.get(kind), int | float)]
-    return f"{_usd(total)} ({', '.join(parts)})"
+    idle = spent.get("idle")
+    parts = [
+        f"{name} {_usd(usd)}"
+        + (f" (idle {_usd(idle)})" if kind == "overseer" and isinstance(idle, int | float) and idle else "")
+        for kind, name in _SPENT
+        if isinstance(usd := spent.get(kind), int | float)
+    ]
+    return f"*{_usd(total)}*" + (f"\n{', '.join(parts)}" if parts else "")
 
 
 def _usd(usd: float) -> str:
@@ -1066,94 +1199,112 @@ def read_message(stdin: str) -> dict[str, object]:
     return {str(k): v for k, v in parsed.items()}
 
 
-def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: str = SLACK_API_URL) -> int:
-    """Post the message on `stdin`.
+@dataclass(frozen=True)
+class Slack:
+    """Where the sink may post: Slack's own, unless a test gives its own."""
 
-    `prefix` is what the webhook URL must start with; `api_url` is where a token posts.
+    #: What the webhook URL must start with.
+    prefix: str = SLACK_PREFIX
+    #: Where a token posts.
+    api_url: str = SLACK_API_URL
 
-    Returns:
-        The exit code: 0 posted, 1 Slack refused the post, 2 the secret file, the channel, or the message is not
-        usable.
+
+@click.command("canopy-notify-slack", context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--webhook-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="The incoming webhook's URL. Default: $XDG_CONFIG_HOME/canopy/slack-webhook, or ~/.config/canopy/.",
+)
+@click.option("--channel", default=None, help="Post with a bot token to this channel id, not a webhook.")
+@click.option(
+    "--token-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="With --channel, the bot token. Default: $XDG_CONFIG_HOME/canopy/slack-token, or ~/.config/canopy/.",
+)
+@click.option("--username", default=None, help="With --channel, the name to post as.")
+@click.option("--icon-emoji", default=None, help="With --channel, the emoji to post with, such as :robot_face:.")
+@click.option(
+    "--threads",
+    is_flag=True,
+    help="With --channel, post each ticket's and review's messages in its own thread, a new one each day.",
+)
+@click.option(
+    "--broadcast",
+    "broadcasts",
+    multiple=True,
+    type=click.Choice(list(BROADCASTS)),
+    help="With --threads, also show in the channel a reply holding this; give it again for another: "
+    + "; ".join(f"{k}, {v}" for k, v in BROADCASTS.items())
+    + ".",
+)
+@click.pass_context
+def main(
+    ctx: click.Context,
+    *,
+    webhook_file: Path | None,
+    channel: str | None,
+    token_file: Path | None,
+    username: str | None,
+    icon_emoji: str | None,
+    threads: bool,
+    broadcasts: tuple[str, ...],
+) -> None:
+    """Post the canopy message on stdin to Slack: canopy's Slack sink (DESIGN §20).
+
+    It posts to an incoming webhook, or with --channel, with a bot token. Each secret is read from a file that is
+    yours alone.
     """
-    parser = argparse.ArgumentParser(
-        prog="canopy-notify-slack",
-        description=__doc__.split("\n", 1)[0],
-    )
-    parser.add_argument("--webhook-file", type=Path, default=None, help="default: " + str(default_webhook_file()))
-    parser.add_argument("--channel", default=None, help="post with a bot token to this channel id, not a webhook")
-    parser.add_argument("--token-file", type=Path, default=None, help="default: " + str(default_token_file()))
-    parser.add_argument("--username", default=None, help="with --channel, the name to post as")
-    parser.add_argument(
-        "--icon-emoji",
-        default=None,
-        help="with --channel, the emoji to post with, such as :robot_face:",
-    )
-    parser.add_argument(
-        "--threads",
-        action="store_true",
-        help="with --channel, post each ticket's and review's messages in its own thread, a new one each day",
-    )
-    parser.add_argument(
-        "--broadcast",
-        action="append",
-        choices=list(BROADCASTS),
-        default=[],
-        help="with --threads, also show in the channel a reply holding this; give it again for another: "
-        + "; ".join(f"{k}, {v}" for k, v in BROADCASTS.items()),
-    )
-    args = parser.parse_args(argv)
-    for given, flag in (
-        (args.token_file, "--token-file"),
-        (args.username, "--username"),
-        (args.icon_emoji, "--icon-emoji"),
-    ):
-        if args.channel is None and given is not None:
-            parser.error(f"{flag} needs --channel")
-    if args.channel is None and args.threads:
-        parser.error("--threads needs --channel")
-    if args.broadcast and not args.threads:
-        parser.error("--broadcast needs --threads")
-    if args.channel is not None and args.webhook_file is not None:
-        parser.error("--webhook-file and --channel are two ways to post; give one")
+    slack = ctx.find_object(Slack) or Slack()
+    _check_options(ctx.params)
     send: Callable[[str, list[Block]], tuple[bool, str]]
     threaded: tuple[Send, str] | None = None
     try:
-        if args.channel is None:
-            send = functools.partial(post, read_webhook(args.webhook_file or default_webhook_file(), prefix=prefix))
+        if channel is None:
+            send = functools.partial(post, read_webhook(webhook_file or default_webhook_file(), prefix=slack.prefix))
         else:
-            channel = check_channel(args.channel)
+            checked = check_channel(channel)
             to_channel = functools.partial(
                 post_message,
-                api_url,
-                read_token(args.token_file or default_token_file()),
-                channel,
-                username=None if args.username is None else check_username(args.username),
-                icon_emoji=None if args.icon_emoji is None else check_icon_emoji(args.icon_emoji),
+                slack.api_url,
+                read_token(token_file or default_token_file()),
+                checked,
+                username=None if username is None else check_username(username),
+                icon_emoji=None if icon_emoji is None else check_icon_emoji(icon_emoji),
             )
             send = to_channel
-            threaded = (to_channel, channel) if args.threads else None
-        parsed = read_message(stdin.read())
+            threaded = (to_channel, checked) if threads else None
+        parsed = read_message(sys.stdin.read())
         if threaded is None:
             ok, reply = send(render(parsed), blocks(parsed))
         else:
-            to_channel, channel = threaded
-            threads = Threads.load(default_threads_file(), channel, str(parsed.get("repo") or ""))
+            to_channel, checked = threaded
+            recorded = Threads.load(default_threads_file(), checked, str(parsed.get("repo") or ""))
             # Saved before anything is posted, so a file that cannot be written refuses the delivery whole.
-            threads.save()
-            ok, reply = post_threaded(parsed, to_channel, threads, frozenset(args.broadcast))
+            recorded.save()
+            ok, reply = post_threaded(parsed, to_channel, recorded, frozenset(broadcasts))
     except SinkError as e:
         print(f"canopy-notify-slack: {e}", file=sys.stderr)  # noqa: T201
-        return 2
+        ctx.exit(2)
     if not ok:
         print(f"canopy-notify-slack: Slack refused the post: {reply[:_MAX_REPLY]}", file=sys.stderr)  # noqa: T201
-        return 1
-    return 0
+        ctx.exit(1)
 
 
-def main() -> int:
-    """The `canopy-notify-slack` command.
+def _check_options(given: Mapping[str, object]) -> None:
+    """Refuse an option given without the one it needs, and a webhook given with a channel.
 
-    Returns:
-        The exit code.
+    Raises:
+        UsageError: One is.
     """
-    return run(sys.argv[1:], sys.stdin)
+    channel = given.get("channel")
+    for name, flag in (("token_file", "--token-file"), ("username", "--username"), ("icon_emoji", "--icon-emoji")):
+        if channel is None and given.get(name) is not None:
+            raise click.UsageError(f"{flag} needs --channel")
+    if channel is None and given.get("threads"):
+        raise click.UsageError("--threads needs --channel")
+    if given.get("broadcasts") and not given.get("threads"):
+        raise click.UsageError("--broadcast needs --threads")
+    if channel is not None and given.get("webhook_file") is not None:
+        raise click.UsageError("--webhook-file and --channel are two ways to post; give one")

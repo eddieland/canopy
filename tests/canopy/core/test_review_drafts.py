@@ -135,8 +135,11 @@ def test_each_edit_drop_addition_and_dismissal_is_a_new_version(scenario: Scenar
     scenario.operator("review", "edit", run, "--body", "--text", f"Two defects.\n\n{OFF_DIFF}")
     scenario.operator("dismiss", f"review:{reviewed}", "2")
     assert newest(scenario, reviewed).body == "Two defects."
+    findings = present(review_result.stored(present(review_runs.get_review_run(scenario.conn, reviewed)).result_json))
+    assert review_drafts.in_body(newest(scenario, reviewed).body, findings.findings) == []
     scenario.operator("dismiss", f"review:{reviewed}", "2", "--undo")
     assert newest(scenario, reviewed).body == f"Two defects.\n\n{OFF_DIFF}"
+    assert review_drafts.in_body(newest(scenario, reviewed).body, findings.findings) == [2]
     # The same words again make no version.
     before = newest(scenario, reviewed).number
     scenario.operator("review", "edit", run, "--body", "--text", f"Two defects.\n\n{OFF_DIFF}")
