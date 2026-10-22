@@ -86,8 +86,8 @@ test('the reviews list filters by repository and by words, and a request waits o
     await repos.getByRole('option', { name: 'api', exact: true }).click()
     await page.keyboard.press('Escape')
     await expect(page).toHaveURL(/[?&]repo=api/u)
-    await expect.poll(() => reviews(page)).toEqual(['review-2', 'review-5'])
-    await expect(page.getByTestId('reviews-count')).toHaveText(/^2 of \d+$/u)
+    await expect.poll(() => reviews(page)).toEqual(['review-2', 'review-5', 'review-6'])
+    await expect(page.getByTestId('reviews-count')).toHaveText(/^3 of \d+$/u)
 
     await field.fill('abc-099')
     await expect(page.getByText('no reviews in api with “abc-099”')).toBeVisible()

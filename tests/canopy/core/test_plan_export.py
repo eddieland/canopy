@@ -217,6 +217,10 @@ def test_a_name_that_is_the_plans_own_file_is_not_removed(
         ("# Plan the migration", "-plan-the-migration"),
         (f"# Plan: {KEY}2 Next", f"-{KEY.lower()}2-next"),
         (f"# Plan: {KEY}", ""),
+        # A title on the line under a heading of the key alone, as a planner may write the outline.
+        (f"# Plan: {KEY}\n\nExport reports as CSV", "-export-reports-as-csv"),
+        (f"# Feedback plan: {KEY} -\n**Export reports**", "-export-reports"),
+        ("# Plan\n\nAdd the endpoint.", ""),
         ("# 日本語", ""),
         ("## Goal", ""),
         ("# " + "word " * 30, "-" + "-".join(["word"] * 12)),
@@ -238,6 +242,33 @@ def test_a_name_carries_a_slug_of_the_title(heading: str, slug: str) -> None:
         effort=None,
     )
     assert plan_export.name("plan", plan, f"{heading}\n\n## Goal\n") == f"7-PROPOSED{slug}.md"
+
+
+def test_a_plan_with_no_title_of_its_own_takes_its_tickets(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
+    untitled = proposed(conn, state_dir, f"# Plan: {KEY}\n\n## Goal\n")
+    titled = proposed(conn, state_dir, "# Its own\n", key="PROJ-2")
+    db.set_ticket(conn, KEY, "/ws", title="Export reports\nas CSV")
+    db.set_ticket(conn, "PROJ-2", "/ws", title="Not this one")
+    dest = tmp_path / "archive"
+
+    exported = plan_export.export(conn, state_dir, dest)
+
+    assert exported.written == [
+        f"{KEY}/{untitled}-PROPOSED-export-reports-as-csv.md",
+        f"PROJ-2/{titled}-PROPOSED-its-own.md",
+    ]
+    # The ticket retitled moves the plan named for it, and leaves the one with its own title.
+    db.set_ticket(conn, KEY, "/ws", title="Export as JSON")
+    db.set_ticket(conn, "PROJ-2", "/ws", title="Nor this one")
+    exported = plan_export.export(conn, state_dir, dest)
+    assert (exported.written, exported.removed) == (
+        [f"{KEY}/{untitled}-PROPOSED-export-as-json.md"],
+        [f"{KEY}/{untitled}-PROPOSED-export-reports-as-csv.md"],
+    )
 
 
 def test_each_plan_has_its_prompt_beside_it(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:

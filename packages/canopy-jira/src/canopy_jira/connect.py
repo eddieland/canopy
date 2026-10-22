@@ -85,44 +85,14 @@ class Request:
 
 
 @dataclass(frozen=True)
-class Io:
-    """What one run reads its request from, prints to, and sends the site's requests to: the process's, or a test's."""
+class Sites:
+    """How the connector reaches a Jira site: as Jira Cloud's are reached, unless a test gives its own."""
 
-    stdin: TextIO
-    stdout: TextIO
     #: The site's host, to the base URL of its REST API.
     endpoint_of: Endpoint = endpoint
 
 
-def run(argv: Sequence[str], stdin: TextIO, stdout: TextIO, *, endpoint_of: Endpoint = endpoint) -> int:
-    """Run `canopy-connect-jira` with `argv`: read what `stdin` names, and print what was read on `stdout`.
-
-    Returns:
-        The exit code: 0 everything read, 1 something was not, 2 nothing was read or `argv` is not usable.
-    """
-    try:
-        found = command.main(
-            args=list(argv),
-            prog_name="canopy-connect-jira",
-            standalone_mode=False,
-            obj=Io(stdin, stdout, endpoint_of),
-        )
-    except click.ClickException as e:
-        e.show()
-        return e.exit_code
-    return found if isinstance(found, int) else 0
-
-
-def main() -> int:
-    """The `canopy-connect-jira` command.
-
-    Returns:
-        The exit code.
-    """
-    return run(sys.argv[1:], sys.stdin, sys.stdout)
-
-
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.command("canopy-connect-jira", context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--site", required=True, help="Your Jira Cloud site, such as acme.atlassian.net.")
 @click.option(
     "--credentials-file",
@@ -131,25 +101,25 @@ def main() -> int:
     help=f"One line, EMAIL:API_TOKEN, readable by you alone. Default: {default_credentials_file()}",
 )
 @click.pass_context
-def command(ctx: click.Context, site: str, credentials_file: Path | None) -> None:
+def main(ctx: click.Context, site: str, credentials_file: Path | None) -> None:
     """Read Jira Cloud's tickets into canopy's journal: canopy's tracker source for Jira (DESIGN §30).
 
     The request is one JSON object on stdin; what was read is JSON lines on stdout, the `end` line last.
     """
-    io = ctx.find_object(Io) or Io(sys.stdin, sys.stdout)
+    sites = ctx.find_object(Sites) or Sites()
     try:
         host = parse_site(site)
-        request = _request(read_input(io.stdin))
+        request = _request(read_input(sys.stdin))
         email, token = read_credentials(credentials_file or default_credentials_file())
     except InputError as e:
         _say(str(e))
         ctx.exit(2)
-    reader = _Reader(Client(io.endpoint_of(host), email, token), io.stdout)
+    reader = _Reader(Client(sites.endpoint_of(host), email, token), sys.stdout)
     query = reader.read(request)
     end: dict[str, object] = {"kind": "end", "tickets": reader.whole}
     if query is not None:
         end["query"] = query
-    emit(io.stdout, end)
+    emit(sys.stdout, end)
     ctx.exit(1 if reader.failed else 0)
 
 

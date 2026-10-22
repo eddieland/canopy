@@ -52,7 +52,8 @@ if TYPE_CHECKING:
     from canopy.serve.spend_schema import Spend
 
 # Reading one pragma costs next to nothing, and a server has a handful of streams open, so a change shows within a
-# quarter of a second rather than within one.
+# quarter of a second rather than within one. A stream whose page left unheard polls only until its lifetime ends
+# (`ServeOptions.stream_seconds`).
 POLL_SECONDS = 0.25
 
 

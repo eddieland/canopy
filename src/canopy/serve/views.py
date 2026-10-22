@@ -556,9 +556,16 @@ def persona_choice(found: personas.Listed) -> PersonaChoice:
     """A persona a run could get, as the API sends it, its error worded as `canopy personas` words it.
 
     Returns:
-        Its name, whether it is the operator's, the agents it is the default for, and why a run would refuse it.
+        Its name, whether it is the operator's, the agents it is the default for, why a run would refuse it, and
+        its description.
     """
-    return PersonaChoice(name=found.name, yours=found.yours, defaults=list(found.defaults), error=found.error)
+    return PersonaChoice(
+        name=found.name,
+        yours=found.yours,
+        defaults=list(found.defaults),
+        error=found.error,
+        description=found.description,
+    )
 
 
 def forget(found: records.Forget) -> TicketForget:
