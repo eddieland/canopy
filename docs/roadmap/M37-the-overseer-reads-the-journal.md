@@ -79,8 +79,14 @@ ticket, a named unit's PR, and a stacked dispatch's blocker's PR; none for a pri
 Chosen conservatively: cursors are checked as they are today, a `review` cursor naming an item by its time to the
 second; a ticket the query found this tick is stale until the next read records its comments, so its first dispatch
 waits a tick, as the block already said; the prompt is unchanged, its refusals section covering the new codes.
+Built (2026-10-22): the cursor check on `canopy ticket set`, through the command and the tool alike, in a tick
+(`claims.check_cursors`): `unobserved` for a cursor naming nothing observed or passing what the block left out; none
+for a private ticket or an unobserved subject. Chosen conservatively: it is never refused `stale`, since it starts
+nothing, but a stale subject's cursors move no further than what they already passed, since the block shows none of its
+items; a unit with no PR is unobserved; a `review` cursor may name the end of any canopy review run of the PR; and the
+operator's own `canopy ticket set`, outside a tick, is not checked.
 Left: the duties check owing `canopy queried` only when no source read the query (it needs the harness to touch the
-source's tickets into the journal, so it is not small), the cursor check on `canopy ticket set`, `handled`,
+source's tickets into the journal, so it is not small), `handled`,
 journal-numbered cursors and their migration, the mirror's retirement with comments recorded in the conversation, the
 design folded into the sections it names, and the live re-measurement. Open for the operator: whether a tracker with
 no connector keeps the live-read procedure or a `tracker` source is required (recommended: required), and how many
