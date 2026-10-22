@@ -32,7 +32,15 @@ import { reviewSentText } from '@/lib/outcomes'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { reviewRef } from '@/lib/refs'
 import { goneText } from '@/lib/retention'
-import { findingAnchor, placeFindings, SEVERITY_TONE, shortSha, verdictText, verdictTone } from '@/lib/reviews'
+import {
+    findingAnchor,
+    placeFindings,
+    SEVERITY_TONE,
+    shortSha,
+    siblingsOf,
+    verdictText,
+    verdictTone,
+} from '@/lib/reviews'
 import { useSeesReview } from '@/lib/seen-reviews'
 import { tickId } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
@@ -119,6 +127,7 @@ function Loaded({ id }: { id: number }) {
                             findings={data.findings.length}
                             hasDiff={data.diff !== null}
                             onFollow={follow}
+                            siblings={siblingsOf(data.review, data.runs)}
                         />
                         <ReviewerFold detail={data} onFollow={follow} />
                     </>

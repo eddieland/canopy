@@ -198,7 +198,9 @@ between you and your coworker.
 [Reviews](/reviews) lists every review, newest first: its verdict, its ticket, how big the change is (`low impact`,
 `normal impact`, `high impact`), the PR and commit, the persona it wrote in (`as skeptic`, where the list has room for
 it), and what it cost. A PR you had reviewed in several personas gets a row for each, and the persona is how you tell
-the skeptic from the minimalist. A verdict reads `clean`, or counts the findings with the worst among them, such as
+the skeptic from the minimalist. The reviews one request made of one commit sit together, with no rule between them:
+the first names the PR, and each after it says only `as minimalist`, since the PR and commit are the first's. The
+PR's page lists them the same way. A verdict reads `clean`, or counts the findings with the worst among them, such as
 `3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. A review of a PR the loop doesn't own carries its
 draft's chip after the verdict, as the pull requests list does. With no review yet, it points you to **Review a
 PR** above the list, which works with the defaults, and to `review.agent_prs` and `review.query`, which have the loop
@@ -293,6 +295,12 @@ one card: its severity and title from the reviewer, then the comment as it will 
 **left out**. Every word is the reviewer's, written after reading the PR, so read it as you'd read
 anything a stranger wrote about your coworker's code before signing it: hidden characters are named, never hidden.
 Hover the version in its header to see who made it and the hash a publish carries.
+
+A request in several personas made a review, and so a draft, in each. The draft says so under its intro, **Also
+reviewed as skeptic, minimalist**, each name opening that review's page, so you can read them side by side and publish
+the one you'd sign. Publishing one leaves the others as they were: a draft you didn't pick is still a draft, not a
+second review waiting to surprise your coworker. The attention list's `review waiting` clears once any of them is
+published or staged.
 
 canopy's own review, the summary, verdict, and findings list from [a review's page](#a-reviews-page), folds under the
 draft as **What the reviewer found**, its status and verdict on the fold. **Show the review** opens it, for when you

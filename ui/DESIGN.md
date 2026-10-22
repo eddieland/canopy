@@ -592,7 +592,11 @@ side.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
   kind of their own (`own-review`, `own-run`). A run names the PRs it pushed to under its row, so on a PR's page
-  `ownPr` leaves that PR out of them, as it does from `Decisions`.
+  `ownPr` leaves that PR out of them, as it does from `Decisions`. The reviews one request made of one commit, one per
+  persona (DESIGN §31), are adjacent rows where the first of them falls (`requestGroups`), with no hairline between
+  them: each keeps its own verdict, draft chip, cost, and age, and after the first, the free column says only
+  `as skeptic`, at any width, in place of the PR and commit it shares, its ticket's cell empty. Rows, not a nested
+  card: the request is one entry read down its personas.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
@@ -1476,6 +1480,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   comment's card is in the panel's list, as before. While it waits, each line of the new side has a ghost `+` beside its
   number (`DiffPanels`' `onAdd`), shown on the row's hover or its focus, which opens a new comment's card under the
   line, its form open.
+  A review whose request made others of the same commit in other personas names them in a muted line under the intro,
+  `Also reviewed as skeptic, eddie`, each persona a `ReviewLink` to its page, and that each is a draft of its own:
+  the operator picks one to publish, and publishing it changes none of the others.
   Outside its review's page a draft is its status alone (`ReviewDraftChip`): `draft` while it waits, else the
   journal's word, in `REVIEW_DRAFT_TONE`, with the word and what it means on hover. A review's row and a PR's carry it
   after the verdict (a PR's, its newest review's draft that has one), where its state is, so the list's left edge says

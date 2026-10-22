@@ -3,7 +3,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
-import { reviewDraft } from '@/api/mocks'
+import { mockReviews, reviewDraft } from '@/api/mocks'
 import type { DiffLine, ReviewDiff, ReviewDraft, ReviewFinding } from '@/api/types'
 import { ToastContext } from '@/hooks/use-toast'
 import { placeFindings } from '@/lib/reviews'
@@ -72,6 +72,37 @@ async function panel(draft: ReviewDraft = reviewDraft(), hasDiff = true, finding
 }
 
 describe('ReviewDraftPanel', () => {
+    it("names the request's reviews in its other personas, each opening its page, or nothing", async () => {
+        const [one] = mockReviews
+        if (one === undefined) {
+            throw new Error('no mock review')
+        }
+        await renderRouted(
+            <ReviewDraftPanel
+                run={5}
+                prUrl={PR}
+                sha={SHA}
+                draft={reviewDraft()}
+                findings={1}
+                hasDiff
+                onFollow={followed}
+                siblings={[
+                    { ...one, id: 6, persona: 'skeptic' },
+                    { ...one, id: 7, persona: 'eddie' },
+                ]}
+            />,
+        )
+        const line = screen.getByTestId('draft-siblings')
+        expect(line.textContent).toBe(
+            'Also reviewed as skeptic, eddie, from the same request at this commit. Each is a draft of its own: ' +
+                'publish the one you want, and the others stay as they are.',
+        )
+        expect(within(line).getByRole('link', { name: 'eddie' }).getAttribute('href')).toBe('/reviews/7')
+        cleanup()
+        await panel()
+        expect(screen.queryByTestId('draft-siblings')).toBeNull()
+    })
+
     it('shows what would post word for word, its comments and versions, every hidden character named', async () => {
         const hidden = `Retry${String.fromCodePoint(8203)}s.`
         const found = await panel(reviewDraft({ body: hidden }))

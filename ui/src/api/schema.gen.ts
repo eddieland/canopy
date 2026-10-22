@@ -5048,6 +5048,12 @@ export type components = {
              */
             repo: string | null;
             /**
+             * Request Id
+             * @description The operator's review request it answers (DESIGN §21), which its reviews in the request's other personas share
+             *     (§31); None for a review the loop started on its own.
+             */
+            request_id: number | null;
+            /**
              * Seen
              * @description Whether the operator has seen it, on its page or with `canopy review show ID` (DESIGN §22). A run with news
              *     that is not seen is new to them.

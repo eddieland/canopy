@@ -138,8 +138,8 @@ ATTENTION: tuple[Item, ...] = (
     Item(
         f"pr:{mock_reviews.PR_14}",
         "review_waiting",
-        f"review:5, which you asked for, is done: its draft of {mock_reviews.PR_14} waits on you to publish or stage "
-        "it (`canopy review draft 5`)",
+        f"review:5 and review:6, which you asked for, are done: their drafts of {mock_reviews.PR_14} wait on you to "
+        "publish or stage one",
         at(-30),
     ),
     Item(
