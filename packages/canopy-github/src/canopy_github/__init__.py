@@ -3,8 +3,7 @@
 canopy runs them as commands, never imports them, so the harness holds no token and opens no connection (TRUST_MODEL
 T2, D003). Each reads the token `gh` holds for the host its PR's URL or repository's clone URL names, when it runs,
 and talks to that host's GraphQL API, so GitHub Enterprise works as github.com does. This module holds what both
-share: reading a PR's or an issue's URL and a clone URL, the token, the GraphQL client, the JSON lines they print,
-and running their command lines.
+share: reading a PR's or an issue's URL and a clone URL, the token, the GraphQL client, and the JSON lines they print.
 
 click for the command lines (D025), and nothing from canopy.
 """
@@ -19,8 +18,6 @@ import urllib.request
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import IO, TYPE_CHECKING, TextIO, override
-
-import click
 
 if TYPE_CHECKING:
     from email.message import Message
@@ -412,26 +409,10 @@ def emit(stdout: TextIO, line: Mapping[str, object]) -> None:
 
 
 @dataclass(frozen=True)
-class Io:
-    """What a program reads and prints, and how it reaches GitHub: the real ones, unless a test gives its own."""
+class Hosts:
+    """How a program reaches a GitHub host: as GitHub's own are reached, unless a test gives its own."""
 
-    stdin: TextIO
-    stdout: TextIO
     #: A host to its GraphQL endpoint.
     endpoint_of: Endpoint = endpoint
     #: A host to its token.
     token_of: Token = gh_token
-
-
-def invoke(command: click.Command, prog_name: str, argv: Sequence[str], io: Io) -> int:
-    """Run `command` as `prog_name` with `argv`, reading and printing through `io`.
-
-    Returns:
-        The exit code: the command's, 0 once `--help` is printed, or 2 for a command line it cannot use.
-    """
-    try:
-        found = command.main(args=list(argv), prog_name=prog_name, standalone_mode=False, obj=io)
-    except click.ClickException as e:
-        e.show()
-        return e.exit_code
-    return found if isinstance(found, int) else 0

@@ -55,7 +55,7 @@ from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
 from tests.canopy.helpers import granted_meanwhile, present
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, SECRET, client, free_port, signed_in
-from tests.conftest import Journals
+from tests.conftest import Journals, invoke
 
 INDEX = """<!doctype html>
 <html lang="en">
@@ -982,16 +982,17 @@ def test_the_mock_journal_covers_every_run_state_and_message_source(ui: Path, ba
     assert sources == {"worker", "operator", "tracker"}
 
 
-def test_the_development_server_serves_mock_data_only(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["serve"]) == 2
-    assert "--mock" in capsys.readouterr().err
-    assert main(["serve", "--mock", "--host", "10.0.0.5"]) == 2
-    assert "loopback" in capsys.readouterr().err
+def test_the_development_server_serves_mock_data_only() -> None:
+    unseeded = invoke(main, ["serve"])
+    assert unseeded.exit_code == 2
+    assert "--mock" in unseeded.stderr
+    public = invoke(main, ["serve", "--mock", "--host", "10.0.0.5"])
+    assert public.exit_code == 2
+    assert "loopback" in public.stderr
 
 
-def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFixture[str]) -> None:
-    main(["openapi"])
-    schema = json.loads(capsys.readouterr().out)
+def test_openapi_names_the_stream_event_and_every_route() -> None:
+    schema = json.loads(invoke(main, ["openapi"]).stdout)
     names = {
         "Run",
         "RunState",
@@ -1110,9 +1111,8 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
     assert set(schema["paths"]) == paths
 
 
-def test_openapi_describes_every_route_parameter_error_and_field(capsys: pytest.CaptureFixture[str]) -> None:
-    main(["openapi"])
-    schema = json.loads(capsys.readouterr().out)
+def test_openapi_describes_every_route_parameter_error_and_field() -> None:
+    schema = json.loads(invoke(main, ["openapi"]).stdout)
     assert schema["info"]["version"] == version("canopy")
     assert schema["info"]["description"]
     tags = {t["name"] for t in schema["tags"] if t["description"]}

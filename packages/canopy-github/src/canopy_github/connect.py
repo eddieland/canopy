@@ -33,16 +33,13 @@ from canopy_github import (
     Client,
     Endpoint,
     GitHubError,
+    Hosts,
     InputError,
-    Io,
     Ref,
     Repository,
     Token,
     client_for,
     emit,
-    endpoint,
-    gh_token,
-    invoke,
     parse_pr,
     parse_repository,
     read_input,
@@ -79,47 +76,20 @@ class Request:
     review_query: str | None = None
 
 
-def run(
-    argv: Sequence[str],
-    stdin: TextIO,
-    stdout: TextIO,
-    *,
-    endpoint_of: Endpoint = endpoint,
-    token_of: Token = gh_token,
-) -> int:
-    """Read what `stdin` names, and print what was read on `stdout`.
-
-    `endpoint_of` and `token_of` map a host to its GraphQL endpoint and its token.
-
-    Returns:
-        The exit code: 0 everything read, 1 something was not, 2 nothing was read or `argv` is not usable.
-    """
-    return invoke(command, "canopy-connect-github", argv, Io(stdin, stdout, endpoint_of, token_of))
-
-
-def main() -> int:
-    """The `canopy-connect-github` command.
-
-    Returns:
-        The exit code.
-    """
-    return run(sys.argv[1:], sys.stdin, sys.stdout)
-
-
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.command("canopy-connect-github", context_settings={"help_option_names": ["-h", "--help"]})
 @click.pass_context
-def command(ctx: click.Context) -> None:
+def main(ctx: click.Context) -> None:
     """Read GitHub's PRs and branches into canopy's journal: canopy's vcs source (DESIGN §29, §30).
 
     The request is one JSON object on stdin; what was read is JSON lines on stdout, the `end` line last.
     """
-    io = ctx.find_object(Io) or Io(sys.stdin, sys.stdout)
+    hosts = ctx.find_object(Hosts) or Hosts()
     try:
-        request = _request(read_input(io.stdin))
+        request = _request(read_input(sys.stdin))
     except InputError as e:
         _say(str(e))
         ctx.exit(2)
-    reader = _Reader(io.stdout, io.endpoint_of, io.token_of)
+    reader = _Reader(sys.stdout, hosts.endpoint_of, hosts.token_of)
     reader.prs(request.prs)
     end: dict[str, object] = {"kind": "end", "prs": reader.whole_prs}
     repositories = [] if request.repositories is None else reader.repositories(request)
@@ -129,7 +99,7 @@ def command(ctx: click.Context) -> None:
         found = reader.review_query(request.review_query, repositories)
         if found is not None:
             end["review_query"] = found
-    emit(io.stdout, end)
+    emit(sys.stdout, end)
     ctx.exit(1 if reader.failed else 0)
 
 
