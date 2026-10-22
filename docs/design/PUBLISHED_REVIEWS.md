@@ -7,9 +7,9 @@ journal](READING_THE_JOURNAL.md).
 
 ## 34. Publishing a review
 
-Built in part (ROADMAP M43): the draft, its versions, and publishing and staging from the CLI and the review's page.
-Revising with an agent is designed, not built. Each part changes D114 and TRUST_MODEL as it is built
-(Trust model changes).
+Built in part (ROADMAP M43): the draft, its versions, publishing and staging from the CLI and the review's page, and
+revising with an agent on a note from the CLI. Asking for a revision from the review's page is designed, not built. Each
+part changes D114 and TRUST_MODEL as it is built (Trust model changes).
 
 §21's reviews post nothing (D114), and §29's drafts answer threads on the loop's own PRs. This section says what
 changes for a review of someone else's PR, a `review.query` match or a review request (§21), where sending findings to
@@ -45,8 +45,10 @@ A note on the draft, the operator's reply on the review, asks for a revision. Wh
 newest version, the overseer starts a revision or records why it waits, as it plans again on a reply (§25); only a tick
 starts one (D020). The state block gives each such draft and its revisions spent, never its text. A revision is a
 review run at the same commit, under §21's guards but two, the `done` review of its commit and the per-PR limit: the
-daily limit, review capacity, and `max_workers` hold it, and a draft's revisions are limited, never reset (D030), and
-raised only by the operator's grant.
+daily limit, review capacity, and `max_workers` hold it, and a draft's revisions are limited, by
+`policy.max_revisions_per_draft`, which a repository may only lower, never reset (D030), and raised only by the
+operator's grant. A note is refused at that limit and while a revision runs, and a revision whose draft moved on while
+it ran makes no version: what the operator did meanwhile stands.
 
 It runs as the reviewer does, with `canopy-reviewer`, outside the checkout, and posts and writes nothing. Its prompt
 carries the review, the newest version, and the operator's notes since it, which are instructions; the PR and the
@@ -101,7 +103,6 @@ publishing, T3 with revisions, and T8 with the review page.
 
 ### Open
 
-- How many revisions a draft gets.
 - Following a published review onto the next commit, its comments or a coworker's answers on its threads carried into
   the next draft. It needs a finding's identity across commits first (§21, Open).
 - The loop's own PRs publishing a review, for a coworker's benefit, beside §21's send.

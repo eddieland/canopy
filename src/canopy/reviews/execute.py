@@ -1,9 +1,12 @@
-"""`canopy _review <run_id>`: one review run (DESIGN §21).
+"""`canopy _review <run_id>`: one review run (DESIGN §21), or one revision of a review's draft (§34).
 
 Checks the slot out at the reviewed commit, runs the reviewer in a directory of its own outside the checkout, parses the
 result, and always returns the slot with `--force`, which discards anything the reviewer left there. The checkout holds
 code the loop did not write, and an agent runtime reads its configuration from its working directory, so the reviewer
 works in `<state_dir>/reviews/<id>/`, where a link leads to the checkout. The harness runs nothing from the checkout.
+
+A revision runs the same way, as the reviewer does, and its `done` result becomes the newest version of the draft it
+revises (`review_revisions.revised`) before its run closes, so a publish waiting on the revision sees that version.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from canopy.core import (
     pools,
     review_diff,
     review_drafts,
+    review_revisions,
     review_runs,
     run_models,
     run_offers,
@@ -62,7 +66,8 @@ class Outcome:
     """How a review run ended: its status and the validated result, with a note when the harness decided the status."""
 
     status: ReviewRunStatus
-    result: result.ReviewResult | None
+    #: The reviewer's validated result, or a reviser's.
+    result: result.ReviewResult | result.RevisionResult | None
     note: str = ""
 
     def result_json(self) -> str:
@@ -112,7 +117,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended):
                 log.warning("review run was already closed; its outcome is not recorded", extra=fields)
             else:
-                if outcome.result is not None and outcome.result.pr_title:
+                if isinstance(outcome.result, result.ReviewResult) and outcome.result.pr_title:
                     # The PR's title as the reviewer read it, for display: the newest report wins, a worker's or a
                     # review's.
                     db.set_pr_title(ctx.conn, run.pr_url, outcome.result.pr_title)
@@ -144,6 +149,23 @@ def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
     return Outcome(ReviewRunStatus.DONE, parsed)
 
 
+def _revised(ctx: Context, run: records.ReviewRun, parsed: result.RevisionResult | None) -> Outcome:
+    """The outcome of a revision's result line: a `done` one made the draft's newest version, if the draft waited on it.
+
+    Returns:
+        `unknown` for no valid result, `failed` for a result that is not `done`, else `done`, with a note when the
+        draft took no version from it.
+    """
+    if parsed is None:
+        return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviser's last line was not a valid result")
+    if parsed.status != "done":
+        return Outcome(ReviewRunStatus.FAILED, parsed)
+    made = review_revisions.revised(ctx.conn, run, parsed)
+    if made.version is None:
+        return Outcome(ReviewRunStatus.DONE, parsed, made.why)
+    return Outcome(ReviewRunStatus.DONE, parsed, f"made version {made.version.number} of the draft")
+
+
 def clean_up(ctx: Context, run: records.ReviewRun, log: logs.TickAdapter) -> None:
     """Remove the reviewer's directory, never following its link, and return the slot with `--force`."""
     with contextlib.suppress(OSError):
@@ -171,7 +193,9 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     dropped = _drop_escaping_links(ctx.runner, slot)
     if dropped:
         log.warning("removed links that leave the checkout", extra={"review_run_id": run.id, "links": dropped})
-    _save_diff(ctx.runner, slot, run, log)
+    if run.revises is None:
+        # A revision's comments sit on the diff its review kept, never one of its own.
+        _save_diff(ctx.runner, slot, run, log)
     cwd = start.run_dir(ctx, run.id)
     cwd.mkdir(mode=0o700)
     (cwd / start.CHECKOUT_LINK).symlink_to(slot, target_is_directory=True)
@@ -181,7 +205,8 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
         raise _SetupError(refused)
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
-    argv = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, f"review {run.pr_url}")
+    title = f"{'revise' if run.revises is not None else 'review'} {run.pr_url}"
+    argv = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
         "running reviewer",
@@ -221,6 +246,8 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
     if done.timed_out:
         return Outcome(ReviewRunStatus.TIMEOUT, None, f"the reviewer timed out after {timeout_minutes} minutes")
+    if run.revises is not None:
+        return _revised(ctx, run, result.parse_revision(output.text))
     parsed = result.parse(output.text)
     if parsed is None:
         return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")

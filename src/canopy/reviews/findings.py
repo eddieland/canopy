@@ -1,4 +1,7 @@
-"""A review's findings as a resumed worker reads them (DESIGN §21): from the journal, since none is posted (D114)."""
+"""A review's findings as a resumed worker, a later review, and a reviser read them (DESIGN §21, §34).
+
+They come from the journal, since nothing is posted but what the operator publishes (D114).
+"""
 
 from __future__ import annotations
 
@@ -63,21 +66,40 @@ def for_reviewer(conn: sqlite3.Connection, pr_url: str, *, before: int) -> str |
         stored = result.stored(run.result_json)
         if run.id >= before or run.status is not ReviewRunStatus.DONE or stored is None:
             continue
-        lines = [
-            (
-                f"canopy's review run {run.id} of this PR, at commit `{run.sha}`, ended with verdict {stored.verdict}, "
-                f"impact {stored.impact}."
-            ),
-        ]
-        if stored.summary:
-            lines += ["", "Its summary:", *(f"> {line}" for line in printable(stored.summary).splitlines())]
-        kept = _findings(stored, review_runs.review_dismissals(conn, run.id), keep_dismissed=False)
-        if kept:
-            lines += ["", "Its findings:", *kept]
-        elif stored.findings:
-            lines += ["", "Its findings: none the operator kept."]
-        return "\n".join(lines)
+        return _review_block(conn, run, stored)
     return None
+
+
+def for_reviser(conn: sqlite3.Connection, run: records.ReviewRun) -> str:
+    """Return `{{REVIEW}}` for a revision of review run `run`'s draft (DESIGN §34): the review, as data.
+
+    A finding the operator dismissed is left out, as it is for a later review; the rest keep their numbers.
+
+    Returns:
+        The review's verdict, summary, and findings; a line saying it kept no result, if it has none.
+    """
+    stored = result.stored(run.result_json)
+    if stored is None:
+        return f"canopy's review run {run.id} of this PR, at commit `{run.sha}`, kept no result."
+    return _review_block(conn, run, stored)
+
+
+def _review_block(conn: sqlite3.Connection, run: records.ReviewRun, stored: result.ReviewResult) -> str:
+    # A `done` review for another agent to read: its verdict, its summary, and the findings the operator kept, quoted.
+    lines = [
+        (
+            f"canopy's review run {run.id} of this PR, at commit `{run.sha}`, ended with verdict {stored.verdict}, "
+            f"impact {stored.impact}."
+        ),
+    ]
+    if stored.summary:
+        lines += ["", "Its summary:", *(f"> {line}" for line in printable(stored.summary).splitlines())]
+    kept = _findings(stored, review_runs.review_dismissals(conn, run.id), keep_dismissed=False)
+    if kept:
+        lines += ["", "Its findings:", *kept]
+    elif stored.findings:
+        lines += ["", "Its findings: none the operator kept."]
+    return "\n".join(lines)
 
 
 def listed(conn: sqlite3.Connection, since: str) -> list[str]:

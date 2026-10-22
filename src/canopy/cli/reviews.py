@@ -1,10 +1,11 @@
-"""`canopy review`: `run`, `wait`, and `end` for the overseer; `show`, and a review's draft, for the operator.
+"""`canopy review`: `run`, `wait`, `end`, and `revise` for the overseer; `show`, and a review's draft, for you.
 
-The detached `_review` does one review run (DESIGN §21). A review of a PR the loop does not own is a draft of a
-review on that PR (§34): `draft` shows it as it would post, `edit` changes it, and `publish` posts one version as the
-operator's own comment review, named by the hash `draft` printed. A draft's text is the reviewer's, written from the
-PR's, until the operator publishes it, so it is printed as plain text with each character that hides text named. The
-commands that write refuse inside canopy's own ticks and runs.
+The detached `_review` does one review run (DESIGN §21), or one revision of a review's draft (§34). A review of a PR
+the loop does not own is a draft of a review on that PR (§34): `draft` shows it as it would post, `edit` changes it,
+and `publish` posts one version as the operator's own comment review, named by the hash `draft` printed. A draft's
+text is the reviewer's, or a reviser's, written from the PR's, until the operator publishes it, so it is printed as
+plain text with each character that hides text named. The commands that write refuse inside canopy's own ticks and
+runs; `canopy reply review:ID` notes what a revision should change.
 """
 
 from __future__ import annotations
@@ -19,7 +20,16 @@ import click
 
 from canopy.cli.common import CliError, Group, OverseerCommand, leave_the_tick, open_context
 from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, verb
-from canopy.core import conversation, db, records, review_drafts, review_drafts_manage, review_requests, sql
+from canopy.core import (
+    conversation,
+    db,
+    records,
+    review_drafts,
+    review_drafts_manage,
+    review_requests,
+    review_revisions,
+    sql,
+)
 from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
@@ -35,7 +45,7 @@ CLI = "cli"
 
 @click.group("review", cls=Group)
 def review_group() -> None:
-    """Review PRs: `run`, `wait`, and `end` are the overseer's; `show` is how you read what canopy's reviews found."""
+    """Review PRs: `run`, `wait`, `end`, and `revise` are the overseer's; `show` is how you read what reviews found."""
 
 
 @review_group.command("run", cls=OverseerCommand)
@@ -89,6 +99,14 @@ def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, ra
 def cmd_review_end(click_ctx: click.Context, *, pr: str, reason: str) -> int:
     """End the operator's review request on the PR at URL: it merged or closed first, or is in no repository here."""
     return verb(click_ctx, review_tools.review_end, review_tools.ReviewEnd, pr=pr, reason=reason)
+
+
+@review_group.command("revise", cls=OverseerCommand)
+@click.option("--run", "run_id", required=True, type=click.IntRange(min=1), help="The review whose draft to revise.")
+@click.pass_context
+def cmd_review_revise(click_ctx: click.Context, *, run_id: int) -> int:
+    """Start a revision of the draft of review RUN, which the operator's note asks for, if its guards allow one now."""
+    return verb(click_ctx, review_tools.review_revise, review_tools.ReviewRevise, run=run_id)
 
 
 @review_group.command("show")
@@ -272,6 +290,11 @@ def _print_standing(conn: sqlite3.Connection, draft: records.ReviewDraft) -> Non
         case _:
             if draft.why:
                 click.echo(f"  {draft.why}")
+    revising = review_revisions.running(conn, draft.id)
+    if revising is not None:
+        click.echo(f"  Review run {revising.id} is revising it on your notes.")
+    elif draft.status is ReviewDraftStatus.WAITING and review_revisions.pending(conn, draft.id):
+        click.echo("  Your note asks for a revision: the next tick starts one.")
     pr = records.fetch_one(
         conn,
         records.ObservedPr,

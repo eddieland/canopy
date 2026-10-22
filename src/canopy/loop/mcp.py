@@ -159,6 +159,13 @@ TOOLS = (
         review_tools.review_end,
     ),
     tool(
+        "review-revise",
+        "Start a revision of a review's draft that the operator's note asks for, if its guards allow one now. A dry "
+        "run checks them and starts nothing.",
+        review_tools.ReviewRevise,
+        review_tools.review_revise,
+    ),
+    tool(
         "chore-run",
         "Start a run of a chore, if its guards allow one now. A dry run checks them and starts nothing.",
         chore_tools.ChoreRun,

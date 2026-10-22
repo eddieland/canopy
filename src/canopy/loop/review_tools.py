@@ -1,20 +1,21 @@
-"""The overseer's review verbs (DESIGN §6, §21, §27): start a review of a PR, hold one off, or end a review request.
+"""The overseer's review verbs (DESIGN §6, §21, §27, §34): start, hold off, or end a review, or revise its draft.
 
-Each is a request (`loop.tools.Request`) and a function, which the `canopy review` commands and the MCP server
-(`loop.mcp`) both call, as they do the overseer's other verbs.
+A revision is of a review's draft, which the operator's note asks for. Each verb is a request (`loop.tools.Request`) and
+a function, which the `canopy review` commands and the MCP server (`loop.mcp`) both call, as they do the overseer's
+other verbs.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated
 
-from pydantic import ConfigDict, Field, WithJsonSchema
+from pydantic import ConfigDict, Field, StrictInt, WithJsonSchema
 
-from canopy.core import conversation, db, review_requests
+from canopy.core import conversation, db, review_requests, review_revisions, review_runs
 from canopy.infra import logs
 from canopy.loop import attention
 from canopy.loop.tools import Key, PrUrl, Refused, Repo, Request, Text, one_of, required, running_tick, truncate
-from canopy.reviews import grants
+from canopy.reviews import grants, revise
 from canopy.reviews import start as review_start
 
 if TYPE_CHECKING:
@@ -198,3 +199,50 @@ def review_end(ctx: Context, request: ReviewEnd) -> str:
     db.record_decision(ctx.conn, tick_id, None, END_ACTION, reason, pr=pr)
     logs.for_tick(tick_id).info("review request ended", extra={"pr": pr, "reason": reason})
     return f"ended the review request on {pr}: {reason}"
+
+
+class ReviewRevise(Request):
+    """A revision of a review's draft, which the operator's note asks for."""
+
+    #: The review whose draft to revise, as `reviews.revisions` names it.
+    run: Annotated[StrictInt, Field(ge=1, description="The review run whose draft to revise, from reviews.revisions.")]
+
+
+def review_revise(ctx: Context, request: ReviewRevise) -> str:
+    """Start a revision of a review's draft, if its guards allow one now; in a dry run, check them and start nothing.
+
+    Returns:
+        What the command prints.
+
+    Raises:
+        Refused: Outside a running tick, or a guard refused the revision, which is recorded.
+    """
+    current = running_tick(ctx)
+    tick_id, run_id = current.id, request.run
+    review = review_runs.get_review_run(ctx.conn, run_id)
+    pr = review.pr_url if review is not None else None
+    try:
+        if current.dry_run:
+            target = revise.check(ctx, tick_id=tick_id, run_id=run_id)
+            said = f"dry run: not dispatched; would revise review run {run_id}'s version {target.version.number}"
+            db.record_decision(ctx.conn, tick_id, None, review_start.DISPATCH_ACTION, truncate(said), pr=pr)
+            return f"dry run: recorded a revision of review run {run_id}'s draft; nothing was started"
+        started = revise.begin(ctx, tick_id=tick_id, run_id=run_id)
+    except review_start.Refusal as r:
+        db.record_decision(ctx.conn, tick_id, None, f"refused:{r.guard}", r.reason, pr=pr)
+        if r.guard == "revision_limit" and pr is not None:
+            # The operator's note asks for what the limit forbids: a human has to look (DESIGN §34).
+            hint = review_revisions.hint(run_id)
+            action = f"{attention.ACTION_PREFIX}review_limit"
+            db.record_decision(ctx.conn, tick_id, None, action, f"{r.reason}; {hint}", pr=pr)
+        if r.attention is not None:
+            db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, pr=pr)
+        logs.for_tick(tick_id).info("revision refused", extra={"review_run_id": run_id, "guard": r.guard})
+        raise Refused(f"revision refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+    rationale = truncate(f"revision run {started.run_id} of review run {run_id}'s draft in {started.slot}")
+    db.record_decision(ctx.conn, tick_id, None, review_start.DISPATCH_ACTION, rationale, pr=pr)
+    logs.for_tick(tick_id).info(
+        "revision started",
+        extra={"pr": pr, "review_run_id": run_id, "revision_run_id": started.run_id, "pid": started.pid},
+    )
+    return f"started a revision of review run {run_id}'s draft: run {started.run_id}"
