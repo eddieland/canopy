@@ -24,7 +24,7 @@ from canopy.runtime import project_config, stdout
 
 if TYPE_CHECKING:
     from canopy.core import records
-    from canopy.core.config import Chore
+    from canopy.core.config import Chore, Rendered
     from canopy.core.context import Context
     from canopy.runtime.report import AgentOutput
 
@@ -107,7 +107,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     return outcome
 
 
-def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, list[str], str]:
+def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, Rendered, str]:
     """Return where chore `name` runs, the command that runs it with `prompt`, and the definitions snapshot's digest.
 
     Raises:
@@ -154,7 +154,8 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
     run_id = run.id
     # Beside the row's log, so a run started before an upgrade moved the directory still finds its prompt.
     prompt = start.prompt_file(Path(run.log_path)).read_text(encoding="utf-8")
-    cwd, argv, digest = prepare(ctx, name, chore, prompt)
+    cwd, command, digest = prepare(ctx, name, chore, prompt)
+    argv = command.argv
     log.info(
         "running chore",
         extra={"chore_run_id": run_id, "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": chore.timeout_minutes},
@@ -169,6 +170,7 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
             argv,
             cwd=cwd,
             env=env,
+            stdin=command.stdin,
             timeout=chore.timeout_minutes * 60,
             on_start=lambda pid: db.set_agent_pid(ctx.conn, "chore_runs", run_id, pid),
             # Each line reaches the run log as the agent prints it, so a running chore's transcript is what it did so

@@ -131,10 +131,10 @@ or turns it off with `policy.stacking` (C1).
 
 ### R9. PR-scoped workspaces for "address feedback" and "fix CI on my PR"
 
-Gap; sketched as M14, which the operator deferred on 2026-10-15: real use has not needed it. All of canopy's work is
-keyed by ticket. M11's `review.query` reviews the operator's own PRs without a ticket, but never pushes to them (§21).
-Fixing CI or addressing review on a hand-written PR needs a PR-keyed unit of work, and pushing to the PR's own branch,
-which D056 now allows (C4).
+Gap; sketched as M14, which the operator closed unbuilt on 2026-10-22: real use has not needed it. All of canopy's
+work is keyed by ticket. M11's `review.query` reviews the operator's own PRs without a ticket, but never pushes to
+them (§21). Fixing CI or addressing review on a hand-written PR needs a PR-keyed unit of work, and pushing to the PR's
+own branch, which D056 now allows (C4).
 
 ### R10. Worktree setup hooks that cope with the Bazel monorepo
 
@@ -173,7 +173,7 @@ Built in M19, live acceptance pending. Every ticket's conversation, public or pr
 web UI (N1) can show it as one inbox and later channels such as Slack join it rather than keeping their own (§22, D072).
 For a public ticket the tracker stays the authority and the journal holds the overseer's copy: each tick the overseer
 mirrors new tracker comments with `canopy mirror` (D081), and `canopy show` lists them with workers' reports and the
-operator's replies. Gap: PR review comments, which join with PR subjects (M14).
+operator's replies. Gap: PR review comments, which would join with PR subjects (M14, closed unbuilt).
 
 ### R13. Trusted and untrusted reviewers
 
@@ -314,7 +314,8 @@ compared.
 
 ### R25. One-off private tasks, about no ticket
 
-Built in part (M61, §36): a task runs, and the operator's replies run it again; its report and tickets are to come.
+Built (M61, §36), live acceptance pending: a task runs, the operator's replies run it again, and it leaves a report
+and, with a project, unlabeled tickets.
 Written down 2026-10-21. The operator wants to hand canopy one-off work in their own words that belongs to no ticket:
 exploring a question in the code, or planning the tickets that should follow. A task runs once in a worktree and may
 push a branch, open a draft PR, and file tickets with no queue label. What it leaves is throwaway quality until the
@@ -354,8 +355,8 @@ and a connector, with the operator's own token, and pulls comments rather than l
 
 - Mobile access, remote relay, team or hosted features. Aligned: DESIGN §3, TRUST_MODEL §4.
 - A new CLI that coworkers must learn to get value. Aligned: coworkers' surface is labels, ticket comments, and PR
-  review (DESIGN §2, §4). Only the operator runs `canopy`. M14's sketch authorizes PR work with a label for the same
-  reason.
+  review (DESIGN §2, §4). Only the operator runs `canopy`. M14's sketch, closed unbuilt, authorized PR work with a
+  label for the same reason.
 
 ## Conflicts
 
@@ -373,7 +374,7 @@ Each was settled by the operator, C1 to C4 on 2026-10-06, C5 on 2026-10-08, and 
   server, and the operator prompts a running session with `opencode attach` (M15).
 - **C4. Pushing to the operator's own PR branches vs `trust.branch_prefix` (R9).** Settled by D056: a worker may push
   to the head branch of an open, non-fork PR the operator authored and labeled with a queue label, never with force
-  (TRUST_MODEL T1, §6; to be built in M14, now deferred).
+  (TRUST_MODEL T1, §6; M14 closed without building it).
 - **C5. The web UI as the operator's main surface vs "daily surface is labels, ticket comments, PR review, and one
   attention list" (DESIGN §4 principle 6, N1).** Settled by the operator on 2026-10-08 (D072, D073): the operator's
   own surface moves to the web UI once M20 is built, and private tickets (R11) are answered there or with the CLI.

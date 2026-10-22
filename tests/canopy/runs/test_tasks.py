@@ -16,12 +16,13 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, prompts, records, run_models, spend, sql, tasks
+from canopy.core import config, conversation, db, prompts, records, run_models, spend, sql, task_tickets, tasks
 from canopy.core.context import Context
 from canopy.core.items import Item
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, resources
 from canopy.loop import attention
+from canopy.notify import message
 from canopy.runs import reconcile
 from canopy.runs import tasks as task_starts
 from tests.canopy.helpers import (
@@ -458,6 +459,14 @@ def test_a_running_task_holds_its_slot_through_reconcile(inline: Context, treeho
 
 
 def test_the_task_prompt(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    tickets = prompts.task_tickets(
+        "PROJ",
+        cfg.policy.max_follow_ups,
+        branch=BRANCH,
+        needs_human=cfg.tracker.needs_human_label,
+        labels=cfg.tracker.labels,
+    )
     values = {
         "TASK_ID": "1",
         "TASK": TEXT,
@@ -467,8 +476,9 @@ def test_the_task_prompt(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAsser
         "BASE": "main",
         "TIMEOUT_MINUTES": "45",
         "CONVERSATION": None,
+        "REPORT": tasks.REPORT,
+        "TICKETS": tickets,
     }
-    cfg = config.load(canopy_env.root, canopy_env.user_file)
     assert prompts.render_task(cfg, values) == markdown_snapshot
 
 
@@ -525,6 +535,8 @@ def test_a_later_run_s_prompt_carries_the_conversation(
         "BASE": "main",
         "TIMEOUT_MINUTES": "45",
         "CONVERSATION": conversation.prompt_task_conversation(conn, 1, 3),
+        "REPORT": tasks.REPORT,
+        "TICKETS": prompts.no_task_tickets("the operator submitted this task with no tracker project for its tickets"),
     }
     cfg = config.load(canopy_env.root, canopy_env.user_file)
     assert prompts.render_task(cfg, values) == markdown_snapshot
@@ -723,3 +735,202 @@ def test_no_row_a_replied_task_writes_names_a_ticket(inline: Context) -> None:
         run_task(inline, second.run_id)
     assert [sql.execute(inline.conn, query).fetchone()[0] for query in TICKETS_WORK] == [0] * len(TICKETS_WORK)
     assert {(m.subject_kind, m.subject_id) for m in tasks.messages_of(inline.conn, 1)} == {("task", "1")}
+
+
+# What a task leaves: its report and its tickets
+
+REPORT_TEXT = "# The slow build\n\nThe dependencies are fetched on every job.\n"
+
+
+def writes_report(text: str, *, append: bool = False) -> list[str]:
+    """The command a task's worker runs to write `text` to its report, or to add it to the end."""
+    return ["sh", "-c", f'printf "%s" "$1" {">>" if append else ">"} {tasks.REPORT}', "sh", text]
+
+
+def unrecorded_items(ctx: Context) -> list[Item]:
+    return [i for i in attention.listed(ctx) if i.reason == task_tickets.REASON]
+
+
+def test_the_report_is_kept_shown_and_copied_into_the_next_run(
+    capsys: pytest.CaptureFixture[str],
+    inline: Context,
+    git_pool: GitPool,
+) -> None:
+    submit()
+    [first] = start(inline)
+    # `git add -A` leaves the report out: git in the slot ignores it.
+    work = [writes_report(REPORT_TEXT), ["git", "add", "-A"], *commit_and_push(BRANCH, "task 1: first")]
+    with private_worker_does(*work, result=BLOCKED):
+        run = run_task(inline, first.run_id)
+    kept = tasks.report_path(inline.state_dir, 1, run.id)
+    assert kept.read_text() == REPORT_TEXT
+    assert kept.stat().st_mode & 0o777 == 0o600
+    assert run.report_sha256 is not None
+    assert not (Path(run.slot_path) / tasks.REPORT).exists()
+    assert git("ls-tree", "--name-only", present(run.head), "--", tasks.REPORT, cwd=git_pool.origin) == ""
+    assert operator("show", "task:1") == 0
+    out = capsys.readouterr().out
+    assert f"    report {kept}\n" in out
+    assert f"Report, as run {run.id} left it: {kept}\n" in out
+    assert "    The dependencies are fetched on every job." in out
+    # The next run starts with a copy, and the report it leaves is kept as its own.
+    assert operator("reply", "task:1", "Cache them.") == 0
+    [second] = start(inline)
+    with private_worker_does(writes_report("Cached.\n", append=True), result=DONE):
+        later = run_task(inline, second.run_id)
+    assert tasks.report_path(inline.state_dir, 1, later.id).read_text() == f"{REPORT_TEXT}Cached.\n"
+    assert kept.read_text() == REPORT_TEXT
+    capsys.readouterr()
+    assert operator("show", "task:1") == 0
+    assert f"Report, as run {later.id} left it:" in capsys.readouterr().out
+
+
+def test_a_report_the_operator_edited_is_shown_as_edited(capsys: pytest.CaptureFixture[str], inline: Context) -> None:
+    submit()
+    [started] = start(inline)
+    with private_worker_does(writes_report(REPORT_TEXT), result=DONE):
+        run = run_task(inline, started.run_id)
+    kept = tasks.report_path(inline.state_dir, 1, run.id)
+    kept.write_text("# Mine now\n")
+    assert operator("show", "task:1") == 0
+    out = capsys.readouterr().out
+    assert f"Report, as run {run.id} left it: {kept}: edited since its run left it" in out
+    assert "    # Mine now" in out
+
+
+def test_a_run_that_leaves_no_report_keeps_none(capsys: pytest.CaptureFixture[str], inline: Context) -> None:
+    submit()
+    [started] = start(inline)
+    with private_worker_does(result=DONE):
+        run = run_task(inline, started.run_id)
+    assert run.report_sha256 is None
+    assert not tasks.report_path(inline.state_dir, 1, run.id).exists()
+    assert operator("show", "task:1") == 0
+    assert "Report" not in capsys.readouterr().out
+
+
+def test_created_keys_are_recorded_against_the_task_and_capped(
+    capsys: pytest.CaptureFixture[str],
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+) -> None:
+    assert git_pool.slots
+    canopy_env.configure(canopy_env.user_file, {"policy": {"max_follow_ups": 2}})
+    ctx = inline_context(canopy_env)
+    submit("Plan the tickets for the new importer.", "--project", "PROJ")
+    [started] = start(ctx)
+    with private_worker_does(result={**DONE, "created": ["PROJ-7", "PROJ-8", "PROJ-7", "PROJ-9"]}):
+        run = run_task(ctx, started.run_id)
+    assert run.status is RunStatus.DONE
+    assert [(t.key, t.task_run_id) for t in task_tickets.of_task(ctx.conn, 1)] == [
+        ("PROJ-7", run.id),
+        ("PROJ-8", run.id),
+    ]
+    note = json.loads(present(run.result_json))["harness"]
+    assert note == "tickets not recorded against the task: PROJ-9: past policy.max_follow_ups, 2 from one run"
+    [item] = unrecorded_items(ctx)
+    assert (item.ticket_key, item.reason) == ("task:1", "task_ticket_unrecorded")
+    assert f"task:1's run {run.id} reported 1 ticket that canopy did not record" in item.detail
+    assert "PROJ-9" not in item.detail
+    # Its prompt let it file them in its project alone, at most the bound.
+    [worker] = agent_runs(agent_log)
+    assert "You may file tickets in the tracker's project `PROJ`, and only there" in worker["argv"][-1]
+    assert "File at most 2" in worker["argv"][-1]
+    assert operator("show", "task:1") == 0
+    out = capsys.readouterr().out
+    assert "Tickets (2), unlabeled" in out
+    assert f"  PROJ-7  reported by run {run.id}" in out
+    assert "PROJ-9: past policy.max_follow_ups" in out
+
+
+def test_a_key_outside_the_project_is_unrecorded_and_raises_its_item_until_a_reply(inline: Context) -> None:
+    submit(TEXT, "--project", "PROJ")
+    [started] = start(inline)
+    with private_worker_does(result={**DONE, "created": ["OTHER-3", "PROJ-4", "not a key"]}):
+        run = run_task(inline, started.run_id)
+    assert [t.key for t in task_tickets.of_task(inline.conn, 1)] == ["PROJ-4"]
+    stored = json.loads(present(run.result_json))
+    assert stored["tickets_unrecorded"] == {"keys": ["OTHER-3"], "others": 1}
+    assert "OTHER-3: not in the task's project, PROJ" in stored["harness"]
+    [item] = unrecorded_items(inline)
+    assert "reported 2 tickets" in item.detail
+    # The item is the harness's: the overseer never sees it.
+    assert attention.for_overseer(inline.conn) == []
+    assert operator("reply", "task:1", "Close OTHER-3; it belongs elsewhere.") == 0
+    assert unrecorded_items(inline) == []
+
+
+def test_a_task_with_no_project_records_no_key_and_raises_its_item_until_stopped(
+    inline: Context,
+    agent_log: Path,
+) -> None:
+    submit()
+    [started] = start(inline)
+    with private_worker_does(result={**DONE, "created": ["PROJ-1"]}):
+        run = run_task(inline, started.run_id)
+    assert task_tickets.of_task(inline.conn, 1) == []
+    assert (
+        "PROJ-1: the task names no project, so it files no tickets" in json.loads(present(run.result_json))["harness"]
+    )
+    [worker] = agent_runs(agent_log)
+    assert (
+        "File no tickets in the tracker: the operator submitted this task with no tracker project"
+        in (worker["argv"][-1])
+    )
+    assert [i.ticket_key for i in unrecorded_items(inline)] == ["task:1"]
+    assert operator("stop", "task:1") == 0
+    assert unrecorded_items(inline) == []
+
+
+def test_no_row_a_task_that_files_tickets_writes_names_a_ticket(inline: Context) -> None:
+    submit(TEXT, "--project", "PROJ")
+    [started] = start(inline)
+    with private_worker_does(writes_report(REPORT_TEXT), result={**DONE, "created": ["PROJ-4", "OTHER-1"]}):
+        run_task(inline, started.run_id)
+    assert [t.key for t in task_tickets.of_task(inline.conn, 1)] == ["PROJ-4"]
+    assert [sql.execute(inline.conn, query).fetchone()[0] for query in TICKETS_WORK] == [0] * len(TICKETS_WORK)
+
+
+def test_task_ended_names_the_keys_its_run_recorded(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    assert git_pool.slots
+    sinks = {"told": {"cmd": f"{sink_script} {tmp_path / 'told.txt'}", "events": ["tasks"]}}
+    canopy_env.configure(canopy_env.user_file, {"notify": {"sinks": sinks}})
+    ctx = inline_context(canopy_env)
+    submit(TEXT, "--project", "PROJ")
+    [started] = start(ctx)
+    with private_worker_does(result={**DONE, "created": ["PROJ-4", "OTHER-1", "PROJ-5"]}):
+        run_task(ctx, started.run_id)
+    [(kind, fields)] = sql.execute(ctx.conn, sql.select("kind, fields").from_("notify_events")).fetchall()
+    event = json.loads(fields)
+    assert (kind, event["tickets"]) == ("task.ended", ["PROJ-4", "PROJ-5"])
+    assert "filed PROJ-4, PROJ-5" in message.event_line(kind, event)
+
+
+@pytest.mark.parametrize(
+    ("created", "project", "limit", "recorded", "refused"),
+    [
+        (None, "PROJ", 5, [], []),
+        ({"PROJ-1": None}, "PROJ", 5, [], [(None, "`created` is not a list of ticket keys")]),
+        (["PROJ-1", 7, "a b"], "PROJ", 5, ["PROJ-1"], [(None, "not a ticket key"), (None, "not a ticket key")]),
+        # A key whose shape shows no project is in any, as far as its text shows (D003).
+        (["42", "MY-PROJ-3"], "MY-PROJ", 5, ["42", "MY-PROJ-3"], []),
+        (["PROJ-1"], "PROJ", 0, [], [("PROJ-1", "policy.max_follow_ups is 0")]),
+        (["PROJ-1"], None, 5, [], [("PROJ-1", "the task names no project, so it files no tickets")]),
+    ],
+)
+def test_each_created_entry_is_checked_alone_on_its_text(
+    created: object,
+    project: str | None,
+    limit: int,
+    recorded: list[str],
+    refused: list[tuple[str | None, str]],
+) -> None:
+    checked = task_tickets.check(created, project=project, limit=limit)
+    assert list(checked.recorded) == recorded
+    assert [(r.key, r.why) for r in checked.refused] == refused

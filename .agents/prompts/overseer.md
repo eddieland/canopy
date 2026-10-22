@@ -153,10 +153,11 @@ key and `why`, `not labeled` or `closed`: decide it from that, and do not read i
   time (`at`), and `body` (cut at the mirror's length; `truncated` when it was), and two marks canopy set: `authorized`,
   its author is an authorized replier, and `worker`, it carries the workers' marks (see "Workers' comments");
 - `units`: each one's `pr` (`state`, `head`, `base`, `draft`, `mergeable`, `mergeable_state`, `author`); its `checks`
-  at the head, `human` marking a check that waits on a person, which is not CI and never makes a unit `ci_running` or
-  `ci_red`; `verdicts`, each person's latest approval, change request, or dismissal, whenever it came; and `reviews`,
-  the reviews and review comments past the unit's `review` cursor, oldest first, each marked `trusted` and `worker` by
-  canopy. A unit without a PR has `branch`, the ticket's branch seen on origin, or null;
+  at the head: how many `passed`, the names of those `pending`, each `failed` one with its `conclusion`, `run_id`, and
+  `url`, `stale` naming any that ended neither way, and `human` the checks that wait on a person, which are not CI and
+  never make a unit `ci_running` or `ci_red`; `verdicts`, each person's latest approval, change request, or dismissal,
+  whenever it came; and `reviews`, the reviews and review comments past the unit's `review` cursor, oldest first, each
+  marked `trusted` and `worker` by canopy. A unit without a PR has `branch`, the ticket's branch seen on origin, or null;
 - `derived`, on the ticket and each fresh unit: the rows of the phase table canopy's own reading found holding. It is a
   reading, not a ruling: where the table, applied to the observations, says otherwise, follow the table.
 
@@ -291,7 +292,7 @@ rest. A conflict's context names the PR and its base, such as `'PR 7 conflicts w
 resolve the conflicts.'`; a stacked PR whose blocker is still open keeps its `--base`. A conflict has no cursor: it is
 new while it lasts, and the `resume` attempt limit bounds it.
 
-A fresh unit's `checks` are its head's named checks. Read a stale or unobserved one's as its head commit's check runs
+A fresh unit's `checks` sum up its head's named checks. Read a stale or unobserved one's as its head commit's check runs
 (`pull_request_read` with method `get_check_runs`): GitHub Actions writes only those. Where a repository's CI writes
 commit statuses, read them (`get_status`) too, never instead: an empty `pending` there (`total_count` 0) means nothing
 wrote one, not that checks are running.

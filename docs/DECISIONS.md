@@ -85,7 +85,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D009. The runtime is a command template, and only its implementation in `canopy.runtime` knows it
 
-- `runtime.*_cmd` are templates with `{prompt}` (rendered per D023): how a run starts is config, not code.
+- `runtime.*_cmd` are templates, rendered per D023: how a run starts is config, not code.
 - What canopy reads and writes of OpenCode, its events, definitions' format, config files, and variables, is in
   `runtime/opencode/` alone, which only `runtime/implementation.py` imports; the rest of canopy calls the `runtime`
   package's surface. `test_layers.py` fails on a string naming OpenCode, or an import of it, anywhere else. A new
@@ -157,9 +157,11 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D023. Command templates are split into argv; no shell runs
 
-- `shlex.split`, substitute `{prompt}` exactly once, run the argv. The prompt carries untrusted text.
-- Templates cannot pipe or redirect; a wrapper such as a sandbox is a prefix or a script.
-- Revisit: if the prompt must go on stdin or nears Linux's 128 KiB argument limit.
+- `shlex.split`, substitute `{prompt}` at most once, run the argv. The prompt carries untrusted text.
+- A template that places no `{prompt}` gets the prompt on stdin, as the defaults do: Linux caps one argument at 128
+  KiB, which a state block with the connectors' observations passes (the operator, 2026-10-22).
+- Templates cannot pipe or redirect; a wrapper such as a sandbox is a prefix or a script, and passes stdin through.
+- Revisit: if a runtime takes its message only as an argument.
 
 ## D025. click for every command line
 

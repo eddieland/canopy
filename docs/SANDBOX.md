@@ -176,10 +176,10 @@ worker_cmd_prefix = 'canopy-sandbox worker --read {definitions_dir} --'
 # Multi-line literal strings: the template is split into words, so a line break is only a space.
 chore_cmd = '''canopy-sandbox chore --read {definitions_dir} --
     env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --thinking
-    --title={title} {prompt}'''
+    --title={title}'''
 review_cmd = '''canopy-sandbox review --read {definitions_dir} --
     env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json --thinking
-    --title={title} {prompt}'''
+    --title={title}'''
 # setup_cmd takes no placeholders; give the wrapper no --read.
 setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
 ```
@@ -187,7 +187,7 @@ setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
 - Prefix every one of them. If you wrap the worker templates by hand instead of with `worker_cmd_prefix`,
   `private_worker_cmd` is easy to miss, and a private ticket's worker then runs outside the sandbox.
 - A chore with a `cmd` of its own (DESIGN §19) needs the prefix there too, with `--read {definitions_dir}` only if the
-  command names it: `cmd = 'canopy-sandbox chore -- opencode run --agent build-health --format json {prompt}'`.
+  command names it: `cmd = 'canopy-sandbox chore -- opencode run --agent build-health --format json'`.
 - Leave `overseer_cmd` as it is. The overseer needs the journal and the config the sandbox denies.
 - The reviewer reads the checkout and writes nothing in it, not even a commit, so `review.json` allows reading the
   checkout and its git directories and writing none of them, and leaves `github.com` off the allowlist.

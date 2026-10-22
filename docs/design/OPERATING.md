@@ -120,10 +120,11 @@ Rules:
   workspace sync` warns about push URLs over SSH; nothing else checks the remote.
 
 **Command templates.** A template is split into words with `shlex`, and `{prompt}`, `{definitions_dir}`, and
-`{title}` are replaced inside each word. No shell runs, so the prompt is always exactly one argument (D023). Every
-agent template contains `{prompt}` exactly once and `{definitions_dir}` (§13) at least once. canopy cannot tell where
-the runtime reads it: a custom template, such as a sandbox wrapper's, must still set `OPENCODE_CONFIG_DIR` to it, or
-OpenCode runs its default agent, which allows everything (D040). `notify.cmd` is split the same way and takes no
+`{title}` are replaced inside each word. No shell runs, so the prompt is always exactly one argument, or, in a
+template that places no `{prompt}`, as the defaults do, the command's stdin, where no argument limit applies (D023).
+Every agent template contains `{prompt}` at most once and `{definitions_dir}` (§13) at least once. canopy cannot tell
+where the runtime reads it: a custom template, such as a sandbox wrapper's, must still set `OPENCODE_CONFIG_DIR` to it,
+or OpenCode runs its default agent, which allows everything (D040). `notify.cmd` is split the same way and takes no
 `{prompt}`. `runtime.worker_cmd_prefix` and `worker_cmd_suffix` wrap every command a worker run starts (worker, private
 worker, and plan) from one key, so a sandbox wrapper (§24) cannot miss one; they may not hold `{prompt}`. The
 overseer's, a chore's, and a review's templates are not wrapped: each takes a different sandbox role, or none.
@@ -283,8 +284,8 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 `multi_repo` and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
 `review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `flaky_rerun` (§23), `plan_review`,
 `plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28),
-`drafts_waiting` (§29), `connector_failed` (§30), and `persona_missing` and `bad_persona` (§31). An item about one
-unit names its repository, shown as `KEY (repo)`.
+`drafts_waiting` (§29), `connector_failed` (§30), `persona_missing` and `bad_persona` (§31), and
+`task_ticket_unrecorded` (§36). An item about one unit names its repository, shown as `KEY (repo)`.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
 reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or `worker_failed` (for `failed`). The

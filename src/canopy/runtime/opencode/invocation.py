@@ -18,16 +18,19 @@ CONFIG_DIR_ENV = "OPENCODE_CONFIG_DIR"
 _AGENT_RE = re.compile(r"--agent[ =]([a-z][a-z0-9-]*)(?:\s|$)")
 
 
-def default_template(agent: str, *, definitions_dir: str, title: str, prompt: str) -> str:
-    """The default template that runs `agent`, from config's placeholders for the definitions, title, and prompt.
+def default_template(agent: str, *, definitions_dir: str, title: str) -> str:
+    """The default template that runs `agent`, from config's placeholders for the definitions and title.
+
+    It places no prompt: canopy writes it on stdin, which `opencode run` appends to its message, so no argument limit
+    applies and OpenCode does not quote it as it quotes a message argument that holds a space.
 
     Returns:
-        A template that points OpenCode at `definitions_dir`, and runs `agent` with JSON events, `title` as the
-        session's title, and `prompt` as its message.
+        A template that points OpenCode at `definitions_dir`, and runs `agent` with JSON events and `title` as the
+        session's title.
     """
     return with_config_dir(
         definitions_dir,
-        f"opencode run --agent {agent} --format json --thinking --title={title} {prompt}",
+        f"opencode run --agent {agent} --format json --thinking --title={title}",
     )
 
 

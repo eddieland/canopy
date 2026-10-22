@@ -58,16 +58,17 @@ def cmd_show(click_ctx: click.Context, *, as_json: bool) -> int:
     "--json",
     "as_json",
     is_flag=True,
-    help="Print the commands as one JSON object instead, each as its argv.",
+    help="Print the commands as one JSON object instead, each as its argv and, when the prompt goes there, its stdin.",
 )
 @click.pass_context
 def cmd_commands(click_ctx: click.Context, *, as_json: bool) -> int:
     """Print each command canopy starts its agents with, rendered from your config as a run would render it.
 
-    Each is quoted for a shell, so you can see where one word ends: `<prompt>` stands for the prompt, the title is an
-    example, and the definitions directory is the one a run would use. A worker run's prefix and suffix are in place,
-    and each chore with a command of its own, and `runtime.setup_cmd`, follow. A command may carry a token, so only you
-    read them: it is refused inside one of canopy's own ticks or runs.
+    Each is quoted for a shell, so you can see where one word ends: `<prompt>` stands for the prompt, `< <prompt>` for
+    one written on the command's stdin, the title is an example, and the definitions directory is the one a run would
+    use. A worker run's prefix and suffix are in place, and each chore with a command of its own, and
+    `runtime.setup_cmd`, follow. A command may carry a token, so only you read them: it is refused inside one of
+    canopy's own ticks or runs.
     """
     try:
         conversation.check_operator()
@@ -129,8 +130,14 @@ def render_commands(found: Sequence[Command]) -> list[str]:
     Returns:
         Its lines, without line ends.
     """
-    lines = [f"Each command as a run starts it, with no shell; {agent_commands.PROMPT} stands for the prompt."]
+    prompt = agent_commands.PROMPT
+    header = (
+        f"Each command as a run starts it, with no shell; {prompt} stands for the prompt, and < {prompt} after a "
+        "command means canopy writes it on its stdin."
+    )
+    lines = [header]
     for command in found:
         keys = ", ".join(f"{k.key} ({f'{k.set_in} file' if k.set_in is not None else 'default'})" for k in command.keys)
-        lines.extend(["", f"{command.role}: {keys}", f"  {shlex.join(command.argv)}"])
+        stdin = f" < {command.stdin}" if command.stdin is not None else ""
+        lines.extend(["", f"{command.role}: {keys}", f"  {shlex.join(command.argv)}{stdin}"])
     return lines

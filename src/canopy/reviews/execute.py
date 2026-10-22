@@ -206,7 +206,8 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     title = f"{'revise' if run.revises is not None else 'review'} {run.pr_url}"
-    argv = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
+    command = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
+    argv = command.argv
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
         "running reviewer",
@@ -224,6 +225,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
             argv,
             cwd=cwd,
             env=env,
+            stdin=command.stdin,
             timeout=timeout_minutes * 60,
             on_start=lambda pid: db.set_agent_pid(ctx.conn, "review_runs", run_id, pid),
         )

@@ -340,9 +340,11 @@ def test_labels_must_not_be_empty(canopy_env: CanopyEnv) -> None:
 @pytest.mark.parametrize(
     ("replacement", "message"),
     [
-        ("canopy-overseer", r"runtime\.overseer_cmd: Value error, must contain \{prompt\} exactly once"),
-        ("canopy-overseer {prompt} --copy {prompt}", r"must contain \{prompt\} exactly once"),
-        ("{prompt}{prompt}", r"must contain \{prompt\} exactly once"),
+        (
+            "canopy-overseer {prompt} --copy {prompt}",
+            r"runtime\.overseer_cmd: Value error, must contain \{prompt\} at most once",
+        ),
+        ("{prompt}{prompt}", r"must contain \{prompt\} at most once"),
         ('canopy-overseer "{prompt}', "No closing quotation"),
     ],
 )
@@ -380,26 +382,33 @@ def test_ticket_url_is_refused_unless_a_plain_https_template(canopy_env: CanopyE
 
 def test_render_command_keeps_the_prompt_in_one_argument() -> None:
     prompt = "it's a `prompt` with $HOME; rm -rf / && echo {prompt} {definitions_dir}"
-    argv = render_command("opencode run --agent 'canopy overseer' {prompt}", prompt, Path("/defs"), "tick 1")
-    assert argv == ["opencode", "run", "--agent", "canopy overseer", prompt]
+    rendered = render_command("opencode run --agent 'canopy overseer' {prompt}", prompt, Path("/defs"), "tick 1")
+    assert rendered == config.Rendered(["opencode", "run", "--agent", "canopy overseer", prompt], None)
+
+
+def test_render_command_writes_the_prompt_on_stdin_when_the_template_places_none() -> None:
+    # Past Linux's 128 KiB for one argument, as a state block with many tickets' observations is.
+    prompt = "x {title} {prompt}" * 20_000
+    rendered = render_command("agent run --title={title}", prompt, Path("/defs"), "tick 1")
+    assert rendered == config.Rendered(["agent", "run", "--title=tick 1"], prompt)
 
 
 def test_render_command_fills_in_the_definitions_dir() -> None:
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}"
-    argv = render_command(template, "do {definitions_dir}", Path("/state/runtime/abc"), "tick 1")
+    argv = render_command(template, "do {definitions_dir}", Path("/state/runtime/abc"), "tick 1").argv
     assert argv[:2] == ["env", "OPENCODE_CONFIG_DIR=/state/runtime/abc"]
     assert argv[-1] == "do {definitions_dir}"
 
 
 def test_render_command_fills_in_the_title_and_nothing_inside_the_prompt() -> None:
     template = "agent run --title={title} {prompt}"
-    argv = render_command(template, "do {title}", Path("/defs"), "PROJ-1 implement: {prompt}")
+    argv = render_command(template, "do {title}", Path("/defs"), "PROJ-1 implement: {prompt}").argv
     assert argv == ["agent", "run", "--title=PROJ-1 implement: {prompt}", "do {title}"]
 
 
 def test_a_worker_template_runs_between_the_prefix_and_the_suffix() -> None:
     runtime = config.Runtime(worker_cmd_prefix="wrap --read {definitions_dir} --", worker_cmd_suffix="--model 'a b'")
-    argv = render_command(runtime.worker_template("agent {prompt}"), "do it", Path("/defs"), "PROJ-1 implement")
+    argv = render_command(runtime.worker_template("agent {prompt}"), "do it", Path("/defs"), "PROJ-1 implement").argv
     assert argv == ["wrap", "--read", "/defs", "--", "agent", "do it", "--model", "a b"]
     assert config.Runtime().worker_template("agent {prompt}") == "agent {prompt}"
 
@@ -444,7 +453,9 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.chore_cmd,
         runtime.review_cmd,
     ):
-        assert template.endswith(" --title={title} {prompt}")
+        # No `{prompt}`: canopy writes the prompt on stdin, past any limit on one argument (D023).
+        assert config.PROMPT not in template
+        assert template.endswith(" --title={title}")
         # Events, with the model's reasoning among them, so a transcript shows why a call did what it did (DESIGN §22).
         assert " --format json --thinking " in template
 
