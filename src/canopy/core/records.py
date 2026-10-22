@@ -661,6 +661,8 @@ class Memory(Row):
     invalidated_at: str | None
     wrong_at: str | None
     wrong_run_id: int | None
+    #: When the operator pinned a lesson, which is then never due for review and served first; None if not pinned.
+    pinned_at: str | None
 
 
 @dataclass(frozen=True)

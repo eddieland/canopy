@@ -112,6 +112,22 @@ test("a review that ended badly says on its run's page what it ended on", async 
     await expect(read.locator('summary')).toBeInViewport()
 })
 
+for (const width of [900, 1720]) {
+    test(`a draft's comments each name what they came from on one line, at ${width}px`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 })
+        await page.goto('reviews/5')
+        await settled(page)
+        const comments = page.getByTestId('draft-comments')
+        for (const from of ['finding 1', 'finding 2']) {
+            // A chip is h-5: a label that wraps spills out of it, two lines in the height of one.
+            const spills = await comments
+                .getByText(from, { exact: true })
+                .evaluate((chip) => chip.scrollHeight > chip.clientHeight || chip.scrollWidth > chip.clientWidth)
+            expect(spills).toBe(false)
+        }
+    })
+}
+
 test('a review that does not exist says so', async ({ page }) => {
     await page.goto('reviews/99')
     await expect(page.getByText('no review run 99')).toBeVisible()

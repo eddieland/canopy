@@ -90,7 +90,7 @@ export const HEADLINES: Record<TickerTopic, readonly string[]> = {
         'Tip: canopy loop --every MINUTES sets the wait after each tick, and keeps it on a reload',
         'Tip: canopy loop --no-serve runs the loop without serving the web UI',
         "Tip: canopy decisions TICK_ID prints an older tick's decisions",
-        "Tip: canopy review show lists the last 14 days' reviews; they post nothing on the PR",
+        "Tip: canopy review show lists the last 14 days' reviews; only a draft you publish reaches a PR",
         "Tip: canopy dismiss chore:NAME ID takes a chore's finding off the attention list; --undo takes it back",
         "Tip: canopy reply chore:NAME leaves a note the chore's next runs read, such as a finding to leave out",
         'Tip: canopy chore try NAME --no-record records nothing, for drafting a prompt',

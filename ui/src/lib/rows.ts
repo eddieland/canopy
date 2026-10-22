@@ -216,6 +216,16 @@ export const ROW_COLUMNS = {
         ['title', FREE],
         ['facts', 'auto'],
     ],
+    /**
+     * A comment in a review's draft: its number, what it came from (`yours` or `finding N`), its first line, and where
+     * it is. The chip's column has room for `finding 99` on one line, wider than a finding's severity.
+     */
+    'draft-comment': [
+        ['id', '2.5rem'],
+        ['from', '5.5rem'],
+        ['title', FREE],
+        ['facts', 'auto'],
+    ],
     /** A PR's draft in its threads' head: where it stands, its run and number, its text, and where its card is. */
     'thread-draft': [
         ['state', '6rem'],
@@ -401,6 +411,7 @@ const FROM: Record<RowColumn, string> = {
     decisions: 'col-[decisions/end]',
     facts: 'col-[facts/end]',
     findings: 'col-[findings/end]',
+    from: 'col-[from/end]',
     holder: 'col-[holder/end]',
     id: 'col-[id/end]',
     impact: 'col-[impact/end]',

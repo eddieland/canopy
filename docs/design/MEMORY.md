@@ -66,10 +66,12 @@ replaced, keeps its text until the operator forgets it.
 - An edit writes a lesson anew, the old words kept as history and served to no run. Rejected: an edit in place, which
   would leave a run's citations naming words it never read.
 - At `use`, lessons are in every worker prompt that carries the standing instructions (§8),
-  framed as the operator's words that the prompt's obligations come before; capped, and a lesson naming a repository
-  only in runs that lease it.
-- A lesson unused for a while comes up for review: the operator renews it, graduates it into a repository's AGENTS.md
-  or a skill through a PR they merge, or forgets it.
+  framed as the operator's words that the prompt's obligations come before; capped, pinned lessons kept first, and a
+  lesson naming a repository only in runs that lease it.
+- A lesson unused for a while comes up for review: the operator renews it, pins it, graduates it into a repository's
+  AGENTS.md or a skill through a PR they merge, or forgets it. A pinned lesson never comes up for review, and keeps its
+  pin through each new version under its key until the operator unpins it; a run's report that it is wrong still
+  raises `lesson_wrong`.
 - The attention items (§14), none while proposals are off: `memory_proposal` once a ticket is done, so proposals are
   judged after a merge checked the work, and at `use`, `lesson_review` and `lesson_wrong`.
 

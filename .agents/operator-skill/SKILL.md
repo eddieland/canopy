@@ -65,6 +65,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy memory list`, `proposals`, `lessons`, `search` | Read memory: see Reading memory. |
 | `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
 | `canopy memory renew ID` | Keeps a lesson due for review. |
+| `canopy memory pin ID` | Pins a lesson: never due for review, served first; `unpin` undoes it. |
 | `canopy memory edit ID --text T` | Rewrites a lesson (`--repo R`, `--every-repo`); the old version stays in its history. |
 | `canopy memory history ID` | Every version of a lesson or note, newest first, with how each was made. |
 | `canopy memory forget ID`, `purge` | Deletes one memory's text, or many (`--ticket`, `--run`, `--all`); the rows stay. |

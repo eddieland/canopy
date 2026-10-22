@@ -2,12 +2,14 @@
 
 import json
 import os
+import re
 import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 from unittest import mock
 
 import pytest
+from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, feedback_items, feedback_plans, plan_export, plans, records
@@ -120,6 +122,33 @@ def test_an_export_rewrites_only_what_changed(conn: sqlite3.Connection, state_di
     meta, text = front_matter(dest / KEY / f"{first}-APPROVED-edited.md")
     assert (meta["status"], meta["approved_channel"], text) == ("approved", "web", "# Edited\n")
     assert front_matter(dest / "PROJ-2" / f"{second}-PROPOSED.md")[0]["status"] == "proposed"
+
+
+def test_a_plan_names_its_planners_persona(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    db.touch_ticket(conn, KEY, "/ws")
+    tick_id = db.start_tick(conn, dry_run=False)
+    run_id = db.insert_run(
+        conn,
+        tick_id=tick_id,
+        key=KEY,
+        kind="plan",
+        branch="",
+        slots=[],
+        runs_dir=state_dir,
+        persona="skeptic",
+        persona_digest="0" * 64,
+        persona_text="Doubt everything.\n",
+    )
+    plans.record(conn, KEY, run_id, plans.write(state_dir, KEY, run_id, PLAN))
+    # A run from before canopy recorded its persona has none in its front matter.
+    older = proposed(conn, state_dir, key="PROJ-2")
+    dest = tmp_path / "archive"
+
+    plan_export.export(conn, state_dir, dest)
+
+    meta, text = front_matter(file_of(dest, KEY, run_id))
+    assert (meta["persona"], text) == ("skeptic", PLAN)
+    assert "persona" not in front_matter(file_of(dest, "PROJ-2", older))[0]
 
 
 def test_only_a_plans_own_earlier_names_are_removed(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
@@ -625,6 +654,148 @@ def test_a_reason_the_planner_wrote_stays_one_value() -> None:
     assert head.count("---\n") == 1
 
 
+def indexed(conn: sqlite3.Connection, state_dir: Path, dest: Path) -> plan_export.Exported:
+    """Export into `dest` with its indexes, and nothing but the plans beside them."""
+    return plan_export.export(conn, state_dir, dest, prompts=False, indexes=True)
+
+
+def undated(path: Path) -> str:
+    """An index, each day in it as `<day>`, so its snapshot holds on any day."""
+    return re.sub(r"\d{4}-\d\d-\d\d", "<day>", path.read_text())
+
+
+def test_each_ticket_and_the_export_get_an_index(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+    markdown_snapshot: SnapshotAssertion,
+) -> None:
+    first = prompted(conn, state_dir)
+    plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
+    proposed(conn, state_dir, f"# Plan: {KEY} Export reports as CSV\n")
+    feedback_plan(conn, state_dir, f"# Feedback plan: {KEY} Answer the review\n")
+    other = proposed(conn, state_dir, "# Other's\n", key="PROJ-2")
+    said(conn)
+    dest = tmp_path / "archive"
+
+    exported = plan_export.export(conn, state_dir, dest, conversations=True, indexes=True)
+
+    # Each ticket's once its plans and conversation are, and the one of every ticket last.
+    assert exported.written[-5:] == [
+        f"{KEY}/CONVERSATION.md",
+        f"{KEY}/README.md",
+        f"PROJ-2/{other}-PROPOSED-other-s.md",
+        "PROJ-2/README.md",
+        "README.md",
+    ]
+    assert undated(dest / KEY / "README.md") == markdown_snapshot
+    assert undated(dest / "README.md") == markdown_snapshot
+    assert (dest / KEY / f"{first}-PROMPT.md").exists()
+    assert (dest / "README.md").stat().st_mode & 0o777 == 0o600
+
+    # An index is the same bytes for the same plans, so it is written again only when one of them changed.
+    again = plan_export.export(conn, state_dir, dest, conversations=True, indexes=True)
+    assert again.written == []
+    plans.approve(conn, state_dir, "PROJ-2", channel="web", dispatch_lock=state_dir / DISPATCH_LOCK)
+    exported = plan_export.export(conn, state_dir, dest, conversations=True, indexes=True)
+    assert exported.written == [f"PROJ-2/{other}-APPROVED-other-s.md", "PROJ-2/README.md", "README.md"]
+
+
+def test_a_title_shows_in_an_index_as_text_alone(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    run_id = proposed(conn, state_dir, f"# Plan: {KEY} [Click](https://example.com) <img src=x> | &amp; *now*\n")
+    dest = tmp_path / "archive"
+
+    indexed(conn, state_dir, dest)
+
+    # Never inside a link's text, where a renderer that reads escapes loosely could still find a link of its own.
+    title = r"\[Click\]\(https://example.com\) \<img src=x\> \| \&amp; \*now\*"
+    exported = f"{run_id}-PROPOSED-click-https-example-com-img-src-x-amp-now.md"
+    assert f"| [{run_id}]({exported}) | {title} |" in (dest / KEY / "README.md").read_text()
+    assert f"| [{KEY}]({KEY}/) | 1 | [{run_id}]({KEY}/{exported}) | {title} |" in (dest / "README.md").read_text()
+
+
+def test_a_long_title_is_cut_short_in_an_index(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    proposed(conn, state_dir, f"# Plan: {KEY} {'word ' * 40}\n")
+    dest = tmp_path / "archive"
+
+    indexed(conn, state_dir, dest)
+
+    assert f" | {('word ' * 20).strip()}... | " in (dest / KEY / "README.md").read_text()
+
+
+def test_only_an_index_canopy_wrote_is_rewritten(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    proposed(conn, state_dir)
+    other = proposed(conn, state_dir, key="PROJ-2")
+    dest = tmp_path / "archive"
+    (dest / KEY).mkdir(parents=True)
+    (dest / "README.md").write_text("The operator's own.\n")
+    # A link at the name is the operator's too, and never followed.
+    elsewhere = tmp_path / "elsewhere.md"
+    elsewhere.write_text("Not the export's.\n")
+    (dest / KEY / "README.md").symlink_to(elsewhere)
+
+    exported = indexed(conn, state_dir, dest)
+
+    assert "PROJ-2/README.md" in exported.written
+    assert {"README.md", f"{KEY}/README.md"}.isdisjoint(exported.written)
+    assert (dest / "README.md").read_text() == "The operator's own.\n"
+    assert (dest / KEY / "README.md").is_symlink()
+    assert elsewhere.read_text() == "Not the export's.\n"
+
+    # One canopy wrote is rewritten when its plans change; one whose first line the operator removed is theirs.
+    canopy_wrote = (dest / "PROJ-2" / "README.md").read_text()
+    assert canopy_wrote.startswith(plan_export.INDEX_MARK)
+    (dest / "PROJ-2" / "README.md").write_text(canopy_wrote.removeprefix(plan_export.INDEX_MARK))
+    plans.approve(conn, state_dir, "PROJ-2", channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
+    assert indexed(conn, state_dir, dest).written == [f"PROJ-2/{other}-APPROVED.md"]
+    assert "proposed" in (dest / "PROJ-2" / "README.md").read_text()
+    (dest / "PROJ-2" / "README.md").write_text(plan_export.INDEX_MARK + "An index of an earlier canopy.\n")
+    assert indexed(conn, state_dir, dest).written == ["PROJ-2/README.md"]
+    assert f"[{other}]({other}-APPROVED.md)" in (dest / "PROJ-2" / "README.md").read_text()
+
+
+def test_an_index_says_a_plan_left_as_last_exported_is_not_as_it_stands(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
+    run_id = proposed(conn, state_dir)
+    dest = tmp_path / "archive"
+    indexed(conn, state_dir, dest)
+    plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
+    plans.path_for(state_dir, KEY, run_id).unlink()
+
+    indexed(conn, state_dir, dest)
+
+    # Its row is approved, but the file linked is the one exported while it was proposed.
+    line = f"| [{run_id}]({run_id}-PROPOSED.md) (not exported as it stands) |  | plan | approved |"
+    assert line in (dest / KEY / "README.md").read_text()
+
+
+@pytest.mark.usefixtures("settled")
+def test_an_index_lists_a_plan_it_does_not_read(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    run_id = proposed(conn, state_dir, f"# Plan: {KEY} Export reports as CSV\n")
+    dest = tmp_path / "archive"
+    indexed(conn, state_dir, dest)
+    indexed(conn, state_dir, dest)
+    before = (dest / KEY / "README.md").read_bytes()
+
+    with (
+        mock.patch.object(plans, "read", autospec=True, side_effect=plans.read) as read,
+        mock.patch.object(plan_export, "_read_head", autospec=True, side_effect=plan_export._read_head) as head,  # noqa: SLF001
+    ):
+        assert indexed(conn, state_dir, dest).written == []
+    assert (read.call_count, head.call_count) == (0, 0)
+
+    # Its row changing changes its index, from the title kept for it, still without reading it again for that.
+    plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
+    exported = indexed(conn, state_dir, dest)
+    assert exported.written == [f"{KEY}/{run_id}-APPROVED-export-reports-as-csv.md", f"{KEY}/README.md", "README.md"]
+    after = (dest / KEY / "README.md").read_text()
+    assert after != before.decode()
+    assert f"| [{run_id}]({run_id}-APPROVED-export-reports-as-csv.md) | Export reports as CSV |" in after
+
+
 def test_canopy_archive_exports_and_says_what_it_did(
     conn: sqlite3.Connection,
     state_dir: Path,
@@ -640,10 +811,15 @@ def test_canopy_archive_exports_and_says_what_it_did(
     assert capsys.readouterr().out.splitlines() == [
         f"wrote {KEY}/{run_id}-PROPOSED.md",
         f"wrote {KEY}/{run_id}-PROMPT.md",
+        f"wrote {KEY}/README.md",
+        "wrote PROJ-2/README.md",
+        "wrote README.md",
         f"skipped PROJ-2's plan of run {gone}: its file is missing",
-        f"Exported 1 plan and 1 prompt to {dest}; 0 unchanged, 1 skipped.",
+        f"Exported 1 plan, 1 prompt and 3 READMEs to {dest}; 0 unchanged, 1 skipped.",
     ]
     assert front_matter(dest / KEY / f"{run_id}-PROPOSED.md")[1] == PLAN
+    # A plan with no file is listed all the same, with nothing to link.
+    assert f"| {gone} (not exported) |  | plan | proposed |" in (dest / "PROJ-2" / "README.md").read_text()
 
 
 def test_canopy_archive_exports_conversations_when_asked(
@@ -660,7 +836,9 @@ def test_canopy_archive_exports_conversations_when_asked(
     assert capsys.readouterr().out.splitlines() == [
         f"wrote {KEY}/{run_id}-PROPOSED.md",
         f"wrote {KEY}/CONVERSATION.md",
-        f"Exported 1 plan, 0 prompts and 1 conversation to {dest}; 0 unchanged, 0 skipped.",
+        f"wrote {KEY}/README.md",
+        "wrote README.md",
+        f"Exported 1 plan, 0 prompts, 1 conversation and 2 READMEs to {dest}; 0 unchanged, 0 skipped.",
     ]
 
 
