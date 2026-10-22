@@ -526,6 +526,7 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
         canopy("decide", "PROJ-1", "wait", "--rationale", "waits on a human"),
         canopy("ticket", "set", "PROJ-2", "--phase", "needs_human"),
         canopy("decide", "PROJ-2", "wait", "--rationale", "waits on a human"),
+        queried=None,
     )
     tick_id = ticked.tick.id
     rows = records.fetch_all(
@@ -541,5 +542,5 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
         ("PROJ-1", "agrees"),
         ("PROJ-2", "disagrees"),
     }
-    # In shadow: the tick's decisions are the overseer's alone.
+    # In shadow: the derivation decides nothing. The query the source read is the harness's to record (DESIGN §6).
     assert [d.action for d in db.decisions_for_tick(scenario.conn, tick_id)] == ["queried", "wait", "wait"]
