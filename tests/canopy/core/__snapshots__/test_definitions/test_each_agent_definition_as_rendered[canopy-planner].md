@@ -64,6 +64,16 @@ permission:
   "*get_tag*": deny
   "*search_repositories*": deny
   "*list_repository_collaborators*": deny
+  # GitHub's issue tools, which only the `tracker-github` skill names: off a GitHub tracker, canopy renders their
+  # denial at the marked line, so OpenCode sends none of them. Its issue comment tools stay, for a PR's conversation.
+  # canopy: github issue tools
+  "*issue_read*": deny
+  "*list_issues*": deny
+  "*search_issues*": deny
+  "*issue_write*": deny
+  "*list_issue_types*": deny
+  "*list_issue_fields*": deny
+  "*get_label*": deny
   # Every edit is denied but of `.canopy-new-plan.md` (`plans.WRITTEN`), which canopy reads from the desk's root when
   # the planner exits. Here, after the patterns above: OpenCode matches each key as a wildcard on the permission's name
   # too, so `*edit*` denies the edit tool, and a rule after this block would undo it. OpenCode matches an edit's path

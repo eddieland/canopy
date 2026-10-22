@@ -121,6 +121,9 @@ permission:
   "*get_tag*": deny
   "*search_repositories*": deny
   "*list_repository_collaborators*": deny
+  # GitHub's issue tools, which only the `tracker-github` skill names: off a GitHub tracker, canopy renders their
+  # denial at the marked line, so OpenCode sends none of them. Its issue comment tools stay, for a PR's conversation.
+  # canopy: github issue tools
   # Every tool of the tracker's MCP server is denied by a wildcard, then only its read tools, the tool that creates a
   # ticket, and, where it is GitHub's, the tools that open, update, and reply on a PR, are allowed by name, whole: the
   # last matching rule wins (D021), so a write tool missing from these lists fails closed. GitHub's `issue_write` also
