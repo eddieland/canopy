@@ -115,6 +115,8 @@ describe('ReviewDraftPanel', () => {
         ])
         // The draft's own linked line says it once the draft shows published; the raw URL is the toast's alone.
         expect(within(found).queryByRole('status')).toBeNull()
+        // Posting it drops a leaf, as approving a plan does.
+        expect(within(found).getByTestId('leaf')).toBeTruthy()
 
         cleanup()
         sent = []
@@ -134,6 +136,8 @@ describe('ReviewDraftPanel', () => {
             ])
         })
         expect(writes()[0]?.body).toEqual({ hash: '3f9a1c27b0de', submit: false })
+        // Staging posts nothing anyone sees yet, so it drops no leaf.
+        expect(within(again).queryByTestId('leaf')).toBeNull()
     })
 
     it('says why a publish posted nothing, with a cross', async () => {
@@ -145,6 +149,7 @@ describe('ReviewDraftPanel', () => {
             await within(found).findByText("Version 1 of review run 5's draft was not published: the post failed: 502"),
         ).toBeTruthy()
         expect(toasts).toEqual([{ title: "Version 1 of review run 5's draft was not published", tone: 'failed' }])
+        expect(within(found).queryByTestId('leaf')).toBeNull()
     })
 
     it('offers nothing to publish while the draft is empty', async () => {
@@ -189,6 +194,8 @@ describe('ReviewDraftPanel', () => {
         expect(within(found).queryByRole('button', { name: 'Start the review on GitHub' })).toBeNull()
         expect(within(found).getByTestId('draft-published').textContent).toContain('Published version 1 as your review')
         expect(within(found).getByRole('link', { name: 'on GitHub' }).getAttribute('href')).toBe(url)
+        // Published before the page opened: nothing was just done here, so no leaf.
+        expect(within(found).queryByTestId('leaf')).toBeNull()
     })
 
     it('says where to finish a staged review', async () => {

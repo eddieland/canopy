@@ -14,6 +14,7 @@ import {
 } from '@/api/mutations'
 import type { ReviewDraft, ReviewDraftComment } from '@/api/types'
 import { Textarea } from '@/components/input'
+import { Leaf } from '@/components/leaf'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
@@ -237,7 +238,8 @@ function VersionList({ draft }: { draft: ReviewDraft }) {
  * version N` submits it now (`--submit`), and an outline `Start the review on GitHub` beside it stages it, a pending
  * review for the operator to submit there. A line beside them says what posts, as whom, on whose PR, and on which
  * commit. A toast says what a publish did; a draft staged or published says so in one linked line, and one of unknown
- * outcome or not published says why.
+ * outcome or not published says why. A publish that posted the review, and only that, drops a leaf off the footer, as
+ * approving a plan does: the review is done with, and nothing else waits on it here.
  */
 function PublishFooter({
     run,
@@ -256,11 +258,16 @@ function PublishFooter({
 }) {
     const client = useQueryClient()
     const toast = useToast()
+    // How many publishes here posted the review, not staged it: each drops its leaf once.
+    const [posted, setPosted] = useState(0)
     const publish = useMutation({
         mutationFn: (submit: boolean) => publishReviewDraft(run, draft.hash, submit),
         onSuccess: (published) => {
             onSaid(reviewDraftPublishedText(run, published))
             toast(reviewDraftPublishedToast(run, prUrl, published))
+            if (published.draft.status === 'published') {
+                setPosted((n) => n + 1)
+            }
             void showReviewDraft(client, run, published.draft)
         },
     })
@@ -268,7 +275,9 @@ function PublishFooter({
     // Which of the two is on its way, so only that one says so.
     const submitting = publish.isPending ? publish.variables : null
     return (
-        <PanelFooter>
+        <PanelFooter className="relative">
+            {/* Placed from the footer's corner, over room the buttons leave once published, so it takes none. */}
+            {posted > 0 && <Leaf key={posted} className="top-1 right-3" />}
             {editable(draft) && (
                 <span className="flex flex-wrap items-center gap-2">
                     <Button
