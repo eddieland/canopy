@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import sys
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 import click
 
@@ -31,6 +31,7 @@ from canopy.core import (
     contract,
     conversation,
     db,
+    feedback_items,
     feedback_plans,
     notice,
     pause,
@@ -43,7 +44,7 @@ from canopy.core import (
     review_revisions,
     review_runs,
 )
-from canopy.core.vocab import PlanStatus, RunKind
+from canopy.core.vocab import PlanItem, PlanStatus, RunKind
 from canopy.infra import logs
 from canopy.infra.text import one_line
 from canopy.loop import attention
@@ -51,6 +52,8 @@ from canopy.reviews import grants
 from canopy.runs import halt, policy
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from canopy.core import records
     from canopy.core.context import Context
     from canopy.core.conversation import Ref
@@ -817,19 +820,42 @@ def _show_feedback_plan(ctx: Context, key: str) -> None:
     click.echo(f"  {plans.path_for(ctx.state_dir, key, plan.run_id)}")
     covered = feedback_plans.items(ctx.conn, plan.id)
     who = feedback_plans.authors(ctx.conn, plan.id)
+    checks = feedback_items.check_names(ctx.conn, plan.id)
     several = len({i.pr_url for i in covered}) > 1
     for i in covered:
-        author = who.get((i.pr_url, i.item, i.item_id))
-        line = f"  {i.number}. id {i.item_id}, {one_line(author) if author else 'no author recorded'}, {i.proposal}"
+        line = f"  {i.number}. id {i.item_id}, {_item_what(i, who, checks)}, {i.proposal}"
         line += f", on {i.pr_url}" if several else ""
         click.echo(line + (", left out" if i.left_out else ""))
     if not covered:
-        click.echo("  it covers no review item")
+        click.echo("  it covers no item")
     if plan.spent_run_id is None:
         click.echo(
             f"\nApprove it with `canopy plan {key} --approve`, by item with `--item N` or all but some with "
             f"`--leave N`; ask for changes with `canopy reply {key}`.",
         )
+
+
+def _item_what(
+    item: records.FeedbackPlanItem,
+    who: Mapping[feedback_items.Key, str | None],
+    checks: Mapping[tuple[str, int], str],
+) -> str:
+    """What a feedback plan's item is, for `canopy show`: a review item's author, a check's name, or a conflict.
+
+    Returns:
+        The words, the author's and the check's name each on one line.
+    """
+    match item.item:
+        case PlanItem.REVIEW | PlanItem.COMMENT:
+            author = who.get((item.pr_url, item.item, item.item_id))
+            return one_line(author) if author else "no author recorded"
+        case PlanItem.CHECK:
+            name = checks.get((item.pr_url, item.item_id))
+            return f"failed check {one_line(name)}" if name else "a failed check"
+        case PlanItem.CONFLICT:
+            return "conflict with its base"
+        case _:
+            assert_never(item.item)
 
 
 def _show_plan_threads(ctx: Context, key: str) -> None:

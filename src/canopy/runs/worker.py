@@ -61,6 +61,8 @@ from canopy.runtime import project_config, stdout
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
+    from collections.abc import Set as AbstractSet
+
     from canopy.core import records
     from canopy.core.context import Context
 
@@ -158,7 +160,7 @@ class PlanResult(BaseModel):
 
 
 class FeedbackItem(BaseModel):
-    """One item a feedback plan's result names: an observed id, what it proposes, and the reply it would draft."""
+    """One item a feedback plan's result names: its id, what it proposes, and the reply it would draft."""
 
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
@@ -606,8 +608,9 @@ def _feedback_plan(
     """Run the planner on what came back to the run's PRs, and write and record the feedback plan (DESIGN §32).
 
     Each slot is checked out at the ticket's branch, as its PR's head was pushed. Each PR is read whole through the
-    `vcs` source first: the items the planner may cover are what that read observed, written to its desk with a copy
-    of the feedback plan this one replaces, if the ticket has one, and what changed on its PRs since that plan saw them.
+    `vcs` source first: the items the planner may cover are what that read observed, its reviews and threads, failed
+    checks, and conflicts, written to its desk with a copy of the feedback plan this one replaces, if the ticket has
+    one, and what changed on its PRs since that plan saw them.
     An item the result names that it was not given is refused, with a harness note; the rest are recorded with the
     plan, and with what the read saw, its snapshot (DESIGN §32, Planning again).
 
@@ -630,8 +633,10 @@ def _feedback_plan(
     read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
     if not prs or read.failure is not None:
         raise SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
-    offered = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
-    snapshot = feedback_items.take(ctx.conn, prs, offered)
+    reviews = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
+    snapshot = feedback_items.take(ctx.conn, prs, reviews)
+    human = {units[s.repo]: _human_checks(ctx, s.repo) for s in slots if s.repo in units}
+    offered = [*reviews, *feedback_items.raised(ctx.conn, key, prs, human)]
     desk_files = _feedback_desk(ctx, key, offered)
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.plan_cmd, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
@@ -650,7 +655,17 @@ def _feedback_plan(
     return _record_feedback_plan(ctx, run, parsed, written.text, matched=matched, snapshot=snapshot, log=log)
 
 
-def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Offered]) -> dict[str, str]:
+def _human_checks(ctx: Context, repo: str) -> AbstractSet[str]:
+    """The checks repository `repo` names `human_checks`: they wait on a person, so no feedback plan's items.
+
+    Returns:
+        Their names; none for a repository the map does not have.
+    """
+    found = ctx.workspace.repo(repo)
+    return found.human_checks if found is not None else frozenset[str]()
+
+
+def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Item]) -> dict[str, str]:
     """Return the files a feedback planner's desk holds, each data to it (DESIGN §32).
 
     Returns:
