@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import plans, workspace
+from canopy.core import db, plans, workspace
 from canopy.core.context import DISPATCH_LOCK
 from canopy.loop import archive, attention
 from tests.canopy.helpers import KEY, PLAN, PLAN_PROMPT, prompted, proposed, waits
@@ -156,6 +156,33 @@ def test_prompts_off_archives_plans_alone(scenario: Scenario, clone: Path, upstr
     assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md"]
 
 
+def test_conversations_go_beside_the_plans_when_asked(scenario: Scenario, clone: Path, upstream: Path) -> None:
+    run_id = proposed(scenario.conn, scenario.env.state_dir)
+    db.insert_message(
+        scenario.conn,
+        db.SUBJECT_TICKET,
+        KEY,
+        source="worker",
+        kind="report",
+        channel="run",
+        run_id=run_id,
+        body="Planned it.",
+    )
+    name = workspace.find(scenario.env.root).name
+
+    scenario.tick(*waits(KEY))
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md"], "off by default"
+
+    scenario.configures(paths={"plan_archive_conversations": True})
+    scenario.tick(*waits(KEY))
+
+    assert archived(scenario, upstream) == [f"{name}/{KEY}/{run_id}-PROPOSED.md", f"{name}/{KEY}/CONVERSATION.md"]
+    assert "\n> Planned it.\n" in git("show", f"main:{name}/{KEY}/CONVERSATION.md", cwd=upstream)
+    assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
+        f"Archive 1 conversation of {name}: {KEY}\n\nNew:\n- {KEY}/CONVERSATION.md"
+    )
+
+
 def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Path, upstream: Path) -> None:
     first = proposed(scenario.conn, scenario.env.state_dir)
     second = proposed(scenario.conn, scenario.env.state_dir, key="PROJ-2")
@@ -164,7 +191,9 @@ def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Pa
     with mock.patch.object(archive, "PER_TICK", 1):
         scenario.tick(*waits(KEY, "PROJ-2"))
         assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-PROPOSED.md"]
-        assert unpushed(scenario) == "1 plan waits for the next tick's archive: a tick archives at most 1 files"
+        assert unpushed(scenario) == (
+            "1 plan or conversation waits for the next tick's archive: a tick archives at most 1 files"
+        )
 
         scenario.tick(*waits(KEY, "PROJ-2"))
 

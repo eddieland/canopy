@@ -384,8 +384,7 @@ def _steps(
     _harness_decides(ctx, tick_id, derived, log)
 
     now = datetime.now(UTC)
-    query_due = _query_due(ctx, now)
-    db.set_tick_query(ctx.conn, tick_id, due=query_due)
+    query_due = _query(ctx, tick_id, now, log)
     block, owed, title = _render(
         ctx,
         tick_id=tick_id,
@@ -482,6 +481,25 @@ def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
         phases.record_overseer(ctx.conn, tick_id)
     except Exception as e:
         log.exception("recording the overseer's phases raised", extra={"error": str(e)})
+
+
+def _query(ctx: Context, tick_id: int, now: datetime, log: logs.TickAdapter) -> bool:
+    """Record whether tick `tick_id` runs the tracker query, and, when it does and a source read it, the query itself.
+
+    The harness records a query the state block shows `fresh` at `now`, before the overseer runs, as `canopy queried`
+    would, so what it records is what the overseer reads and the overseer owes no `canopy queried` (DESIGN §6 step 5).
+    One no source read, or read too long ago, stays the overseer's to run.
+
+    Returns:
+        Whether the query is due this tick.
+    """
+    due = _query_due(ctx, now)
+    db.set_tick_query(ctx.conn, tick_id, due=due)
+    found = observations.fresh_query(ctx, now) if due else None
+    if found is not None:
+        named = duties.record_queried(ctx.conn, tick_id, ctx.repo, found)
+        log.info("recorded the query a source read", extra={"tickets": named})
+    return due
 
 
 def _query_due(ctx: Context, now: datetime) -> bool:
