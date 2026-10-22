@@ -39,6 +39,11 @@ def view(conn: sqlite3.Connection, found: records.ReviewDraft, diff: review_diff
         The draft.
     """
     current = review_drafts.newest(conn, found.id)
+    pr = records.fetch_one(
+        conn,
+        records.ObservedPr,
+        sql.select("*").from_("observed_prs").where("url = ?", found.pr_url),
+    )
     return ReviewDraft(
         status=cast("ReviewDraftStatusName", found.status.value),
         why=found.why,
@@ -62,7 +67,8 @@ def view(conn: sqlite3.Connection, found: records.ReviewDraft, diff: review_diff
             )
             for v in review_drafts.versions(conn, found.id)
         ],
-        moved_head=_moved_head(conn, found),
+        pr_author=pr.author if pr is not None else None,
+        moved_head=_moved_head(pr, found),
         published_at=db.parse_time(found.published_at) if found.published_at else None,
         published_url=found.published_url,
     )
@@ -81,17 +87,12 @@ def _comment(number: int, comment: review_drafts.Comment, diff: review_diff.Diff
     )
 
 
-def _moved_head(conn: sqlite3.Connection, draft: records.ReviewDraft) -> str | None:
-    """The PR's head as canopy last read it, when that is past the commit the draft's review read.
+def _moved_head(pr: records.ObservedPr | None, draft: records.ReviewDraft) -> str | None:
+    """The PR's head as canopy last read it, `pr`, when that is past the commit the draft's review read.
 
     Returns:
         The head, or None when canopy has not read the PR or its head is that commit.
     """
-    pr = records.fetch_one(
-        conn,
-        records.ObservedPr,
-        sql.select("*").from_("observed_prs").where("url = ?", draft.pr_url),
-    )
     if pr is None or not pr.head_sha or draft.sha.startswith(pr.head_sha):
         return None
     return pr.head_sha

@@ -231,6 +231,9 @@ class ReviewDraft(Model):
     """How many comments a version may carry; an addition past it is refused."""
     versions: list[ReviewDraftVersion]
     """Every version, oldest first."""
+    pr_author: str | None = None
+    """The PR's author's login as canopy last read the PR, whose PR the review would post on: untrusted text; None
+    when canopy has not read the PR, or the account is gone."""
     moved_head: str | None = None
     """The PR's head when canopy last read it, when that is past the commit the review read: its comments would show
     as outdated there. None when canopy has not read the PR, or its head is that commit."""

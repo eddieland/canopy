@@ -4540,6 +4540,12 @@ export type components = {
              */
             moved_head: string | null;
             /**
+             * Pr Author
+             * @description The PR's author's login as canopy last read the PR, whose PR the review would post on: untrusted text; None
+             *     when canopy has not read the PR, or the account is gone.
+             */
+            pr_author: string | null;
+            /**
              * Published At
              * @description When it was published; None until it is.
              */
