@@ -131,7 +131,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
 def review_transcript(ctx: Context, run_id: int) -> Transcript | None:
     """A review run's session in its log, or None if there is no such run.
 
-    The reviewer's output reaches the log when it ends, so a running review's transcript has no session yet.
+    The reviewer's events reach the log as it prints them, so a running review's transcript is what it did so far.
 
     Returns:
         The transcript, its status saying whether the run recorded a session and whether its log could be read.
