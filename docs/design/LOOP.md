@@ -517,8 +517,9 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
      `{{OPEN_PR}}` in `implement` and `resume` with `runtime.pr_skill` set; `{{OPERATOR_MESSAGES}}` on a public ticket
      once the operator has written to it (§22, D093); `{{STANDING_INSTRUCTIONS}}` with that file set;
      `{{NOTICE}}` while a notice is in force; `{{BRANCH_UPDATE}}` with `trust.rebase`; in `implement` and
-     `resume`, `{{COMMIT_ATTRIBUTION}}` or `{{COMMIT_TRAILER}}` once the trailer's name or address is changed, and
-     `{{COMMIT_ATTRIBUTION}}` once the trailer is off. Older single-repository placeholders still render.
+     `resume`, `{{COMMIT_ATTRIBUTION}}` or `{{COMMIT_TRAILER}}` once the trailer is not the default, by its name,
+     its address, or the run's model, and `{{COMMIT_ATTRIBUTION}}` once the trailer is off. Older single-repository
+     placeholders still render.
    - Every prompt but a split's carries the standing instructions, the operator's file `paths.worker_instructions`
      (§12), or `None.` without one; a file that is missing, not UTF-8, or over 4 KiB is `bad_prompt`, since a worker
      without it would work as if the operator had never written it. It is the operator's own text, an instruction like
@@ -531,8 +532,9 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
      messages. A private ticket's prompt has the same reports in its conversation. A triage's report is in neither
      (§25). An override without it still renders.
    - Every `implement` and `resume` prompt says how to attribute commits: keep the runtime's trailer, or add
-     the one from `trust.commit_trailer_name` and `trust.commit_trailer_email` (§12); with `trust.commit_trailer` off,
-     add none.
+     the one from `trust.commit_trailer_name` and `trust.commit_trailer_email` (§12), naming the model dispatch records
+     on the run (§13, The worker's model), so the worker never names its own; with `trust.commit_trailer` off, add
+     none.
    - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
      tracker writes, and the ticket's latest journal messages, which an override must keep. The start record is read
      again in the transaction that inserts the run, so a `canopy stop` that commits first refuses the dispatch
@@ -646,8 +648,10 @@ Worker obligations, stated in every worker prompt:
   `origin/<base>` instead, never merging, and pushes with `git push --force-with-lease origin HEAD:refs/heads/<branch>`:
   the one force the worker's definition then allows (TRUST_MODEL T1).
 - Keep the runtime's attribution trailer on commits, or add canopy's: `Co-authored-by: canopy worker
-  <noreply@canopy.invalid>` by default, with the name and address from `trust.commit_trailer_name` and
-  `trust.commit_trailer_email` (§12, TRUST_MODEL T5). With `trust.commit_trailer` off, add none.
+  <noreply@canopy.invalid>` by default, `canopy worker (<model>)` for a run with a model, with the name and address
+  from `trust.commit_trailer_name` and `trust.commit_trailer_email` (§12, TRUST_MODEL T5). A name the operator sets
+  names the run's model where it holds `{model}`, `default` for a run on the runtime's default, and none without it.
+  With `trust.commit_trailer` off, add none.
 - Mark every comment and reply it posts, on the ticket or a PR: start it with `trust.comment_prefix` (`CANOPY:` by
   default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below. Under
   `trust.review_replies = "approve"` it posts none on a PR, and on the ticket only without a tracker source that

@@ -61,8 +61,8 @@ Designed in §13, beside where the runtime finds canopy's definitions.
   gone refused `model_missing` with its attention item and no fallback; a failed or timed-out list read refused
   `model_list_failed`; a covered template, prefix, or suffix passing `--model` a config error; the run's
   `model` in `canopy status`, a snapshot, and in the spend split by model.
-- **Follows from this, not built here.** Issue #275: once canopy knows a worker's model before the run starts, the
-  commit trailer (§8, `trust.commit_trailer_name`) can name it, with no change to the shipped prompts.
+- **Follows from this, built beside it.** Issue #275: since canopy knows a worker's model before the run starts,
+  the commit trailer (§8, `trust.commit_trailer_name`) names it, with no change to the shipped prompts.
 
 Accept: Stage 0 recorded, and the design written before work starts. Live, once built: with `runtime.worker_model`
 empty, the operator sets one labeled ticket to a model other than the default with `canopy model`; its `implement`,

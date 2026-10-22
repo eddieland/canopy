@@ -229,7 +229,7 @@ trusted_reviewers = ["github-login", "canopy:review"]   # whose PR feedback a wo
 comment_prefix = "CANOPY:"   # every worker comment starts with it (§8)
 comment_suffix = ""          # and ends with this, if set
 commit_trailer = true                            # a worker adds this trailer when the runtime adds none (§8)
-commit_trailer_name = "canopy worker"            # a worker's commits are co-authored by this (§8)
+commit_trailer_name = "canopy worker"            # co-authors a worker's commits; {model} names its model (§8)
 commit_trailer_email = "noreply@canopy.invalid"  # at this address
 rebase = false               # true: workers rebase and push with a lease, never merge a base in (§8)
 review_replies = "post"      # or "approve": workers draft their comments for the operator to send (§29)
@@ -281,8 +281,8 @@ Validation:
 - `trust.comment_prefix` and `trust.comment_suffix` are each empty or one line of at most 80 characters, with a letter
   or digit, no backtick, and no surrounding spaces, and at least one is set.
 - `trust.commit_trailer_name` is one line of at most 80 characters, with a letter or digit, no backtick or angle
-  bracket, and no surrounding spaces; `trust.commit_trailer_email` is at most 254 characters, with one `@` and no
-  whitespace, backtick, or angle bracket.
+  bracket, no brace but in `{model}`, and no surrounding spaces; `trust.commit_trailer_email` is at most 254
+  characters, with one `@` and no whitespace, backtick, or angle bracket.
 - `trust.branch_prefix` must be non-empty, end in `/`, and consist of plain ref components (letters, digits, `_`, `-`,
   each starting with a letter or digit) joined by `/`. Branch names reach git's argv.
 - `tracker.ticket_url` is empty (no links) or a plain `https://` URL of at most 500 characters with `{key}` exactly
@@ -646,8 +646,9 @@ runtime's default, as today, which is OpenCode config's `model` or the model the
 (§12): a model is what the operator's spend buys, and the provider it names is sent the ticket and the code, so a
 shared workspace file must choose neither (TRUST_MODEL T7). An id, here and in an override, is one line of at most 200
 characters, a provider and a model joined by its first `/`, each non-empty, with no whitespace, control character,
-quote, or backtick. canopy writes it quoted, so no id can add a key to a definition. Config load checks its shape and
-never reads OpenCode's list (below), so it stays fast; dispatch checks the rest.
+quote, backtick, or angle bracket. canopy writes it quoted, so no id can add a key to a definition, and the commit
+trailer that names it (§8) stays one name. Config load checks its shape and never reads OpenCode's list (below), so
+it stays fast; dispatch checks the rest.
 
 **The definition, not the template.** When canopy renders a snapshot (Where the runtime finds canopy's definitions,
 above), it writes the run's model as `model:` in the frontmatter of the covered definitions, and no key for none. The
@@ -758,7 +759,8 @@ what they are about:
 - T1: the worker's model is the operator's choice alone, from `runtime.worker_model` or `canopy model`, which refuses
   `inside_run`. No dispatch flag, label, or state block field lets an agent choose it, and a model OpenCode does not
   list refuses the run rather than falling back. In TRUST_MODEL without the override and dispatch's check yet.
-- T5: a run records the model canopy asked for; the session's record says what served.
+- T5: a run records the model canopy asked for, and its commit trailer names it (§8); the session's record says
+  what served.
 - T7: `runtime.worker_model` is private, as every `runtime` key is.
 - T8: only if the web UI's control is built.
 

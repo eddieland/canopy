@@ -287,6 +287,58 @@ def test_with_a_custom_trailer_an_older_override_naming_it_still_renders(canopy_
     assert text.endswith("add `Co-authored-by: Acme Agent <agent@acme.test>`\n")
 
 
+MODEL = "openai/gpt-5"
+
+
+@pytest.mark.parametrize(
+    ("name", "model", "trailer"),
+    [
+        # The default name names the run's model after itself, and a run on the runtime's default as before.
+        ("canopy worker", MODEL, f"canopy worker ({MODEL})"),
+        ("canopy worker", "", "canopy worker"),
+        # The operator's name names it where it says to, and a run on the runtime's default as `canopy spend` does.
+        ("Acme Agent on {model}", MODEL, f"Acme Agent on {MODEL}"),
+        ("Acme Agent on {model}", "", "Acme Agent on default"),
+        ("{model}", MODEL, MODEL),
+        # A name without the placeholder is the operator's as written: it names no model.
+        ("Acme Agent", MODEL, "Acme Agent"),
+    ],
+)
+def test_the_trailer_names_the_runs_model_as_the_name_says(
+    canopy_env: CanopyEnv, name: str, model: str, trailer: str
+) -> None:
+    canopy_env.configure(canopy_env.user_file, {"trust": {"commit_trailer_name": name}})
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert prompts.commit_trailer(cfg, model) == f"Co-authored-by: {trailer} <noreply@canopy.invalid>"
+
+
+@pytest.mark.parametrize("private", [False, True])
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_shipped_prompts_that_commit_name_the_runs_model(canopy_env: CanopyEnv, kind: str, *, private: bool) -> None:
+    values = {**PROMPT_VALUES, "CONVERSATION": "None."}
+    text = prompts.render_worker(
+        load(canopy_env.root, canopy_env.user_file), kind, values, private=private, model=MODEL
+    )
+    assert f"`Co-authored-by: canopy worker ({MODEL}) <noreply@canopy.invalid>`" in text
+
+
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_with_a_model_an_override_must_name_the_trailer(canopy_env: CanopyEnv, kind: str) -> None:
+    # An override that spells out the default trailer would credit no model on a run that has one: fail closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add the canopy worker trailer\n")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert prompts.render_worker(cfg, kind, PROMPT_VALUES).startswith("Work PROJ-1")
+    with pytest.raises(prompts.PromptError, match=r"\{\{COMMIT_ATTRIBUTION\}\} or \{\{COMMIT_TRAILER\}\}"):
+        prompts.render_worker(cfg, kind, PROMPT_VALUES, model=MODEL)
+    # A name the operator wrote without the placeholder is the same trailer on every model.
+    canopy_env.configure(canopy_env.user_file, {"trust": {"commit_trailer_name": "Acme Agent"}})
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add `{{COMMIT_TRAILER}}`\n")
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, model=MODEL)
+    assert text.endswith("add `Co-authored-by: Acme Agent <noreply@canopy.invalid>`\n")
+
+
 @pytest.mark.parametrize("private", [False, True])
 @pytest.mark.parametrize("kind", prompts.COMMITS)
 def test_with_the_trailer_off_shipped_prompts_add_none(canopy_env: CanopyEnv, kind: str, *, private: bool) -> None:
