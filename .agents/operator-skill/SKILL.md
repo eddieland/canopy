@@ -76,7 +76,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy persona KEY [NAME]` | Sets the ticket's workers' persona until `--clear`; `--agent planner` or `reviewer` for its others. No NAME prints each agent's next persona and where it comes from. `--next`: its next run alone, as `canopy start KEY --persona` and `canopy plan KEY --persona` set it. A PR's URL sets its open review request's. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. Then `canopy decisions`. |
 | `canopy chore install [NAME]` | Sets up a shipped example chore, replacing its prompt and table; no NAME lists them. |
-| `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
+| `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run, so the operator sees its findings in `canopy status` and the web UI. Suggest `--no-record`, which records nothing, only while a new prompt is first being drafted. |
 | `canopy chore history NAME` | A chore's runs, newest first, with what each found; `--run ID` one in detail. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
 | `canopy daemon start [LOOP OPTIONS]`, `stop` | The loop, detached; output in `.canopy/daemon.log`. The operator runs these. |
