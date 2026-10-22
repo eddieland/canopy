@@ -53,9 +53,10 @@ function ReviewsPage() {
     return (
         <>
             <PageHeader title="Reviews">
-                canopy&apos;s own adversarial reviews, newest first. They are yours alone: nothing of them is on the PR,
-                so this page, <code className="font-mono text-xs">canopy review show</code>, and the workers sent to fix
-                their findings are the only places they are.
+                canopy&apos;s own adversarial reviews, newest first. They stay in the journal: this page,{' '}
+                <code className="font-mono text-xs">canopy review show</code>, and the workers sent to fix their
+                findings are the only places they are. A review of a PR the loop does not own is also a draft you may
+                publish, word for word, as your own.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Review a PR" />
