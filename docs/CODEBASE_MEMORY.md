@@ -52,9 +52,9 @@ A joint run, a worker across several repositories, starts in a desk of links (DE
    {
      "agent": {
        "canopy-overseer": {"permission": {"codebase-memory-mcp_*": "deny"}},
-       "canopy-planner": {"permission": {"codebase-memory-mcp_*": "deny"}},
-       "canopy-reviewer": {"permission": {"codebase-memory-mcp_*": "deny"}},
-       "canopy-chore": {"permission": {"codebase-memory-mcp_*": "deny"}},
+       "canopy-planner": {"permission": {"codebase-memory-mcp_*": "deny", "skill": {"codebase-memory": "deny"}}},
+       "canopy-reviewer": {"permission": {"codebase-memory-mcp_*": "deny", "skill": {"codebase-memory": "deny"}}},
+       "canopy-chore": {"permission": {"codebase-memory-mcp_*": "deny", "skill": {"codebase-memory": "deny"}}},
        "canopy-worker": {
          "permission": {
            "codebase-memory-mcp_*": "deny",
@@ -76,14 +76,16 @@ A joint run, a worker across several repositories, starts in a desk of links (DE
    }
    ```
 
-   Give `canopy-worker-private` the same rules as `canopy-worker`. The read tools are the eleven of the server's own
-   `analysis` profile. If you deny skills to the planner, reviewer, and chores as GETTING_STARTED shows, the
-   `codebase-memory` skill goes with them.
+   Give `canopy-worker-private` the same rules as `canopy-worker`, and each chore agent of your own, such as
+   `canopy-introspect`, the same rules as `canopy-chore`: a rule reaches only the agent it names. The read tools are
+   the eleven of the server's own `analysis` profile. The skill is denied by name, so canopy's own skill rules keep
+   their order; the overseer needs no such rule, since with Jira or GitHub as the tracker it is sent no skill tool.
 3. **Tell the workers when to use it**, if the skill alone does not. A line in your `worker_instructions` file
    ([GETTING_STARTED.md](GETTING_STARTED.md#teach-the-loop-your-org)) reaches every worker, such as: "Before changing a
    function, find its callers with `trace_path`. Index the slot with `index_repository` first if `index_status` says it
    is not indexed." A line about one repository goes in its `AGENTS.md` instead.
-4. **Check** with `canopy agents`: the workers list the server's tools, and the other agents do not.
+4. **Check** with `canopy agents`: the workers list the server's tools and the skill, and the other agents neither. A
+   chore's own agent is checked as GETTING_STARTED shows.
 
 ## Indexes and slots
 
@@ -110,7 +112,8 @@ A joint run, a worker across several repositories, starts in a desk of links (DE
   already built.
 - **Not under the sandbox, yet.** The shipped templates (SANDBOX.md) refuse `~/.cache`, where the indexes live, and
   codebase-memory-mcp does its indexing in one daemon per account, shared by every session. Whether a sandboxed run
-  reaches a daemon you started outside it is untested. Until it is, deny the server to sandboxed roles as to the
-  overseer.
+  reaches a daemon you started outside it is untested. Until it is, deny the server to the agents of each role you
+  sandbox, as to the overseer. A rule names an agent, not a sandbox, so it takes the server from every run of that
+  agent: with the workers sandboxed, no worker has it.
 - **Network:** the server makes no request of its own, and sends no telemetry; its optional graph UI listens on
   loopback only when you start it.
