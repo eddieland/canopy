@@ -183,6 +183,7 @@ def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
         last_used_at=_time(m.last_used_at),
         used_by=memory.used_by(ctx.conn, m.id) if m.use_count else [],
         review_at=_time(m.review_at),
+        pinned_at=_time(m.pinned_at),
         wrong_at=_time(m.wrong_at),
         wrong_run_id=m.wrong_run_id,
         promoted_from=m.promoted_from,
@@ -212,10 +213,11 @@ def _digest(found: memory.Digest, *, served: bool) -> MemoryDigest:
     return MemoryDigest(text=found.text, ids=list(found.ids), left_out=found.left_out, served=served)
 
 
-def _review_order(lesson: records.Memory) -> tuple[bool, str, str]:
+def _review_order(lesson: records.Memory) -> tuple[bool, bool, str, str]:
     # Reported wrong first, then by review date: what calls for the operator comes first, and the lessons longest since
-    # vouched for, which the digest leaves out first, come before those it serves.
-    return (lesson.wrong_at is None, lesson.review_at or "", lesson.key)
+    # vouched for, which the digest leaves out first, come before those it serves. A pinned lesson is never due, so it
+    # comes after every one that will be.
+    return (lesson.wrong_at is None, lesson.pinned_at is not None, lesson.review_at or "", lesson.key)
 
 
 def _ticket_notes(found: memory.TicketNotes) -> TicketNotes:
