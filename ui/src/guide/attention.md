@@ -25,8 +25,9 @@ The items come in four groups, in this order, and within a group the one open lo
    ticket or PR at its `attempt limit` or `review limit`; a chore or review that failed; `canopy unavailable`, when
    the overseer couldn't run canopy at all; or `disk low`, when the disk was too full for the overseer to run.
 2. **Waiting on you**, in amber: a worker's question (`awaiting reply`), a review from someone the loop doesn't trust
-   (`untrusted review`), a plan to approve (`plan review`), and replies a run drafted for you to send
-   (`drafts waiting`).
+   (`untrusted review`), a plan to approve (`plan review`), replies a run drafted for you to send
+   (`drafts waiting`), a review you asked for that's done with its draft unpublished (`review waiting`), and a review
+   you staged on GitHub, or whose post never said how it went (`review unsettled`).
 3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, a
    lesson a worker proposed for [memory](memory), or a worker's report of follow-up tickets canopy couldn't record
    (`follow up unrecorded`), until its ticket is done or forgotten. The follow-ups it did record never land here:
@@ -76,6 +77,12 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
 - **Replies waiting on you** (`drafts waiting`): a button to the PR's page, where each reply a run drafted sits on the
   thread it answers, or for a comment on the ticket itself, the draft right here, with **Send**. See
   [Pull requests](pull-requests#replying-to-your-coworkers-reviews).
+- **A review's draft** (`review waiting`, `review unsettled`): a button to the review's page, where its draft is
+  read, edited, and published or staged ([Publishing your review](pull-requests#publishing-your-review)). A review
+  you asked for waits until you publish or stage a draft of the PR's newest reviewed commit, the PR merges or closes,
+  or you dismiss and delete everything the draft would post, which is how you say "thanks, no". A staged one waits
+  until you submit or delete it on GitHub and the next read notices. A review canopy found on its own waits on
+  nobody: read it or don't.
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
   There's nothing to answer here; the item leaves once the command has fixed its cause.
 
@@ -90,8 +97,8 @@ Memory's items carry what they're about. A `memory proposal` lists the proposals
 points you to the memory page, where the lesson a run doubted heads the list. See
 [Memory](memory#keeping-lessons-honest).
 
-An item about a PR no ticket owns, such as one canopy only reviews, offers **Allow one more** when the PR is at its
-review limit. An item about nothing in particular has nothing to answer here: it leaves when you fix its cause.
+Any other item about a PR no ticket owns, such as one canopy only reviews, offers **Allow one more** when the PR is
+at its review limit. An item about nothing in particular has nothing to answer here: it leaves when you fix its cause.
 
 ## Replying
 

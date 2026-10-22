@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from canopy.core import review_drafts, review_runs
 from canopy.core.context import Context
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
-from tests.canopy.helpers import present, reads
+from tests.canopy.helpers import present, reads, waits
 from tests.canopy.observation_helpers import HEAD, observe_pr
 from tests.canopy.review_helpers import FINDINGS, OFF_DIFF, ON_LINE, THEIRS, feature_commit, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, reviews
@@ -216,3 +216,25 @@ def test_a_review_of_the_loops_own_pr_has_no_draft_to_edit_or_publish(
     assert refused(body).startswith("no_draft: ")
     publish = c.post(f"/api/reviews/{own}/draft/publish", json={"hash": "0" * 12}, headers=write)
     assert refused(publish).startswith("no_draft: ")
+
+
+def test_staging_from_the_page_takes_a_requested_review_off_the_attention_list(
+    scenario: Scenario,
+    requested: int,
+    ctx: Context,
+    github_state: Path,
+) -> None:
+    c, write = signed_in_client(ctx)
+    scenario.tick(*waits("PROJ-1", rationale="its PR is out for review"))
+    [item] = [i for i in c.get("/api/attention").json() if i["reason"] == "review_waiting"]
+    assert (item["pr"], item["ticket_key"]) == (THEIRS, None)
+    assert f"review:{requested}" in item["detail"]
+    github_state.write_text(json.dumps({"prs": {THEIRS: {}}}))
+    staged = c.post(
+        f"/api/reviews/{requested}/draft/publish",
+        json={"hash": draft_of(c, requested)["hash"]},
+        headers=write,
+    )
+    assert staged.status_code == 200, staged.text
+    assert "review_waiting" not in [i["reason"] for i in c.get("/api/attention").json()]
+    assert "review_waiting" not in (scenario.env.state_dir / "attention.md").read_text()

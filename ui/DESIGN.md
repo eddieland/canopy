@@ -898,13 +898,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above).
   Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
   where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,
-  `bare`). An item about nothing the page shows
+  `bare`). A review's draft (`review_waiting`, `review_unsettled`): an outline `Read the draft of review:N` (`See`
+  for one unsettled), a router link to the review's page its detail names, in place of the PR's review limit. An item
+  about nothing the page shows
   whose detail names a `canopy` command to run (`repo_missing`): the command,
   `Copyable`, and nothing to answer. A broken run's item shows any limit it is stuck at (below) under its run, as
   what it asks for. A ticket's item then shows its answer (below): its conversation, the reply form, and on the
   reasons above the ticket's own verbs (Start or Stop, Forget) and any other limit as a quiet row under the reply,
   Start and Stop as ghost buttons; on any other reason the verbs and the limit lead, under the head, as what it asks.
-  An item about a PR no ticket owns shows its review limit; a chore's item (a finding or `chore_failed`) shows
+  Any other item about a PR no ticket owns shows its review limit; a chore's item (a finding or `chore_failed`) shows
   the chore's notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`) and, in
   place of its detail, the finding as its chore's page has it (`ChoreFindingText`): the title whole, then what it says
   of itself, then its link on its own line, where the item's detail runs title and link together; an item about none of
