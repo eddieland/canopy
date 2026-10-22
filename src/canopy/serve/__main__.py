@@ -9,9 +9,7 @@ Not an operator command: `canopy loop` serves the operator's own journal (DESIGN
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
-from collections.abc import Sequence
 from pathlib import Path
 
 import click
@@ -24,25 +22,7 @@ from canopy.serve.auth import Sessions
 from canopy.serve.options import ServeOptions
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Parse `argv`, by default the process's own, and serve, or print the schema.
-
-    Returns:
-        The exit code: 0 once served or printed, 2 for a command line it cannot use.
-    """
-    try:
-        found = cli.main(
-            args=None if argv is None else list(argv),
-            prog_name="python -m canopy.serve",
-            standalone_mode=False,
-        )
-    except click.ClickException as e:
-        e.show()
-        return e.exit_code
-    return found if isinstance(found, int) else 0
-
-
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.command("python -m canopy.serve", context_settings={"help_option_names": ["-h", "--help"]})
 @click.argument("action", type=click.Choice(["serve", "openapi"]), default="serve", required=False)
 @click.option("--host", default="127.0.0.1", show_default=True, help="A loopback address.")
 @click.option("--port", type=int, default=8765, show_default=True)
@@ -68,7 +48,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     default=None,
     help="The built UI. Default: the bundled one, or ui/dist.",
 )
-def cli(
+def main(
     *,
     action: str,
     host: str,
@@ -113,4 +93,4 @@ def _check(options: ServeOptions, *, serving: bool, seeded: bool) -> None:
 
 # Guarded: tests/canopy/test_models.py imports every module of canopy.
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
