@@ -124,6 +124,33 @@ def test_an_export_rewrites_only_what_changed(conn: sqlite3.Connection, state_di
     assert front_matter(dest / "PROJ-2" / f"{second}-PROPOSED.md")[0]["status"] == "proposed"
 
 
+def test_a_plan_names_its_planners_persona(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+    db.touch_ticket(conn, KEY, "/ws")
+    tick_id = db.start_tick(conn, dry_run=False)
+    run_id = db.insert_run(
+        conn,
+        tick_id=tick_id,
+        key=KEY,
+        kind="plan",
+        branch="",
+        slots=[],
+        runs_dir=state_dir,
+        persona="skeptic",
+        persona_digest="0" * 64,
+        persona_text="Doubt everything.\n",
+    )
+    plans.record(conn, KEY, run_id, plans.write(state_dir, KEY, run_id, PLAN))
+    # A run from before canopy recorded its persona has none in its front matter.
+    older = proposed(conn, state_dir, key="PROJ-2")
+    dest = tmp_path / "archive"
+
+    plan_export.export(conn, state_dir, dest)
+
+    meta, text = front_matter(file_of(dest, KEY, run_id))
+    assert (meta["persona"], text) == ("skeptic", PLAN)
+    assert "persona" not in front_matter(file_of(dest, "PROJ-2", older))[0]
+
+
 def test_only_a_plans_own_earlier_names_are_removed(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
     run_id = proposed(conn, state_dir)
     dest = tmp_path / "archive"
