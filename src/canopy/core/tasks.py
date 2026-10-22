@@ -4,7 +4,9 @@ Only the operator's channels write a task, and every write here refuses inside a
 TRUST_MODEL T1): the submission, and each reply (`conversation.reply`), is what authorizes a task's run, and its text
 the operator's instruction. The overseer never reads a task. The tick starts a queued one before the overseer runs
 (`runs/tasks.py`), and `_task` records how its run ended (`runs/task_run.py`), with its report and question as
-messages about the task. A task's runs write nothing about any ticket: their rows name the task.
+messages about the task. A run's report file is kept beside the journal, `<state_dir>/tasks/<id>/<run>.md`, as a plan
+is (§25), and the tickets it filed are recorded against the task (`task_tickets.py`). A task's runs write nothing about
+any ticket of canopy's: their rows name the task.
 """
 
 from __future__ import annotations
@@ -13,11 +15,12 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, outbox, pools, records, sql
+from canopy.core import conversation, db, outbox, plans, pools, records, sql, task_tickets
 from canopy.core.conversation import Refused
 from canopy.core.vocab import RunStatus
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
     from canopy.core.config import Config
@@ -33,6 +36,10 @@ MAX_PROJECT = 100
 HOLDER_KEY = "task:"
 #: The branch of task N is `<branch_prefix>task/N`: a ticket key has no `/`, so no ticket's branch takes this shape.
 BRANCH_PART = "task/"
+#: A task's report: a markdown file its worker writes at the slot's root, which git there ignores (DESIGN §36).
+REPORT = ".canopy-task-report.md"
+#: Where reports are kept, `<state_dir>/tasks/<id>/<run>.md`, readable only by the operator, as plans are (§25).
+REPORTS_DIR = "tasks"
 
 
 @dataclass(frozen=True)
@@ -318,6 +325,54 @@ def set_git_link(conn: sqlite3.Connection, run_id: int, link: bytes | None) -> N
     sql.execute(conn, sql.update("task_runs").set(git_link=link).where("id = ?", run_id))
 
 
+def report_path(state_dir: Path, task_id: int, run_id: int) -> Path:
+    """Where the report task run `run_id` left is kept. Built from the ids, never read from a row.
+
+    Returns:
+        `<state_dir>/tasks/<task_id>/<run_id>.md`. The file may not exist.
+    """
+    return state_dir / REPORTS_DIR / str(task_id) / plans.file_name(run_id)
+
+
+def keep_report(state_dir: Path, task_id: int, run_id: int, text: str) -> plans.Written:
+    """Write the report task run `run_id` left to its file, once, readable only by the operator (DESIGN §36).
+
+    Returns:
+        The file's hash and size, for its run's row.
+
+    Raises:
+        PlanFileError: `tasks/` or the task's directory is not the operator's own, or the file's name is taken.
+    """
+    return plans.write_new(state_dir / REPORTS_DIR, str(task_id), plans.file_name(run_id), text, what="report")
+
+
+def latest_report(conn: sqlite3.Connection, state_dir: Path, task_id: int) -> tuple[records.TaskRun, str] | None:
+    """Return the newest report a run of task `task_id` left, as its file stands, with the run: the next run's copy.
+
+    Only a report the journal records is read, never through a link, and one whose file is no longer a report is
+    passed over for an older one.
+
+    Returns:
+        The run and the report's text, or None when no run left one that still reads as one.
+    """
+    query = (
+        sql.select("*")
+        .from_("task_runs")
+        .where("task_id = ? AND report_sha256 IS NOT NULL", task_id)
+        .order_by("id DESC")
+    )
+    for run in records.fetch_all(conn, records.TaskRun, query):
+        reading = plans.read(report_path(state_dir, task_id, run.id))
+        if reading.text is not None:
+            return run, reading.text
+    return None
+
+
+def set_report(conn: sqlite3.Connection, run_id: int, sha256: str) -> None:
+    """Record the hash of the report task run `run_id` left, as `_task` kept it in the state directory (DESIGN §36)."""
+    sql.execute(conn, sql.update("task_runs").set(report_sha256=sha256).where("id = ?", run_id))
+
+
 def close_run(
     conn: sqlite3.Connection,
     config: Config,
@@ -326,11 +381,13 @@ def close_run(
     result_json: str,
     *,
     head: str | None,
+    tickets: Iterable[str] = (),
 ) -> bool:
     """Close task run `run_id` as `status`, with its result and the head its branch was at on origin (DESIGN §36).
 
     In the same transaction it records the run's messages about its task, its report and a `blocked` run's question,
-    each naming the run, and its `task.ended` event when a sink takes `tasks`.
+    each naming the run; `tickets`, the keys `task_tickets.check` passed, against the task; and its `task.ended` event,
+    naming the keys it recorded, when a sink takes `tasks`.
 
     Returns:
         True if this call closed it; False when it was already closed, by reconcile or a stop: nothing is recorded.
@@ -361,7 +418,8 @@ def close_run(
                 body=body,
                 task_run_id=run_id,
             )
-        event = outbox.task_ended(config, run, status, result_json, head=head, message=last)
+        recorded = task_tickets.record(conn, run.task_id, run_id, tickets)
+        event = outbox.task_ended(config, run, status, result_json, head=head, message=last, tickets=recorded)
         if event is not None:
             db.record_event(conn, event)
     return True

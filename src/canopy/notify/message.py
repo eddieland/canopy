@@ -82,6 +82,10 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
             extras.append(f"question: {f.get('question')}")
         if f.get("branch") and f.get("head"):
             extras.append(f"{f.get('branch')} at {str(f.get('head'))[:12]}")
+        given = f.get("tickets")
+        tickets: list[str] = [str(k) for k in cast("list[object]", given)] if isinstance(given, list) else []
+        if tickets:
+            extras.append(f"filed {', '.join(tickets)}")
         return _line(f"{text}: {' '.join(extras)}" if extras else text)
     if kind == "chore.ended":
         findings = f.get("findings") or 0

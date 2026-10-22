@@ -11,7 +11,8 @@ A chore's open findings are on the list too, from its latest `ok` run, and a cho
 ticket key would be, which no ticket key can equal. Only chores configured for this workspace are listed, and no
 finding the operator dismissed (`listed`). A one-off task whose run asked a question waits on the operator's reply: its
 `awaiting_reply` item is read from the journal as it is listed, named `task:<id>` where a ticket key would be, and
-gone once they reply or stop it (DESIGN §36).
+gone once they reply or stop it (DESIGN §36); so is `task_ticket_unrecorded`, for tickets a task's run reported that
+canopy did not record.
 
 After every tick, `publish` rewrites `<state_dir>/attention.md` and hands the list to the notification sinks
 (`canopy.notify`), each told about each open item once however many ticks it lasts (DESIGN §20).
@@ -35,6 +36,7 @@ from canopy.core import (
     follow_ups,
     memory,
     sql,
+    task_tickets,
     tasks,
 )
 from canopy.core.items import Item, age, fingerprint, one_line, subject
@@ -102,6 +104,7 @@ HARNESS_REASONS = frozenset(
         *memory.HARNESS_REASONS,
         drafted.WAITING_REASON,
         follow_ups.REASON,
+        task_tickets.REASON,
     },
 )
 # The window the list reads: how far back to look when working out how long an item has been open. Garbage
@@ -272,8 +275,8 @@ def listed(ctx: Context) -> list[Item]:
 
     A chore deleted from the config, or one whose workspaces leave this one out, is not listed at all, nor is a finding
     the operator dismissed (DESIGN §19). A `drafts_waiting` item says what waits now, not at the tick that recorded
-    it, so one the operator sent or dropped every draft of is gone at once (DESIGN §29). So does a task's
-    `awaiting_reply`, which no tick records (DESIGN §36).
+    it, so one the operator sent or dropped every draft of is gone at once (DESIGN §29). So do a task's
+    `awaiting_reply` and `task_ticket_unrecorded`, which no tick records (DESIGN §36).
     """
     configured = set(chore_view.configured(ctx.config, ctx.workspace))
     items = [
@@ -294,7 +297,9 @@ def listed(ctx: Context) -> list[Item]:
         for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace, starts=ctx.finding_starts)
         if not f.dismissed
     ]
-    return items + [_task_item(w) for w in tasks.awaiting(ctx.conn)] + findings
+    waiting = [_task_item(w) for w in tasks.awaiting(ctx.conn)]
+    unrecorded = [_unrecorded_item(u) for u in task_tickets.unrecorded(ctx.conn)]
+    return items + waiting + unrecorded + findings
 
 
 def _task_item(waiting: tasks.Awaiting) -> Item:
@@ -310,6 +315,21 @@ def _task_item(waiting: tasks.Awaiting) -> Item:
         f"and answer with `canopy reply {ref}`"
     )
     return Item(ref, "awaiting_reply", detail, waiting.at)
+
+
+def _unrecorded_item(found: task_tickets.Unrecorded) -> Item:
+    """A task's `task_ticket_unrecorded` item: it names the task, its run, and how many, never the keys (§36).
+
+    Returns:
+        The item, open since the run ended.
+    """
+    ref = f"{TASK_PREFIX}{found.task_id}"
+    entries = f"{found.count} {'ticket' if found.count == 1 else 'tickets'}"
+    detail = (
+        f"{ref}'s run {found.run_id} reported {entries} that canopy did not record against it: "
+        f"`canopy show {ref}` names each and why. It clears when you reply to the task or stop it"
+    )
+    return Item(ref, task_tickets.REASON, detail, found.at)
 
 
 def _drafts_now(conn: sqlite3.Connection, items: Iterable[Item]) -> list[Item]:

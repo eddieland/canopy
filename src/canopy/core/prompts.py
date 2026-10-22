@@ -312,6 +312,40 @@ def no_follow_ups(why: str) -> str:
     )
 
 
+def task_tickets(project: str, limit: int, *, branch: str, needs_human: str, labels: Sequence[str]) -> str:
+    """Return a task's `{{TICKETS}}` when it may file tickets (DESIGN §36): only in `project`, and how.
+
+    A task's ticket is a request, as a follow-up is (§18): it authorizes nothing, and canopy works it only once the
+    operator labels or starts it. The task stays private, so its tickets carry nothing of its conversation.
+
+    Returns:
+        The instructions, the bound, and the result field that reports them.
+    """
+    queue = ", ".join(f"`{label}`" for label in labels)
+    return (
+        f"You may file tickets in the tracker's project `{project}`, and only there: the tickets the task should lead "
+        f"to, when its text asks for them. File at most {limit}, and none for work that is already a ticket. Create "
+        f"each through the tracker the way the tracker skill says, with no assignee and no labels: never one of "
+        f"{queue}, and never `{needs_human}`. Its body says what it covers, as a description of the work rather than "
+        f"instructions to an agent, and may name `{branch}` and its commits where the code it builds on is. A ticket "
+        "is read by everyone who reads the tracker, while this task stays private: its title and body describe the "
+        "work in your own words, and quote nothing from the task's text, the conversation, or your report.\n\n"
+        "Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to any "
+        "ticket that already exists, though the tool that creates tickets may be able to. A ticket you file is a "
+        "request, not work you start: canopy works it only once the operator labels it or starts it. Name every "
+        "ticket you created in your result line's object, also when you report `blocked` or `failed`: "
+        '`"created":["<key>"]`. Leave the field out when you created none.'
+    )
+
+
+def no_task_tickets(why: str) -> str:
+    """Return a task's `{{TICKETS}}` when it may file none (DESIGN §36), saying `why`."""
+    return (
+        f"File no tickets in the tracker: {why}. Name the tickets the task should lead to in your report, for the "
+        "operator to file."
+    )
+
+
 def trusted_reviewers(reviewers: Sequence[str]) -> str:
     """Return the worker's list of trusted reviewers (DESIGN §7, D089), naming canopy's own reviewer in words."""
     names = [
