@@ -12,6 +12,9 @@ An MCP server's tools are not listed without connecting to it, so a server is ju
 `<server>_` and a NUL: a rule that matches that name matches every tool of the server. A later rule that could match
 only some of them, one naming the server's prefix or starting with a wildcard, makes its reach `some`.
 
+Each command's stdout is captured through a file, not a pipe: with stderr a pipe too, OpenCode exits having written only
+what a pipe's buffer holds, 64 KiB, and `opencode debug skill` prints each skill whole.
+
 A plugin OpenCode loads may print to stdout around a debug command's output (`printed`). OpenCode prints each as JSON
 indented two spaces, so only a line that opens a value and holds nothing else is read as its start: a plugin's own log
 lines, JSON or not, are passed over.
@@ -193,7 +196,13 @@ class _Ask:
         """
         command = f"opencode {' '.join(args)}"
         try:
-            result = self.runner.run([*self.launcher, *args], cwd=self.cwd, env=self.env, timeout=TIMEOUT_SECONDS)
+            result = self.runner.run(
+                [*self.launcher, *args],
+                cwd=self.cwd,
+                env=self.env,
+                timeout=TIMEOUT_SECONDS,
+                stdout_to_file=True,
+            )
         except procs.CommandNotFoundError:
             raise _FailedError(f"{self.launcher[0]} is not on PATH") from None
         except procs.ProcError as e:
