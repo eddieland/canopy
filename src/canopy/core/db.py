@@ -225,6 +225,27 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
     return applied_now
 
 
+def live_runs(conn: sqlite3.Connection) -> list[str]:
+    """Every run that is `running` and whose process is alive, read from any schema this canopy or an older one wrote.
+
+    A run whose `_run` is gone does not count; the next tick's reconcile closes it (DESIGN §6).
+
+    Returns:
+        Each run as a message names it, `run 3` or `review run 4`, by table, then by id.
+    """
+    live: list[str] = []
+    # Every table of detached runs: each process writes its own row when it ends.
+    for table in RUN_TABLES:
+        if not sql.execute(conn, _table_named(table)).fetchone():
+            continue
+        rows = sql.execute(
+            conn,
+            sql.select("id, pid, log_path").from_(table).where("status = 'running'").order_by("id"),
+        )
+        live += [f"{RUN_NOUNS[table]} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
+    return live
+
+
 def _table_named(table: str) -> sql.Select:
     """A query of one row if the journal has a table named `table`, and none if it has not.
 
@@ -236,8 +257,6 @@ def _table_named(table: str) -> sql.Select:
 
 def _check_no_live_runs(conn: sqlite3.Connection) -> None:
     """Refuse to migrate while a `_run` is alive: it was started by an earlier canopy, which wrote the old schema.
-
-    A run whose `_run` is gone does not count; the next tick's reconcile closes it (DESIGN §6).
 
     Raises:
         MigrationError: A run, chore run, review run, or task run is `running` and its process is alive.

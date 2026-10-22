@@ -95,6 +95,8 @@ before every tick (a half-saved edit would apply itself). Prompt files are read 
 
 The daemon runs the same loop in its own session, so it outlives the terminal (D042). Nothing is installed with the OS
 and nothing restarts it. Rejected: launchd or systemd units (an install step the operator did not want).
+Stopping it refuses while runs are running, since a canopy that changes the journal does not start under them; told
+to wait, it ticks no more and stops once they end.
 
 ### Ticks and polls
 

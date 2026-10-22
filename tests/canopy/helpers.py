@@ -212,6 +212,18 @@ def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
     return run_id
 
 
+def live_run(env: CanopyEnv, ctx: Context, key: str) -> int:
+    """Record a running run of `key` whose own process is alive: this one, holding no lifelock.
+
+    Returns:
+        The run's id.
+    """
+    env.journal()  # migrated, as the loop would, so the run can be recorded before it starts
+    run_id = running_run(ctx, key)
+    assert db.claim_run(ctx.conn, "runs", run_id, os.getpid())
+    return run_id
+
+
 def earlier(now: datetime, days: float, hours: float = 0) -> str:
     """The time `days` and `hours` before `now`, as the journal writes it."""
     return db.format_time(now - timedelta(days=days, hours=hours))

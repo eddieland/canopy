@@ -23,7 +23,6 @@ from rich.console import Console
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, pause, review_runs
-from canopy.core.context import Context
 from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import lock, procs, resources
 from canopy.loop import loop_view, repeat, reread, tick_now
@@ -33,6 +32,7 @@ from tests.canopy.helpers import (
     canopy,
     console,
     context,
+    live_run,
     log_file,
     overseer_does,
     present,
@@ -506,18 +506,6 @@ def test_a_second_signal_aborts_only_after_the_window(gap: float, aborts: bool) 
         else:
             os.kill(os.getpid(), signal.SIGINT)
     assert stop.requested
-
-
-def live_run(env: CanopyEnv, ctx: Context, key: str) -> int:
-    """Record a running run of `key` whose own process is alive: this one, holding no lifelock.
-
-    Returns:
-        The run's id.
-    """
-    env.journal()  # migrated, as the loop would, so the run can be recorded before it starts
-    run_id = running_run(ctx, key)
-    assert db.claim_run(ctx.conn, "runs", run_id, os.getpid())
-    return run_id
 
 
 def test_ctrl_c_waits_for_running_runs_to_end_before_the_loop_exits(
