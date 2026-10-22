@@ -23,6 +23,7 @@ from canopy.core import (
     conversation,
     db,
     drafts,
+    feedback_items,
     feedback_plans,
     follow_ups,
     memory,
@@ -907,7 +908,8 @@ def _spawn(
     }
     if kind == policy.FEEDBACK_PLAN:
         values |= {
-            "ITEMS_FILE": feedback_plans.ITEMS,
+            "ITEMS_FILE": feedback_items.ITEMS,
+            "CHANGES_FILE": feedback_items.CHANGES,
             "MAX_ITEMS": str(feedback_plans.MAX_ITEMS),
             "MAX_REPLY": f"{feedback_plans.MAX_REPLY:,}",
             "PULL_REQUESTS": ", ".join(f"`{prs[s.repo or '']}`" for s in slots),

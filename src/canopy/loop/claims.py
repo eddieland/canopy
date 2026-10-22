@@ -11,7 +11,8 @@ a decision, as every guard's is:
   by an authorized replier that is not a worker's, nor to a new operator message; a `resume` for `review` covers no
   feedback by a trusted reviewer, nor the canopy review it names with `canopy:review` trusted, or covers someone else's
   feedback with no operator message after it among those it carries (D089). With feedback plans on, the approval of
-  the plan is the gate instead (§32), so the review check is not made.
+  the plan is the gate instead (§32), so the review check is not made; nor is it on a joint `resume`, which carries
+  no unit's `review` cursor, so its review claim stays a claim.
 - `unobserved`: a cursor names no item observed for its subject, or passes one the block left out for its bound.
 
 A private ticket, which its start record authorizes (§22), is not checked; nor is a subject no source covers, such as
@@ -83,7 +84,7 @@ def check(
     if tracked and ResumeReason.REPLY in reasons:
         _check_reply(ctx, reader, record, cursors)
     gated = ResumeReason.REVIEW in reasons and ctx.config.policy.feedback_plan != "approve"
-    if gated and any(_fresh_pr(units.get(r)) is not None for r in repos):
+    if gated and pr is not None:
         review.check_authority(ctx, record, cursors.get("message"))
 
 

@@ -60,7 +60,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy grant URL review` | One more review for a PR at `max_reviews_per_pr`; `--runs N` for more. |
 | `canopy reply review:ID TEXT` | Asks an agent to revise the draft of a review of another's PR; it posts nothing. |
 | `canopy grant review:ID revision` | One more revision for a draft at `max_revisions_per_draft`; `--runs N` for more. |
-| `canopy plan KEY` | Has a ticket planned before its implement; `--approve` the plan as its file stands, `--skip` it. |
+| `canopy plan KEY` | Has a ticket planned before its implement; `--approve` the plan as its file stands (a feedback plan whole, or `--item N` or `--leave N` by the item's number in `canopy show`, with `--message`), `--skip` it. |
 | `canopy pause`, `canopy resume` | No tick starts until resumed; running workers keep going. `p` in the loop too. |
 | `canopy memory list`, `proposals`, `lessons`, `search` | Read memory: see Reading memory. |
 | `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
@@ -178,6 +178,7 @@ The overseer may record other reasons; the detail says what it wants.
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
 | `review_failed`, `review_limit` | A PR's review failed or hit its limit: `canopy review show`; at the limit, `canopy grant URL review`. |
 | `notice_rerun` | A check failed during an outage your notice named, and the notice has ended: rerun the check. |
+| `flaky_rerun` | A worker judged a failed check flaky and changed nothing for it: rerun the check, or `canopy reply` that it is real. |
 | `repo_missing` | A repository in the workspace map has no clone: `canopy workspace sync`. |
 | `memory_proposal` | A done ticket's runs proposed lessons: `canopy memory proposals`, then `promote` or `reject` each. |
 | `lesson_review` | Lessons are due for review: `canopy memory renew ID`, graduate one into AGENTS.md, or `forget` it. |
