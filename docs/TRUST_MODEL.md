@@ -696,7 +696,8 @@ same exposure as the build scripts a worker runs, T4), agents under other names,
 canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
 agent's name out of JSON escapes or `{file:...}` substitution gets past it, and could then add bash rules to canopy's
 agents. The check of canopy's own servers is a text match too, and JSON escapes get past it the same way; so does a
-server under another name whose tools the runtime names the same, such as one named `canopy` with a tool `git_diff`.
+server under another name whose tools the runtime names the same, such as one named `canopy` with a tool `git_diff`,
+and a wildcard rule such as `canopy_*`, which can deny those tools or allow them, every one already allowed by name.
 A scalar rule canopy sets (the worker's `edit`, `external_directory`, and `task`) replaces whatever such an
 agent sets for it, but OpenCode matches each permission key as a wildcard on the permission's name: an agent that sets
 the same permission and then a key such as `external_*` keeps that key after canopy's rule, and loosens it. These
