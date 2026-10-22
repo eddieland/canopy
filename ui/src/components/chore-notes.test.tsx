@@ -26,6 +26,7 @@ function note(id: number, at: string, body: string): Message {
         channel: 'web',
         answers: null,
         run_id: null,
+        task_run_id: null,
         comment: null,
     }
 }
