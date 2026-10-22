@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db
+from canopy.core.vocab import Decider
 
 if TYPE_CHECKING:
     import sqlite3
@@ -36,10 +37,10 @@ class Duties:
     """What a tick's state block asked of the overseer.
 
     `tickets` are the block's tickets, each owed a decision. The tickets `canopy queried` names are owed one too, read
-    when the tick ends, except the block's `stopped` and `recently_done`, and those the harness decided this tick
-    (DESIGN §37), which are owed nothing. `chores` are the chores due and not running, each owed `chore run` or `chore
-    wait`. `harness` is the newest decision recorded before the overseer ran: those are the harness's, and never count
-    as the overseer's.
+    when the tick ends, except the block's `stopped` and `recently_done`, and those the harness decided or dispatches
+    this tick (DESIGN §37), which are owed nothing. `chores` are the block's chores due and not running, each owed
+    `chore run` or `chore wait`; one with no `when` is the harness's, and not in the block. `harness` is the newest
+    decision recorded before the overseer ran: those, and any the harness records after it, are never the overseer's.
     """
 
     query_due: bool
@@ -62,7 +63,8 @@ def owed(
 ) -> Duties:
     """What the state block rendered from these asks of the overseer, read just before it runs.
 
-    `decided` are the tickets the harness decided this tick, which the block names instead of listing (DESIGN §37).
+    `decided` are the tickets the harness decided this tick or dispatches after the overseer, which the block names
+    instead of listing (DESIGN §37).
 
     Returns:
         The tick's duties.
@@ -124,7 +126,10 @@ def undone(conn: sqlite3.Connection, tick_id: int, duties: Duties) -> list[str]:
     Returns:
         One phrase per kind of duty left undone, empty when the overseer did every one.
     """
-    recorded = [d for d in db.decisions_for_tick(conn, tick_id) if d.id > duties.harness]
+    # The harness's own, before the overseer ran or after (DESIGN §37), are never the overseer's.
+    recorded = [
+        d for d in db.decisions_for_tick(conn, tick_id) if d.id > duties.harness and d.decider is not Decider.HARNESS
+    ]
     queried = [d for d in recorded if d.action == QUERIED_ACTION]
     missing: list[str] = []
     if duties.query_due and not queried:

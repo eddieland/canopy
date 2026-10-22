@@ -45,8 +45,10 @@ its prompt runs.
 
 ### Delegation
 
-The state block lists each chore with its `when`, when it is next due, whether it is running, its latest run, and its
-open findings. Each tick the overseer runs each due chore or records why it waits. Findings inform only decisions about
+The state block lists each chore with a `when`, when it is next due, whether it is running, its latest run, and its
+open findings. Each tick the overseer runs each due chore or records why it waits. A chore with no `when` needs no
+judgment, so the harness runs it when due, after the overseer, with no context (§37), and the overseer's `chore run`
+or `chore wait` about one is refused `decided`. Findings inform only decisions about
 the chore: chores never cause or prevent a dispatch (Open). With no chores, or `capacity.max_chores = 0`, nothing about
 chores reaches the overseer.
 

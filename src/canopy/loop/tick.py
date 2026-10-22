@@ -41,6 +41,7 @@ from canopy.loop import (
     duties,
     gc_pass,
     harness,
+    harness_dispatches,
     observations,
     phases,
     state,
@@ -195,9 +196,11 @@ def _render(
     last_runs = db.latest_runs(ctx.conn)
     # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
     stopped = conversation.stopped(ctx.conn)
-    # A ticket the harness decided is named with its decision, and nothing else of it is shown (DESIGN §37).
+    # A ticket the harness decided, or dispatches after the overseer, is named with what it does, and nothing else of
+    # it is shown (DESIGN §37).
     by_harness = harness.recorded(ctx.conn, tick_id)
-    decided = frozenset(str(d.ticket_key) for d in by_harness)
+    to_come = harness_dispatches.plan(ctx, tick_id, now)
+    decided = frozenset([*(str(d.ticket_key) for d in by_harness), *(r.key for r in to_come.runs)])
     tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in decided]
     private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     operator = {t.key: found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None}
@@ -206,7 +209,10 @@ def _render(
     found = duties.last_queried(ctx.conn)
     since = db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))
     recently_done = [t for t in db.recently_done(ctx.conn, since) if str(t["key"]) in found]
-    chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
+    # A chore with no `when` is the harness's: the block names it only as a dispatch to come (DESIGN §37).
+    chores = [
+        c for c in chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now) if c["when"]
+    ]
     shown = [*(int(r["id"]) for r in running), *(r.id for r in last_runs.values())]
     block = state.state_block(
         ctx.config,
@@ -221,6 +227,7 @@ def _render(
         stopped=stopped,
         recently_done=recently_done,
         harness=harness.section(by_harness),
+        dispatches_to_come=harness_dispatches.section(to_come),
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, shown),
@@ -393,6 +400,8 @@ def _steps(
         return finish(*halted)
     # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
     failure, usage = _run_overseer(ctx, tick_id, block, title, dry_run=dry_run, log=log)
+    # After the overseer, whatever its run ended as; a tick halted before it starts none (DESIGN §37).
+    _harness_dispatches(ctx, tick_id, log)
     if failure is not None:
         return finish(TickStatus.OVERSEER_FAILED, failure, usage)
 
@@ -453,6 +462,18 @@ def _harness_decides(ctx: Context, tick_id: int, derived: Iterable[phases.Derive
         return
     if decided:
         log.info("harness decided", extra={"tickets": [d.key for d in decided]})
+
+
+def _harness_dispatches(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+    """Make the harness's dispatches, after the overseer, in §7's order, each under every guard (DESIGN §37).
+
+    What it raises is logged, never the tick's outcome: what it started stands, and what it did not waits for a later
+    tick.
+    """
+    try:
+        harness_dispatches.make(ctx, tick_id, log)
+    except Exception as e:
+        log.exception("the harness's dispatches raised", extra={"error": str(e)})
 
 
 def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
