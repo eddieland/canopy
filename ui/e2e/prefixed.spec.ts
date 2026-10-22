@@ -367,8 +367,16 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
 }) => {
     // Review 5, of Carol's PR, is the one review with a draft no other test changes (canopy/serve/mock_reviews.py).
     await page.goto('reviews/5')
+    // The page is the draft's record: its title names whose review it is, and its line says where the draft stands.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:5 Your review of acme/api#14 by carol')
+    await expect(page.getByTestId('draft-state')).toHaveText('waitingversion 1 · posts nothing until you publish it')
     const draft = page.getByTestId('review-draft')
-    await expect(draft).toContainText('version 1,')
+    await expect(draft.getByTestId('draft-version')).toHaveText('version 1')
+    // What canopy's reviewer found is folded under the draft until it is opened.
+    const fold = page.getByTestId('reviewer-fold')
+    await expect(fold).not.toContainText('summary')
+    await fold.getByRole('button', { name: 'Show the review' }).click()
+    await expect(fold.getByRole('heading', { name: /^Findings/u })).toBeVisible()
     const comments = page.getByTestId('draft-comment')
     await expect(comments).toHaveCount(2)
 
@@ -382,11 +390,11 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
 
     // Each comment is edited and dropped on its card, at its line of the diff.
     const first = comments.filter({ hasText: 'Comment 1' })
-    await first.getByRole('button', { name: 'edit' }).click()
+    await first.getByRole('button', { name: 'Edit' }).click()
     await first.getByRole('textbox', { name: 'In your words' }).fill('Raise once the attempts run out.')
     await first.getByRole('button', { name: 'Save' }).click()
     await expect(first).toContainText('Raise once the attempts run out.')
-    await comments.filter({ hasText: 'Comment 2' }).getByRole('button', { name: 'drop' }).click()
+    await comments.filter({ hasText: 'Comment 2' }).getByRole('button', { name: 'Drop' }).click()
     await expect(comments).toHaveCount(1)
 
     // A comment of the operator's own, on any line of the diff.
@@ -396,7 +404,7 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
     await form.getByRole('button', { name: 'Save' }).click()
     await expect(comments).toHaveCount(2)
     await expect(comments.filter({ hasText: 'Cap the delay?' })).toContainText('yours')
-    await expect(draft).toContainText('version 5,')
+    await expect(draft.getByTestId('draft-version')).toHaveText('version 5')
     await expect(draft.getByTestId('draft-versions')).toContainText('added a comment on api/upstream.py:14')
 
     // Publish submits it; the outline button beside it would stage it. The mock answers for canopy's GitHub programs:

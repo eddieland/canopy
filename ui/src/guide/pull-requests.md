@@ -218,7 +218,9 @@ the harness decided the review's status itself, such as failing a run that never
 sits, and the diff, a panel per file, with each finding pinned under the line it names. A finding on a line the diff
 doesn't show sits under its file's header, and one about a file the diff doesn't touch waits in a panel of its own after
 the files. A long diff shows the lines around each finding at first, with folds that open the rest. A renamed file is
-headed `old → new`, and a binary one is marked `binary`. A diff too long to keep whole says so at its end.
+headed `old → new`, and a binary one is marked `binary`. A diff too long to keep whole says so at its end. A review that
+holds a draft of yours leads with the draft instead, and folds all this but the diff under it
+([Publishing your review](#publishing-your-review)).
 
 An old review may have no diff kept, either from before canopy kept them or because your `[retention]` removed it with
 the review's log, which the page says as `removed after 30 days`. Its findings list is then the cards themselves, each
@@ -265,16 +267,23 @@ belong to one review, so a new commit's review starts fresh.
 ## Publishing your review
 
 A finished review of a PR the loop doesn't own, a coworker's you asked for or one `review.query` matched, is also the
-first draft of a review you could leave on it. **Draft review**, under the findings, shows exactly what canopy would
-post in your name: the reviewer's summary as the body, each finding on a line of the diff as a comment on that line,
-and a finding the diff doesn't show tucked into the body under its location. The comments sit on the diff beside the
-findings they came from. Every word is the reviewer's, written after reading the PR, so read it as you'd read anything
-a stranger wrote about your coworker's code before signing it: hidden characters are named, never hidden.
+first draft of a review you could leave on it, and its page is about that draft. The title says so, **Your review of
+acme/api#14 by carol**, and the line under it says where the draft stands: waiting on you, staged on GitHub, published,
+or unconfirmed while canopy finds out whether a publish landed. **Draft review** comes first and shows exactly what
+canopy would post in your name: the reviewer's summary as the body, each finding on a line of the diff as a comment on
+that line, and a finding the diff doesn't show tucked into the body under its location. The comments sit on the diff
+beside the findings they came from. Every word is the reviewer's, written after reading the PR, so read it as you'd read
+anything a stranger wrote about your coworker's code before signing it: hidden characters are named, never hidden.
+Hover the version in its header to see who made it and the hash a publish carries.
+
+canopy's own review, the summary, verdict, and findings list from [a review's page](#a-reviews-page), folds under the
+draft as **What the reviewer found**, its status and verdict on the fold. **Show the review** opens it, for when you
+want to check the draft against what the reviewer actually said.
 
 Change it until it says what you would:
 
 - **edit**, beside **Body**, rewrites the body; empty, the comments post alone.
-- **edit** and **drop**, on a comment's card, reword it or leave it out. Dropping a comment leaves its finding alone;
+- **Edit** and **Drop**, on a comment's card, reword it or leave it out. Dropping a comment leaves its finding alone;
   **dismiss** on the finding drops its comment too, and **undo** puts it back.
 - The **+** beside a line's number on the diff, there when you hover the line, opens a comment of your own on it.
 
