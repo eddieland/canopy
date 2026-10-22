@@ -10,11 +10,13 @@ personas, and the fun are kept in this browser; everything else canopy reads fro
 of the header flips it too.
 
 Each theme also has a palette, picked apart. The defaults tint the canvas with the accent's hue: **Lavender** in light,
-**Indigo** in dark. Light can also be **Off-white**, a warm paper, or the light side of **Solarized**, **Nord**, or
-**Gruvbox**. Dark can be a plain **Grey**, a near **Black** for an OLED screen, or the dark side of **Solarized** or
-**Gruvbox**. Only the background, surfaces, and text change; every status color stays where you learned it. Scheme
-purists will notice the bases sit a shade off the spec, so the status colors stay readable on them. Nord's dark side
-didn't make it: moved far enough for that, it was Indigo with a different name.
+**Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, or the light side of
+**Solarized**, **Nord**, **Gruvbox**, or **Rosé Pine** (its Dawn variant). Dark can be a plain **Grey**, a near
+**Black** for an OLED screen, a deep green **Forest**, a wine-dark **Plum**, or the dark side of **Solarized**,
+**Gruvbox**, or **Monokai**. Only the background, surfaces, and text change; every status color stays where you
+learned it. Scheme purists will notice the bases sit a shade off the spec, so the status colors stay readable on them.
+Nord's dark side didn't make it: moved far enough for that, it was Indigo with a different name. Rosé Pine's and
+Dracula's dark sides missed out the same way.
 
 ## Time
 
