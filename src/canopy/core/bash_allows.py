@@ -19,17 +19,18 @@ from canopy.runtime.definitions import BASH_ALLOW_RE, RUNTIME_COMMANDS
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-#: The agents whose shell the key may widen, by the name it keys them by: the overseer, whose bash rules deny every
-#: command but those they name, and the workers, whose rules deny only what they name, so an allow undoes one of those
-#: denies that no check below refuses, such as the private worker's of a tracker's CLI (TRUST_MODEL T6).
+#: The agents whose shell the key may widen, by the name it keys them by: the overseer and the planner, whose bash rules
+#: deny every command but those they name, such as a tracker CLI's reads while its MCP server is down, and the workers,
+#: whose rules deny only what they name, so an allow undoes one of those denies that no check below refuses, such as
+#: the private worker's of a tracker's CLI (TRUST_MODEL T6).
 ROLES: Mapping[str, str] = {
     "overseer": agents.OVERSEER,
     "worker": agents.WORKER,
     "worker-private": agents.PRIVATE_WORKER,
+    "planner": agents.PLANNER,
 }
 #: canopy's other agents, by the name the key would give them, and why none of them takes an allow.
 REFUSED_ROLES: Mapping[str, str] = {
-    "planner": "the planner has no shell, and reads only (DESIGN §25)",
     "reviewer": "the reviewer has no shell: it reads code the loop did not write (TRUST_MODEL T4)",
     "chore": "canopy-chore has no shell; a chore that runs commands names an agent of yours in its cmd (DESIGN §19)",
 }

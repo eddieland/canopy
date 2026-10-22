@@ -244,7 +244,17 @@ def test_bash_allows_are_the_last_of_a_workers_bash_rules(agent: str) -> None:
     assert rules[-1] == '    "jira issue view *": allow'
 
 
-@pytest.mark.parametrize("agent", [agents.PLANNER, agents.REVIEWER, agents.CHORE])
+def test_bash_allows_are_the_planners_only_bash_rules_but_its_deny() -> None:
+    # The planner's shell denies every command, so an allow, after the catch-all, is all it runs.
+    allowing = replace(PLAIN, bash_allows={agents.PLANNER: ("jira issue view *",)})
+    rendered = definitions.render(definitions.bundled(), allowing)
+    text = rendered[f"agents/{agents.PLANNER}.md"].decode()
+    bash = text.split("\n  bash:\n", 1)[1].split("\n  #", 1)[0]
+    rules = [line for line in bash.splitlines() if line.startswith('    "')]
+    assert rules == ['    "*": deny', '    "jira issue view *": allow']
+
+
+@pytest.mark.parametrize("agent", [agents.REVIEWER, agents.CHORE])
 def test_no_agent_without_a_shell_takes_bash_allows(agent: str) -> None:
     rules = replace(PLAIN, bash_allows={agent: ("jira issue list *",)})
     with pytest.raises(agents.DefinitionsError, match=rf"{agent}\.md has no line '# canopy: bash allows'"):
