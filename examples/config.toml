@@ -148,6 +148,9 @@ prompt_overrides = "~/.config/canopy/prompts"
 # <clone>/<workspace>/, with its status and approval, commits, and pushes to the clone's upstream (DESIGN §25). Plans
 # hold what planners read of your tickets: keep the repository private. `canopy archive DIR` does the copy by hand.
 # plan_archive = "~/src/plans"
+# Set false to archive into the clone's top level rather than <clone>/<workspace>/, for a repository that holds this
+# workspace's plans alone. Only what canopy wrote there is committed: each ticket's directory and its own README.md.
+# plan_archive_workspace_dir = true
 # Each plan goes with the prompt its planner was given, which carries your messages and standing instructions. Set
 # false to archive plans alone; `canopy archive DIR` copies prompts either way.
 # plan_archive_prompts = true

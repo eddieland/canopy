@@ -875,6 +875,9 @@ class Paths(Section):
     #: into `<it>/<workspace>/`, commits, and pushes to its upstream (DESIGN §25). Private, since it sends every plan's
     #: text where it points (TRUST_MODEL T6).
     plan_archive: Annotated[UserPath | None, Scope.PRIVATE] = None
+    #: Whether `plan_archive` takes the plans into `<it>/<workspace>/`; off, into its top level, for a clone that
+    #: archives this workspace alone. Private, as `plan_archive` is: it chooses what canopy commits in that clone.
+    plan_archive_workspace_dir: Annotated[StrictBool, Scope.PRIVATE] = True
     #: Whether `plan_archive` also takes the prompt each plan's planner was given, beside its plan. Private, as
     #: `plan_archive` is: a prompt carries the operator's messages and standing instructions.
     plan_archive_prompts: Annotated[StrictBool, Scope.PRIVATE] = True
