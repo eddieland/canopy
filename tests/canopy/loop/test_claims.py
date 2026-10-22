@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Mapping, Sequence
 
+    from tests.canopy.conftest import Ws
+    from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import CanopyEnv
 
 BRANCH = f"agent/{KEY}-work"
@@ -159,6 +161,21 @@ def test_a_resume_for_review_covering_nothing_is_unauthorized(observed: sqlite3.
     action, reason = dispatched(observed, kind="resume", label=LABEL, reasons=["review"])
     assert action == "refused:unauthorized"
     assert reason.startswith(f"a resume for review covers no feedback by a trusted reviewer on {KEY} in repo")
+
+
+def test_a_joint_resume_for_review_keeps_its_claim(ws_scenario: Scenario, ws: Ws) -> None:
+    # A joint resume carries no unit's review cursor, so it covers nothing to check: its claim stays a claim.
+    conn, web = ws_scenario.conn, "https://github.com/acme/web/pull/8"
+    ws_scenario.configures("private", trust={"trusted_reviewers": ["octocat"]})
+    db.touch_ticket(conn, KEY, str(ws.root))
+    conn.execute("UPDATE tickets SET branch = ?", (BRANCH,))
+    for repo, url in (("api", PR), ("web", web)):
+        conn.execute("INSERT INTO ticket_units (ticket_key, repo, branch) VALUES (?, ?, ?)", (KEY, repo, BRANCH))
+        db.set_unit(conn, KEY, str(ws.root), repo, pr_url=url)
+        observe_pr(conn, url=url, at=ago())
+    review(conn, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    joint = ["dispatch", KEY, "--repo", "api", "--repo", "web", "--kind", "resume", "--label", LABEL]
+    ws_scenario.overseer(*joint, "--reason", "review", dry_run=True)
 
 
 @pytest.mark.parametrize(
