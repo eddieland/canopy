@@ -439,6 +439,20 @@ describe('TranscriptPanel', () => {
         expect(rows().queryByText(/thought 8/u)).toBeNull()
     })
 
+    it('drops the blank lines thinking ends on, whole or folded', () => {
+        const entries: TranscriptEntry[] = [
+            { kind: 'text', call: 1, at: AT, text: 'a plan\n\n', reasoning: true, cut: false },
+            { kind: 'text', call: 1, at: AT, text: 'one\ntwo\nthree\n\nfour\nfive', reasoning: true, cut: false },
+        ]
+        render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
+        expect(
+            rows()
+                .getByText(/a plan/u)
+                .closest('p')?.textContent,
+        ).toBe('thinkinga plan')
+        expect(rows().getByText(/one/u).closest('p')?.textContent).toBe('thinkingone\ntwo\nthree')
+    })
+
     it('shows long thinking whole with All open, or when the search holds a line it folds away', () => {
         const thought = Array.from({ length: 8 }, (_, i) => `thought ${i + 1}`).join('\n')
         const entries: TranscriptEntry[] = [

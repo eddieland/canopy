@@ -29,6 +29,7 @@ from canopy.core.context import Context, db_path
 from canopy.infra import logs
 from canopy.serve import live, mock_reviews, secret, server, views
 from canopy.serve import mock as serve_mock
+from canopy.serve import options as serve_options
 from canopy.serve.__main__ import main
 from canopy.serve.api import session
 from canopy.serve.app import create_app
@@ -55,7 +56,7 @@ from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
 from tests.canopy.helpers import granted_meanwhile, present
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, SECRET, client, free_port, signed_in
-from tests.conftest import Journals
+from tests.conftest import Journals, invoke
 
 INDEX = """<!doctype html>
 <html lang="en">
@@ -591,6 +592,13 @@ def test_a_stream_with_a_lifetime_ends_on_its_own_after_its_first_events(ui: Pat
     assert not any(isinstance(e.root, StreamEnding) for e in events[:-1])
 
 
+def test_every_server_ends_its_streams_on_its_own(ui: Path, backend: Backend) -> None:
+    # A forwarder can hold a stream open after its page has gone (#1299): only the lifetime ends it then.
+    with mock.patch.object(serve_options, "STREAM_SECONDS", 0.3):
+        response = client(ui, backend).get("/api/events")
+    assert response.text.rstrip().endswith('data: {"type":"stream.ending"}')
+
+
 def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None:
     recent = db.recent_tickets
     replied: list[bool] = []
@@ -982,18 +990,17 @@ def test_the_mock_journal_covers_every_run_state_and_message_source(ui: Path, ba
     assert sources == {"worker", "operator", "tracker"}
 
 
-def test_the_development_server_serves_mock_data_only(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit):
-        main(["serve"])
-    assert "--mock" in capsys.readouterr().err
-    with pytest.raises(SystemExit):
-        main(["serve", "--mock", "--host", "10.0.0.5"])
-    assert "loopback" in capsys.readouterr().err
+def test_the_development_server_serves_mock_data_only() -> None:
+    unseeded = invoke(main, ["serve"])
+    assert unseeded.exit_code == 2
+    assert "--mock" in unseeded.stderr
+    public = invoke(main, ["serve", "--mock", "--host", "10.0.0.5"])
+    assert public.exit_code == 2
+    assert "loopback" in public.stderr
 
 
-def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFixture[str]) -> None:
-    main(["openapi"])
-    schema = json.loads(capsys.readouterr().out)
+def test_openapi_names_the_stream_event_and_every_route() -> None:
+    schema = json.loads(invoke(main, ["openapi"]).stdout)
     names = {
         "Run",
         "RunState",
@@ -1112,9 +1119,8 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
     assert set(schema["paths"]) == paths
 
 
-def test_openapi_describes_every_route_parameter_error_and_field(capsys: pytest.CaptureFixture[str]) -> None:
-    main(["openapi"])
-    schema = json.loads(capsys.readouterr().out)
+def test_openapi_describes_every_route_parameter_error_and_field() -> None:
+    schema = json.loads(invoke(main, ["openapi"]).stdout)
     assert schema["info"]["version"] == version("canopy")
     assert schema["info"]["description"]
     tags = {t["name"] for t in schema["tags"] if t["description"]}

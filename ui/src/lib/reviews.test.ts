@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ReviewFinding, ReviewSummary } from '@/api/types'
 
-import { placeFindings, shortSha, verdictText, verdictTone } from './reviews'
+import { placeFindings, requestGroups, shortSha, siblingsOf, verdictText, verdictTone } from './reviews'
 
 function finding(title: string, file: number | null, line: number | null): ReviewFinding {
     return { severity: 'minor', title, location: '', detail: '', file, line, dismissed: false }
@@ -26,8 +26,10 @@ const REVIEW: ReviewSummary = {
     ended_at: '2026-10-08T11:04:00Z',
     cost_usd: 0.24,
     persona: 'canopy',
+    request_id: null,
     news: true,
     seen: true,
+    draft: null,
 }
 
 describe('placeFindings', () => {
@@ -81,4 +83,24 @@ describe('verdictTone', () => {
 
 it('shortens a commit to 7 characters', () => {
     expect(shortSha(REVIEW.sha)).toBe('9b2f4c6')
+})
+
+// A review's id, the request it answers, and the commit it read: all that groups it.
+function of(id: number, request: number | null, sha = 'a') {
+    return { id, request_id: request, sha }
+}
+
+describe('requestGroups', () => {
+    it("pulls a request's reviews of one commit together where the first is, and keeps the rest in place", () => {
+        const reviews = [of(9, 1), of(8, null), of(7, 2), of(6, 1), of(5, 1, 'b'), of(4, null)]
+        expect(requestGroups(reviews).map((group) => group.map((r) => r.id))).toEqual([[9, 6], [8], [7], [5], [4]])
+    })
+})
+
+describe('siblingsOf', () => {
+    it("names the request's other reviews of the same commit, and none for a review the loop started", () => {
+        const runs = [of(9, 1), of(8, 1), of(7, 1, 'b'), of(6, 2), of(5, null), of(4, null)]
+        expect(siblingsOf(of(9, 1), runs).map((r) => r.id)).toEqual([8])
+        expect(siblingsOf(of(5, null), runs)).toEqual([])
+    })
 })

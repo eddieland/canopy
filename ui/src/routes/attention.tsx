@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ChevronLeft, GitPullRequest, MessageSquareReply } from 'lucide-react'
+import { ChevronLeft, FileText, GitPullRequest, MessageSquareReply } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -41,11 +41,21 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { answered } from '@/lib/acknowledged'
-import { ask, bySeverity, commandOf, nextWaiting, pullRequestOf, severity, shownDetail } from '@/lib/attention'
+import {
+    ask,
+    bySeverity,
+    commandOf,
+    nextWaiting,
+    pullRequestOf,
+    reviewOf,
+    severity,
+    shownDetail,
+} from '@/lib/attention'
 import type { Ask, Severity } from '@/lib/attention'
 import { settled, withLeaving } from '@/lib/leaving'
 import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
+import { reviewRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import type { Tone } from '@/lib/tone'
@@ -334,7 +344,8 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
                 <ReasonChip item={item} />
                 {done && <Answered />}
                 <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-                    {item.subject}
+                    {/* A PR no ticket owns is named as the PR is everywhere, not by its URL behind `pr:`. */}
+                    {item.pr === null ? item.subject : pullRequestLabel(item.pr)}
                     {item.finding ? ` ${item.reason}` : ''}
                 </span>
                 <Age at={item.since} className="ml-auto" />
@@ -366,9 +377,10 @@ function Answered() {
  * "The attention detail"): a broken run's row, the PR's link out, the plan's card, the proposals or lessons memory's
  * items name, or the command to run. A ticket's item then shows its answer: its conversation and the reply form, with
  * the ticket's own actions and grants under them, or ahead of them when the reason asks for nothing else; a chore's
- * item its notes and the form for another, and for a finding the button to dismiss it; a PR's item its review limit
- * and its grant, for a PR no ticket owns; an item about none of them, what it says. `onReplied` hears each reply sent
- * from it, with what the form said of it.
+ * item its notes and the form for another, and for a finding the button to dismiss it; a review's draft's item the
+ * review's page, where the draft is read and published; a PR's other item its review limit and its grant, for a PR no
+ * ticket owns; an item about none of them, what it says. `onReplied` hears each reply sent from it, with what the
+ * form said of it.
  */
 function Detail({ item, done, onReplied }: { item: AttentionItem; done: boolean; onReplied: (said: string) => void }) {
     const asks = ask(item)
@@ -386,7 +398,8 @@ function Detail({ item, done, onReplied }: { item: AttentionItem; done: boolean;
                 <Thread item={item} ticketKey={item.ticket_key} asks={asks} onReplied={onReplied} />
             )}
             {item.chore !== null && <ChoreThread name={item.chore} />}
-            {item.pr !== null && <PullRequestLimits url={item.pr} />}
+            {asks === 'review' && <ReviewAction item={item} />}
+            {item.pr !== null && asks !== 'review' && <PullRequestLimits url={item.pr} />}
             {command !== null && <RunCommand command={command} />}
             {asks === 'none' && item.ticket_key === null && item.chore === null && item.pr === null && (
                 <NothingToAnswer />
@@ -679,6 +692,27 @@ function DraftsAction({ item, ticketKey, drafts }: { item: AttentionItem; ticket
                 <Link to="/pull-requests/pr" search={{ url }}>
                     <MessageSquareReply />
                     Read the drafts on {pullRequestLabel(url)}
+                </Link>
+            </Button>
+        </div>
+    )
+}
+
+/**
+ * A review's draft that waits on the operator (DESIGN §34): the review's page, where the draft is read, edited, and
+ * published or staged; for one staged or of unknown outcome, where it says how it stands until a read settles it.
+ */
+function ReviewAction({ item }: { item: AttentionItem }) {
+    const id = reviewOf(item)
+    if (id === null) {
+        return null
+    }
+    return (
+        <div className="flex flex-wrap items-center gap-2 border-b p-3" data-testid="attention-review">
+            <Button asChild variant="outline">
+                <Link to="/reviews/$id" params={{ id: String(id) }}>
+                    <FileText />
+                    {item.reason === 'review_waiting' ? 'Read the draft of' : 'See the draft of'} {reviewRef(id)}
                 </Link>
             </Button>
         </div>

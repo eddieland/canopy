@@ -3,6 +3,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 
 import { dismissFinding, dismissReviewFinding, refreshFindings, refreshReview } from '@/api/mutations'
+import type { ReviewDismissed } from '@/api/types'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import { dismissedText, reviewDismissedText } from '@/lib/outcomes'
@@ -29,18 +30,30 @@ export function useDismissFinding(chore: string, finding: string, dismissed: boo
 
 /**
  * `canopy dismiss review:ID N` on one of a review's findings (DESIGN §21): `button` dismisses it, so no worker or tick
- * acts on it, or undoes that; `notice` as for a chore's finding. Both undo as `canopy dismiss --undo` does.
+ * acts on it, or undoes that; `notice` as for a chore's finding. Both undo as `canopy dismiss --undo` does. `words`, on
+ * a review with a draft, names the button and says what a click did in the draft's terms, where the dismissal leaves
+ * the finding out of the operator's review and taking it back puts it in again (DESIGN §34).
  */
-export function useDismissReviewFinding(run: number, finding: number, dismissed: boolean) {
+export function useDismissReviewFinding(run: number, finding: number, dismissed: boolean, words?: DismissalWords) {
     const client = useQueryClient()
     return useDismiss({
         dismissed,
-        act: async (undo) => reviewDismissedText(await dismissReviewFinding(run, finding, undo)),
+        act: async (undo) => (words?.said ?? reviewDismissedText)(await dismissReviewFinding(run, finding, undo)),
         refresh: () => refreshReview(client, run),
-        labels: ['dismiss', 'undo'],
-        titles: ['No worker or tick acts on it', 'Hand it to a resumed worker again'],
+        labels: words?.labels ?? ['dismiss', 'undo'],
+        titles: words?.titles ?? ['No worker or tick acts on it', 'Hand it to a resumed worker again'],
         testId: `finding-${finding}`,
     })
+}
+
+/** What a review finding's dismissal button is called and says, each pair as `[dismiss, undo]`. */
+export interface DismissalWords {
+    /** The button's label. */
+    labels: [string, string]
+    /** Its title, shown on hover. */
+    titles: [string, string]
+    /** What a click did, from the server's answer. */
+    said: (dismissed: ReviewDismissed) => string
 }
 
 interface Dismissal {

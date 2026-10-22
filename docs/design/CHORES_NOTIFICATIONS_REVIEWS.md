@@ -183,13 +183,13 @@ string. So the harness never learns a channel's markup, and a new event kind nee
 
 ### The desktop sink
 
-`canopy-notify-desktop` is stdlib only (D035) and runs only as a configured sink. It passes title and body to
+`canopy-notify-desktop` ships inside canopy (D035) and runs only as a configured sink. It passes title and body to
 `notify-send` or a fixed `osascript` script as arguments, never as a shell command or script, so agent or org-member
 text runs nothing.
 
 ### The Slack sink
 
-`canopy-notify-slack` is its own program (§5), stdlib only, importing nothing from canopy.
+`canopy-notify-slack` is its own program (§5), importing nothing from canopy.
 
 - It posts to an incoming webhook, or with `--channel` through a bot token. The URL or token is read from a file that
   must be the operator's, unreadable by group and others; it is never in canopy's config, argv, journal, or logs. A
