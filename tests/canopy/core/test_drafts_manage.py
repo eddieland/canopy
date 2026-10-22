@@ -40,8 +40,8 @@ if TYPE_CHECKING:
 PR = DRAFTS_PR
 OLD = "2020-01-01T00:00:00Z"
 ISSUE = "https://github.com/acme/api/issues/1"
-#: A resume of KEY for its PR's review.
-RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
+#: A resume of KEY for a conflict on its PR: a reason no observation has to authorize, which the drafts do not need.
+RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
 
 
 def drafted_run(scenario: Scenario, state: Path, entries: object, connect: Mapping[str, object] | None = None) -> int:
@@ -264,6 +264,7 @@ def test_a_tickets_draft_posts_through_the_trackers_command_and_is_settled_by_th
     assert draft.status is DraftStatus.SENT
     assert draft.sent_url is not None
 
+    scenario.polls()
     second = scenario.run(RESUME, worker=sends_drafts([ticket])).id
     github_state.write_text(json.dumps({**state_of(github_state), "post": "unknown", "posted": True}))
     scenario.operator("draft", "send", f"run:{second}", hashed(conn, second, 1), code=1)
@@ -405,6 +406,7 @@ def test_the_next_resume_is_told_what_the_operator_sent(scenario: Scenario, gith
     run_id = drafted_run(scenario, github_state, [thread(501)])
     scenario.operator("draft", "send", f"run:{run_id}", hashed(scenario.conn, run_id, 1))
     [sent] = all_drafts(scenario.conn)
+    scenario.polls()
     text = scenario.run(RESUME, worker=sends_drafts([])).prompt
     assert (
         f"The operator already sent these through canopy, unmarked, as their own: {PR}: comments "

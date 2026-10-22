@@ -44,8 +44,8 @@ if TYPE_CHECKING:
 PR = DRAFTS_PR
 #: KEY's run on its `work` branch, as each drafting run here is.
 WORK = dispatches(slug="work")
-#: A resume of KEY for its PR's review.
-RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
+#: A resume of KEY for a conflict on its PR: a reason no observation has to authorize, which the drafts do not need.
+RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -172,6 +172,7 @@ def test_a_ticket_draft_supersedes_the_ticket_draft_before_it(scenario: Scenario
     github_has(github_state)
     ticket = {"on": "ticket", "url": "https://github.com/acme/api/issues/1", "text": "Which base?"}
     scenario.run(WORK, worker=sends_drafts([ticket]))
+    scenario.polls()
     scenario.run(RESUME, worker=sends_drafts([{**ticket, "text": "Which base, main or next?"}]))
     old, new = all_drafts(conn)
     assert (old.kind, old.status, old.superseded_by) == (DraftKind.TICKET, DraftStatus.SUPERSEDED, new.id)

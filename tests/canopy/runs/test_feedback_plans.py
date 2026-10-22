@@ -67,11 +67,12 @@ def test_a_resume_waits_on_a_feedback_plan_the_operator_approved_and_goes_ahead_
 ) -> None:
     conn, env = scenario.conn, scenario.env
     with_a_pr(scenario)
+    scenario.polls()
     assert scenario.refuses(RESUME)[0][0] == "refused:unplanned"
 
     run_id = planned(scenario, github_state)
     # The planner read the PR whole first, at its head, in a desk: alice's and bob's comments alike, with their trust.
-    assert reads(github_state) == [{"prs": [PR]}]
+    assert reads(github_state)[-1] == {"prs": [PR]}
     planner = agent_runs(scenario.agent_log)[-1]
     assert planner["argv"][:3] == ["run", "--agent", "canopy-planner"]
     assert planner["cwd"] == str(env.root / "desks" / KEY)
@@ -141,12 +142,17 @@ def test_a_resume_for_no_pr_alone_waits_on_no_plan(scenario: Scenario) -> None:
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_off_plans_no_feedback_and_resumes_as_before(scenario: Scenario) -> None:
+def test_off_plans_no_feedback_and_resumes_as_before(scenario: Scenario, github_state: Path) -> None:
     with_a_pr(scenario, approve=False)
     assert scenario.refuses(FEEDBACK_PLAN) == [
         ("refused:feedback_plan_off", 'policy.feedback_plan is not "approve": a resume goes ahead without a plan'),
     ]
-    run = scenario.run(RESUME, worker=pushes())
+    # A trusted reviewer's comment, observed, is then what authorizes the resume, as before plans (D089).
+    scenario.configures("private", trust={"trusted_reviewers": ["alice"]})
+    github_has(github_state, comment(501))
+    scenario.polls()
+    covered = {"review": comment(501)["time"]}
+    run = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW], cursors=covered), worker=pushes())
     assert run.status == RunStatus.DONE
     assert run.row["feedback_plan_id"] is None
     assert "feedback plan" not in run.prompt
