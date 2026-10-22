@@ -18,17 +18,16 @@ Each thread starts with a post of the same shape, naming what it is about, and e
 A reply stays in its thread, unless `--broadcast` names what it holds, such as `--broadcast blocked` for a worker's
 question: then it is shown in the channel too.
 
-Exit codes: 0 posted (a 2xx reply, and `"ok": true` from the Web API); 1 the post failed, with Slack's reply on
-stderr; 2 the secret file, the channel, the threads file, or the message on stdin is not usable, saying which. canopy
-retries anything but 0 on its next tick.
+Exit codes: 0 posted (a 2xx reply, and `"ok": true` from the Web API); 1 the post failed, with Slack's reply on stderr;
+2 the command line, the secret file, the channel, the threads file, or the message on stdin is not usable, saying which.
+canopy retries anything but 0 on its next tick.
 
-Stdlib only, importing nothing from canopy: canopy runs it as a command, so the process that holds the journal and
-enforces the guards never opens a connection or reads this secret (D035).
+click for its command line (D025), and nothing from canopy: canopy runs it as a command, so the process that holds
+the journal and enforces the guards never opens a connection or reads this secret (D035).
 """
 
 from __future__ import annotations
 
-import argparse
 import fcntl
 import functools
 import hashlib
@@ -47,6 +46,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol, TextIO
+
+import click
 
 SLACK_PREFIX = "https://hooks.slack.com/"
 SLACK_API_URL = "https://slack.com/api/chat.postMessage"
@@ -1066,88 +1067,138 @@ def read_message(stdin: str) -> dict[str, object]:
     return {str(k): v for k, v in parsed.items()}
 
 
+@dataclass(frozen=True)
+class Io:
+    """What the sink reads, and where it may post: Slack's own, unless a test gives its own."""
+
+    stdin: TextIO
+    #: What the webhook URL must start with.
+    prefix: str = SLACK_PREFIX
+    #: Where a token posts.
+    api_url: str = SLACK_API_URL
+
+
 def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: str = SLACK_API_URL) -> int:
     """Post the message on `stdin`.
 
     `prefix` is what the webhook URL must start with; `api_url` is where a token posts.
 
     Returns:
-        The exit code: 0 posted, 1 Slack refused the post, 2 the secret file, the channel, or the message is not
-        usable.
+        The exit code: 0 posted, 1 Slack refused the post, 2 `argv`, the secret file, the channel, or the message is
+        not usable.
     """
-    parser = argparse.ArgumentParser(
-        prog="canopy-notify-slack",
-        description=__doc__.split("\n", 1)[0],
-    )
-    parser.add_argument("--webhook-file", type=Path, default=None, help="default: " + str(default_webhook_file()))
-    parser.add_argument("--channel", default=None, help="post with a bot token to this channel id, not a webhook")
-    parser.add_argument("--token-file", type=Path, default=None, help="default: " + str(default_token_file()))
-    parser.add_argument("--username", default=None, help="with --channel, the name to post as")
-    parser.add_argument(
-        "--icon-emoji",
-        default=None,
-        help="with --channel, the emoji to post with, such as :robot_face:",
-    )
-    parser.add_argument(
-        "--threads",
-        action="store_true",
-        help="with --channel, post each ticket's and review's messages in its own thread, a new one each day",
-    )
-    parser.add_argument(
-        "--broadcast",
-        action="append",
-        choices=list(BROADCASTS),
-        default=[],
-        help="with --threads, also show in the channel a reply holding this; give it again for another: "
-        + "; ".join(f"{k}, {v}" for k, v in BROADCASTS.items()),
-    )
-    args = parser.parse_args(argv)
-    for given, flag in (
-        (args.token_file, "--token-file"),
-        (args.username, "--username"),
-        (args.icon_emoji, "--icon-emoji"),
-    ):
-        if args.channel is None and given is not None:
-            parser.error(f"{flag} needs --channel")
-    if args.channel is None and args.threads:
-        parser.error("--threads needs --channel")
-    if args.broadcast and not args.threads:
-        parser.error("--broadcast needs --threads")
-    if args.channel is not None and args.webhook_file is not None:
-        parser.error("--webhook-file and --channel are two ways to post; give one")
+    try:
+        found = command.main(
+            args=list(argv),
+            prog_name="canopy-notify-slack",
+            standalone_mode=False,
+            obj=Io(stdin, prefix, api_url),
+        )
+    except click.ClickException as e:
+        e.show()
+        return e.exit_code
+    return found if isinstance(found, int) else 0
+
+
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--webhook-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="The incoming webhook's URL. Default: $XDG_CONFIG_HOME/canopy/slack-webhook, or ~/.config/canopy/.",
+)
+@click.option("--channel", default=None, help="Post with a bot token to this channel id, not a webhook.")
+@click.option(
+    "--token-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="With --channel, the bot token. Default: $XDG_CONFIG_HOME/canopy/slack-token, or ~/.config/canopy/.",
+)
+@click.option("--username", default=None, help="With --channel, the name to post as.")
+@click.option("--icon-emoji", default=None, help="With --channel, the emoji to post with, such as :robot_face:.")
+@click.option(
+    "--threads",
+    is_flag=True,
+    help="With --channel, post each ticket's and review's messages in its own thread, a new one each day.",
+)
+@click.option(
+    "--broadcast",
+    "broadcasts",
+    multiple=True,
+    type=click.Choice(list(BROADCASTS)),
+    help="With --threads, also show in the channel a reply holding this; give it again for another: "
+    + "; ".join(f"{k}, {v}" for k, v in BROADCASTS.items())
+    + ".",
+)
+@click.pass_context
+def command(
+    ctx: click.Context,
+    *,
+    webhook_file: Path | None,
+    channel: str | None,
+    token_file: Path | None,
+    username: str | None,
+    icon_emoji: str | None,
+    threads: bool,
+    broadcasts: tuple[str, ...],
+) -> None:
+    """Post the canopy message on stdin to Slack: canopy's Slack sink (DESIGN §20).
+
+    It posts to an incoming webhook, or with --channel, with a bot token. Each secret is read from a file that is
+    yours alone.
+    """
+    io = ctx.find_object(Io) or Io(sys.stdin)
+    _check_options(ctx.params)
     send: Callable[[str, list[Block]], tuple[bool, str]]
     threaded: tuple[Send, str] | None = None
     try:
-        if args.channel is None:
-            send = functools.partial(post, read_webhook(args.webhook_file or default_webhook_file(), prefix=prefix))
+        if channel is None:
+            send = functools.partial(post, read_webhook(webhook_file or default_webhook_file(), prefix=io.prefix))
         else:
-            channel = check_channel(args.channel)
+            checked = check_channel(channel)
             to_channel = functools.partial(
                 post_message,
-                api_url,
-                read_token(args.token_file or default_token_file()),
-                channel,
-                username=None if args.username is None else check_username(args.username),
-                icon_emoji=None if args.icon_emoji is None else check_icon_emoji(args.icon_emoji),
+                io.api_url,
+                read_token(token_file or default_token_file()),
+                checked,
+                username=None if username is None else check_username(username),
+                icon_emoji=None if icon_emoji is None else check_icon_emoji(icon_emoji),
             )
             send = to_channel
-            threaded = (to_channel, channel) if args.threads else None
-        parsed = read_message(stdin.read())
+            threaded = (to_channel, checked) if threads else None
+        parsed = read_message(io.stdin.read())
         if threaded is None:
             ok, reply = send(render(parsed), blocks(parsed))
         else:
-            to_channel, channel = threaded
-            threads = Threads.load(default_threads_file(), channel, str(parsed.get("repo") or ""))
+            to_channel, checked = threaded
+            recorded = Threads.load(default_threads_file(), checked, str(parsed.get("repo") or ""))
             # Saved before anything is posted, so a file that cannot be written refuses the delivery whole.
-            threads.save()
-            ok, reply = post_threaded(parsed, to_channel, threads, frozenset(args.broadcast))
+            recorded.save()
+            ok, reply = post_threaded(parsed, to_channel, recorded, frozenset(broadcasts))
     except SinkError as e:
         print(f"canopy-notify-slack: {e}", file=sys.stderr)  # noqa: T201
-        return 2
+        ctx.exit(2)
     if not ok:
         print(f"canopy-notify-slack: Slack refused the post: {reply[:_MAX_REPLY]}", file=sys.stderr)  # noqa: T201
-        return 1
-    return 0
+        ctx.exit(1)
+
+
+def _check_options(given: Mapping[str, object]) -> None:
+    """Refuse an option given without the one it needs, and a webhook given with a channel.
+
+    Raises:
+        UsageError: One is.
+    """
+    channel = given.get("channel")
+    for name, flag in (("token_file", "--token-file"), ("username", "--username"), ("icon_emoji", "--icon-emoji")):
+        if channel is None and given.get(name) is not None:
+            raise click.UsageError(f"{flag} needs --channel")
+    if channel is None and given.get("threads"):
+        raise click.UsageError("--threads needs --channel")
+    if given.get("broadcasts") and not given.get("threads"):
+        raise click.UsageError("--broadcast needs --threads")
+    if channel is not None and given.get("webhook_file") is not None:
+        raise click.UsageError("--webhook-file and --channel are two ways to post; give one")
 
 
 def main() -> int:

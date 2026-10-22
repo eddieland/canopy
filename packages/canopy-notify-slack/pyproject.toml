@@ -20,8 +20,9 @@ classifiers = [
     "Topic :: Communications :: Chat",
 ]
 requires-python = ">=3.12"
-# Stdlib only, and nothing from canopy: it runs as its own process, as a sink command (DESIGN §20, D041).
-dependencies = []
+# click for its command line (D025), and nothing from canopy: it runs as its own process, as a sink command
+# (DESIGN §20, D041).
+dependencies = ["click>=8.5.0"]
 
 [project.scripts]
 canopy-notify-slack = "canopy_notify_slack:main"

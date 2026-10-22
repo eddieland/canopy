@@ -221,6 +221,8 @@ ban-relative-imports = "all"
 # A mock is specced, so a call the real thing would refuse fails the test (AGENTS.md, Testing).
 "unittest.mock.Mock".msg = "Spec it: `mock.patch.object(..., autospec=True)` or `mock.create_autospec(...)`."
 "unittest.mock.MagicMock".msg = "Spec it: `mock.patch.object(..., autospec=True)` or `mock.create_autospec(...)`."
+# Every command line is click (D025). The workspace members turn TID251 off below, so review holds them to it.
+"argparse".msg = "Every command line is click (D025)."
 
 # `from unittest import mock`, then `mock.patch`, `mock.create_autospec` (AGENTS.md, Testing).
 [tool.ruff.lint.flake8-import-conventions]
