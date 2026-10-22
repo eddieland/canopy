@@ -32,18 +32,25 @@ const REVIEW: ReviewSummary = {
     ended_at: '2026-10-08T11:04:00Z',
     news: true,
     seen: true,
+    draft: null,
 }
 
 const REQUESTED: RequestedReview = {
     pr_url: 'https://github.com/acme/web/pull/95',
     created_at: '2026-10-08T11:40:00Z',
     channel: 'web',
+    author: 'dana',
 }
 
 function renderReviews(reviews: ReviewSummary[], pr?: boolean) {
     const client = new QueryClient()
     client.setQueryDefaults(keys.meta, { enabled: false })
     return renderRouted(<ReviewsTable reviews={reviews} pr={pr} />, { client })
+}
+
+/** The text `word` in review `id`'s row. */
+function chip(id: number, word: string) {
+    return within(screen.getByTestId(`review-${id}`)).getByText(word)
 }
 
 function renderRequested(requestedLast: boolean) {
@@ -66,6 +73,36 @@ describe('ReviewsTable', () => {
         const [first, second] = screen.getAllByRole('listitem')
         expect(first?.dataset.testid).toBe(`requested-${REQUESTED.pr_url}`)
         expect(second?.dataset.testid).toBe('review-4')
+    })
+
+    it('names a requested PR’s author where its ticket would be, and says none until canopy has read it', async () => {
+        await renderRequested(false)
+        const row = within(screen.getByTestId(`requested-${REQUESTED.pr_url}`))
+        expect(tipOf(row.getByText('dana'))).toBe("The PR's author: canopy only reviews it, so it has no ticket")
+        expect(row.queryByText('none')).toBeNull()
+        cleanup()
+        const client = new QueryClient()
+        client.setQueryDefaults(keys.meta, { enabled: false })
+        await renderRouted(<ReviewsTable reviews={[]} requested={[{ ...REQUESTED, author: null }]} />, { client })
+        expect(screen.getByText('none').title).toBe('none: canopy only reviews it')
+    })
+
+    it('says where each review’s draft stands after its verdict, and nothing for one without a draft', async () => {
+        await renderReviews([
+            { ...REVIEW, id: 1, draft: 'waiting' },
+            { ...REVIEW, id: 2, draft: 'staged' },
+            { ...REVIEW, id: 3, draft: 'unconfirmed' },
+            { ...REVIEW, id: 6, draft: 'published' },
+            REVIEW,
+        ])
+        expect(tipOf(chip(1, 'draft'))).toBe('waiting: yours to edit and publish; nothing is on GitHub yet')
+        expect(tipOf(chip(2, 'staged'))).toBe('staged: a pending review on GitHub, for you to submit there')
+        expect(tipOf(chip(3, 'unconfirmed'))).toBe(
+            'unconfirmed: a publish may have posted; the next read of the PR says',
+        )
+        expect(tipOf(chip(6, 'published'))).toBe('published: posted on GitHub')
+        const none = within(screen.getByTestId('review-4'))
+        expect(none.queryByText(/^(draft|staged|unconfirmed|published)$/u)).toBeNull()
     })
 
     it('puts a requested PR last when the list runs oldest first', async () => {

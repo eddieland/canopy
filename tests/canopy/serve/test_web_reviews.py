@@ -41,6 +41,9 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
     ]
     # The persona each wrote in, which tells apart the reviews of one commit in several (DESIGN §31).
     assert [r["persona"] for r in listed] == ["canopy", "skeptic", "canopy", "canopy", "canopy"]
+    # Where each one's draft stands (DESIGN §34): Carol's waits, the clean one's was published, and the loop's own
+    # PRs' reviews have none.
+    assert [r["draft"] for r in listed] == ["waiting", None, None, "published", None]
 
 
 def test_a_review_is_titled_by_its_prs_own_title_else_its_tickets_else_none(backend: Backend) -> None:
@@ -63,6 +66,11 @@ def test_a_requested_pr_is_listed_from_the_request_until_its_review_starts_and_a
     c = client(None, backend)
     # Asked for from the web UI, and no review of it has run yet: the reviews page shows it waiting on a tick.
     assert [(r["pr_url"], r["channel"]) for r in c.get("/api/review-requests").json()] == [(mock_reviews.PR_95, "web")]
+    # Whose it is, from canopy's read of it, since an open request watches its PR; none before a read.
+    assert c.get("/api/review-requests").json()[0]["author"] == "dana"
+    with backend.open() as ctx:
+        ctx.conn.execute("DELETE FROM observed_prs WHERE url = ?", (mock_reviews.PR_95,))
+    assert c.get("/api/review-requests").json()[0]["author"] is None
     with backend.open() as ctx:
         run_id = review_runs.insert_review_run(
             ctx.conn,

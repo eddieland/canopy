@@ -10,11 +10,17 @@ from __future__ import annotations
 
 import math
 from collections.abc import Collection, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
-from canopy.core import contract, conversation, db, pr_list, review_requests, review_runs
+from canopy.core import contract, conversation, db, pr_list, review_drafts, review_requests, review_runs
 from canopy.serve import threads
-from canopy.serve.review_schema import PullRequest, PullRequestDetail, ReviewRequest
+from canopy.serve.review_schema import (
+    PullRequest,
+    PullRequestDetail,
+    PullRequestDraft,
+    ReviewDraftStatusName,
+    ReviewRequest,
+)
 from canopy.serve.reviews import summaries
 from canopy.serve.schema import CostTotal
 from canopy.serve.views import decision, limit, run
@@ -99,6 +105,7 @@ def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: Sequence[
     return PullRequest(
         url=str(row["url"]),
         ticket_key=str(key) if key else None,
+        loop_pr=row["ticket_key"] is not None,
         ticket_title=_one_line(row["title"]),
         title=_one_line(row["pr_title"]),
         repo=str(repo) if repo else None,
@@ -109,7 +116,17 @@ def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: Sequence[
         reviews=len(reviews),
         latest_review=summaries(conn, reviews[:1])[0] if reviews else None,
         review_request=review_request(conn, request) if request is not None else None,
+        draft=_draft(conn, reviews),
     )
+
+
+def _draft(conn: sqlite3.Connection, reviews: Sequence[records.ReviewRun]) -> PullRequestDraft | None:
+    # Reviews come newest first, so the first with a draft holds the operator's review as it stands now.
+    drafts = review_drafts.of_reviews(conn, [r.id for r in reviews])
+    found = next((drafts[r.id] for r in reviews if r.id in drafts), None)
+    if found is None:
+        return None
+    return PullRequestDraft(review_id=found.review_run_id, status=cast("ReviewDraftStatusName", found.status.value))
 
 
 def _one_line(text: object) -> str | None:

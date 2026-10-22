@@ -20,6 +20,7 @@ from canopy.serve.review_schema import (
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Collection
 
 
 def of_review(conn: sqlite3.Connection, run: records.ReviewRun, diff: review_diff.Diff | None) -> ReviewDraft | None:
@@ -45,11 +46,7 @@ def view(
     """
     current = review_drafts.newest(conn, found.id)
     stored = review_result.stored(run.result_json)
-    pr = records.fetch_one(
-        conn,
-        records.ObservedPr,
-        sql.select("*").from_("observed_prs").where("url = ?", found.pr_url),
-    )
+    pr = observed_prs(conn, [found.pr_url]).get(found.pr_url)
     return ReviewDraft(
         status=cast("ReviewDraftStatusName", found.status.value),
         why=found.why,
@@ -79,6 +76,16 @@ def view(
         published_at=db.parse_time(found.published_at) if found.published_at else None,
         published_url=found.published_url,
     )
+
+
+def observed_prs(conn: sqlite3.Connection, urls: Collection[str]) -> dict[str, records.ObservedPr]:
+    """PRs `urls` as canopy's reader last read them, whose author a draft and a request name, by URL.
+
+    Returns:
+        Each PR the reader has read, by URL: one it has not is left out.
+    """
+    query = sql.select("*").from_("observed_prs").where_in("url", urls)
+    return {pr.url: pr for pr in records.fetch_all(conn, records.ObservedPr, query)}
 
 
 def _comment(number: int, comment: review_drafts.Comment, diff: review_diff.Diff | None) -> ReviewDraftComment:

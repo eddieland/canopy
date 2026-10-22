@@ -14,6 +14,27 @@ export const REVIEW_DRAFT_TONE: Record<ReviewDraft['status'], Tone> = {
     published: 'plain',
 }
 
+/**
+ * A review's draft's state as a list's chip says it (`ReviewDraftChip`): one that waits on the operator is a `draft`,
+ * as they would call it, and the rest keep the journal's word.
+ */
+export const REVIEW_DRAFT_WORD: Record<ReviewDraft['status'], string> = {
+    waiting: 'draft',
+    publishing: 'publishing',
+    unconfirmed: 'unconfirmed',
+    staged: 'staged',
+    published: 'published',
+}
+
+/** What each state of a review's draft means for the operator, on its chip's hover after the journal's word. */
+export const REVIEW_DRAFT_MEANS: Record<ReviewDraft['status'], string> = {
+    waiting: 'yours to edit and publish; nothing is on GitHub yet',
+    publishing: 'posting to GitHub now',
+    unconfirmed: 'a publish may have posted; the next read of the PR says',
+    staged: 'a pending review on GitHub, for you to submit there',
+    published: 'posted on GitHub',
+}
+
 /** A line of the diff the operator is writing a new comment on: the file's index and path, and the new-side line. */
 export interface Adding {
     /** The file's index in the diff. */

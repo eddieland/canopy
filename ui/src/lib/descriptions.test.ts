@@ -34,6 +34,7 @@ const REVIEW: ReviewSummary = {
     persona: 'canopy',
     news: true,
     seen: true,
+    draft: null,
 }
 
 describe('runDescription', () => {
