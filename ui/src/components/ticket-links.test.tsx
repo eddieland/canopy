@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { TicketLinks } from './ticket-links'
+import { PullRequestLinksOut, TicketLinks } from './ticket-links'
 
 afterEach(() => {
     cleanup()
@@ -84,5 +84,21 @@ describe('TicketLinks', () => {
         const branches = within(screen.getByRole('menu')).getAllByRole('menuitem')
         expect(branches.map((item) => item.textContent)).toEqual(['web', 'api'])
         expect(branches[1]?.title).toBe('The branch in api: github.com/acme/api/tree/agent/ABC-1')
+    })
+})
+
+describe('PullRequestLinksOut', () => {
+    it('says a PR on GitHub is on GitHub, since the title already names it, and opens it in a new tab', () => {
+        render(<PullRequestLinksOut url={WEB_PR} />)
+        expect(names()).toEqual(['on GitHub'])
+        const link = screen.getByRole('link', { name: 'on GitHub' })
+        expect(link.getAttribute('href')).toBe(WEB_PR)
+        expect(link.getAttribute('target')).toBe('_blank')
+        expect(link.title).toBe('The PR')
+    })
+
+    it('shows the address of a PR on another host', () => {
+        render(<PullRequestLinksOut url="https://git.acme.dev/web/pull/7" />)
+        expect(names()).toEqual(['git.acme.dev/web/pull/7'])
     })
 })

@@ -24,12 +24,13 @@ import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { TicketField } from '@/components/ticket-field'
+import { PullRequestLinksOut } from '@/components/ticket-links'
 import { Timestamp } from '@/components/timestamp'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { reviewDescription, reviewDraftTitle } from '@/lib/descriptions'
 import { reviewSentText } from '@/lib/outcomes'
-import { pullRequestLabel } from '@/lib/pull-request-label'
+import { pullRequestLabel, pullRequestUrl } from '@/lib/pull-request-label'
 import { reviewRef } from '@/lib/refs'
 import { goneText } from '@/lib/retention'
 import {
@@ -91,6 +92,8 @@ function Loaded({ id }: { id: number }) {
     const placed = placeFindings(data.findings, data.diff !== null)
     const { draft } = data
     const follow = (file: number) => setWanted({ file })
+    // The PR on its host, first found under the title, as its own page has it: the Review panel's icon may be folded.
+    const links = <PullRequestLinksOut url={pullRequestUrl(data.review.pr_url) ?? data.review.pr_url} />
     return (
         <>
             {/* With a draft, the page is the draft's record: the operator's review leads, its state the line. */}
@@ -99,6 +102,7 @@ function Loaded({ id }: { id: number }) {
                     title={`${reviewRef(data.review.id)} ${pullRequestLabel(data.review.pr_url)}`}
                     subject={data.ticket_title}
                     help={HELP}
+                    links={links}
                 >
                     {reviewDescription(data.review)}
                 </PageHeader>
@@ -107,6 +111,7 @@ function Loaded({ id }: { id: number }) {
                     title={reviewRef(data.review.id)}
                     subject={reviewDraftTitle(data.review.pr_url, draft)}
                     help={HELP}
+                    links={links}
                 >
                     <ReviewDraftState draft={draft} />
                 </PageHeader>
