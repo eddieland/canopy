@@ -287,7 +287,8 @@ as a pending review instead: only you can see it until you submit it, or delete 
 of the PR records which. The line beside them says exactly what goes out, the body and how many comments, on whose PR
 and which commit, so there's no guessing what your name is about to be attached to. Either way it is one comment review
 that approves nothing and requests no change, and it's `canopy review publish RUN HASH`, with `--submit` for the
-first. A toast says what went and where; the panel keeps a line linking to it on GitHub. The hash is the version you
+first. A toast says what went and where; the panel keeps a line linking to it on GitHub, and a published one drops a
+leaf, as an approved plan does. Staging gets none: nobody has seen it yet. The hash is the version you
 looked at, so if anything changed it since, the publish is refused as `stale` and you read it again. A draft publishes
 once; a later commit's review is a draft of its own. If the PR has moved on since, the panel says so: your comments
 would land on the old commit and show as outdated.

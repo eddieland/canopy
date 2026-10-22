@@ -463,8 +463,9 @@ Rules:
 ## Fun
 
 canopy should be a little fun to use (PRODUCT.md): the header's ticker, Sprig at the foot of the rail, the empty inbox
-and the leaf a cleared item drops, and the lightswitch rave. Fun is ancillary, so this design holds only the rules it
-all keeps; what each one does is written in its code. None of it is journal text.
+and the leaf a cleared item drops (an approved plan drops one too, and so does a review draft once published, not
+staged), and the lightswitch rave. Fun is ancillary, so this design holds only the rules it all keeps; what each one
+does is written in its code. None of it is journal text.
 
 - **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
