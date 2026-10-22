@@ -4,4 +4,6 @@ import sys
 
 from canopy.cli.devserver import main
 
-sys.exit(main())
+# Guarded, unlike canopy's own `__main__`: tests/canopy/test_models.py imports every module of canopy.
+if __name__ == "__main__":
+    sys.exit(main())
