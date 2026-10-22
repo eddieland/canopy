@@ -183,12 +183,12 @@ reported wrong. A lesson that needs nothing shows its buttons only when you poin
 wall of buttons.
 
 Some lessons you'll never want to revisit: the one that says the staging database is shared, say. **Pin** it, or
-`canopy memory pin ID`, and it never comes up for review again. Pinned lessons are also served first: when there are
-more lessons than fit in a prompt, the cap drops unpinned ones before it touches a pinned one, and a pinned one leads
-the list a run reads. The pin stays through your edits, and through a promote under the same key, until you
-**Unpin** it (`canopy memory unpin ID`), which puts it back on the 90-day clock from today. A pin doesn't silence
-workers: a run that finds a pinned lesson wrong still raises `lesson wrong`, and **Renew** clears that as usual. Pin
-sparingly. A prompt where everything is first has no first.
+`canopy memory pin ID`, and it never comes up for review again, so on the memory page it sits below the lessons that
+will. For runs it's the other way round: when there are more lessons than fit in a prompt, the cap drops unpinned ones
+before it touches a pinned one, and a pinned one leads the list a run reads. The pin stays through your edits, and
+through a promote under the same key, until you **Unpin** it (`canopy memory unpin ID`), which puts it back on the
+90-day clock from today. A pin doesn't silence workers: a run that finds a pinned lesson wrong still raises
+`lesson wrong`, and **Renew** clears that as usual. Pin sparingly. A prompt where everything is first has no first.
 
 Three attention items keep you honest, all yours and never the overseer's, and none while lessons are off:
 

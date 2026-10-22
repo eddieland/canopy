@@ -173,16 +173,19 @@ def test_the_overview_lists_lessons_reported_wrong_first_then_by_review_date(can
             runs_dir=Path("/r"),
         )
     ctx.conn.executemany(
-        "INSERT INTO memories (id, scope, key, body, status, author, created_at, review_at, wrong_at, wrong_run_id) "
-        "VALUES (?, 'lesson', ?, 'A lesson.', 'active', 'operator', '2026-10-01T00:00:00.000Z', ?, ?, ?)",
+        "INSERT INTO memories (id, scope, key, body, status, author, created_at, review_at, wrong_at, wrong_run_id, "
+        "pinned_at) VALUES (?, 'lesson', ?, 'A lesson.', 'active', 'operator', '2026-10-01T00:00:00.000Z', ?, ?, ?, ?)",
         [
-            (1, "a-due-last", "2027-03-01T00:00:00.000Z", None, None),
-            (2, "b-due-first", "2027-01-01T00:00:00.000Z", None, None),
-            (3, "c-reported-wrong", "2027-06-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z", run_id),
+            (1, "a-due-last", "2027-03-01T00:00:00.000Z", None, None, None),
+            (2, "b-due-first", "2027-01-01T00:00:00.000Z", None, None, None),
+            (3, "c-reported-wrong", "2027-06-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z", run_id, None),
+            # Never due, so after every lesson that will be; reported wrong, with the lessons reported wrong.
+            (4, "0-pinned", None, None, None, "2026-10-01T00:00:00.000Z"),
+            (5, "d-pinned-wrong", None, "2026-10-02T00:00:00.000Z", run_id, "2026-10-01T00:00:00.000Z"),
         ],
     )
     c, _ = signed_in_client(ctx)
-    assert [lesson["id"] for lesson in c.get("/api/memory").json()["lessons"]] == [3, 2, 1]
+    assert [lesson["id"] for lesson in c.get("/api/memory").json()["lessons"]] == [3, 5, 2, 1, 4]
 
 
 # A write to the mock needs no session, but an Origin naming the server (guard.py).
