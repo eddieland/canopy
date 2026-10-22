@@ -64,3 +64,57 @@ def test_status_names_each_runs_model_beside_its_kind(
 
     shown = out[out.index("Running workers") :].replace(str(scenario.env.root.parent), "<tmp>")
     assert re.sub(r"\b\d+[smhd]\b", "<age>", shown) == snapshot
+
+
+def trailer(name: str) -> str:
+    """The commit trailer a worker prompt says to add, naming `name`, at the default address."""
+    return f"`Co-authored-by: {name} <noreply@canopy.invalid>`"
+
+
+def test_every_implement_and_resume_credits_its_model_in_the_commit_trailer(
+    scenario: Scenario, git_pool: GitPool
+) -> None:
+    # The harness names the model the run records, so the worker never names its own (TRUST_MODEL T5).
+    scenario.configures(runtime={"worker_model": MODEL})
+    implement = scenario.run(worker=pushes())
+    resume = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW]), worker=pushes())
+    for run in (implement, resume):
+        assert run.row["model"] == MODEL
+        assert trailer(f"canopy worker ({MODEL})") in run.prompt
+
+
+def test_a_run_on_the_runtimes_default_keeps_the_default_trailer(scenario: Scenario, git_pool: GitPool) -> None:
+    run = scenario.run(worker=pushes())
+    assert trailer("canopy worker") in run.prompt
+    assert "canopy worker (" not in run.prompt
+
+
+def test_a_running_run_keeps_the_trailer_of_the_model_it_was_dispatched_on(
+    scenario: Scenario, git_pool: GitPool
+) -> None:
+    scenario.configures(runtime={"worker_model": MODEL})
+    working = scenario.starts(worker=pushes())
+    scenario.configures(runtime={"worker_model": "openai/gpt-5"})
+    run = working.finishes()
+    assert run.row["model"] == MODEL
+    assert trailer(f"canopy worker ({MODEL})") in run.prompt
+
+
+def test_the_operators_trailer_name_names_the_model_where_it_holds_the_placeholder(
+    scenario: Scenario, git_pool: GitPool
+) -> None:
+    scenario.configures(runtime={"worker_model": MODEL}, trust={"commit_trailer_name": "Acme Agent on {model}"})
+    assert trailer(f"Acme Agent on {MODEL}") in scenario.run(worker=pushes()).prompt
+    # A run on the runtime's default is named as `canopy spend` names its runs.
+    scenario.configures(runtime={"worker_model": ""})
+    resume = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW]), worker=pushes())
+    assert trailer("Acme Agent on default") in resume.prompt
+
+
+def test_the_operators_trailer_name_without_the_placeholder_stays_as_written(
+    scenario: Scenario, git_pool: GitPool
+) -> None:
+    scenario.configures(runtime={"worker_model": MODEL}, trust={"commit_trailer_name": "Acme Agent"})
+    run = scenario.run(worker=pushes())
+    assert trailer("Acme Agent") in run.prompt
+    assert MODEL not in run.prompt

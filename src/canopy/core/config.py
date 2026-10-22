@@ -147,23 +147,26 @@ MAX_TRAILER_EMAIL = 254
 # The `Co-authored-by` trailer a worker adds to its commits when the runtime adds none of its own (TRUST_MODEL T5).
 DEFAULT_TRAILER_NAME = "canopy worker"
 DEFAULT_TRAILER_EMAIL = "noreply@canopy.invalid"
+#: What `trust.commit_trailer_name` may hold to name the model dispatch recorded on the run (DESIGN §8, §13).
+MODEL_PLACEHOLDER = "{model}"
 # An address git and VCS hosts read as one: no whitespace, angle brackets, or backtick, and one "@" inside it.
 TRAILER_EMAIL_RE = re.compile(r"[^\s<>@`]+@[^\s<>@`]+")
 
 
 def _trailer_name(value: str) -> str:
     # The name in `Co-authored-by: <name> <<email>>`. Prompts quote the trailer in backticks, and an angle bracket or a
-    # second line would end it early or start another.
+    # second line would end it early or start another. A brace is the placeholder's alone, so a misspelt one fails here
+    # rather than reach a commit as written.
     if (
         len(value) > MAX_TRAILER_NAME
         or value != value.strip()
         or not value.isprintable()
-        or any(c in value for c in "`<>")
+        or any(c in value.replace(MODEL_PLACEHOLDER, "") for c in "`<>{}")
         or not any(c.isalnum() for c in value)
     ):
         raise ValueError(
             f"must be one line of at most {MAX_TRAILER_NAME} characters with a letter or digit, no backtick or angle "
-            "bracket, and no surrounding spaces"
+            f"bracket, no brace but in {MODEL_PLACEHOLDER}, and no surrounding spaces"
         )
     return value
 
@@ -286,8 +289,9 @@ def _wrapper(value: str) -> str:
 
 #: The longest model id canopy takes, in `runtime.worker_model` (DESIGN §13, The worker's model).
 MAX_MODEL_ID = 200
-#: Characters no model id holds: quotes and a backtick, which the definitions and prompts quote it with.
-_MODEL_ID_REFUSED = "\"'`"
+#: Characters no model id holds: quotes and a backtick, which the definitions and prompts quote it with, and angle
+#: brackets, which would end the name early in the commit trailer that names it (DESIGN §8).
+_MODEL_ID_REFUSED = "\"'`<>"
 #: The option a covered worker template must not pass: OpenCode's `--model` beats the definition's `model:` (§13).
 MODEL_OPTION = "--model"
 
@@ -296,7 +300,7 @@ def model_id(value: str) -> str:
     """Check that `value` is a `provider/model` id, as OpenCode names a model, and return it.
 
     It is one line of at most `MAX_MODEL_ID` characters, a provider and a model joined by its first `/`, each non-empty,
-    with no whitespace, control character, quote, or backtick. The model part may hold more slashes.
+    with no whitespace, control character, quote, backtick, or angle bracket. The model part may hold more slashes.
 
     Returns:
         `value`, unchanged.
@@ -313,7 +317,7 @@ def model_id(value: str) -> str:
     ):
         raise ValueError(
             f"must be a provider/model id as `opencode models` prints it: at most {MAX_MODEL_ID} characters, a "
-            "provider and a model joined by '/', with no whitespace, quote, or backtick"
+            "provider and a model joined by '/', with no whitespace, quote, backtick, or angle bracket"
         )
     return value
 
@@ -568,8 +572,9 @@ class Trust(Section):
     comment_prefix: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_comment_mark)] = "CANOPY:"
     comment_suffix: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_comment_mark)] = ""
     # Whether a worker adds canopy's trailer to its commits when the agent runtime adds no attribution trailer, and whom
-    # it names as co-author (TRUST_MODEL T5). Private: the commits are the operator's, and a shared file must neither
-    # credit agent work to a person nor strip the mark that tells it is an agent's.
+    # it names as co-author (TRUST_MODEL T5); `{model}` in the name names the run's model (DESIGN §8). Private: the
+    # commits are the operator's, and a shared file must neither credit agent work to a person nor strip the mark that
+    # tells it is an agent's.
     commit_trailer: Annotated[StrictBool, Scope.PRIVATE] = True
     commit_trailer_name: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trailer_name)] = DEFAULT_TRAILER_NAME
     commit_trailer_email: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trailer_email)] = DEFAULT_TRAILER_EMAIL

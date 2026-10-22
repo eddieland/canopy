@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core.config import CANOPY_REVIEWER, DEFAULT_TRAILER_EMAIL, DEFAULT_TRAILER_NAME
+from canopy.core.config import CANOPY_REVIEWER, DEFAULT_TRAILER_EMAIL, DEFAULT_TRAILER_NAME, MODEL_PLACEHOLDER
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.infra import resources
 
@@ -108,12 +108,17 @@ MAX_STANDING_BYTES = 4096
 REQUIRED_NOTICE = ("NOTICE",)
 # The kinds whose workers commit, and how their commits are attributed (TRUST_MODEL T5). The shipped prompts carry
 # `{{COMMIT_ATTRIBUTION}}`, the whole instruction; an older override may carry `{{COMMIT_TRAILER}}`, the trailer alone,
-# or neither. Neither still serves an operator who keeps the default trailer; once `trust.commit_trailer_name` or
-# `trust.commit_trailer_email` is changed, a prompt needs one of the two, so it cannot name the old trailer; and once
-# `trust.commit_trailer` is off, it needs `{{COMMIT_ATTRIBUTION}}`, so it cannot keep adding one.
+# or neither. Neither still serves an operator whose runs get the default trailer; once the trailer is another, by
+# `trust.commit_trailer_name`, `trust.commit_trailer_email`, or the run's model, a prompt needs one of the two, so it
+# cannot name the old trailer; and once `trust.commit_trailer` is off, it needs `{{COMMIT_ATTRIBUTION}}`, so it cannot
+# keep adding one.
 COMMITS = (RunKind.IMPLEMENT, RunKind.RESUME)
 REQUIRED_TRAILER = ("COMMIT_ATTRIBUTION", "COMMIT_TRAILER")
 REQUIRED_NO_TRAILER = ("COMMIT_ATTRIBUTION",)
+#: What `{model}` in `trust.commit_trailer_name` names for a run on the runtime's default, as `canopy spend` names one.
+NO_MODEL = "default"
+#: The trailer a run gets with the default name and address and no model: the one an older override may spell out.
+DEFAULT_TRAILER = f"Co-authored-by: {DEFAULT_TRAILER_NAME} <{DEFAULT_TRAILER_EMAIL}>"
 # How the workers that commit bring a base branch in: merge it, or with `trust.rebase`, rebase and push with a lease
 # (DESIGN §8). An override written before it existed says to merge, which still serves an operator who keeps the
 # default; once `trust.rebase` is set, it fails to render instead of making the merge commits the operator's
@@ -249,16 +254,27 @@ def mark_comments(prefix: str, suffix: str, *, where: str = "on the ticket or a 
     return f"In every comment and reply you post, {where}, {', and '.join(marks)}, without the backticks."
 
 
-def commit_trailer(config: Config) -> str:
-    """Return the trailer a worker adds to its commits when the agent runtime adds no attribution of its own."""
-    return f"Co-authored-by: {config.trust.commit_trailer_name} <{config.trust.commit_trailer_email}>"
+def commit_trailer(config: Config, model: str = "") -> str:
+    """Return the trailer a worker adds to its commits when the agent runtime adds no attribution of its own.
+
+    `model` is the one dispatch records on the run, empty for the runtime's default (DESIGN §13). The default name
+    names it after itself, `canopy worker (openai/gpt-5)`; a name the operator set names it where it holds `{model}`,
+    as `NO_MODEL` for none, and is kept as written where it holds none. Config load and `config.model_id` keep both
+    to characters that cannot end the trailer early or start another line.
+    """
+    name = config.trust.commit_trailer_name
+    if MODEL_PLACEHOLDER in name:
+        name = name.replace(MODEL_PLACEHOLDER, model or NO_MODEL)
+    elif model and name == DEFAULT_TRAILER_NAME:
+        name = f"{name} ({model})"
+    return f"Co-authored-by: {name} <{config.trust.commit_trailer_email}>"
 
 
-def commit_attribution(config: Config) -> str:
+def commit_attribution(config: Config, model: str = "") -> str:
     """Return the instruction for a worker's commits: keep the runtime's trailer, or add canopy's while it is on."""
     if not config.trust.commit_trailer:
         return "Keep the agent runtime's attribution trailer on commits, if it adds one, and add no co-author trailer."
-    return f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config)}`."
+    return f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config, model)}`."
 
 
 def branch_update(config: Config, branch: str) -> str:
@@ -354,6 +370,7 @@ def render_worker(
     required: Sequence[str] = (),
     private: bool = False,
     notice: str | None = None,
+    model: str = "",
 ) -> str:
     """Return the worker prompt for `kind` with every `{{NAME}}` replaced from `values`.
 
@@ -364,8 +381,8 @@ def render_worker(
     `REQUIRED_PRIVATE` in place of `REQUIRED_WORKER`: it checks no label. A plan has one prompt for both, which carries
     its own check. `{{STANDING_INSTRUCTIONS}}` comes from the config, not `values`, and with
     `paths.worker_instructions` set every prompt but a split's must carry it. `{{COMMIT_ATTRIBUTION}}` and
-    `{{COMMIT_TRAILER}}` come from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
-    changed from the default every prompt for a kind that commits must carry one of them, and with
+    `{{COMMIT_TRAILER}}` come from the config too, and `model`, the run's (`commit_trailer`): with a trailer other
+    than `DEFAULT_TRAILER` every prompt for a kind that commits must carry one of them, and with
     `trust.commit_trailer` off it must carry `{{COMMIT_ATTRIBUTION}}`. So does `{{BRANCH_UPDATE}}`, which every such
     prompt must carry with `trust.rebase` set. `notice` is the operator's notice in force (`core.notice`), for
     `{{NOTICE}}`: with one, every prompt but a split's must carry it, and a split's hears none.
@@ -378,8 +395,8 @@ def render_worker(
         **values,
         "STANDING_INSTRUCTIONS": standing_instructions(config) if instructed else "None.",
         "NOTICE": notice if notice is not None and instructed else "None.",
-        "COMMIT_ATTRIBUTION": commit_attribution(config),
-        "COMMIT_TRAILER": commit_trailer(config),
+        "COMMIT_ATTRIBUTION": commit_attribution(config, model),
+        "COMMIT_TRAILER": commit_trailer(config, model),
         "BRANCH_UPDATE": branch_update(config, values.get("BRANCH", "")),
     }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
@@ -387,7 +404,7 @@ def render_worker(
     rebase = REQUIRED_REBASE if config.trust.rebase and kind in COMMITS else ()
     noticed = REQUIRED_NOTICE if notice is not None and instructed else ()
     required = (*pr_skill, *standing, *rebase, *noticed, *required)
-    one_of = _required_attribution(config) if kind in COMMITS else ()
+    one_of = _required_attribution(config, model) if kind in COMMITS else ()
     if kind == RunKind.PLAN:
         return render(config, WORKER[kind], values, required=(*REQUIRED_PLAN, *required))
     if private:
@@ -458,12 +475,8 @@ def render(
     return rendered
 
 
-def _required_attribution(config: Config) -> tuple[str, ...]:
+def _required_attribution(config: Config, model: str) -> tuple[str, ...]:
     # What a committing kind's prompt must carry, one of, for its commits to be attributed as configured.
     if not config.trust.commit_trailer:
         return REQUIRED_NO_TRAILER
-    custom = (config.trust.commit_trailer_name, config.trust.commit_trailer_email) != (
-        DEFAULT_TRAILER_NAME,
-        DEFAULT_TRAILER_EMAIL,
-    )
-    return REQUIRED_TRAILER if custom else ()
+    return REQUIRED_TRAILER if commit_trailer(config, model) != DEFAULT_TRAILER else ()

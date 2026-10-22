@@ -110,7 +110,9 @@ comment_prefix = "CANOPY:"
 comment_suffix = ""
 # The Co-authored-by trailer a worker adds to its commits when the agent runtime adds none of its own. Name an agent
 # here, such as your team's bot address, never a person: it is how a reader tells the work is an agent's. Set
-# commit_trailer = false to add none, keeping only the runtime's own attribution, if it adds any.
+# commit_trailer = false to add none, keeping only the runtime's own attribution, if it adds any. A run with a model
+# (runtime.worker_model) is credited to "canopy worker (<model>)"; a name you set names it where it holds {model},
+# such as "acme bot ({model})", as "default" on the runtime's default model, and names none without it.
 # commit_trailer = true
 # commit_trailer_name = "canopy worker"
 # commit_trailer_email = "noreply@canopy.invalid"

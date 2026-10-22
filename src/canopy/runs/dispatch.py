@@ -957,7 +957,12 @@ def _spawn(
         required = (*required, *prompts.REQUIRED_PLAN_COPY)
     if kind == RunKind.RESUME:
         _check_retired_overrides(ctx, plan.repos)
-    prompt, remembered, replied = _render(ctx, key, kind, values, required, repos=plan.repos, private=plan.private)
+    # Fixed here, so the run keeps it whatever is set after: `_run` renders the definitions it loads from it, and the
+    # prompt's commit trailer names it (§8).
+    model = cfg.runtime.worker_model if kind in policy.MODEL_KINDS else ""
+    prompt, remembered, replied = _render(
+        ctx, key, kind, values, required, repos=plan.repos, private=plan.private, model=model
+    )
 
     run_id = db.insert_run(
         ctx.conn,
@@ -974,8 +979,7 @@ def _spawn(
         plan_id=followed[0] if followed is not None else None,
         reasons=tuple(r for r in ResumeReason if r in reasons),
         rendered=functools.partial(_record_rendered, ctx, remembered, replied),
-        # Fixed here, so the run keeps it whatever is set after; `_run` renders the definitions it loads from it.
-        model=cfg.runtime.worker_model if kind in policy.MODEL_KINDS else "",
+        model=model,
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
@@ -1115,8 +1119,11 @@ def _render(
     *,
     repos: Collection[str],
     private: bool,
+    model: str,
 ) -> tuple[str, memory.Rendered | None, replies.Rendered | None]:
     """Render the worker prompt, with agent memory's part (§28) and how its comments reach GitHub (§29).
+
+    Its commit trailer names `model`, the one the run records (§8, §13).
 
     Returns:
         The prompt; memory's part of it for the run to record, or None when no memory tier reaches the run; and the
@@ -1137,7 +1144,13 @@ def _render(
         required = (*required, *replied.required)
     try:
         prompt = prompts.render_worker(
-            ctx.config, kind, values, required=required, private=private, notice=notice.for_prompt(ctx.conn)
+            ctx.config,
+            kind,
+            values,
+            required=required,
+            private=private,
+            notice=notice.for_prompt(ctx.conn),
+            model=model,
         )
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e

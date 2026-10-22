@@ -24,7 +24,7 @@ from canopy.cli.params import (
     TextType,
     valid_key,
 )
-from canopy.core import config, definitions
+from canopy.core import config, definitions, prompts
 from canopy.infra.procs import SubprocessRunner
 from canopy.runs import dispatch
 from canopy.setup import init
@@ -250,6 +250,25 @@ def test_an_accepted_model_renders_as_one_key_holding_it(provider: str, slash: s
     assert json.loads(line.removeprefix("model: ")) == value
     assert "/" in value
     assert not any(c.isspace() or c in "\"'`" for c in value)
+
+
+@given(
+    st.lists(st.one_of(st.text(max_size=8), st.just(config.MODEL_PLACEHOLDER)), max_size=4).map("".join),
+    st.text(max_size=12).map(lambda model: f"openai/{model}"),
+)
+def test_an_accepted_trailer_name_and_model_make_one_trailer(name: str, model: str) -> None:
+    # The model comes from config, the name from the operator: together they must stay one trailer, quoted in
+    # backticks in a worker's prompt, with the address the only thing in angle brackets (DESIGN §8).
+    try:
+        trust = config.Trust(commit_trailer_name=name)
+        config.model_id(model)
+    except ValueError:  # pydantic's ValidationError is one
+        return
+    trailer = prompts.commit_trailer(config.Config.model_construct(trust=trust), model)
+    assert trailer.isprintable()
+    assert "`" not in trailer
+    assert trailer.endswith(f" <{config.DEFAULT_TRAILER_EMAIL}>")
+    assert trailer.count("<") == trailer.count(">") == 1
 
 
 @given(near(dispatch.SLUG_RE))

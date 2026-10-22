@@ -229,6 +229,10 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         ("[trust]\ncommit_trailer_name = 'bot <x@y>'\n", "no backtick or angle bracket"),
         ('[trust]\ncommit_trailer_name = "bot\\nSigned-off-by: x"\n', "one line"),
         ("[trust]\ncommit_trailer_name = ' bot'\n", "no surrounding spaces"),
+        # A brace is the model's placeholder alone, so a misspelt one is refused rather than reach a commit as written.
+        ("[trust]\ncommit_trailer_name = 'bot {models}'\n", "no brace but in {model}"),
+        ("[trust]\ncommit_trailer_name = 'bot {Model}'\n", "no brace but in {model}"),
+        ("[trust]\ncommit_trailer_name = 'bot {{model}}'\n", "no brace but in {model}"),
         ("[trust]\ncommit_trailer_email = ''\n", "one '@'"),
         ("[trust]\ncommit_trailer_email = 'bot'\n", "one '@'"),
         ("[trust]\ncommit_trailer_email = 'a@b@c'\n", "one '@'"),
@@ -370,6 +374,8 @@ def test_the_workers_model_takes_a_provider_and_model_id(canopy_env: CanopyEnv, 
     [
         *("gpt-5", "/gpt-5", "openai/", "open ai/gpt-5", "openai/gpt-5\nx", 'openai/"gpt"', "openai/'gpt'"),
         *("openai/`x`", "openai/gpt\t5", "openai/gpt\x075", "openai/" + "x" * 194),
+        # An angle bracket would end the name early in the commit trailer that names the model (DESIGN §8).
+        *("openai/gpt<5", "openai/gpt>5"),
     ],
 )
 def test_the_workers_model_refuses_an_id_of_another_shape(canopy_env: CanopyEnv, value: str) -> None:
