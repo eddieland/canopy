@@ -60,7 +60,7 @@ item touches at the PR's head. Then decide, for each item, one of:
 
 Write the plan as markdown to `{{SLOT}}/{{PLAN_OUT}}` with your file writing tool, within {{MAX_PLAN_CHARS}} characters:
 
-- `# Feedback plan: {{KEY}}`, then the ticket's title.
+- `# Feedback plan: {{KEY}} <the ticket's title>`, the title on the heading's own line.
 - `## Summary`: in a few sentences, what this round of feedback asks for, and what the plan does about it.
 - `## Items`: a `### Item <id>: <proposal>` heading for each item you cover, in the order of your result line, saying
   who wrote it and whether they are trusted, what it asks, what you propose and why, and for a `change`, which files and

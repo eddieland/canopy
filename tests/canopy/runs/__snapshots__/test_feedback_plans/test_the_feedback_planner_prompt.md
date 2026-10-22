@@ -54,7 +54,7 @@ item touches at the PR's head. Then decide, for each item, one of:
 
 Write the plan as markdown to `/workspace/desks/PROJ-1/.canopy-new-plan.md` with your file writing tool, within 100,000 characters:
 
-- `# Feedback plan: PROJ-1`, then the ticket's title.
+- `# Feedback plan: PROJ-1 <the ticket's title>`, the title on the heading's own line.
 - `## Summary`: in a few sentences, what this round of feedback asks for, and what the plan does about it.
 - `## Items`: a `### Item <id>: <proposal>` heading for each item you cover, in the order of your result line, saying
   who wrote it and whether they are trusted, what it asks, what you propose and why, and for a `change`, which files and
