@@ -262,6 +262,7 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
                 created_at: '2026-10-08T11:30:00Z',
             },
         ],
+        pr_author: 'carol',
         moved_head: null,
         published_at: null,
         published_url: null,

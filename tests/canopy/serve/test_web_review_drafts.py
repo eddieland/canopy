@@ -17,6 +17,7 @@ from canopy.core import review_drafts, review_runs
 from canopy.core.context import Context
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from tests.canopy.helpers import present, reads
+from tests.canopy.observation_helpers import HEAD, observe_pr
 from tests.canopy.review_helpers import FINDINGS, OFF_DIFF, ON_LINE, THEIRS, feature_commit, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.canopy.web_helpers import refused, signed_in_client
@@ -52,6 +53,19 @@ def test_a_reviews_page_carries_its_draft_each_comment_on_its_line_of_the_diff(
     assert draft["hash"] == newest.hash
     assert [(v["number"], v["hash"]) for v in draft["versions"]] == [(1, newest.hash)]
     assert (draft["max_comments"], draft["moved_head"], draft["published_url"]) == (30, None, None)
+    assert draft["pr_author"] is None
+
+
+def test_a_draft_names_the_prs_author_and_its_head_as_canopy_last_read_the_pr(
+    scenario: Scenario,
+    reviewed: int,
+    ctx: Context,
+) -> None:
+    observe_pr(scenario.conn, url=THEIRS)
+    scenario.conn.commit()
+    c, _ = signed_in_client(ctx)
+    draft = draft_of(c, reviewed)
+    assert (draft["pr_author"], draft["moved_head"]) == ("operator", HEAD)
 
 
 def test_the_page_edits_a_draft_as_the_cli_does_each_change_a_version_through_the_web(

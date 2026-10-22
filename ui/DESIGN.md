@@ -464,8 +464,9 @@ Rules:
 ## Fun
 
 canopy should be a little fun to use (PRODUCT.md): the header's ticker, Sprig at the foot of the rail, the empty inbox
-and the leaf a cleared item drops, and the lightswitch rave. Fun is ancillary, so this design holds only the rules it
-all keeps; what each one does is written in its code. None of it is journal text.
+and the leaf a cleared item drops (an approved plan drops one too, and so does a review draft once published, not
+staged), and the lightswitch rave. Fun is ancillary, so this design holds only the rules it all keeps; what each one
+does is written in its code. None of it is journal text.
 
 - **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
@@ -1428,9 +1429,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   the header's end; a muted line saying it is what would post, word for word, on which commit, and what made the
   version; a `status-blocked` line when the PR's head has moved past that commit; the body as `MemoryText` with a ghost
   `xs` `edit`; its comments as rows linking to their cards; every version in muted monospace, the newest in the
-  foreground; and in its foot an outline `Start the review on GitHub`, which stages it, with a `Submit it on GitHub now`
-  checkbox that turns it into a default `Publish version N`, each with its command on hover. Staged or published, the
-  foot says so with a link to GitHub instead. Each comment's card (`DraftCommentCard`, `surface`, an `accent/40` border
+  foreground; and in its foot the one way canopy posts as the operator, as a PR's thread drafts are sent (A PR's
+  threads, below): a default `Publish version N`, which submits it, and beside it an outline `Start the review on
+  GitHub`, which stages it, each with its command on hover, and a muted line by them saying what posts: as you, on the
+  PR's author's PR (`the PR` when canopy has not read it), the body and how many comments, on which commit. A publish
+  says what it did in a toast; staged or published, the foot says so in one line linked to GitHub instead, never a raw
+  URL. Each comment's card (`DraftCommentCard`, `surface`, an `accent/40` border
   to tell it from a finding's `surface-raised`) sits under its line after the findings there, with ghost `xs` `edit` and
   `drop`. While the draft waits, each line of the new side has a ghost `+` beside its number (`DiffPanels`' `onAdd`),
   shown on the row's hover or its focus, which opens a new comment's form under the line. Each form is a `Textarea` with
