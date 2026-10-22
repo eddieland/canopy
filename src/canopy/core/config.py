@@ -878,6 +878,10 @@ class Paths(Section):
     #: Whether `plan_archive` also takes the prompt each plan's planner was given, beside its plan. Private, as
     #: `plan_archive` is: a prompt carries the operator's messages and standing instructions.
     plan_archive_prompts: Annotated[StrictBool, Scope.PRIVATE] = True
+    #: Whether `plan_archive` also takes each planned ticket's conversation: its workers' reports and questions, the
+    #: operator's replies, and mirrored tracker comments, a private ticket's too. Off by default, and private, so only
+    #: the operator sends a conversation to a remote chosen for plans.
+    plan_archive_conversations: Annotated[StrictBool, Scope.PRIVATE] = False
 
 
 class Personas(Section):
