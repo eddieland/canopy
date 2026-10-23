@@ -1060,6 +1060,8 @@ GITHUB_READER = "canopy-connect-github"
 GITHUB_POSTER = "canopy-post-github"
 # The name canopy's own `vcs` source goes by when none is configured, in `connector_runs` and `canopy status`.
 DEFAULT_SOURCE = "github"
+#: The order a tick runs the sources in, by kind: the `vcs` run is also the reconcile read of the drafts (DESIGN §29).
+_SOURCE_ORDER = ("tracker", "vcs", "artifacts")
 
 
 def _source_name(value: str) -> str:
@@ -1075,8 +1077,9 @@ class Source(Section):
     on stdin, so neither takes a placeholder.
     """
 
-    kind: Literal["vcs", "tracker"]
-    # Reads the source: for `vcs`, a PR's reviews and threads. Empty for a source canopy only posts to.
+    kind: Literal["vcs", "tracker", "artifacts"]
+    # Reads the source: for `vcs`, a PR's reviews and threads; for `artifacts`, a store's comment feed. Empty for a
+    # source canopy only posts to.
     cmd: NotifyCommand = ""
     # Posts what the operator approved: for `vcs`, a PR's drafts; for `tracker`, a ticket's.
     post_cmd: NotifyCommand = ""
@@ -1088,6 +1091,8 @@ class Source(Section):
             raise ValueError("set cmd, post_cmd, or both")
         if self.kind == "vcs" and not notify_words(self.cmd):
             raise ValueError("a vcs source needs cmd: drafts are checked against what it reads")
+        if self.kind == "artifacts" and (not notify_words(self.cmd) or notify_words(self.post_cmd)):
+            raise ValueError("an artifacts source needs cmd, and takes no post_cmd: workers reply through the store")
         return self
 
 
@@ -1110,13 +1115,13 @@ class Connect(Section):
     def _one_per_kind(self) -> Connect:
         kinds = [source.kind for source in self.sources.values()]
         if len(kinds) != len(set(kinds)):
-            raise ValueError("at most one source of each kind, vcs and tracker")
+            raise ValueError("at most one source of each kind, tracker, vcs, and artifacts")
         if self.max_age_minutes < self.every_minutes:
             raise ValueError("max_age_minutes must be at least every_minutes")
         return self
 
     def named(self) -> dict[str, Source]:
-        """Each source that reads, by name, the `tracker` source first: the order a tick runs them in (DESIGN §30).
+        """Each source that reads, by name, in the order a tick runs them: `tracker`, `vcs`, then `artifacts` (§30).
 
         Returns:
             The sources with a `cmd`, canopy's own GitHub reader named `github` when no `vcs` source is configured.
@@ -1124,7 +1129,7 @@ class Connect(Section):
         found = {name: s for name, s in self.sources.items() if notify_words(s.cmd)}
         if self._of("vcs") is None:
             found[DEFAULT_SOURCE if DEFAULT_SOURCE not in found else f"{DEFAULT_SOURCE}-vcs"] = self.vcs()
-        return dict(sorted(found.items(), key=lambda item: (item[1].kind != "tracker", item[0])))
+        return dict(sorted(found.items(), key=lambda item: (_SOURCE_ORDER.index(item[1].kind), item[0])))
 
     def vcs(self) -> Source:
         """The `vcs` source: the operator's, or canopy's own GitHub reader and poster.
