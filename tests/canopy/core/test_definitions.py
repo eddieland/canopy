@@ -1402,3 +1402,28 @@ def test_the_worker_definition_as_rendered_with_a_model(
     canopy_env.write_private('[runtime.models]\nworker = "acme/fake-model-1"\n')
     files = definitions.sources(config.load(canopy_env.root))
     assert files[f"agents/{agents.WORKER}.md"].decode() == markdown_snapshot
+
+
+def test_each_set_of_variants_gets_a_digest_of_its_own(canopy_env: CanopyEnv) -> None:
+    digests = set()
+    for model in ("acme/fake-model-1", "acme/fake-model-1@high", "acme/fake-model-1@low"):
+        canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"worker": model}}})
+        digests.add(definitions.digest(config.load(canopy_env.root, canopy_env.user_file)))
+    assert len(digests) == 3
+
+
+def test_a_chores_own_copy_as_rendered_with_its_model_and_variant(
+    canopy_env: CanopyEnv,
+    markdown_snapshot: SnapshotAssertion,
+) -> None:
+    """A chore with a model of its own gets a copy of the chore's definition, `canopy-chore-<name>` (DESIGN §19)."""
+    canopy_env.write_private(
+        '[runtime.models]\nchore = "acme/fake-model-1"\n\n'
+        '[chores.triage]\nprompt = "~/triage.md"\nevery_minutes = 60\nmodel = "acme/fake-model-2@high"\n',
+    )
+    files = definitions.sources(config.load(canopy_env.root))
+    copy = files[f"agents/{agents.chore_agent('triage')}.md"].decode()
+    assert copy == markdown_snapshot
+    # Nothing else of it differs from the chore's definition, which keeps `runtime.models.chore`.
+    chore = files[f"agents/{agents.CHORE}.md"].decode()
+    assert copy.replace('"acme/fake-model-2"\nvariant: "high"', '"acme/fake-model-1"') == chore

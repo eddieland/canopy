@@ -242,11 +242,12 @@ Controls:
   characters that hide text from a person who reads it, as a lesson does. A run whose persona's file is gone or past
   its bounds is refused, never run in canopy's voice instead, and a prompt override without `{{PERSONA}}` serves only
   a run in canopy's own voice.
-- Each agent's model (DESIGN §13, M58) is the operator's choice alone: `runtime.models`, private (T7), which canopy
-  writes into the agent's definition. The overseer, a dispatch, ticket text, and labels choose none, and a `runtime`
-  template, prefix, or suffix that passes a model is a config error, so no agent's command line overrides it unseen.
-  A worker run whose model the runtime does not list, or whose list cannot be read, is refused with an attention item,
-  never run on the runtime's default instead.
+- Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
+  and a chore's `model`, both private (T7), which canopy writes into the agent's definition. The overseer, a dispatch,
+  ticket text, and labels choose none, and a `runtime` template, prefix, or suffix that passes a model or a variant is
+  a config error, as is a chore's command that does while it runs canopy's chore agent, so no agent's command line
+  overrides it unseen. A worker run whose model or variant the runtime does not list, or whose list cannot be read,
+  is refused with an attention item, never run on the runtime's default instead.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like a
   dispatch's `label`, and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds
   the workers' marks (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages
