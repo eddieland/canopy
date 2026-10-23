@@ -26,6 +26,8 @@ from typing import Any, ClassVar
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
 from canopy.core import sql
 from canopy.core.vocab import (
+    AnchorStatus,
+    AuthorKind,
     CheckConclusion,
     CheckStatus,
     ChoreRunStatus,
@@ -65,6 +67,7 @@ from canopy.core.vocab import (
     SeenKind,
     SourceKind,
     StartStatus,
+    ThreadState,
     TicketState,
     TickStatus,
 )
@@ -986,6 +989,72 @@ class ConnectorRun(Row):
     query_result: str | None
     #: The review query's result, the URLs in order, as a JSON list, when it read it to the end.
     review_query_result: str | None
+
+
+@dataclass(frozen=True)
+class ObservedFeed(Row):
+    """How far an `artifacts` source has read its store's comment feed (DESIGN §30, §38)."""
+
+    TABLE: ClassVar[str] = "observed_feeds"
+
+    source: str
+    #: The cursor the next run reads from: the `seq` of the last change it read, or past changes filtered out.
+    through: int
+    #: When a run last read the feed to its `end` line with nothing refused; None until one has.
+    read_at: str | None
+
+
+@dataclass(frozen=True)
+class ObservedArtifactThread(Row):
+    """A thread on an artifact, as the newest change the `artifacts` source read of it left it. Never authority."""
+
+    TABLE: ClassVar[str] = "observed_artifact_threads"
+
+    id: str
+    artifact_id: str
+    #: The artifact's origin pairs, as a JSON object.
+    origin: str
+    #: The origin's `canopy.ticket`, where that is a ticket's key.
+    ticket: str | None
+    #: The passage's words and the text either side; None for a thread on the whole artifact.
+    exact: str | None
+    prefix: str | None
+    suffix: str | None
+    anchored_version: int
+    state: ThreadState
+    #: Whether the passage was in the artifact's latest version when the store printed the change.
+    anchor_status: AnchorStatus | None
+    #: The store's `seq` of the newest change read of it.
+    seq: int
+    observed_at: str
+
+
+@dataclass(frozen=True)
+class ObservedArtifactComment(Row):
+    """A comment on an artifact, as the newest change the `artifacts` source read of it left it. Never authority."""
+
+    TABLE: ClassVar[str] = "observed_artifact_comments"
+
+    id: str
+    thread_id: str
+    #: The store's id for who wrote it, stable for the life of the account.
+    author: str
+    author_name: str
+    author_kind: AuthorKind
+    #: For an agent's comment, the person it wrote for.
+    on_behalf_of: str | None
+    via: str
+    #: Its text, cut at the mirror's length; empty once deleted.
+    body: str
+    truncated: bool
+    #: Whether it carries every one of the workers' marks (D069).
+    marked: bool
+    created_at: str
+    edited_at: str | None
+    deleted_at: str | None
+    #: The store's `seq` of the newest change read of it.
+    seq: int
+    observed_at: str
 
 
 @dataclass(frozen=True)

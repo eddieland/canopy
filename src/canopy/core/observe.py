@@ -21,7 +21,7 @@ from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Literal, assert_never, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -58,9 +58,11 @@ MAX_NAME = 200
 MAX_PATH = 1000
 MAX_URL = 2000
 #: The kinds each kind of source owns: a line of another kind is skipped, so one source never writes another's facts.
+#: An `artifacts` source owns none of these: its feed is read past a cursor, in `artifact_feed`, never whole.
 OWNS: Mapping[SourceKind, frozenset[str]] = {
     SourceKind.TRACKER: frozenset({"ticket", "comment"}),
     SourceKind.VCS: frozenset({"pr", "review", "check", "branch"}),
+    SourceKind.ARTIFACTS: frozenset(),
 }
 
 
@@ -90,6 +92,8 @@ class Request:
     repositories: Sequence[Repository] | None = None
     branch_prefix: str | None = None
     review_query: str | None = None
+    #: For an `artifacts` source, the feed's cursor: the `through` its last run's `end` line named, 0 at first.
+    since: int | None = None
 
     def to_json(self) -> dict[str, object]:
         """The request as the connector reads it on stdin.
@@ -113,6 +117,8 @@ class Request:
             found["branch_prefix"] = self.branch_prefix
         if self.review_query is not None:
             found["review_query"] = self.review_query
+        if self.since is not None:
+            found["since"] = self.since
         return found
 
 
@@ -162,35 +168,26 @@ def observe(
     Returns:
         How the run ended.
     """
-    started = db.now()
+    ran = run(runner, source, request, log=log)
+    if isinstance(ran, Observed):
+        return ran
+    started, stderr = ran.started_at, ran.stderr
     kind = SourceKind(source.kind)
-    printed = _Printed()
-    try:
-        result = runner.run(
-            notify_words(source.cmd),
-            stdin=json.dumps(request.to_json()),
-            timeout=source.timeout_minutes * 60,
-            on_line=printed.count,
-        )
-    except _TooMuchError:
-        return _failed(log, started, f"it printed more than {MAX_OUTPUT // (1024 * 1024)} MiB")
-    except procs.ProcError as e:
-        return _failed(log, started, f"it did not start: {e}")
-    stderr = result.stderr.strip()[-MAX_STDERR:]
-    if result.timed_out:
-        return _failed(log, started, f"it did not finish in {source.timeout_minutes} minutes", stderr)
-    if len(result.stdout) > MAX_OUTPUT:
-        return _failed(log, started, f"it printed more than {MAX_OUTPUT // (1024 * 1024)} MiB", stderr)
-    read = _read(result.stdout, kind, request.branch_prefix or config.trust.branch_prefix)
+    read = _read(ran.stdout, kind, request.branch_prefix or config.trust.branch_prefix)
     if read.end is None:
-        return _failed(log, started, "it ended without its end line", stderr, read.refused)
+        return failed(log, started, "it ended without its end line", stderr, read.refused)
     named = read.whole(read.end)
     # A source reads whole only the subjects of the kinds it owns.
-    whole = (
-        Whole(tickets=named.tickets)
-        if kind is SourceKind.TRACKER
-        else Whole(prs=named.prs, repositories=named.repositories)
-    )
+    match kind:
+        case SourceKind.TRACKER:
+            whole = Whole(tickets=named.tickets)
+        case SourceKind.VCS:
+            whole = Whole(prs=named.prs, repositories=named.repositories)
+        case SourceKind.ARTIFACTS:
+            # Its feed is read past a cursor (`artifact_feed`), so no subject of it is whole.
+            whole = Whole()
+        case _:
+            assert_never(kind)
     recorded = _record(conn, config, kind, read, whole)
     query = list(read.end.query) if request.query is not None and read.end.query is not None else None
     review = (
@@ -211,6 +208,68 @@ def observe(
         stderr=stderr,
         query_result=query,
         review_query_result=review,
+    )
+
+
+@dataclass(frozen=True)
+class Printed:
+    """What a connector printed, having run to its end within its timeout and `MAX_OUTPUT`."""
+
+    started_at: str
+    stdout: str
+    #: The last `MAX_STDERR` characters of its stderr.
+    stderr: str
+
+
+def run(runner: procs.Runner, source: Source, request: Request, *, log: logs.TickAdapter) -> Printed | Observed:
+    """Run `source`'s connector for `request`, the request on its stdin, under its timeout and `MAX_OUTPUT`.
+
+    Returns:
+        What it printed; or, when it did not start, timed out, or printed more than `MAX_OUTPUT`, the `failed` run,
+        which records nothing.
+    """
+    started = db.now()
+    printed = _Printed()
+    try:
+        result = runner.run(
+            notify_words(source.cmd),
+            stdin=json.dumps(request.to_json()),
+            timeout=source.timeout_minutes * 60,
+            on_line=printed.count,
+        )
+    except _TooMuchError:
+        return failed(log, started, f"it printed more than {MAX_OUTPUT // (1024 * 1024)} MiB")
+    except procs.ProcError as e:
+        return failed(log, started, f"it did not start: {e}")
+    stderr = result.stderr.strip()[-MAX_STDERR:]
+    if result.timed_out:
+        return failed(log, started, f"it did not finish in {source.timeout_minutes} minutes", stderr)
+    if len(result.stdout) > MAX_OUTPUT:
+        return failed(log, started, f"it printed more than {MAX_OUTPUT // (1024 * 1024)} MiB", stderr)
+    return Printed(started, result.stdout, stderr)
+
+
+def failed(
+    log: logs.TickAdapter,
+    started: str,
+    why: str,
+    stderr: str = "",
+    refused: Mapping[str, int] | None = None,
+) -> Observed:
+    """Log a run that records nothing.
+
+    Returns:
+        The `failed` run, its `missed` saying why, with the tail of its stderr.
+    """
+    log.warning("connector failed", extra={"reason": why})
+    missed = f"{why}: {stderr}" if stderr else why
+    return Observed(
+        ConnectorRunStatus.FAILED,
+        started,
+        db.now(),
+        refused=dict(refused or {}),
+        missed=missed,
+        stderr=stderr,
     )
 
 
@@ -263,29 +322,10 @@ class _Printed:
             raise _TooMuchError
 
 
-def _failed(
-    log: logs.TickAdapter,
-    started: str,
-    why: str,
-    stderr: str = "",
-    refused: Mapping[str, int] | None = None,
-) -> Observed:
-    log.warning("connector failed", extra={"reason": why})
-    missed = f"{why}: {stderr}" if stderr else why
-    return Observed(
-        ConnectorRunStatus.FAILED,
-        started,
-        db.now(),
-        refused=dict(refused or {}),
-        missed=missed,
-        stderr=stderr,
-    )
-
-
 # What a line carries
 
 
-def _text_of(limit: int, pattern: re.Pattern[str] | None = None) -> AfterValidator:
+def text_of(limit: int, pattern: re.Pattern[str] | None = None) -> AfterValidator:
     """Refuse a string longer than `limit`, not printable, or not matching `pattern`: a cut would change what it says.
 
     Returns:
@@ -336,13 +376,14 @@ _NODE_RE = re.compile(r"[A-Za-z0-9_=-]+")
 # Plain ref components, as the branch prefix is: nothing git reads specially.
 _BRANCH_RE = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_.-]*/)*[A-Za-z0-9][A-Za-z0-9_.-]*")
 
-_Key = Annotated[str, _text_of(conversation.MAX_KEY, conversation.KEY_RE)]
-_Time = Annotated[str, AfterValidator(_time)]
+_Key = Annotated[str, text_of(conversation.MAX_KEY, conversation.KEY_RE)]
+#: An ISO 8601 time, as the journal writes one; a time with no offset is the source's UTC.
+Time = Annotated[str, AfterValidator(_time)]
 _PrUrl = Annotated[str, AfterValidator(_pr_url)]
 _Url = Annotated[str, contract.url(MAX_URL)]
-_Login = Annotated[str, _text_of(MAX_NAME, _LOGIN_RE)]
-_Sha = Annotated[str, _text_of(64, _SHA_RE)]
-_Name = Annotated[str, _text_of(MAX_NAME)]
+_Login = Annotated[str, text_of(MAX_NAME, _LOGIN_RE)]
+_Sha = Annotated[str, text_of(64, _SHA_RE)]
+_Name = Annotated[str, text_of(MAX_NAME)]
 _Title = Annotated[str, contract.one_line, contract.bounded(MAX_TITLE)]
 _Body = Annotated[str, contract.bounded(conversation.MAX_MIRRORED)]
 
@@ -353,7 +394,7 @@ class _Line(BaseModel):
 
 class _Label(_Line):
     name: _Name
-    added_at: _Time | None = None
+    added_at: Time | None = None
 
 
 class _Ticket(_Line):
@@ -363,7 +404,7 @@ class _Ticket(_Line):
     body: _Body = ""
     state: TicketState
     labels: Annotated[list[_Label], Field(max_length=MAX_LIST)] = []
-    updated_at: _Time | None = None
+    updated_at: Time | None = None
     blockers: Annotated[list[_Key], Field(max_length=MAX_LIST)] = []
 
     @property
@@ -374,9 +415,9 @@ class _Ticket(_Line):
 class _Comment(_Line):
     kind: Literal["comment"]
     ticket: _Key
-    id: Annotated[str, _text_of(200, conversation.COMMENT_ID_RE)]
-    author: Annotated[str, _text_of(conversation.MAX_AUTHOR, re.compile(r"\S+"))]
-    time: _Time
+    id: Annotated[str, text_of(200, conversation.COMMENT_ID_RE)]
+    author: Annotated[str, text_of(conversation.MAX_AUTHOR, re.compile(r"\S+"))]
+    time: Time
     # Cut where it is recorded, and marked truncated there, as a mirrored comment is.
     body: str = ""
 
@@ -388,10 +429,10 @@ class _Comment(_Line):
 class _Pr(_Line):
     kind: Literal["pr"]
     url: _PrUrl
-    repository: Annotated[str, _text_of(MAX_NAME, _HOST_REPO_RE)]
+    repository: Annotated[str, text_of(MAX_NAME, _HOST_REPO_RE)]
     number: Annotated[int, Field(ge=1)]
     head_sha: _Sha | None = None
-    base_ref: Annotated[str, _text_of(255, _REF_RE)] | None = None
+    base_ref: Annotated[str, text_of(255, _REF_RE)] | None = None
     state: PrState | None = None
     draft: bool = False
     mergeable: Literal["mergeable", "conflicting", "unknown"] | None = None
@@ -406,8 +447,8 @@ class _Pr(_Line):
 
 
 class _Thread(_Line):
-    id: Annotated[str, _text_of(MAX_NAME, _NODE_RE)]
-    path: Annotated[str, _text_of(MAX_PATH)] | None = None
+    id: Annotated[str, text_of(MAX_NAME, _NODE_RE)]
+    path: Annotated[str, text_of(MAX_PATH)] | None = None
     line: Annotated[int, Field(ge=0)] | None = None
     side: Literal["left", "right"] | None = None
     outdated: bool = False
@@ -422,7 +463,7 @@ class _Review(_Line):
     author: _Login | None = None
     bot: bool = False
     state: ReviewState | None = None
-    time: _Time | None = None
+    time: Time | None = None
     body: _Body = ""
     url: _Url | None = None
     review: Annotated[int, Field(ge=1)] | None = None
@@ -456,8 +497,8 @@ class _Check(_Line):
 
 class _Branch(_Line):
     kind: Literal["branch"]
-    repository: Annotated[str, _text_of(MAX_NAME, REPO_NAME_RE)]
-    name: Annotated[str, _text_of(255, _BRANCH_RE)]
+    repository: Annotated[str, text_of(MAX_NAME, REPO_NAME_RE)]
+    name: Annotated[str, text_of(255, _BRANCH_RE)]
     head_sha: _Sha
 
     @property

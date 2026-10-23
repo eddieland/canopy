@@ -99,6 +99,11 @@ Controls:
   shown (`unobserved`). A dispatch resting on a public ticket or a PR observed past that age is refused `stale`. A
   private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual: the
   guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
+- An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own,
+  apart from every conversation, cut as a mirror cuts them, with the store's id for each author and whether the
+  comment is an agent's or carries every comment mark. In shadow (ROADMAP M62), no prompt, state block, attention
+  item, or guard reads them, so a comment steers nothing. The ticket one names is its artifact's origin, a worker's
+  word until canopy sets it per run.
 - The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
   `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
   each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
