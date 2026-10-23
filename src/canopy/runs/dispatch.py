@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import (
+    agent_models,
     conversation,
     db,
     drafts,
@@ -193,6 +194,8 @@ def start(
         attempt, limit = _guard(ctx, key, kind, plan.repos, reasons=reasons, reserved=reserved)
         # Fixed now, before a slot is leased: a persona that cannot be used refuses the run whole (DESIGN §31).
         persona = _check_persona(ctx, key, kind)
+        # And its model, looked up in the runtime's list now: one it lacks refuses the run whole (DESIGN §13).
+        model = _check_model(ctx, kind, private=plan.private)
         leases = _lease_all(ctx, key, plan.repos)
         try:
             return _spawn(
@@ -208,6 +211,7 @@ def start(
                 review=review,
                 reasons=reasons,
                 persona=persona,
+                model=model,
             )
         except BaseException:
             _return_all(ctx, leases)
@@ -263,6 +267,7 @@ def check(
         )
         _guard(ctx, key, kind, plan.repos, planned=planned, reasons=reasons, reserved=reserved)
         _check_persona(ctx, key, kind)
+        _check_model(ctx, kind, private=plan.private)
     return plan
 
 
@@ -666,6 +671,37 @@ def _check_persona(ctx: Context, key: str, kind: str) -> personas.Persona | None
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
 
 
+def _check_model(ctx: Context, kind: str, *, private: bool) -> str | None:
+    """Return the model a `kind` run asks for, looked up now in the list the runtime would look it up in (DESIGN §13).
+
+    The model is the one `runtime.models` chooses for the agent the run's template runs, which canopy writes into that
+    agent's definition. The list is read in the workspace root, not a repository's clone or slot, whose own runtime
+    config could change it. It is never fallen back from: a canary's run on a model nobody chose would read as the
+    canary's. A refusal spends no attempt and leases no slot, and raises an attention item of its guard's name, since
+    only the operator can fix it.
+
+    Returns:
+        The model, or None when config chooses none for the agent, which runs on the runtime's default.
+
+    Raises:
+        Refusal: `model_missing`, when the runtime does not list the model, or `model_list_failed`, when its list could
+            not be read.
+    """
+    runtime = ctx.config.runtime
+    if kind in (policy.PLAN, policy.FEEDBACK_PLAN):
+        template = runtime.plan_cmd
+    else:
+        template = runtime.private_worker_cmd if private else runtime.worker_cmd
+    model = agent_models.of_template(runtime.models, template)
+    if model is None:
+        return None
+    try:
+        agent_models.check(ctx.runner, ctx.workspace.root, model)
+    except agent_models.ModelError as e:
+        raise Refusal(e.guard, e.reason, attention=e.guard) from e
+    return model
+
+
 def _check_notice(ctx: Context, tick_id: int, kind: str, reasons: Collection[str]) -> None:
     """Refuse a `resume` for CI when the operator set or cleared a notice to workers after this tick read the journal.
 
@@ -865,7 +901,9 @@ def _spawn(
     review: str | None = None,
     reasons: Collection[str] = (),
     persona: personas.Persona | None = None,
+    model: str | None = None,
 ) -> Started:
+    # `model` is what the run's agent runs on, as `_check_model` found it listed; None for the runtime's default.
     cfg = ctx.config
     branch = plan.branch
     # A stacked run starts from, and opens its PRs against, the other ticket's branch; `_run` checks it is on origin.
@@ -967,6 +1005,7 @@ def _spawn(
         repos=plan.repos,
         private=plan.private,
         persona=persona,
+        model=model,
     )
 
     run_id = db.insert_run(
@@ -996,6 +1035,7 @@ def _spawn(
         persona=persona.name if persona is not None else None,
         persona_digest=persona.digest if persona is not None else None,
         persona_text=persona.text if persona is not None else None,
+        model=model,
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
@@ -1084,8 +1124,11 @@ def _render(
     repos: Collection[str],
     private: bool,
     persona: personas.Persona | None,
+    model: str | None,
 ) -> tuple[str, memory.Rendered | None, replies.Rendered | None]:
     """Render the worker prompt, with agent memory's part (§28), how its comments reach GitHub (§29), and its persona.
+
+    `model` is the one the run's agent runs on, which the commit trailer names (`prompts.commit_trailer`).
 
     Returns:
         The prompt; memory's part of it for the run to record, or None when no memory tier reaches the run; and the
@@ -1113,6 +1156,7 @@ def _render(
             private=private,
             notice=notice.for_prompt(ctx.conn),
             persona=persona,
+            model=model,
         )
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e

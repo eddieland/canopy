@@ -3,13 +3,15 @@
 The harness reads these and nothing else of a run's output. The runtime's implementation makes them from what it
 printed (`canopy.runtime.stdout`); a template that asks for no events reports text alone. What holds whatever the
 runtime is lives here, for the implementation to build on: a session id canopy prints, the sum of the model calls, and
-the bounded rollup of the tool calls, and which models served a session, as the runtime's record of it says.
+the bounded rollup of the tool calls, and which models served a session, as the runtime's record of it says, and
+which models it lists to run an agent on.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import Annotated, Literal
 
@@ -160,6 +162,16 @@ class SessionModels:
     #: Empty unless `found`, and for a session that made no model call.
     models: Sequence[ModelUse] = ()
     #: Why it `failed`, in canopy's words, never what the runtime printed.
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class ModelList:
+    """The models the runtime lists to run an agent on, the list it looks a run's model up in, or why it listed none."""
+
+    #: Each model, as `provider/model`; empty when the list could not be read, and when the runtime lists none.
+    models: AbstractSet[str] = frozenset()
+    #: Why the list could not be read, in canopy's words, never what the runtime printed; None when it was read.
     error: str | None = None
 
 
