@@ -175,6 +175,9 @@ class SpendTicks(Model):
     """How many ticks."""
     cost_usd: float | None = None
     """What their overseers cost; None when none reported a cost."""
+    without_overseer: int = 0
+    """How many of them ran no overseer, the harness having left it nothing to judge or the tick halting before it
+    (DESIGN §39): each counted at nothing, never as a run that reported no cost."""
 
 
 class SpendWoken(Model):
@@ -186,6 +189,9 @@ class SpendWoken(Model):
     """How many ticks."""
     cost_usd: float | None = None
     """What their overseers cost; None when none reported a cost."""
+    without_overseer: int = 0
+    """How many of them ran no overseer, the harness having left it nothing to judge or the tick halting before it
+    (DESIGN §39): each counted at nothing, never as a run that reported no cost."""
 
 
 class SpendUnpriced(Model):
