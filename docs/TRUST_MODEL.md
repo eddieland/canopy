@@ -711,15 +711,16 @@ authorship or the work: commits keep the attribution T5 gives them, and its bran
 which a tracker's VCS integration may link to the ticket.
 An operator message on a public ticket (D089, D093) is kept off the ticket only by the worker's prompt: a public worker
 can comment on the ticket and its PRs, so one that disregards the prompt, or is steered by what it read, can repeat the
-message there, and its work shows what the message asked for. Text the ticket's readers must never see belongs on a
-private ticket, whose worker writes nothing to it. Residual: a private worker can create tickets, so a steered or
-careless one can put what it read, the operator's messages included, into a follow-up's title or body, which the
-tracker's readers see; its prompt forbids it, and nothing prevents it. On GitHub its create tool, `issue_write`, also
-edits and closes issues, so such a worker can change any issue the operator's token reaches; that is the same exposure
-the public worker has had, now on private tickets too. A task's worker has the same tools, and so the same residual, in
-any project the token reaches, though its prompt files only in the one the submission names and canopy flags a
-reported key outside it; and a steered one can open a PR that is no draft, or one the text did not ask for, with what
-it read in its body, where whoever reads the repository's PRs sees it.
+message there, and its work shows what the message asked for. So is an attachment's text (DESIGN §22), on a public
+ticket or a private one: any worker that reads it can quote it on what it writes. Text the ticket's readers must never
+see belongs on a private ticket, whose worker writes nothing to it. Residual: a private worker can create tickets, so a
+steered or careless one can put what it read, the operator's messages included, into a follow-up's title or body, which
+the tracker's readers see; its prompt forbids it, and nothing prevents it. On GitHub its create tool, `issue_write`,
+also edits and closes issues, so such a worker can change any issue the operator's token reaches; that is the same
+exposure the public worker has had, now on private tickets too. A task's worker has the same tools, and so the same
+residual, in any project the token reaches, though its prompt files only in the one the submission names and canopy
+flags a reported key outside it; and a steered one can open a PR that is no draft, or one the text did not ask for, with
+what it read in its body, where whoever reads the repository's PRs sees it.
 
 ### T7. Hostile shared config
 
