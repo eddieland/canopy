@@ -12,7 +12,7 @@ canopy reads three files, each overriding the one before it, key by key:
 1. `canopy-workspace.toml`, at the workspace's root: the map of the workspace, its repositories and its tracker's
    query. It's the one file meant to be shared, and committed if the workspace is.
 2. `~/.config/canopy/config.toml` (under `$XDG_CONFIG_HOME`, if you set it): yours, for every workspace. What holds
-   everywhere goes here, such as the runtime templates and your notification sinks.
+   everywhere goes here, such as the runtime templates and your notification sinks, [Slack](slack) among them.
 3. `.canopy/config.toml`, under the workspace's root: yours, for this workspace alone. `canopy init` writes your
    queue label and your trust lists here.
 
