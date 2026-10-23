@@ -955,7 +955,7 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
             git=[f"checkout={seed}"],
         )
     # Its own tools, wherever it runs, a running tick included, and none of the overseer's.
-    assert served.listed() == ["merge-base", "diff", "log", "show", "blame"]
+    assert served.listed() == ["merge-base", "diff", "log", "show", "blame", "grep", "files"]
     # Each answers with text alone.
     assert not any("outputSchema" in t for t in served.responses[1]["result"]["tools"])
     assert served.structured(2) is None

@@ -12,10 +12,10 @@ The repositories this plan covers, each at its PR's head on branch `{{BRANCH}}`:
 
 Their pull requests: {{PULL_REQUESTS}}.
 
-Your git tools, `canopy_git_merge-base`, `canopy_git_diff`, `canopy_git_log`, `canopy_git_show`, and
-`canopy_git_blame`, read each one's history: where its branch leaves its base, the diff and commits since, a file as it
-was, and which commit wrote a line. Name the repository with
-`repo`, as above.
+Your git tools, `canopy_git_merge-base`, `canopy_git_diff`, `canopy_git_log`, `canopy_git_show`, `canopy_git_blame`,
+`canopy_git_grep`, and `canopy_git_files`, read each one's history: where its branch leaves its base, the diff and
+commits since, a file as it was, which commit wrote a line, and where a text or a file is at a commit. Name the
+repository with `repo`, as above.
 
 {{#MAP}}
 
