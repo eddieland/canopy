@@ -87,9 +87,9 @@ hide a result by marking it seen.
 ### Tracker comments in the journal
 
 The overseer copies each ticket's new tracker comments into the journal every tick, so the operator reads every
-conversation in one place (D081), through a command only a tick may run (D020) and in a form no comment can break out
-of (TRUST_MODEL T1). A comment bearing a worker's marks (D069) is recorded as a worker's. Either way it authorizes
-nothing: phases, `awaiting_reply`, and the loop's wake read operator messages only.
+conversation in one place, through a tool only a tick's overseer has (D020, §27), the comment's body a field no comment
+can break out of (TRUST_MODEL T1). A comment bearing a worker's marks (D069) is recorded as a worker's. Either
+way it authorizes nothing: phases, `awaiting_reply`, and the loop's wake read operator messages only.
 
 ### The web UI
 

@@ -57,7 +57,7 @@ Controls:
   one of `tracker.labels`, and whose replies count for resuming blocked work
   (`trust.authorized_repliers`). All other text is data. Prompts say so.
 - canopy has no tracker code, so it cannot read labels, and a live tick showed an overseer can skip its label check
-  for a ticket the journal remembers (D051). `canopy dispatch` refuses without `--label` naming one of
+  for a ticket the journal remembers (D051). A dispatch refuses without a `label` naming one of
   `tracker.labels`; that is a recorded claim a harness guard checks against config, not proof the label is on the
   ticket. Where a `tracker` source observes the ticket, it is checked against the observation too (below). The
   independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
@@ -151,12 +151,12 @@ Controls:
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
   `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). With `tracker.private`
   set (private), a labeled ticket canopy never ran is started by its first dispatch instead, on the overseer's
-  `--label` claim, which the harness checks against config as for any public dispatch (D119). No worker re-reads the
+  `label` claim, which the harness checks against config as for any public dispatch (D119). No worker re-reads the
   labels for it, then or later, and removing the label does not stop it: an overseer that claims a label a ticket
   does not carry starts it for good, with nothing but its own read to catch it, until the operator runs `canopy stop`.
   That is the switch's residual, beside D051's; `canopy show` and the dispatch's decision name such a start.
-  `canopy dispatch` checks the start record in code, in the transaction that inserts the run, so it needs no
-  `--label`, and `_run` reads it again before the worker starts. A stopped ticket is dispatched by nothing, whatever
+  A dispatch checks the start record in code, in the transaction that inserts the run, so it needs no `label`, and
+  `_run` reads it again before the worker starts. A stopped ticket is dispatched by nothing, whatever
   labels it carries. Tracker comments on a private ticket are data, whoever wrote them; only the operator's messages
   are instructions, and the harness renders them into the worker's prompt itself. `canopy forget` is the operator's
   too: it clears what the journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit
@@ -247,20 +247,25 @@ Controls:
   template, prefix, or suffix that passes a model is a config error, so no agent's command line overrides it unseen.
   A worker run whose model the runtime does not list, or whose list cannot be read, is refused with an attention item,
   never run on the runtime's default instead.
-- Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
-  and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
-  (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
-  worker's prompt labels a mirrored comment as data, with its author. The overseer passes a comment's text on stdin
-  through a quoted heredoc, never in an argument, so the shell expands nothing in it, and the heredoc's delimiter is
-  random and fresh each tick, so no comment can be written to end it early and run what follows (D081).
-- The overseer has no edit or write tools and can act only through the
-  `canopy` CLI, whose guards are code, and the commands the operator names for it in `runtime.allow_bash`, such as a
-  tracker's CLI while its MCP server is down. That key is private (T7): only the operator widens the overseer's shell,
-  and canopy renders each pattern last of its bash rules, so it wins, and lists them in `canopy agents`. The same key
-  takes allows for both workers, rendered last of theirs: a worker's shell already runs all but what it denies, so
-  there an allow undoes a deny, which the checks below keep from git, `gh`, `sudo`, and the loop's own tools, and leave
-  open for the private worker's tracker CLIs (T6). The planner takes them too, as the overseer does: its shell runs
-  nothing else. In code, canopy refuses an allow for the agents with no shell, a
+- Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like a
+  dispatch's `label`, and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds
+  the workers' marks (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages
+  only. A private worker's prompt labels a mirrored comment as data, with its author. The overseer passes a comment's
+  text as a field of its `mirror` tool's JSON arguments, which no shell reads, so there is nothing in it to expand,
+  quote, or end early (DESIGN §27).
+- The overseer has no edit or write tools, and can act only through canopy's own MCP tools, whose guards are code
+  (D020, DESIGN §27), and the commands the operator names for it in `runtime.allow_bash`, such as a tracker's CLI while
+  its MCP server is down. The server is named in the overseer process's environment alone, from which the harness
+  removes it before any run it starts; it lists no tool and refuses every call under `CANOPY_RUN_ID` or outside a
+  running tick, the overseer's definition allows each tool by exact name, and every other definition denies them all.
+  A steered overseer can still make any call its tools take, as it could run any `canopy` command before; the guards
+  in the tools bound what that does. Its bash rules deny every command but those `runtime.allow_bash` names. That key
+  is private (T7): only the operator widens the overseer's shell, and canopy renders each pattern last of its bash
+  rules, so it wins, and lists them in `canopy agents`. The same key takes allows for both workers, rendered last of
+  theirs: a worker's shell already runs all but what it denies, so there an allow undoes a deny, which the checks below
+  keep from git, `gh`, `sudo`, and the loop's own tools, and leave open for the private worker's tracker CLIs (T6). The
+  planner takes them too, as the overseer does: its shell runs nothing else. In code, canopy refuses an allow for the
+  agents with no shell, a
   pattern that is not one plain command line (no quote, `$`, `;`, `&`, `|`, redirect, backslash, brace, or newline), a
   command named by a wildcard or a path, and one that runs a command it is given (a shell, an interpreter, a wrapper
   such as `env`, `xargs`, or `timeout`, a package or build runner, `find`, a pager, a database shell), fetches pages
@@ -747,6 +752,10 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 
 - The harness refuses to start the overseer or a worker where the repository's OpenCode config defines one of canopy's
   agents, by file name under `.opencode/`, or by name anywhere in the text of an `opencode.json` or `opencode.jsonc`.
+- It refuses the same where that config names an MCP server `canopy` (DESIGN §27): canopy gives the overseer its own
+  server by that name, and a merge keeps the keys canopy's entry leaves out, such as the environment of canopy's
+  interpreter. That interpreter starts with the workspace root off its import path, so no file a workspace holds
+  stands in for canopy's modules.
 - A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
   back to its default agent, which allows everything.
 
@@ -768,8 +777,9 @@ undenied in that definition. An operator who works private tickets in a reposito
 also add skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the
 same exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
 canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
-agent's name out of JSON escapes or `{file:...}` substitution gets past it, and could then add bash rules to canopy's
-agents. A scalar rule canopy sets (the worker's `edit`, `external_directory`, and `task`) replaces whatever such an
+agent's name, or the `canopy` server's, out of JSON escapes or `{file:...}` substitution gets past it, and could then
+add bash rules to canopy's agents, or set the environment of the overseer's server. A scalar rule canopy sets (the
+worker's `edit`, `external_directory`, and `task`) replaces whatever such an
 agent sets for it, but OpenCode matches each permission key as a wildcard on the permission's name: an agent that sets
 the same permission and then a key such as `external_*` keeps that key after canopy's rule, and loosens it. These
 rules are defense in depth (T4), as the bash rules are, with branch protection (§7) the boundary for what a worker can

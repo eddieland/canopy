@@ -14,11 +14,12 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
     FAKE_AGENT_TOOLS    a JSON list of [tool, arguments] pairs, each called in order before the commands, `tool` named
                         as OpenCode names it, `<server>_<tool>`, through the local MCP server of that name its inline
                         config names (OPENCODE_CONFIG_CONTENT), as OpenCode starts it: its command, in its cwd, with
-                        the agent's whole environment. Stands in for a chore calling `canopy_chore_history`. Default
-                        none. A call no server named answers fails as OpenCode's would.
+                        the agent's whole environment. Stands in for an overseer calling `canopy_decide`, or a chore
+                        `canopy_chore_history`. Default none. A call no server named answers fails as OpenCode's would.
     FAKE_AGENT_QUERIED  for an overseer whose state block says `"query_due": true`: a JSON list of the ticket keys it
-                        records with `canopy queried` before its commands, as the prompt's step 1 does once it has run
-                        the query. Default `[]`, the query found nothing open. `skip` records no query.
+                        records before its commands, as the prompt's step 1 does once it has run the query: with the
+                        `canopy_queried` tool, first, when it calls tools, else with `canopy queried`. Default `[]`, the
+                        query found nothing open. `skip` records no query.
     FAKE_AGENT_LOG      if set, a JSON object of "argv", "stdin", "cwd", "env", "tools", and "commands", on one line,
                         is appended to this file per run. `stdin` is what was piped to it, None from a terminal or
                         /dev/null, as `opencode run` takes a piped prompt. `env` holds the CANOPY_* and OPENCODE_*
@@ -51,6 +52,7 @@ Stdlib only, no canopy imports: this runs as a separate process under whatever p
 """
 
 import functools
+import itertools
 import json
 import os
 import subprocess  # noqa: TID251  (stands in for an agent runtime, so a fake overseer can run the CLI)
@@ -108,30 +110,47 @@ def run_commands(argv: list[str]) -> list[dict[str, object]]:
 
 
 def queried(argv: list[str]) -> list[list[str]]:
+    keys = queried_keys(argv)
+    return [] if keys is None or calls_tools(argv) else [["canopy", "queried", *keys]]
+
+
+def queried_keys(argv: list[str]) -> list[str] | None:
+    """The keys an overseer whose query is due records it found, or None when it records no query."""
     found = setting(argv, "QUERIED", "[]")
     if role(argv) != "OVERSEER" or found == "skip" or not query_due(prompt(argv)):
-        return []
-    return [["canopy", "queried", *json.loads(found)]]
+        return None
+    keys: list[str] = json.loads(found)
+    return keys
+
+
+def calls_tools(argv: list[str]) -> bool:
+    return bool(json.loads(setting(argv, "TOOLS", "[]")))
 
 
 def call_tools(argv: list[str]) -> list[dict[str, object]]:
-    """Call each tool the script names, through the server the inline config names for it, one session per server."""
-    calls: list[list[Any]] = json.loads(setting(argv, "TOOLS", "[]"))
-    if not calls:
-        return []
-    servers = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
-    made: list[dict[str, object]] = []
-    for name, arguments in calls:
+    """Call each tool the script names, the query's record first, through the server the inline config names for it:
+    one session for each run of calls to the same server, as OpenCode keeps one open for the whole run."""
+    keys = queried_keys(argv) if calls_tools(argv) else None
+    calls: list[list[Any]] = [*([] if keys is None else [["canopy_queried", {"keys": keys}]])]
+    calls += json.loads(setting(argv, "TOOLS", "[]"))
+    servers: dict[str, dict[str, Any]] = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
+
+    def owner(call: list[Any]) -> str | None:
         # The longest server name the tool's name starts with, as `<server>_<tool>`.
-        owner = max((s for s in servers if name.startswith(f"{s}_")), key=len, default=None)
-        if owner is None:
-            text, error = f"no MCP server serves {name}", True
+        return max((s for s in servers if call[0].startswith(f"{s}_")), key=len, default=None)
+
+    made: list[dict[str, object]] = []
+    for server, run in itertools.groupby(calls, key=owner):
+        group = list(run)
+        if server is None:
+            answers = [(f"no MCP server serves {name}", True) for name, _ in group]
         else:
-            [(text, error)] = served(servers[owner], [[name.removeprefix(f"{owner}_"), arguments]])
-        made.append({"name": name, "arguments": arguments, "text": text, "error": error})
-        if events(argv):
-            outcome = {"status": "error", "error": text} if error else {"status": "completed", "output": text}
-            emit(argv, "tool_use", {"type": "tool", "tool": name, "state": {**outcome, "input": arguments}})
+            answers = served(servers[server], [[name.removeprefix(f"{server}_"), args] for name, args in group])
+        for (name, arguments), (text, error) in zip(group, answers, strict=True):
+            made.append({"name": name, "arguments": arguments, "text": text, "error": error})
+            if events(argv):
+                outcome = {"status": "error", "error": text} if error else {"status": "completed", "output": text}
+                emit(argv, "tool_use", {"type": "tool", "tool": name, "state": {**outcome, "input": arguments}})
     return made
 
 
