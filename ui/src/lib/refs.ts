@@ -54,6 +54,16 @@ export function choreRunRef(name: string, id: number | string): string {
     return `${choreRef(name)}#${id}`
 }
 
+/** A one-off task, as `canopy show` reads it: `task:4`. */
+export function taskRef(id: number | string): string {
+    return `task:${id}`
+}
+
+/** One run of a task, which has no reference of its own: its task, then its number, as a chore run is: `task:4#5`. */
+export function taskRunRef(task: number | string, id: number | string): string {
+    return `${taskRef(task)}#${id}`
+}
+
 /** A message in a ticket's conversation, as its head line numbers it: `#5`. */
 export function messageRef(id: number | string): string {
     return `#${id}`

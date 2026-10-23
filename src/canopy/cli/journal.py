@@ -188,7 +188,7 @@ def cmd_mirror(click_ctx: click.Context, *, ref: str, comment_id: str, author: s
         )
     except tools.Refused as e:
         raise CliError(str(e)) from None
-    click.echo(said)
+    click.echo(said.text)
     return 0
 
 

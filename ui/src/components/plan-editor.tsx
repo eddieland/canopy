@@ -620,6 +620,29 @@ export function PlanEditor({
     )
 }
 
+/**
+ * Agent-written Markdown laid out as a document, read only, through the plan's schema (`src/lib/plan-schema.ts`): a
+ * task's report. It is the plan's read without its panel, toolbar, or comments. The schema keeps HTML and images as
+ * their characters and draws no link, so untrusted text stays text, as a plan's does. `markdown` is read once: other
+ * text is a new `key`.
+ */
+export function PlanDocument({ markdown, label }: { markdown: string; label: string }) {
+    const editor = useEditor({
+        extensions: planExtensions(),
+        content: markdown,
+        contentType: 'markdown',
+        editable: false,
+        // The document renders on the first pass, so it never paints empty first.
+        immediatelyRender: true,
+        shouldRerenderOnTransaction: false,
+        editorProps: {
+            // As tall as its text: a short report is no taller than it reads.
+            attributes: { class: 'plan-doc min-h-0', 'aria-label': label, role: 'document' },
+        },
+    })
+    return <EditorContent editor={editor} className="px-6 py-4" />
+}
+
 // How many changes are marked, and buttons that step the cursor to the one before or after it.
 function ChangeSteps({ count, onStep }: { count: number; onStep: (step: 1 | -1) => void }) {
     return (

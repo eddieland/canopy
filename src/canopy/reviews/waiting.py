@@ -1,7 +1,7 @@
 """The reviews' drafts that wait on the operator (DESIGN §14, §34), as the attention items the harness raises.
 
 A review the operator asked for that landed with its draft unpublished is `review_waiting`, an item about its PR until
-the operator publishes or stages a draft of the PR's newest reviewed commit, empties the draft of all it would post,
+the operator publishes, stages, or discards a draft of the PR's newest reviewed commit, empties it of all it would post,
 or the PR is seen merged or closed. A review of a later commit replaces it. A draft staged on GitHub, or whose post
 ended without saying whether it submitted, is `review_unsettled` until a whole read of the PR settles it. Both are the
 operator's alone: the overseer never records them.
@@ -49,8 +49,8 @@ def items(conn: sqlite3.Connection) -> list[Item]:
 def _waiting(conn: sqlite3.Connection) -> list[Item]:
     """A `review_waiting` item for each open PR whose newest reviewed commit has a requested review's draft to publish.
 
-    The drafts of that commit are taken together, a review in each persona among them: one published, staged, being
-    posted, or of unknown outcome answers them all.
+    The drafts of that commit are taken together, a review in each persona among them: one published, staged,
+    discarded, being posted, or of unknown outcome answers them all.
 
     Returns:
         The items, by PR.
@@ -115,9 +115,12 @@ def _waiting_detail(pr: str, runs: Sequence[int]) -> str:
     if len(runs) == 1:
         return (
             f"{named}, which you asked for, is done: its draft of {pr} waits on you to publish or stage it "
-            f"(`canopy review draft {runs[0]}`)"
+            f"(`canopy review draft {runs[0]}`), or discard it (`canopy review discard {runs[0]}`)"
         )
-    return f"{named}, which you asked for, are done: their drafts of {pr} wait on you to publish or stage one"
+    return (
+        f"{named}, which you asked for, are done: their drafts of {pr} wait on you to publish or stage one, or "
+        "discard one (`canopy review discard RUN_ID`)"
+    )
 
 
 def _unsettled(conn: sqlite3.Connection) -> list[Item]:

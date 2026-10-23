@@ -15,6 +15,11 @@ a decision, as every guard's is:
   no unit's `review` cursor, so its review claim stays a claim.
 - `unobserved`: a cursor names no item observed for its subject, or passes one the block left out for its bound.
 
+`canopy ticket set` moves cursors too, so its cursors are checked the same way in a tick (`check_cursors`), refused
+`unobserved` alone: it starts nothing, so a stale subject is not refused, but the block shows none of a stale subject's
+items, so a cursor on one may move no further than the items it already passed. A unit with no PR is unobserved, since
+no source reads checks or reviews but a PR's.
+
 A private ticket, which its start record authorizes (§22), is not checked; nor is a subject no source covers, such as
 every ticket without a `tracker` source: its claims stay claims, checked again by the worker (D051). Cursors are still
 the source's ids and times (§7), so a `review` cursor names an item by its time, to the second.
@@ -86,6 +91,49 @@ def check(
     gated = ResumeReason.REVIEW in reasons and ctx.config.policy.feedback_plan != "approve"
     if gated and pr is not None:
         review.check_authority(ctx, record, cursors.get("message"))
+
+
+def check_cursors(
+    ctx: Context,
+    tick_id: int,
+    now: datetime,
+    *,
+    key: str,
+    repo: str | None,
+    cursors: Mapping[str, str],
+) -> None:
+    """Refuse a `ticket set` whose cursors name no item observed, or pass one the block left out, at `now`.
+
+    `cursors` are the ones it moves, by name; a unit's (`review`, `ci`) is of `repo`. A `review` cursor may name the end
+    of any canopy review run of the PR, as the block's `reviewed_at` shows the latest.
+
+    Raises:
+        Refusal: `unobserved`, as the module says.
+    """
+    if conversation.start_of(ctx.conn, key) is not None:
+        return
+    record = db.get_ticket(ctx.conn, key)
+    if record is None:
+        return
+    reader = observations.Reader.read(ctx, tick_id, now, [record])
+    if reader.ticket(key)["observed"] != "unobserved":
+        _check_comment(reader, record, cursors.get("comment"))
+    unit = next((u for u in reader.units_of.get(key, []) if repo is not None and u.repo == repo), None)
+    seen = next((u for u in reader.units(key) if u["repo"] == repo), None)
+    if unit is None or unit.pr_url is None or seen is None or seen["observed"] == "unobserved":
+        return
+    pr = _fresh_pr(seen)
+    if pr is None:
+        name = next((n for n in db.UNIT_CURSORS if n in cursors), None)
+        if name is None:
+            return
+        raise Refusal(
+            "unobserved",
+            f"{name} cursor {cursors[name]}: {key} in {repo} is stale ({seen.get('why')}), so the state block shows "
+            "none of its items; move it once the next read observes them",
+        )
+    _check_ci(reader, pr, cursors.get("ci"))
+    _Review.read(reader, pr, unit, cursors.get("review"), None, any_run=True).check_named()
 
 
 def _check_subjects(
@@ -276,6 +324,8 @@ class _Review:
     shown: AbstractSet[tuple[str, int]]
     #: The canopy review run the dispatch names, if the journal has it.
     run: records.ReviewRun | None
+    #: When each canopy review run the cursor may name ended: the one named, or with `any_run` every run of the PR.
+    ends: Sequence[str]
 
     @classmethod
     def read(
@@ -285,16 +335,25 @@ class _Review:
         unit: records.TicketUnit | None,
         cursor: str | None,
         review_run: int | None,
+        *,
+        any_run: bool = False,
     ) -> _Review:
         """Read what a `review` cursor covers on a unit's fresh PR, past the unit's own cursor and up to it.
+
+        With `any_run`, the cursor may name the end of any canopy review run of the PR, not only the one named.
 
         Returns:
             The cover: no items without a fresh PR or a cursor, with the review run the dispatch names either way. A
             run the journal does not have is left to `review_run`'s own check, which refuses it.
         """
-        run = None if review_run is None else review_runs.get_review_run(reader.ctx.conn, review_run)
+        conn = reader.ctx.conn
+        run = None if review_run is None else review_runs.get_review_run(conn, review_run)
         if pr is None or unit is None:
-            return cls(subject=None, pr=None, cursor=None, items=(), covered=(), shown=frozenset(), run=run)
+            return cls(subject=None, pr=None, cursor=None, items=(), covered=(), shown=frozenset(), run=run, ends=())
+        runs: Sequence[records.ReviewRun] = (
+            review_runs.review_runs_of(conn, pr["url"]) if any_run else [run] if run else []
+        )
+        ends = [r.ended_at for r in runs if r.ended_at is not None]
         items = reader.reviews.get(pr["url"], [])
         since = phases.review_cursor(unit.last_review_id)
         new = [r for r in items if phases.newer(r.created_at, since)]
@@ -302,12 +361,21 @@ class _Review:
         covered = [r for r in new if upto is not None and not phases.newer(r.created_at, upto)]
         shown = frozenset((r.item.value, r.id) for r in new[: observations.MAX_NEW_ITEMS])
         subject = f"{unit.ticket_key} in {unit.repo}"
-        return cls(subject=subject, pr=pr, cursor=cursor, items=items, covered=covered, shown=shown, run=run)
+        return cls(
+            subject=subject,
+            pr=pr,
+            cursor=cursor,
+            items=items,
+            covered=covered,
+            shown=shown,
+            run=run,
+            ends=ends,
+        )
 
     def check_named(self) -> None:
         """Refuse a `review` cursor that is no observed item's time, or passes an item the block left out.
 
-        The named review run's end is an item's time too, as the block's `reviewed_at`.
+        A review run's end it may name is an item's time too, as the block's `reviewed_at`.
 
         Raises:
             Refusal: `unobserved`.
@@ -315,12 +383,12 @@ class _Review:
         if self.pr is None or self.cursor is None:
             return
         at = phases.review_cursor(self.cursor)
-        stamps = [r.created_at for r in self.items] + ([self.run.ended_at] if self.run is not None else [])
+        stamps = [r.created_at for r in self.items] + list(self.ends)
         if at is None or not any(s is not None and _second(s) == at.replace(microsecond=0) for s in stamps):
             raise Refusal(
                 "unobserved",
-                f"review cursor {self.cursor} is the time of no review item observed on {self.pr['url']}, nor of the "
-                "review run named; take it from an item the state block shows",
+                f"review cursor {self.cursor} is the time of no review item observed on {self.pr['url']}, nor of a "
+                "review run's end it may name; take it from an item the state block shows",
             )
         left_out = [r for r in self.covered if (r.item.value, r.id) not in self.shown]
         if left_out:

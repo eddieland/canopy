@@ -1,7 +1,8 @@
 """A review's draft as the API sends it (DESIGN §34): its newest version, exactly what would post, and its history.
 
-Its text is the reviewer's, written from the PR's, until the operator publishes it: sent as the journal holds it, for
-the UI to show as plain text, every hidden character named. Reads only; the operator's verbs on it are
+Its text is the reviewer's, or a reviser's, written from the PR's, until the operator publishes it: sent as the journal
+holds it, for the UI to show as plain text, every hidden character named. Beside it, the operator's notes no version
+has answered, and its revisions against their limit. Reads only; the operator's verbs on it are
 `canopy.core.review_drafts_manage`'s, through `api/reviews.py`.
 """
 
@@ -9,37 +10,50 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import db, records, review_diff, review_drafts, review_result, sql
+from canopy.core import db, records, review_diff, review_drafts, review_result, review_revisions, review_runs, sql
 from canopy.serve.review_schema import (
     ReviewDraft,
     ReviewDraftAuthorName,
     ReviewDraftComment,
+    ReviewDraftNote,
+    ReviewDraftRevision,
     ReviewDraftStatusName,
     ReviewDraftVersion,
 )
+from canopy.serve.views import review_state
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Collection
 
+    from canopy.core.config import Config
 
-def of_review(conn: sqlite3.Connection, run: records.ReviewRun, diff: review_diff.Diff | None) -> ReviewDraft | None:
+
+def of_review(
+    conn: sqlite3.Connection,
+    config: Config,
+    run: records.ReviewRun,
+    diff: review_diff.Diff | None,
+) -> ReviewDraft | None:
     """Review run `run`'s draft, its comments placed on `diff`, the diff it kept; None when it has none.
 
     Returns:
         The draft, or None.
     """
     found = review_drafts.of_review(conn, run.id)
-    return view(conn, found, run, diff) if found is not None else None
+    return view(conn, config, found, run, diff) if found is not None else None
 
 
 def view(
     conn: sqlite3.Connection,
+    config: Config,
     found: records.ReviewDraft,
     run: records.ReviewRun,
     diff: review_diff.Diff | None,
 ) -> ReviewDraft:
     """A draft as the API sends it, at its newest version, its comments placed on `diff`, its review run `run`.
+
+    Its revisions are counted against their limit under `config`.
 
     Returns:
         The draft.
@@ -75,6 +89,18 @@ def view(
         moved_head=_moved_head(pr, found),
         published_at=db.parse_time(found.published_at) if found.published_at else None,
         published_url=found.published_url,
+        notes=[
+            ReviewDraftNote(
+                id=n.id,
+                body=n.body,
+                channel=n.channel,
+                after_version=n.after_version,
+                created_at=db.parse_time(n.created_at),
+            )
+            for n in review_revisions.pending(conn, found.id)
+        ],
+        revisions=[_revision(r) for r in review_runs.revision_runs_of(conn, found.id)],
+        revision_limit=review_revisions.limit(conn, config, found.id),
     )
 
 
@@ -110,3 +136,14 @@ def _moved_head(pr: records.ObservedPr | None, draft: records.ReviewDraft) -> st
     if pr is None or not pr.head_sha or draft.sha.startswith(pr.head_sha):
         return None
     return pr.head_sha
+
+
+def _revision(run: records.ReviewRun) -> ReviewDraftRevision:
+    return ReviewDraftRevision(
+        id=run.id,
+        status=run.status,
+        state=review_state(run.status),
+        revised=run.revises_version or 0,
+        started_at=db.parse_time(run.started_at),
+        ended_at=db.parse_time(run.ended_at) if run.ended_at else None,
+    )

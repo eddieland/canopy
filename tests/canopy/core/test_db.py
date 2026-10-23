@@ -553,3 +553,43 @@ def test_runs_whose_models_were_found_are_read_again_and_keep_their_models(tmp_p
     reads = conn.execute("SELECT run_table, run_id, status FROM run_model_reads ORDER BY run_id").fetchall()
     assert [tuple(r) for r in reads] == [("runs", 2, "missing"), ("ticks", 3, "failed")]
     assert [tuple(r) for r in conn.execute("SELECT run_id, model FROM run_models")] == [(1, "a/x")]
+
+
+def test_review_drafts_rebuilt_to_be_discarded_keep_the_revisions_that_name_them(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """0080 rebuilds `review_drafts` under the review runs, versions, and notes that reference them, keeping each."""
+    conn = journal_at(journals, tmp_path, 79)
+    pr = "https://github.com/acme/api/pull/8"
+    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
+    conn.execute(
+        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path, purpose) "
+        "VALUES (1, ?, 'abc', 'x', 'done', 'l', 'request')",
+        (pr,),
+    )
+    conn.execute(
+        "INSERT INTO review_drafts (review_run_id, pr_url, sha, status, created_at) "
+        "VALUES (1, ?, 'abc', 'waiting', 'x')",
+        (pr,),
+    )
+    conn.execute(
+        "INSERT INTO review_draft_versions (draft_id, version, body, comments, author, change, created_at) "
+        "VALUES (1, 1, 'One defect.', '[]', 'reviewer', 'made', 'x')",
+    )
+    conn.execute(
+        "INSERT INTO review_draft_notes (draft_id, after_version, body, channel, created_at) "
+        "VALUES (1, 1, 'Gentler.', 'cli', 'x')",
+    )
+    conn.execute(
+        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path, purpose, revises, "
+        "revises_version) VALUES (1, ?, 'abc', 'x', 'done', 'l', 'request', 1, 1)",
+        (pr,),
+    )
+    assert db.migrate(conn, resources.migrations_dir()) == versions_after(79)
+    assert [tuple(r) for r in conn.execute("SELECT id, review_run_id, status FROM review_drafts")] == [
+        (1, 1, "waiting"),
+    ]
+    assert [tuple(r) for r in conn.execute("SELECT id, revises FROM review_runs ORDER BY id")] == [(1, None), (2, 1)]
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    conn.execute("UPDATE review_drafts SET status = 'discarded', why = 'discarded by you through cli'")

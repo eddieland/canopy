@@ -1070,7 +1070,7 @@ class Draft(Row):
     #: The reaction a send added on GitHub, which stays there even when the send's review then failed.
     reacted: Reaction | None
     reacted_at: str | None
-    #: The number of the item of its run's feedback plan whose proposed reply it started from, or None (0080).
+    #: The number of the item of its run's feedback plan whose proposed reply it started from, or None (0081).
     plan_item: int | None
 
 

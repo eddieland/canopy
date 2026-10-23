@@ -1,4 +1,4 @@
-"""The operator's verbs on a review's draft (DESIGN §34): editing it, noting what to revise, and publishing or staging.
+"""The operator's verbs on a review's draft (DESIGN §34): editing, noting what to revise, publishing, and discarding.
 
 Each refuses inside canopy's ticks and runs (`conversation.check_operator`): an agent that could publish could post as
 the operator on any PR their query matches. The CLI's `canopy review` commands call these functions, and the web UI is
@@ -18,6 +18,9 @@ the draft's revision limit, or while a revision runs, is refused; the operator g
 
 Staging is publishing without the submit: the version waits in a pending review for the operator to submit on GitHub,
 and is `staged` until a whole read finds that review submitted, or gone.
+
+Discarding is the operator's word that a waiting draft is seen and will not post: it is `discarded`, past every other
+verb, and posts nothing.
 """
 
 from __future__ import annotations
@@ -241,6 +244,34 @@ def grant_revisions(conn: sqlite3.Connection, config: Config, run_id: int, *, ru
         return Granted(runs=spent, limit=review_revisions.limit(conn, config, draft.id))
 
 
+def discard(conn: sqlite3.Connection, run_id: int, *, channel: str) -> records.ReviewDraft:
+    """Discard review run `run_id`'s draft: the operator has seen it and will not post it.
+
+    It posts nothing, takes no edit, note, or publish from now on, and answers its PR's `review_waiting` item as a
+    published draft does. A later commit's review is a new draft.
+
+    Returns:
+        The draft, discarded.
+
+    Raises:
+        Refused: (`inside_run`); (`unknown`); (`no_draft`); a status past edits, named for it; (`revising`) a revision
+            of it runs.
+    """
+    conversation.check_operator()
+    draft = find(conn, run_id)
+    with db.transaction(conn):
+        draft = review_drafts.get(conn, draft.id) or draft
+        _check_open(draft)
+        _check_not_revising(conn, draft)
+        sql.execute(
+            conn,
+            sql.update("review_drafts")
+            .set(status=ReviewDraftStatus.DISCARDED, why=f"discarded by you through {channel}")
+            .where("id = ?", draft.id),
+        )
+    return _present(conn, draft)
+
+
 def _checked(text: str) -> str:
     """The operator's text, held to the bounds the reviewer's is (DESIGN §34).
 
@@ -297,7 +328,7 @@ def _change(
 
 
 def _check_open(draft: records.ReviewDraft) -> None:
-    """Refuse to change a draft past edits: one publishing, published, staged, or of unknown outcome.
+    """Refuse to change a draft past edits: one publishing, published, staged, discarded, or of unknown outcome.
 
     Raises:
         Refused: Named for the draft's status.
@@ -394,6 +425,8 @@ def _check_publishable(draft: records.ReviewDraft) -> None:
             )
         case ReviewDraftStatus.PUBLISHING:
             raise conversation.Refused("publishing", f"{where} is being posted now")
+        case ReviewDraftStatus.DISCARDED:
+            raise conversation.Refused("discarded", f"{where} is discarded; a later commit's review is a new one")
         case _:
             assert_never(draft.status)
 

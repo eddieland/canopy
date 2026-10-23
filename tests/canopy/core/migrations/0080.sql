@@ -1,3 +1,3 @@
--- sha256 of 0080_draft_plan_items.sql: 07e198f4a19cff80ef042e1d8af271cbd2ff928371cc4d4c4156fc6c6fafe3c2
+-- sha256 of 0080_discarded_review_drafts.sql: b80c4e0a004cd02c5b248c331888089b086bc582b55950ab76acd872d6e2286a
 
 -- Creates no table, so seeds no row.
