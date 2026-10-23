@@ -9,7 +9,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import agent_commands, config, conversation, definitions
+from canopy.core import agent_commands, config, conversation, definitions, sandboxing
 from tests.conftest import CanopyEnv
 
 PLAN_CMD = (
@@ -86,6 +86,33 @@ def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
     assert found["reviewer"]["argv"][0] == "env"
     assert found["chore build-health"]["argv"] == ["mytool", "--ask", "<prompt>"]
     assert found["setup"]["argv"] == ["make", "setup"]
+
+
+def test_the_commands_a_sandboxed_repositorys_runs_start_follow_wrapped(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    canopy_env.configure(canopy_env.private_file, {"runtime": {"sandbox_repos": ["api", "web"], "setup_cmd": "make"}})
+    assert main(["config", "commands", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    found = {c["role"]: c for c in data["commands"]}
+    wrapper = str(sandboxing.WRAPPER)
+    read = ["--read", data["definitions_dir"], "--"]
+
+    # Neither the overseer nor a chore is wrapped.
+    assert [role.removesuffix(" in api, web") for role in found if role.endswith(" in api, web")] == [
+        "worker",
+        "private worker",
+        "planner",
+        "reviewer",
+        "setup",
+    ]
+    for role, as_role in (("worker", "worker"), ("planner", "worker"), ("reviewer", "review")):
+        sandboxed = found[f"{role} in api, web"]
+        assert sandboxed["argv"] == [wrapper, as_role, *read, *found[role]["argv"]], role
+        assert sandboxed["keys"] == [{"key": "runtime.sandbox_repos", "set_in": "private"}, *found[role]["keys"]]
+    # Setup runs no agent, so the wrapper is given no definitions to read.
+    assert found["setup in api, web"]["argv"] == [wrapper, "setup", "--", "make"]
 
 
 def test_the_text_quotes_each_command_for_a_shell(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

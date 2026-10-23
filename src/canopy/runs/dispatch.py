@@ -35,6 +35,7 @@ from canopy.core import (
     pools,
     prompts,
     replies,
+    sandboxing,
 )
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import PoolKind, ResumeReason, RunKind, RunStatus, StartStatus
@@ -579,7 +580,8 @@ def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...
         Each repository's name once, in the order first named.
 
     Raises:
-        Refusal: `unknown_repo`, when none is named, or one is not in the map or has no primary clone.
+        Refusal: `unknown_repo`, when none is named, or one is not in the map or has no primary clone;
+            `mixed_sandbox`, when some of them are sandboxed and some not (DESIGN §24).
     """
     ws = ctx.workspace
     names = ", ".join(r.name for r in ws.repos) or "none yet"
@@ -597,6 +599,9 @@ def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...
             )
         if found.name not in chosen:
             chosen.append(found.name)
+    mixed = sandboxing.mixed(ctx.config.runtime, chosen)
+    if mixed is not None:
+        raise Refusal("mixed_sandbox", mixed)
     return tuple(chosen)
 
 
