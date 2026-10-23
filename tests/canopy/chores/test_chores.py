@@ -523,6 +523,69 @@ def test_a_shadowing_config_above_the_cwd_stops_the_chore(canopy_env: CanopyEnv,
     assert not agent_log.exists() or "canopy-chore" not in agent_log.read_text()
 
 
+def own_model(canopy_env: CanopyEnv, model: str) -> None:
+    """Add the chore triage, with `model` of its own, its command running canopy's chore agent from its definitions.
+
+    It has a `when`, so the overseer's `canopy chore run` may start it: one without is the harness's (DESIGN §19).
+    """
+    canopy_env.append_user(
+        chore_toml(
+            "triage",
+            extra=f'when = "Weekdays only."\nmodel = {json.dumps(model)}\n',
+        ).replace("cmd = 'agent run", "cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run"),
+    )
+    (canopy_env.home / "chores" / "triage.md").write_text("# Triage\n\nLook at the errors.\n")
+
+
+def test_a_chore_with_a_model_of_its_own_runs_on_it(canopy_env: CanopyEnv, chores: Path, agent_log: Path) -> None:
+    """One definition holds one model, so the chore runs a copy of the chore's agent made for it (DESIGN §19, §13)."""
+    canopy_env.append_user('\n[runtime.models]\nchore = "acme/fake-model-1"\n')
+    own_model(canopy_env, "acme/fake-model-2@high")
+    conn = canopy_env.journal()
+    for run_id, name in enumerate(("triage", "build-health"), start=1):
+        with in_tick(conn, ends_ok=True), chore_reports(OK):
+            assert main(["chore", "run", name], runner=InlineRunner()) == 0
+            assert main(["_chore", str(run_id)], runner=InlineRunner()) == 0
+        assert present(chore_runs.get_chore_run(conn, run_id)).status == "ok"
+    triage, build_health = agent_runs(agent_log)
+    assert triage["argv"][:3] == ["run", "--agent", "canopy-chore-triage"]
+    snapshot = Path(triage["env"]["OPENCODE_CONFIG_DIR"])
+    copy = (snapshot / "agents" / "canopy-chore-triage.md").read_text()
+    assert '\nmodel: "acme/fake-model-2"\nvariant: "high"\n' in copy
+    # Every other chore runs the chore's agent, on `runtime.models.chore`.
+    assert build_health["argv"][:3] == ["run", "--agent", "canopy-chore"]
+    assert '\nmodel: "acme/fake-model-1"\n' in (snapshot / "agents" / "canopy-chore.md").read_text()
+    # The digest covers the copy: another model makes another snapshot.
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert snapshot.name == definitions.digest(cfg)
+    other = cfg.model_copy(
+        update={
+            "chores": {**cfg.chores, "triage": cfg.chores["triage"].model_copy(update={"model": "acme/fake-model-2"})},
+        },
+    )
+    assert definitions.digest(other) != snapshot.name
+
+
+def test_a_project_agent_named_for_a_chores_copy_stops_the_chore(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+) -> None:
+    project = canopy_env.home / "project"
+    (project / ".opencode" / "agent").mkdir(parents=True)
+    (project / ".opencode" / "agent" / "canopy-chore-triage.md").write_text("---\npermission:\n  bash: allow\n---\n")
+    own_model(canopy_env, "acme/fake-model-2")
+    canopy_env.append_user(f"cwd = {json.dumps(str(project))}\n")
+    conn = canopy_env.journal()
+    with in_tick(conn, ends_ok=True), chore_reports(OK):
+        assert main(["chore", "run", "triage"], runner=InlineRunner()) == 0
+        assert main(["_chore", "1"], runner=InlineRunner()) == 0
+    run = present(chore_runs.get_chore_run(conn, 1))
+    assert run.status == "crashed"
+    assert "canopy-chore-triage.md" in json.loads(run.result_json)["harness"]
+    assert agent_runs(agent_log) == []
+
+
 def test_deleting_a_chore_clears_its_items(
     canopy_env: CanopyEnv,
     chores: Path,

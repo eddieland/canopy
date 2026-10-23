@@ -54,17 +54,37 @@ def test_agent_of_names_only_an_agent_a_path_component_can_hold(command: str, ag
         # A wrapper may hand `--model` on, but `-m` before the run is the wrapper's own.
         ("wrap --model acme/x --", False, "--model"),
         ("python -m wrap --", False, None),
-        ("env X=1 opencode run --agent canopy-worker --variant high {prompt}", False, None),
+        # A variant beats the definition's as a model does, and has no short form.
+        ("env X=1 opencode run --agent canopy-worker --variant high {prompt}", False, "--variant"),
+        ("wrap --variant=max --", False, "--variant=max"),
+        ("--variant=max", True, "--variant=max"),
+        ("env X=1 opencode run --agent canopy-worker -v {prompt}", False, None),
         # A suffix's words are the run's own.
         ("-m acme/x", True, "-m"),
         ("-macme/x", True, "-macme/x"),
         ("--log-level DEBUG", True, None),
     ],
 )
-def test_model_option_finds_a_model_passed_on_the_command_line(
+def test_model_option_finds_a_model_or_variant_passed_on_the_command_line(
     command: str,
     found: str | None,
     *,
     run_args: bool,
 ) -> None:
     assert invocation.model_option(shlex.split(command), run_args=run_args) == found
+
+
+@pytest.mark.parametrize(
+    ("command", "replaced"),
+    [
+        (
+            "env X=1 opencode run --agent canopy-chore --format json {prompt}",
+            "env X=1 opencode run --agent canopy-chore-triage --format json {prompt}",
+        ),
+        ("opencode run --agent=canopy-chore", "opencode run --agent=canopy-chore-triage"),
+        ("opencode run {prompt}", "opencode run {prompt}"),
+    ],
+)
+def test_with_agent_runs_another_agent_in_place_of_the_one_named(command: str, replaced: str) -> None:
+    assert invocation.with_agent(command, "canopy-chore-triage") == replaced
+    assert invocation.agent_of(replaced) == ("canopy-chore-triage" if "--agent" in command else None)

@@ -208,10 +208,9 @@ class NoticeState(TypedDict):
 
 
 class MirrorState(TypedDict):
-    """How many tracker comments one tick may mirror, and the heredoc delimiter for their bodies (DESIGN §22)."""
+    """How many tracker comments one tick may mirror (DESIGN §22)."""
 
     max_per_tick: int
-    body_delimiter: str
 
 
 def state_block(
@@ -244,7 +243,6 @@ def state_block(
     operator: Mapping[str, conversation.OperatorSection] | None = None,
     planned: Mapping[str, plans.PlanState] | None = None,
     feedback_planned: Mapping[str, feedback_plans.FeedbackPlanState] | None = None,
-    mirror_delimiter: str,
     attention: list[OpenItem] | None = None,
     query_due: bool,
     operator_sent: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
@@ -269,14 +267,12 @@ def state_block(
     holds a ticket's plan, by key: whether it needs one, its plan attempts and limit, and its newest plan's id,
     status, and time, never its text (DESIGN §25); a ticket plans do not touch has no `plan` key. `feedback_planned`
     holds a ticket's feedback plan, by key, likewise; a ticket feedback plans do not touch has no `feedback_plan` key
-    (DESIGN §32). `mirror_delimiter`
-    ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict
-    it. `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what leaving one
-    out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this tick or works the
-    tickets the block lists alone (DESIGN §7, Spacing the query). `operator_sent` holds, by PR, the comments and
-    reviews the operator sent through canopy (`drafts.sent_by_pr`); a unit whose PR has none has no `operator_sent`
-    key (DESIGN §29). `observations` is what the connectors last read of every ticket the block lists or the query
-    returned, each subject fresh, stale, or unobserved (`observations.section`, DESIGN §35).
+    (DESIGN §32). `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what
+    leaving one out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this tick or
+    works the tickets the block lists alone (DESIGN §7, Spacing the query). `operator_sent` holds, by PR, the comments
+    and reviews the operator sent through canopy (`drafts.sent_by_pr`); a unit whose PR has none has no
+    `operator_sent` key (DESIGN §29). `observations` is what the connectors last read of every ticket the block lists
+    or the query returned, each subject fresh, stale, or unobserved (`observations.section`, DESIGN §35).
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -315,7 +311,7 @@ def state_block(
             "title": t.title,
             "phase": t.phase,
             "branch": t.branch,
-            # The mirror cursor is moved by `canopy mirror` itself, never by `--cursor` (DESIGN §22).
+            # The mirror cursor is moved by the mirror tool itself, never by `cursors` (DESIGN §22).
             "cursors": {
                 **{name: getattr(t, column) for name, column in db.TICKET_CURSORS.items()},
                 "mirror": t.last_mirrored_id,
@@ -407,7 +403,7 @@ def state_block(
         },
         "running_workers": [_running_summary(r, run_slots, run_reasons) for r in running],
         # Tracker comments the overseer copies into the journal (DESIGN §22).
-        "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
+        "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK},
         # Whether this tick runs the tracker query, or works the tickets above alone (DESIGN §7, Spacing the query).
         "query_due": query_due,
         "tick_id": tick_id,
@@ -416,9 +412,9 @@ def state_block(
     }
     if dry_run:
         mode = (
-            "This is a dry run. `canopy dispatch` checks its guards and records what it would have done, or the "
-            "refusal, and starts nothing. `canopy ticket set` records phases but neither advances cursors nor marks "
-            "tickets done. `canopy mirror` records comments but moves no mirror cursor. Decide exactly as you would "
+            "This is a dry run. `canopy_dispatch` checks its guards and records what it would have done, or the "
+            "refusal, and starts nothing. `canopy_ticket-set` records phases but neither advances cursors nor marks "
+            "tickets done. `canopy_mirror` records comments but moves no mirror cursor. Decide exactly as you would "
             "otherwise."
         )
     else:

@@ -89,6 +89,7 @@ export function RepoSelect({
     value,
     onValue,
     label,
+    none,
 }: {
     /** The repositories to offer, in order, `null` for every one. */
     choices: readonly (string | null)[]
@@ -98,9 +99,11 @@ export function RepoSelect({
     onValue: (repo: string | null) => void
     /** What the choice is, for a screen reader, which hears the button as it and then what is chosen. */
     label: string
+    /** What the button says while `value` is `null`, when `null` is not among the choices: nothing is chosen yet. */
+    none?: string
 }) {
     const [open, setOpen] = useState(false)
-    const summary = value ?? EVERY
+    const summary = value ?? none ?? EVERY
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PickerButton label={`${label}: ${summary}`} quiet={false}>

@@ -35,6 +35,7 @@ from canopy.core import (
     pools,
     prompts,
     replies,
+    sandboxing,
 )
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import PoolKind, ResumeReason, RunKind, RunStatus, StartStatus
@@ -281,7 +282,10 @@ def check_kind(kind: str) -> None:
         Refusal: `bad_kind`, for `fix-ci`, `split`, or `needs-plan`.
     """
     if kind == policy.RETIRED:
-        raise Refusal("bad_kind", "fix-ci is retired: a resume fixes CI now; dispatch resume --reason ci")
+        raise Refusal(
+            "bad_kind",
+            "fix-ci is retired: a resume fixes CI now; dispatch kind resume, reasons ci (--kind resume --reason ci)",
+        )
     if kind == policy.SPLIT:
         raise Refusal(
             "bad_kind",
@@ -483,22 +487,26 @@ def _check_reasons(kind: str, reasons: Collection[str], cursors: AbstractSet[str
     """
     if kind != RunKind.RESUME:
         if reasons:
-            raise Refusal("bad_reason", "--reason says why a resume runs; it is for resume only")
+            raise Refusal("bad_reason", "reasons (--reason) say why a resume runs; they are for resume only")
         return
     if not reasons:
         raise Refusal(
             "bad_reason",
-            f"--reason is required for a resume: name why it runs, one or more of {', '.join(ResumeReason)}",
+            f"reasons is required for a resume (--reason): name why it runs, one or more of {', '.join(ResumeReason)}",
         )
     for cursor in sorted(cursors):
         needed = REASON_CURSORS.get(cursor)
         if needed is not None and needed not in reasons:
-            moved = "--review-run" if cursor == "review_run" else f"--cursor {cursor}"
-            raise Refusal("bad_reason", f"{moved} is handled by a resume for {needed}: add --reason {needed}")
+            moved = "review_run (--review-run)" if cursor == "review_run" else f"cursor {cursor} (--cursor {cursor})"
+            raise Refusal(
+                "bad_reason",
+                f"{moved} is handled by a resume for {needed}: add {needed} to reasons (--reason {needed})",
+            )
     if ResumeReason.RETARGET in reasons and base is not None:
         raise Refusal(
             "bad_reason",
-            "--reason retarget is for a PR whose blocker merged, and --base says it is still open",
+            "reasons retarget (--reason retarget) is for a PR whose blocker merged, and base (--base) says it is still "
+            "open",
         )
 
 
@@ -565,7 +573,7 @@ def _check_label(labels: Sequence[str], key: str, label: str | None) -> str:
         Refusal: `unauthorized`, when no label is named or it is not a configured queue label.
     """
     if label is None:
-        raise Refusal("unauthorized", f"--label is required: name the queue label you read on {key}")
+        raise Refusal("unauthorized", f"label is required (--label): name the queue label you read on {key}")
     for configured in labels:
         if configured.casefold() == label.casefold():
             return configured
@@ -582,12 +590,13 @@ def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...
         Each repository's name once, in the order first named.
 
     Raises:
-        Refusal: `unknown_repo`, when none is named, or one is not in the map or has no primary clone.
+        Refusal: `unknown_repo`, when none is named, or one is not in the map or has no primary clone;
+            `mixed_sandbox`, when some of them are sandboxed and some not (DESIGN §24).
     """
     ws = ctx.workspace
     names = ", ".join(r.name for r in ws.repos) or "none yet"
     if not repos:
-        raise Refusal("unknown_repo", f"--repo is required: name the repositories for {key} ({names})")
+        raise Refusal("unknown_repo", f"repos is required (--repo): name the repositories for {key} ({names})")
     chosen: list[str] = []
     for repo in repos:
         found = ws.repo(repo)
@@ -600,6 +609,9 @@ def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...
             )
         if found.name not in chosen:
             chosen.append(found.name)
+    mixed = sandboxing.mixed(ctx.config.runtime, chosen)
+    if mixed is not None:
+        raise Refusal("mixed_sandbox", mixed)
     return tuple(chosen)
 
 
@@ -620,10 +632,13 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
                 raise Refusal("bad_slug", f"slug must match {SLUG_RE.pattern}")
             return branch_name(ctx.config.trust.branch_prefix, key, slug)
         if slug is not None and branch_name(ctx.config.trust.branch_prefix, key, slug) != recorded:
-            raise Refusal("bad_slug", f"{key}'s branch is {recorded}, named by its first implement; leave out --slug")
+            raise Refusal(
+                "bad_slug",
+                f"{key}'s branch is {recorded}, named by its first implement; leave out slug (--slug)",
+            )
         return recorded
     if slug is not None:
-        raise Refusal("bad_slug", f"{kind} continues the ticket's recorded branch; --slug is for implement")
+        raise Refusal("bad_slug", f"{kind} continues the ticket's recorded branch; slug (--slug) is for implement")
     if recorded is None:
         raise Refusal("no_branch", f"{key} has no branch in the journal for {kind} to continue; dispatch implement")
     with_branch = {str(u.repo) for u in db.units(ctx.conn, key) if u.branch}
@@ -631,7 +646,8 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
         if repo not in with_branch:
             raise Refusal(
                 "no_branch",
-                f"{key} has no branch in {repo} for {kind} to continue; dispatch implement with --repo {repo}",
+                f"{key} has no branch in {repo} for {kind} to continue; dispatch implement with repos {repo} "
+                f"(--repo {repo})",
             )
     return recorded
 
@@ -644,7 +660,7 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
     """
     tail = base.removeprefix(prefix)
     if tail == base or BASE_TAIL_RE.fullmatch(tail) is None:
-        raise Refusal("bad_base", f"--base must be another ticket's branch, {prefix}<KEY>-<slug>")
+        raise Refusal("bad_base", f"base (--base) must be another ticket's branch, {prefix}<KEY>-<slug>")
     if base == branch:
         raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
 
@@ -681,11 +697,12 @@ def _check_model(ctx: Context, kind: str, *, private: bool) -> str | None:
     only the operator can fix it.
 
     Returns:
-        The model, or None when config chooses none for the agent, which runs on the runtime's default.
+        The model as the run records it, `provider/model` or `provider/model@variant`, or None when config chooses none
+        for the agent, which runs on the runtime's default.
 
     Raises:
-        Refusal: `model_missing`, when the runtime does not list the model, or `model_list_failed`, when its list could
-            not be read.
+        Refusal: `model_missing`, when the runtime does not list the model or its variant, or `model_list_failed`, when
+            its list could not be read.
     """
     runtime = ctx.config.runtime
     if kind in (policy.PLAN, policy.FEEDBACK_PLAN):
@@ -699,7 +716,7 @@ def _check_model(ctx: Context, kind: str, *, private: bool) -> str | None:
         agent_models.check(ctx.runner, ctx.workspace.root, model)
     except agent_models.ModelError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
-    return model
+    return model.name
 
 
 def _check_notice(ctx: Context, tick_id: int, kind: str, reasons: Collection[str]) -> None:
@@ -1006,6 +1023,7 @@ def _spawn(
         private=plan.private,
         persona=persona,
         model=model,
+        planner_model=followed.planner_model if followed is not None else None,
     )
 
     run_id = db.insert_run(
@@ -1125,10 +1143,13 @@ def _render(
     private: bool,
     persona: personas.Persona | None,
     model: str | None,
+    planner_model: str | None,
 ) -> tuple[str, memory.Rendered | None, replies.Rendered | None]:
     """Render the worker prompt, with agent memory's part (§28), how its comments reach GitHub (§29), and its persona.
 
-    `model` is the one the run's agent runs on, which the commit trailer names (`prompts.commit_trailer`).
+    `model` is the one the run's agent runs on, which the commit trailer names (`prompts.commit_trailer`), and
+    `planner_model` that of the planner whose approved plan it follows, which a second trailer names
+    (`prompts.planner_trailer`).
 
     Returns:
         The prompt; memory's part of it for the run to record, or None when no memory tier reaches the run; and the
@@ -1157,6 +1178,7 @@ def _render(
             notice=notice.for_prompt(ctx.conn),
             persona=persona,
             model=model,
+            planner_model=planner_model,
         )
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e

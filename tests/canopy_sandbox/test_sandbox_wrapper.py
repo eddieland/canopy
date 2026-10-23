@@ -4,9 +4,11 @@ The fake `srt` on PATH records the policy and environment the wrapper hands it, 
 These tests check what the wrapper asks of the sandbox, not that the sandbox holds: that is the canary's job (§6).
 """
 
+import contextlib
 import json
 import os
 import shutil
+import signal
 import sqlite3
 import sys
 import tempfile
@@ -20,10 +22,22 @@ import canopy_sandbox
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, review_runs
-from canopy.infra import procs
+from canopy.core import db, review_runs, tasks
+from canopy.infra import logs, procs
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import DEAD_PID, InlineRunner, in_tick, pool, present, slot_of, worker_does
+from canopy.runs import tasks as task_starts
+from tests.canopy.helpers import (
+    DEAD_PID,
+    InlineRunner,
+    in_tick,
+    inline_context,
+    operator,
+    pool,
+    present,
+    private_worker_does,
+    slot_of,
+    worker_does,
+)
 from tests.canopy.review_helpers import CLEAN, PR, reviewer_reports, run_inline
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, executable, git, user_toml
 
@@ -84,6 +98,18 @@ def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Itera
 
 def wrap(*args: str, cwd: Path, env: Mapping[str, str] | None = None) -> procs.Result:
     return SubprocessRunner().run([str(WRAPPER), *args], cwd=cwd, env=env)
+
+
+def wrap_here(*args: str, cwd: Path, ipv6: bool) -> int:
+    """Run the wrapper in this process, as `wrap` runs it in its own, on a host whose kernel has IPv6 or has none."""
+    with (
+        mock.patch.object(canopy_sandbox, "ipv6_missing", autospec=True, return_value=not ipv6),
+        mock.patch.object(signal, "signal", autospec=True),  # the handlers it sets would outlast it here
+        mock.patch.object(tempfile, "tempdir", None),  # read TMPDIR again, as a process of its own does
+        mock.patch.dict(os.environ),  # which it scrubs
+        contextlib.chdir(cwd),
+    ):
+        return canopy_sandbox.run(list(args))
 
 
 def linked_worktree(tmp_path: Path, name: str) -> tuple[Path, Path]:
@@ -164,6 +190,7 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     cache = sandbox.caches() / "worker"
     assert str(cache) in filesystem["allowRead"]
     assert str(cache) in filesystem["allowWrite"]
+    call["env"].pop(canopy_sandbox.SOCAT_LISTEN, None)  # as this host has IPv6 or not
     assert call["env"] == {
         "CANOPY_GIT_OBJECTS": str(objects),
         "CLAUDE_CODE_TMPDIR": tmp,
@@ -405,6 +432,7 @@ def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp
     assert done.ok, done.stderr
     assert done.stdout.strip() == git("rev-parse", "HEAD", cwd=slot)
     call = sandbox.only_call()
+    call["env"].pop(canopy_sandbox.SOCAT_LISTEN, None)  # as this host has IPv6 or not
     filesystem = call["settings"]["filesystem"]
     tmp = call["env"]["TMPDIR"]
     own, shared = primary / ".git" / "worktrees" / "slot", primary / ".git"
@@ -481,6 +509,28 @@ def test_a_temp_directory_too_deep_for_srts_sockets_runs_nothing(sandbox: Sandbo
     assert f"the temp directory {deep} has too long a path for srt's sockets" in done.stderr
     assert not sandbox.log.exists()
     assert list((deep / f"canopy-sandbox-{os.getuid()}").iterdir()) == []
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="srt bridges the network with socat on Linux alone")
+@pytest.mark.parametrize(
+    ("ipv6", "operators", "listen"),
+    [(True, None, None), (False, None, "4"), (False, "6", "6")],
+    ids=["with-ipv6", "without", "without-but-the-operator-chose"],
+)
+def test_on_a_host_without_ipv6_srts_bridge_listens_on_ipv4(
+    sandbox: Sandbox,
+    tmp_path: Path,
+    ipv6: bool,  # noqa: FBT001  (a parameter)
+    operators: str | None,
+    listen: str | None,
+) -> None:
+    """socat, srt's bridge into the sandbox, listens on IPv6 unless told not to, and without it exits unreported."""
+    with mock.patch.dict(os.environ, {canopy_sandbox.SOCAT_LISTEN: operators or ""}):
+        if operators is None:
+            os.environ.pop(canopy_sandbox.SOCAT_LISTEN)
+        assert wrap_here("chore", "true", cwd=tmp_path, ipv6=ipv6) == 0
+
+    assert sandbox.only_call()["env"].get(canopy_sandbox.SOCAT_LISTEN) == listen
 
 
 def test_the_commands_exit_status_is_the_wrappers(sandbox: Sandbox, tmp_path: Path) -> None:
@@ -631,3 +681,108 @@ def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
     assert not [p for p in filesystem["allowWrite"] if p.startswith(str(slot.parent))]
     assert "CANOPY_GIT_OBJECTS" not in call["env"]
     assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
+def test_a_sandboxed_repositorys_worker_and_setup_run_in_the_wrapper_canopy_adds(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    worktree_pool: tuple[Path, list[Path]],
+    agent_log: Path,
+    treehouse_state: Path,
+    sandbox: Sandbox,
+) -> None:
+    """With `runtime.sandbox_repos` naming the repository and no prefix, `_run` starts setup and the worker in the
+    wrapper itself, each with its role's policy, and pushes the commit the worker made in the run's object directory."""
+    primary, _ = worktree_pool
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"sandbox_repos": ["repo"], "setup_cmd": "sh -c true"}})
+    conn: sqlite3.Connection = canopy_env.journal()
+    commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
+    with worker_does(commit):
+        runner = InlineRunner()
+        with in_tick(conn, ends_ok=True):
+            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+            assert main([*args, "--slug", "work"], runner=runner) == 0
+        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
+        assert main(["_run", str(run_id)], runner=runner) == 0
+
+    assert present(db.get_run(conn, run_id))["status"] == "done"
+    setup, worker = [json.loads(line) for line in sandbox.log.read_text().splitlines()]
+    slot = Path(slot_of(conn, run_id).slot_path)
+    assert (setup["argv"][-2:], setup["cwd"]) == (["-c", "true"], str(slot))
+    # Each role caches in its own directory, setup in the worker's: the policy each run was given is its role's.
+    assert setup["env"]["XDG_CACHE_HOME"] == worker["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "worker")
+    definitions = next(w for w in worker["argv"] if w.startswith("OPENCODE_CONFIG_DIR=")).split("=", 1)[1]
+    assert definitions in worker["settings"]["filesystem"]["allowRead"]
+    pushed = present(git_pool.remote_head("agent/PROJ-1-work"))
+    assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok  # never in the shared one
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
+def test_a_repository_sandbox_repos_does_not_name_runs_unwrapped(
+    canopy_env: CanopyEnv,
+    worktree_pool: tuple[Path, list[Path]],
+    agent_log: Path,
+    sandbox: Sandbox,
+) -> None:
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"sandbox_repos": ["other"]}})
+    conn: sqlite3.Connection = canopy_env.journal()
+    with worker_does():
+        runner = InlineRunner()
+        with in_tick(conn, ends_ok=True):
+            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+            assert main([*args, "--slug", "work"], runner=runner) == 0
+        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
+        assert main(["_run", str(run_id)], runner=runner) == 0
+
+    assert present(db.get_run(conn, run_id))["status"] == "done"
+    assert not sandbox.log.exists()
+
+
+def test_a_sandboxed_repositorys_review_runs_in_the_wrapper_canopy_adds(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    worktree_pool: tuple[Path, list[Path]],
+    treehouse_state: Path,
+    sandbox: Sandbox,
+) -> None:
+    """`_review` of a PR in a repository `runtime.sandbox_repos` names starts its reviewer in the wrapper, as
+    `review`."""
+    review_cmd = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    canopy_env.configure(
+        canopy_env.user_file,
+        {"runtime": {"sandbox_repos": ["repo"], "review_cmd": review_cmd}, "review": {"agent_prs": True}},
+    )
+    conn: sqlite3.Connection = canopy_env.journal()
+    db.set_unit(conn, "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
+    sha = git("rev-parse", "main", cwd=git_pool.origin)
+
+    with reviewer_reports(CLEAN, ["git", "-C", "checkout", "rev-parse", "HEAD"]):
+        run_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
+
+    row = present(review_runs.get_review_run(conn, run_id))
+    assert row.status == "done", Path(row.log_path).read_text()
+    call = sandbox.only_call()
+    assert call["cwd"] == str(canopy_env.state_dir / "reviews" / str(run_id))
+    assert call["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "review")
+    assert "CANOPY_GIT_OBJECTS" not in call["env"]
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
+@pytest.mark.usefixtures("worktree_pool")
+def test_a_sandboxed_repositorys_task_runs_in_the_wrapper_canopy_adds(canopy_env: CanopyEnv, sandbox: Sandbox) -> None:
+    """A task's run in a repository `runtime.sandbox_repos` names starts its worker in the wrapper, as `worker`."""
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"sandbox_repos": ["repo"]}})
+    ctx = inline_context(canopy_env)
+    assert operator("task", "submit", "Find out why the build is slow.") == 0
+    with in_tick(ctx.conn) as tick_id:
+        [started] = task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id))
+
+    with private_worker_does(result={"status": "done", "summary": "nothing to change"}):
+        assert main(["_task", str(started.run_id)], runner=InlineRunner()) == 0
+
+    run = present(tasks.get_run(ctx.conn, started.run_id))
+    assert run.status == "done"
+    call = sandbox.only_call()
+    assert call["cwd"] == present(tasks.get_run(ctx.conn, started.run_id)).slot_path
+    assert call["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "worker")
+    assert call["env"]["CANOPY_GIT_OBJECTS"]

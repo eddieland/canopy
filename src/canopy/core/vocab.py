@@ -66,7 +66,7 @@ class TickStatus(StrEnum):
     OK = "ok"
     # The overseer skipped the whole tick: it could not see the world (`mcp_unavailable`, `tracker_unsupported`).
     SKIPPED = "skipped"
-    # `canopy --version` failed from the overseer's environment, so the overseer did not run.
+    # The server of the overseer's tools did not answer `initialize` (DESIGN §27), so the overseer did not run.
     CANOPY_UNAVAILABLE = "canopy_unavailable"
     # The state directory's or the workspace's filesystem had less than `loop.min_free_disk_mib` free, so the overseer
     # did not run.

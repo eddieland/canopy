@@ -33,6 +33,8 @@ BASH_ALLOW_RE = definitions.BASH_ALLOW_RE
 RUNTIME_COMMANDS = definitions.RUNTIME_COMMANDS
 #: A model as the runtime names one, which canopy renders into an agent's definition (DESIGN §13).
 MODEL_RE = definitions.MODEL_RE
+#: A variant of a model as the runtime names one, which canopy renders beside the model (DESIGN §13).
+VARIANT_RE = definitions.VARIANT_RE
 
 
 def agent_names() -> list[str]:
