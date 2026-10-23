@@ -366,6 +366,8 @@ class ReviewDraftStatus(StrEnum):
     #: In a pending review the operator opened through canopy, theirs to submit on GitHub; a read settles it.
     STAGED = "staged"
     PUBLISHED = "published"
+    #: Seen by the operator and not to be posted: it takes no edit, note, or publish.
+    DISCARDED = "discarded"
 
 
 class ReviewDraftAuthor(StrEnum):

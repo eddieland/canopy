@@ -4,21 +4,20 @@
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
 # The agent of the example chores that look at canopy itself, canopy-health and canopy-efficiency.
 # `canopy chore install` copies it into the workspace beside the chore's prompt, and the chore's `cmd` loads that copy,
-# which stays as installed until the chore is installed again. It is `canopy-chore` with a shell for canopy's own
-# read-only commands. A chore reads and reports (DESIGN §19, TRUST_MODEL T6): its only output is its result line.
-# Everything but bash is `canopy-chore`'s; keep the two in step.
+# which stays as installed until the chore is installed again. It is `canopy-chore` with two more of canopy's tools,
+# its health and spend reports, and a shell for canopy's other read-only commands. A chore reads and reports (DESIGN
+# §19, TRUST_MODEL T6): its only output is its result line. Everything but bash and canopy's tools it allows is
+# `canopy-chore`'s; keep the two in step.
 description: canopy chore that reads canopy's own health, spend, and runs. Reports findings, changes nothing.
 mode: primary
 permission:
   edit: deny
-  # Its own chore's earlier runs (DESIGN §19, History), and the read-only commands its prompts name, each of which
-  # writes nothing: `canopy show` for runs and chores only, since a ticket's page holds its conversation. Everything
-  # else in bash is denied.
+  # Its own chore's earlier runs (DESIGN §19, History), and the read-only commands its prompts name that canopy serves
+  # no tool for, each of which writes nothing: `canopy show` for runs and chores only, since a ticket's page holds its
+  # conversation. Everything else in bash is denied.
   bash:
     "*": deny
     "canopy chore history *": allow
-    "canopy health --json*": allow
-    "canopy spend --json*": allow
     "canopy decisions*": allow
     "canopy show run:*": allow
     "canopy show chore:*": allow
@@ -62,9 +61,13 @@ permission:
   # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
   # above reopens one.
   "canopy_git_*": deny
-  # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
-  # chore's, allowed by exact name: last, so no pattern above closes it.
+  # Its tools of canopy's, each allowed by exact name: last, so no pattern above closes one. Its own chore's earlier
+  # runs (DESIGN §19, History), which refuses any other chore's, and the health and spend reports its prompts name
+  # (DESIGN §27), which write nothing; the reports' server's other tools are denied.
+  "canopy_reports_*": deny
   "canopy_chore_history": allow
+  "canopy_reports_health": allow
+  "canopy_reports_spend": allow
 ---
 
 The system prompt is supplied by the harness at invocation time via the

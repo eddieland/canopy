@@ -83,6 +83,27 @@ for (const theme of THEMES) {
         await expect(output).toHaveScreenshot(`ticks-2-output-pretty-${theme}.png`)
     })
 
+    // The jump palette over a ticket's page, two others viewed a while before: the box alone, so the page under it
+    // changes none of these.
+    test(`the jump palette in ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        const viewed = [
+            { key: 'ABC-099', title: null, viewedAt: minutesBefore(3) },
+            { key: 'ABC-105', title: null, viewedAt: minutesBefore(48) },
+        ]
+        await page.addInitScript((list) => {
+            localStorage.setItem('canopy-recent-tickets', list)
+        }, JSON.stringify(viewed))
+        await signIn(page)
+        await page.goto('tickets/ABC-102')
+        await settled(page)
+        await page.keyboard.press('Control+k')
+        const palette = page.getByTestId('jump-palette')
+        await expect(palette.getByRole('option')).toHaveCount(2)
+        await expect(palette).toHaveScreenshot(`jump-palette-${theme}.png`)
+    })
+
     test(`sign-in in ${theme}`, async ({ page }) => {
         await storeTheme(page, theme)
         await page.goto('attention')
@@ -181,6 +202,11 @@ test.describe('in a narrow window', () => {
         })
     }
 })
+
+// The moment `minutes` before NOW, ISO.
+function minutesBefore(minutes: number): string {
+    return new Date(NOW.getTime() - minutes * 60_000).toISOString()
+}
 
 // Opens `route` in dark, its clock frozen, as every screenshot here is taken.
 async function openInDark(page: Page, route: string): Promise<void> {

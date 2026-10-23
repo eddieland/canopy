@@ -5,7 +5,7 @@ import os
 import shutil
 import stat
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
 from unittest import mock
@@ -14,9 +14,9 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.chores import history
-from canopy.core import config, definitions, git_tools, plans, prompts
+from canopy.core import config, definitions, git_tools, plans, prompts, reports
 from canopy.infra import resources
-from canopy.runtime import agents
+from canopy.runtime import agents, servers
 from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime.opencode import definitions as opencode_definitions
 from tests.conftest import CanopyEnv
@@ -444,37 +444,47 @@ def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
     assert _allowed(_rules("canopy-reviewer"), tool)
 
 
-#: The agents example chores come with, copies of `canopy-chore` that `canopy chore install` puts in the workspace, and
-#: commands their prompts run.
-CHORE_AGENTS = {
+#: The agents example chores come with, copies of `canopy-chore` that `canopy chore install` puts in the workspace: the
+#: commands their prompts run, and canopy's reports they read through tools (DESIGN §27).
+CHORE_AGENTS: Mapping[str, tuple[Sequence[str], Sequence[str]]] = {
     "canopy-introspect": (
-        "canopy health --json --days 7",
-        "canopy spend --json --days 28",
-        "canopy decisions 12",
-        "canopy show run:4",
-        "canopy show chore:canopy-health",
-        "canopy config show --json",
-        "canopy agents --json",
-        "canopy chore history canopy-health",
+        (
+            "canopy decisions 12",
+            "canopy show run:4",
+            "canopy show chore:canopy-health",
+            "canopy config show --json",
+            "canopy agents --json",
+            "canopy chore history canopy-health",
+        ),
+        (reports.HEALTH, reports.SPEND),
     ),
-    "canopy-memory-tickets": (
-        "canopy memory lessons --json",
-        "canopy memory proposals --json",
-        "canopy memory list --json",
-        "canopy chore history memory-tickets",
-    ),
+    "canopy-memory-tickets": ((), (reports.MEMORY_LESSONS, reports.MEMORY_PROPOSALS, reports.MEMORY_LIST)),
 }
 
 
 @pytest.mark.parametrize("agent", sorted(CHORE_AGENTS))
-def test_an_example_chores_agent_is_canopy_chore_with_a_shell_for_its_prompts_commands(agent: str) -> None:
-    """Everything but bash is `canopy-chore`'s (DESIGN §19), so it can write nothing `canopy-chore` could not."""
+def test_an_example_chores_agent_is_canopy_chore_with_its_prompts_commands_and_reports(agent: str) -> None:
+    """Everything but bash and its reports is `canopy-chore`'s (DESIGN §19), so it can write nothing `canopy-chore`
+    could not."""
     definition = (resources.example_chores_dir() / "agents" / f"{agent}.md").read_text()
-    assert _outside_bash(definition) == _outside_bash((resources.agents_dir() / "canopy-chore.md").read_text())
+    commands, reads = CHORE_AGENTS[agent]
+    allows = {f'  "{servers.tool_name(reports.SERVER, tool)}": allow' for tool in reads}
+    outside = [line for line in _outside_bash(definition) if line not in allows]
+    assert outside == _outside_bash((resources.agents_dir() / "canopy-chore.md").read_text())
+    tools = _rules_in(definition)
+    assert _allowed(tools, CHORE_HISTORY)
+    for tool in reports.TOOLS:
+        assert _allowed(tools, servers.tool_name(reports.SERVER, tool)) is (tool in reads), tool
+    if not commands:
+        # No shell at all: a scalar, which a repository's config cannot loosen (D044).
+        assert "\n  bash: deny\n" in definition
+        return
     rules = _rules_in(definition, "bash")
-    for command in CHORE_AGENTS[agent]:
+    for command in commands:
         assert _allowed(rules, command), command
     for refused in (
+        "canopy health --json",
+        "canopy spend --json",
         "canopy memory forget 3",
         "canopy memory promote 3",
         "canopy decide PROJ-1 wait --rationale x",
@@ -531,21 +541,32 @@ def test_the_planner_reads_the_ticket_and_writes_nothing(canopy_env: CanopyEnv, 
 CHORE_HISTORY = history.tool_name()
 
 
+#: canopy's read-only reports, whose server a chore's run is also given (DESIGN §27), as the runtime names them.
+REPORTS = reports.tool_names()
+
+
 @pytest.mark.parametrize("provider", ["github", "jira"])
-def test_a_chore_may_call_its_history_tool_and_has_no_shell(canopy_env: CanopyEnv, provider: str) -> None:
-    """The shipped chore reads its history through its tool alone: its shell is gone (ROADMAP M48, Stage 1b)."""
+def test_a_chore_may_call_its_history_tool_alone_and_has_no_shell(canopy_env: CanopyEnv, provider: str) -> None:
+    """The shipped chore reads its history through its tool alone: its shell is gone (ROADMAP M48, Stage 1b), and
+    canopy's reports are for an agent of the operator's that allows each by name."""
     _set_provider(canopy_env, provider)
     ruleset = _ruleset(canopy_env, agents.CHORE)
     assert _opencode_action(ruleset, CHORE_HISTORY, "*") == "allow"
+    assert [tool for tool in REPORTS if not _opencode_disabled(ruleset, tool)] == []
     assert _opencode_disabled(ruleset, "bash")
     assert _opencode_action(ruleset, "bash", "canopy chore history build-health") == "deny"
 
 
 @pytest.mark.parametrize("provider", ["github", "jira"])
 @pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - {agents.CHORE}))
-def test_no_other_agent_may_call_a_chores_history_tool(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
+def test_no_other_agent_may_call_a_chores_history_tool_or_canopys_reports(
+    canopy_env: CanopyEnv,
+    agent: str,
+    provider: str,
+) -> None:
     _set_provider(canopy_env, provider)
-    assert _opencode_disabled(_ruleset(canopy_env, agent), CHORE_HISTORY)
+    ruleset = _ruleset(canopy_env, agent)
+    assert [tool for tool in (CHORE_HISTORY, *REPORTS) if not _opencode_disabled(ruleset, tool)] == []
 
 
 #: canopy's read-only git tools, the reviewer's and the planner's (DESIGN §27), as the runtime names them.

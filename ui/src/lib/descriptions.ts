@@ -51,6 +51,7 @@ const DRAFT_STATE: Record<ReviewDraft['status'], string> = {
     unconfirmed: "may have posted: canopy's next read of the PR settles it",
     staged: 'pending on GitHub, for you to submit there',
     published: 'posted on GitHub',
+    discarded: 'you chose not to post it',
 }
 
 /**

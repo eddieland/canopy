@@ -170,8 +170,10 @@ permission:
   # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
   # above reopens one.
   "canopy_git_*": deny
-  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
+  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone, and canopy's read-only reports
+  # (DESIGN §27) are for an agent of the operator's that allows each by name: last, so no rule above reopens one.
   "canopy_chore_history": deny
+  "canopy_reports_*": deny
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy private worker" prompt,

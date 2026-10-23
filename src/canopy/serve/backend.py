@@ -1,8 +1,9 @@
 """What the server reads and writes through, handed to it by whoever runs it (DESIGN §22).
 
 `serve` is a feature: it cannot import `loop`, `runs`, `reviews`, or `chores`. The attention list
-(`loop.attention.listed`), ending a stopped ticket's run (`runs.halt.end`, as `canopy stop --now` does), asking the loop
-to read its config again (`loop.reread`, as SIGHUP does) or for a tick now (`loop.tick_now`, as `t` does), the attempt
+(`loop.attention.listed`), ending a stopped ticket's or task's run (`runs.halt.end`, `runs.task_run.stop_now`, as
+`canopy stop --now` does), asking the loop to read its config again (`loop.reread`, as SIGHUP does) or for a tick now
+(`loop.tick_now`, as `t` does), the attempt
 and review limits `canopy grant` raises (`runs.policy`, `reviews.grants`), and trying a chore (`chores.trial`) are
 theirs, so `canopy loop` passes them in, and `python -m canopy.serve --mock` passes stand-ins over its seeded journal.
 Reading a pool is the pool's own `status` unless told otherwise: the mock has no pool to ask.
@@ -13,6 +14,7 @@ The loop's config and workspace map are read by each request as it opens, and re
 
 from __future__ import annotations
 
+import json
 import threading
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -20,8 +22,9 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, db, pools
+from canopy.core import chore_view, db, pools, tasks
 from canopy.core.context import Context, db_path
+from canopy.core.vocab import RunStatus
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -34,6 +37,12 @@ if TYPE_CHECKING:
 
 def _status(ctx: Context, repo: str) -> Sequence[pools.Slot]:
     return ctx.pool(repo).status()
+
+
+def _close_task_run(ctx: Context, run: records.TaskRun) -> bool:
+    # The mock's, which has no process to kill and no pool to return a slot to: it closes the run's row alone.
+    note = json.dumps({"harness": "the operator stopped the task (mock: no process was killed)"})
+    return tasks.close_run(ctx.conn, ctx.config, run.id, RunStatus.STOPPED, note, head=None)
 
 
 @dataclass(frozen=True)
@@ -113,6 +122,9 @@ class Backend:
     # The process runner each Context gets. The mock's answers for canopy's GitHub programs from its own journal, so a
     # draft sent from the mock posts nowhere.
     runner: Callable[[], procs.Runner] = field(default=procs.SubprocessRunner)
+    #: End a stopped task's running run as `canopy stop task:N --now` does; False if it had already ended. The loop
+    #: passes `runs.task_run.stop_now`; the default, the mock's, closes the run's row and kills nothing.
+    end_task_run: Callable[[Context, records.TaskRun], bool] = field(default=_close_task_run)
     # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
     # When chores' findings started, as the last read found them, handed to every Context opened, so a request or a

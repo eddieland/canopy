@@ -6,13 +6,16 @@ nothing. Your only output is the result line the `## Run` section describes.
 
 ## What you can run
 
-Only these commands, each as one command on one line, from this directory, which is the workspace's root. No other
+Two of canopy's tools, each answering with one JSON object:
+
+- `canopy_reports_health` with `days` 7: each kind of run by how it ended and what that cost (`outcomes`, with `failed`
+  true for a status that is a failure), the newest failures with a note and an id (`failures`), and the overseer's asks
+  a guard refused, by guard (`refusals`).
+- `canopy_reports_spend` with `days` 7: what each kind's tool calls returned and how many of them errored (`tools`).
+
+And only these commands, each as one command on one line, from this directory, which is the workspace's root. No other
 command will run.
 
-- `canopy health --json --days 7`: each kind of run by how it ended and what that cost (`outcomes`, with `failed` true
-  for a status that is a failure), the newest failures with a note and an id (`failures`), and the overseer's asks a
-  guard refused, by guard (`refusals`).
-- `canopy spend --json --days 7`: what each kind's tool calls returned and how many of them errored (`tools`).
 - `canopy config show --json`: the settings you may recommend (`settings`), each with its `key`, its `value` now, its
   `default`, the file that set it (`set_in`: `workspace`, `user`, `private`, or null for the default), and the
   `choices`, `minimum`, and `maximum` it may take.
@@ -62,8 +65,8 @@ Each finding's detail ends with one recommendation, and its title starts with wh
 - At most `max_findings` findings. With more, keep the costliest first.
 - No findings, with status `ok`, means nothing recurs. Say so in the summary in a sentence, with how many ticks and
   runs you looked at and how many failed.
-- If a `canopy` command fails or is refused, report status `failed` with the command and its error in the summary,
-  rather than an `ok` that checked nothing.
+- If a tool or a `canopy` command fails or is refused, report status `failed` with the tool or command and its error
+  in the summary, rather than an `ok` that checked nothing.
 
 ## What you read
 

@@ -72,13 +72,13 @@ def test_a_done_review_of_someone_elses_pr_drafts_a_review_its_finding_off_the_d
 ) -> None:
     first = newest(scenario, reviewed)
     assert (first.number, first.author, first.channel) == (1, ReviewDraftAuthor.REVIEWER, None)
-    assert first.body == f"Two defects.\n\n{OFF_DIFF}"
+    assert first.body == OFF_DIFF
     assert first.comments == [ON_LINE]
-    assert first.change == f"made from review run {reviewed}'s summary and findings"
+    assert first.change == f"made from review run {reviewed}'s body and findings"
     draft = draft_of(scenario, reviewed)
     assert (draft.status, draft.pr_url) == (ReviewDraftStatus.WAITING, THEIRS)
     shown = scenario.operator("review", "draft", str(reviewed)).out
-    assert f"Version 1, hash {first.hash}: made from review run {reviewed}'s summary and findings" in shown
+    assert f"Version 1, hash {first.hash}: made from review run {reviewed}'s body and findings" in shown
     assert "Comment 1, on retry.py:1 (finding 1):\n    loops forever\n" in shown
     assert f"canopy review publish {reviewed} {first.hash}" in shown
     # A review of one of the loop's own PRs has none: its findings go to a worker.
@@ -104,9 +104,36 @@ def test_a_reviewers_text_canopy_would_not_keep_is_left_out_alone(
     run_id = scenario.review(reviews(sha, THEIRS), reviewer=reviewer_reports(hidden)).id
     first = newest(scenario, run_id)
     assert first.comments == []
-    assert first.body == f"Two defects.\n\n{OFF_DIFF}"
+    assert first.body == OFF_DIFF
     [why] = first.refused
     assert why.startswith("finding 1: its text holds")
+
+
+@pytest.mark.parametrize(
+    ("said", "body", "refused"),
+    [
+        ("Could the client's own retry do this?", f"Could the client's own retry do this?\n\n{OFF_DIFF}", []),
+        # A body canopy would not keep is left out alone, the findings kept.
+        ("Could\u200b the client's own retry do this?", OFF_DIFF, ["the body: its text holds"]),
+    ],
+)
+def test_the_reviewers_body_for_the_author_leads_the_first_version_and_its_summary_stays_out(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+    said: str,
+    body: str,
+    refused: list[str],
+) -> None:
+    del reviewing
+    sha = feature_commit(git_pool, tmp_path)
+    first = newest(
+        scenario,
+        scenario.review(reviews(sha, THEIRS), reviewer=reviewer_reports({**REPORT, "body": said})).id,
+    )
+    assert (first.body, first.comments) == (body, [ON_LINE])
+    assert [why[: len(want)] for why, want in zip(first.refused, refused, strict=True)] == refused
 
 
 def test_each_edit_drop_addition_and_dismissal_is_a_new_version(scenario: Scenario, reviewed: int) -> None:
@@ -119,7 +146,7 @@ def test_each_edit_drop_addition_and_dismissal_is_a_new_version(scenario: Scenar
     scenario.operator("dismiss", f"review:{reviewed}", "1", "--undo")
     versions = review_drafts.versions(scenario.conn, draft_of(scenario, reviewed).id)
     assert [(v.number, v.author, v.channel, v.change) for v in versions] == [
-        (1, ReviewDraftAuthor.REVIEWER, None, f"made from review run {reviewed}'s summary and findings"),
+        (1, ReviewDraftAuthor.REVIEWER, None, f"made from review run {reviewed}'s body and findings"),
         (2, ReviewDraftAuthor.OPERATOR, "cli", "edited comment 1"),
         (3, ReviewDraftAuthor.OPERATOR, "cli", "added a comment on retry.py:2"),
         (4, ReviewDraftAuthor.OPERATOR, "cli", "edited the body"),
@@ -181,7 +208,7 @@ def test_publishing_posts_the_version_verbatim_as_one_comment_review_on_the_revi
             "pr": THEIRS,
             "commit": sha,
             "delete_pending": None,
-            "body": f"Two defects.\n\n{OFF_DIFF}",
+            "body": OFF_DIFF,
             "comments": [
                 {"path": "retry.py", "line": 1, "text": ON_LINE.text},
                 {"path": "retry.py", "line": 2, "text": "Call what?"},
@@ -230,6 +257,30 @@ def test_a_review_whose_pr_a_ticket_now_holds_publishes_nothing(scenario: Scenar
     db.set_unit(scenario.conn, "PROJ-2", str(scenario.env.root), "repo", pr_url=THEIRS)
     refused = scenario.operator("review", "publish", str(reviewed), newest(scenario, reviewed).hash, code=1)
     assert "publish refused (not_ours)" in refused.err
+
+
+def test_a_discarded_draft_posts_nothing_and_takes_no_edit_note_or_publish(
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
+) -> None:
+    run, version = str(reviewed), newest(scenario, reviewed).hash
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "review-9"}):
+        assert main(["review", "discard", run]) == 1
+    assert draft_of(scenario, reviewed).status is ReviewDraftStatus.WAITING
+    out = scenario.operator("review", "discard", run).out
+    assert out == f"Discarded review run {reviewed}'s draft of {THEIRS}; nothing was posted.\n"
+    draft = draft_of(scenario, reviewed)
+    assert (draft.status, draft.why) == (ReviewDraftStatus.DISCARDED, "discarded by you through cli")
+    assert "discarded by you through cli" in scenario.operator("review", "draft", run).out
+    for refused, verb in [
+        (("review", "publish", run, version, "--submit"), "publish"),
+        (("review", "edit", run, "--drop", "1"), "edit"),
+        (("reply", f"review:{reviewed}", NOTE), "reply"),
+        (("review", "discard", run), "discard"),
+    ]:
+        assert f"{verb} refused (discarded)" in scenario.operator(*refused, code=1).err
+    assert posted(github_state) == []
 
 
 def test_a_comment_github_refuses_posts_nothing_and_the_draft_waits_again(
@@ -458,7 +509,7 @@ def test_a_note_starts_a_revision_on_the_next_tick_whose_result_is_the_new_versi
     assert revision.status is ReviewRunStatus.DONE
     assert revision.prompt.startswith("# canopy reviser\n")
     assert f"> {NOTE}" in revision.prompt
-    assert "The body:\n> Two defects." in revision.prompt
+    assert "The body:\n> `tests/test_retry.py:3`" in revision.prompt
     assert "Comment 1, on `retry.py:1`:\n> loops forever" in revision.prompt
     second = newest(scenario, reviewed)
     assert (second.number, second.author, second.channel) == (2, ReviewDraftAuthor.REVISER, None)
@@ -532,6 +583,8 @@ def test_while_a_revision_runs_the_draft_takes_no_note_and_no_publish_and_an_edi
     assert "publish refused (revising)" in held.err
     noted = scenario.operator("reply", f"review:{reviewed}", "And shorter.", code=1)
     assert "reply refused (revising)" in noted.err
+    discarded = scenario.operator("review", "discard", str(reviewed), code=1)
+    assert "discard refused (revising)" in discarded.err
     # The operator edits meanwhile: their version stands, and the revision's, made from the one before, is left out.
     scenario.operator("review", "edit", str(reviewed), "--body", "--text", "Mine now.")
     done = revising.finishes()

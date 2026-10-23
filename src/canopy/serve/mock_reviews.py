@@ -94,6 +94,7 @@ _CAROL = ReviewResult(
     verdict="findings",
     impact="normal",
     summary="The retry works for a 503, but a request that keeps failing comes back looking like an answer.",
+    body="Could the client's own retry transport do this, rather than a loop of our own?",
     findings=[
         Finding(
             severity="major",

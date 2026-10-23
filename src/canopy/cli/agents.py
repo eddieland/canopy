@@ -13,8 +13,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.cli.render import report_json
-from canopy.core import bash_allows, definitions
+from canopy.core import bash_allows, definitions, reports
 from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime import offerings
 
@@ -48,7 +47,9 @@ def cmd_agents(click_ctx: click.Context, *, as_json: bool) -> int:
     failed = found.error is not None or any(a.error is not None for a in found.agents)
     allows = bash_allows.by_agent(ctx.config.runtime.allow_bash)
     if as_json:
-        click.echo(report_json({**dataclasses.asdict(found), "allow_bash": {a: list(p) for a, p in allows.items()}}))
+        click.echo(
+            reports.report_json({**dataclasses.asdict(found), "allow_bash": {a: list(p) for a, p in allows.items()}}),
+        )
         return int(failed)
     for line in render(found, allows):
         click.echo(line)
