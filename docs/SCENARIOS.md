@@ -61,7 +61,10 @@ any OpenCode upgrade, and before relying on a permission they check.
   two reviews, each pair within five minutes. Expect two system blocks in every request, the first the agent's body
   alone and equal across the pair, each with a breakpoint; and the second run's first call reading the tools and the
   body from the cache, writing only from the environment on. One system block means OpenCode changed those lines: the
-  split leaves the prompt as it was. Record the tables in `MEASUREMENTS.md`.
+  split leaves the prompt as it was. Record the tables in `MEASUREMENTS.md`. Then, over a week of real use, compare
+  `canopy spend --json`'s first calls for the `workers`, `plans`, and `reviews` kinds on the snapshot with the split against the
+  one before it: expect `cold_share` to fall where runs of one kind start within five minutes of each other, and no
+  change otherwise. No fall at all means the split found no boundary, or such runs are too rare for it to pay.
 
 ## Before a release
 
