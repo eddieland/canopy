@@ -19,6 +19,7 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowGrid, RowLine } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
+import { TaskLink, TaskRunLink } from '@/components/task-link'
 import { TicketLink } from '@/components/ticket-link'
 import { Clipped, Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,7 @@ import {
     slotGroups,
     slotsRoot,
     WORKTREE_DOT,
+    workingLine,
     WORKTREE_TEXT,
 } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
@@ -167,14 +169,13 @@ function PoolCounters({ pools }: { pools: Pool[] | undefined }) {
     // A broken slot, or a pool that could not be read, is a slot nobody can vouch for: the failure color.
     const failed = (count('broken') ?? 0) > 0 || (pools ?? []).some((p) => p.error !== null)
     const lookTone: Tone = failed ? 'failed' : (count('dirty') ?? 0) > 0 ? 'blocked' : 'plain'
-    const repos = pools?.filter((p) => p.worktrees.some((w) => w.state === 'working')).length
     return (
         // Four across once the pane gives each 11rem (4 × 11rem and three 0.75rem gaps), else two by two: never three
         // and one. The pane is the container, so the rail's width counts.
         <div className="@container">
             <div className="grid grid-cols-2 gap-3 @min-[46.25rem]:grid-cols-4" data-testid="pool-counters">
                 <Counter label="Working" value={count('working')} tone="running">
-                    {repos === undefined ? null : `runs and reviews, in ${repos} ${repos === 1 ? 'pool' : 'pools'}`}
+                    {pools === undefined ? null : workingLine(pools)}
                 </Counter>
                 <Counter label="Held" value={count('held')} tone="stopped">
                     {slots === undefined ? null : heldBy(slots)}
@@ -351,7 +352,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
     const branchUrl = useBranchUrls()
     const branchHref = w.branch === null ? undefined : branchUrl(repo, w.branch)
     const whole = useWholePath()
-    const since = w.run?.started_at ?? w.review?.started_at ?? w.leased_at
+    const since = w.run?.started_at ?? w.review?.started_at ?? w.task?.started_at ?? w.leased_at
     const idle = w.state === 'idle'
     return (
         <ListRow kind="worktree" className="group/copy py-2" data-testid={`worktree-${w.name}`} data-state={w.state}>
@@ -414,8 +415,9 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
 }
 
 /**
- * What holds a slot: a run's ticket and kind, a review's PR, or the lease holder as the pool names it. A run's ticket
- * and id stay whole; its kind is what gets cut, whole in its tip, since a resume's reasons can run long.
+ * What holds a slot: a run's ticket and kind, a review's PR, a task's run, or the lease holder as the pool names it. A
+ * run's ticket and id stay whole; its kind is what gets cut, whole in its tip, since a resume's reasons can run long.
+ * A task's run is its task and the run, as a ticket's is its ticket and the run.
  */
 function Holder({ worktree: w }: { worktree: Worktree }) {
     if (w.run) {
@@ -432,6 +434,14 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
             <span className="flex min-w-0 items-center gap-2">
                 <Chip>review</Chip>
                 <PullRequestLink url={w.review.pr_url} />
+            </span>
+        )
+    }
+    if (w.task) {
+        return (
+            <span className="flex min-w-0 items-center gap-2">
+                <TaskLink id={w.task.task_id} className="shrink-0" />
+                <TaskRunLink task={w.task.task_id} run={w.task.run_id} className="shrink-0" />
             </span>
         )
     }

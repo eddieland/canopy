@@ -483,6 +483,23 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     expect((await reads).status()).toBe(200)
 })
 
+test("a slot a task's run holds names the task and the run, each opening its page", async ({ page }) => {
+    await page.goto('worktrees')
+    await settled(page)
+    // Task 6's run 6 holds mobile's second slot, as run 43 holds its first.
+    const slot = page.getByTestId('pool-mobile').getByTestId('worktree-2')
+    await expect(slot).toHaveAttribute('data-state', 'working')
+    await expect(slot).toContainText('agent/task/6')
+    await expect(page.getByTestId('pool-counters')).toContainText('runs and tasks, in 2 pools')
+
+    await slot.getByRole('link', { name: 'task:6', exact: true }).click()
+    await expect(page).toHaveURL(/\/tasks\/6$/u)
+    await page.goBack()
+    await settled(page)
+    await slot.getByRole('link', { name: 'task:6#6', exact: true }).click()
+    await expect(page).toHaveURL(/\/tasks\/6\/runs\/6$/u)
+})
+
 test('a slot with long text keeps it inside its row', async ({ page }) => {
     // Treehouse can find many processes in one slot, and a branch or a note can be any length: each is cut to fit
     // or wrapped, never past the panel's edge.

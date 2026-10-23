@@ -159,7 +159,8 @@ folds into one line, **Show 6 slots, #3 to #8**, so the slots with work in them 
 
 A slot is:
 
-- `working`: a run or review holds it.
+- `working`: a run, a review, or a task's run holds it. A ticket's run names the ticket and `run:N`; a task's names
+  `task:N` and its run, `task:N#M`, each opening its page.
 - `held`: something else holds it, such as your own shell or a pool sync.
 - `dirty`: nobody holds it, but it has changes nobody committed.
 - `idle`: free for the next run.

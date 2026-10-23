@@ -6416,6 +6416,28 @@ export type components = {
             tickets: components["schemas"]["TaskTicket"][];
         };
         /**
+         * TaskHold
+         * @description A running task's run that holds a worktree (DESIGN §36).
+         */
+        TaskHold: {
+            /**
+             * Run Id
+             * @description Its run's id.
+             */
+            run_id: number;
+            /**
+             * Started At
+             * Format: date-time
+             * @description When the run started.
+             */
+            started_at: string;
+            /**
+             * Task Id
+             * @description The task's id.
+             */
+            task_id: number;
+        };
+        /**
          * TaskReplied
          * @description What a reply recorded, as `canopy reply task:N` says: the message, what it answers, and what starts next.
          */
@@ -7700,9 +7722,11 @@ export type components = {
              * @description The pool's own word: available, leased, in-use, dirty, damaged, or unverified; treehouse's also "you're here".
              */
             status: string;
+            /** @description The running task's run holding this lease, matched by lease id. */
+            task: components["schemas"]["TaskHold"] | null;
         };
         /**
-         * @description A worktree's state, in five groups the UI colors (DESIGN §22). `working` is held by a run or review the journal shows running; `held` is leased or in use by anything else; `dirty` is unleased with uncommitted changes; `broken` is damaged, unverified, or a status canopy does not know.
+         * @description A worktree's state, in five groups the UI colors (DESIGN §22). `working` is held by a run, review, or task's run the journal shows running; `held` is leased or in use by anything else; `dirty` is unleased with uncommitted changes; `broken` is damaged, unverified, or a status canopy does not know.
          * @enum {string}
          */
         WorktreeState: "working" | "held" | "dirty" | "idle" | "broken";
