@@ -87,17 +87,19 @@ worker_timeout_minutes = 45
 # overseer = ["jira issue list *", "jira issue view *"]
 # planner = ["jira issue view *"]
 # worker-private = ["jira issue view *"]
-# Optional: each agent's model, `provider/model` as `opencode models` lists it (DESIGN §13). canopy writes it into the
-# agent's definition and records it on each worker run; an agent not named runs on OpenCode's default. A template,
-# prefix, or suffix that passes --model or -m is refused, since it would override this unseen. Before a worker run
-# starts, its model is looked up in `opencode models`: one not listed, or a list that cannot be read, refuses the run
-# with an attention item, never running it on another model. Private, as every runtime key is.
+# Optional: each agent's model, `provider/model` as `opencode models` lists it, or `provider/model@variant` to run it at
+# one of the variants `opencode models --verbose` lists for it, such as a reasoning effort (DESIGN §13). canopy writes
+# it into the agent's definition and records it on each worker run; an agent not named runs on OpenCode's default. A
+# template, prefix, or suffix that passes --model, -m, or --variant is refused, since it would override this unseen.
+# Before a worker run starts, its model and variant are looked up in `opencode models`: one not listed, or a list that
+# cannot be read, refuses the run with an attention item, never running it on another model. Private, as every
+# runtime key is.
 # [runtime.models]
 # worker = "provider/model"     # both workers, and your tasks' runs
 # planner = "provider/model"
-# reviewer = "provider/other-model"
+# reviewer = "provider/other-model@high"
 # overseer = "provider/model"
-# chore = "provider/model"
+# chore = "provider/model"      # every chore without a model of its own
 
 [loop]
 # `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
@@ -235,6 +237,7 @@ cmd = ""
 # when = "Skip it when the last run found nothing."
 # timeout_minutes = 20
 # workspaces = ["acme"]   # default: every workspace
+# model = "provider/model@low"   # default runtime.models.chore; only for a chore that runs canopy-chore
 
 # Optional: adversarial reviews of PRs (DESIGN §21). A fresh reviewer reads each new commit and reports to canopy only:
 # it posts nothing on the PR and never approves (D114). Read reviews with `canopy review show`. Point review_cmd at a

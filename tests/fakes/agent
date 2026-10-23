@@ -74,7 +74,11 @@ SERVER_TIMEOUT = 60
 
 def role(argv: list[str]) -> str:
     if "--agent" in argv[:-1]:
-        return argv[argv.index("--agent") + 1].removeprefix("canopy-").upper().replace("-", "_")
+        agent = argv[argv.index("--agent") + 1]
+        # A chore's own copy of the chore's agent, `canopy-chore-<name>`, plays the chore.
+        if agent.startswith("canopy-chore-"):
+            return "CHORE"
+        return agent.removeprefix("canopy-").upper().replace("-", "_")
     return "AGENT"
 
 

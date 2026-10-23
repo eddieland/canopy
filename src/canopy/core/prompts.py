@@ -518,14 +518,14 @@ def mark_comments(prefix: str, suffix: str, *, where: str = "on the ticket or a 
 def commit_trailer(config: Config, model: str | None = None) -> str:
     """Return the trailer a worker adds to its commits when the agent runtime adds no attribution of its own.
 
-    `model` is the one canopy chose for the worker (DESIGN §13), or None for the runtime's default. While
-    `trust.commit_trailer_name` is the default, the name credits it, as `provider/model (canopy worker)`; a name the
-    operator set is used as it is (TRUST_MODEL T5).
+    `model` is the one canopy chose for the worker (DESIGN §13), as the run records it, or None for the runtime's
+    default. While `trust.commit_trailer_name` is the default, the name credits it, as `provider/model (canopy worker)`,
+    its variant included (`provider/model@high`); a name the operator set is used as it is (TRUST_MODEL T5).
     """
     name = config.trust.commit_trailer_name
     if model is not None and name == DEFAULT_TRAILER_NAME:
-        # A `runtime.models` value is `provider/model`, with no space, backtick, or angle bracket (`agent_models`), so
-        # it ends neither the name nor the backticks the prompts quote the trailer in.
+        # A `runtime.models` value is `provider/model`, maybe with `@variant`, with no space, backtick, or angle bracket
+        # (`agent_models`), so it ends neither the name nor the backticks the prompts quote the trailer in.
         name = f"{model} ({DEFAULT_TRAILER_NAME})"
     return f"Co-authored-by: {name} <{config.trust.commit_trailer_email}>"
 
