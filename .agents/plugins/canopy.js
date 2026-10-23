@@ -1,12 +1,15 @@
 // canopy's plugin for a running agent: each job canopy asks of the agent process, as hooks the runtime calls. Its
 // first job is the clock (DESIGN §33): near the end of the run's time, one line on each tool call's result tells the
-// agent the minutes left before canopy stops the run, so it keeps its work before the kill.
+// agent the minutes left before canopy stops the run, so it keeps its work before the kill. Its second is the split
+// (§33): it cuts the system prompt after the agent's body, so that the tools and the body are a prefix the provider
+// caches for every run of the agent, whatever directory the run starts in.
 //
 // The agent runtime loads it from canopy's snapshot of its definitions, inside every agent process, sandboxed or not
 // (TRUST_MODEL T4). So it is plain JavaScript with no imports, which loads with no network, and each job does as
-// little as it can: it reads only what the harness hands it for that job (the clock, CANOPY_DEADLINE and the time),
-// writes nothing, refuses no call, and grants no tool. Each job's hooks run in its own try, in the order of `JOBS`, so
-// a job that throws neither fails a call that has already run nor keeps the jobs after it from theirs.
+// little as it can: it reads only what it is handed for that job (the clock, CANOPY_DEADLINE and the time; the split,
+// the system prompt), changes only what its hook is handed, refuses no call, and grants no tool. Each job's hooks run
+// in its own try, in the order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the
+// jobs after it from theirs.
 //
 // Under OpenCode 2 it has one job more, its own: a session's first prompt waits until the tools of its MCP servers are
 // registered, which 2 does only after the server connects, so that the first model call is sent them (`mcpTools`).
@@ -29,6 +32,7 @@
  *
  * @typedef {{ content: Array<{ type: string, text?: string }> }} McpResult
  */
+/** @typedef {Parameters<NonNullable<Hooks["experimental.chat.system.transform"]>>[1]} SystemOutput */
 /** @typedef {(...args: any[]) => Promise<void>} AnyHook */
 /** @typedef {import("@opencode/plugin").Plugin.Context} Context2 */
 /** @typedef {Parameters<Parameters<Context2["tool"]["hook"]>[1]>[0]} ToolEvent2 */
@@ -48,13 +52,23 @@ const MCP_WAIT_MS = 30_000;
 const MCP_SETTLE_MS = 2_000;
 /** How often it asks the runtime again while it waits. */
 const MCP_POLL_MS = 50;
+/**
+ * Where OpenCode 1's environment starts in its system prompt, right after the agent's body: the newline that joins
+ * them, the line naming the model, and the head of `<env>`, whose working directory is the first thing two runs of one
+ * agent differ by.
+ */
+const ENVIRONMENT = new RegExp(
+    "\nYou are powered by the model named [^\n]*\n" +
+        "Here is some useful information about the environment you are running in:\n" +
+        "<env>\n  Working directory: ",
+);
 
 /**
  * Each job the plugin does, in the order its hooks run: a function that returns its hooks, by the runtime's names.
  *
  * @type {Array<() => Hooks>}
  */
-const JOBS = [clock];
+const JOBS = [clock, split];
 
 /**
  * The plugin, as each major version of OpenCode reads it: its id, and its entry point for each.
@@ -316,4 +330,39 @@ function tell(output, text) {
         return true;
     }
     return false;
+}
+
+/**
+ * The split's hooks: the one that cuts OpenCode 1's system prompt in two, the agent's body and all after it.
+ *
+ * OpenCode 1 joins the body, the environment, the instructions, the MCP servers' instructions, and the skills into one
+ * system message, and the provider caches at the end of the first two system messages only; so with one, the cached
+ * prefix ends past the working directory, and two runs in two directories share none of it, not even the tools before
+ * it (MEASUREMENTS 2026-10-19, F47 and F48). Two messages give the body a breakpoint of its own (F50). OpenCode keeps
+ * the array it hands the hook, not the object around it, so the hook changes that array in place; and the two parts
+ * joined by a newline, as a provider that takes one system string joins them, are the prompt as it was. A prompt in
+ * which the environment cannot be found, or one already in parts, is left as it is. OpenCode 2 builds its request
+ * otherwise, unmeasured, and `setup` registers nothing for this hook.
+ *
+ * @returns {Hooks} The split's hooks.
+ */
+function split() {
+    return {
+        /**
+         * @param {unknown} _input
+         * @param {SystemOutput | null | undefined} output
+         */
+        "experimental.chat.system.transform": async (_input, output) => {
+            const system = output?.system;
+            if (!Array.isArray(system) || system.length !== 1 || typeof system[0] !== "string") {
+                return;
+            }
+            const text = system[0];
+            const at = text.search(ENVIRONMENT);
+            if (at <= 0) {
+                return;
+            }
+            system.splice(0, 1, text.slice(0, at), text.slice(at + 1));
+        },
+    };
 }
