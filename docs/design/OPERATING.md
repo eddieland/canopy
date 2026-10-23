@@ -91,6 +91,64 @@ symlink, that no one else can write (§18, D053). A sandboxed run can neither re
 Secrets (the listener secret, Slack credentials) and the sandbox templates are files in the user config directory, not
 keys, shared by every workspace's runs.
 
+**From the web UI.** The Limits and trust page under Settings (§22) edits a few keys of the workspace's private file
+in place, and no others (D128, TRUST_MODEL T8). They are named one by one in `canopy/serve/config_edit.py`, never by
+section, so a key added to a section later is not editable until it is named there. A limit may be raised or
+lowered, but the page cannot loosen it past its bound; the file can set any value, and the page may still tighten a
+value the file set past the bound. A trust key moves only toward stricter: a config write outlives the listener
+secret, and a replier added through a stolen session would go on steering workers after a new secret ended it.
+
+| Key | From the page |
+|---|---|
+| `capacity.max_workers`, `capacity.slots_per_repo`, each `capacity.repo_slots` entry | at most 32; an unmanaged pool's first count is bounded too |
+| `capacity.max_chores`, `capacity.max_reviews` | at most 16 |
+| `capacity.max_reviews_per_day` | at most 500 |
+| `policy.max_implement_attempts`, `policy.max_resume_attempts` | at most 10 |
+| `policy.max_reviews_per_pr` | at most 25 |
+| `policy.ci_cooldown_minutes` | at least 5 |
+| `loop.interval_minutes`, `loop.idle_max_minutes` | at least 2 |
+| `policy.stacking` | to `"never"` only |
+| `trust.authorized_repliers`, `trust.trusted_reviewers` | entries removed, never added |
+| `trust.rebase` | to `false` only |
+| `trust.commit_trailer` | to `true` only |
+
+The bounds sit well above what one machine runs today, so the page serves the operator's real changes; what they stop
+is a stolen session turning spend up without limit. A raise within them outlives a new secret, and that residual is
+spend, which the page and the log show. `capacity.repo_slots` is edited as its entries: the page lists the
+repositories with a count of their own and takes a name to give another one, so a workspace of many repositories
+shows the few that differ from `capacity.slots_per_repo`. A save:
+
+- writes the private file only, never the workspace file (T7), a shared `policy.*` key included, nor the user file,
+  which serves every workspace. A key whose value comes from the user file is written to the private file whole, where
+  it shadows the user file's for this workspace alone: a list keeps the entries the page did not drop, and
+  `capacity.repo_slots` the repositories it did not change. The page names a key's file and says so before the save. A
+  private file not there yet is made, the operator's alone (`0600`);
+- is edited in place with tomlkit (D129), so the operator's comments, order, and layout stay; a list loses its removed
+  entries where they stand, keeping the rest and their comments. A file tomlkit would not write back byte for byte, as
+  read, is refused `not_roundtrip` before anything changes, so a save differs from the file only in the values set;
+- keeps the file as it was beside it, `config.toml.bak` with the file's mode, replacing the previous save's: the way
+  back from a save is to move it over the file and Reload. A save that made the file keeps no backup;
+- carries the hash of the private file as the page read it, an empty file's when there is none, and holds a lock
+  beside the file (`config.toml.lock`) from reading the file to replacing it, so two saves made on one read cannot
+  both pass; a file whose hash differs is refused `stale`, checked again just before the replace, so a hand edit is
+  lost only if it lands in that last moment;
+- applies the change to a copy beside the file, which `config.load` validates as any `canopy` command would read it,
+  and checks every bound on the values the copy loads to, so the rules hold whatever the request's shape; a refusal
+  writes nothing and gives the loader's message, naming the private file;
+- replaces the file atomically, keeping its mode, and refuses one that is a symlink or not the operator's (D053's
+  check, `unsafe_file`), and inside a tick or run (`inside_run`), as the CLI's verbs do;
+- logs each change with channel `web`, the key, and its old and new values, then asks the loop to read its config
+  again through the same path as Reload (§6). A save whose reload is refused, or never asked for because the server
+  stopped between the two, takes effect at the next reload.
+
+There is no CLI verb for it: the operator's editor is the CLI's way, and a `canopy config set` would be in reach of
+the overseer's `canopy *` bash rule. Pools: a changed `capacity.slots_per_repo` or `capacity.repo_slots` bounds leases
+from the next tick; making or removing slots is still `canopy workspace sync`, which the page does not run.
+
+Rejected: a file of canopy's own layered after the private file (a hand edit to the private file would be silently
+overridden), writing the file anew with the stdlib (its comments lost), and writing the user file, whose change would
+reach every workspace.
+
 Rules:
 
 - **Queues are per operator.** A ticket carrying any of `tracker.labels` is in this operator's queue. Two operators

@@ -9,3 +9,8 @@
     content: 'canopy 0.1.0.dev52+abc1234';
     font-size: var(--text-2xs);
 }
+
+/* The private config's path is under the mock's temporary directory, so it changes with every run, not the page. */
+[data-testid='config-private-file'] {
+    visibility: hidden;
+}

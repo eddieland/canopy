@@ -98,6 +98,12 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
 - **S18. Untrusted and trusted reviewers** (M22). A review bot's comment on a loop PR waits as `untrusted_review` with
   no dispatch. A reply from the web UI resumes it, with the reply as the worker's instruction. A comment from someone in
   `trust.trusted_reviewers` resumes it without a reply.
+- **S65. Limits and trust from the web UI** (M41). While `canopy loop` runs, change `capacity.slots_per_repo` and remove
+  a trusted reviewer on the web UI's Settings, Limits and trust page. Expect the next tick to lease under the new size
+  and its overseer's state block to carry the shorter list, and the workspace's private file, `.canopy/config.toml`, to
+  keep its comments, with only those two values changed, and `~/.config/canopy/config.toml` untouched. Then try a
+  count past its ceiling and adding a reviewer back by hand-crafting the request: expect each refused, naming its
+  guard, and the files unchanged.
 
 ### Reviews
 

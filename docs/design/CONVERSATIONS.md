@@ -100,9 +100,10 @@ and its controls TRUST_MODEL T8's.
   secret it serves nothing; a server failure never ends the loop. Only its development mode, on loopback with a journal
   of its own, may skip signing in.
 - It writes only through core's functions, with their guards: the ones the CLI's verbs use, and, for what no command
-  would do, one of its own that TRUST_MODEL T8 names, such as the operator's own words on a plan (§25) and what they
-  have seen. It never takes the tick lock. A page needs no CLI verb for what nobody would type. The server, not the
-  page, refuses a forget not typed out.
+  would do, one of its own that TRUST_MODEL T8 names, such as the operator's own words on a plan (§25), what they have
+  seen, and the limits and trust settings §12 lists, which Settings' Limits and trust page writes to the workspace's
+  private file and then reloads (`serve.config_edit`, D128). It never takes the tick lock. A page needs no CLI verb for
+  what nobody would type. The server, not the page, refuses a forget not typed out.
 - It records each write it lets through, and each sign-in, in the journal, so the operator can see what a holder of
   the secret did; never a request's body or credentials (T8).
 - Every value from the journal or a run's log is untrusted and rendered as text (D113). `canopy.serve` alone imports
@@ -119,7 +120,8 @@ times the text.
 
 Private tickets and mirrored comments changed TRUST_MODEL T1 and T6, and the web UI added T8. Operator messages on
 public tickets (D089) changed T1: one authorizes a `resume` as an authorized reply does. Seen marks changed T8: the web
-writes what no CLI verb does (D127).
+writes what no CLI verb does (D127). Limits and trust (M41) changed T8 too: the web writes a few config keys, limits
+within bounds and trust only stricter (D128).
 
 ### Open
 

@@ -43,10 +43,17 @@ class Serving:
     links: str | None = None
 
 
-def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tick_now.TickNow) -> Serving:
+def start(
+    ctx: Context,
+    log: logs.TickAdapter,
+    reload: reread.Reload,
+    asked: tick_now.TickNow,
+    every: int | None = None,
+) -> Serving:
     """Start the web UI's server for the loop, or say why it serves nothing. Never raises: the loop goes on.
 
-    The UI's reload asks through `reload`, as SIGHUP does, and its Tick now through `asked`, as `t` does.
+    The UI's reload asks through `reload`, as SIGHUP does, and its Tick now through `asked`, as `t` does. `every` is
+    `--every`'s minutes, which the settings page names beside `loop.interval_minutes`.
 
     Returns:
         The note for the loop's header, with the URL, server, backend, and the address of notifications' links when
@@ -64,7 +71,7 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tic
         return Serving(f"not served: cannot read the listener secret: {e}")
 
     sessions = Sessions(key, port=options.port, base_path=options.base_path, hosts=options.hosts)
-    served = backend(ctx, reload, asked)
+    served = backend(ctx, reload, asked, every)
     server = WebServer(create_app(options, served, sessions), options, log)
     server.start()
     url = options.url()
@@ -74,11 +81,11 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tic
     return Serving(note, url, server, served, links=cfg.url or url)
 
 
-def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Backend:
+def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow, every: int | None = None) -> Backend:
     """The server's view of the loop's journal: the attention list, `halt.end`, reload, tick now, grants, and tries.
 
     Returns:
-        The backend the server calls into, bound to `ctx`, `reload`, and `asked`.
+        The backend the server calls into, bound to `ctx`, `reload`, and `asked`, with `--every`'s minutes.
     """
 
     def end_run(run_ctx: Context, run: records.Run) -> bool:
@@ -110,6 +117,7 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Bac
         grant=grant,
         try_chore=try_chore,
         write_attention=lambda current: attention.write(current, logs.for_tick(None)),
+        every=every,
     )
 
 

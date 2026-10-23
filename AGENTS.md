@@ -105,12 +105,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   passed. A run GitHub has not started yet is waited for, not replaced; a job that failed is re-run in its own run.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
   stdlib makes the code materially worse, and say why in its PR. Adopted so far: `click` for every command line, the
-  workspace members' too, never argparse (D025),
-  `pydantic` for validating config and anything parsed from another program's output (D026), `hypothesis` for property
-  tests of input validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
-  (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), and `httpx2` for its test
-  client (D079, dev only), `syrupy` for snapshot tests (dev only), and `jsonschema` to hold an MCP tool's result to
-  its output schema (dev only).
+  workspace members' too, never argparse (D025), `pydantic` for validating config and anything parsed from another
+  program's output (D026), `hypothesis` for property tests of input validators (dev only), `pytest-xdist` to run the
+  tests in parallel (dev only), `rich` for terminal output (D043), `fastapi` and `uvicorn` for the web UI's server
+  (D074, only in `canopy.serve`), `tomlkit` for its edits to the private config (D129, only in `canopy.serve`), and
+  `httpx2` for its test client (D079, dev only), `syrupy` for snapshot tests (dev only), and `jsonschema` to hold an MCP
+  tool's result to its output schema (dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported by the harness, `src/canopy`. No Jira client, no GitHub
