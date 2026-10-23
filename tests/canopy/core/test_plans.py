@@ -34,8 +34,11 @@ def test_a_plan_is_written_operator_only_and_recorded_with_its_hash(conn: sqlite
     assert path.stat().st_mode & 0o777 == 0o600
     assert (state_dir / "plans").stat().st_mode & 0o777 == 0o700
     assert path.parent.stat().st_mode & 0o777 == 0o700
-    # Nothing but the plan is left in the ticket's directory.
-    assert [p.name for p in path.parent.iterdir()] == [path.name]
+    # Nothing but the plan and its original, the same bytes kept as written, is left in the ticket's directory.
+    original = path.with_name(f"{run_id}.original.md")
+    assert sorted(p.name for p in path.parent.iterdir()) == sorted([path.name, original.name])
+    assert original.read_text() == PLAN
+    assert original.stat().st_mode & 0o777 == 0o600
 
     plan = plans.record(conn, KEY, run_id, written)
     assert (plan.status, plan.sha256, plan.size, plan.approved_at) == (PlanStatus.PROPOSED, written.sha256, 34, None)
@@ -57,7 +60,7 @@ def test_a_name_already_taken_is_never_overwritten(conn: sqlite3.Connection, sta
     with pytest.raises(plans.PlanFileError, match="already there"):
         plans.write(state_dir, KEY, other, "# Another\n")
     assert not target.exists()
-    assert sorted(p.name for p in path.parent.iterdir()) == sorted([path.name, f"{other}.md"])
+    assert sorted(p.name for p in path.parent.iterdir()) == sorted([path.name, f"{run_id}.original.md", f"{other}.md"])
 
 
 @pytest.mark.parametrize("which", ["plans", "ticket"])

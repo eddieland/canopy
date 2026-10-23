@@ -183,6 +183,10 @@ prompt_overrides = "~/.config/canopy/prompts"
 # Set true to archive each planned ticket's conversation beside its plans too: workers' reports and questions, your
 # replies, and mirrored tracker comments, a private ticket's included. `canopy archive DIR --conversations` copies them.
 # plan_archive_conversations = false
+# Each ticket's plans go with your comments on them, as KEY/COMMENTS.md: every thread, the passage it is on, and its
+# replies. Set false to leave them out; `canopy archive DIR` copies them either way. A plan you edited always goes with
+# its original, as the planner wrote it, as RUN-ORIGINAL.md.
+# plan_archive_comments = true
 
 # Optional: the persona each agent writes in, by name: its voice and what it weighs most, never what it may do. A run
 # whose persona has no file is refused, never run in canopy's voice instead (DESIGN §31).

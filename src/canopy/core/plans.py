@@ -10,10 +10,12 @@ Whether a ticket needs a plan is its own setting, set only by the operator (`ask
 channel's: each refuses inside one of canopy's own runs, and holds the dispatch lock, so a dispatch reads a ticket's
 plans either before the verb or after it.
 
-A file is written once and never overwritten or deleted: under a temporary name in the ticket's directory, then linked
-to its own, which fails if the name is taken. `plans/` and each ticket's directory are operator-only, and one that is
-not, or a symlink, refuses the write. Every read opens a regular file without following a link and takes at most
-`MAX_CHARS` of UTF-8; its hash is of the whole file, so a file over the bound is not a plan and never matches a hash.
+A file is written once and never deleted: under a temporary name in the ticket's directory, then linked to its own,
+which fails if the name is taken. The operator's edits replace it (`save`, or their own editor), so beside it goes a
+copy under a second name, `<run>.original.md`, never written again, that keeps the plan as its planner wrote it.
+`plans/` and each ticket's directory are operator-only, and one that is not, or a symlink, refuses the write. Every read
+opens a regular file without following a link and takes at most `MAX_CHARS` of UTF-8; its hash is of the whole file, so
+a file over the bound is not a plan and never matches a hash.
 """
 
 from __future__ import annotations
@@ -416,18 +418,31 @@ def file_name(run_id: int) -> str:
     return f"{run_id}.md"
 
 
+def original_name(run_id: int) -> str:
+    """The name of the copy of the plan the run `run_id` wrote, as its planner wrote it, in its ticket's directory.
+
+    Returns:
+        `<run_id>.original.md`.
+    """
+    return f"{run_id}.original.md"
+
+
 def write(state_dir: Path, key: str, run_id: int, text: str) -> Written:
-    """Write the plan the run `run_id` wrote for `key` to its file, readable only by the operator.
+    """Write the plan the run `run_id` wrote for `key` to its file, and its original beside it, operator-only.
+
+    Either file left by a write that failed has no row, so is never read.
 
     Returns:
         The file's hash and size, for its row.
 
     Raises:
         PlanFileError: `plans/` or the ticket's directory is a symlink, not a directory, or not the operator's alone; or
-            the file's name is taken, by an earlier file or anything else, which is left as it is.
+            either file's name is taken, by an earlier file or anything else, which is left as it is.
     """
     path = path_for(state_dir, key, run_id)
-    return write_new(state_dir / DIR_NAME, key, path.name, text)
+    written = write_new(state_dir / DIR_NAME, key, path.name, text)
+    write_new(state_dir / DIR_NAME, key, original_name(run_id), text)
+    return written
 
 
 def write_new(top: Path, sub: str, name: str, text: str, *, what: str = "plan") -> Written:

@@ -213,7 +213,7 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | Give one ticket's workers, planner, or reviewer a persona of its own, until you clear it | `canopy persona KEY NAME [--agent planner\|reviewer]`, or the ticket's page |
 | See what canopy keeps of its own history, and what your retention would remove | `canopy gc --dry-run` |
 | Pack the primary clones' loose objects, between runs, since git's own maintenance is off in them | `canopy gc --git` |
-| Keep every plan, with its status, approval, and prompt, in a private repository of yours | `canopy archive DIR` |
+| Keep every plan, with its status, approval, prompt, original, your comments, and the work that followed, in a private repository of yours | `canopy archive DIR` |
 | Read a run's transcript | its page in the web UI, or `opencode export <session id>` |
 | Teach your own agent session canopy | `canopy skill --install`, which saves it in `~/.agents/skills/canopy/` |
 | Complete canopy's commands, repositories, and chores with Tab | `canopy completion bash` (or `zsh`, `fish`); its help says how to load it |
