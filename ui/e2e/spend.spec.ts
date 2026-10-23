@@ -348,7 +348,7 @@ test('a week of one priced day draws one narrow bar, its segments apart, and the
             }),
         )
     ).toSorted((a, b) => a.top - b.top)
-    expect(segments).toHaveLength(6)
+    expect(segments).toHaveLength(7)
     for (const [i, segment] of segments.entries()) {
         expect(segment.bottom - segment.top).toBeGreaterThanOrEqual(1.99)
         const below = segments[i + 1]

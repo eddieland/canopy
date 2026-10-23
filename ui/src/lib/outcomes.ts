@@ -224,7 +224,8 @@ export function reviewDraftPublishedText(run: number, published: ReviewDraftPubl
             )
         }
         case 'waiting':
-        case 'publishing': {
+        case 'publishing':
+        case 'discarded': {
             return `${version} was not published: ${published.failed ?? draft.why ?? 'nothing was posted'}`
         }
     }
@@ -249,10 +250,16 @@ export function reviewDraftPublishedToast(run: number, prUrl: string, published:
             return { title: `${capitalized(version)} may have been posted`, tone: 'failed' }
         }
         case 'waiting':
-        case 'publishing': {
+        case 'publishing':
+        case 'discarded': {
             return { title: `${capitalized(version)} was not published`, tone: 'failed' }
         }
     }
+}
+
+/** The toast a discard shows, in the words `canopy review discard` says it with, and the PR it was of. */
+export function reviewDraftDiscardedToast(run: number, prUrl: string): NewToast {
+    return { title: `Discarded review run ${run}'s draft; nothing was posted`, detail: prUrl, tone: 'done' }
 }
 
 function capitalized(text: string): string {

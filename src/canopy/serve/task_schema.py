@@ -1,4 +1,4 @@
-"""The API's types for one-off tasks (DESIGN §36): the tasks list, a task's page, one of its runs, and a run's report.
+"""The API's types for one-off tasks (DESIGN §36): the list, a task's page, a run, a report, and the operator's writes.
 
 Built on `schema.Model`, as every API type is (schema.py). A task's text is the operator's; everything a run wrote, its
 summary, question, and report among it, is an agent's: untrusted text, which the UI renders as text.
@@ -156,7 +156,7 @@ class TaskReport(Model):
     run_id: int
     """The run that left it."""
     path: str
-    """Its file, `<state_dir>/tasks/<task>/<run>.md`."""
+    """Its file, `<state_dir>/tasks/<task>/<run>.md`: from the workspace root when under it, as a log path is."""
     text: str | None = None
     """Its Markdown, control characters dropped, or none when the file is not a report any more: `problem` says why.
     Agent-written and untrusted: the UI renders it as text."""
@@ -166,3 +166,53 @@ class TaskReport(Model):
     """The file's hash now, whenever it could be read."""
     edited: bool = False
     """Whether the file has changed since its run left it."""
+
+
+class TaskSubmitRequest(Model):
+    """A task's text, in the operator's words, and where it runs, as `canopy task submit` takes them."""
+
+    text: Annotated[str, Field(max_length=20_000)]
+    """The task's text. Bounded again in code at 4000 characters, after stripping (DESIGN §36)."""
+    repo: Annotated[str, Field(max_length=200)] | None = None
+    """The repository it runs in, as `--repo` names it. Required when the workspace has several."""
+    project: Annotated[str, Field(max_length=200)] | None = None
+    """The tracker project its tickets may go in, as `--project` names it. None: it files no tickets."""
+
+
+class TaskSubmitted(Model):
+    """What a submission recorded: the task, queued for the next tick, and where it will run."""
+
+    id: int
+    """The task's id, as `task:N` names it."""
+    repo: str
+    """The repository it runs in."""
+    branch: str
+    """The branch every run of it works on, `<branch_prefix>task/N`."""
+    no_capacity: bool
+    """Whether `capacity.max_tasks` is 0, so no tick starts it until the operator raises it."""
+
+
+class TaskReplied(Model):
+    """What a reply recorded, as `canopy reply task:N` says: the message, what it answers, and what starts next."""
+
+    message_id: int
+    """The message the reply is."""
+    answers: int | None = None
+    """The question it answers, if it answers one."""
+    new: bool
+    """Whether it was recorded now, rather than by an earlier submission with the same id."""
+    running_run: int | None = None
+    """A run of the task still working: the first tick after it ends starts the next. None: the next tick does."""
+
+
+class TaskStopped(Model):
+    """What a stop did, as `canopy stop task:N` says: no tick starts the task again."""
+
+    already: bool
+    """Whether the task was already stopped."""
+    dropped: bool
+    """Whether it was still queued, its first run or one a reply asked for, which nothing starts now."""
+    running_run: int | None = None
+    """A run of it still working, if one is: it finishes unless `now` ended it."""
+    ended: bool = False
+    """Whether `now` ended that run and returned its slot."""

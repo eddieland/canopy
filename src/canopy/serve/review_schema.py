@@ -24,10 +24,11 @@ type FindingSeverity = Annotated[
     Field(description="How much a review finding matters (DESIGN §21)."),
 ]
 type ReviewDraftStatusName = Annotated[
-    Literal["waiting", "publishing", "unconfirmed", "staged", "published"],
+    Literal["waiting", "publishing", "unconfirmed", "staged", "published", "discarded"],
     Field(
         description="Where a review's draft stands (DESIGN §34): the operator's to edit and publish while `waiting`; "
-        "`staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted.",
+        "`staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted; "
+        "`discarded` once they said it will not post.",
     ),
 ]
 type DiffLineKind = Annotated[

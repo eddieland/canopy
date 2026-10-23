@@ -49,7 +49,15 @@ export function ticketShown(
     show: TicketShow | undefined,
     query: string | undefined,
 ): boolean {
-    return standsAt(ticket, show) && holdsEvery(`${ticket.key} ${ticket.title ?? ''}`, query)
+    return standsAt(ticket, show) && keyOrTitleHolds(ticket, query)
+}
+
+/**
+ * Whether a ticket's key or title holds every word of `query`, in any case and anywhere in a word, as the tickets
+ * page and the jump palette find one. No query holds everything.
+ */
+export function keyOrTitleHolds(ticket: Pick<TicketSummary, 'key' | 'title'>, query: string | undefined): boolean {
+    return holdsEvery(`${ticket.key} ${ticket.title ?? ''}`, query)
 }
 
 type Standing = Pick<TicketSummary, 'done' | 'awaiting' | 'running_run' | 'phase'>

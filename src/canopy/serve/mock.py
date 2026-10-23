@@ -12,7 +12,7 @@ workspace's policy allows one resume and two reviews, so ABC-100 is at its resum
 running, is a resume for a failed check and review feedback together. The running runs 41 and 43 have the latest tool
 call on each one's row (§8).
 Each feature's fixtures are in a module of their own beside this one, `mock_<feature>.py`, which `seed` calls: plans,
-memory, chore runs, review runs, review replies, a feedback plan, personas, and the runs' transcripts.
+memory, chore runs, review runs, review replies, a feedback plan, personas, one-off tasks, and the runs' transcripts.
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -37,6 +37,7 @@ from canopy.serve import (
     mock_personas,
     mock_plans,
     mock_reviews,
+    mock_tasks,
     mock_transcripts,
 )
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
@@ -180,7 +181,7 @@ def _pools(root: Path) -> dict[str, list[pools.Slot]]:
     """What `treehouse status --json` would show for each cloned repository's pool.
 
     web: the two running runs' slots, a shell someone opened in a third, one idle, and one dirty, five for a declared
-    size of four. mobile: run 43's other slot, and one idle.
+    size of four. mobile: run 43's other slot, and the running task's (mock_tasks).
 
     Returns:
         Each cloned repository's slots, by repository name, numbered from 1.
@@ -216,7 +217,14 @@ def _pools(root: Path) -> dict[str, list[pools.Slot]]:
                 "leased_at": at(5),
                 "processes": [{"pid": 48530, "name": "node"}],
             },
-            {"status": "available", "detached": True},
+            {
+                "status": "leased",
+                "detached": True,
+                "lease_id": mock_tasks.RUNNING_LEASE,
+                "lease_holder": f"canopy:task:{mock_tasks.RUNNING_TASK}",
+                "leased_at": at(2),
+                "processes": [{"pid": 48644, "name": "opencode"}],
+            },
         ],
     }
     return {
@@ -280,6 +288,7 @@ def seed(directory: Path) -> Backend:
             mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
             mock_feedback_plans.seed(ctx.conn, ws.state_dir, at, ctx.config.trust, slot_path(root, "web", 3))
             mock_personas.seed(ctx.conn, ctx.config, at)
+            mock_tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
         mock_reviews.drafts(ctx.conn, at)
     mock_transcripts.write(ws.state_dir, T0)
     return backend
@@ -289,14 +298,14 @@ def _attention(ctx: Context) -> list[Item]:
     """The fixtures' list, less a finding the operator dismissed, as `loop.attention.listed` leaves one out.
 
     Returns:
-        `ATTENTION` without the findings dismissed in the mock journal.
+        `ATTENTION` without the findings dismissed in the mock journal, and the tasks' items as the journal has them.
     """
     dismissed = {
         (f"chore:{f.chore}", f.finding.id)
         for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace, starts=ctx.finding_starts)
         if f.dismissed
     }
-    return [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed]
+    return [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed] + mock_tasks.attention(ctx.conn)
 
 
 def _end_run(ctx: Context, run: records.Run) -> bool:
