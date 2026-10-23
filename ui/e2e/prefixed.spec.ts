@@ -57,7 +57,11 @@ test('a reply answers the waiting question, and a retry records nothing new', as
     // No tick has read it yet: the reply says so, and the inbox keeps the question, marked answered, until one does.
     await expect(mine).toContainText('waiting for the next tick')
     await page.goto('attention')
-    const item = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting reply' })
+    const item = page
+        .getByTestId('attention-list')
+        .getByRole('link')
+        .filter({ hasText: 'awaiting reply' })
+        .filter({ hasText: 'ABC-102' })
     await expect(item).toContainText('answered')
     await item.click()
     await expect(page.getByTestId('answered-note')).toContainText('leaves at the next tick')
@@ -383,13 +387,29 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
     const comments = page.getByTestId('draft-comment')
     await expect(comments).toHaveCount(0)
 
+    // A note asks the next tick for a revision, as canopy reply review:5 does; the mock runs no tick, so it waits.
+    const revision = draft.getByTestId('draft-revision')
+    await expect(revision).toContainText('0 of 3 revisions')
+    const ask = revision.getByRole('form', { name: "Ask for a revision of review run 5's draft" })
+    await ask.getByRole('textbox', { name: 'What should change' }).fill('Fold the test finding into comment 1.')
+    await ask.getByRole('button', { name: /Ask for a revision/u }).click()
+    await expect(revision.getByRole('status')).toHaveText(
+        /^Recorded note \d+ on review run 5's draft, at version 1\. The next tick revises it, unless/u,
+    )
+    await expect(revision).toContainText('Your note asks for a revision: the next tick starts one')
+    await expect(revision.getByRole('list', { name: 'Your notes' })).toContainText(
+        'Fold the test finding into comment 1.',
+    )
+
+    // A version of the operator's own answers the note instead. What the panel says of it is beside the note's.
+    const said = draft.getByRole('status').filter({ hasNotText: /^Recorded note/u })
     await draft.getByTestId('draft-body').getByRole('button', { name: 'edit' }).click()
     await draft.getByRole('textbox', { name: 'In your words' }).fill('One thing to fix before this goes in.')
     await draft.getByRole('button', { name: 'Save' }).click()
-    await expect(draft.getByRole('status')).toHaveText(
-        /^Review run 5's draft is version 2 now, hash [0-9a-f]{12}: edited the body\.$/u,
-    )
+    await expect(said).toHaveText(/^Review run 5's draft is version 2 now, hash [0-9a-f]{12}: edited the body\.$/u)
     await expect(draft.getByTestId('draft-body')).toContainText('One thing to fix before this goes in.')
+    await expect(revision.getByRole('list', { name: 'Your notes' })).toHaveCount(0)
+    await expect(revision).toContainText('Tell an agent what to change')
 
     // A finding's comment is edited in place on its card, and left out and put back with one control.
     const first = points.filter({ hasText: 'The last 503 is returned' })
@@ -584,8 +604,8 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
 
     await form.getByLabel('PR URL').fill(pr)
     await expect(form.getByTestId('review-request-submit')).toHaveAttribute('title', 'canopy start URL --review')
-    // Its review is written in skeptic, as `--persona skeptic` asks: the persona is folded with the notes.
-    await form.getByRole('button', { name: 'Show persona and notes' }).click()
+    // Its review is written in skeptic, as `--persona skeptic` asks: the persona is folded under the notes.
+    await form.getByRole('button', { name: 'Show persona' }).click()
     await form.getByRole('button', { name: 'Persona: canopy (default)' }).click()
     await expect(page.getByRole('menuitemcheckbox', { name: 'skeptic' })).toHaveAccessibleDescription(
         /^Plans and reviews by naming the input that would break each claim/u,

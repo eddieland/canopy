@@ -129,7 +129,7 @@ def run_env(checkouts: Mapping[str, Path], *, cwd: Path) -> dict[str, str]:
         The variables to set on the agent's process.
     """
     named = [checkout_arg(name, path.absolute()) for name, path in checkouts.items()]
-    return servers.env(SERVER, (*SERVER_COMMAND, *(arg for n in named for arg in ("--git", n))), cwd=cwd)
+    return servers.env({SERVER: (*SERVER_COMMAND, *(arg for n in named for arg in ("--git", n)))}, cwd=cwd)
 
 
 def tool_names() -> list[str]:

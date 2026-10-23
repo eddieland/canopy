@@ -2,6 +2,8 @@
 
 import json
 import os
+import re
+import sys
 import time
 from pathlib import Path
 from unittest import mock
@@ -689,6 +691,32 @@ def test_a_review_run_records_what_it_cost(
     assert tools_of(conn, "review_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
     # Which models served it, read from its session as it ended (DESIGN §13).
     assert [(m.model, m.replies) for m in run_models.of_run(conn, "review_runs", run_id)] == [("anthropic/claude-x", 1)]
+
+
+def test_a_running_review_shows_its_session_and_spend_so_far(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """What the reviewer reports is on its row as it prints it, so its page shows it mid-review."""
+    with_events(reviewing, "canopy-reviewer")
+    journal = reviewing.state_dir / db.DB_FILE_NAME
+    read_row = "import sqlite3, sys; print(sqlite3.connect(sys.argv[1]).execute(sys.argv[2]).fetchall())"
+    row_now = [sys.executable, "-c", read_row, str(journal), "SELECT session_id, cost_usd FROM review_runs"]
+    reviewer = reviewer_reports(FINDINGS, row_now, session="ses_review")
+    reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer)
+    assert reviewed.status == "done", reviewed.printed.out
+
+    [run] = agent_runs(scenario.agent_log)
+    commands = run["commands"]
+    assert isinstance(commands, list)
+    [shown] = commands
+    # The first of its two model calls has ended, before it ran its command.
+    assert shown["stdout"] == "[('ses_review', 0.125)]\n"
+    # Once it ends, its row has its whole report, and its log what it printed in the same shape as ever.
+    assert (reviewed.row.session_id, reviewed.row.cost_usd) == ("ses_review", 0.25)
+    out = reviewed.printed.out
+    assert re.search(r"--- reviewer stdout ---\n(\{.*\}\n)+\n--- reviewer stderr ---\n\n--- reviewer exit 0 ---\n", out)
 
 
 def test_a_timed_out_review_records_what_it_reported_before_the_kill(

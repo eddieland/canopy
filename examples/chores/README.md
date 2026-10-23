@@ -98,9 +98,9 @@ Cadence is a suggested `every_minutes` plus a `days`/`hours` window; `when` is t
 
 | Chore | What it reports | Finding id | Cadence | Runs under |
 | --- | --- | --- | --- | --- |
-| `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Its own agent, `canopy-introspect`, `canopy health --json *` and canopy's other read-only commands allowed |
+| `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Its own agent, `canopy-introspect`, canopy's health and spend tools and its other read-only commands allowed |
 | `canopy-efficiency` | Where the week's spend went: MCP servers and skills an agent never uses, tools that fill context, idle ticks, cold starts, cost per ticket done ([canopy-efficiency.md](canopy-efficiency.md)) | `unused/<kind>/<server>`, `heavy/<kind>/<tool>`, `idle` | Weekly, Mondays | Its own agent, `canopy-introspect`, as `canopy-health`, with `canopy agents` |
-| `memory-tickets` | Workers' notes, proposals, and lessons that should become a ticket: a workaround a fix would make needless, a lesson ready for a repository's `AGENTS.md`, each checked against open tickets and issues ([memory-tickets.md](memory-tickets.md)) | `fix/<repo>/<key>`, `graduate/<repo>/<key>` | Weekly, Mondays | Its own agent, `canopy-memory-tickets`, `canopy memory lessons`, `proposals`, and `list` allowed with `--json`, tracker and GitHub MCP read tools |
+| `memory-tickets` | Workers' notes, proposals, and lessons that should become a ticket: a workaround a fix would make needless, a lesson ready for a repository's `AGENTS.md`, each checked against open tickets and issues ([memory-tickets.md](memory-tickets.md)) | `fix/<repo>/<key>`, `graduate/<repo>/<key>` | Weekly, Mondays | Its own agent, `canopy-memory-tickets`, canopy's three memory listing tools, tracker and GitHub MCP read tools, no shell |
 
 ## Writing a good chore
 
@@ -200,8 +200,8 @@ timeout_minutes = 15
 
 `canopy-health` and `canopy-efficiency` look at canopy itself, from the journal of the workspace they run in, and
 recommend what to change: a setting to tune, an MCP server or skill to turn off, a fix outside canopy, or a feature
-canopy lacks. They read through canopy's read-only commands (`canopy health`, `canopy spend`, `canopy decisions`,
-`canopy show`), so their `cwd` is the workspace root.
+canopy lacks. They read health and spend through two of canopy's tools, and the rest through its read-only commands
+(`canopy decisions`, `canopy show`), so their `cwd` is the workspace root.
 
 ```toml
 [chores.canopy-health]
@@ -223,8 +223,9 @@ hours = "08:00-12:00"
 timeout_minutes = 15
 ```
 
-- **Its agent comes with it.** [`canopy-introspect`](agents/canopy-introspect.md) is `canopy-chore` with bash allowed
-  for exactly the commands the prompts use. `canopy chore install` copies it into the workspace's
+- **Its agent comes with it.** [`canopy-introspect`](agents/canopy-introspect.md) is `canopy-chore` with two more of
+  canopy's tools, `canopy_reports_health` and `canopy_reports_spend`, and bash allowed for exactly the commands the
+  prompts use. `canopy chore install` copies it into the workspace's
   `.canopy/chore-agents/<name>/`, and starts the table's `cmd` with `env OPENCODE_CONFIG_DIR=` that directory, so the
   chore runs the copy, which stays as installed when canopy is upgraded until you install the chore again. Each
   command only reads; `canopy show` is allowed for runs and chores only, since a ticket's page holds its
@@ -235,8 +236,6 @@ timeout_minutes = 15
   bash:
     "*": deny
     "canopy chore history *": allow
-    "canopy health --json*": allow
-    "canopy spend --json*": allow
     "canopy decisions*": allow
     "canopy show run:*": allow
     "canopy show chore:*": allow
@@ -266,8 +265,7 @@ timeout_minutes = 15
 A weekly read of agent memory ([DESIGN §28](../../docs/design/MEMORY.md)) for what should be fixed rather than
 remembered, with the prompt in [memory-tickets.md](memory-tickets.md). A note that says "re-run `test_checkout_retry`,
 it is flaky" in three tickets is a bug nobody filed, and a lesson every `api` run uses belongs in `api`'s `AGENTS.md`,
-where people read it too. It reads memory through canopy's read-only commands, so, like canopy's own chores, its `cwd`
-is the workspace root.
+where people read it too. It reads memory through three of canopy's tools, and has no shell.
 
 ```toml
 [chores.memory-tickets]
@@ -283,19 +281,18 @@ timeout_minutes = 20
 
 - **Memory on.** It reads what `[memory]` records, so at least one tier must be `record` or `use`; with both off it
   finds nothing, and says so.
-- **Its agent comes with it.** [`canopy-memory-tickets`](agents/canopy-memory-tickets.md) is `canopy-chore` with bash
-  allowed for the three listings the prompt uses, which `canopy chore install` copies into the workspace as for
-  canopy's own chores. The commands that change memory (`promote`, `reject`, `renew`, `forget`, `purge`) match none
-  of them, and refuse `inside_run` in any run anyway. If you made a copy of your own in `~/.config/opencode/agent/`
-  before, delete it.
+- **Its agent comes with it.** [`canopy-memory-tickets`](agents/canopy-memory-tickets.md) is `canopy-chore` with the
+  three listings the prompt uses allowed as canopy's tools, each of which only reads, and no shell; `canopy chore
+  install` copies it into the workspace as for canopy's own chores. If you made a copy of your own in
+  `~/.config/opencode/agent/` before, delete it.
 
   ```yaml
-  bash:
-    "*": deny
-    "canopy chore history *": allow
-    "canopy memory lessons --json": allow
-    "canopy memory proposals --json": allow
-    "canopy memory list --json": allow
+  bash: deny
+  "canopy_reports_*": deny
+  "canopy_chore_history": allow
+  "canopy_reports_memory-lessons": allow
+  "canopy_reports_memory-proposals": allow
+  "canopy_reports_memory-list": allow
   ```
 
 - **MCP read tools, not write tools.** It searches the tracker and GitHub to leave out what is already filed, and reads

@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 
 import { applyStreamEvent, parseStreamEvent } from './live'
-import { mockAttention, mockCapacity, mockChores, mockReviews, mockRuns, mockTickets } from './mocks'
+import { mockAttention, mockCapacity, mockChores, mockReviews, mockRuns, mockTasks, mockTickets } from './mocks'
 import { keys } from './queries'
 import type { ChoreDetail, ChoreRunDetail, ReviewDetail, ReviewSummary, Run, TicketDetail } from './types'
 
@@ -81,6 +81,19 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.ticket('ABC-999'))?.isInvalidated).toBe(false)
     })
 
+    it("marks a changed task's page and its reports stale and leaves the other tasks alone", () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.task(4), { task: mockTasks[0] })
+        client.setQueryData(keys.taskReport(4, 5), { text: 'old' })
+        client.setQueryData(keys.task(1), { task: mockTasks[0] })
+
+        applyStreamEvent(client, { type: 'task.changed', id: 4 })
+
+        expect(client.getQueryState(keys.task(4))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.taskReport(4, 5))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.task(1))?.isInvalidated).toBe(false)
+    })
+
     it('replaces the chores and marks every chore page stale, for a page to read again', () => {
         const client = new QueryClient()
         const detail = { chore: mockChores[0], runs: [], notes: [] } as unknown as ChoreDetail
@@ -90,6 +103,15 @@ describe('applyStreamEvent', () => {
 
         expect(client.getQueryData(keys.chores)).toEqual(mockChores)
         expect(client.getQueryState(keys.chore('deps'))?.isInvalidated).toBe(true)
+    })
+
+    it('replaces the tasks whole, as a task is submitted or its run starts or ends', () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.tasks, mockTasks.slice(1))
+
+        applyStreamEvent(client, { type: 'tasks.updated', tasks: mockTasks })
+
+        expect(client.getQueryData(keys.tasks)).toEqual(mockTasks)
     })
 
     it("reads a chore run's page and transcript again only when its status or cost moves", () => {
@@ -329,6 +351,9 @@ describe('parseStreamEvent', () => {
         const chores = { type: 'chores.updated', chores: mockChores }
         expect(parseStreamEvent(JSON.stringify(chores))).toEqual(chores)
         expect(parseStreamEvent('{"type":"chores.updated","chores":null}')).toBeNull()
+        const tasks = { type: 'tasks.updated', tasks: mockTasks }
+        expect(parseStreamEvent(JSON.stringify(tasks))).toEqual(tasks)
+        expect(parseStreamEvent('{"type":"tasks.updated","tasks":null}')).toBeNull()
         const reviews = { type: 'reviews.updated', reviews: mockReviews }
         expect(parseStreamEvent(JSON.stringify(reviews))).toEqual(reviews)
         expect(parseStreamEvent('{"type":"reviews.updated"}')).toBeNull()
@@ -336,6 +361,8 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent(JSON.stringify(requested))).toEqual(requested)
         expect(parseStreamEvent('{"type":"review_requests.updated","requests":null}')).toBeNull()
         expect(parseStreamEvent('{"type":"ticket.changed","key":7}')).toBeNull()
+        expect(parseStreamEvent('{"type":"task.changed","id":4}')).toEqual({ type: 'task.changed', id: 4 })
+        expect(parseStreamEvent('{"type":"task.changed","id":"4"}')).toBeNull()
         const day = { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 }
         const spend = { type: 'spend.updated', spend: { day, month: { ...day, hours: 720 } } }
         expect(parseStreamEvent(JSON.stringify(spend))).toEqual(spend)
