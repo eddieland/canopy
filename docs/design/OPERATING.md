@@ -103,6 +103,7 @@ Rules:
   trailer, `tracker.ticket_url`) are validated at load.
 - The commit trailer keys set the `Co-authored-by` trailer a worker adds when the runtime adds no attribution of its
   own (§8, TRUST_MODEL T5). It names agent work, never a person: it is how a reader tells the work is an agent's.
+  Left as the default, its name credits the model canopy chose for the worker (§13, Each agent's model).
 - `trust.rebase` lets workers rebase and push with `--force-with-lease` instead of merging a base in, for hosts that
   refuse merge commits; `_run`'s own push leases the commit the run started from (§8, TRUST_MODEL T1).
 - `canopy init` sets up a workspace in the current directory or fills in the one it is inside (§18). Never in the home
@@ -242,8 +243,9 @@ what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 
-Designed, and built only as far as recording what served (REQUIREMENTS R23). Until the rest lands, an agent runs on
-OpenCode's default unless its template passes a model.
+Built as far as each agent's default in `[runtime.models]`, the check before a worker run, and recording what served
+(REQUIREMENTS R23). The ticket's override, the web UI's control, and the check before a review, a chore, or a tick's
+overseer are still to come; until then such a run on an unlisted model fails as it starts.
 
 The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
@@ -290,9 +292,9 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 `multi_repo` and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
 `review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `flaky_rerun` (§23), `plan_review`,
 `plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28),
-`drafts_waiting` (§29), `connector_failed` (§30), `persona_missing` and `bad_persona` (§31),
-`review_waiting` and `review_unsettled` (§34), and `task_ticket_unrecorded` (§36). An item about one unit names its
-repository, shown as `KEY (repo)`.
+`drafts_waiting` (§29), `connector_failed` (§30), `persona_missing` and `bad_persona` (§31), `model_missing` and
+`model_list_failed` (§13), `review_waiting` and `review_unsettled` (§34), and `task_ticket_unrecorded` (§36). An item
+about one unit names its repository, shown as `KEY (repo)`.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
 reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or `worker_failed` (for `failed`). The

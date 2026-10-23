@@ -10,6 +10,7 @@
 # provider's create tools, at the marked line below. As shipped it names none.
 description: canopy private worker. Works one private ticket; pushes a branch, opens a PR, never writes to the ticket.
 mode: primary
+# canopy: model
 permission:
   # Edits inside the worktree, which is the working directory `canopy _run` starts the worker in. Files outside it
   # are refused. A joint run's working directory is its desk, whose links lead to the worktrees it leased (DESIGN
