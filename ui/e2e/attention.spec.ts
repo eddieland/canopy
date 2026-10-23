@@ -213,10 +213,10 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
 }) => {
     await page.goto('attention')
     await settled(page)
-    // ABC-101's and ABC-104's runs, and task 6's; ABC-102, and task 4, waiting on a reply, and ABC-099's feedback
-    // plan on your approval.
+    // ABC-101's and ABC-104's runs, and task 6's; ABC-102, and task 4, waiting on a reply, and the feedback plans of
+    // ABC-099 and ABC-133 to ABC-136 on your approval.
     await expect(page.getByTestId('counter-running')).toContainText('3')
-    await expect(page.getByTestId('counter-waiting')).toContainText('3')
+    await expect(page.getByTestId('counter-waiting')).toContainText('7')
     await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
     await expect(page.getByTestId('counter-attention')).toContainText('10')
     // The split is the nav's, and what waits on you the counter's value: no line under them says either again.
