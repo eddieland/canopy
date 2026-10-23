@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { GitPullRequest } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
@@ -22,9 +21,8 @@ import { ReviewsTable } from '@/components/reviews-table'
 import { RunsTable } from '@/components/runs-table'
 import { Chip } from '@/components/status'
 import { TicketField } from '@/components/ticket-field'
-import { LinkOutButton } from '@/components/ticket-links'
+import { PullRequestLinksOut } from '@/components/ticket-links'
 import { pullRequestDescription } from '@/lib/descriptions'
-import { addressOf, onGitHub } from '@/lib/links'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 
@@ -103,18 +101,8 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                 subject={pr.title ?? pr.ticket_title}
                 help={HELP}
                 chips={pr.phase ? <Chip word={pr.phase} /> : undefined}
-                // The PR on its host, as a ticket's page shows its links out: the title names it, so this says where it
-                // goes.
-                links={
-                    <nav aria-label="Links out" className="mt-2 flex flex-wrap gap-2">
-                        <LinkOutButton
-                            href={pr.url}
-                            label={onGitHub(pr.url) ? 'on GitHub' : addressOf(pr.url)}
-                            icon={GitPullRequest}
-                            hint="The PR"
-                        />
-                    </nav>
-                }
+                // The PR on its host, as a ticket's page shows its links out.
+                links={<PullRequestLinksOut url={pr.url} />}
             >
                 {pullRequestDescription(pr, reviewLimit)}
             </PageHeader>

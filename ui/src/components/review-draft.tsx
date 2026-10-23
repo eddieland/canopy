@@ -1,13 +1,16 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { GitPullRequestDraft, Pencil, Send } from 'lucide-react'
-import { useState } from 'react'
+import { GitPullRequestDraft, Pencil, Send, Trash2, WandSparkles } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, SubmitEvent } from 'react'
 
 import {
     addReviewDraftComment,
+    discardReviewDraft,
     dropReviewDraftComment,
     editReviewDraftBody,
     editReviewDraftComment,
+    noteReviewDraft,
     publishReviewDraft,
     showReviewDraft,
 } from '@/api/mutations'
@@ -15,6 +18,7 @@ import type { ReviewDraft, ReviewDraftComment, ReviewSummary } from '@/api/types
 import { useDismissReviewFinding } from '@/components/dismiss-finding'
 import type { DismissalWords } from '@/components/dismiss-finding'
 import { DraftCardFrame, DraftForm, DraftVerbs, DropVerb, EditVerb } from '@/components/draft-card'
+import { Textarea } from '@/components/input'
 import { Leaf } from '@/components/leaf'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
@@ -22,21 +26,34 @@ import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { ReviewLink } from '@/components/review-link'
 import { RichText } from '@/components/rich-text'
 import { ListRow } from '@/components/rows'
+import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
 import { Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { reviewDraftDescription } from '@/lib/descriptions'
 import {
+    reviewDraftDiscardedToast,
     reviewDraftEditedText,
+    reviewDraftNotedText,
     reviewDraftPublishedText,
     reviewDraftPublishedToast,
     reviewPointText,
 } from '@/lib/outcomes'
-import { REVIEW_DRAFT_TONE, commentAnchor, editable, leftOut, pointState, versionBy } from '@/lib/review-drafts'
+import {
+    MAX_NOTE_CHARS,
+    REVIEW_DRAFT_TONE,
+    commentAnchor,
+    editable,
+    leftOut,
+    pointState,
+    revisionStanding,
+    versionBy,
+} from '@/lib/review-drafts'
 import type { Adding, PointState } from '@/lib/review-drafts'
 import { findingAnchor, SEVERITY_TONE, shortSha } from '@/lib/reviews'
 import type { Numbered } from '@/lib/reviews'
+import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
 // What the draft is, around the commit the review read.
@@ -102,8 +119,10 @@ const NO_SIBLINGS: ReviewSummary[] = []
  * where to finish it, a published one links to it. With no diff kept, its comments are listed here. It leads the
  * review's page, whose description says its status (`ReviewDraftState`), so its header names only its version, with
  * what made it and its hash on hover. `findings` is how many the review reported, so the list can say which the draft
- * leaves out. `onFollow` hears a link followed to a comment's card, by its file's index in the diff. `siblings` are the
- * reviews its request made of the same commit in its other personas, named under the intro so the operator picks one.
+ * leaves out. A note asks the next tick for a revision by an agent, as `canopy reply review:ID` does, and the
+ * panel says while one is asked for or running; the version it makes is listed with the rest. `onFollow` hears a
+ * link followed to a comment's card, by its file's index in the diff. `siblings` are the reviews its request made of
+ * the same commit in its other personas, named under the intro so the operator picks one.
  */
 export function ReviewDraftPanel({
     run,
@@ -201,6 +220,7 @@ export function ReviewDraftPanel({
             </div>
             <CommentList run={run} draft={draft} findings={findings} hasDiff={hasDiff} onFollow={onFollow} />
             <VersionList draft={draft} />
+            {(editable(draft) || draft.revisions.length > 0) && <RevisionSection run={run} draft={draft} />}
             <PublishFooter run={run} prUrl={prUrl} sha={sha} draft={draft} said={said} onSaid={setSaid} />
         </Panel>
     )
@@ -339,12 +359,148 @@ function VersionList({ draft }: { draft: ReviewDraft }) {
 }
 
 /**
+Revising the draft with an agent (DESIGN §34): the operator's notes no version has answered, its revisions against
+ * their limit, and, while it waits, the form of a note, as `canopy reply review:RUN TEXT`. A note asks the
+ * next tick for a revision, which reads the PR and the version shown and makes a new one, posting nothing; a version
+ * the operator makes first answers it instead.
+ */
+function RevisionSection({ run, draft }: { run: number; draft: ReviewDraft }) {
+    const client = useQueryClient()
+    const id = useId()
+    const sendKeys = useSendKeys()
+    const [text, setText] = useState('')
+    const [said, setSaid] = useState<string | null>(null)
+    const note = useMutation({
+        mutationFn: () => noteReviewDraft(run, text),
+        onSuccess: (noted) => {
+            setSaid(reviewDraftNotedText(run, noted))
+            setText('')
+            void showReviewDraft(client, run, noted.draft)
+        },
+    })
+    const latest = draft.revisions[0]
+    const chars = text.trim().length
+    const fits = chars > 0 && chars <= MAX_NOTE_CHARS
+
+    function submit(event: SubmitEvent<HTMLFormElement>) {
+        event.preventDefault()
+        if (fits && !note.isPending) {
+            note.mutate()
+        }
+    }
+
+    return (
+        <div className="flex flex-col gap-2 border-t p-3 text-sm" data-testid="draft-revision">
+            <span className="flex items-baseline gap-2">
+                <span className="panel-label">Revision</span>
+                <span className="readout text-xs text-muted-foreground">
+                    {draft.revisions.length} of {draft.revision_limit} revisions
+                </span>
+            </span>
+            {editable(draft) && <p className="text-muted-foreground">{standingText(run, draft)}</p>}
+            {latest?.state === 'failed' && (
+                <p className="text-xs text-status-failed">
+                    Revision run {latest.id} ended {latest.status}: the draft stands as it was.
+                </p>
+            )}
+            {draft.notes.length > 0 && (
+                <ol className="flex flex-col gap-1.5" aria-label="Your notes">
+                    {draft.notes.map((n) => (
+                        <li key={n.id} className="rounded-md border bg-surface px-2.5 py-1.5">
+                            <span className="readout block text-2xs text-muted-foreground">
+                                note {n.id}, at version {n.after_version}, through {n.channel}
+                            </span>
+                            <MemoryText text={n.body} lines className="block" />
+                        </li>
+                    ))}
+                </ol>
+            )}
+            {draft.revisions.length > 0 && (
+                <ol className="flex flex-col gap-0.5 font-mono text-xs text-muted-foreground" aria-label="Revisions">
+                    {draft.revisions.map((r) => (
+                        <li key={r.id}>
+                            review run {r.id}, of version {r.revised}: {r.status}
+                        </li>
+                    ))}
+                </ol>
+            )}
+            {editable(draft) && (
+                <form onSubmit={submit} aria-label={`Ask for a revision of review run ${run}'s draft`}>
+                    <span className="flex items-baseline justify-between gap-3">
+                        <label className="panel-label" htmlFor={`${id}-note`}>
+                            What should change
+                        </label>
+                        <span
+                            className={cn(
+                                'readout text-xs text-muted-foreground',
+                                chars > MAX_NOTE_CHARS && 'text-status-failed',
+                            )}
+                        >
+                            {chars} of {MAX_NOTE_CHARS}
+                        </span>
+                    </span>
+                    <Textarea
+                        id={`${id}-note`}
+                        value={text}
+                        onChange={(event) => setText(event.target.value)}
+                        onKeyDown={sendKeys.onKeyDown}
+                        spellCheck
+                        placeholder="Fold the nits into one comment, and say the retry finding more gently"
+                        className="mt-1.5 min-h-16"
+                    />
+                    <Button
+                        type="submit"
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        disabled={note.isPending || !fits}
+                        title={`canopy reply review:${run} TEXT`}
+                        aria-keyshortcuts={sendKeys.shortcut}
+                    >
+                        <WandSparkles />
+                        {note.isPending ? 'Asking…' : 'Ask for a revision'}
+                        <SendKeycap keys={sendKeys.shortcut} />
+                    </Button>
+                </form>
+            )}
+            <Notice error={note.error}>{said}</Notice>
+        </div>
+    )
+}
+
+// What the section says of a waiting draft's revisions, in the CLI's words where `canopy review draft` has them.
+function standingText(run: number, draft: ReviewDraft): string {
+    const standing = revisionStanding(draft)
+    switch (standing.kind) {
+        case 'running': {
+            return `Review run ${standing.run} is revising it on your notes. A note or a publish waits for it to end.`
+        }
+        case 'spent': {
+            const grant =
+                `It has had its ${draft.revision_limit} revisions: allow it another with ` +
+                `\`canopy grant review:${run} revision\`.`
+            return standing.asked ? `${grant} Your note waits for that.` : grant
+        }
+        case 'asked': {
+            return 'Your note asks for a revision: the next tick starts one, unless you change the draft first.'
+        }
+        case 'open': {
+            return (
+                'Tell an agent what to change, and the next tick revises the draft: it reads the PR and this version ' +
+                'and makes a new one. It posts nothing.'
+            )
+        }
+    }
+}
+
+/**
  * Publishing the version shown, as `canopy review publish RUN HASH`, as a PR's thread drafts are sent: `Publish
  * version N` submits it now (`--submit`), and an outline `Start the review on GitHub` beside it stages it, a pending
  * review for the operator to submit there. A line beside them says what posts, as whom, on whose PR, and on which
  * commit. A toast says what a publish did; a draft staged or published says so in one linked line, and one of unknown
  * outcome or not published says why. A publish that posted the review, and only that, drops a leaf off the footer, as
- * approving a plan does: the review is done with, and nothing else waits on it here.
+ * approving a plan does: the review is done with, and nothing else waits on it here. A ghost `Discard`, as `canopy
+ * review discard RUN`, asks in its place whether to post nothing, and a discarded draft says so in one line.
  */
 function PublishFooter({
     run,
@@ -376,6 +532,15 @@ function PublishFooter({
             void showReviewDraft(client, run, published.draft)
         },
     })
+    const [discarding, setDiscarding] = useState(false)
+    const discard = useMutation({
+        mutationFn: () => discardReviewDraft(run),
+        onSuccess: (saved) => {
+            setDiscarding(false)
+            toast(reviewDraftDiscardedToast(run, prUrl))
+            void showReviewDraft(client, run, saved)
+        },
+    })
     const empty = draft.body === '' && draft.comments.length === 0
     // Which of the two is on its way, so only that one says so.
     const submitting = publish.isPending ? publish.variables : null
@@ -383,7 +548,14 @@ function PublishFooter({
         <PanelFooter className="relative">
             {/* Placed from the footer's corner, over room the buttons leave once published, so it takes none. */}
             {posted > 0 && <Leaf key={posted} className="top-1 right-3" />}
-            {editable(draft) && (
+            {editable(draft) && discarding && (
+                <ConfirmDiscard
+                    pending={discard.isPending}
+                    onConfirm={() => discard.mutate()}
+                    onKeep={() => setDiscarding(false)}
+                />
+            )}
+            {editable(draft) && !discarding && (
                 <span className="flex flex-wrap items-center gap-2">
                     <Button
                         onClick={() => publish.mutate(true)}
@@ -401,6 +573,15 @@ function PublishFooter({
                     >
                         <GitPullRequestDraft />
                         {submitting === false ? 'Starting the review…' : 'Start the review on GitHub'}
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        onClick={() => setDiscarding(true)}
+                        disabled={publish.isPending}
+                        title={`canopy review discard ${run}`}
+                    >
+                        <Trash2 />
+                        Discard
                     </Button>
                     <span className="text-xs text-muted-foreground" data-testid="draft-posts">
                         {empty ? (
@@ -445,8 +626,50 @@ function PublishFooter({
                     . A later commit&apos;s review is a draft of its own.
                 </p>
             )}
-            <Notice error={publish.error}>{said}</Notice>
+            {draft.status === 'discarded' && (
+                <p className="text-sm" data-testid="draft-discarded">
+                    You discarded this draft, so nothing was posted. A later commit&apos;s review is a draft of its own.
+                </p>
+            )}
+            <Notice error={publish.error ?? discard.error}>{said}</Notice>
         </PanelFooter>
+    )
+}
+
+// Discarding asked about in its place in the foot, as skipping a plan is: nothing on this page undoes it. Keep, the
+// choice that loses nothing, takes the focus, and Escape keeps too.
+function ConfirmDiscard({
+    pending,
+    onConfirm,
+    onKeep,
+}: {
+    pending: boolean
+    onConfirm: () => void
+    onKeep: () => void
+}) {
+    const keep = useRef<HTMLButtonElement>(null)
+    useEffect(() => {
+        keep.current?.focus()
+    }, [])
+    function onKey(event: ReactKeyboardEvent<HTMLButtonElement>) {
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            onKeep()
+        }
+    }
+    return (
+        <fieldset className="flex flex-wrap items-center gap-2">
+            <legend className="float-left mr-1 text-sm">
+                Discard the draft? Nothing posts, and it takes no edit after.
+            </legend>
+            <Button ref={keep} type="button" variant="ghost" onClick={onKeep} onKeyDown={onKey}>
+                Keep
+            </Button>
+            <Button type="button" variant="outline" onClick={onConfirm} onKeyDown={onKey} disabled={pending}>
+                <Trash2 />
+                {pending ? 'Discarding…' : 'Discard the draft'}
+            </Button>
+        </fieldset>
     )
 }
 

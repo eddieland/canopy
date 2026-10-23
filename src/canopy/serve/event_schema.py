@@ -24,6 +24,7 @@ from canopy.serve.schema import (
     WorkerNotice,
 )
 from canopy.serve.spend_schema import Spend
+from canopy.serve.task_schema import TaskSummary
 
 
 class AttentionUpdated(Model):
@@ -60,6 +61,24 @@ class ChoresUpdated(Model):
     """What the event is."""
     chores: list[ChoreSummary]
     """The chores, as `GET /chores` returns them."""
+
+
+class TasksUpdated(Model):
+    """The tasks changed: one was submitted, replied to, or stopped, or a run of one started or ended. Whole."""
+
+    type: Literal["tasks.updated"] = "tasks.updated"
+    """What the event is."""
+    tasks: list[TaskSummary]
+    """The tasks, as `GET /tasks` returns them."""
+
+
+class TaskChanged(Model):
+    """Something about one task changed, its summary or its conversation: a page showing it reads it again."""
+
+    type: Literal["task.changed"] = "task.changed"
+    """What the event is."""
+    id: int
+    """The task's id, as `task:N` names it."""
 
 
 class ReviewsUpdated(Model):
@@ -142,6 +161,8 @@ class StreamEvent(
             | TicketsUpdated
             | TicketChanged
             | ChoresUpdated
+            | TasksUpdated
+            | TaskChanged
             | ReviewsUpdated
             | ReviewRequestsUpdated
             | SpendUpdated

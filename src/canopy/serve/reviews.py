@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never, cast
+from typing import TYPE_CHECKING, cast
 
 from canopy.core import (
     contract,
@@ -39,14 +39,13 @@ from canopy.serve.review_schema import (
     ReviewSummary,
 )
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
-from canopy.serve.views import lines, models_served, new_tokens, shown_path, ticket_title
+from canopy.serve.views import lines, models_served, new_tokens, review_state, shown_path, ticket_title
 
 if TYPE_CHECKING:
     import sqlite3
 
     from canopy.core import records
     from canopy.core.context import Context
-    from canopy.serve.schema import RunState
     from canopy.serve.transcript_schema import RawOutput, Transcript
 
 # How many review runs the reviews list carries, newest first.
@@ -113,7 +112,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         diff_removed_after_days=removed_after(ctx.conn, kept, row.ended_at, "run_files_days"),
         runs=summaries(ctx.conn, review_runs.review_runs_of(ctx.conn, row.pr_url)),
         sendable=row.status is ReviewRunStatus.DONE and conversation.own_pr(ctx.conn, row),
-        draft=review_draft_views.of_review(ctx.conn, row, found),
+        draft=review_draft_views.of_review(ctx.conn, ctx.config, row, found),
         new_tokens=new_tokens(row),
         peak_context=row.tokens_peak_context,
         log_path=shown_path(row.log_path, ctx.workspace.root),
@@ -132,7 +131,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
 def review_transcript(ctx: Context, run_id: int) -> Transcript | None:
     """A review run's session in its log, or None if there is no such run.
 
-    The reviewer's output reaches the log when it ends, so a running review's transcript has no session yet.
+    The reviewer's events reach the log as it prints them, so a running review's transcript is what it did so far.
 
     Returns:
         The transcript, its status saying whether the run recorded a session and whether its log could be read.
@@ -207,7 +206,7 @@ def summary(
         title=title,
         repo=row.repo or None,
         status=row.status,
-        state=_review_state(row.status),
+        state=review_state(row.status),
         verdict=stored.verdict if stored is not None else None,
         impact=stored.impact if stored is not None else None,
         findings=len(stored.findings) if stored is not None else 0,
@@ -222,23 +221,6 @@ def summary(
         seen=seen,
         draft=cast("ReviewDraftStatusName", draft.status.value) if draft is not None else None,
     )
-
-
-def _review_state(status: ReviewRunStatus) -> RunState:
-    """What the web UI colors a review run that has `status` as.
-
-    Returns:
-        The run's state: every ending but `done` is failed.
-    """
-    match status:
-        case ReviewRunStatus.RUNNING:
-            return "running"
-        case ReviewRunStatus.DONE:
-            return "done"
-        case ReviewRunStatus.FAILED | ReviewRunStatus.UNKNOWN | ReviewRunStatus.TIMEOUT | ReviewRunStatus.CRASHED:
-            return "failed"
-        case _:
-            assert_never(status)
 
 
 def _worst(findings: Iterable[result.Finding]) -> FindingSeverity | None:

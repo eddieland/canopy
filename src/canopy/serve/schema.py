@@ -288,7 +288,7 @@ class Comment(Model):
 
 
 class Message(Model):
-    """One message in a ticket's conversation."""
+    """One message in a ticket's, a chore's, or a task's conversation."""
 
     id: int
     """The message's id."""
@@ -301,7 +301,9 @@ class Message(Model):
     channel: str
     """How it reached the journal: run | cli | web | slack | tracker"""
     run_id: int | None = None
-    """The run that wrote it, for a worker's message."""
+    """The run that wrote it, for a worker's message about a ticket."""
+    task_run_id: int | None = None
+    """The task's run that wrote it, for a worker's message about a one-off task (DESIGN §36)."""
     answers: int | None = None
     """The message a reply answers."""
     body: str

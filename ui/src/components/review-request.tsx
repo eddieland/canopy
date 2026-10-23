@@ -30,12 +30,13 @@ const SEVERAL =
 
 /**
  * `canopy start URL --review --notes TEXT --persona NAME` from the reviews page (DESIGN §21, §22, §31), compact as a
- * ticket's `StartTicket` is: a PR the loop does not own, by its URL, and an outline `Review`; what its reviewer should
- * know and the personas to review it in, one review each, or none for `[personas] reviewer`'s, are under
- * `Show persona and notes`. The personas start as those the operator prefers in Settings, which the disclosure's line
- * names while it is closed. canopy reviews it once, at its head, in whichever of the workspace's repositories it is
- * in, and the form opens the PR's page, where the request stands. Its review becomes a draft the operator may publish
- * as their own; nothing posts until they do, and nothing is reviewed now: the next tick does it.
+ * ticket's `StartTicket` is: a PR the loop does not own, by its URL, an outline `Review`, and what its reviewer should
+ * know, always open since the operator writes notes often; the personas to review it in, one review each, or none for
+ * `[personas] reviewer`'s, are under `Show persona`. The personas start as those the operator prefers in Settings,
+ * which the disclosure's line names while it is closed. canopy reviews it once, at its head, in whichever of the
+ * workspace's repositories it is in, and the form opens the PR's page, where the request stands. Its review becomes a
+ * draft the operator may publish as their own; nothing posts until they do, and nothing is reviewed now: the next tick
+ * does it.
  */
 export function ReviewRequestForm({ className }: { className?: string }) {
     const client = useQueryClient()
@@ -86,18 +87,32 @@ export function ReviewRequestForm({ className }: { className?: string }) {
                     variant="outline"
                     disabled={!ready}
                     title="canopy start URL --review"
-                    // The notes' send key, while they are open to send from.
-                    aria-keyshortcuts={more ? sendKeys.shortcut : undefined}
+                    aria-keyshortcuts={sendKeys.shortcut}
                     data-testid="review-request-submit"
                 >
                     <ScanSearch />
                     Review
-                    {more && <SendKeycap keys={sendKeys.shortcut} />}
+                    <SendKeycap keys={sendKeys.shortcut} />
                 </Button>
+            </div>
+            <div className="flex flex-col gap-1.5">
+                <label className="panel-label" htmlFor={`${id}-notes`}>
+                    Notes for the reviewer (optional)
+                </label>
+                <Textarea
+                    id={`${id}-notes`}
+                    className="min-h-16 text-xs"
+                    value={notes}
+                    maxLength={MAX_NOTES}
+                    onChange={(event) => setNotes(event.target.value)}
+                    onKeyDown={sendKeys.onKeyDown}
+                    placeholder="What the author asked for, or the part of the change that worries you"
+                    data-testid="review-request-notes"
+                />
             </div>
             <Collapsible open={more} onOpenChange={setMore} className="flex flex-col gap-2">
                 <span className="flex flex-wrap items-center gap-x-2">
-                    <Disclosure open={more} what="persona and notes" className="-ml-2" />
+                    <Disclosure open={more} what="persona" className="-ml-2" />
                     {!more && (
                         <span className="text-xs text-muted-foreground" data-testid="review-request-chosen">
                             {chosenText(chosen, picked === null, personas?.reviewer)}
@@ -123,21 +138,6 @@ export function ReviewRequestForm({ className }: { className?: string }) {
                         {chosen.length > 1 && (
                             <span className="text-xs text-muted-foreground">one review in each, side by side</span>
                         )}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <label className="panel-label" htmlFor={`${id}-notes`}>
-                            Notes for the reviewer (optional)
-                        </label>
-                        <Textarea
-                            id={`${id}-notes`}
-                            className="min-h-16 text-xs"
-                            value={notes}
-                            maxLength={MAX_NOTES}
-                            onChange={(event) => setNotes(event.target.value)}
-                            onKeyDown={sendKeys.onKeyDown}
-                            placeholder="What the author asked for, or the part of the change that worries you"
-                            data-testid="review-request-notes"
-                        />
                     </div>
                 </CollapsibleContent>
             </Collapsible>

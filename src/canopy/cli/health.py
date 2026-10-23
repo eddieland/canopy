@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import dataclasses
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, assert_never
 
 import click
 
 from canopy.cli.common import open_context
-from canopy.cli.render import report_json
 from canopy.cli.spend import cost_text, since_text
-from canopy.core import health, spend
+from canopy.core import health, reports, spend
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -46,11 +44,10 @@ def cmd_health(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     `canopy show`, and the overseer's asks a guard refused, by guard.
     """
     ctx = open_context(click_ctx)
-    found = health.report(ctx.conn, datetime.now(UTC), days)
     if as_json:
-        click.echo(report_json(dataclasses.asdict(found)))
+        click.echo(reports.read_health(ctx, reports.Health(days=days)))
         return 0
-    for line in render(found):
+    for line in render(health.report(ctx.conn, datetime.now(UTC), days)):
         click.echo(line)
     return 0
 

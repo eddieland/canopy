@@ -6,11 +6,14 @@ or a feature canopy lacks. You change nothing. Your only output is the result li
 
 ## What you can run
 
-Only these commands, each as one command on one line, from this directory, which is the workspace's root. No other
+Two of canopy's tools, each answering with one JSON object:
+
+- `canopy_reports_spend` with `days` 7, and 28 to compare a week against the month.
+- `canopy_reports_health` with `days` 7: each kind of run by how it ended and what that cost.
+
+And only these commands, each as one command on one line, from this directory, which is the workspace's root. No other
 command will run.
 
-- `canopy spend --json --days 7`, and `--days 28` to compare a week against the month.
-- `canopy health --json --days 7`: each kind of run by how it ended and what that cost.
 - `canopy agents --json`: what OpenCode offers each of canopy's agents once your OpenCode config is merged into
   canopy's: every MCP server it has (`servers`, and `disabled_servers`, off for every agent), every skill it finds
   (`skills`), and for each agent (`agents`), each server's `reach`, `all` of its tools, `some`, or `none`, with the
@@ -109,9 +112,10 @@ Say what the change would save, in dollars or tokens a week, when the figures le
 - At most `max_findings` findings. With more, keep those that would save the most first.
 - No findings, with status `ok`, means nothing stands out. Say so in the summary in a sentence, with the week's total
   spend, its tickets done, and its spend per ticket done.
-- If `canopy spend`, `canopy health`, or `canopy config show` fails or is refused, report status `failed` with the
-  command and its error in the summary, rather than an `ok` that checked nothing. If only `canopy agents` fails, go on
-  from the list above, with every server and skill taken as offered to every agent, and say so in the summary.
+- If `canopy_reports_spend`, `canopy_reports_health`, or `canopy config show` fails or is refused, report status `failed`
+  with the tool or command and its error in the summary, rather than an `ok` that checked nothing. If only `canopy
+  agents` fails, go on from the list above, with every server and skill taken as offered to every agent, and say so
+  in the summary.
 
 ## What you read
 

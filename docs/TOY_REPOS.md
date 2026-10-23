@@ -7,8 +7,8 @@ Built so far, as of 2026-10-17: the `canopy-toys` org, its `kit`, and `toy-calc`
 
 ## Goals
 
-- Every scenario that needs a real repository (S6, S8 to S16, S18 to S21, S36, S37, S39) can run on demand from a
-  known starting state.
+- Every scenario that needs a real repository (S7, S12, S14, S16, S18, S37, S43, S54, S58, S63) can run on demand
+  from a known starting state.
 - One command resets that state, so a scenario can be repeated.
 - A session costs cents in CI and a few dollars in model spend, and nothing runs while nobody is watching.
 - Nothing in the toy setup can reach real work: its own org, its own token, its own queue label.
@@ -39,8 +39,8 @@ Tiny and stdlib-only: nothing to install, so a slot needs no `setup_cmd` and CI 
 
 | Repository | What it is | Scenarios |
 | --- | --- | --- |
-| `toy-calc` | A Python CLI calculator: about five modules, `unittest` tests, a CHANGELOG | One repository: S8 to S12, S16, S18 to S21, S36 |
-| `toy-api` | A JSON "orders" schema and its validator; owns the contract | Several repositories: S13, S14, S39 |
+| `toy-calc` | A Python CLI calculator: about five modules, `unittest` tests, a CHANGELOG | One repository: S12, S16, S18, S43, S54, S63 |
+| `toy-api` | A JSON "orders" schema and its validator; owns the contract | Several repositories: S14, S58 |
 | `toy-web` | Renders orders from a vendored copy of `toy-api`'s schema, pinned by a version file | Several repositories, joint runs |
 | `toy-bazel` (optional) | One `py_binary` and its test under Bazel, with no CI | S7 |
 
@@ -135,8 +135,9 @@ blocked by. Each is small enough for a worker to finish in a few minutes.
 | S19 to S21, S36 | Any toy PR, with `review.agent_prs` on |
 | S39 | An open PR in each of api and web, written by the operator as the coworker's |
 
-About fifteen in all. Nothing carries the queue label unless marked `autolabel`, so nothing starts until the operator
-labels it.
+S8 to S11, S13, S19 to S21, S36, and S39 are retired from SCENARIOS (2026-10-22); their issues stay, as small
+tickets for a smoke run and for M45's pool checks. About fifteen in all. Nothing carries the queue label unless
+marked `autolabel`, so nothing starts until the operator labels it.
 
 ## Reset
 

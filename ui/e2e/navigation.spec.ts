@@ -15,9 +15,9 @@ test('the root redirects to the attention list', async ({ page }) => {
 test('the tab names the page, after what blocks on the operator', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    // The mock's seven items less the PR that waits on a reviewer and the chore's finding, which block nothing.
-    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(7)
-    const count = 5
+    // The mock's nine items less the PR that waits on a reviewer and the chore's finding, which block nothing.
+    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(9)
+    const count = 7
     await expect(page).toHaveTitle(`(${count}) Attention · canopy`)
 
     const nav = page.getByRole('navigation', { name: 'Main' })
@@ -638,9 +638,9 @@ test('a tick that does not exist, or a path that names none, says so', async ({ 
 test('the worktrees page counts every pool, and each pool shows its slots at a glance', async ({ page }) => {
     await page.goto('worktrees')
     await settled(page)
-    // The mock: web's two runs, a shell, an idle and a dirty slot; mobile's run 43 slot and an idle one; api has
-    // no clone.
-    await expect(page.getByTestId('counter-working')).toContainText('3')
+    // The mock: web's two runs, a shell, an idle and a dirty slot; mobile's run 43 slot and a task's; api has no
+    // clone.
+    await expect(page.getByTestId('counter-working')).toContainText('4')
     await expect(page.getByTestId('counter-held')).toContainText('1')
     // The shell's slot has no lease: a process holds it.
     await expect(page.getByTestId('counter-held')).toContainText('1 in use')

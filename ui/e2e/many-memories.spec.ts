@@ -65,12 +65,13 @@ async function manyMemories(page: Page): Promise<void> {
         const response = await route.fetch()
         const mock = (await response.json()) as {
             tickets: { ticket_key: string; count: number; used: number; latest_at: string }[]
-            lessons: { id: number; key: string }[]
+            lessons: { id: number; key: string; pinned_at: string | null }[]
             proposals: { entry: { id: number; key: string } }[]
             lessons_digest: { ids: number[]; left_out: number } | null
         }
         const [ticket] = mock.tickets
-        const [lesson] = mock.lessons
+        // One not pinned, so the hundreds made from it list as the rest, unheaded, as most lessons are.
+        const lesson = mock.lessons.find((l) => l.pinned_at === null)
         const [proposal] = mock.proposals
         if (ticket === undefined || lesson === undefined || proposal === undefined || mock.lessons_digest === null) {
             throw new Error('the mock has no ticket with notes, no lesson, or no proposal')
