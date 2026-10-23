@@ -13,7 +13,7 @@ from canopy.core import agent_commands, config, conversation, definitions
 from tests.conftest import CanopyEnv
 
 PLAN_CMD = (
-    "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --model 'some model' "
+    "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --variant 'some variant' "
     "--title={title} {prompt}"
 )
 
@@ -53,7 +53,7 @@ def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
         {"key": "runtime.plan_cmd", "set_in": "private"},
         {"key": "runtime.worker_cmd_suffix", "set_in": "private"},
     ]
-    # The quoted model stays one word, and the title, the definitions, and the prompt land where the template put them.
+    # A quoted word stays one word, and the title, the definitions, and the prompt land where the template put them.
     assert planner["argv"] == [
         "wrap",
         "--net",
@@ -64,8 +64,8 @@ def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
         "run",
         "--agent",
         "canopy-planner",
-        "--model",
-        "some model",
+        "--variant",
+        "some variant",
         "--title=PROJ-1 plan: Example ticket",
         "<prompt>",
         "--log-level",
@@ -101,8 +101,8 @@ def test_the_text_quotes_each_command_for_a_shell(canopy_env: CanopyEnv, capsys:
         [
             "env",
             f"OPENCODE_CONFIG_DIR={definitions_dir}",
-            *shlex.split("opencode run --agent canopy-planner --model"),
-            "some model",
+            *shlex.split("opencode run --agent canopy-planner --variant"),
+            "some variant",
             "--title=PROJ-1 plan: Example ticket",
             "<prompt>",
         ],

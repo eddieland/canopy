@@ -244,6 +244,11 @@ Controls:
   characters that hide text from a person who reads it, as a lesson does. A run whose persona's file is gone or past
   its bounds is refused, never run in canopy's voice instead, and a prompt override without `{{PERSONA}}` serves only
   a run in canopy's own voice.
+- Each agent's model (DESIGN §13, M58) is the operator's choice alone: `runtime.models`, private (T7), which canopy
+  writes into the agent's definition. The overseer, a dispatch, ticket text, and labels choose none, and a `runtime`
+  template, prefix, or suffix that passes a model is a config error, so no agent's command line overrides it unseen.
+  A worker run whose model the runtime does not list, or whose list cannot be read, is refused with an attention item,
+  never run on the runtime's default instead.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -487,7 +492,9 @@ but must be distinguishable:
 
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>`, whose name and address the operator may
-  change in their own config (`trust.commit_trailer_*`, private), or the runtime's own attribution. Never hidden: a
+  change in their own config (`trust.commit_trailer_*`, private), or the runtime's own attribution. The harness forms
+  it, never the agent: left as the default, the name credits the model canopy chose for the worker (DESIGN §13), as
+  `provider/model (canopy worker)`, and a name the operator set is used as set. Never hidden: a
   worker never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
   private), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
   that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
@@ -498,7 +505,8 @@ but must be distinguishable:
   loop did and why. Each decision records who made it: the overseer, through one of its verbs, or the harness on its
   own, its attention items and the decisions that need no judgment (DESIGN §37); `canopy decisions` marks the
   harness's. Each worker run and review records the persona it ran in (DESIGN §31), by name and a digest of its
-  text as the prompt carried it, so a persona edited between runs splits them.
+  text as the prompt carried it, so a persona edited between runs splits them. Each worker run records the model canopy
+  chose for its agent (DESIGN §13), the one its definition names, since no template may pass another.
 - canopy's reviews post nothing the operator has not published (D114). A review of a PR the loop does not own may
   be published by the operator (DESIGN §34): one version of its draft, word for word as they last saw it, named by its
   hash, unmarked, as one comment review on the commit the review read, which approves nothing and resolves no thread.
@@ -560,10 +568,13 @@ Controls:
   harness, never an agent, does it: no agent runs git there, and `canopy archive` refuses inside a tick or run. It uses
   only a path that is a clone's own top level, never a directory inside a repository the operator works in, commits
   only the workspace's own directory there, or with `paths.plan_archive_workspace_dir` off only each planned ticket's
-  directory and canopy's own index at its top level, runs git with hooks off (D107), and never forces a push. A prompt
-  is exported only from beside its run's log under the state directory, never through a link. Residual: anyone who can
-  read that remote reads every plan, prompt, and conversation there, so the operator keeps it private; the clone's
-  own git config, such as its remote or `core.sshCommand`, is the operator's to keep, as their home directory is.
+  directory and canopy's own index at its top level, runs git with hooks off (D107), and never forces a push. When the
+  upstream refuses a push for commits the clone lacks, it fetches them and rebases the clone's unpushed commits,
+  the operator's included, onto them, never stashing the operator's changes, and aborts a rebase that cannot finish.
+  A prompt is exported only from beside its run's log under the state directory, never through a link. Residual:
+  anyone who can read that remote reads every plan, prompt, and conversation there, so the operator keeps it private;
+  the clone's own git config, such as its remote or `core.sshCommand`, is the operator's to keep, as their home
+  directory is.
 - With `trust.review_replies = "approve"`, a worker's comments and reactions leave the machine only as the operator
   sent them: its prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the
   GitHub server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker
@@ -701,9 +712,9 @@ shares with a team, so anyone who can push there can change that file, and a che
 carries their version. Unlike build scripts a worker runs (T4), this file is read by the harness itself, outside any
 worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
 `notify.cmd`, chores, the review query, prompt paths, capacity, queue labels, authorized repliers, agent memory's
-tiers, the agents' personas, or which agents publish artifacts and whose comments on them count, one commit would be
-enough to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who
-steers their workers.
+tiers, the agents' personas or models, or which agents publish artifacts and whose comments on them count, one commit
+would be enough to run commands on operators' machines, raise their spend, send what workers read off the machine, or
+pick who steers their workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each

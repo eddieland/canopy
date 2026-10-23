@@ -1,26 +1,34 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { attentionQuery, runsQuery, ticketsQuery } from '@/api/queries'
+import { attentionQuery, runsQuery, tasksQuery, ticketsQuery } from '@/api/queries'
 import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
 import { answered } from '@/lib/acknowledged'
 import { countBySeverity } from '@/lib/attention'
+import { runningTasks } from '@/lib/run-state'
 
 /**
  * The loop at a glance, above the attention list: what runs, what waits on you, and what needs you. What it cost is
  * in the rail, on every page. Only Waiting on you has a line under its value, the oldest question's age, since it has
- * no other home: what waits on you is that counter's value, and how the list splits is the nav's badge.
+ * no other home: what waits on you is that counter's value, and how the list splits is the nav's badge. Running and
+ * Waiting on you count tasks as they count tickets: a task's run running, and a task waiting on your reply.
  */
 export function Counters() {
     const runs = useQuery(runsQuery)
     const tickets = useQuery(ticketsQuery)
+    const tasks = useQuery(tasksQuery).data
     const attention = useQuery(attentionQuery)
 
-    const running = runs.data?.filter((r) => r.state === 'running').length
-    const waiting = tickets.data?.filter((t) => t.awaiting !== null).length
+    const running =
+        runs.data === undefined
+            ? undefined
+            : runs.data.filter((r) => r.state === 'running').length + runningTasks(tasks ?? []).length
+    const asking = (tasks ?? []).filter((t) => t.standing === 'awaiting_reply').length
+    const waiting =
+        tickets.data === undefined ? undefined : tickets.data.filter((t) => t.awaiting !== null).length + asking
     // An answered question stays on the list until the next tick; it waits on the loop now, not on you.
     const questions = attention.data
-        ?.filter((i) => i.reason === 'awaiting_reply' && !answered(i, tickets.data))
+        ?.filter((i) => i.reason === 'awaiting_reply' && !answered(i, tickets.data, tasks))
         .map((i) => i.since)
     const oldest = questions?.toSorted()[0]
     const counts = attention.data === undefined ? undefined : countBySeverity(attention.data)

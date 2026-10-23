@@ -6,6 +6,7 @@
 # land (TRUST_MODEL T1), and `canopy _run` verifies what was pushed.
 description: canopy worker. Works one ticket in a leased worktree; pushes a branch, opens a PR, comments.
 mode: primary
+# canopy: model
 permission:
   # Edits inside the worktree, which is the working directory `canopy _run` starts the worker in. Files outside it
   # are refused. A joint run's working directory is its desk, whose links lead to the worktrees it leased (DESIGN

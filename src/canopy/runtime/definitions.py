@@ -31,6 +31,8 @@ MAX_SKILL_NAME = definitions.MAX_SKILL_NAME
 BASH_ALLOW_RE = definitions.BASH_ALLOW_RE
 #: The runtime's own commands, which run an agent with rules of their own.
 RUNTIME_COMMANDS = definitions.RUNTIME_COMMANDS
+#: A model as the runtime names one, which canopy renders into an agent's definition (DESIGN §13).
+MODEL_RE = definitions.MODEL_RE
 
 
 def agent_names() -> list[str]:

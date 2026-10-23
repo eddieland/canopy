@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { mockChores, mockReviews, mockRuns } from '@/api/mocks'
-import type { ChoreSummary, ReviewSummary, Run } from '@/api/types'
+import { mockChores, mockReviews, mockRuns, mockTasks } from '@/api/mocks'
+import type { ChoreSummary, ReviewSummary, Run, TaskSummary } from '@/api/types'
 
-import { busy, byTicket, railWork, runsListed, subjectRuns, workingOn } from './run-state'
+import { busy, byTicket, railWork, runningTasks, runsListed, subjectRuns, workingOn } from './run-state'
 import type { RailItem, SubjectRuns } from './run-state'
 
 const running = mockRuns[0] as Run
@@ -58,6 +58,18 @@ function chore(name: string, id: number | null, started_at = '2026-10-08T12:00:0
     return { ...base, name, running: run === null ? null : { ...run, status: 'running', state: 'running' } }
 }
 
+// The mock's running task, task 6, its run started at `started_at`.
+function task(id: number, started_at: string): TaskSummary {
+    const base = mockTasks[1] as TaskSummary
+    return { ...base, id, latest: { ...(base.latest as NonNullable<TaskSummary['latest']>), started_at } }
+}
+
+describe('runningTasks', () => {
+    it('lists the tasks whose newest run is running, with that run, and none queued, waiting, or done', () => {
+        expect(runningTasks(mockTasks).map(({ task: t, run }) => [t.id, run.id])).toEqual([[6, 8]])
+    })
+})
+
 describe('railWork', () => {
     it('puts the running runs first, then the ones waiting on an answer, each oldest first', () => {
         const runs = [
@@ -74,6 +86,13 @@ describe('railWork', () => {
         const reviews = [review(7, 'running', '2026-10-08T12:05:00Z'), review(6, 'done', '2026-10-08T11:00:00Z')]
         const chores = [chore('deps', 3, '2026-10-08T12:15:00Z'), chore('idle', null)]
         expect(ids(railWork({ runs, reviews, chores }, 10).shown)).toEqual(['review:7', 'run:1', 'chore:3', 'run:2'])
+    })
+
+    it("lists the task runs running among the runs, by when each started, and leaves out a task's question", () => {
+        const runs = [at(1, 'running', '2026-10-08T12:10:00Z'), at(2, 'blocked', '2026-10-08T11:00:00Z')]
+        // Task 4 waits on a reply and task 1 is done: neither is working.
+        const tasks = [task(6, '2026-10-08T12:05:00Z'), ...mockTasks.slice(2)]
+        expect(ids(railWork({ runs, tasks }, 10).shown)).toEqual(['task:8', 'run:1', 'run:2'])
     })
 
     it('leaves out the runs that ended', () => {
@@ -114,6 +133,8 @@ describe('railWork', () => {
         const chores = [chore('deps', 3, '2026-10-08T13:00:00Z')]
         expect(railWork({ runs: runs.slice(0, 4), chores }, 4).moreAt).toBe('/chores')
         expect(railWork({ runs: runs.slice(0, 4), reviews, chores }, 4).moreAt).toBe('/runs')
+        const tasks = [task(6, '2026-10-08T13:00:00Z')]
+        expect(railWork({ runs: runs.slice(0, 4), tasks }, 4).moreAt).toBe('/tasks')
     })
 })
 
@@ -167,5 +188,10 @@ describe('busy', () => {
         const chores = [chore('deps', 3), chore('idle', null)]
         expect(busy({ runs, reviews, chores })).toEqual({ workers: 2, reviews: 1, chores: 1 })
         expect(busy({ runs })).toEqual({ workers: 1, reviews: 0, chores: 0 })
+    })
+
+    it('counts the task runs running among the workers, as max_workers does', () => {
+        const runs = [at(1, 'running', '2026-10-08T12:00:00Z')]
+        expect(busy({ runs, tasks: mockTasks })).toEqual({ workers: 2, reviews: 0, chores: 0 })
     })
 })

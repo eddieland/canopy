@@ -96,10 +96,12 @@ With `paths.plan_archive`, a clone's top level, each live tick does the same int
 level itself with `paths.plan_archive_workspace_dir` off, prompts too unless `paths.plan_archive_prompts` is off,
 conversations only with `paths.plan_archive_conversations`, commits what it wrote there alone (at the top level, each
 planned ticket's directory and its own index, never the operator's files beside them), and pushes to the clone's
-upstream, never forcing; `archive_unpushed` stays open while the archive is not all
-there, so a failed push is retried each tick. A tick writes at most a thousand files, so a long history goes in over
-several, each push bounded, and reads again only the plans whose row or files changed, and the conversations with a new
-message, since it last found them as they stand. A dry run only reads the clone (TRUST_MODEL T6).
+upstream, never forcing: an upstream that refuses it for commits another clone pushed has them fetched and this clone's
+commits rebased onto them, so the push is a fast-forward, and a rebase that cannot finish is aborted. `archive_unpushed`
+stays open while the archive is not all there, so a failed push is retried each tick. A tick writes at most a thousand
+files, so a long history goes in over several, each push bounded, and reads again only the plans whose row or files
+changed, and the conversations with a new message, since it last found them as they stand. A dry run only reads the
+clone (TRUST_MODEL T6).
 
 ### Commenting on a plan
 
