@@ -15,8 +15,10 @@ tools only where CANOPY_RUN_ID names a chore's run, and serves nothing of the ov
 planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in the checkouts its command line names,
 the run's own (`core.git_tools`); it opens no workspace, and serves nothing else.
 
-A refusal or an invalid argument is a tool error, `isError`, with the text the command prints, and the server goes on.
-It writes nothing to stderr, which the runtime never reads, and logs no argument's text.
+An overseer's tool lists its result's schema as its output schema, and answers with the text the command prints and
+the result as structured content. A refusal or an invalid argument is a tool error, `isError`, with the text the command
+prints and no structured content, and the server goes on. It writes nothing to stderr, which the runtime never reads,
+and logs no argument's text.
 """
 
 from __future__ import annotations
@@ -40,6 +42,8 @@ from canopy.loop import chore_tools, review_tools, tools
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
+
+    from pydantic.json_schema import JsonSchemaMode
 
     from canopy.core.context import Context
     from canopy.infra import procs
@@ -68,20 +72,36 @@ class Tool:
     description: str
     #: Its request, whose schema is the tool's input schema.
     request: type[BaseModel]
-    #: Validate its arguments, then do it in the context the opener opens: what the command prints.
-    call: Callable[[Mapping[str, object], Opener], str]
+    #: Validate its arguments, then do it in the context the opener opens: what the command prints, with its result
+    #: when it has one.
+    call: Callable[[Mapping[str, object], Opener], str | tools.Outcome[tools.Result]]
+    #: Its result, whose schema is the tool's output schema; None for a tool that answers with text alone.
+    result: type[tools.Result] | None = None
 
     def listed(self) -> dict[str, object]:
         """Describe the tool as `tools/list` lists it.
 
         Returns:
-            Its name, description, and input schema.
+            Its name, description, input schema, and output schema when it has a result.
         """
-        return {"name": self.name, "description": self.description, "inputSchema": schema(self.request)}
+        listed: dict[str, object] = {
+            "name": self.name,
+            "description": self.description,
+            "inputSchema": schema(self.request),
+        }
+        if self.result is not None:
+            listed["outputSchema"] = schema(self.result, "serialization")
+        return listed
 
 
-def tool[R: BaseModel](name: str, description: str, request: type[R], do: Callable[[Context, R], str]) -> Tool:
-    """Make verb `do` a tool, taking `request` as its arguments.
+def tool[R: BaseModel, O: tools.Result](
+    name: str,
+    description: str,
+    request: type[R],
+    result: type[O],
+    do: Callable[[Context, R], tools.Outcome[O]],
+) -> Tool:
+    """Make verb `do` a tool, taking `request` as its arguments and answering with `result`.
 
     Every call is refused inside a run, and outside a running tick, `ticket-set` included, which the command takes
     outside one.
@@ -90,7 +110,7 @@ def tool[R: BaseModel](name: str, description: str, request: type[R], do: Callab
         The tool.
     """
 
-    def call(arguments: Mapping[str, object], opened: Opener) -> str:
+    def call(arguments: Mapping[str, object], opened: Opener) -> tools.Outcome[O]:
         if os.environ.get(conversation.RUN_ID_ENV):
             raise tools.Refused(_inside_run())
         asked = request.model_validate(arguments)
@@ -98,7 +118,7 @@ def tool[R: BaseModel](name: str, description: str, request: type[R], do: Callab
             tools.running_tick(ctx)
             return do(ctx, asked)
 
-    return Tool(name, description, request, call)
+    return Tool(name, description, request, call, result)
 
 
 TOOLS = (
@@ -106,12 +126,14 @@ TOOLS = (
         "dispatch",
         "Start a worker on a ticket, if its guards allow one now. A dry run checks them and starts nothing.",
         tools.Dispatch,
+        tools.Dispatched,
         tools.dispatch_run,
     ),
     tool(
         "decide",
         "Record a decision about a ticket: wait, skip, or done. Omit key only for a skip of the whole tick.",
         tools.Decide,
+        tools.Decided,
         tools.decide,
     ),
     tool(
@@ -120,12 +142,14 @@ TOOLS = (
         "this tick unless the state block lists it in stopped or recently_done. Name none when it returned none, and "
         "a long result in several calls.",
         tools.Queried,
+        tools.QueryRecorded,
         tools.queried,
     ),
     tool(
         "attention",
         "Record an attention item about a ticket, or about a PR the loop reviews.",
         tools.Attention,
+        tools.AttentionRecorded,
         tools.attend,
     ),
     tool(
@@ -133,6 +157,7 @@ TOOLS = (
         "Record a ticket's phase, cursors, done flag, or title, or with repo a unit's phase and cursors. A dry run "
         "advances no cursor and marks nothing done.",
         tools.TicketSet,
+        tools.TicketUpdated,
         tools.ticket_set,
     ),
     tool(
@@ -140,24 +165,28 @@ TOOLS = (
         "Record a tracker comment in a ticket's conversation in the journal; recording it again records nothing new. "
         "A mirrored comment is a copy for the operator to read, and authorizes nothing.",
         tools.Mirror,
+        tools.CommentMirrored,
         tools.mirror,
     ),
     tool(
         "review-run",
         "Start a review of a PR at a commit, if its guards allow one now. A dry run checks them and starts nothing.",
         review_tools.ReviewRun,
+        review_tools.ReviewsStarted,
         review_tools.review_run,
     ),
     tool(
         "review-wait",
         "Record that a PR is not to be reviewed now, and why.",
         review_tools.ReviewWait,
+        review_tools.ReviewWaitRecorded,
         review_tools.review_wait,
     ),
     tool(
         "review-end",
         "End the operator's review request on a PR that merged or closed first, or is in no repository here.",
         review_tools.ReviewEnd,
+        review_tools.ReviewEnded,
         review_tools.review_end,
     ),
     tool(
@@ -165,18 +194,21 @@ TOOLS = (
         "Start a revision of a review's draft that the operator's note asks for, if its guards allow one now. A dry "
         "run checks them and starts nothing.",
         review_tools.ReviewRevise,
+        review_tools.RevisionStarted,
         review_tools.review_revise,
     ),
     tool(
         "chore-run",
         "Start a run of a chore, if its guards allow one now. A dry run checks them and starts nothing.",
         chore_tools.ChoreRun,
+        chore_tools.ChoreStarted,
         chore_tools.chore_run,
     ),
     tool(
         "chore-wait",
         "Record that a chore is due but should not run now, and why.",
         chore_tools.ChoreWait,
+        chore_tools.ChoreWaitRecorded,
         chore_tools.chore_wait,
     ),
 )
@@ -466,17 +498,18 @@ def answer(line: bytes, opener: Opener, mode: Mode | None = None) -> Response:
     return {"jsonrpc": "2.0", "id": message.id, "result": result}
 
 
-def schema(request: type[BaseModel]) -> dict[str, object]:
-    """Return a request's JSON schema as a tool's input schema: every reference inlined, and no titles.
+def schema(model: type[BaseModel], mode: JsonSchemaMode = "validation") -> dict[str, object]:
+    """Return a model's JSON schema as a tool's: every reference inlined, and no titles.
 
+    A request's, in `mode` "validation", is its tool's input schema; a result's, in "serialization", its output schema.
     Some models' providers take no `$ref`, and a title only repeats its field's name. What a docstring says is for
     canopy's readers, so only the fields' own descriptions are kept.
 
     Returns:
-        The schema, an object that takes no field the request does not.
+        The schema, an object that holds no field the model does not.
     """
-    whole = request.model_json_schema()
-    # The request's docstring says what it is to canopy's readers; the tool's description says what it does.
+    whole = model.model_json_schema(mode=mode)
+    # The model's docstring says what it is to canopy's readers; the tool's description says what it does.
     whole.pop("description", None)
     definitions = whole.pop("$defs", {})
     inlined = _inlined(whole, definitions if isinstance(definitions, dict) else {})
@@ -569,13 +602,14 @@ def _call(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str,
     if found is None:
         raise _Failed(INVALID_PARAMS, f"no tool named {asked.name!r}")
     try:
-        return _said(found.call(asked.arguments or {}, opener))
+        said = found.call(asked.arguments or {}, opener)
     except ValidationError as e:
         return _said(tools.explain(e), error=True)
     except tools.Refused as e:
         return _said(str(e), error=True)
     except (config.ConfigError, db.MigrationError) as e:
         return _said(f"canopy: {e}", error=True)
+    return _said(said) if isinstance(said, str) else _said(said.text, structured=said.result)
 
 
 _METHODS: Mapping[str, Callable[[Mapping[str, object], Opener, Mode], dict[str, object]]] = {
@@ -639,8 +673,11 @@ def _parsed[P: _Params](params_model: type[P], params: Mapping[str, object]) -> 
         raise _Failed(INVALID_PARAMS, tools.explain(e)) from None
 
 
-def _said(text: str, *, error: bool = False) -> dict[str, object]:
-    return {"content": [{"type": "text", "text": text}], "isError": error}
+def _said(text: str, *, error: bool = False, structured: BaseModel | None = None) -> dict[str, object]:
+    said: dict[str, object] = {"content": [{"type": "text", "text": text}], "isError": error}
+    if structured is not None:
+        said["structuredContent"] = structured.model_dump(mode="json")
+    return said
 
 
 def _error(request_id: object, code: int, message: str) -> dict[str, object]:

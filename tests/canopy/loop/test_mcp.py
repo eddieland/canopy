@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
 
+import jsonschema
 import pytest
 
 from canopy.chores import history
@@ -86,6 +87,8 @@ class Verb:
     dry_run: bool = False
     #: Whether the call is made inside a running tick.
     ticking: bool = True
+    #: What the tool returns as structured content, when it does what was asked.
+    result: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +102,10 @@ class Done:
     code: int | None = None
     #: What the command wrote to stderr.
     stderr: str = ""
+    #: What the tool returned as structured content; None for the command, or a tool error.
+    structured: Mapping[str, object] | None = None
+    #: The output schema the tool was listed with; None for the command, or outside a running tick.
+    schema: Mapping[str, object] | None = None
 
 
 #: The tables a verb writes, which a tool and its command must leave alike.
@@ -108,10 +115,17 @@ RECORDED = ("decisions", "tickets", "ticket_units", "messages", "review_requests
 def by_tool(env: CanopyEnv, verb: Verb) -> Done:
     """Do `verb` through `canopy _mcp`, in a fresh journal."""
     with fresh(env, verb) as conn:
-        served = mcp_session(tool_call(verb.tool, **verb.arguments))
+        served = mcp_session(LIST_TOOLS, tool_call(verb.tool, **verb.arguments))
         assert (served.stderr, served.returncode) == ("", 0)
-        said = served.said()
-        return Done(said.text, said.error, recorded(conn))
+        said = served.said(2)
+        schemas = {t["name"]: t["outputSchema"] for t in served.responses[1]["result"]["tools"]}
+        return Done(
+            said.text,
+            said.error,
+            recorded(conn),
+            structured=served.structured(2),
+            schema=schemas.get(verb.tool),
+        )
 
 
 def by_command(env: CanopyEnv, verb: Verb, capsys: pytest.CaptureFixture[str]) -> Done:
@@ -165,6 +179,14 @@ RECORDS = [
                 *("add-login", "--context", "see comment 7", "--cursor", "comment=7"),
             ],
             dry_run=True,
+            result={
+                "key": "PROJ-1",
+                "kind": "implement",
+                "dry_run": True,
+                "run": None,
+                "branch": "agent/PROJ-1-add-login",
+                "repos": ["repo"],
+            },
         ),
         id="dispatch",
     ),
@@ -173,6 +195,7 @@ RECORDS = [
             "decide",
             {"key": "PROJ-1", "action": "wait", "rationale": "  checks still running  "},
             ["decide", "PROJ-1", "wait", "--rationale", "  checks still running  "],
+            result={"key": "PROJ-1", "action": "wait"},
         ),
         id="decide",
     ),
@@ -181,11 +204,17 @@ RECORDS = [
             "decide",
             {"action": "skip", "rationale": "mcp_unavailable: the tracker"},
             ["decide", "skip", "--rationale", "mcp_unavailable: the tracker"],
+            result={"key": None, "action": "skip"},
         ),
         id="decide-tick-wide",
     ),
     pytest.param(
-        Verb("queried", {"keys": ["PROJ-2", "PROJ-3", "PROJ-2"]}, ["queried", "PROJ-2", "PROJ-3", "PROJ-2"]),
+        Verb(
+            "queried",
+            {"keys": ["PROJ-2", "PROJ-3", "PROJ-2"]},
+            ["queried", "PROJ-2", "PROJ-3", "PROJ-2"],
+            result={"keys": ["PROJ-2", "PROJ-3"]},
+        ),
         id="queried",
     ),
     pytest.param(
@@ -193,6 +222,7 @@ RECORDS = [
             "attention",
             {"key": "PROJ-1", "reason": "needs_reviewer", "detail": "no one owns it", "repo": "repo"},
             ["attention", "PROJ-1", "needs_reviewer", "--detail", "no one owns it", "--repo", "repo"],
+            result={"reason": "needs_reviewer", "key": "PROJ-1", "repo": "repo", "pr": None},
         ),
         id="attention",
     ),
@@ -201,6 +231,7 @@ RECORDS = [
             "attention",
             {"reason": "review_limit", "detail": "reviewed often", "pr": PR},
             ["attention", "review_limit", "--detail", "reviewed often", "--pr", PR],
+            result={"reason": "review_limit", "key": None, "repo": None, "pr": PR},
         ),
         id="attention-pr",
     ),
@@ -221,11 +252,25 @@ RECORDS = [
                 *("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", "ci_red", "--cursor", "comment=7"),
                 *("--title", "Fix the\nlogin"),
             ],
+            result={
+                "key": "PROJ-1",
+                "repo": "repo",
+                "phase": "ci_red",
+                "cursors": ["comment"],
+                "done": False,
+                "dry_run": False,
+            },
         ),
         id="ticket-set",
     ),
     pytest.param(
-        Verb("ticket-set", {"key": "PROJ-1", "done": True}, ["ticket", "set", "PROJ-1", "--done"], dry_run=True),
+        Verb(
+            "ticket-set",
+            {"key": "PROJ-1", "done": True},
+            ["ticket", "set", "PROJ-1", "--done"],
+            dry_run=True,
+            result={"key": "PROJ-1", "repo": None, "phase": None, "cursors": [], "done": False, "dry_run": True},
+        ),
         id="ticket-set-dry",
     ),
     pytest.param(
@@ -236,6 +281,7 @@ RECORDS = [
                 *("mirror", "PROJ-1", "--comment", "10", "--author", "acct-1", "--at", "2026-10-15T10:00:00Z"),
                 *("--body", "Looks good."),
             ],
+            result={"message": 1, "new": True, "truncated": False},
         ),
         id="mirror",
     ),
@@ -248,6 +294,7 @@ RECORDS = [
                 *("--context", "the retry loop"),
             ],
             dry_run=True,
+            result={"pr": PR, "dry_run": True, "reviews": [{"persona": None, "run": None}], "waits": None},
         ),
         id="review-run",
     ),
@@ -256,6 +303,7 @@ RECORDS = [
             "review-wait",
             {"pr": PR, "ticket": "PROJ-1", "rationale": "checks still running"},
             ["review", "wait", "--pr", PR, "--ticket", "PROJ-1", "--rationale", "checks still running"],
+            result={"pr": PR, "ticket": "PROJ-1"},
         ),
         id="review-wait",
     ),
@@ -264,6 +312,7 @@ RECORDS = [
             "review-end",
             {"pr": REQUESTED, "reason": "closed"},
             ["review", "end", "--pr", REQUESTED, "--reason", "closed"],
+            result={"pr": REQUESTED, "reason": "closed", "dry_run": False},
         ),
         id="review-end",
     ),
@@ -273,6 +322,7 @@ RECORDS = [
             {"name": "build-health", "context": "job 90"},
             ["chore", "run", "build-health", "--context", "job 90"],
             dry_run=True,
+            result={"name": "build-health", "dry_run": True, "run": None},
         ),
         id="chore-run",
     ),
@@ -281,6 +331,7 @@ RECORDS = [
             "chore-wait",
             {"name": "build-health", "rationale": "the queue is down"},
             ["chore", "wait", "build-health", "--rationale", "the queue is down"],
+            result={"name": "build-health"},
         ),
         id="chore-wait",
     ),
@@ -300,6 +351,11 @@ def test_each_tool_records_what_its_command_records(
     assert tool.said == command.said
     assert tool.journal == command.journal
     assert any(command.journal[table] for table in ("decisions", "tickets"))
+    # What it did comes back as fields too, which hold to the output schema it is listed with, as a client checks.
+    assert tool.structured == verb.result
+    assert tool.schema is not None
+    for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
+        validator(tool.schema).validate(tool.structured)
 
 
 REFUSALS = [
@@ -528,6 +584,7 @@ def test_a_tool_refuses_what_its_command_refuses_and_records_the_same(
     tool = by_tool(overseen, verb)
     assert tool.failed
     assert refusal in tool.said
+    assert tool.structured is None
     assert tool.journal == command.journal
 
 
@@ -603,6 +660,21 @@ def test_each_tools_input_is_its_schema_and_takes_no_other_field(overseen: Canop
     assert schemas["dispatch"]["required"] == ["key", "kind", "repos"]
     assert "default" not in schemas["dispatch"]["properties"]["repos"]
     assert schemas["review-run"]["required"] == ["pr", "sha", "repo"]
+
+
+def test_each_tool_lists_its_result_as_its_output_schema(overseen: CanopyEnv) -> None:
+    with in_tick(overseen.journal()):
+        served = mcp_session(LIST_TOOLS)
+    schemas = {t["name"]: t["outputSchema"] for t in served.responses[1]["result"]["tools"]}
+    assert list(schemas) == TOOL_NAMES
+    for name, schema in schemas.items():
+        for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
+            validator.check_schema(schema)
+        assert (schema["type"], schema["additionalProperties"]) == ("object", False), name
+        # Every field is in every result, so a client may read each one.
+        assert sorted(schema["required"]) == sorted(schema["properties"]), name
+    assert "$ref" not in json.dumps(schemas)
+    assert "title" not in schemas["review-run"]["properties"]["reviews"]["items"]
 
 
 def test_a_tool_takes_no_text_for_a_flag_or_a_number_and_names_only_the_kinds_it_dispatches(
@@ -687,6 +759,7 @@ def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
                 chore=True,
             )
         assert served.listed() == ["history"], run
+        assert "outputSchema" not in served.responses[1]["result"]["tools"][0]
         # None of the overseer's verbs is served to a chore, whatever it asks.
         assert served.responses[2]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
     schema = served.responses[1]["result"]["tools"][0]["inputSchema"]
@@ -883,6 +956,9 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
         )
     # Its own tools, wherever it runs, a running tick included, and none of the overseer's.
     assert served.listed() == ["merge-base", "diff", "log", "show", "blame"]
+    # Each answers with text alone.
+    assert not any("outputSchema" in t for t in served.responses[1]["result"]["tools"])
+    assert served.structured(2) is None
     schema = served.responses[1]["result"]["tools"][2]["inputSchema"]
     assert (schema["required"], schema["additionalProperties"]) == (["range"], False)
     assert schema["properties"]["limit"]["maximum"] == git_tools.MAX_LIMIT
@@ -971,6 +1047,7 @@ def test_a_run_a_tool_starts_outlives_the_server(overseen: CanopyEnv) -> None:
     with in_tick(conn, ends_ok=True), chore_reports(CHORE_OK, sleep=60):
         served = mcp_session(tool_call("chore-run", name="build-health"))
     assert served.said() == ("started chore build-health: run 1", False)
+    assert served.structured() == {"name": "build-health", "dry_run": False, "run": 1}
     # The server has exited, and the run it started goes on: `stopped` finds it running.
     with stopped(conn):
         pass
@@ -992,6 +1069,14 @@ def test_a_worker_a_tool_dispatches_is_recorded_and_not_the_servers_descendant(o
     assert said["result"]["isError"] is False, said
     [text] = [c["text"] for c in said["result"]["content"]]
     assert text.startswith("dispatched implement for PROJ-1: run 1: ")
+    assert said["result"]["structuredContent"] == {
+        "key": "PROJ-1",
+        "kind": "implement",
+        "dry_run": False,
+        "run": 1,
+        "branch": "agent/PROJ-1-work",
+        "repos": ["repo"],
+    }
     assert [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, tick_id)] == [
         ("PROJ-1", "dispatch:implement"),
     ]

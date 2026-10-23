@@ -896,6 +896,10 @@ class Served:
         [content] = response["result"]["content"]
         return Said(content["text"], response["result"]["isError"])
 
+    def structured(self, request_id: int = 1) -> Mapping[str, Any] | None:
+        """What tool call `request_id` came back with as structured content; None when it came back with none."""
+        return self.responses[request_id]["result"].get("structuredContent")
+
     def listed(self, request_id: int = 1) -> list[str]:
         """The name of each tool `tools/list` request `request_id` was answered with."""
         return [t["name"] for t in self.responses[request_id]["result"]["tools"]]
