@@ -1,4 +1,5 @@
-import type { RunState, TaskStanding, TaskSummary } from '@/api/types'
+import type { RunState, TaskRun, TaskStanding, TaskSummary } from '@/api/types'
+import { taskRef } from '@/lib/refs'
 import { inRepos } from '@/lib/repo-filter'
 
 /** Where a task stands as the tasks list shows it: the run state it is colored as, and the word it reads. */
@@ -51,4 +52,32 @@ export function tasksShown(tasks: readonly TaskSummary[], repo: string | undefin
 /** Whether a task waits on the operator: its latest run asked a question no reply has followed. */
 export function waits(task: Pick<TaskSummary, 'standing'>): boolean {
     return task.standing === 'awaiting_reply'
+}
+
+/** The run whose report a task's page shows: its newest that left one, as `canopy show task:N` prints it. */
+export function reportRun(runs: readonly TaskRun[]): TaskRun | undefined {
+    return runs.findLast((run) => run.reported)
+}
+
+/** Why a task's page has no report to show, as one `Empty` clause: what comes next, or that no run left one. */
+export function noReport(task: Pick<TaskSummary, 'standing'>, runs: readonly TaskRun[]): string {
+    if (runs.length === 0) {
+        return task.standing === 'stopped'
+            ? 'no report: it was stopped before its first run'
+            : 'no report yet: the next tick starts its first run'
+    }
+    if (runs.at(-1)?.status === 'running') {
+        return 'no report yet: its run is working'
+    }
+    return runs.length === 1 ? 'no report: its run left none' : 'no report: none of its runs left one'
+}
+
+/** The PRs a task's runs named, each once, in the order they first named them. */
+export function taskPrs(runs: readonly TaskRun[]): string[] {
+    return [...new Set(runs.flatMap((run) => run.prs))]
+}
+
+/** The command that answers a task from the shell, until the page has a reply box: `canopy reply task:4`. */
+export function replyCommand(id: number): string {
+    return `canopy reply ${taskRef(id)}`
 }

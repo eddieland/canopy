@@ -48,6 +48,32 @@ and how long ago you submitted it. Under the text is the first line of what its 
 
 The repository picker narrows the list once your tasks span more than one, and the count reads `2 of 7` while it does.
 The list moves as the loop does: a task submitted, a run starting or ending, a reply, all show without a reload.
+`task:N` opens the task's page.
+
+## A task's page
+
+A task's page reads as one story. Its title is `task:N` and the first line of your text; under it, where the task
+stands, how many runs it has had, and when you submitted it.
+
+**Conversation** starts with your instruction, whole and in your own words, on your side of the thread. Then come what
+its runs said and your replies, in order, each message naming the run that wrote it (`task:4#5` is task 4's run
+number 5, counted across every task's runs). While a run works, the thread ends on it, `working now`, with what it
+has cost so far. A question waiting on you wears `waiting on you`, and the band under the thread says how to answer
+it: from your shell for now, with `canopy reply task:N "TEXT"`, which the band offers to copy. With no question
+waiting, the same line says a reply queues the next run.
+
+**Report** is the page's main content: the newest report a run left, laid out as a document. It is the agent's
+Markdown, drawn as a plan is, so headings, lists, and code read as they should and anything else (HTML, an image, a
+link) stays its characters. The header names the run that left it, and says `edited` when the file changed since its
+run wrote it. Under it is the file's path, to open in your editor. When there is no report yet, or its file is gone,
+the panel says so.
+
+**What it left** gathers the rest: the repository, the branch (with a link out once a run pushed it), each run's
+pushed head commit, the draft PR, and the tickets it filed, each opening its page. Copy a commit, not the branch, when
+a ticket should build on a task's work: the branch moves with every later reply, and the commit stays put. The line
+under the panel is the whole policy: all of it is throwaway until you give it a pass of its own.
+
+**Runs** lists every run, the first first: its status, `task:N#M`, cost, how long it took, and what it said.
 
 ## Replying and stopping
 

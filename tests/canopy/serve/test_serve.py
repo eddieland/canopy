@@ -45,6 +45,7 @@ from canopy.serve.event_schema import (
     SpendUpdated,
     StreamEnding,
     StreamEvent,
+    TaskChanged,
     TasksUpdated,
     TicketChanged,
     TicketsUpdated,
@@ -642,6 +643,24 @@ def test_a_task_submitted_sends_the_tasks_again(backend: Backend) -> None:
         events = [e.root for e in sent.changes(backend, ctx)]
     [tasks_event] = [e for e in events if isinstance(e, TasksUpdated)]
     assert [(t.id, t.standing) for t in tasks_event.tasks[:1]] == [(task.id, "queued")]
+
+
+def test_a_message_about_a_task_names_the_task_though_its_summary_holds(backend: Backend) -> None:
+    with backend.open() as ctx:
+        task = tasks.submit(ctx.conn, ctx.workspace, "Tidy the README.", repo="web", project=None, channel="cli")
+        sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+        first = [e.root for e in sent.changes(backend, ctx)]
+        # A reply while its run still runs queues nothing: the list is as it was, but its page shows the reply.
+        ctx.conn.execute(
+            "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
+            "VALUES ('task', ?, '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')",
+            (str(task.id),),
+        )
+        events = [e.root for e in sent.changes(backend, ctx)]
+    # The first read names no task: there was nothing sent before it to differ from.
+    assert not any(isinstance(e, TaskChanged) for e in first)
+    assert not any(isinstance(e, TasksUpdated) for e in events)
+    assert [e.id for e in events if isinstance(e, TaskChanged)] == [task.id]
 
 
 def test_a_review_run_starting_sends_the_reviews_again(backend: Backend, tmp_path: Path) -> None:

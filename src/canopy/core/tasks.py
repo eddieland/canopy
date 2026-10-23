@@ -232,6 +232,24 @@ def messages_of(conn: sqlite3.Connection, task_id: int) -> list[records.Message]
     return records.fetch_all(conn, records.Message, query)
 
 
+def newest_messages(conn: sqlite3.Connection) -> dict[int, int]:
+    """Return the id of each task's newest message, by the task's id; a task with none is not listed.
+
+    A reply to a task whose run still runs queues nothing yet, so it changes no summary: this is how a reader of the
+    tasks list knows a conversation moved all the same.
+
+    Returns:
+        The ids.
+    """
+    query = (
+        sql.select("subject_id, max(id)")
+        .from_("messages")
+        .where("subject_kind = ?", conversation.TASK)
+        .group_by("subject_id")
+    )
+    return {int(r[0]): int(r[1]) for r in sql.execute(conn, query)}
+
+
 def runs_of(conn: sqlite3.Connection, task_id: int) -> list[records.TaskRun]:
     """Return task `task_id`'s runs, the oldest first."""
     query = sql.select("*").from_("task_runs").where("task_id = ?", task_id).order_by("id")

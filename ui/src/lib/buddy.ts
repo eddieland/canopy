@@ -58,6 +58,13 @@ export const TIPS = {
         'Hot take: every big feature starts as a task. Every sprout starts as me.',
         'Did you know? A task that pushes nothing has not failed. Sometimes I also do nothing, successfully.',
     ],
+    '/tasks/$id': [
+        "It looks like you're reading a report. Would you like me to skim it and nod?",
+        'Unhelpful tip: copy the commit, not the branch. Branches move. I would know, I am mostly branch.',
+        'Dear diary, it called its own work throwaway. Very humble. I have never thrown anything away.',
+        'Hot take: a draft PR is a PR that has not met a reviewer yet.',
+        'Haiku: you asked one question / it came back with three tickets / such is delegation',
+    ],
     '/tickets/$key': [
         "It looks like you're reading a ticket. Would you like me to read it louder?",
         'Unhelpful tip: Forget makes canopy forget a ticket. I forget tickets for free, all day.',

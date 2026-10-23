@@ -159,6 +159,12 @@ export type TaskSummary = Schemas['TaskSummary']
 export type TaskStanding = TaskSummary['standing']
 /** One run of a task's worker (DESIGN §36). */
 export type TaskRun = Schemas['TaskRun']
+/** One task, as `canopy show task:N` prints it: the task, every run, its conversation, and its tickets. */
+export type TaskDetail = Schemas['TaskDetail']
+/** A ticket a task's run reported filing, unlabeled, so worked only once the operator says so. */
+export type TaskTicket = Schemas['TaskTicket']
+/** The report a task run left, as its file stands now, or why it is no report any more (DESIGN §36). */
+export type TaskReport = Schemas['TaskReport']
 /** What a run's or chore run's log, or a tick's output, holds of its session, read from its events (DESIGN §22). */
 export type Transcript = Schemas['Transcript']
 /** One entry of a transcript, told apart by its `kind`: text, a tool call, a model call's end, or an error. */
