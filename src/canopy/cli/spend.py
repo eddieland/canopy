@@ -12,7 +12,7 @@ from canopy.core import db, reports, spend
 from canopy.runtime.report import count_text
 
 if TYPE_CHECKING:
-    from canopy.core.spend import Breakdown, Costs
+    from canopy.core.spend import Breakdown, Costs, Month
 
 GROUP_LABELS: dict[spend.Group, str] = {
     "idle": "idle",
@@ -76,13 +76,15 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     if as_json:
         click.echo(reports.read_spend(ctx, reports.Spend(days=days)))
         return 0
-    for line in render(spend.breakdown(ctx.conn, datetime.now(UTC), days)):
+    now = datetime.now(UTC)
+    month = spend.budget_month(ctx.conn, now, ctx.config.spend)
+    for line in render(spend.breakdown(ctx.conn, now, days), month):
         click.echo(line)
     return 0
 
 
-def render(found: Breakdown) -> list[str]:
-    """The breakdown as `canopy spend` prints it.
+def render(found: Breakdown, month: Month | None = None) -> list[str]:
+    """The breakdown as `canopy spend` prints it, led by the month against its budget when one is set.
 
     Returns:
         Its lines, without line ends.
@@ -90,6 +92,7 @@ def render(found: Breakdown) -> list[str]:
     since = since_text(found.since)
     lines = [
         f"Spend over {found.days} day{'s' if found.days != 1 else ''}, since {since}, as the runtime reported it.",
+        *([budget_text(month)] if month is not None else []),
         "",
         f"{'day':<{_DAY_WIDTH}}" + "".join(f"{title:>{_COST_WIDTH}}" for title, _ in _COLUMNS),
     ]
@@ -114,6 +117,20 @@ def render(found: Breakdown) -> list[str]:
     unpriced = ", ".join(f"{u.unpriced} of {u.runs} {KIND_LABELS[u.kind]}" for u in found.unpriced if u.unpriced)
     lines.extend(["", f"No cost reported: {unpriced}." if unpriced else "Every run that ended reported a cost."])
     return lines
+
+
+def budget_text(month: Month) -> str:
+    """The month so far against its budget, as `canopy spend` says it.
+
+    Returns:
+        One sentence: `This month, 2026-10: $123.45 of a $300 budget (41%), on pace for $280.00.`
+    """
+    pace = f", on pace for {cost_text(month.projected_usd)}" if month.projected_usd is not None else ""
+    over = " Over budget." if month.over else ""
+    return (
+        f"This month, {month.month}: {cost_text(month.spent_usd or 0.0)} of a ${month.budget_usd} budget "
+        f"({month.percent}%){pace}.{over}"
+    )
 
 
 def since_text(stamp: str) -> str:

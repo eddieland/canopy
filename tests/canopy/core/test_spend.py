@@ -769,3 +769,112 @@ def test_models_read_only_the_windows_runs(tmp_path: Path, journals: Journals, k
         plan
     )
     assert plan[1].startswith("SEARCH m USING PRIMARY KEY (run_table=? AND run_id=?)"), plan
+
+
+def test_the_month_is_the_local_calendar_month_against_its_budget(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, "2026-09-30T23:00:00.000Z", 9.0)  # September's, in UTC
+    tick(conn, "2026-10-01T09:00:00.000Z", 1.0)
+    tick(conn, "2026-10-08T09:00:00.000Z", 0.5, dry_run=True)  # a dry run costs what it costs
+    conn.execute(
+        "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path, cost_usd) "
+        "VALUES (NULL, 'deps', '2026-10-08T10:00:00.000Z', 'ok', 'l', 1.5)",
+    )
+    found = spend.month(conn, NOW, 10)
+    assert (found.month, found.since, found.until) == (
+        "2026-10",
+        "2026-10-01T00:00:00.000Z",
+        "2026-11-01T00:00:00.000Z",
+    )
+    assert found.spent_usd == pytest.approx(3.0)
+    assert found.elapsed == pytest.approx(7.5 / 31)
+    assert found.projected_usd == pytest.approx(3.0 / (7.5 / 31))
+    assert (found.share, found.over) == (pytest.approx(0.3), False)
+    assert spend.month(conn, NOW, 3).over
+    # In Los Angeles, September's last evening is September's still, and October starts at its midnight.
+    with in_zone("America/Los_Angeles"):
+        there = spend.month(conn, NOW, 10)
+    assert there.since == "2026-10-01T07:00:00.000Z"
+    assert there.spent_usd == pytest.approx(3.0)
+
+
+def test_a_month_has_no_pace_in_its_first_day(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, "2026-10-01T01:00:00.000Z", 4.0)
+    morning = spend.month(conn, datetime(2026, 10, 1, 9, tzinfo=UTC), 100)
+    assert (morning.spent_usd, morning.projected_usd) == (4.0, None)
+    assert spend.month(conn, datetime(2026, 10, 2, 0, tzinfo=UTC), 100).projected_usd == pytest.approx(124.0)
+    # Nothing reported a cost: nothing spent, and no pace to read.
+    empty = spend.month(conn, datetime(2026, 12, 15, tzinfo=UTC), 100)
+    assert (empty.spent_usd, empty.projected_usd, empty.share) == (None, None, 0.0)
+
+
+def test_canopy_spend_prints_the_month_against_its_budget(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    now = datetime.now(UTC)
+    tick(canopy_env.journal(), db.format_time(now), 2.0)
+    canopy_env.append_user("[spend]\nmonthly_budget_usd = 5\n")
+    assert main(["spend", "--days", "1"]) == 0
+    line = capsys.readouterr().out.splitlines()[1]
+    assert re.fullmatch(
+        rf"This month, {now:%Y-%m}: \$2\.00 of a \$5 budget \(40%\)(, on pace for \$\d+\.\d\d)?\.",
+        line,
+    )
+    assert main(["spend", "--json"]) == 0
+    month = json.loads(capsys.readouterr().out)["month"]
+    assert (month["month"], month["budget_usd"], month["spent_usd"], month["share"]) == (f"{now:%Y-%m}", 5, 2.0, 0.4)
+
+
+def test_canopy_spend_says_when_the_month_is_over_its_budget(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    conn = canopy_env.journal()
+    tick(conn, db.format_time(datetime.now(UTC)), 4.99)
+    canopy_env.append_user("[spend]\nmonthly_budget_usd = 5\n")
+    assert main(["spend", "--days", "1"]) == 0
+    short = capsys.readouterr().out.splitlines()[1]
+    # Floored: a month a cent short of its budget is not all of it.
+    assert "(99%)" in short
+    assert not short.endswith("Over budget.")
+    tick(conn, db.format_time(datetime.now(UTC)), 1.0)
+    assert main(["spend", "--days", "1"]) == 0
+    assert capsys.readouterr().out.splitlines()[1].endswith(". Over budget.")
+
+
+def test_canopy_spend_names_no_month_without_a_budget(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["spend", "--days", "1"]) == 0
+    assert capsys.readouterr().out.splitlines()[1] == ""
+    assert main(["spend", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["month"] is None
+
+
+def test_a_month_s_alerts_are_100_and_the_operator_s_and_it_names_the_highest_reached(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, "2026-10-02T09:00:00.000Z", 8.5)
+    found = spend.month(conn, NOW, 10, (150, 50, 80))
+    assert (found.alerts, found.reached) == ((50, 80, 100, 150), 80)
+    assert spend.month(conn, NOW, 10).alerts == (100,)
+    assert spend.month(conn, NOW, 10).reached is None
+    assert spend.month(conn, NOW, 5, (50,)).reached == 100
+    assert spend.month(conn, NOW, 100, (50,)).reached is None
+
+
+def test_a_month_s_percent_is_floored_in_whole_cents(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, "2026-10-02T09:00:00.000Z", 0.1)
+    tick(conn, "2026-10-02T10:00:00.000Z", 0.19)
+    # 0.1 + 0.19 is 0.29000000000000004, and 0.29 * 100 a hair under 29: in cents it is 29, of a $1 budget.
+    assert spend.month(conn, NOW, 1).percent == 29
+    tick(conn, "2026-10-02T11:00:00.000Z", 0.7)
+    assert (spend.month(conn, NOW, 1).percent, spend.month(conn, NOW, 1).over) == (99, False)
+    tick(conn, "2026-10-02T12:00:00.000Z", 0.01)
+    assert (spend.month(conn, NOW, 1).percent, spend.month(conn, NOW, 1).over) == (100, True)

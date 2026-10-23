@@ -97,5 +97,9 @@ def save_config(body: ConfigPatch, backend: BackendDep) -> ConfigSaved:
     )
 
 
-def _shown(value: config_edit.Value) -> int | bool | str | list[str] | dict[str, int] | None:
-    return list(value) if isinstance(value, tuple) else value
+def _shown(value: config_edit.Value) -> int | bool | str | list[str] | list[int] | dict[str, int] | None:
+    if not isinstance(value, tuple):
+        return value
+    # A list of names, or the budget's alerts, a list of percentages.
+    numbers = [v for v in value if isinstance(v, int)]
+    return numbers if len(numbers) == len(value) else [str(v) for v in value]

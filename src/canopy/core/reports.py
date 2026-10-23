@@ -177,9 +177,11 @@ def read_spend(ctx: Context, request: Spend) -> str:
     """Report what the last `request.days` days' agent runs cost, as `canopy spend --json` prints it.
 
     Returns:
-        The breakdown's JSON.
+        The breakdown's JSON, with the local month against `spend.monthly_budget_usd`: None when none is set.
     """
-    return report_json(spend_dict(spend.breakdown(ctx.conn, datetime.now(UTC), request.days)))
+    now = datetime.now(UTC)
+    month = spend.budget_month(ctx.conn, now, ctx.config.spend)
+    return report_json(spend_dict(spend.breakdown(ctx.conn, now, request.days), month))
 
 
 def read_lessons(ctx: Context, request: MemoryLessons) -> str:
@@ -295,16 +297,19 @@ def report_json(report: dict[str, Any]) -> str:
     return json.dumps(report, sort_keys=True, indent=0)
 
 
-def spend_dict(found: spend.Breakdown) -> dict[str, Any]:
-    """A spend breakdown as JSON-ready values, each set of costs with its total.
+def spend_dict(found: spend.Breakdown, month: spend.Month | None = None) -> dict[str, Any]:
+    """A spend breakdown as JSON-ready values, each set of costs with its total, and the month against its budget.
 
     Returns:
-        A dict `json.dumps` takes as it is.
+        A dict `json.dumps` takes as it is; its `month` is None when no budget is set.
     """
     data = dataclasses.asdict(found)
     for day, row in zip(data["per_day"], found.per_day, strict=True):
         day["costs"]["total"] = row.costs.total
     data["totals"]["total"] = found.totals.total
+    data["month"] = (
+        dataclasses.asdict(month) | {"share": month.share, "percent": month.percent} if month is not None else None
+    )
     return data
 
 

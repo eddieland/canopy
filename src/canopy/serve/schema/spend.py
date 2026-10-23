@@ -199,6 +199,30 @@ class SpendUnpriced(Model):
     """How many of them reported no cost."""
 
 
+class SpendMonth(Model):
+    """The local calendar month so far against the operator's monthly budget (`spend.monthly_budget_usd`)."""
+
+    month: str
+    """The month, `YYYY-MM`, in the local time of the machine canopy runs on."""
+    since: datetime
+    """When it starts: local midnight on its first day."""
+    until: datetime
+    """When it ends: local midnight on the next month's first day."""
+    budget_usd: int
+    """The budget, in whole US dollars. Nothing enforces it."""
+    spent_usd: float | None = None
+    """What every run that started in the month so far cost, dry runs included, in US dollars; None when none reported
+    a cost."""
+    elapsed: float
+    """How much of the month has gone by, from 0 to 1."""
+    projected_usd: float | None = None
+    """What the month will cost if the rest of it spends as it has so far, in US dollars; None in its first day, or
+    when nothing reported a cost."""
+    alerts: list[int]
+    """The percentages of the budget a sink that takes `loop` hears the month reach, lowest first: 100, always, and
+    `spend.budget_alerts`."""
+
+
 class SpendBreakdown(Model):
     """What a window of whole local days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33).
 
@@ -241,3 +265,6 @@ class SpendBreakdown(Model):
     """What each kind spent on each model, a row per kind and model: the kinds in a fixed order, overseer, workers,
     plans, chores, reviews, tasks, each kind's models the most costly first, and its runs no session named a model for
     last."""
+    month: SpendMonth | None = None
+    """The local calendar month so far against the operator's monthly budget, whatever the window; None when no budget
+    is set."""

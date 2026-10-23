@@ -46,6 +46,14 @@ sees the merge. Spend per ticket done divides the window's whole spend, overseer
 context is measured in characters it returned, since the runtime does not attribute tokens to tool results, and is
 labeled an estimate wherever shown (MEASUREMENTS 2026-10-13).
 
+`spend.monthly_budget_usd` is what the operator means a local calendar month of runs to cost. `canopy spend` and the
+spend page track the month so far against it, with the pace it is on once its first day is over, and a sink that takes
+`loop` hears once when the month reaches it, again only for a budget raised past it. `spend.budget_alerts` adds other
+percentages of the budget, each told once a month: one message for the highest reached, and only for more dollars than
+the sink was last told, so a raised budget or an added alert is news when the month reaches it and a lowered one is not.
+It is a number to watch, never a brake: nothing pauses or refuses a run over it (ROADMAP's deferred spend-paced loop
+would be that).
+
 `canopy health` reads the same window for how runs ended: each kind's runs by status and cost, the newest failures,
 and the overseer's asks a guard refused. A failure is a run that did not do what it was started for: a tick not closed
 `ok`, or a run ended `failed`, `unknown`, `unpushed`, `crashed`, or `timeout`. With `canopy spend --json`, it is what a
@@ -107,6 +115,8 @@ secret, and a replier added through a stolen session would go on steering worker
 | `policy.max_reviews_per_pr` | at most 25 |
 | `policy.ci_cooldown_minutes` | at least 5 |
 | `loop.interval_minutes`, `loop.idle_max_minutes` | at least 2 |
+| `spend.monthly_budget_usd` | at most 10000; raising it keeps a sink from hearing the month reached it |
+| `spend.budget_alerts` | any list the loader takes; the 100% alert is sent whatever it holds |
 | `policy.stacking` | to `"never"` only |
 | `trust.authorized_repliers`, `trust.trusted_reviewers` | entries removed, never added |
 | `trust.rebase` | to `false` only |
