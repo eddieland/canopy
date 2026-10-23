@@ -310,9 +310,9 @@ turns none off, but for the overseer whose body holds the tracker's skill, and t
 repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
-canopy ships one plugin, `canopy.js`, whose jobs are a clock that tells a running agent the minutes left, a split
-that lets an unsandboxed run's first call read its agent's tools and body from the provider's cache (under OpenCode 1
-alone, not yet ported to 2), and, under OpenCode 2, holding a session's first prompt until its MCP tools are
+canopy ships one plugin, `canopy.js`, whose jobs are a clock that tells a running agent the minutes left, a split under
+OpenCode 1 that lets an unsandboxed run's first call read its agent's tools and body from the provider's cache, which
+OpenCode 2 needs no split for, and, under OpenCode 2, holding a session's first prompt until its MCP tools are
 registered; they, and what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
