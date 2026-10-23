@@ -58,11 +58,13 @@ MAX_NAME = 200
 MAX_PATH = 1000
 MAX_URL = 2000
 #: The kinds each kind of source owns: a line of another kind is skipped, so one source never writes another's facts.
-#: An `artifacts` source owns none of these: its feed is read past a cursor, in `artifact_feed`, never whole.
+#: An `artifacts` source owns none of these: its feed is read past a cursor, in `artifact_feed`, never whole. Nor
+#: does a `slack` source: what it reads is the operator's messages, recorded in `slack_replies`.
 OWNS: Mapping[SourceKind, frozenset[str]] = {
     SourceKind.TRACKER: frozenset({"ticket", "comment"}),
     SourceKind.VCS: frozenset({"pr", "review", "check", "branch"}),
     SourceKind.ARTIFACTS: frozenset(),
+    SourceKind.SLACK: frozenset(),
 }
 
 
@@ -94,6 +96,8 @@ class Request:
     review_query: str | None = None
     #: For an `artifacts` source, the feed's cursor: the `through` its last run's `end` line named, 0 at first.
     since: int | None = None
+    #: For a `slack` source, the workspace as canopy's messages to the sink name it, which files the sink's threads.
+    repo: str | None = None
 
     def to_json(self) -> dict[str, object]:
         """The request as the connector reads it on stdin.
@@ -119,6 +123,8 @@ class Request:
             found["review_query"] = self.review_query
         if self.since is not None:
             found["since"] = self.since
+        if self.repo is not None:
+            found["repo"] = self.repo
         return found
 
 
@@ -183,8 +189,9 @@ def observe(
             whole = Whole(tickets=named.tickets)
         case SourceKind.VCS:
             whole = Whole(prs=named.prs, repositories=named.repositories)
-        case SourceKind.ARTIFACTS:
-            # Its feed is read past a cursor (`artifact_feed`), so no subject of it is whole.
+        case SourceKind.ARTIFACTS | SourceKind.SLACK:
+            # A feed is read past a cursor (`artifact_feed`), and replies are messages (`slack_replies`): neither has a
+            # subject read whole.
             whole = Whole()
         case _:
             assert_never(kind)

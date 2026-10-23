@@ -20,8 +20,8 @@ the measurement read.
 
 ### Sources
 
-There is at most one source of each kind, `tracker`, `vcs`, and `artifacts` (an artifact store's comment feed, §38),
-each a command run with no shell (§20) under a timeout.
+There is at most one source of each kind, `tracker`, `vcs`, `artifacts` (an artifact store's comment feed, §38), and
+`slack` (the replies in the Slack sink's ticket threads, §20), each a command run with no shell (§20) under a timeout.
 Every `connect.*` key is private (§12, TRUST_MODEL T7), since each runs a command with the operator's credentials. The
 `vcs` source defaults to canopy's own programs (§29), so PRs are observed with nothing configured. There is no default
 `tracker` source, since the harness never branches on `tracker.provider` (§17); without one, tickets are not observed,
@@ -34,7 +34,8 @@ whatever its pace for ticks (§6, Ticks and polls).
 On stdin, one JSON object naming what to observe, and a connector reads only what it is given: a `tracker` source the
 tracker query and every ticket the state block lists (§6 step 4); a `vcs` source every PR of a ticket not marked done,
 with a draft waiting (§29), or last observed open, so no observation stays open unread, the repositories, the branch
-prefix, and the review query; an `artifacts` source its feed's cursor. On stdout, one JSON line per observation, naming
+prefix, and the review query; an `artifacts` source its feed's cursor; a `slack` source the workspace, which names
+the sink's threads. On stdout, one JSON line per observation, naming
 its kind (tickets and comments; PRs, branches, checks, and reviews; a feed's changes to comments and threads), and last
 an `end` line naming what the run read whole, or for a feed the cursor its next run reads from; the exit code is not
 read. A connector of the operator's own speaks this contract and nothing else: it is all the harness knows of any of
@@ -70,8 +71,8 @@ reads after a run and before a send are validated the same way but are not a tic
 ### In the tick, and between ticks
 
 In §6 step 3, after the reconciles, the tick runs the `tracker` source, then the `vcs` source, which is also §29's
-reconcile read, then the `artifacts` source; a tick whose reconcile failed runs none, and a dry run observes as a live
-tick does. A source that
+reconcile read, then the `artifacts` source, then the `slack` source; a tick whose reconcile failed runs none, and a
+dry run observes as a live tick does. A source that
 fails, or reads less than it was asked, keeps its previous observations and raises the harness's `connector_failed`
 (§14), naming what was not read, each tick until a run reads everything; the overseer's view of the list leaves it
 out. It is one item about the workspace, its detail naming each failing source, since the attention list has no
@@ -115,6 +116,12 @@ for GitHub Issues, with `gh`'s token for the host a PR's URL or a repository's c
 PR many to a GraphQL query, not a call per PR, which would cost many times the overseer's reads (MEASUREMENTS
 2026-10-15). `canopy-connect-jira` reads Jira Cloud with credentials from an operator-only file held to the Slack
 sink's checks (§20), sent only to the site the operator names, and never in config, argv, journal, or logs.
+`canopy-connect-slack`, beside the Slack sink, is the `slack` connector, with the sink's own bot token file.
+
+What a `slack` source reads is no observation: a reply from one of its `operators`, on a ticket canopy knows, is the
+operator's message, recorded as `canopy reply` records one, once per Slack message (§22, TRUST_MODEL T1); the harness
+checks the id against config in code, whatever the connector printed. Anyone else's records nothing, and a dry run
+records none (D036).
 
 Rejected: the harness calling the APIs (D003, TRUST_MODEL T2: the process that holds the journal and enforces the
 guards never opens a connection or reads a token); an agent as the connector (a model run as a poll, against §4

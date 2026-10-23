@@ -1,10 +1,11 @@
-"""Each tick's run of the connectors (DESIGN §30, §6 step 3): the `tracker`, `vcs`, and `artifacts` sources, each once.
+"""Each tick's run of the connectors (DESIGN §30, §6 step 3): the `tracker`, `vcs`, `artifacts`, and `slack` sources.
 
 Each source is asked what the journal watches of its kind, and what it read whole replaces what the journal held; the
 `artifacts` source is asked for its store's comment feed past its cursor, and moves it on (§38). A source that fails,
 or whose output cannot be recorded, keeps its previous observations, and the tick goes on. The `vcs` run is also §29's
 reconcile read, so the drafts it covers are checked after it. The `artifacts` source is in shadow: what it reads
-reaches no conversation, state block, or dispatch.
+reaches no conversation, state block, or dispatch. The `slack` source is not: a listed operator's reply in the Slack
+sink's thread is their message, as `canopy reply` records one (§22, `slack_replies`), except in a dry run.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from canopy.core import (
     observe,
     review_drafts_manage,
     review_requests,
+    slack_replies,
     sql,
 )
 from canopy.core.vocab import ConnectorRunStatus, PrState, SourceKind
@@ -45,10 +47,11 @@ class Ran:
     read: frozenset[str]
 
 
-def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> Ran:
+def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter, *, dry_run: bool) -> Ran:
     """Run every source that reads, recording each run.
 
-    `tick_id` is the tick running them, or None for the loop's poll between ticks (`poll.run`).
+    `tick_id` is the tick running them, or None for the loop's poll between ticks (`poll.run`). In a dry run, the
+    `slack` source records no operator message (D036).
 
     Returns:
         How each source's run ended, and the PRs the `vcs` run read whole.
@@ -64,12 +67,16 @@ def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> Ran:
                 request = vcs_request(ctx)
             case SourceKind.ARTIFACTS:
                 request = observe.Request(since=artifact_feed.cursor(ctx.conn, name))
+            case SourceKind.SLACK:
+                request = observe.Request(repo=ctx.repo)
             case _:
                 assert_never(kind)
         started = db.now()
         try:
             if kind is SourceKind.ARTIFACTS:
                 observed = artifact_feed.read(ctx.conn, ctx.config, ctx.runner, source, request, name=name, log=log)
+            elif kind is SourceKind.SLACK:
+                observed = slack_replies.read(ctx.conn, ctx.runner, source, request, dry_run=dry_run, log=log)
             else:
                 observed = observe.observe(ctx.conn, ctx.config, ctx.runner, source, request, log=log)
         except Exception as e:

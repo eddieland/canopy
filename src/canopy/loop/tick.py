@@ -368,7 +368,7 @@ def _steps(
             reconciled = replace(reconciled, capacity=replace(reconciled.capacity, running=running))
     archive_unpushed = archive.run(ctx, log, dry_run=dry_run)
     # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
-    drafted.reconcile(ctx, connectors.run(ctx, tick_id, log).read, log)
+    drafted.reconcile(ctx, connectors.run(ctx, tick_id, log, dry_run=dry_run).read, log)
     # What moved on a waiting feedback plan's PRs, first seen now: its quiet period runs from the newest (§32).
     feedback_plans.note_moves(ctx.conn, ctx.config)
     derived = _derive(ctx, tick_id, log)

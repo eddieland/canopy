@@ -152,9 +152,19 @@ Controls:
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
   it into every public worker prompt itself (`implement`, `resume`), and refuses a prompt override that
   would drop it (D093).
+- A reply in the Slack sink's ticket thread (DESIGN §22, M64) is an operator message only when the Slack user id that
+  wrote it is one a `slack` source's `operators` lists (private, T7), checked in code against what
+  `canopy-connect-slack` printed, and only on a ticket the journal already has. It is recorded through
+  `core/conversation.py`'s `reply`, with its guards and its bound, on the channel `slack`, once per Slack message. That
+  channel proves the operator by three things of theirs: the command in their private config, the bot token in their
+  operator-only file, and the ids they listed, each of which Slack's own sign-in proves. A reply from anyone else, or
+  from a bot, records nothing, not even as data, and a dry run records none (D036). Residual: whoever controls a listed
+  Slack account, or a Slack admin able to act as it, can answer and resume a ticket's worker as the operator; and a
+  reply edited after canopy read it keeps the words first read.
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
-  `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). With `tracker.private`
+  `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8), and for a reply, a listed
+  Slack id's in the sink's thread (above). With `tracker.private`
   set (private), a labeled ticket canopy never ran is started by its first dispatch instead, on the overseer's
   `label` claim, which the harness checks against config as for any public dispatch (D119). No worker re-reads the
   labels for it, then or later, and removing the label does not stop it: an overseer that claims a label a ticket
@@ -359,7 +369,9 @@ Controls:
 - Listeners follow T8. No outbound calls from the harness except through the
   configured commands. canopy ships programs that make them, each a separate distribution it runs only as a command.
   The Slack sink (DESIGN §20) runs only as a sink the operator configured, and reads its webhook or bot token from an
-  operator-only file of its own, never from canopy's config, argv, journal, or logs. The GitHub reader and poster,
+  operator-only file of its own, never from canopy's config, argv, journal, or logs; `canopy-connect-slack`, which
+  reads the replies in its threads, reads the same file and sends the token only to Slack's API. The GitHub reader and
+  poster,
   `canopy-connect-github` and `canopy-post-github` (DESIGN §29), read the token `gh` holds for the host a PR's or an
   issue's URL, or a repository's clone URL in the map, names, when they run, only once `gh` names that host as one it
   is logged in to, and send it only to that host's API, following no redirect; canopy never reads it. Lint bans network
@@ -1024,8 +1036,10 @@ loop's terminal would.
   under your account, though it posts nothing. A reviewer definition of your own that runs commands runs the PR's
   code on your machine.
 - Point a notification sink only at a place whose audience may read the tickets and PRs it quotes, and keep the
-  Slack sink's webhook or token file readable only by you. Give a bot token only the `chat:write` scope: the file holds
-  whatever the token can do. People who can read the channel see what the loop does; they cannot steer it.
+  Slack sink's webhook or token file readable only by you. Give a bot token only the `chat:write` scope, and for a
+  `slack` source the one history scope its channel needs, `channels:history` or `groups:history`: the file holds
+  whatever the token can do. People who can read the channel see what the loop does; only the Slack accounts a `slack`
+  source's `operators` lists can steer it, as you, by replying in a ticket's thread. List only your own.
 - If you allow a tool in a chore's agent definition, you are responsible for what that tool can do. canopy's controls
   assume chore tools only read.
 - If you sandbox runs (T4), prefix every command docs/SANDBOX.md lists, `private_worker_cmd` included, or name the

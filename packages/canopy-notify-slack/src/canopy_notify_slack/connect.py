@@ -16,9 +16,10 @@ a message with no user, from a bot (`bot_id`, which a bot posting under a person
 `subtype`, such as a join or a file comment. An edited message is printed as it reads now; canopy records a message by
 its `ts`, once, so an edit after that changes nothing. A review's thread is not read, nor the channel itself.
 
-Last, an `end` line naming the tickets whose threads were each read to the last page. A thread that could not be read
-prints nothing for its ticket but its error on stderr, so a cut-off read never looks like a thread nobody answered.
-Nothing is posted to Slack.
+Last, an `end` line naming the tickets whose threads were each read to the last page, `tickets`, and those it could
+not read, `unread`. A thread that could not be read prints nothing for its ticket but its error on stderr, so a cut-off
+read never looks like a thread nobody answered. A thread Slack no longer has, its first post deleted, is read as one
+with no replies, so it does not fail every run until it ages out. Nothing is posted to Slack.
 
 Exit codes: 0 everything was read; 1 something was not, and the `end` line names what was; 2 the command line, the
 token file, the threads file, or stdin is not usable, and nothing was read.
@@ -63,6 +64,8 @@ _KEY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
 _USER = re.compile(r"[UW][A-Z0-9]{2,30}")
 #: A message's `ts`.
 _TS = re.compile(r"\d{1,20}\.\d{1,20}")
+#: Slack's error for a thread it no longer has.
+_GONE = "thread_not_found"
 #: A link or a mention in a message's text, as Slack writes it: `<https://x|label>`, `<@U123>`, `<#C123|name>`.
 _ANGLED = re.compile(r"<([^<>|]*)(?:\|([^<>]*))?>")
 
@@ -112,7 +115,7 @@ def main(ctx: click.Context, channel: str, token_file: Path | None, days: int) -
     for key, started in asked.items():
         if _KEY.fullmatch(key) and (tickets is None or key in tickets):
             reader.read(key, [ts for _, ts in started])
-    _emit(sys.stdout, {"kind": "end", "tickets": reader.whole})
+    _emit(sys.stdout, {"kind": "end", "tickets": reader.whole, "unread": reader.unread})
     ctx.exit(1 if reader.failed else 0)
 
 
@@ -144,7 +147,7 @@ def _request(stdin: str) -> tuple[str, AbstractSet[str] | None]:
 
 @dataclass
 class _Reader:
-    """One run's reads: the tickets it printed whole, and whether anything was not read."""
+    """One run's reads: the tickets it printed whole, and those it could not read."""
 
     url: str
     token: str
@@ -152,7 +155,13 @@ class _Reader:
     stdout: TextIO
     #: The tickets each of whose threads was read to the last page, in the order read.
     whole: list[str] = field(default_factory=list[str])
-    failed: bool = False
+    #: The tickets one of whose threads could not be read, in the order read.
+    unread: list[str] = field(default_factory=list[str])
+
+    @property
+    def failed(self) -> bool:
+        """Whether a ticket's threads could not be read."""
+        return bool(self.unread)
 
     def read(self, key: str, threads: Sequence[str]) -> None:
         """Read each of a ticket's threads to the last page, and print its replies only if every one was."""
@@ -161,7 +170,7 @@ class _Reader:
             try:
                 lines += [line for m in self._messages(thread) if (line := _reply(key, thread, m)) is not None]
             except SinkError as e:
-                self.failed = True
+                self.unread.append(key)
                 _say(f"cannot read {key}'s thread {thread}: {e}")
                 return
         for line in lines:
@@ -172,7 +181,7 @@ class _Reader:
         """Every message of a thread, page by page, to the last.
 
         Returns:
-            The messages, the thread's first post among them, in Slack's order.
+            The messages, the thread's first post among them, in Slack's order; none for a thread Slack no longer has.
 
         Raises:
             SinkError: A page could not be read, Slack refused it, or the pages never end.
@@ -183,7 +192,11 @@ class _Reader:
             params = {"channel": self.channel, "ts": thread, "limit": str(PAGE)}
             if cursor:
                 params["cursor"] = cursor
-            reply = _get(self.url, params, self.token)
+            try:
+                reply = _get(self.url, params, self.token)
+            except _GoneError:
+                # Its first post was deleted: nobody can reply in it, and the replies it had are gone with it.
+                return found
             messages = reply.get("messages")
             listed: list[object] = messages if isinstance(messages, list) else []
             found.extend({str(k): v for k, v in m.items()} for m in listed if isinstance(m, dict))
@@ -224,8 +237,13 @@ def _get(url: str, params: Mapping[str, str], token: str) -> dict[str, object]:
     reply = {str(k): v for k, v in parsed.items()}
     if reply.get("ok") is not True:
         # `error` is Slack's own code, such as `missing_scope` or `thread_not_found`, never the token.
-        raise SinkError(f"Slack refused it: {str(reply.get('error'))[:100]}")
+        error = str(reply.get("error"))[:100]
+        raise (_GoneError if error == _GONE else SinkError)(f"Slack refused it: {error}")
     return reply
+
+
+class _GoneError(SinkError):
+    """Slack no longer has the thread asked for."""
 
 
 def _reply(key: str, thread: str, message: Mapping[str, object]) -> dict[str, object] | None:

@@ -129,7 +129,7 @@ def test_a_reply_a_person_wrote_in_a_tickets_thread_is_printed(replies: str, tmp
             "time": "1970-01-01T00:29:50.000005+00:00",
             "body": "Use the staging config, not prod.",
         },
-        {"kind": "end", "tickets": ["PROJ-1"]},
+        {"kind": "end", "tickets": ["PROJ-1"], "unread": []},
     ]
     # The bot token, as the sink sends it, and the channel and thread asked for by name.
     [(authorization, query)] = _Replies.received
@@ -176,7 +176,7 @@ def test_the_threads_of_the_last_days_are_read_and_no_review_thread(
     result = _read(replies, tmp_path)
     assert result.exit_code == 0, result.stderr
     assert _bodies(result) == [("PROJ-1", OPERATOR, "yesterday's answer"), ("PROJ-1", OPERATOR, "today's answer")]
-    assert _lines(result)[-1] == {"kind": "end", "tickets": ["PROJ-1"]}
+    assert _lines(result)[-1] == {"kind": "end", "tickets": ["PROJ-1"], "unread": []}
     # Four days back, PROJ-2's thread is read too.
     assert ("PROJ-2", OPERATOR, "too old") in _bodies(_read(replies, tmp_path, None, "--days", "4"))
 
@@ -189,7 +189,7 @@ def test_only_the_tickets_asked_are_read(replies: str, tmp_path: Path, state: Pa
     _Replies.threads = {"1790.000001": [], "1790.000002": [_says("1790.000003", "on two")]}
     result = _read(replies, tmp_path, {"repo": REPO, "tickets": ["PROJ-2", "PROJ-9"]})
     assert _bodies(result) == [("PROJ-2", OPERATOR, "on two")]
-    assert _lines(result)[-1] == {"kind": "end", "tickets": ["PROJ-2"]}
+    assert _lines(result)[-1] == {"kind": "end", "tickets": ["PROJ-2"], "unread": []}
     assert [q["ts"] for _, q in _Replies.received] == ["1790.000002"]
 
 
@@ -218,8 +218,23 @@ def test_a_thread_that_cannot_be_read_leaves_its_ticket_out_of_the_end(
     assert result.exit_code == 1
     # PROJ-1's other thread was read, but a ticket is printed whole or not at all.
     assert _bodies(result) == [("PROJ-2", OPERATOR, "two")]
-    assert _lines(result)[-1] == {"kind": "end", "tickets": ["PROJ-2"]}
+    assert _lines(result)[-1] == {"kind": "end", "tickets": ["PROJ-2"], "unread": ["PROJ-1"]}
     assert "cannot read PROJ-1's thread 1790.000001: Slack refused it: missing_scope" in result.stderr
+
+
+def test_a_thread_slack_no_longer_has_reads_as_one_with_no_replies(replies: str, tmp_path: Path, state: Path) -> None:
+    """A deleted first post takes its thread with it: it is read, and does not fail every run until it ages out."""
+    _threads(
+        state,
+        {"PROJ-1": {"day": "2026-09-26", "ts": "1790.000001"}},
+        earlier={"PROJ-1": [{"day": "2026-09-25", "ts": "1790.000000"}]},
+    )
+    _Replies.threads = {"1790.000001": [_says("1790.000011", "still here")]}
+    _Replies.refused = {"1790.000000": "thread_not_found"}
+    result = _read(replies, tmp_path)
+    assert result.exit_code == 0, result.stderr
+    assert _bodies(result) == [("PROJ-1", OPERATOR, "still here")]
+    assert _lines(result)[-1] == {"kind": "end", "tickets": ["PROJ-1"], "unread": []}
 
 
 @pytest.mark.parametrize(
@@ -257,7 +272,7 @@ def test_a_token_file_others_can_read_is_exit_2(replies: str, tmp_path: Path, st
 def test_no_threads_file_reads_nothing(replies: str, tmp_path: Path, state: Path) -> None:
     del state
     result = _read(replies, tmp_path)
-    assert (result.exit_code, _lines(result)) == (0, [{"kind": "end", "tickets": []}])
+    assert (result.exit_code, _lines(result)) == (0, [{"kind": "end", "tickets": [], "unread": []}])
 
 
 @pytest.mark.parametrize(

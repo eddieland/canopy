@@ -429,6 +429,8 @@ class SourceKind(StrEnum):
     VCS = "vcs"
     #: An artifact store's comment feed (DESIGN §38).
     ARTIFACTS = "artifacts"
+    #: The replies people wrote in the Slack sink's ticket threads; a listed operator's is their message (DESIGN §22).
+    SLACK = "slack"
 
 
 class ConnectorRunStatus(StrEnum):
