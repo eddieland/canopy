@@ -84,7 +84,7 @@ _FILE_MODE = 0o600
 _FRONT_MATTER = "---\n"
 # Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
 # and compared again.
-_FORMAT = 8
+_FORMAT = 9
 # The decimal places of a cost in a front matter: a millionth of a dollar, below what any run's cost is reported to.
 _COST_DIGITS = 6
 # The most characters of a title a file's name carries.
@@ -99,6 +99,8 @@ _MARKUP_RE = re.compile(r"([\\`*_~\[\]()<>|&$])")
 _PROMPT_NAME_RE = re.compile(r"\d+-(?:PROMPT|prompt)\.md")
 # What a planner's heading opens with before the ticket's title (the plan prompts' outline): `Plan: KEY`.
 _HEADING_PREFIX = re.compile(r"(?:feedback\s+)?plan(?:\s*:|\s*$)\s*", re.IGNORECASE)
+# What a planner puts between a heading's key and its title, or leaves at either end: `PROJ-1 — Title`, `Title -`.
+_EDGE_SEPARATORS = re.compile(r"^[\s\-\u2010-\u2015:,;|/·•]+|[\s\-\u2010-\u2015:,;|/·•]+$")
 # How long before an export a file must have last changed for its stat to stand for its bytes. A file changed in the
 # same tick of the filesystem's clock as it was read can change again with the same stat, git's "racily clean" case.
 _SETTLED_NS = 2_000_000_000
@@ -935,7 +937,8 @@ def _own_title(text: str, key: str) -> str:
     """The plan's first `# ` heading, less a leading `Plan:` or `Feedback plan:` and the ticket's key.
 
     A heading of the key alone takes its title from the first line of text below it, unless that is a heading: a
-    planner can read the outline's "then the ticket's title" as the line after.
+    planner can read the outline's "then the ticket's title" as the line after. Either way, the separators a planner
+    leaves at its ends, as the dash in `Plan: KEY — Title` or `Title -`, are not the title's.
 
     Returns:
         The title, or "" when the plan has no such heading or nothing past its prefix.
@@ -948,9 +951,9 @@ def _own_title(text: str, key: str) -> str:
     # The key alone, never the start of a longer one: `PROJ-1` stays in `PROJ-12`.
     rest = re.sub(rf"^{re.escape(key)}(?![A-Za-z0-9])", "", title, flags=re.IGNORECASE)
     if rest == title or any(c.isalnum() for c in rest):
-        return rest
+        return _EDGE_SEPARATORS.sub("", rest)
     below = next((line.strip() for line in lines[at + 1 :] if line.strip()), "")
-    return "" if below.startswith("#") else below
+    return "" if below.startswith("#") else _EDGE_SEPARATORS.sub("", below)
 
 
 def _slug(title: str) -> str:
