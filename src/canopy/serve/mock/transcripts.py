@@ -13,8 +13,8 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
 from canopy.infra import logs
-from canopy.serve import mock_reviews
-from canopy.serve.mock_chores import LODASH
+from canopy.serve.mock import reviews
+from canopy.serve.mock.chores import LODASH
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -322,7 +322,7 @@ def write(state_dir: Path, t0: datetime) -> None:
         _text(s2, -59.1, '{"status": "ok", "summary": "mock tick"}'),
         _step(s2, -59, 0.31, reason="stop"),
     ]
-    # Review 4 read the diff and the files it touches, then reported what its page shows (mock_reviews).
+    # Review 4 read the diff and the files it touches, then reported what its page shows (reviews.py).
     review_4 = [
         _start(r4, -57.9),
         _text(r4, -57.8, "I'll read the diff against main, then each file it touches in full."),
@@ -341,7 +341,7 @@ def write(state_dir: Path, t0: datetime) -> None:
                 "status": "completed",
                 "input": {"filePath": "checkout/src/search/useSearch.ts"},
                 # The new file is the diff's last hunk, its lines without their `+`.
-                "output": "\n".join(line[1:] for line in mock_reviews.DIFF_88.splitlines()[-21:]),
+                "output": "\n".join(line[1:] for line in reviews.DIFF_88.splitlines()[-21:]),
                 "title": "src/search/useSearch.ts",
             },
         ),
@@ -351,7 +351,7 @@ def write(state_dir: Path, t0: datetime) -> None:
         _done(r4, -56.6, "Find the other timings", "grep -rn '_MS =' src/config.ts", "export const TOAST_MS = 4000\n"),
         _step(r4, -56.5, 0.11, sent=21_400),
         _start(r4, -56.4),
-        _text(r4, -56.1, mock_reviews.LATEST.model_dump_json()),
+        _text(r4, -56.1, reviews.LATEST.model_dump_json()),
         _step(r4, -56, 0.04, reason="stop", sent=22_900),
     ]
     # Review 3 ended on a file it could not read, and never printed a result: `unknown`, as its row says.
@@ -419,7 +419,7 @@ def write(state_dir: Path, t0: datetime) -> None:
 
 
 def _task_run_1(t0: datetime) -> list[str]:
-    """Task 1's run (mock_tasks): it measured the checkout bundle, cut it over three model calls, and pushed.
+    """Task 1's run (tasks.py): it measured the checkout bundle, cut it over three model calls, and pushed.
 
     Its calls cost what its row says, $2.12, and the last sent its peak context, as the run's page shows them.
 

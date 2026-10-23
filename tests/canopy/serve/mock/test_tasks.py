@@ -4,8 +4,9 @@ import pytest
 
 from canopy.core import db, task_tickets, tasks
 from canopy.core.vocab import RunStatus
-from canopy.serve import mock, mock_tasks
+from canopy.serve import mock
 from canopy.serve.backend import Backend
+from canopy.serve.mock import tasks as mock_tasks
 from tests.canopy.web_helpers import client
 
 

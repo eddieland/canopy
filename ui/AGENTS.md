@@ -66,9 +66,9 @@ dozen. When every screenshot differs, check the browser before the change.
   `.oxlintrc.json`); a public member of an exported class needs one too, which the lint does not check.
 - **No hand-written memoization.** The compiler memoizes. `useMemo`, `useCallback`, and `memo` are banned by the lint.
   Follow the compiler's rules (no setState directly in an effect body, no reading refs during render, ...).
-- **Types come from the server.** API types are generated from the pydantic models in
-  `src/canopy/serve/schema.py`, the shared ones, and in each feature's `*_schema.py` beside it. To change a shape,
-  change the pydantic model, run `npm run gen:api`, and commit both. Import types from `src/api/types.ts`.
+- **Types come from the server.** API types are generated from the pydantic models in `src/canopy/serve/schema/`:
+  the shared ones in its `__init__.py`, and each feature's in a module of its own. To change a shape, change the
+  pydantic model, run `npm run gen:api`, and commit both. Import types from `src/api/types.ts`.
 - **One place per query.** Keys and fetchers live in `src/api/queries.ts`; components call `useQuery(xQuery)`.
 - **Live data comes from the stream, not polling.** No `refetchInterval`, but for the worktrees. Server pushes arrive
   through
@@ -108,7 +108,7 @@ dozen. When every screenshot differs, check the browser before the change.
 - **Formatting:** oxfmt, 120 columns, 4-space indent (the repository's `.editorconfig`). A formatter does not split a
   long string: split class lists across `cn()` or `cva()` arguments. The lint fails on a line over 120.
 - **Mocks are flagged.** `python -m canopy.serve --mock` serves the real API over a journal seeded from
-  `canopy/serve/mock.py`, a workspace of three repositories; the header shows `mock`. Its times are fixed around
+  `canopy/serve/mock/`, a workspace of three repositories; the header shows `mock`. Its times are fixed around
   2026-10-08 12:00 UTC: a screenshot test freezes the browser's clock (`NOW` in `e2e/helpers.ts`). `src/api/mocks.ts`
   holds a few typed rows for unit tests.
 - **The guide says what the pages do.** The operator's documentation is Markdown in `src/guide/` (`DESIGN.md`, "The

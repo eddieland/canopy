@@ -1,7 +1,7 @@
 """The API's types for personas (DESIGN §31): the persona each agent of a ticket writes in, and the operator's choice.
 
 Also every persona a run could get, and the one a run wrote in. Built on `schema.Model`, as every API type is
-(schema.py).
+(schema/__init__.py).
 """
 
 from __future__ import annotations

@@ -379,7 +379,7 @@ test("a review's finding is dismissed on its card, and kept again", async ({ pag
 })
 
 test('a review new to the operator is counted in the nav until its page shows it', async ({ page }) => {
-    // The mock operator has seen every review but review 2 (canopy/serve/mock_reviews.py).
+    // The mock operator has seen every review but review 2 (canopy/serve/mock/reviews.py).
     await page.goto('reviews')
     const nav = page.getByRole('navigation', { name: 'Main' })
     await expect(nav.getByRole('link', { name: 'Reviews 1 new review to read' })).toBeVisible()
@@ -418,7 +418,7 @@ test("a review's findings are sent to a worker from its list, as a reply on its 
 test("a coworker's PR's review is edited as a draft on its page and published, as canopy review publish does", async ({
     page,
 }) => {
-    // Review 5, of Carol's PR, is the one review with a draft no other test changes (canopy/serve/mock_reviews.py).
+    // Review 5, of Carol's PR, is the one review with a draft no other test changes (canopy/serve/mock/reviews.py).
     await page.goto('reviews/5')
     // The page is the draft's record: its title names whose review it is, and its line says where the draft stands.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:5 Your review of acme/api#14 by carol')
@@ -815,7 +815,7 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await expect(page.getByTestId('plan-card')).toContainText('superseded')
 })
 
-// The mock's lessons are recording (canopy/serve/mock_memory.py): a promoted lesson is served to no run.
+// The mock's lessons are recording (canopy/serve/mock/memory.py): a promoted lesson is served to no run.
 test("a proposal is promoted in the operator's words and another rejected from the memory page", async ({ page }) => {
     await page.goto('memory')
     const proposals = page.getByTestId('memory-proposals')

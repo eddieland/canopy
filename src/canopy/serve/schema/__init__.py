@@ -1,7 +1,7 @@
 """The API's shared types: the base model, and what more than one feature's routes serve (DESIGN §22).
 
-The UI's TypeScript types are generated from the OpenAPI schema these produce, with each feature's own types in the
-`*_schema.py` modules beside this one (ui/AGENTS.md). Change a model where it is defined, then regenerate the UI's types
+The UI's TypeScript types are generated from the OpenAPI schema these produce, with each feature's own types in a
+module of this package (ui/AGENTS.md). Change a model where it is defined, then regenerate the UI's types
 with `npm run gen:api` in ui/. Every text field that comes from the journal is untrusted: the UI renders it as text,
 never as HTML (DESIGN §22).
 
@@ -44,7 +44,7 @@ type StartStatus = Annotated[
 
 
 class Model(BaseModel):
-    """The base of every API model, here and in each feature's `*_schema.py`: frozen, and refusing unknown fields."""
+    """The base of every API model, here and in each feature's module: frozen, and refusing unknown fields."""
 
     # Fields with defaults are still always sent, so the generated TypeScript types mark them required. A field's
     # docstring is its description in the schema.

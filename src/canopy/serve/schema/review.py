@@ -2,7 +2,7 @@
 
 Review runs, their findings on their diffs, the operator's review requests, and what the operator does with a
 review: dismiss a finding, mark it seen, send findings to a worker. Built on `schema.Model`, as every API type is
-(schema.py).
+(schema/__init__.py).
 """
 
 from __future__ import annotations

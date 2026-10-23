@@ -14,15 +14,15 @@ from typing import TYPE_CHECKING, cast
 
 from canopy.core import contract, conversation, db, pr_list, review_drafts, review_requests, review_runs
 from canopy.serve import threads
-from canopy.serve.review_schema import (
+from canopy.serve.reviews import summaries
+from canopy.serve.schema import CostTotal
+from canopy.serve.schema.review import (
     PullRequest,
     PullRequestDetail,
     PullRequestDraft,
     ReviewDraftStatusName,
     ReviewRequest,
 )
-from canopy.serve.reviews import summaries
-from canopy.serve.schema import CostTotal
 from canopy.serve.views import decision, limit, run
 
 if TYPE_CHECKING:

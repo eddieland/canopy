@@ -5,7 +5,7 @@ import { E2E_SECRET } from './e2e/secret.ts'
 // End-to-end tests run against the production build served by FastAPI (canopy.serve), never the Vite dev server:
 // that is what operators get, base href, CSP, and SPA fallback included. `npm run test:e2e` builds first.
 //
-// Two servers, both over a journal seeded from fixtures (canopy/serve/mock.py):
+// Two servers, both over a journal seeded from fixtures (canopy/serve/mock/):
 //   root      at /, behind the listener secret E2E_SECRET, with no changes to the journal, so screenshots are stable
 //   prefixed  at /canopy, signing nobody in, changing the journal every 250 ms, for the base path, live updates, and
 //             writes (which would change root's screenshots)

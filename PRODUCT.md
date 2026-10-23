@@ -78,7 +78,7 @@ faster.
 
 ## Evidence on Hand
 
-- A mock journal of a three-repository workspace (`src/canopy/serve/mock.py`, run with
+- A mock journal of a three-repository workspace (`src/canopy/serve/mock/`, run with
   `python -m canopy.serve --mock`), with times fixed around 2026-10-08.
 - Playwright screenshot baselines for every route in both themes (`ui/e2e/screenshots.spec.ts-snapshots/`). The README
   shows the dark Attention, ticket, run, review, and tick pages.

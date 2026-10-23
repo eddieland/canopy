@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 
 from canopy.core import db, personas, plan_threads, plans, records, sql
 from canopy.core.vocab import PlanStatus, RunKind
-from canopy.serve.persona_schema import RunPersona
-from canopy.serve.plan_schema import PlanFile, PlanReplyView, PlanSummary, PlanThreadView, TicketPlans
+from canopy.serve.schema.persona import RunPersona
+from canopy.serve.schema.plan import PlanFile, PlanReplyView, PlanSummary, PlanThreadView, TicketPlans
 
 if TYPE_CHECKING:
     from canopy.core.context import Context

@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from canopy.core import db, records, review_diff, review_drafts, review_result, review_revisions, review_runs, sql
-from canopy.serve.review_schema import (
+from canopy.serve.schema.review import (
     ReviewDraft,
     ReviewDraftAuthorName,
     ReviewDraftComment,

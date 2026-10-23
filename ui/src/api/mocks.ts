@@ -1,4 +1,4 @@
-// Typed fixtures for unit tests, a few of the rows canopy/serve/mock.py seeds its journal with. The dev server and the
+// Typed fixtures for unit tests, a few of the rows canopy/serve/mock/ seeds its journal with. The dev server and the
 // end-to-end tests get the whole seeded journal from `python -m canopy.serve --mock`.
 import type {
     Attachments,

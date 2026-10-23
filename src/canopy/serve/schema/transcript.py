@@ -1,6 +1,6 @@
 """The API's types for a run's log or a tick's output (DESIGN §22): its session's transcript, and the file's end.
 
-Built on `schema.Model`, as every API type is (schema.py).
+Built on `schema.Model`, as every API type is (schema/__init__.py).
 """
 
 from __future__ import annotations

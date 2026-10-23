@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 from canopy.core import sql, tasks
 from canopy.infra import logs
 from canopy.serve import chore_views, reviews, spend_views, task_views, tick_views, views
-from canopy.serve.event_schema import (
+from canopy.serve.schema.event import (
     AttentionUpdated,
     ChoresUpdated,
     LoopUpdated,
@@ -51,8 +51,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
     from canopy.serve.schema import LastTick, LoopState, TicketSummary
-    from canopy.serve.spend_schema import Spend
-    from canopy.serve.task_schema import TaskSummary
+    from canopy.serve.schema.spend import Spend
+    from canopy.serve.schema.task import TaskSummary
 
 # Reading one pragma costs next to nothing, and a server has a handful of streams open, so a change shows within a
 # quarter of a second rather than within one. A stream whose page left unheard polls only until its lifetime ends

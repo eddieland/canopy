@@ -1,7 +1,7 @@
 """The API's types for one-off tasks (DESIGN §36): the list, a task's page, a run, a report, and the operator's writes.
 
-Built on `schema.Model`, as every API type is (schema.py). A task's text is the operator's; everything a run wrote, its
-summary, question, and report among it, is an agent's: untrusted text, which the UI renders as text.
+Built on `schema.Model`, as every API type is (schema/__init__.py). A task's text is the operator's; everything a run
+wrote, its summary, question, and report among it, is an agent's: untrusted text, which the UI renders as text.
 """
 
 from __future__ import annotations
