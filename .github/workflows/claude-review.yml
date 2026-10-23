@@ -78,7 +78,7 @@ jobs:
 
       - name: Review with Claude
         # Pinned to a commit, not the movable v1 tag, because this step holds the subscription token.
-        uses: anthropics/claude-code-action@374f254f5efaf968abfe15d399fd90972e8138b9 # v1
+        uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The Screenshots workflow pushes a PR's baselines as github-actions[bot], and the action refuses a run a bot

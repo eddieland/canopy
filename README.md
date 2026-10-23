@@ -66,7 +66,8 @@ Ask canopy to review a coworker's PR, with `canopy start PR_URL --review` or the
 canopy, posting nothing. The review is a draft you iterate on: dismiss findings, edit the text, or reply with what to
 change, `canopy reply review:ID`, and an agent revises it into a new version. When it says what you mean,
 `canopy review publish RUN_ID HASH` posts that one version, word for word, as your comment review: pending on GitHub for
-you to submit there, or submitted with `--submit`. Ask again after the author pushes, and the new head gets a review of
+you to submit there, or submitted with `--submit`; `canopy review discard RUN_ID` posts nothing and stops it waiting on
+you. Ask again after the author pushes, and the new head gets a review of
 its own. Publishing and revising are built from the CLI; asking for a revision from the review's page is still to come
 (§21, §34).
 

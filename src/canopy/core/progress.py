@@ -1,7 +1,8 @@
-"""What a running tick's overseer or chore run's agent has printed so far, kept as it prints it (DESIGN §6, §19, §22).
+"""What a running tick's overseer or a run's agent has printed so far, kept as it prints it (DESIGN §6, §19, §22).
 
 Each line goes to the log as it comes, so the web UI reads a running session's transcript from it, and what its events
-report so far, its session and what it has spent, goes on the tick or chore run, whose change the UI's stream carries.
+report so far, its session and what it has spent, goes on the tick or the chore, task, or review run, whose change the
+UI's stream carries.
 A worker run's `_run` keeps its own, which also records the latest tool call on the run (§8).
 """
 

@@ -1,0 +1,55 @@
+import { expect, test } from '@playwright/test'
+
+import { settled, signIn } from './helpers.ts'
+
+// A task's page (ui/DESIGN.md, "A task"), over the mock journal's tasks: task 1 done with a report, a draft PR, and two
+// tickets; task 4 waiting on the operator's answer.
+
+test.beforeEach(async ({ page }) => {
+    await signIn(page)
+})
+
+test("the list opens a task's page, whose story starts with your instruction and whose report is laid out", async ({
+    page,
+}) => {
+    await page.goto('tasks')
+    await settled(page)
+    await page.getByTestId('task-1').getByRole('link', { name: 'task:1', exact: true }).click()
+    await expect(page).toHaveURL(/\/tasks\/1$/u)
+    await settled(page)
+    const story = page.getByTestId('conversation').getByRole('listitem')
+    await expect(story.first()).toHaveAttribute('data-testid', 'instruction')
+    await expect(story.first()).toContainText("The checkout page's bundle grew past 900 kB")
+    const report = page.getByTestId('task-report')
+    await expect(report.getByRole('heading', { name: 'Checkout bundle' })).toBeVisible()
+    await expect(report).toContainText('from task:1#1')
+})
+
+test('what a task left names its commit, its draft PR, and the tickets it filed, each opening its page', async ({
+    page,
+}) => {
+    await page.goto('tasks/1')
+    await settled(page)
+    const left = page.getByTestId('task-left')
+    await expect(left.getByTestId('task-heads')).toContainText('task:1#1')
+    await expect(left.getByRole('link', { name: 'acme/web#97', exact: true })).toBeVisible()
+    await expect(left.getByRole('link', { name: 'ABC-120', exact: true })).toHaveAttribute(
+        'href',
+        /\/tickets\/ABC-120$/u,
+    )
+    await expect(left).toContainText('All of it is throwaway until you give it a pass of its own.')
+})
+
+test("a task's open question is marked, and its foot names the command that answers it", async ({ page }) => {
+    await page.goto('tasks/4')
+    await settled(page)
+    await expect(page.getByTestId('conversation').getByText('waiting on you')).toBeVisible()
+    const foot = page.getByRole('region', { name: 'A question waiting on you' })
+    await expect(foot).toContainText('canopy reply task:4 TEXT')
+})
+
+test('a task canopy has no record of says so', async ({ page }) => {
+    await page.goto('tasks/999')
+    await settled(page)
+    await expect(page.locator('main')).toContainText('canopy has no task:999')
+})

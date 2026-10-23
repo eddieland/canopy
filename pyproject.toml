@@ -131,8 +131,10 @@ dev = [
     "actionlint-py>=1.7.12.25",
     "editorconfig-checker>=3.11.1",
     "httpx2>=2.13.1",
-    "hypothesis>=6.169.4",
-    "pyrefly>=1.3.2",
+    "hypothesis>=6.170.0",
+    # Holds what an MCP tool returns to the schema it lists, as a client would check it (tests/canopy/loop/test_mcp.py).
+    "jsonschema>=4.26.0",
+    "pyrefly>=1.4.0",
     "pytest>=9.1",
     # Line and branch coverage: `make coverage`, and `make check COVERAGE=1`, whose coverage.xml CI sends to Codecov.
     "pytest-cov>=7.1.0",
@@ -143,6 +145,8 @@ dev = [
     # Snapshot tests: what canopy renders whole, held to a file under a test's `__snapshots__/` (AGENTS.md, Testing).
     "syrupy>=6.1.1",
     # Security lint for the GitHub workflows, beside actionlint's correctness checks: pins, triggers, token handling.
+    # jsonschema's types, for the type checker.
+    "types-jsonschema>=4.26.0.20261006",
     "zizmor>=1.31.1",
 ]
 

@@ -4,7 +4,8 @@ Ticket notes are in use and lessons recording, as the mock's config sets them. A
 superseded, and one written to the journal by hand past the bounds, with a link and a zero-width space, which every
 surface shows as plain text with the space named. Run 37 was rendered while notes were recording, so it read nothing;
 run 40 read run 37's note and had a secret refused. Two proposals wait, one from a private ticket's run, and one
-promoted earlier is a lesson, recorded and served to no run.
+promoted earlier is a lesson, recorded and served to no run. Two lessons the operator wrote are pinned, one for every
+repository, so the memory page shows its pinned lessons apart from the rest.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 
 
 def seed(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
-    """Insert what each run recorded and read of memory, the notes and proposals, and the lesson."""
+    """Insert what each run recorded and read of memory, the notes and proposals, and the lessons."""
     sql.execute_many(
         conn,
         sql.insert_rows("run_memory", ("run_id", "ticket_notes", "proposals", "refused")),
@@ -197,5 +198,38 @@ def seed(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
             approved_at=at(-100),
             review_at=at(90 * 24 * 60),
         ),
+    )
+    sql.execute_many(
+        conn,
+        sql.insert_rows(
+            "memories",
+            ("id", "scope", "repo", "key", "body", "status", "author", "created_at", "approved_at", "pinned_at"),
+        ),
+        [
+            (
+                9,
+                "lesson",
+                None,
+                "staging-db-shared",
+                "The staging database is shared with QA: never truncate, reseed, or migrate it from a worker.",
+                "active",
+                "operator",
+                at(-40 * 24 * 60),
+                at(-40 * 24 * 60),
+                at(-30 * 24 * 60),
+            ),
+            (
+                10,
+                "lesson",
+                "api",
+                "api-migrations",
+                "Migrations in api are append-only: add a new file under migrations/, never edit a shipped one.",
+                "active",
+                "operator",
+                at(-20 * 24 * 60),
+                at(-20 * 24 * 60),
+                at(-20 * 24 * 60),
+            ),
+        ],
     )
     sql.execute(conn, sql.insert("memory_reads", run_id=40, memory_id=1, cited="used"))

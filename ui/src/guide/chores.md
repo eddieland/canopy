@@ -128,4 +128,8 @@ reads its own chore's history and no other's, and the overseer reads none. You c
 `canopy chore history NAME`: it's the **Runs** list with the details left in.
 
 A chore with an agent definition of your own needs `"canopy_chore_history": allow` among its permissions to look back.
+A chore's run also gets a second server, of canopy's own reports, for a chore that looks at canopy itself:
+`canopy_reports_health`, `canopy_reports_spend`, and agent memory's `canopy_reports_memory-lessons`, `-proposals`, and
+`-list`, each the JSON its command prints with `--json`. The agent canopy ships reads none of them; yours allows the
+ones it needs, each by name, and needs no shell for them.
 A sandboxed chore can't: the journal sits in the part of `.canopy/` its sandbox hides, so it makes do with its prompt.
