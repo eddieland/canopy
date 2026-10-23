@@ -20,7 +20,8 @@ the measurement read.
 
 ### Sources
 
-There is at most one source of each kind, `tracker` and `vcs`, each a command run with no shell (§20) under a timeout.
+There is at most one source of each kind, `tracker`, `vcs`, and `artifacts` (an artifact store's comment feed, §38),
+each a command run with no shell (§20) under a timeout.
 Every `connect.*` key is private (§12, TRUST_MODEL T7), since each runs a command with the operator's credentials. The
 `vcs` source defaults to canopy's own programs (§29), so PRs are observed with nothing configured. There is no default
 `tracker` source, since the harness never branches on `tracker.provider` (§17); without one, tickets are not observed,
@@ -33,9 +34,11 @@ whatever its pace for ticks (§6, Ticks and polls).
 On stdin, one JSON object naming what to observe, and a connector reads only what it is given: a `tracker` source the
 tracker query and every ticket the state block lists (§6 step 4); a `vcs` source every PR of a ticket not marked done,
 with a draft waiting (§29), or last observed open, so no observation stays open unread, the repositories, the branch
-prefix, and the review query. On stdout, one JSON line per observation, naming its kind (tickets and comments; PRs,
-branches, checks, and reviews), and last an `end` line naming what the run read whole; the exit code is not read. A
-connector of the operator's own speaks this contract and nothing else: it is all the harness knows of any of them.
+prefix, and the review query; an `artifacts` source its feed's cursor. On stdout, one JSON line per observation, naming
+its kind (tickets and comments; PRs, branches, checks, and reviews; a feed's changes to comments and threads), and last
+an `end` line naming what the run read whole, or for a feed the cursor its next run reads from; the exit code is not
+read. A connector of the operator's own speaks this contract and nothing else: it is all the harness knows of any of
+them.
 
 - Ids, states, times, and bounded text; never logs, diffs, PR descriptions, or a credential.
 - A connector pages everything before `end` names it: the tracker query to its last page (REQUIREMENTS R1), a PR's
@@ -52,7 +55,9 @@ not whole this run, whatever `end` says, so a line canopy could not read never l
 run with no `end` line records nothing: without it, canopy cannot tell what is missing from what is not there. A
 subject read whole has its observations replaced in one transaction, so what is gone from the source is gone from the
 journal; a subject not read whole keeps its old rows and their age. A refused line whose subject canopy cannot read
-leaves no subject of its kind whole; a line that is not JSON is skipped, as an unknown kind is.
+leaves no subject of its kind whole; a line that is not JSON is skipped, as an unknown kind is. A feed is never read
+whole: each change is read once, past the cursor the last run's `end` line named, and kept as the newest change to its
+thread or comment. A refused change holds the cursor before it, so the next run reads it again and none is missed.
 
 Comments are kept apart from the conversation, in their own observations, once each and cut and marked as a mirrored
 comment is (§22), the workers' marks (D069) read in code. The conversation is what a private worker's prompt carries
@@ -65,7 +70,8 @@ reads after a run and before a send are validated the same way but are not a tic
 ### In the tick, and between ticks
 
 In §6 step 3, after the reconciles, the tick runs the `tracker` source, then the `vcs` source, which is also §29's
-reconcile read; a tick whose reconcile failed runs neither, and a dry run observes as a live tick does. A source that
+reconcile read, then the `artifacts` source; a tick whose reconcile failed runs none, and a dry run observes as a live
+tick does. A source that
 fails, or reads less than it was asked, keeps its previous observations and raises the harness's `connector_failed`
 (§14), naming what was not read, each tick until a run reads everything; the overseer's view of the list leaves it
 out. It is one item about the workspace, its detail naming each failing source, since the attention list has no
@@ -117,6 +123,4 @@ credentials with it).
 
 ### Open
 
-- The tracker query's result in the state block in place of the query, which a cheaper overseer skipped unseen.
-  §35 puts it there.
 - Whether one failed run should raise `connector_failed`, or only one that leaves an observation stale.

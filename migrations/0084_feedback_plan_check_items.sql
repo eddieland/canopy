@@ -4,7 +4,7 @@
 -- observed id is (`feedback_items.check_id`, `feedback_items.conflict_id`); neither has an author, so neither has a
 -- reply. SQLite cannot change a CHECK in place, so `feedback_plan_items` is rebuilt with every row it had; nothing
 -- references it.
-CREATE TABLE feedback_plan_items_0083 (
+CREATE TABLE feedback_plan_items_0084 (
     plan_id   INTEGER NOT NULL REFERENCES feedback_plans(id),
     number    INTEGER NOT NULL CHECK (number > 0),
     pr_url    TEXT NOT NULL,
@@ -18,10 +18,10 @@ CREATE TABLE feedback_plan_items_0083 (
     CHECK ((item IN ('check', 'conflict')) = (item_id < 0)),
     CHECK (item IN ('review', 'comment') OR reply IS NULL)
 );
-INSERT INTO feedback_plan_items_0083 (plan_id, number, pr_url, item, item_id, proposal, reply, left_out)
+INSERT INTO feedback_plan_items_0084 (plan_id, number, pr_url, item, item_id, proposal, reply, left_out)
     SELECT plan_id, number, pr_url, item, item_id, proposal, reply, left_out FROM feedback_plan_items;
 DROP TABLE feedback_plan_items;
-ALTER TABLE feedback_plan_items_0083 RENAME TO feedback_plan_items;
+ALTER TABLE feedback_plan_items_0084 RENAME TO feedback_plan_items;
 
 -- Whether each PR a plan read conflicted with its base then: 1 or 0 as its host said, and NULL while it had not said,
 -- or for a plan recorded before this, which was offered no conflict, so that a conflict on its PR since makes it stale.
