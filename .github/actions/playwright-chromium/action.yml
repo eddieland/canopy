@@ -1,0 +1,44 @@
+name: Install Playwright's Chromium
+description: >-
+  Installs the Chromium the pinned Playwright drives and the system packages it needs, keeping the packages' .deb files
+  in the Actions cache. Runs from the repository root, after `npm --prefix ui ci`.
+
+# Ubuntu's mirror often serves the runners those 26 MB of packages at 40 to 85 kB/s: a fifth of the ui-e2e jobs spent 5
+# to 11 minutes here rather than 20 seconds. apt reuses a .deb it already holds when it matches the signed index, so
+# with the cache it downloads only what changed since the cache was saved. The browser comes from Playwright's own CDN,
+# which has stayed fast, and is not cached: restoring its 250 MB takes about as long as downloading it.
+runs:
+  using: composite
+  steps:
+    # A new runner image or Playwright version saves a new cache, starting from the last one so only the new packages
+    # are downloaded. The directory is outside $HOME, which apt's download user cannot enter: there apt would download
+    # as root instead, with a warning.
+    - name: Prepare the cache
+      id: cache-key
+      shell: bash
+      run: |
+        sudo install -d -o "$(id -u)" -g "$(id -g)" /var/cache/playwright-apt
+        version=$(node -p 'require("./ui/node_modules/@playwright/test/package.json").version')
+        echo "key=playwright-apt-$ImageOS-$ImageVersion-$version" >>"$GITHUB_OUTPUT"
+        echo "prefix=playwright-apt-$ImageOS-" >>"$GITHUB_OUTPUT"
+
+    - name: Restore the system packages
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: /var/cache/playwright-apt
+        key: ${{ steps.cache-key.outputs.key }}
+        restore-keys: ${{ steps.cache-key.outputs.prefix }}
+
+    - name: Install Chromium and its system packages
+      shell: bash
+      working-directory: ui
+      run: |
+        archives=/var/cache/playwright-apt
+        conf=/etc/apt/apt.conf.d/90playwright-archives
+        mkdir -p "$archives/partial"
+        echo "Dir::Cache::Archives \"$archives/\";" | sudo tee "$conf" >/dev/null
+        npx playwright install --with-deps chromium
+        # Drop versions the mirror no longer offers, so the cache does not grow with every update, and apt's own
+        # files, which only root can read and would fail the cache's save.
+        sudo apt-get autoclean -qq
+        sudo rm -rf "$archives/partial" "$archives/lock" "$conf"

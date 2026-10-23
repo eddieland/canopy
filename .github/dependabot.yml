@@ -79,8 +79,9 @@ updates:
       prefix: build
       include: scope
 
+  # The workflows, and the composite actions they share, each in a directory of its own under .github/actions.
   - package-ecosystem: github-actions
-    directory: /
+    directories: [/, /.github/actions/*]
     schedule:
       interval: weekly
     cooldown:
