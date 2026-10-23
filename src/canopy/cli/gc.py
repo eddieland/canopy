@@ -10,9 +10,10 @@ import click
 
 from canopy.cli.common import CliError, open_context
 from canopy.core import conversation, reports
-from canopy.loop import gc, vacuum
+from canopy.loop import gc, git_gc, vacuum
 
 if TYPE_CHECKING:
+    from canopy.core.context import Context
     from canopy.loop.gc import Report
 
 _NAME_WIDTH = 20
@@ -25,38 +26,35 @@ _SIZE_WIDTH = 11
 @click.option("--dry-run", is_flag=True, help="Report what a pass would remove, and remove nothing.")
 @click.option("--json", "as_json", is_flag=True, help="Print the dry run's report as one JSON object instead.")
 @click.option("--vacuum", "vacuum_journal", is_flag=True, help="Give the journal's free pages back to its disk.")
+@click.option("--git", "git_objects", is_flag=True, help="Pack the primary clones' loose objects and small packs.")
 @click.pass_context
-def cmd_gc(click_ctx: click.Context, *, dry_run: bool, as_json: bool, vacuum_journal: bool) -> int:
+def cmd_gc(click_ctx: click.Context, *, dry_run: bool, as_json: bool, vacuum_journal: bool, git_objects: bool) -> int:
     """Report what canopy keeps of its own history, and what a pass with your `[retention]` would remove.
 
     For each kind: how many there are and their size, then how many a pass would remove and theirs, and the rule that
     removes them. A live tick runs the pass once a day, removing the files and the journal's rows the report counts,
     and rotates canopy.log. By hand, `--dry-run` removes nothing, and `--vacuum` shrinks the journal by its free pages:
-    it runs only while no tick is running and no run is live, and when the disk has room for a copy of the journal
-    (ROADMAP M47).
+    it runs only while no tick is running and no run is live, and when the disk has room for a copy of the journal.
+    `--git` packs each primary clone's loose objects and combines its small packs, pruning nothing, and skips a
+    repository while a slot of its pool is leased; a dispatch waits for it (ROADMAP M47).
 
     Raises:
-        UsageError: neither `--dry-run` nor `--vacuum` is given, or both are.
-        CliError: it runs inside one of canopy's ticks or runs, or `--vacuum` cannot run now.
+        UsageError: not exactly one of `--dry-run`, `--vacuum`, and `--git` is given.
+        CliError: it runs inside one of canopy's ticks or runs, `--vacuum` cannot run now, or git failed in a clone.
     """
     try:
         conversation.check_operator()
     except conversation.Refused as r:
         raise CliError(f"gc refused ({r.guard}): {r.reason}") from None
-    if dry_run == vacuum_journal:
+    if dry_run + vacuum_journal + git_objects != 1:
         raise click.UsageError(
-            "give `--dry-run` or `--vacuum`; the loop's live ticks run the pass once a day",
+            "give one of `--dry-run`, `--vacuum`, and `--git`; the loop's live ticks run the pass once a day",
         )
     ctx = open_context(click_ctx)
+    if git_objects:
+        return _git(ctx)
     if vacuum_journal:
-        try:
-            done = vacuum.vacuum(ctx)
-        except vacuum.RefusedError as e:
-            raise CliError(f"gc --vacuum refused: {e}") from None
-        click.echo(f"The journal was {size_text(done.before)}, and is {size_text(done.after)}.")
-        if not done.checkpointed:
-            click.echo("A reader holds its WAL: it shrinks the rest of the way once the reader lets go.")
-        return 0
+        return _vacuum(ctx)
     report = gc.measure(ctx, datetime.now(UTC))
     if as_json:
         click.echo(reports.report_json(dataclasses.asdict(report)))
@@ -108,6 +106,43 @@ def size_text(size: int) -> str:
         value /= gc.KIB
         units.pop(0)
     return f"{value:.1f} {units[0]}"
+
+
+def _git(ctx: Context) -> int:
+    """`--git`, printing what it came to in each primary clone.
+
+    Returns:
+        0, when git failed in no clone.
+
+    Raises:
+        CliError: git failed in a clone.
+    """
+    done = git_gc.maintain(ctx)
+    for repo in done:
+        click.echo(f"{repo.repo}: {repo.outcome}: {repo.detail}")
+    failed = sum(r.outcome == "failed" for r in done)
+    if failed:
+        raise CliError(f"git failed in {failed} of {len(done)} primary clones; see above")
+    return 0
+
+
+def _vacuum(ctx: Context) -> int:
+    """`--vacuum`, printing the journal's size before and after.
+
+    Returns:
+        0, once the journal is vacuumed.
+
+    Raises:
+        CliError: it cannot run now.
+    """
+    try:
+        done = vacuum.vacuum(ctx)
+    except vacuum.RefusedError as e:
+        raise CliError(f"gc --vacuum refused: {e}") from None
+    click.echo(f"The journal was {size_text(done.before)}, and is {size_text(done.after)}.")
+    if not done.checkpointed:
+        click.echo("A reader holds its WAL: it shrinks the rest of the way once the reader lets go.")
+    return 0
 
 
 # The cells of a row: kind, unit, count, size, how many a pass removes, their size, and by what rule.
