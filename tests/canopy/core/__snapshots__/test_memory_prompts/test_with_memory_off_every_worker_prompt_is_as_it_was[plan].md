@@ -11,9 +11,10 @@ The repositories this plan covers, as the overseer chose them:
 This run works in one repository:
 - `repo` at `/pool/1/repo`: branch `agent/PROJ-1-work`
 
-Your git tools, `canopy_git_log`, `canopy_git_blame`, `canopy_git_show`, `canopy_git_diff`, and
-`canopy_git_merge-base`, read each one's history: how the code you plan around came to be, which commit wrote a line,
-and a file as it was. Name the repository with `repo`, as above.
+Your git tools, `canopy_git_log`, `canopy_git_blame`, `canopy_git_show`, `canopy_git_diff`,
+`canopy_git_merge-base`, `canopy_git_grep`, and `canopy_git_files`, read each one's history: how the code you plan
+around came to be, which commit wrote a line, a file as it was, and where a text or a file is at a commit. Name the
+repository with `repo`, as above.
 
 The workspace map, `MAP.md`, on what each repository owns and how they depend on each other:
 

@@ -379,8 +379,8 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         ),
         _git_tool(
             git_tools.DIFF,
-            "Show the diff from one commit to another, in the paths named if any. Commits only, never the working "
-            "tree.",
+            "Show the diff from one commit to another, in the paths named if any, or with stat each file changed and "
+            "its lines added and removed. Commits only, never the working tree.",
             git_tools.Diff,
             git_tools.diff,
             runner=runner,
@@ -407,9 +407,29 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         _git_tool(
             git_tools.BLAME,
             "Name the commit that last changed each of some lines of a file as it is at a commit, with its author and "
-            "date: which lines a branch wrote, and what commit to read for why the rest are so.",
+            "date: which lines a branch wrote, and what commit to read for why the rest are so. moves and "
+            "ignore_whitespace look past a refactor that moved or reindented them.",
             git_tools.Blame,
             git_tools.blame,
+            runner=runner,
+            checkouts=checkouts,
+        ),
+        _git_tool(
+            git_tools.GREP,
+            "Find the lines that hold an exact text in the files as they are at a commit, each as path:line:text: "
+            "who calls a function, or what used a name before a branch changed it. Not a pattern; files that are not "
+            "text are left out.",
+            git_tools.Grep,
+            git_tools.grep,
+            runner=runner,
+            checkouts=checkouts,
+        ),
+        _git_tool(
+            git_tools.FILES,
+            "List the paths of the files as they are at a commit, under some paths if named, and only those whose own "
+            "name matches a name or a glob such as `*.py` if one is given.",
+            git_tools.Files,
+            git_tools.files,
             runner=runner,
             checkouts=checkouts,
         ),
