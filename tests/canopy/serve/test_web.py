@@ -151,6 +151,11 @@ def test_meta_carries_each_repositorys_branch_url_when_set(canopy_env: CanopyEnv
         other.conn.close()
 
 
+def test_meta_names_the_workspaces_repositories(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    assert c.get("/api/meta").json()["repos"] == ["repo"]
+
+
 def test_meta_carries_the_trackers_ticket_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     assert c.get("/api/meta").json()["ticket_url"] is None

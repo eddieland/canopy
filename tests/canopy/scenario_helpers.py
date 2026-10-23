@@ -141,7 +141,7 @@ from typing import Any, Literal, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
-from canopy.core import db, records, review_runs
+from canopy.core import db, feedback_items, records, review_runs
 from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TickStatus
 from canopy.infra import logs, procs
 from canopy.loop import attention, poll
@@ -157,6 +157,7 @@ from tests.canopy.helpers import (
     Script,
     blocked_result,
     canopy,
+    comment,
     commit_and_push,
     context,
     in_tick,
@@ -164,6 +165,7 @@ from tests.canopy.helpers import (
     last_tick,
     operator,
     overseer_does,
+    planner_does,
     present,
     seen,
     state_block,
@@ -180,6 +182,26 @@ type Worker = AbstractContextManager[None]
 #: Which of the workspace's config files a test sets keys in (DESIGN §12): the operator's user file, the workspace
 #: file, or the workspace's private file.
 type ConfigFile = Literal["user", "workspace", "private"]
+
+#: A feedback plan's text, as `feedback_planned`'s planner writes it.
+FEEDBACK_TEXT = "# Feedback plan: PROJ-1\n\n## Items\n\n### Item 501: change\n\nRename it.\n"
+#: alice's comment, which `with_a_pr` trusts her for, and bob's, on a thread of its own, both on DRAFTS_PR's head.
+ALICES_COMMENT = comment(501)
+BOBS_COMMENT = comment(502, "PRRT_2", author="bob", body="Drop this argument.")
+#: DRAFTS_PR's head in `github_shows`, and the check that is red there.
+FEEDBACK_HEAD = "abc1234"
+FEEDBACK_RED = {"name": "build", "status": "completed", "conclusion": "failure"}
+#: `feedback_planned`'s planner's result: a change for alice's comment, a decline for bob's, and an id it was never
+#: given.
+FEEDBACK_PLANNED = {
+    "status": "done",
+    "summary": "planned the round",
+    "items": [
+        {"id": 501, "proposal": "change", "reply": "Renamed."},
+        {"id": 502, "proposal": "decline", "reply": "Kept, since the API needs it."},
+        {"id": 999, "proposal": "change"},
+    ],
+}
 
 #: How many lines of what a command printed to stdout its step in the story keeps; what it printed to stderr, where a
 #: refusal says why, the story keeps whole.
@@ -1036,6 +1058,49 @@ def sends_drafts(entries: object, *, pr: str = DRAFTS_PR) -> Script:
     """The worker pushes its ticket's branch and reports it done with `pr` open in `repo`, sending `entries` as its
     drafts, whatever they hold, so a test can send ones canopy refuses."""
     return pushes(prs={"repo": pr}, drafts=entries)
+
+
+def with_a_pr(scenario: Scenario, *, approve: bool = True) -> None:
+    """KEY's implement pushes its branch and opens DRAFTS_PR; with `approve`, feedback plans are on, and alice is
+    trusted (DESIGN §32)."""
+    scenario.run(dispatches(slug="work"), worker=pushes(prs={"repo": DRAFTS_PR}))
+    if approve:
+        scenario.configures("private", policy={"feedback_plan": "approve"}, trust={"trusted_reviewers": ["alice"]})
+
+
+def github_shows(
+    state: Path,
+    *reviews: dict[str, Any],
+    head: str = FEEDBACK_HEAD,
+    checks: Sequence[Mapping[str, object]] = (FEEDBACK_RED,),
+    mergeable: str = "mergeable",
+) -> None:
+    """Make the fake GitHub hold DRAFTS_PR at `head`, by `me`, with `reviews` on it, `checks` at its head, and
+    `mergeable`."""
+    shown = {"pr": {"head_sha": head, "mergeable": mergeable}, "reviews": list(reviews), "checks": list(checks)}
+    state.write_text(json.dumps({"prs": {DRAFTS_PR: shown}}))
+
+
+def feedback_planned(
+    scenario: Scenario,
+    github_state: Path,
+    result: object = None,
+    *,
+    mergeable: str = "mergeable",
+) -> int:
+    """A feedback plan run on alice's and bob's comments, `build` red, that writes FEEDBACK_TEXT and reports `result`,
+    FEEDBACK_PLANNED by default.
+
+    Returns:
+        Its run id.
+    """
+    github_shows(github_state, ALICES_COMMENT, BOBS_COMMENT, mergeable=mergeable)
+    line = FEEDBACK_PLANNED if result is None else result
+    assert isinstance(line, dict)
+    worker = planner_does(["cat", feedback_items.ITEMS], plan=FEEDBACK_TEXT, result=line)
+    run = scenario.run(dispatches(kind=RunKind.FEEDBACK_PLAN), worker=worker)
+    assert run.status == RunStatus.DONE, run
+    return run.id
 
 
 @contextmanager

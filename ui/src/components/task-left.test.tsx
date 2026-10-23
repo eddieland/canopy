@@ -53,7 +53,8 @@ describe('TaskLeft', () => {
         const shown = await left(DONE, [mockTaskRun()], tickets)
         expect(within(shown).getByText('tickets in ABC')).toBeTruthy()
         expect(within(shown).getByRole('link', { name: 'ABC-120' }).getAttribute('href')).toBe('/tickets/ABC-120')
-        expect(within(screen.getByTestId('task-tickets')).getAllByText('from task:1#1')).toHaveLength(2)
+        const from = within(screen.getByTestId('task-tickets')).getAllByRole('link', { name: 'task:1#1' })
+        expect(from.map((link) => link.getAttribute('href'))).toEqual(['/tasks/1/runs/1', '/tasks/1/runs/1'])
     })
 
     it('says plainly what a task left nothing of, and why', async () => {

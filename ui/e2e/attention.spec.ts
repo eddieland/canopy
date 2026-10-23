@@ -108,6 +108,33 @@ test("a requested review's draft leads to the review's page, where it is read an
     await expect(page.getByTestId('draft-siblings').getByRole('link', { name: 'canopy' })).toBeVisible()
 })
 
+test("a task's question is named by its text, and leads to the task's page, where it is answered", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const row = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'task:4' })
+    // Named as the tasks list names it, by its text's first line.
+    await expect(row).toContainText('Rename the `billing_v1` feature flag')
+    await row.click()
+    const detail = page.getByTestId('attention-detail')
+    await expect(detail.getByTestId('awaiting-line')).toContainText(/^Waits on your answer to message \d+, asked/u)
+    // Its page is the answer, not the CLI's commands in its detail, and it has no ticket's reply form.
+    await expect(detail.getByTestId('attention-command')).toHaveCount(0)
+    await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
+    await detail.getByTestId('attention-task').getByRole('link', { name: 'Answer on task:4' }).click()
+    await expect(page).toHaveURL(/\/tasks\/4$/u)
+})
+
+test("a task's other item opens the task, by the link in its head too", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'task ticket unrecorded' }).click()
+    const detail = page.getByTestId('attention-detail')
+    await expect(detail).toContainText('Find out why the Android build takes twelve minutes.')
+    await expect(detail.getByTestId('attention-task').getByRole('link', { name: 'Open task:5' })).toBeVisible()
+    await detail.getByRole('link', { name: 'task:5', exact: true }).click()
+    await expect(page).toHaveURL(/\/tasks\/5$/u)
+})
+
 test("a PR waiting on a reviewer leads with its link out, the detail's one stop for the PR", async ({ page }) => {
     await page.goto('attention')
     await settled(page)

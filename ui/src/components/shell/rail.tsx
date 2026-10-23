@@ -4,7 +4,7 @@ import { BookOpen, SlidersHorizontal } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { choresQuery, metaQuery, reviewsQuery, runsQuery, spendQuery } from '@/api/queries'
-import type { RunState, SpendWindow } from '@/api/types'
+import type { Run, RunState, SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
 import { RunDot } from '@/components/status'
@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useLoopDown } from '@/hooks/use-loop-down'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { choreRunRef, reviewRef, runRef } from '@/lib/refs'
+import { runPhase, useQuips } from '@/lib/run-phase'
 import { railWork } from '@/lib/run-state'
 import type { RailItem } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
@@ -94,7 +95,8 @@ function itemKey(item: RailItem): string {
 
 /**
  * One row of what is working, opening its page: a dot in its state's color, what it works on (a ticket's key, a PR, a
- * chore), how long it has run or `waiting on you`, and under it what it is: the ticket's title, the review, the run.
+ * chore), how long it has run or `waiting on you`, and under it what it is: the ticket's title, the review, the run. A
+ * worker run adds what it is doing, `planning`, on a line of its own.
  */
 function WorkingRow({ item }: { item: RailItem }) {
     switch (item.kind) {
@@ -110,6 +112,7 @@ function WorkingRow({ item }: { item: RailItem }) {
                 >
                     <RowHead state={run.state} subject={run.ticket_key} started={run.started_at} />
                     <TicketTitle title={run.ticket_title} className="pl-4 text-xs font-normal text-muted-foreground" />
+                    <PhaseLine run={run} />
                 </Link>
             )
         }
@@ -167,6 +170,27 @@ function RowHead({ state, subject, started }: { state: RunState; subject: string
                     <Age at={started} />
                 )}
             </span>
+        </span>
+    )
+}
+
+/**
+ * Under a worker run's ticket title: what it is doing in plain words, `planning`, or while it works and Settings leaves
+ * them on, its quip for this ticket and phase, `planning in pencil`, with the plain words on hover.
+ */
+function PhaseLine({ run }: { run: Run }) {
+    const { word, quip } = runPhase(run)
+    const quipped = useQuips() === 'on' && run.state === 'running' && quip !== null
+    return (
+        <span
+            title={quipped ? word : undefined}
+            className={cn(
+                'min-w-0 truncate pl-4 text-xs text-muted-foreground',
+                quipped ? 'font-sans italic' : 'font-mono',
+            )}
+            data-testid={`rail-phase-${run.id}`}
+        >
+            {quipped ? quip : word}
         </span>
     )
 }

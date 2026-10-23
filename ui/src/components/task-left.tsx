@@ -5,10 +5,10 @@ import { LinkOut } from '@/components/link-out-icon'
 import { None } from '@/components/none'
 import { Panel, PanelHeader } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { TaskRunLink } from '@/components/task-link'
 import { TicketLink } from '@/components/ticket-link'
 import { Tip } from '@/components/tip'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
-import { taskRunRef } from '@/lib/refs'
 import { shortSha } from '@/lib/reviews'
 import { taskPrs } from '@/lib/tasks'
 
@@ -85,7 +85,7 @@ export function TaskLeft({
                                 <li key={ticket.key} className="flex items-center gap-2">
                                     <TicketLink ticketKey={ticket.key} />
                                     <span className="text-muted-foreground">
-                                        from {taskRunRef(task.id, ticket.run_id)}
+                                        from <TaskRunLink task={task.id} run={ticket.run_id} />
                                     </span>
                                 </li>
                             ))}
@@ -103,7 +103,7 @@ function Head({ task, run }: { task: number; run: TaskRun }) {
     const head = run.head ?? ''
     return (
         <li className="flex items-center gap-2">
-            <span className="text-muted-foreground">{taskRunRef(task, run.id)}</span>
+            <TaskRunLink task={task} run={run.id} />
             <Copyable text={head} label="commit">
                 <Tip fact={head} mono>
                     <span className="readout">{shortSha(head)}</span>

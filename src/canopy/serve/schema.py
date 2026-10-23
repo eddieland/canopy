@@ -73,6 +73,8 @@ class Meta(Model):
     goes, from `branch_url` or a GitHub `url`. A repository without one is left out."""
     workspace_root: str
     """The workspace's root, absolute: a path a page shows from it is joined to it to copy it whole."""
+    repos: list[str]
+    """The workspace's repositories, by name, in its file's order: the ones a task may be submitted to run in."""
 
 
 class Session(Model):
@@ -122,7 +124,7 @@ class AttentionItem(Model):
     subject: str
     """How the CLI names it: `PROJ-1`, `api`, `PROJ-1 (api)`, `chore:deps`."""
     ticket_key: str | None = None
-    """The ticket it is about, when it is about one; a chore's and a repository's items have none."""
+    """The ticket it is about, when it is about one; a chore's, a task's, and a repository's items have none."""
     ticket_title: str | None = None
     """That ticket's title, as the overseer named it (DESIGN §13); None until it does, or when it is about none."""
     chore: str | None = None
@@ -139,6 +141,9 @@ class AttentionItem(Model):
     """A chore's finding rather than a ticket's item."""
     pr: str | None = None
     """The PR it is about when no ticket owns it, such as a `review_limit` on a PR `review.query` found."""
+    task: int | None = None
+    """The one-off task it is about, by its id, when it is about one (DESIGN §36): `awaiting_reply` or
+    `task_ticket_unrecorded`."""
 
 
 class RunsSince(Model):
