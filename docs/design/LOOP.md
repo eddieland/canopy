@@ -109,7 +109,8 @@ rarely still has observations as fresh as they ask for (operator, 2026-10-19). A
 skipped, not waited for, while a tick holds it; none runs while the loop is paused. It records its runs with no tick
 and checks the drafts its `vcs` run read (§29). It raises no attention item, since the list is a tick's and the next
 tick runs every source again before recording its items, and it ends no wait: nothing acts on an observation yet
-(§30), and M39's early tick on one is not built. A hand-run `canopy tick` runs the sources as any tick does, and
+(§30), and M39's early tick on one is not built. A reply a `slack` source records is the operator's message, not an
+observation, and ends the wait as any does (§20). A hand-run `canopy tick` runs the sources as any tick does, and
 nothing polls without the loop.
 
 ### Idle pacing

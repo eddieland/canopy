@@ -667,7 +667,7 @@ def tick_reads(ctx: Context) -> int:
     """
     log = logs.for_tick(None)
     with in_tick(ctx.conn) as tick_id:
-        drafted.reconcile(ctx, connectors.run(ctx, tick_id, log).read, log)
+        drafted.reconcile(ctx, connectors.run(ctx, tick_id, log, dry_run=False).read, log)
     return tick_id
 
 

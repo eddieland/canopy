@@ -340,6 +340,8 @@ class _Polls:
     log: logs.TickAdapter
     #: The runs' sessions left unread; None in a dry run, which reads none.
     backlog: models.Backlog | None
+    #: Whether the loop is a dry run, whose polls record no operator message (D036).
+    dry_run: bool = False
     #: When the connectors last ran, a tick's or a poll's, on `clock`.
     last: float = 0.0
 
@@ -366,7 +368,7 @@ class _Polls:
         if self.clock() - self.last < ctx.config.connect.every_minutes * 60 or pause.paused(ctx.conn) is not None:
             return
         self.last = self.clock()
-        polled = poll.run(ctx, self.log)
+        polled = poll.run(ctx, self.log, dry_run=self.dry_run)
         if not self.settings.console.is_terminal:
             loop_view.record_poll(self.settings.console, polled)
 
@@ -415,7 +417,7 @@ def _ticks(
         woken_by = woken or "start"
     idle_count = 0
     # A dry run reads no session, as its tick reads none.
-    polls = _Polls(settings, clock, log, None if dry_run else models.Backlog(clock, log))
+    polls = _Polls(settings, clock, log, None if dry_run else models.Backlog(clock, log), dry_run=dry_run)
     while not stop.requested:
         settings.apply()
         ctx, pace = settings.ctx, settings.pace
