@@ -143,7 +143,7 @@ function RunPanel({
                     <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
                 </Field>
                 <PersonaField persona={run.persona} digest={run.persona_digest} />
-                {run.models !== null && <ModelsField models={run.models} />}
+                {run.models !== null && <ModelsField models={run.models} asked={run.model} />}
                 <Field label="branch" mono>
                     {run.branch === null ? <None /> : <Copyable text={run.branch} label="branch" />}
                 </Field>

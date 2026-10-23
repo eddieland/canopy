@@ -143,7 +143,8 @@ asks the runtime for its models each time it opens, the same list `canopy models
 fill. The override holds for every run of that agent on this ticket, a `resume` after review comments included,
 until you pick **Clear the override**. That is the canary: one ticket on the new model, the rest on the one you
 trust, and [the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run's page names
-the model that served it, so you can check the canary actually sang.
+the model it asked for while it works, then the model that served it, and both when they differ, so you can check the
+canary actually sang.
 
 The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
 override names drops off the runtime's list before the next run, that run is refused rather than sent to another
