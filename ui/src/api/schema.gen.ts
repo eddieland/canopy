@@ -2089,8 +2089,14 @@ export type components = {
              */
             subject: string;
             /**
+             * Task
+             * @description The one-off task it is about, by its id, when it is about one (DESIGN §36): `awaiting_reply` or
+             *     `task_ticket_unrecorded`.
+             */
+            task: number | null;
+            /**
              * Ticket Key
-             * @description The ticket it is about, when it is about one; a chore's and a repository's items have none.
+             * @description The ticket it is about, when it is about one; a chore's, a task's, and a repository's items have none.
              */
             ticket_key: string | null;
             /**

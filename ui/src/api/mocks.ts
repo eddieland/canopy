@@ -93,6 +93,7 @@ export const mockAttention: AttentionItem[] = [
         since: '2026-10-08T11:56:00Z',
         finding: false,
         pr: null,
+        task: null,
     },
 ]
 

@@ -42,9 +42,14 @@ def test_the_mock_holds_a_task_in_every_state_over_the_three_repositories(backen
 
 def test_attention_and_spend_show_the_tasks(backend: Backend) -> None:
     c = client(None, backend)
-    items = {(i["reason"], i["subject"]) for i in c.get("/api/attention").json()}
-    assert ("awaiting_reply", "task:4") in items
-    assert ("task_ticket_unrecorded", "task:5") in items
+    listed = c.get("/api/attention").json()
+    # A task's item names the task by its id, for its page, and no ticket, chore, or PR.
+    items = {(i["reason"], i["subject"], i["task"], i["ticket_key"], i["chore"], i["pr"]) for i in listed if i["task"]}
+    assert items == {
+        ("awaiting_reply", "task:4", 4, None, None, None),
+        ("task_ticket_unrecorded", "task:5", 5, None, None, None),
+    }
+    assert all(i["task"] is None for i in listed if not i["subject"].startswith("task:"))
     totals = c.get("/api/spend/breakdown", params={"days": 7}).json()["totals"]
     assert totals["tasks"] == pytest.approx(4.51)
     [mobile] = [p for p in c.get("/api/worktrees").json() if p["repo"] == "mobile"]
