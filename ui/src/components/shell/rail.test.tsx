@@ -2,9 +2,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { mockChores, mockReviews, mockRuns } from '@/api/mocks'
+import { mockChores, mockReviews, mockRuns, mockTasks } from '@/api/mocks'
 import { keys } from '@/api/queries'
-import type { ChoreSummary, Meta, ReviewSummary, Run, Spend } from '@/api/types'
+import type { ChoreSummary, Meta, ReviewSummary, Run, Spend, TaskSummary } from '@/api/types'
 import { QUIPS, setQuips } from '@/lib/run-phase'
 import { renderRouted } from '@/test-utils'
 
@@ -32,13 +32,21 @@ function seeded(key: readonly string[], data: unknown) {
     return client
 }
 
-// A query client holding the runs, the reviews, and the chores the rail reads, or no runs yet, and fetching nothing.
-function rail(runs: Run[] | undefined, reviews: ReviewSummary[] = [], chores: ChoreSummary[] = []) {
+// A query client holding the runs, the reviews, the chores, and the tasks the rail reads, or no runs yet, and fetching
+// nothing.
+function rail(
+    runs: Run[] | undefined,
+    reviews: ReviewSummary[] = [],
+    chores: ChoreSummary[] = [],
+    tasks: TaskSummary[] = [],
+) {
     const client = seeded(keys.runs, runs)
     client.setQueryDefaults(keys.reviews, { enabled: false })
     client.setQueryDefaults(keys.chores, { enabled: false })
+    client.setQueryDefaults(keys.tasks, { enabled: false })
     client.setQueryData(keys.reviews, reviews)
     client.setQueryData(keys.chores, chores)
+    client.setQueryData(keys.tasks, tasks)
     return client
 }
 
@@ -130,6 +138,22 @@ describe('RailWorking', () => {
         act(() => setQuips('off'))
         expect(screen.getByTestId('rail-phase-41').textContent).toBe('implementing')
         act(() => setQuips('on'))
+    })
+
+    it("lists a task's run running, named as task:N#M with the task's first line, opening the run's page", async () => {
+        // Task 6's run started at 11:58:30, before run 41; task 4, waiting on a reply, is not working.
+        const { router } = await renderRouted(<RailWorking />, { client: rail([RUNNING], [], [], mockTasks) })
+        const region = screen.getByRole('region', { name: 'Working' })
+        const rows = within(region).getAllByRole('link')
+        expect(rows.map((row) => row.title)).toEqual(['task:6#8', 'run:41 implement'])
+        expect(within(region).getByText('2')).toBeDefined()
+        const [first] = rows as [HTMLElement]
+        expect(within(first).getByText('task:6#8')).toBeDefined()
+        expect(within(first).getByText("Add a dark launch screen to match the app's theme.")).toBeDefined()
+        expect(within(first).getByText('4m')).toBeDefined()
+
+        await follow(first)
+        expect(router.state.location.pathname).toBe('/tasks/6/runs/8')
     })
 
     it('lists four, then how many more, which opens the runs page; the count is of them all', async () => {
