@@ -7,8 +7,9 @@ overseer](WITHOUT_THE_OVERSEER.md).
 
 ## 38. Artifacts and Louvre
 
-The local store and publishing from runs are built; comments back to the ticket are designed, not built (ROADMAP
-M62). Until they are, a comment on an artifact reaches a worker only as the operator passes it on.
+The local store and publishing from runs are built, and the `artifacts` source reads comments into the journal, in
+shadow; comments reaching the ticket are designed, not built (ROADMAP M62). Until they are, a comment on an artifact
+reaches a worker only as the operator passes it on.
 
 An **artifact** is a page a worker publishes for people to read: a report, a design, an HTML mock-up. People comment
 on its passages, and the comments come back to the ticket that produced it, where they count as review feedback does.

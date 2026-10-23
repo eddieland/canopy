@@ -266,6 +266,23 @@ def test_a_change_carries_ids_anchor_author_and_body_never_the_content(client: C
     assert end == {"kind": "end", "through": made["seq"]}
 
 
+def test_each_change_says_whether_its_passage_is_in_the_latest_version(client: Client) -> None:
+    artifact = client.publish()["artifact_id"]
+    kept = client.call("comment_create", artifact_id=artifact, anchor={"exact": "every miss takes the lock"}, body="A")
+    reworded = client.call("comment_create", artifact_id=artifact, anchor={"exact": "shard it"}, body="B")
+    client.call("comment_create", artifact_id=artifact, body="Overall?")
+    assert [c["anchor_status"] for c in client.feed()[:-1]] == ["found", "found", None]
+
+    client.publish(REVISED, artifact_id=artifact)
+    client.call("comment_reply", thread_id=reworded["thread_id"], body="Still?")
+    *changes, _ = client.feed()
+    status = {c["comment_id"]: c["anchor_status"] for c in changes}
+    # Each change is as its thread is when read, so the change made before the rewording reads it gone too.
+    assert status[kept["comment_id"]] == "found"
+    assert status[reworded["comment_id"]] == "passage_gone"
+    assert changes[-1]["anchor_status"] == "passage_gone"
+
+
 def test_the_feeds_cursor_misses_no_change_and_repeats_none_across_pages(client: Client) -> None:
     ours = client.publish(origin={"canopy.ticket": "PROJ-1"})["artifact_id"]
     theirs = client.publish(origin={"canopy.ticket": "PROJ-2"})["artifact_id"]
