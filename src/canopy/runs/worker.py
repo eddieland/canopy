@@ -33,6 +33,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, S
 from canopy.core import (
     agent_models,
     attachments,
+    commit_hooks,
     contract,
     conversation,
     db,
@@ -58,7 +59,7 @@ from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
-from canopy.runs import checkpoint, desks, dispatch, drafted, policy, tidy
+from canopy.runs import checkpoint, desks, dispatch, drafted, plan_guards, policy, tidy
 from canopy.runs.checkpoint import SetupError
 from canopy.runtime import project_config, stdout
 from canopy.runtime.watch import Watch
@@ -416,6 +417,7 @@ def _run_agent(
     *,
     template: str,
     desk_files: Mapping[str, str] | None = None,
+    marks: commit_hooks.Marks = commit_hooks.NONE,
 ) -> tuple[procs.Result, str]:
     """Check the places the agent reads config from, make the run's desk if it has one, and run `template` in it.
 
@@ -423,6 +425,7 @@ def _run_agent(
     behind the sandbox wrapper when a slot's repository is one `runtime.sandbox_repos` names (DESIGN §24).
     A private run's places and a plan's must also name none of the tracker server's tools (DESIGN §22, §25).
     `desk_files` are written into the desk, by name, readable only by the operator, before the agent starts.
+    `marks` are what canopy's git hooks put on every commit the agent makes (`commit_hooks`).
 
     The session and cost the runtime reported are recorded on the run at once, so a git step after the agent that
     fails does not lose them (DESIGN §13).
@@ -478,6 +481,7 @@ def _run_agent(
     env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
     if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
         env |= git_tools.run_env({s.repo: s.path for s in slots}, cwd=ctx.workspace.root.absolute())
+    env |= commit_hooks.env(snapshot, marks, os.environ)
     with run_offers.probing(ctx.conn, "runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
         result = ctx.runner.run(
             argv,
@@ -739,7 +743,10 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     desk_files = _place_copy(run, slots, copy) | _place_attachments(run, slots, attached)
     runtime = ctx.config.runtime
     template = runtime.private_worker_cmd if run["private"] else runtime.worker_cmd
-    result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files)
+    # As the prompt names them: the run's model, and its planner's when it follows a plan (DESIGN §25).
+    planner = plan_guards.planner_model(ctx, run["plan_id"], run["feedback_plan_id"])
+    marks = commit_hooks.marks(ctx.config, key=str(run["ticket_key"]), model=run["model"], planner_model=planner)
+    result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files, marks=marks)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
 
     parsed = parse_result(text)
@@ -783,6 +790,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
     committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
     committed += [found for slot in slots if attached and (found := _committed_attachments(slot, branch))]
+    for slot, start in zip(slots, starts, strict=True):
+        committed += checkpoint.unmarked(slot.git, branch, start, slot.base, marks)
     _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
     notes = "; ".join(n for n in [note, *committed, filed_note] if n)

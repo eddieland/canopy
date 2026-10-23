@@ -176,6 +176,21 @@ def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection
     return Followed(note=note, plan_id=approved.id, planner_model=_model_of(ctx, approved.run_id))
 
 
+def planner_model(ctx: Context, plan_id: int | None, feedback_plan_id: int | None) -> str | None:
+    """Return the model of the planner whose plan a run follows, from the plan it recorded, as `plan_note` found it.
+
+    Returns:
+        The model canopy chose for the planner's run, or None when the run follows no plan or canopy chose none.
+    """
+    if feedback_plan_id is not None:
+        feedback = feedback_plans.get(ctx.conn, feedback_plan_id)
+        return _model_of(ctx, feedback.run_id) if feedback is not None else None
+    if plan_id is None:
+        return None
+    row = sql.execute(ctx.conn, sql.select("run_id").from_("plans").where("id = ?", plan_id)).fetchone()
+    return None if row is None else _model_of(ctx, int(row[0]))
+
+
 def _model_of(ctx: Context, run_id: int) -> str | None:
     # The model a run asked for (`runs.model`), not the ones its session says served it, which canopy reads later.
     row = sql.execute(ctx.conn, sql.select("model").from_("runs").where("id = ?", run_id)).fetchone()

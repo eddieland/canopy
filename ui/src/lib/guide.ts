@@ -7,6 +7,7 @@ import exampleWorkspace from '../../../examples/canopy-workspace.toml?raw'
 import exampleConfig from '../../../examples/config.toml?raw'
 import attention from '@/guide/attention.md?raw'
 import chores from '@/guide/chores.md?raw'
+import codeReview from '@/guide/code-review.md?raw'
 import configFiles from '@/guide/config-files.md?raw'
 import glossary from '@/guide/glossary.md?raw'
 import howTheLoopWorks from '@/guide/how-the-loop-works.md?raw'
@@ -18,6 +19,7 @@ import pullRequests from '@/guide/pull-requests.md?raw'
 import runs from '@/guide/runs.md?raw'
 import settings from '@/guide/settings.md?raw'
 import signingIn from '@/guide/signing-in.md?raw'
+import slack from '@/guide/slack.md?raw'
 import tasks from '@/guide/tasks.md?raw'
 import tickets from '@/guide/tickets.md?raw'
 import ticks from '@/guide/ticks.md?raw'
@@ -88,6 +90,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['plans', plans],
             ['tasks', tasks],
             ['pull-requests', pullRequests],
+            ['code-review', codeReview],
         ],
     },
     {
@@ -97,6 +100,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['ticks', ticks],
             ['chores', chores],
             ['memory', memory],
+            ['slack', slack],
             ['settings', settings],
         ],
     },

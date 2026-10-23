@@ -100,6 +100,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M61. One-off tasks](M61-one-off-tasks.md): in progress.
 - [M62. Artifacts, and comments on them back to the ticket](M62-artifacts.md): in progress.
 - [M63. Attachments on tickets and tasks](M63-attachments.md): in progress.
+- [M64. Slack replies](M64-slack-replies.md): in progress.
 
 ## Deferred, with the trigger that would unblock each
 
@@ -113,9 +114,6 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
   their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4), all of
   it in `canopy.runtime` (D009).
-- Slack replies: when the operator wants to answer from Slack. A channel into the journal's conversation (DESIGN
-  §22): a Socket Mode bridge running `canopy reply`, or the overseer reading Slack through MCP. Needs a T1
-  change.
 - Watching a PR (M42's watch mode): when the operator asks canopy to review the same coworker's PR again after each
   push often enough to want it to follow the PR until it merges. DESIGN §21 (Review requests) says what it needs.
 - Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather than

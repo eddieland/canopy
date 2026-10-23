@@ -205,6 +205,28 @@ export type paths = {
         patch: operations["saveConfig"];
         trace?: never;
     };
+    "/api/config/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get each agent's and chore's model
+         * @description The model config chooses for each of canopy's agents and each chore, as the loop runs on it, read only.
+         *
+         *     Each file named is the one its tables come from as the files say now, so the page can say where to edit them.
+         */
+        get: operations["getConfigModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/drafts/send": {
         parameters: {
             query?: never;
@@ -2453,6 +2475,40 @@ export type components = {
             title: string;
         };
         /**
+         * ChoreModel
+         * @description The model one chore runs on as config chooses it (DESIGN §13, §19), and where that choice comes from.
+         */
+        ChoreModel: {
+            /**
+             * Agent
+             * @description The agent of the operator's own its command runs, for `agent`; None otherwise, or when the command names none.
+             */
+            agent: string | null;
+            /**
+             * Chore
+             * @description The chore's name, its `[chores.<name>]` table.
+             */
+            chore: string;
+            /**
+             * Model
+             * @description The model, as `provider/model`, without its variant; None when config chooses none.
+             */
+            model: string | null;
+            /**
+             * Source
+             * @description Where it comes from: the chore's own `model`, `runtime.models.chore`, the definition of an agent of the
+             *     operator's own that its command runs, which canopy does not write and config gives no model, or nothing, the
+             *     runtime's default.
+             * @enum {string}
+             */
+            source: "chore" | "config" | "agent" | "default";
+            /**
+             * Variant
+             * @description The variant it runs at; None for the model's default.
+             */
+            variant: string | null;
+        };
+        /**
          * ChoreRun
          * @description One run of a chore (DESIGN §19).
          */
@@ -2829,6 +2885,45 @@ export type components = {
             value: components["schemas"]["ConfigValue"];
         };
         /**
+         * ConfigModels
+         * @description The model config chooses for each of canopy's agents and each chore, and the files that set them (DESIGN §13).
+         *
+         *     As the loop runs on it now: an edit to a file shows here once the loop reads its config again.
+         */
+        ConfigModels: {
+            /**
+             * Agents
+             * @description Each key of `[runtime.models]`: `worker`, `planner`, `reviewer`, `overseer`, then `chore`.
+             */
+            agents: components["schemas"]["ConfiguredModel"][];
+            /**
+             * Chores
+             * @description Each chore the config defines for this workspace, by name.
+             */
+            chores: components["schemas"]["ChoreModel"][];
+            /**
+             * Chores File
+             * @description The file the `[chores.*]` tables come from, all from one, as the files say now; None when no file sets one, or
+             *     one cannot be read.
+             */
+            chores_file: string | null;
+            /**
+             * Models File
+             * @description The file `[runtime.models]` comes from, as the files say now; None when none sets it, or one cannot be read.
+             */
+            models_file: string | null;
+            /**
+             * Private File
+             * @description The workspace's private file (M49), which serves this workspace alone.
+             */
+            private_file: string;
+            /**
+             * User File
+             * @description The user config file, which serves every workspace.
+             */
+            user_file: string;
+        };
+        /**
          * ConfigPatch
          * @description A save from the settings page: the keys to change, and the private file's hash as the page read it.
          */
@@ -2869,6 +2964,11 @@ export type components = {
              */
             restart: string[];
         };
+        /**
+         * @description A key of `[runtime.models]` (DESIGN §13): `worker` for both workers and a task's runs, and `chore` for every chore without a `model` of its own.
+         * @enum {string}
+         */
+        ConfigRole: "worker" | "planner" | "reviewer" | "overseer" | "chore";
         /**
          * ConfigSaved
          * @description What a save wrote, apart from what the reload it asked for did (DESIGN §22).
@@ -2941,6 +3041,30 @@ export type components = {
              * @description The workspace file, which the web UI never writes.
              */
             workspace_file: string;
+        };
+        /**
+         * ConfiguredModel
+         * @description The model `[runtime.models]` chooses for one of canopy's agents, as its runs take it but a ticket's override.
+         */
+        ConfiguredModel: {
+            /** @description The key of `[runtime.models]`, the agent it chooses for. */
+            agent: components["schemas"]["ConfigRole"];
+            /**
+             * Model
+             * @description The model, as `provider/model`, without its variant; None when nothing sets one: the runtime's default.
+             */
+            model: string | null;
+            /**
+             * Source
+             * @description Where it comes from: `[runtime.models]`, or nothing, the runtime's default.
+             * @enum {string}
+             */
+            source: "config" | "default";
+            /**
+             * Variant
+             * @description The variant it runs at, such as a reasoning effort; None for the model's default.
+             */
+            variant: string | null;
         };
         /** @description A config key's value: a count or minutes, a switch, a choice, a list's entries, `spend.budget_alerts`'s percentages, or `capacity.repo_slots`'s counts by repository. None is a pool canopy does not manage, or no budget. */
         ConfigValue: number | boolean | string | string[] | number[] | {
@@ -9352,6 +9476,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getConfigModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigModels"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
