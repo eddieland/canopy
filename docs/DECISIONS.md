@@ -144,9 +144,11 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Without the root `tests/__init__.py`, pytest names `tests/canopy/` `canopy` and shadows `src/canopy`.
 - Rejected: `--import-mode=importlib` (changes how `conftest.py` imports, for no gain).
 
-## D020. The overseer reaches the journal through the CLI, keyed by `CANOPY_TICK_ID`
+## D020. The overseer reaches the journal through canopy's tools, keyed by `CANOPY_TICK_ID`
 
-- `dispatch`, `decide`, and `attention` refuse without a running tick, so the journal holds only what the loop did.
+- Its verbs are MCP tools canopy serves its run alone (D124, DESIGN §27); it has no shell but the commands the
+  operator names in `runtime.allow_bash`, never canopy's own. They, and the commands that share their functions until
+  those go, refuse without a running tick, so the journal holds only what the loop did.
 - Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's. No own table.
 
 ## D021. How OpenCode enforces permissions under `opencode run`
@@ -335,11 +337,6 @@ such as a shipped migration, may still cite one, and git history has its text.
   a wheel without the UI.
 - Revisit: if the UI shrinks to pages a template would serve.
 
-## D081. The overseer mirrors comments through a quoted heredoc with a per-tick random delimiter
-
-- No comment can end the heredoc. Workers' marks are read in code; at most 100 mirrors per tick.
-- Rejected: the body as a quoted argument (one missed escape runs it); a fixed delimiter.
-
 ## D084. Workers set labels through the tracker's MCP edit tool and deny dangerous MCP tools by name
 
 - Merge, review, close, transition, delete, fork, and workflow tools are denied. Both workers create follow-ups
@@ -498,6 +495,7 @@ such as a shipped migration, may still cite one, and git history has its text.
   no tool and refuses every call under `CANOPY_RUN_ID` or outside a running tick (D020). A tool and its command share
   one request and one function (`loop/tools.py` and its siblings, `loop/*_tools.py`), so they cannot drift apart.
 - With `--chore` it serves a chore's run one tool, its own chore's history, and nothing of the overseer's (DESIGN §27).
+- With `--reports` it serves a chore's run canopy's read-only reports, and nothing of the overseer's (DESIGN §27).
 - With `--git NAME=PATH` it serves a review's or a plan's run read-only git in the checkouts the harness names, alone.
 - Rejected: the `mcp` SDK (a runtime dependency with its own async stack and HTTP transports, for five methods); any
   transport but stdio; tools for workers, whose results are read after they exit (DESIGN §27).

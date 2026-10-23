@@ -145,7 +145,7 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
-BAD_BASE = "--base must be another ticket's branch, agent/<KEY>-<slug>"
+BAD_BASE = "base (--base) must be another ticket's branch, agent/<KEY>-<slug>"
 
 
 @pytest.mark.parametrize(

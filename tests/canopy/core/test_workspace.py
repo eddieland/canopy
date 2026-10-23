@@ -216,7 +216,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
         ("dispatch:implement", f"dry run: not dispatched; would work on agent/PROJ-1-work in api; label {LABEL}"),
         (
             "refused:unknown_repo",
-            "--repo is required: name the repositories for PROJ-2 (api, docs, web)",
+            "repos is required (--repo): name the repositories for PROJ-2 (api, docs, web)",
         ),
     ]
     [item] = attention.current(conn)
@@ -252,7 +252,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
     with_docs(ws)
     conn = ws_scenario.conn
     assert ws_scenario.refuses(canopy(*dispatch("PROJ-1"))) == [
-        ("refused:unknown_repo", "--repo is required: name the repositories for PROJ-1 (api, docs, web)"),
+        ("refused:unknown_repo", "repos is required (--repo): name the repositories for PROJ-1 (api, docs, web)"),
     ]
     assert ws_scenario.refuses(dispatches(repo="nope")) == [
         ("refused:unknown_repo", "'nope' is not a repository in this workspace (api, docs, web)"),
@@ -289,7 +289,10 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
         return dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI], repo=repo)
 
     assert ws_scenario.refuses(resume("web")) == [
-        ("refused:no_branch", "PROJ-1 has no branch in web for resume to continue; dispatch implement with --repo web"),
+        (
+            "refused:no_branch",
+            "PROJ-1 has no branch in web for resume to continue; dispatch implement with repos web (--repo web)",
+        ),
     ]
     assert ws_scenario.run(resume("api"), worker=pushes("agent/PROJ-1-login")).status == "done"
 

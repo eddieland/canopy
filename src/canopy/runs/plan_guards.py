@@ -30,9 +30,9 @@ def plan_refusal(ctx: Context, key: str, *, slug: str | None, base: str | None) 
         (`bad_plan`) already has a branch; or (`no_read_tools`) no tracker read tools are known for the planner.
     """
     if slug is not None:
-        return "bad_slug", "a plan writes down the work and names no branch; leave out --slug"
+        return "bad_slug", "a plan writes down the work and names no branch; leave out slug (--slug)"
     if base is not None:
-        return "bad_base", "a plan writes down the work and starts from no branch; leave out --base"
+        return "bad_base", "a plan writes down the work and starts from no branch; leave out base (--base)"
     ticket = db.get_ticket(ctx.conn, key)
     if ticket is not None and ticket.branch:
         # Its first implement recorded the branch: a plan now would describe work already started (DESIGN §25, Open).
@@ -51,7 +51,10 @@ def feedback_plan_refusal(ctx: Context, key: str, *, base: str | None) -> tuple[
         waits for its resume (`bad_plan`); or it is stale, but inside the quiet period on its PRs (`quiet`).
     """
     if base is not None:
-        return "bad_base", "a feedback plan reads the PR's head and starts from no other branch; leave out --base"
+        return (
+            "bad_base",
+            "a feedback plan reads the PR's head and starts from no other branch; leave out base (--base)",
+        )
     return feedback_plans.dispatch_refusal(ctx.conn, ctx.config, key, now=datetime.now(UTC))
 
 

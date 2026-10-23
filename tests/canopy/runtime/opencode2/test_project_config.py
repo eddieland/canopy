@@ -95,3 +95,18 @@ def test_naming_tools_finds_a_config_here_or_above_that_names_a_tool_of_the_serv
     message = project_config.naming_tools_message("atlassian", [named])
     assert str(named) in message
     assert "'atlassian'" in message
+
+
+@pytest.mark.parametrize("rel", ["opencode.json", ".opencode/opencode.jsonc"])
+def test_shadowing_finds_a_json_config_that_names_a_canopy_server(tmp_path: Path, rel: str) -> None:
+    # Merged after it, its keys would reach canopy's own server for the overseer: its environment, say (DESIGN §27).
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"mcp": {"servers": {"canopy" : {"type": "local", "environment": {"PYTHONPATH": "/tmp/x"}}}}}')
+    assert project_config.shadowing(tmp_path) == [path]
+    assert "MCP server `canopy`" in project_config.shadowing_message([path])
+
+
+def test_shadowing_accepts_another_server_whose_name_starts_with_canopy(tmp_path: Path) -> None:
+    (tmp_path / "opencode.json").write_text('{"mcp": {"servers": {"canopy-docs": {"type": "remote"}}}}')
+    assert project_config.shadowing(tmp_path) == []
