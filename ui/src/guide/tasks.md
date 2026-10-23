@@ -22,16 +22,31 @@ open a terminal and an agent session for twenty minutes, it's a task.
 
 ## Submitting one
 
-For now you submit a task from the shell:
+The **Submit a task** panel at the top of [Tasks](/tasks) takes your text. It starts one line high and grows as you
+write, so a paragraph is fine. Enter submits it, Shift+Enter starts a new line, and Settings can change the send key as
+it does for a reply. Beside the text:
+
+- **The repository** it runs in, shown only when the workspace has more than one. It starts at the one the list is
+  narrowed to, else the one your newest task ran in, so a run of tasks against one repository needs no clicking.
+- **The project**, optional: the tracker project it may file tickets in. Leave it empty and it files none.
+
+The line under them is the whole of what a task may do outside its branch: it opens a PR, as a draft, only when your
+text asks for one, and files tickets only in the project you name, with no queue label, so none of them is worked until
+you say so. A refusal takes that line's place and names its guard, as the shell would: `bad_project` for a project that
+isn't a plain key, `unknown_repo` for a repository the workspace doesn't have.
+
+Once it's recorded, a note says so in the CLI's words (that the next tick starts it, and that none will while
+`capacity.max_tasks` is 0) and you land on the task's page. Its row reaches the list the way every other change does,
+over the live stream.
+
+From the shell it's the same verb:
 
 ```sh
 canopy task submit "Find out why the Android build takes twelve minutes."
 ```
 
-In a workspace of several repositories, name the one it runs in with `--repo NAME`. A task files tickets only when you
-name a tracker project with `--project KEY`, and only there, with no queue label, so none of them is worked until you
-say so. It opens a PR, as a draft, only when your text asks for one. Pass `-` as the text to read it from stdin, which
-is easier for a paragraph than shell quoting is.
+Name the repository with `--repo NAME` and the project with `--project KEY`. Pass `-` as the text to read it from
+stdin, which is easier for a paragraph than shell quoting is.
 
 The next tick starts it, before the overseer runs, as capacity allows: tasks share `capacity.max_workers` with
 everything else, and `capacity.max_tasks` caps how many of those may be tasks, so your side quests never starve the

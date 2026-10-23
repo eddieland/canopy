@@ -42,18 +42,19 @@ import type {
     PromoteRequest,
     Started,
     Stopped,
+    TaskSubmitted,
     TickAsked,
 } from './types'
 
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, trying a chore, dismissing
  * a finding, sending a review's findings to a worker, granting a run past a limit, asking for a PR to be reviewed,
- * pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and those on a run's
- * drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`,
- * `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, `notice`,
- * `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`, `draft edit`, `drop`, and `send`,
- * `review edit` and `publish`, and `reply review:ID`, or as `t` at the loop's terminal, with the same guards; a refusal
- * is an ApiError naming its guard.
+ * submitting a task, pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and
+ * those on a run's drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`,
+ * `forget`, `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `task submit`, `pause`,
+ * `resume`, `notice`, `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`, `draft edit`, `drop`,
+ * and `send`, `review edit` and `publish`, and `reply review:ID`, or as `t` at the loop's terminal, with the same
+ * guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -133,6 +134,14 @@ export async function requestReview(
             body: { notes, personas: [...personas] },
         }),
     )
+}
+
+/**
+ * `canopy task submit TEXT --repo NAME --project KEY`: the text is queued as a task, run in `repo` (which may be left
+ * out in a workspace of one) and filing tickets only in `project`, or none without one; the next tick starts it.
+ */
+export async function submitTask(text: string, repo: string | null, project: string | null): Promise<TaskSubmitted> {
+    return unwrap(await api.POST('/api/tasks', { body: { text, repo, project } }))
 }
 
 /** `canopy stop URL`: the PR's review request ends, and a review of it already running finishes. */

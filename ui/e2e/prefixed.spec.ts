@@ -831,3 +831,41 @@ test('a lesson is edited from the memory page, and its versions keep the old wor
     await expect(old).toContainText('text deleted')
     await expect(edited).toContainText('Billing goes through src/billing/client.ts, v2 included.')
 })
+
+test('a task submitted from the tasks page opens its page, and its row arrives on the list', async ({ page }) => {
+    await page.goto('tasks')
+    const form = page.getByRole('form', { name: 'Submit a task' })
+    await expect(form.getByRole('status')).toContainText('opens a draft PR only if your text asks for one')
+    // Other tests may submit at the same time, so this task is found by its text.
+    const text = `Find out why the nightly export is slow (${test.info().testId}).`
+    const picker = await openRepoPicker(form.getByRole('button', { name: /^Runs in: /u }))
+    await picker.getByRole('option', { name: 'mobile' }).click()
+    await form.getByRole('textbox', { name: 'Task' }).fill(text)
+    await form.getByRole('button', { name: /^Submit/u }).click()
+
+    await expect(page.getByText(/^Submitted task:\d+; the next tick starts it\.$/u)).toBeVisible()
+    await expect(page).toHaveURL(/\/canopy\/tasks\/\d+$/u)
+    const id = /\/tasks\/(\d+)$/u.exec(page.url())?.[1] ?? ''
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(`task:${id}`)
+
+    // The list had no row for it when the form sent it: the stream brings it.
+    await page.goBack()
+    const row = page.getByTestId(`task-${id}`)
+    await expect(row).toContainText(text)
+    await expect(row).toContainText('mobile')
+    await expect(row).toContainText('queued')
+    await row.getByRole('link', { name: `task:${id}` }).click()
+    await expect(page).toHaveURL(new RegExp(`/canopy/tasks/${id}$`, 'u'))
+})
+
+test('a task the server refuses says why, naming its guard, and the form keeps it', async ({ page }) => {
+    await page.goto('tasks')
+    const form = page.getByRole('form', { name: 'Submit a task' })
+    await form.getByRole('textbox', { name: 'Task' }).fill('Plan the offline mode.')
+    await form.getByRole('textbox', { name: 'Tracker project' }).fill('not a project')
+    await form.getByRole('button', { name: /^Submit/u }).click()
+    await expect(form.getByRole('alert')).toContainText('refused (bad_project)')
+    await expect(form.getByRole('status')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/canopy\/tasks$/u)
+    await expect(form.getByRole('textbox', { name: 'Task' })).toHaveValue('Plan the offline mode.')
+})
