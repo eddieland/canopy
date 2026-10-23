@@ -31,7 +31,7 @@ from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
 from canopy.infra.text import one_line, printable
 from canopy.loop import attention, readback, repeat, reread, tick
-from canopy.loop.render import chore_line, named, persona_of, phase_of, prs_of, result_of, run_kind, spent
+from canopy.loop.render import chore_line, model_of, named, persona_of, phase_of, prs_of, result_of, run_kind, spent
 from canopy.notify import deliver
 from canopy.runs import drafted
 
@@ -258,7 +258,7 @@ def _print_workers(ctx: Context) -> None:
         where = ", ".join(f"{s.repo} {s.slot_path}" for s in slots[int(r["id"])])
         click.echo(
             f"  {named(r['ticket_key'], r['ticket_title'])}  {run_kind(r)}  {attention.age(r['started_at'])}  {where}"
-            f"{persona_of(r)}",
+            f"{persona_of(r)}{model_of(r)}",
         )
         # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
         if r["session_id"]:
@@ -299,7 +299,7 @@ def _print_recent_runs(ctx: Context) -> None:
         if said:
             click.echo(f"    {said}")
         session = f"session {r['session_id']}" if r["session_id"] else "no session reported"
-        click.echo(f"    {session}{spent(r)}{persona_of(r)}  log {r['log_path']}")
+        click.echo(f"    {session}{spent(r)}{persona_of(r)}{model_of(r)}  log {r['log_path']}")
     if not runs:
         click.echo("  none")
 

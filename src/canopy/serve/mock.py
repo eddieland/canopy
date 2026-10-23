@@ -85,6 +85,8 @@ labels = ["agent-ready-mock"]
 
 [capacity]
 slots_per_repo = 2
+# Runs 41 and 43, and task 6's run, which counts against max_workers too: the limit is full, never past it.
+max_workers = 3
 
 [capacity.repo_slots]
 web = 4
