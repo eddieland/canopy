@@ -23,8 +23,8 @@ A hook is not a guard: a worker can still commit with `--no-verify`, and canopy 
 A worker's git finds your hooks through canopy's own: its environment points `core.hooksPath` at hooks canopy ships,
 which add canopy's commit trailers and prefix (TRUST_MODEL T5) and then run the hook of the same name from wherever
 git would have looked without them, your primary clone's or a `core.hooksPath` your config sets. Nothing here changes
-for that. It needs git 2.31 or later, which reads `GIT_CONFIG_COUNT`; an older git runs your hooks alone, and each
-run's note names the commits that lack canopy's marks.
+for that. It needs git 2.31 or later, which reads `GIT_CONFIG_COUNT`; an older git runs your hooks alone, each tick
+raises `git_too_old` on the attention list, and each run's note names the commits that lack canopy's marks.
 
 ## 1. Install prek where workers can run it
 

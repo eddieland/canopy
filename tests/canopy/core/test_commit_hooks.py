@@ -5,11 +5,13 @@ unless there is nothing to add; the prefix names the run's ticket, and a task, w
 """
 
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from canopy.core import commit_hooks
 from canopy.core.config import ConfigError, load
+from canopy.infra import procs
 from tests.conftest import CanopyEnv
 
 TRAILER = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
@@ -73,3 +75,41 @@ def test_a_shared_file_cannot_set_the_prefix(canopy_env: CanopyEnv) -> None:
     canopy_env.configure(canopy_env.shared_file, {"trust": {"commit_prefix": "{key}: "}})
     with pytest.raises(ConfigError, match="commit_prefix"):
         load(canopy_env.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize(
+    ("printed", "old"),
+    [
+        ("git version 2.30.9\n", "2.30"),
+        ("git version 1.8.3.1\n", "1.8"),
+        ("git version 2.31.0\n", None),
+        ("git version 2.39.3 (Apple Git-145)\n", None),
+        ("git version 2.45.1.windows.1\n", None),
+        # A git that does not say its version is no finding: its runs' own git steps say what is wrong.
+        ("not git\n", None),
+    ],
+)
+def test_a_git_older_than_the_hooks_need_is_named(canopy_env: CanopyEnv, printed: str, old: str | None) -> None:
+    runner = mock.create_autospec(procs.Runner, instance=True)
+    runner.run.return_value = procs.Result(("git", "--version"), 0, printed, "")
+    found = commit_hooks.git_too_old(load(canopy_env.root, canopy_env.user_file), runner)
+    if old is None:
+        assert found is None
+    else:
+        assert found == (
+            f"git {old} on PATH is older than 2.31, which canopy's commit hooks need: workers' commits get no trailer "
+            "or prefix, and each run's note names them; install git 2.31 or later"
+        )
+
+
+def test_a_git_that_cannot_run_is_no_finding(canopy_env: CanopyEnv) -> None:
+    runner = mock.create_autospec(procs.Runner, instance=True)
+    runner.run.side_effect = procs.CommandNotFoundError("git")
+    assert commit_hooks.git_too_old(load(canopy_env.root, canopy_env.user_file), runner) is None
+
+
+def test_with_no_marks_to_add_the_version_is_not_read(canopy_env: CanopyEnv) -> None:
+    canopy_env.configure(canopy_env.user_file, {"trust": {"commit_trailer": False}})
+    runner = mock.create_autospec(procs.Runner, instance=True)
+    assert commit_hooks.git_too_old(load(canopy_env.root, canopy_env.user_file), runner) is None
+    runner.run.assert_not_called()

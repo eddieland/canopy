@@ -15,7 +15,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, definitions
+from canopy.core import commit_hooks, config, db, definitions
 from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import lock, logs, procs
 from canopy.loop import attention, duties, mcp, tick
@@ -692,3 +692,17 @@ def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scen
         {"ticket": "PROJ-1", "repo": "repo", "reason": "needs_reviewer", "since": since[0]},
         {"pr": pr, "reason": "review_limit", "since": since[1]},
     ]
+
+
+def test_a_tick_names_a_git_too_old_for_the_commit_hooks_until_one_new_enough_is_there(scenario: Scenario) -> None:
+    """The hooks that put canopy's marks on a worker's commits need git 2.31 (TRUST_MODEL T5).
+
+    An older git adds none of them.
+    """
+    # The test's own git is new enough, so the oldest git the hooks take is moved past it.
+    with mock.patch.object(commit_hooks, "MIN_GIT", (99, 0)):
+        scenario.tick(dry_run=True)
+    [item] = [i for i in attention.current(scenario.conn) if i.reason == attention.GIT_TOO_OLD]
+    assert "older than 99.0, which canopy's commit hooks need" in item.detail
+    scenario.tick(dry_run=True)
+    assert not [i for i in attention.current(scenario.conn) if i.reason == attention.GIT_TOO_OLD]

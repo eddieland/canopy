@@ -94,6 +94,8 @@ DISK_LOW: str = TickStatus.DISK_LOW
 HALTS = frozenset({UNAVAILABLE, DISK_LOW})
 #: A primary clone whose own config leaves git's automatic maintenance on, which sync turns off (DESIGN §18).
 MAINTENANCE_ON = "auto_maintenance_on"
+#: A git on `PATH` too old to put canopy's marks on a worker's commits (TRUST_MODEL T5).
+GIT_TOO_OLD = "git_too_old"
 # What the harness records itself (`tick._record_harness_items`, and `HALTS`), so the overseer does not.
 HARNESS_REASONS = frozenset(
     {
@@ -102,6 +104,7 @@ HARNESS_REASONS = frozenset(
         chore_view.FAILED_REASON,
         "repo_missing",
         MAINTENANCE_ON,
+        GIT_TOO_OLD,
         *HALTS,
         connector_runs.FAILED_REASON,
         archive.REASON,
