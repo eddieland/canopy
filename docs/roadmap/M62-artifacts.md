@@ -50,4 +50,14 @@ README. Every comment through its tools is an agent's on the operator's behalf; 
 channel. Stage 2 is built (2026-10-22): `[artifacts]` in the private file, the `canopy-artifacts` skill, and the public
 worker, the one agent `publish_roles` may name, allowed the store's tools by exact name, but the feed; every other
 definition denies the server whole, and the store's skill with it. `publish_roles` names agents, not run kinds: a
-definition serves every kind its agent runs. Stage 3 is next, once M36 and M37 are done.
+definition serves every kind its agent runs. Stage 3 started (2026-10-23) ahead of M37, at the operator's word, with
+the half that needs only M36: the `artifacts` source, `canopy-artifacts feed` for the local store, run after the `vcs`
+source each tick and poll, reads the feed past its cursor into `observed_artifact_threads` and
+`observed_artifact_comments`, in shadow, recording its runs, raising `connector_failed`, and named in `canopy status`
+with the change it has read through. Each change says whether its passage is in the latest version, so a reworded one
+reads `passage_gone`. Chosen conservatively: a refused change holds the cursor before it, so the feed waits on it with
+`connector_failed` until a run reads it, rather than skipping it; a run reads at most 1,000 changes, the next reading
+on; and a thread's `passage_gone` is seen only when a change to it is read, since a new version is no change. Left:
+each comment reaching its ticket's conversation, quoting its passage, which waits on M37's comments recorded in the
+conversation; `authorized_authors` and the comment marks deciding authority in code; an unlisted author's attention
+item; and canopy setting an artifact's ticket per run, which is the worker's word until then.
