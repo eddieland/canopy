@@ -382,6 +382,9 @@ Controls in code, not prompts:
   every limit, cooldown, and capacity, and none in a dry run. An overseer's dispatch that would leave fewer workers
   free than the harness's runs ranked above it in §7's order hold is refused `reserved`, so new work cannot take the
   capacity of work in flight.
+- A tick whose block leaves the overseer nothing to judge runs none and spends nothing (DESIGN §39): it makes only the
+  harness's dispatches, under the guards above, and the disk check still holds them. It is paced as any tick is, by
+  `loop.min_gap_minutes` and every wake, and leaves idle pacing's count as it was.
 - Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
 - Tasks (DESIGN §36): one run per task at a time, started only by a live tick, in code; at most `capacity.max_tasks`
   task runs at once (1 by default, and the workspace file may only lower it), within `capacity.max_workers`, which

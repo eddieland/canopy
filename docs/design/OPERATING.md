@@ -18,8 +18,9 @@ back. The schema is in `migrations/`, squashed once for v0.1; a journal from bef
 
 What it records, and why:
 
-- **Ticks**: each tick's status, summary, what it read up to (§6 step 3), and, for a tick `canopy loop` ran, what woke
-  it (§6), so spend can be split by what it bought. A tick that cannot take the lock writes nothing.
+- **Ticks**: each tick's status, summary, what it read up to (§6 step 3), whether it ran the overseer (§39), and, for
+  a tick `canopy loop` ran, what woke it (§6), so spend can be split by what it bought. A tick that cannot take the
+  lock writes nothing.
 - **Tickets and units**: each ticket seen, with its derived phase, its branch, whether it is done or forgotten (§22),
   and its cursors; each unit, a ticket's work in one repository (§18), with its branch, PR, phase, and cursors (§7).
 - **Runs**: every worker, plan, review, and chore run (§19, §21), with its status, a summary of its result, and

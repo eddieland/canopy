@@ -43,7 +43,8 @@ in order:
    what frees space still does. If `canopy` as the overseer would find it does not run, the tick records
    `attention:canopy_unavailable` and closes `canopy_unavailable` without running an overseer that could record
    nothing (MEASUREMENTS 2026-10-12). Rejected: putting this canopy's launcher first on the overseer's PATH, which
-   overrides the operator's.
+   overrides the operator's. A tick whose block leaves the overseer nothing to judge runs none (§39): it skips the
+   `canopy` check, owes no duty, makes the harness's dispatches, and closes `ok`.
 
    Then run `overseer_cmd` in the workspace root (§18), with `CANOPY_TICK_ID` set; the overseer's commands refuse
    unless it names a running tick (D020). Its output goes to a log only the operator can read, never to the journal. It
@@ -125,7 +126,8 @@ the journal after the previous tick read it (step 3): no run started or ended, a
 idle as a tick that changed nothing, since records that repeat on unchanging state kept any tick from counting
 (MEASUREMENTS 2026-10-14).
 
-After each idle tick in a row the wait doubles, up to `loop.idle_max_minutes` and never below the base wait. Whatever
+After each idle tick in a row the wait doubles, up to `loop.idle_max_minutes` and never below the base wait; a tick
+that ran no overseer (§39) leaves the count as it was. Whatever
 pacing chose, the wait ends at the earliest harness gate ahead: the CI cooldown's end (§8), a chore coming due (§19),
 or a notice lapsing (§8); a gate already open sets no deadline, so it cannot make the loop spin. A run ending ends the
 wait, so a long wait never sits on canopy's own work. The world, such as a review or CI going red, is seen up to
