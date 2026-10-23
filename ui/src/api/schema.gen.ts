@@ -1593,6 +1593,32 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/tickets/{key}/feedback-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a ticket's feedback plan
+         * @description `canopy plan KEY --approve [--item N ... | --leave N ...] [--message TEXT]`: approve its feedback plan.
+         *
+         *     Whole, or only the items `items` names by number, or all but those `leave` names, as its file stands now (DESIGN
+         *     §32). The approval writes an operator message on the ticket naming the items to address and to leave, with
+         *     `message` after it, and the next tick may resume the ticket on it, once. Refused as the CLI refuses it:
+         *     `inside_run`, `bad_body`, `bad_plan`, `bad_item`, and `stale` the first time a stale plan is approved, naming what
+         *     changed.
+         */
+        post: operations["approveFeedbackPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tickets/{key}/forget": {
         parameters: {
             query?: never;
@@ -2954,6 +2980,204 @@ export type components = {
             detail: string;
         };
         /**
+         * FeedbackPlan
+         * @description A ticket's current feedback plan, as the PR's page shows it beside its threads (DESIGN §32).
+         */
+        FeedbackPlan: {
+            /**
+             * Approved At
+             * @description When it was approved, the latest time.
+             */
+            approved_at: string | null;
+            /**
+             * Approved Channel
+             * @description How: `cli` or `web`, or `planner` when the harness approved it on its planner's word.
+             */
+            approved_channel: string | null;
+            /**
+             * Approved Message
+             * @description The operator message the approval wrote on the ticket, naming the items to address and to leave.
+             */
+            approved_message: number | null;
+            /**
+             * Approved Reason
+             * @description Why its planner said it needs no review, when the harness approved it so.
+             */
+            approved_reason: string | null;
+            /**
+             * Changes
+             * @description For a stale plan, each thing that changed on its PRs since it was written, in the harness's words.
+             */
+            changes: string[];
+            /**
+             * Created At
+             * Format: date-time
+             * @description When its planner wrote it.
+             */
+            created_at: string;
+            /**
+             * Id
+             * @description Its id, as `canopy show` names it `feedback-plan:ID`.
+             */
+            id: number;
+            /**
+             * Items
+             * @description The items it covers, by number.
+             */
+            items: components["schemas"]["FeedbackPlanItem"][];
+            /**
+             * Path
+             * @description Its file, under the state directory: the operator reads and edits it with their own tools too.
+             */
+            path: string;
+            /**
+             * Problem
+             * @description Why it is not: missing, not a regular file, unreadable, not UTF-8, empty, or over the bound.
+             */
+            problem: string | null;
+            /**
+             * Run
+             * @description The feedback plan run that wrote it.
+             */
+            run: number;
+            /**
+             * Spent Run
+             * @description The resume that went ahead on its approval, which it spent.
+             */
+            spent_run: number | null;
+            /**
+             * Stale Shown
+             * @description Whether an approval was refused `stale` for those changes already, so approving again approves it.
+             */
+            stale_shown: boolean;
+            /** @description Where it stands. */
+            status: components["schemas"]["FeedbackPlanStatusName"];
+            /**
+             * Text
+             * @description Its Markdown as the file stands, plain text here; None when the file is not a plan any more.
+             */
+            text: string | null;
+            /**
+             * Ticket Key
+             * @description The ticket it is for, whose `canopy plan KEY --approve` approves it.
+             */
+            ticket_key: string;
+        };
+        /**
+         * FeedbackPlanApproval
+         * @description The operator's approval of a ticket's feedback plan, whole or by item, as `canopy plan KEY --approve` takes.
+         */
+        FeedbackPlanApproval: {
+            /**
+             * Items
+             * @description The numbers of the items to approve, as `--item N`; the rest are left out. Empty, with `leave` empty, approves
+             *     it whole.
+             * @default []
+             */
+            items: number[];
+            /**
+             * Leave
+             * @description The numbers of the items to leave out, as `--leave N`, approving the rest.
+             * @default []
+             */
+            leave: number[];
+            /**
+             * Message
+             * @description The operator's own words, after the message the approval writes, as `--message`. Bounded again in code.
+             */
+            message?: string | null;
+        };
+        /**
+         * FeedbackPlanApproved
+         * @description What an approval did, as `canopy plan KEY --approve` says it.
+         */
+        FeedbackPlanApproved: {
+            /**
+             * Addressed
+             * @description The items its resume addresses.
+             */
+            addressed: components["schemas"]["ItemName"][];
+            /**
+             * Left
+             * @description The items it leaves out, for the next plan.
+             */
+            left: components["schemas"]["ItemName"][];
+            /**
+             * Message
+             * @description The operator message the approval wrote on the ticket, naming them: set for every approval of the operator's.
+             */
+            message: number | null;
+            /**
+             * Plan
+             * @description The feedback plan approved.
+             */
+            plan: number;
+            /**
+             * Ticket Key
+             * @description Its ticket, whose next resume goes ahead on it once.
+             */
+            ticket_key: string;
+        };
+        /**
+         * FeedbackPlanItem
+         * @description An item a feedback plan covers, and what it proposes: the reply is model text, never an instruction.
+         */
+        FeedbackPlanItem: {
+            /**
+             * Author
+             * @description Who wrote it, as the plan's read saw it; None where the source named none.
+             */
+            author: string | null;
+            /**
+             * Item
+             * @description A review, or a review thread by the comment the plan covers.
+             * @enum {string}
+             */
+            item: "review" | "comment";
+            /**
+             * Item Id
+             * @description The id the `vcs` source observed: the one the plan's `### Item <id>` heading carries.
+             */
+            item_id: number;
+            /**
+             * Left Out
+             * @description Whether the operator's approval left it out: its resume does not act on it, and the next plan gets it.
+             */
+            left_out: boolean;
+            /**
+             * Number
+             * @description Its number in the plan, from 1: what an approval names it by, as `canopy show` lists it.
+             */
+            number: number;
+            /**
+             * Pr Url
+             * @description The PR it is on.
+             */
+            pr_url: string;
+            /** @description What the plan proposes for it. */
+            proposal: components["schemas"]["ProposalName"];
+            /**
+             * Reply
+             * @description The reply the plan would draft, for a change or a decline: plain text here.
+             */
+            reply: string | null;
+            /**
+             * Thread Id
+             * @description The thread on this PR's page it is, when it is one; None for a review, or an item of another PR or no thread.
+             */
+            thread_id: string | null;
+            /**
+             * Trusted
+             * @description Whether `trust.trusted_reviewers` names its author: shown to weigh it, never a gate (DESIGN §32).
+             */
+            trusted: boolean;
+        };
+        /**
+         * @description Where a feedback plan stands: waiting on the operator, waiting with its PRs changed since it was written, approved with no resume gone ahead on it, or spent by the resume that went ahead on it.
+         * @enum {string}
+         */
+        FeedbackPlanStatusName: "waiting" | "stale" | "approved" | "spent";
+        /**
          * @description How much a review finding matters (DESIGN §21).
          * @enum {string}
          */
@@ -3030,6 +3254,22 @@ export type components = {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * ItemName
+         * @description An item of a feedback plan, as canopy names it: by number and observed id, never by its text.
+         */
+        ItemName: {
+            /**
+             * Item Id
+             * @description Its observed id.
+             */
+            item_id: number;
+            /**
+             * Number
+             * @description Its number in the plan.
+             */
+            number: number;
         };
         /**
          * LastTick
@@ -4297,6 +4537,11 @@ export type components = {
             text?: string | null;
         };
         /**
+         * @description What a feedback plan proposes for an item: change the code, decline, ask, or leave it.
+         * @enum {string}
+         */
+        ProposalName: "change" | "decline" | "ask" | "leave";
+        /**
          * PullRequest
          * @description A PR the journal knows (DESIGN §22): one a ticket's unit records, or one canopy reviewed, whoever's it is.
          */
@@ -4430,6 +4675,11 @@ export type components = {
              * @description The run whose diff this is, at its pushed head; None when no run kept one.
              */
             diff_run: number | null;
+            /**
+             * @description The current feedback plan of the PR's ticket, when it covers the PR's repository (DESIGN §32): each item names
+             *     the thread it is.
+             */
+            feedback_plan: components["schemas"]["FeedbackPlan"] | null;
             /**
              * Head Sha
              * @description The PR's head when it was read.
@@ -13834,6 +14084,96 @@ export interface operations {
             };
             /** @description No such ticket. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approveFeedbackPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackPlanApproval"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackPlanApproved"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -549,6 +549,32 @@ test("a draft's reaction is changed and sent alone from the PR's page, with no r
     await expect(nit).toHaveAttribute('data-status', 'sent')
 })
 
+test("a stale feedback plan is approved by item from the PR's page, refused once first, as canopy plan does", async ({
+    page,
+}) => {
+    await page.goto('pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88')
+    const feedback = page.getByTestId('feedback-plan')
+    // carol reviewed the PR after the plan was written; bob's thread carries what the plan proposes for it.
+    await expect(feedback.getByTestId('feedback-plan-stale')).toContainText('new review 4102337050 on')
+    const bob = page.getByTestId('review-thread').filter({ hasText: 'Why 250?' })
+    await expect(bob.getByTestId('plan-proposal')).toContainText('Plan item 3')
+    await feedback.getByRole('checkbox', { name: 'address item 1' }).click()
+    const approve = feedback.getByRole('button', { name: 'Approve 2 of 3' })
+    await expect(approve).toHaveAttribute('title', 'canopy plan ABC-099 --approve --leave 1')
+    await approve.click()
+    await expect(feedback.getByRole('alert')).toContainText(
+        'refused (stale): feedback plan 1 of ABC-099 is stale: new review',
+    )
+    await expect(feedback.getByTestId('feedback-plan-stale')).toContainText('Approving it again approves it as it is')
+    await approve.click()
+    await expect(feedback.getByRole('status')).toContainText(
+        'Feedback plan 1 of ABC-099 is approved as its file stands now, for 2 of its 3 items: ' +
+            'items 2 (id 2468013579) and 3 (id 2468013601).',
+    )
+    await expect(feedback).toHaveAttribute('data-status', 'approved')
+    await expect(feedback.getByRole('checkbox', { name: 'address item 1' })).not.toBeChecked()
+})
+
 test('a long conversation scrolled away from its end stays put as a message arrives', async ({ page }) => {
     // Thirty copies of its first messages, then any added since, so the reply arrives at the end of a long thread.
     // The first ones kept, and new ones told apart by id: the server sends only the latest 100, so after many runs a

@@ -820,7 +820,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - It serves a PR's review threads and the drafts that answer them (DESIGN §29): what canopy's reader last read of the
   PR, coworkers' text, and each draft, a worker's text, all rendered as text; and the diff a run under `approve` kept
   at its pushed head beside its log, read as a review's diff is (below): bounded, from a regular file opened without
-  following links, never served as a file.
+  following links, never served as a file. Beside them it serves the PR's ticket's current feedback plan (DESIGN §32):
+  its file, read as a plan's is, each item's proposed reply, model text, and what changed since in the harness's words,
+  all rendered as text.
 - It serves canopy's reviews (DESIGN §21, M32): each review run's findings, and the diff of the commit it read, which
   `_review` writes beside the run's log. The diff is the PR's own text, by whoever wrote the PR, `review.query`'s
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
@@ -840,8 +842,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a
   review request on a PR, with its personas, as `canopy start URL --review` and `canopy stop URL` do, pause and
   resume the loop as `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice`
-  does, ask for, skip, or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a
-  lesson, reject a proposal, renew or edit a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy
+  does, ask for, skip, or approve a ticket's plan as `canopy plan` does, approve its feedback plan whole or by item,
+  with the operator's own words, as `canopy plan --approve` does (DESIGN §32), promote a proposal or a ticket's note to
+  a lesson, reject a proposal, renew or edit a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy
   memory promote`, `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit a run's drafts' text and reaction,
   drop, send, and stage them as `canopy draft edit`, `drop`, `send`, and `stage` do (DESIGN §29), choose or clear the
   persona of one of a ticket's agents as `canopy persona` does, among the personas a run could already get (DESIGN §31),
@@ -880,7 +883,10 @@ which posts it as the operator, unmarked, as a comment review on any PR canopy r
 coworker's included; the journal records each version, who wrote it, the channel, and what was posted. A note it
 writes on a draft is the reviser's instruction, as the operator's own would be: it can have a revision, under the
 draft's limit and the review guards, write a version of its choosing, which posts only when published; the journal
-records the note and its channel. Binding to a
+records the note and its channel. It can approve a waiting feedback plan, or an approved one again for other items,
+with words of its choosing after the approval's message, which starts a `resume` on that plan within the operator's
+attempt limits and capacity, its worker pushing to the ticket's branch as any resume does; the message and its channel
+are in the journal. Binding to a
 private address rather than loopback relies on the network
 for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
