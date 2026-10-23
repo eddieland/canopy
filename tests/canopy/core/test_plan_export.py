@@ -12,9 +12,10 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, feedback_items, feedback_plans, plan_export, plans, records
+from canopy.core import conversation, db, feedback_items, feedback_plans, plan_export, plans, records, run_models
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import PlanStatus
+from canopy.core.vocab import ModelsRead, PlanStatus
+from canopy.runtime.report import ModelUse
 from tests.canopy.helpers import KEY, PLAN, PLAN_PROMPT, operator, plan_prompt, plan_run, prompted, proposed
 from tests.conftest import CanopyEnv
 
@@ -124,7 +125,11 @@ def test_an_export_rewrites_only_what_changed(conn: sqlite3.Connection, state_di
     assert front_matter(dest / "PROJ-2" / f"{second}-PROPOSED.md")[0]["status"] == "proposed"
 
 
-def test_a_plan_names_its_planners_persona(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
+def test_a_plan_names_its_planners_persona_and_models(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
     db.touch_ticket(conn, KEY, "/ws")
     tick_id = db.start_tick(conn, dry_run=False)
     run_id = db.insert_run(
@@ -138,17 +143,29 @@ def test_a_plan_names_its_planners_persona(conn: sqlite3.Connection, state_dir: 
         persona="skeptic",
         persona_digest="0" * 64,
         persona_text="Doubt everything.\n",
+        model="anthropic/claude-x@high",
     )
     plans.record(conn, KEY, run_id, plans.write(state_dir, KEY, run_id, PLAN))
-    # A run from before canopy recorded its persona has none in its front matter.
+    # A run from before canopy recorded its persona or chose its model has neither in its front matter.
     older = proposed(conn, state_dir, key="PROJ-2")
     dest = tmp_path / "archive"
 
     plan_export.export(conn, state_dir, dest)
 
     meta, text = front_matter(file_of(dest, KEY, run_id))
-    assert (meta["persona"], text) == ("skeptic", PLAN)
-    assert "persona" not in front_matter(file_of(dest, "PROJ-2", older))[0]
+    assert (meta["persona"], meta["model"], text) == ("skeptic", "anthropic/claude-x@high", PLAN)
+    # Until its session is read, nothing says which models wrote it.
+    assert "models" not in meta
+    assert {"persona", "model", "models"}.isdisjoint(front_matter(file_of(dest, "PROJ-2", older))[0])
+
+    # The read lands after the plan was archived, so the next export rewrites it, the most costly model first.
+    due = run_models.Due("runs", run_id, "ses_1", attempts=0)
+    used = [ModelUse("anthropic/claude-y", 1, 0.1), ModelUse("anthropic/claude-x@high", 3, 0.5)]
+    run_models.record(conn, due, ModelsRead.FOUND, used)
+
+    assert plan_export.export(conn, state_dir, dest).written == [f"{KEY}/{file_of(dest, KEY, run_id).name}"]
+    meta, _ = front_matter(file_of(dest, KEY, run_id))
+    assert meta["models"] == ["anthropic/claude-x@high", "anthropic/claude-y"]
 
 
 def test_only_a_plans_own_earlier_names_are_removed(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:

@@ -1,11 +1,11 @@
 """Plans exported into a directory of the operator's, each with what the journal records of it (DESIGN §25).
 
 `export` writes every plan and feedback plan the journal records, superseded ones included, to `<dest>/<KEY>/`: a front
-matter of its row and its planner's persona, then its file as it stands now. These are what a copy of `plans/` alone
-would lose: whether the plan was approved, by whom, and as which hash, and in whose voice it was written. The file's
-name says which plan it is and where it stands, so a listing reads without opening one: its run, its status in capitals
-so it stands out, then its title as a slug (`name`), as `412-APPROVED-export-reports-as-csv.md`; a plan that gives
-itself no title takes its ticket's in the journal.
+matter of its row and its planner's persona and models, then its file as it stands now. These are what a copy of
+`plans/` alone would lose: whether the plan was approved, by whom, and as which hash, in whose voice it was written, and
+by which model. The file's name says which plan it is and where it stands, so a listing reads without opening one: its
+run, its status in capitals so it stands out, then its title as a slug (`name`), as
+`412-APPROVED-export-reports-as-csv.md`; a plan that gives itself no title takes its ticket's in the journal.
 
 An export is the same bytes for the same plan and row, so a file is rewritten only when its plan's file or row changed,
 and a git repository at `dest` sees a change only where there is one. When a plan's status or title changes, so does its
@@ -57,7 +57,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Self
 from urllib.parse import quote
 
-from canopy.core import db, plans, records, sql
+from canopy.core import db, plans, records, run_models, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY
 from canopy.core.vocab import PlanStatus
 from canopy.infra.text import printable
@@ -83,7 +83,7 @@ _FILE_MODE = 0o600
 _FRONT_MATTER = "---\n"
 # Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
 # and compared again.
-_FORMAT = 7
+_FORMAT = 8
 # The most characters of a title a file's name carries.
 _MAX_SLUG = 60
 # The most characters of a title an index shows.
@@ -128,6 +128,20 @@ class Exported:
     removed: Sequence[str] = dataclasses.field(default_factory=list[str])
 
 
+@dataclass(frozen=True)
+class Planner:
+    """What the journal records of the run that wrote a plan, beyond the plan's own row."""
+
+    #: The persona it was given (DESIGN §31); None for a run from before canopy recorded it.
+    persona: str | None = None
+    #: The model canopy chose for it (DESIGN §13), as it asked the runtime for it; None when it chose none, so the run
+    #: went to the runtime's default, and for a run from before canopy chose one.
+    model: str | None = None
+    #: Each model its session names as having written its replies, as `provider/model`, the most costly first; empty
+    #: until canopy has read the session, and for one the runtime no longer kept.
+    models: Sequence[str] = ()
+
+
 class ExportError(Exception):
     """A plan could not be written into `dest`: a ticket's directory there is a link, or a write failed."""
 
@@ -165,7 +179,7 @@ def export(
     ]
     rows.sort(key=lambda kind_row: (kind_row[1].ticket_key, kind_row[1].run_id))
     prompt_paths = _prompt_paths(conn, state_dir) if prompts else None
-    planners = _personas(conn)
+    planners = _planners(conn)
     planned = {row.ticket_key for _, row in rows}
     ticket_titles = db.ticket_titles(conn, planned)
     last_messages: dict[str, int] = (
@@ -199,7 +213,7 @@ def export(
                             dirs,
                             seen,
                             tally,
-                            persona=planners.get(row.run_id),
+                            planner=planners.get(row.run_id, Planner()),
                             ticket_title=ticket_titles.get(key),
                             prompt=prompt,
                             settled_before=settled_before,
@@ -287,12 +301,19 @@ def is_prompt(file_name: str) -> bool:
     return _PROMPT_NAME_RE.fullmatch(file_name) is not None
 
 
-def document(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str, *, persona: str | None = None) -> bytes:
-    """A plan as it is exported: a front matter of its kind, its row's columns that are set, and its planner's persona.
+def document(
+    kind: Kind,
+    row: records.Plan | records.FeedbackPlan,
+    text: str,
+    *,
+    planner: Planner | None = None,
+) -> bytes:
+    """A plan as it is exported: a front matter of its kind, its row's columns that are set, and its planner's.
 
-    The persona is the one its run was given (DESIGN §31), None for a run from before canopy recorded it, which has
-    none in its front matter. Each value is written as JSON, which YAML reads as the same string or number, so a reason
-    the planner wrote cannot end the front matter or add a key to it.
+    Of `planner`, the front matter names the persona as `persona`, the model canopy chose as `model`, and the models
+    that wrote the plan as `models`, each only when the journal records it. Each value is written as JSON, which YAML
+    reads as the same string, number, or list, so a reason the planner wrote cannot end the front matter or add a key
+    to it.
 
     Returns:
         The file's bytes, UTF-8.
@@ -302,8 +323,13 @@ def document(kind: Kind, row: records.Plan | records.FeedbackPlan, text: str, *,
         value: object = getattr(row, field.name)
         if value is not None:
             lines.append(f"{field.name}: {json.dumps(value)}\n")
-    if persona is not None:
-        lines.append(f"persona: {json.dumps(persona)}\n")
+    if planner is not None:
+        if planner.persona is not None:
+            lines.append(f"persona: {json.dumps(planner.persona)}\n")
+        if planner.model is not None:
+            lines.append(f"model: {json.dumps(planner.model)}\n")
+        if planner.models:
+            lines.append(f"models: {json.dumps(list(planner.models))}\n")
     lines.extend([_FRONT_MATTER, "\n", text])
     return "".join(lines).encode("utf-8")
 
@@ -455,15 +481,16 @@ def _export_plan(
     seen: _Seen,
     tally: _Tally,
     *,
-    persona: str | None,
+    planner: Planner,
     ticket_title: str | None,
     prompt: _Prompt | None,
     settled_before: int,
 ) -> _Listed:
     """Export one plan into its ticket's directory, unless it is there as it stands, and remove its earlier names.
 
-    `persona` is its planner's, for its front matter, and `ticket_title` its ticket's, for its name when it has no title
-    of its own. With `prompt`, its run's prompt goes beside it too, unless that is there as it stands.
+    `planner` is what the journal records of its run, for its front matter, and `ticket_title` its ticket's, for its
+    name when it has no title of its own. With `prompt`, its run's prompt goes beside it too, unless that is there as
+    it stands.
 
     Returns:
         The plan as its ticket's index lists it: under the name it is exported as, or for a plan not exported, the
@@ -486,7 +513,7 @@ def _export_plan(
             plan,
             kind,
             row,
-            persona=persona,
+            planner=planner,
             ticket_title=ticket_title,
             source=source_stat,
             exported_name=names[0],
@@ -502,7 +529,7 @@ def _export_plan(
         return _Listed(kind, row, names[0] if len(names) == 1 else None, seen.title(plan), stale=True)
     title = _title(reading.text, row.ticket_key, ticket_title)
     exported_name = name(kind, row, reading.text, ticket_title=ticket_title)
-    data = document(kind, row, reading.text, persona=persona)
+    data = document(kind, row, reading.text, planner=planner)
     # Only a name listed as it is: a filesystem that ignores case would find the plan under an earlier name that
     # differs in case alone, and the name would never change to the new one.
     held = _held(dirs.dest_fd, exported_name, data) if exported_name in dirs.listing else None
@@ -520,7 +547,7 @@ def _export_plan(
             plan,
             kind,
             row,
-            persona=persona,
+            planner=planner,
             ticket_title=ticket_title,
             source=source_stat,
             exported_name=exported_name,
@@ -613,15 +640,21 @@ def _heading(m: records.Message) -> str:
     return " ".join(printable(", ".join(parts)).split())
 
 
-def _personas(conn: sqlite3.Connection) -> dict[int, str]:
-    """The persona each plan run was given (DESIGN §31).
+def _planners(conn: sqlite3.Connection) -> dict[int, Planner]:
+    """What the journal records of each plan run: its persona (DESIGN §31), and the models chosen and served (§13).
 
     Returns:
-        Each plan run's persona, by its run's id; a run from before canopy recorded one has none.
+        Each plan run's, by its run's id.
     """
     planned = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
-    runs = sql.select("id, persona").from_("runs").where("id IN ({}) AND persona IS NOT NULL", planned)
-    return {int(r["id"]): str(r["persona"]) for r in sql.execute(conn, runs)}
+    runs = {
+        int(r["id"]): r
+        for r in sql.execute(conn, sql.select("id, persona, model").from_("runs").where("id IN ({})", planned))
+    }
+    served = run_models.of_runs(conn, "runs", runs)
+    return {
+        run_id: Planner(r["persona"], r["model"], tuple(m.model for m in served[run_id])) for run_id, r in runs.items()
+    }
 
 
 def _export_index(
@@ -936,7 +969,7 @@ class _Seen:
         kind: Kind,
         row: records.Plan | records.FeedbackPlan,
         *,
-        persona: str | None,
+        planner: Planner,
         ticket_title: str | None,
         source: os.stat_result | None,
         exported_name: str,
@@ -962,7 +995,7 @@ class _Seen:
                 source,
                 exported_name,
                 exported,
-                persona=persona,
+                planner=planner,
                 ticket_title=ticket_title,
                 prompt=prompt,
             )
@@ -974,7 +1007,7 @@ class _Seen:
         kind: Kind,
         row: records.Plan | records.FeedbackPlan,
         *,
-        persona: str | None,
+        planner: Planner,
         ticket_title: str | None,
         source: os.stat_result | None,
         exported_name: str,
@@ -998,7 +1031,7 @@ class _Seen:
                 source,
                 exported_name,
                 exported,
-                persona=persona,
+                planner=planner,
                 ticket_title=ticket_title,
                 prompt=prompt,
             )
@@ -1104,11 +1137,11 @@ def _fingerprint(
     exported_name: str,
     exported: os.stat_result,
     *,
-    persona: str | None,
+    planner: Planner,
     ticket_title: str | None,
     prompt: _PromptStats | None,
 ) -> str:
-    """A plan's row, persona, ticket title, file's stat, export's name and stat, and its prompt's, as a digest.
+    """A plan's row, planner, ticket title, file's stat, export's name and stat, and its prompt's, as a digest.
 
     The ticket's title is in it for a plan named for that title, so a ticket retitled moves the plan to its new name.
 
@@ -1118,7 +1151,7 @@ def _fingerprint(
     stats = [_identity(s) for s in (source, exported)]
     prompt_stats = None if prompt is None else [None if s is None else _identity(s) for s in prompt]
     # A row's repr names each column and its value, so it changes with either, and with a column added.
-    digested = (_FORMAT, kind, row, persona, ticket_title, exported_name, stats, prompt_stats)
+    digested = (_FORMAT, kind, row, planner, ticket_title, exported_name, stats, prompt_stats)
     return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
 
 
