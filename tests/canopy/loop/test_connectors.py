@@ -21,6 +21,7 @@ from canopy.core.vocab import (
 )
 from canopy.loop import connectors
 from tests.canopy.helpers import reads, waits
+from tests.canopy.observation_helpers import artifact_change
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -36,6 +37,8 @@ SOURCES = {
         "github": {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1},
     },
 }
+#: An artifact store's comment feed, the fake connector playing it as `louvre`.
+ARTIFACTS = {"kind": "artifacts", "cmd": "connector louvre", "timeout_minutes": 1}
 
 
 def ticket(key: str, title: str = "Fix the build", **more: object) -> dict[str, object]:
@@ -315,6 +318,65 @@ def test_canopys_own_reader_is_asked_the_whole_request_each_tick_with_or_without
     scenario.tick(*waits("PROJ-1"))
     assert reads(github_state)[-1]["prs"] == [PR]
     assert [r.status for r in runs(scenario)] == ["ok", "ok"]
+    assert scenario.attention() == []
+
+
+def test_an_artifacts_source_reads_its_feed_past_its_cursor_last_and_in_shadow(
+    scenario: Scenario,
+    watched: Path,
+) -> None:
+    scenario.configures("private", connect={"sources": {"louvre": ARTIFACTS}})
+    plays(watched, louvre={"lines": [artifact_change(1, body="Why shard it?"), artifact_change(2)]})
+    ticked = scenario.tick(*waits(*KEYS))
+    assert ticked.tick.status == "ok"
+
+    assert [r["name"] for r in asked(watched)] == ["jira", "github", "louvre"]
+    assert asked(watched)[-1]["request"] == {"since": 0}
+    louvre = runs(scenario)[-1]
+    assert (louvre.source, louvre.kind, louvre.status, louvre.tick_id) == (
+        "louvre",
+        SourceKind.ARTIFACTS,
+        ConnectorRunStatus.OK,
+        ticked.tick.id,
+    )
+    assert json.loads(louvre.recorded) == {"comment_created": 2}
+    found = records.fetch_all(
+        scenario.conn,
+        records.ObservedArtifactComment,
+        sql.select("*").from_("observed_artifact_comments").order_by("seq"),
+    )
+    assert [c.body for c in found] == ["Why shard it?", "Comment 2."]
+    # In shadow: no conversation, state block, or attention item carries a comment on an artifact (DESIGN §38).
+    assert "Why shard it?" not in json.dumps(scenario.state())
+    assert scenario.conn.execute("SELECT count(*) FROM messages WHERE body LIKE '%shard%'").fetchone()[0] == 0
+    assert scenario.attention() == []
+
+    scenario.tick(*waits(*KEYS))
+    assert asked(watched)[-1]["request"] == {"since": 2}
+    out = scenario.operator("status").out
+    assert "Connectors (3):" in out
+    assert "  louvre  artifacts  last ran" in out
+    assert "feed through change 2, read to its end" in out
+
+
+def test_an_artifacts_source_read_short_raises_connector_failed_and_reads_the_change_again(
+    scenario: Scenario,
+    watched: Path,
+) -> None:
+    scenario.configures("private", connect={"sources": {"louvre": ARTIFACTS}})
+    plays(watched, louvre={"lines": [artifact_change(1), {"kind": "comment_created", "seq": 2}, artifact_change(3)]})
+    ticked = scenario.tick(*waits(*KEYS))
+    assert ticked.tick.status == "ok", "a source read short does not fail the tick"
+    [failed] = connector_runs.failures(scenario.conn, ticked.tick.id)
+    assert failed.detail == (
+        "louvre (artifacts) partial: did not read the feed past change 1: the line after it was refused"
+    )
+    assert (None, connector_runs.FAILED_REASON) in scenario.attention()
+    assert "feed through change 1, never read to its end, stale" in scenario.operator("status").out
+
+    plays(watched, louvre={"lines": [artifact_change(2), artifact_change(3)]})
+    scenario.tick(*waits(*KEYS))
+    assert asked(watched)[-1]["request"] == {"since": 1}
     assert scenario.attention() == []
 
 
