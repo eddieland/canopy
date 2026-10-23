@@ -43,6 +43,7 @@ from canopy.loop import (
     duties,
     gc_pass,
     harness,
+    harness_dispatches,
     mcp,
     observations,
     phases,
@@ -58,6 +59,7 @@ from canopy.runs import tasks as task_starts
 from canopy.runtime import project_config, servers, stdout
 
 if TYPE_CHECKING:
+    import sqlite3
     from collections.abc import Iterable, Sequence
 
     from canopy.core import records
@@ -76,6 +78,8 @@ MIB = 1024 * 1024
 # overseer leaves it out while a human has yet to close it in the tracker (DESIGN §7). One still open after that is read
 # again and marked done again, which lists it for as long once more.
 RECENTLY_DONE_DAYS = 30
+#: What the summary of a tick that ran no overseer starts with, after a dry run's prefix (DESIGN §39).
+NO_OVERSEER = "no overseer, nothing left to judge"
 #: How many of the runtime's errors a failed overseer's summary names; past it, the first and last, the rest counted.
 MAX_ERRORS_NAMED = 3
 # How a tick ended: the status it closed its row with, or, with no row, `lock_busy` when another tick held the lock and
@@ -141,8 +145,8 @@ def state_block(
     Returns:
         The `## State` section, the overseer's whole message.
     """
-    block, _, _ = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
-    return block
+    rendered = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
+    return rendered.block
 
 
 def session_title(tick_id: int, woken_by: WokenBy | None, *, tickets: int, running: int, open_items: int) -> str:
@@ -189,19 +193,22 @@ def _render(
     reconciled: reconcile.Reconciled,
     query_due: bool,
     woken_by: WokenBy | None = None,
-) -> tuple[str, duties.Duties, str]:
+) -> _Rendered:
     """Render the state block, and read what it asks of the overseer from the same journal reads (DESIGN §6 step 5).
 
     Returns:
-        The `## State` section, the overseer's duties this tick, and its session title, which `woken_by` starts.
+        The `## State` section, the overseer's duties this tick and what is left to it, and its session title, which
+        `woken_by` starts.
     """
     running = db.running_runs(ctx.conn, "runs")
     last_runs = db.latest_runs(ctx.conn)
     # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
     stopped = conversation.stopped(ctx.conn)
-    # A ticket the harness decided is named with its decision, and nothing else of it is shown (DESIGN §37).
+    # A ticket the harness decided, or dispatches after the overseer, is named with what it does, and nothing else of
+    # it is shown (DESIGN §37).
     by_harness = harness.recorded(ctx.conn, tick_id)
-    decided = frozenset(str(d.ticket_key) for d in by_harness)
+    to_come = harness_dispatches.plan(ctx, tick_id, now)
+    decided = frozenset([*(str(d.ticket_key) for d in by_harness), *(r.key for r in to_come.runs)])
     tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in decided]
     private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     operator = {t.key: found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None}
@@ -210,8 +217,12 @@ def _render(
     found = duties.last_queried(ctx.conn)
     since = db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))
     recently_done = [t for t in db.recently_done(ctx.conn, since) if str(t["key"]) in found]
-    chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
+    # A chore with no `when` is the harness's: the block names it only as a dispatch to come (DESIGN §37).
+    chores = [
+        c for c in chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now) if c["when"]
+    ]
     shown = [*(int(r["id"]) for r in running), *(r.id for r in last_runs.values())]
+    reviews = review_view.state_section(ctx.conn, ctx.config, now)
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
@@ -225,6 +236,7 @@ def _render(
         stopped=stopped,
         recently_done=recently_done,
         harness=harness.section(by_harness),
+        dispatches_to_come=harness_dispatches.section(to_come),
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, shown),
@@ -234,13 +246,13 @@ def _render(
         ci_cooldowns=policy.ci_cooldowns(ctx.conn, ctx.config, now),
         now=now,
         chores=chores,
-        reviews=review_view.state_section(ctx.conn, ctx.config, now),
+        reviews=reviews,
         notices=notice.recent(ctx.conn, now),
         private=private,
         operator=operator,
         planned=planned,
         feedback_planned=_feedback_plans(ctx, tickets, now),
-        attention=attention.for_overseer(ctx.conn),
+        attention=attention.for_overseer(ctx.conn, decided=decided),
         query_due=query_due,
         operator_sent=drafts.sent_by_pr(ctx.conn),
         observations=observations.section(ctx, tick_id, now, tickets, decided=decided),
@@ -262,7 +274,42 @@ def _render(
         running=len(running),
         open_items=len(attention.current(ctx.conn)),
     )
-    return block, owed, title
+    return _Rendered(block, owed, _left(ctx.conn, tick_id, owed, reviews), title)
+
+
+@dataclass(frozen=True)
+class _Rendered:
+    """The overseer's state block, and what reading it for the same tick found."""
+
+    #: The `## State` section, the overseer's whole message.
+    block: str
+    #: What the overseer owes this tick (DESIGN §6 step 5).
+    owed: duties.Duties
+    #: What the block leaves the overseer to judge, a phrase each; with none, the tick runs no overseer (DESIGN §39).
+    left: Sequence[str]
+    #: The overseer's session title.
+    title: str
+
+
+def _left(
+    conn: sqlite3.Connection,
+    tick_id: int,
+    owed: duties.Duties,
+    reviews: review_view.ReviewsSection | None,
+) -> list[str]:
+    """What the state block leaves the overseer to judge, after the harness's decisions (DESIGN §37, §39).
+
+    Each duty it owes, which before it runs is each one there is: a ticket listed or the query found, a due chore with
+    a `when`, the query when no source read it. And the reviews it starts: the review query's, the operator's requests,
+    and the revisions their notes ask for.
+
+    Returns:
+        A phrase for each; none when the harness has left it nothing.
+    """
+    left = duties.undone(conn, tick_id, owed)
+    if reviews is not None and (reviews["query"] or reviews["requests"] or reviews.get("revisions")):
+        left.append("reviews to start or wait on")
+    return left
 
 
 def _plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, plans.PlanState]:
@@ -381,7 +428,7 @@ def _steps(
 
     now = datetime.now(UTC)
     query_due = _query(ctx, tick_id, now, log)
-    block, owed, title = _render(
+    rendered = _render(
         ctx,
         tick_id=tick_id,
         dry_run=dry_run,
@@ -390,16 +437,22 @@ def _steps(
         query_due=query_due,
         woken_by=woken_by,
     )
-    halted = _halt(ctx, tick_id, log)
+    # With nothing left to judge, the overseer would be handed an empty block: the tick runs none, and owes nothing.
+    # The disk check still holds the harness's dispatches, which fill a disk as the overseer's do (DESIGN §39).
+    overseer = bool(rendered.left)
+    halted = _halt(ctx, tick_id, log, overseer=overseer)
+    db.set_tick_overseer(ctx.conn, tick_id, ran=overseer and halted is None)
     if halted is not None:
         return finish(*halted)
-    # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
-    failure, usage = _run_overseer(ctx, tick_id, block, title, dry_run=dry_run, log=log)
+    failure, usage = _overseer(ctx, tick_id, rendered, dry_run=dry_run, log=log)
+    # After the overseer, whatever its run ended as; a tick halted before it starts none (DESIGN §37).
+    _harness_dispatches(ctx, tick_id, log)
     if failure is not None:
         return finish(TickStatus.OVERSEER_FAILED, failure, usage)
+    owed = rendered.owed
 
     decisions = db.decisions_for_tick(ctx.conn, tick_id)
-    prefix = "dry run; " if dry_run else ""
+    prefix = ("dry run; " if dry_run else "") + ("" if overseer else f"{NO_OVERSEER}; ")
     # A tick-wide skip (mcp_unavailable, tracker_unsupported) means the overseer could not see the world. Closing it
     # `ok` would make its empty list the attention list and notify every open item as resolved.
     skips = [d.rationale for d in decisions if d.ticket_key is None and d.action == "skip"]
@@ -419,6 +472,26 @@ def _steps(
         if not dry_run:
             acknowledge.note(ctx.conn, tick_id)
         return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
+
+
+def _overseer(
+    ctx: Context,
+    tick_id: int,
+    rendered: _Rendered,
+    *,
+    dry_run: bool,
+    log: logs.TickAdapter,
+) -> tuple[str | None, Usage | None]:
+    """Run the overseer on the state block `rendered`, unless it leaves the overseer nothing to judge (DESIGN §39).
+
+    Returns:
+        Why it failed, or None, and what it cost if the runtime reported it; None and None when it did not run.
+    """
+    if not rendered.left:
+        log.info("overseer not run: the harness left it nothing to judge", extra={"dry_run": dry_run})
+        return None, None
+    # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
+    return _run_overseer(ctx, tick_id, rendered.block, rendered.title, dry_run=dry_run, log=log)
 
 
 def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[phases.Derived]:
@@ -455,6 +528,18 @@ def _harness_decides(ctx: Context, tick_id: int, derived: Iterable[phases.Derive
         return
     if decided:
         log.info("harness decided", extra={"tickets": [d.key for d in decided]})
+
+
+def _harness_dispatches(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+    """Make the harness's dispatches, after the overseer, in §7's order, each under every guard (DESIGN §37).
+
+    What it raises is logged, never the tick's outcome: what it started stands, and what it did not waits for a later
+    tick.
+    """
+    try:
+        harness_dispatches.make(ctx, tick_id, log)
+    except Exception as e:
+        log.exception("the harness's dispatches raised", extra={"error": str(e)})
 
 
 def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
@@ -577,10 +662,11 @@ def _record_connector_failed(ctx: Context, tick_id: int) -> None:
         _harness_item(ctx, tick_id, None, connector_runs.FAILED_REASON, "; ".join(s.detail for s in sources))
 
 
-def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter) -> tuple[TickStatus, str] | None:
+def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter, *, overseer: bool) -> tuple[TickStatus, str] | None:
     """Check what the overseer needs before paying for it: free disk, then its tools' server (DESIGN §6 step 5).
 
-    A check that fails records the attention item named for the status the tick closes with.
+    The server check is the overseer's, made only with `overseer`, for a tick that runs it (DESIGN §39). A check
+    that fails records the attention item named for the status the tick closes with.
 
     Returns:
         That status and the tick's summary, or None when both checks pass.
@@ -589,7 +675,7 @@ def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter) -> tuple[TickStatus
     if low is not None:
         status, summary, then = TickStatus.DISK_LOW, low, "Free space there, and the next tick runs it"
     else:
-        unavailable = _check_server(ctx, tick_id, log)
+        unavailable = _check_server(ctx, tick_id, log) if overseer else None
         if unavailable is None:
             return None
         status, summary = TickStatus.CANOPY_UNAVAILABLE, unavailable
