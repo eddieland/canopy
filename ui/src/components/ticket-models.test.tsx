@@ -60,11 +60,11 @@ function openMenu(name: string) {
 describe('TicketModels', () => {
     it("shows each agent's next model and where it comes from, in the CLI's words, reading no list", () => {
         renderModels()
-        const rows = screen.getAllByRole('definition').map((row) => row.textContent)
+        const rows = screen.getAllByTestId('ticket-model').map((row) => [row.textContent, row.title])
         expect(rows).toEqual([
-            "acme/deep-2this ticket's override",
-            'acme/fast-1[runtime.models]',
-            "the runtime's defaultnothing sets one",
+            ['workeracme/deep-2override', "this ticket's override"],
+            ['planneracme/fast-1', '[runtime.models]'],
+            ["reviewerthe runtime's default", 'nothing sets one'],
         ])
         expect(sent).toEqual([])
     })

@@ -7,6 +7,7 @@ import { keys, modelsQuery } from '@/api/queries'
 import type { AgentModel } from '@/api/types'
 import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
+import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import {
     DropdownMenu,
@@ -29,7 +30,7 @@ interface Choice {
 
 /**
  * The model each of a ticket's agents runs on at its next run (DESIGN §13), and where that comes from: a row for its
- * workers, its planner, and its reviewer, each a menu that sets the ticket's override to one of the models the runtime
+ * workers, its planner, and its reviewer, side by side in one row, an override marked, each a menu that sets the ticket's override to one of the models the runtime
  * lists, read when the menu opens, or clears it, as `canopy model KEY MODEL --agent AGENT` and `--clear` do. A model
  * the runtime no longer lists refuses the agent's next run rather than run it on another.
  */
@@ -57,18 +58,28 @@ export function TicketModels({
     return (
         <div className={className} data-testid="ticket-models">
             <Fields className="pb-1.5">
-                {models.map((m) => (
-                    <Field key={m.agent} label={`${m.agent} model`}>
-                        <span className="flex flex-wrap items-baseline gap-x-2">
-                            <ModelMenu
-                                current={m}
-                                disabled={choose.isPending}
-                                onChoose={(model) => choose.mutate({ agent: m.agent, model })}
-                            />
-                            <span className="text-xs text-muted-foreground">{MODEL_SOURCES[m.source]}</span>
-                        </span>
-                    </Field>
-                ))}
+                {/* One row for the three, so the conversation under the Work panel stays in reach. */}
+                <Field label="models">
+                    <span className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                        {models.map((m) => (
+                            <span
+                                key={m.agent}
+                                className="flex items-baseline gap-x-1.5"
+                                title={MODEL_SOURCES[m.source]}
+                                data-testid="ticket-model"
+                            >
+                                <span className="text-xs text-muted-foreground">{m.agent}</span>
+                                <ModelMenu
+                                    current={m}
+                                    disabled={choose.isPending}
+                                    onChoose={(model) => choose.mutate({ agent: m.agent, model })}
+                                />
+                                {/* Where the rest come from is in the title: only an override is this page's. */}
+                                {m.source === 'ticket' && <Chip>override</Chip>}
+                            </span>
+                        ))}
+                    </span>
+                </Field>
             </Fields>
             <Notice error={choose.error} className="px-3 pb-3">
                 {said}

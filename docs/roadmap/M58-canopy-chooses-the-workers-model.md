@@ -122,7 +122,7 @@ worker or a task's run, `provider/model (canopy worker)`, while `trust.commit_tr
 operator set is used as set, with no placeholder for the model.
 Built (2026-10-22): the per-ticket override, a `ticket_overrides` row of kind `model` (no migration: M60's table
 allowed it), set and cleared by `canopy model KEY MODEL [--agent planner|reviewer]` and `--clear`, or the ticket page's
-Model rows in its Work panel, both through one function that refuses `inside_run`, `unknown_model` for a model the list
+models row in its Work panel, both through one function that refuses `inside_run`, `unknown_model` for a model the list
 lacks or one with a variant (an override names the model alone; the variant stays config's), and `model_list_failed`;
 `canopy model KEY` prints each agent's next model and where it comes from; a worker's or planner's dispatch takes it in
 config's place and records it, and the run renders the model it recorded, which its trailer names; a review of the

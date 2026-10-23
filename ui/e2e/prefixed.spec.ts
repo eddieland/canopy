@@ -549,7 +549,8 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
 }) => {
     await page.goto('tickets/ABC-104')
     const models = page.getByTestId('ticket-models')
-    await expect(models).toContainText('nothing sets one')
+    const worker = models.getByTestId('ticket-model').first()
+    await expect(worker).toHaveAttribute('title', 'nothing sets one')
     await models.getByRole('button', { name: "worker model: the runtime's default" }).click()
     // The mock's runtime lists the models its runs' sessions name.
     const first = page.getByRole('menuitemradio').first()
@@ -561,6 +562,7 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     )
     const chosen = models.getByRole('button', { name: `worker model: ${model}` })
     await expect(chosen).toBeVisible()
+    await expect(worker).toContainText('override')
     await chosen.click()
     await page.getByRole('menuitem', { name: 'Clear the override' }).click()
     await expect(models.getByRole('status')).toHaveText(
