@@ -64,12 +64,16 @@ a fix, not a loop. [Config files](config-files) lists every key.
 
 ## Fun
 
-Off by default, and none of it does anything useful, by design.
+Sprig starts off and the rest starts on. None of it does anything useful, by design.
 
 - **Ticker**: joke headlines crawling across the header, with a speed, a gap between headlines, and topics to pick
   from. **Tips** mixes real tips about canopy in with the jokes.
 - **Sprig**: a small wire figure at the foot of the rail, with a tip for every page. None of them help. Click it for
   a new one, picked at random like the ticker's headlines, or **Don't show me tips again** to turn it off.
+- **Quips**: a worker run's row in the rail says what it's doing as a quip, `planning in pencil`, instead of plain
+  `planning`. Each ticket keeps its quip for a phase and gets a new one with the next, in every tab, so nothing
+  changes its story while you watch. A run waiting on you gets the plain words; it isn't doing anything. Hover a
+  quip for the plain words too.
 - **The hat shop**: every dollar canopy spends is a dollar towards Sprig's hats. All sales are final.
 
 The switch in the panel's header does exactly what you'd fear. Sprig, if it's on, brought glow sticks.

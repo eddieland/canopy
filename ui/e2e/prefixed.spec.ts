@@ -549,6 +549,32 @@ test("a draft's reaction is changed and sent alone from the PR's page, with no r
     await expect(nit).toHaveAttribute('data-status', 'sent')
 })
 
+test("a stale feedback plan is approved by item from the PR's page, refused once first, as canopy plan does", async ({
+    page,
+}) => {
+    await page.goto('pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88')
+    const feedback = page.getByTestId('feedback-plan')
+    // carol reviewed the PR after the plan was written; bob's thread carries what the plan proposes for it.
+    await expect(feedback.getByTestId('feedback-plan-stale')).toContainText('new review 4102337050 on')
+    const bob = page.getByTestId('review-thread').filter({ hasText: 'Why 250?' })
+    await expect(bob.getByTestId('plan-proposal')).toContainText('Plan item 3')
+    await feedback.getByRole('checkbox', { name: 'address item 1' }).click()
+    const approve = feedback.getByRole('button', { name: 'Approve 2 of 3' })
+    await expect(approve).toHaveAttribute('title', 'canopy plan ABC-099 --approve --leave 1')
+    await approve.click()
+    await expect(feedback.getByRole('alert')).toContainText(
+        'refused (stale): feedback plan 1 of ABC-099 is stale: new review',
+    )
+    await expect(feedback.getByTestId('feedback-plan-stale')).toContainText('Approving it again approves it as it is')
+    await approve.click()
+    await expect(feedback.getByRole('status')).toContainText(
+        'Feedback plan 1 of ABC-099 is approved as its file stands now, for 2 of its 3 items: ' +
+            'items 2 (id 2468013579) and 3 (id 2468013601).',
+    )
+    await expect(feedback).toHaveAttribute('data-status', 'approved')
+    await expect(feedback.getByRole('checkbox', { name: 'address item 1' })).not.toBeChecked()
+})
+
 test('a long conversation scrolled away from its end stays put as a message arrives', async ({ page }) => {
     // Thirty copies of its first messages, then any added since, so the reply arrives at the end of a long thread.
     // The first ones kept, and new ones told apart by id: the server sends only the latest 100, so after many runs a
@@ -830,4 +856,85 @@ test('a lesson is edited from the memory page, and its versions keep the old wor
     await expect(said).toHaveText('Memory 8 (lesson billing-client) is forgotten: its text is deleted.')
     await expect(old).toContainText('text deleted')
     await expect(edited).toContainText('Billing goes through src/billing/client.ts, v2 included.')
+})
+
+test('a task submitted from the tasks page opens its page, and its row arrives on the list', async ({ page }) => {
+    await page.goto('tasks')
+    const form = page.getByRole('form', { name: 'Submit a task' })
+    await expect(form.getByRole('status')).toContainText('opens a draft PR only if your text asks for one')
+    // Other tests may submit at the same time, so this task is found by its text.
+    const text = `Find out why the nightly export is slow (${test.info().testId}).`
+    const picker = await openRepoPicker(form.getByRole('button', { name: /^Runs in: /u }))
+    await picker.getByRole('option', { name: 'mobile' }).click()
+    await form.getByRole('textbox', { name: 'Task' }).fill(text)
+    await form.getByRole('button', { name: /^Submit/u }).click()
+
+    await expect(page.getByText(/^Submitted task:\d+; the next tick starts it\.$/u)).toBeVisible()
+    await expect(page).toHaveURL(/\/canopy\/tasks\/\d+$/u)
+    const id = /\/tasks\/(\d+)$/u.exec(page.url())?.[1] ?? ''
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(`task:${id}`)
+
+    // The list had no row for it when the form sent it: the stream brings it.
+    await page.goBack()
+    const row = page.getByTestId(`task-${id}`)
+    await expect(row).toContainText(text)
+    await expect(row).toContainText('mobile')
+    await expect(row).toContainText('queued')
+    await row.getByRole('link', { name: `task:${id}` }).click()
+    await expect(page).toHaveURL(new RegExp(`/canopy/tasks/${id}$`, 'u'))
+})
+
+test('a task the server refuses says why, naming its guard, and the form keeps it', async ({ page }) => {
+    await page.goto('tasks')
+    const form = page.getByRole('form', { name: 'Submit a task' })
+    await form.getByRole('textbox', { name: 'Task' }).fill('Plan the offline mode.')
+    await form.getByRole('textbox', { name: 'Tracker project' }).fill('not a project')
+    await form.getByRole('button', { name: /^Submit/u }).click()
+    await expect(form.getByRole('alert')).toContainText('refused (bad_project)')
+    await expect(form.getByRole('status')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/canopy\/tasks$/u)
+    await expect(form.getByRole('textbox', { name: 'Task' })).toHaveValue('Plan the offline mode.')
+})
+
+test("a reply answers a task's question, which clears, and its reply shows", async ({ page }) => {
+    await page.goto('tasks/4')
+    const question = page.getByRole('region', { name: 'A question waiting on you' })
+    await expect(question).toBeVisible()
+    const form = page.getByRole('form', { name: 'Reply' })
+    await form.getByRole('textbox').fill('Yes: rename it in api too.')
+    await form.getByRole('button', { name: 'Reply' }).click()
+    await expect(form.getByRole('status')).toHaveText(
+        /^Recorded message \d+ on task:4, answering message \d+\. The next tick starts its next run, on its branch\.$/u,
+    )
+    const conversation = page.getByTestId('conversation')
+    const mine = conversation.locator('[data-source=operator]').filter({ hasText: 'Yes: rename it in api too.' })
+    await expect(mine).toContainText('via web')
+    await expect(conversation.getByText('waiting on you')).toHaveCount(0)
+    await expect(question).toHaveCount(0)
+    // It still takes a reply, now a plain one: the next run reads every one.
+    await expect(form.getByRole('textbox', { name: 'Reply', exact: true })).toBeVisible()
+})
+
+test('stopping a queued task asks once more, then drops it, and its reply goes', async ({ page }) => {
+    await page.goto('tasks/7')
+    const actions = page.getByTestId('task-actions')
+    await actions.getByRole('button', { name: 'Stop', exact: true }).click()
+    await actions.getByRole('button', { name: 'Stop task:7' }).click()
+    await expect(actions.getByRole('status')).toHaveText(
+        'task:7 is stopped; it had not started, and nothing starts it now.',
+    )
+    await expect(page.getByRole('form', { name: 'Reply' })).toHaveCount(0)
+    await expect(page.locator('main header p')).toContainText('stopped')
+})
+
+test("stop now ends a task's running run after asking once more", async ({ page }) => {
+    await page.goto('tasks/6')
+    const actions = page.getByTestId('task-actions')
+    await actions.getByRole('button', { name: 'Stop now' }).click()
+    await actions.getByRole('button', { name: 'End run 6 now' }).click()
+    await expect(actions.getByRole('status')).toHaveText(
+        'task:6 is stopped; nothing starts it again. Its run 6 was ended and its slot returned.',
+    )
+    await expect(page.getByTestId('working-now')).toHaveCount(0)
+    await expect(page.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })

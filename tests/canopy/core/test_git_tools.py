@@ -77,6 +77,63 @@ def test_each_tool_reads_the_checkouts_history(repo: Repo) -> None:
     assert listed.endswith("\tretry.py")
 
 
+def test_diff_with_stat_lists_each_file_changed_in_place_of_the_patch(repo: Repo) -> None:
+    stat = git_tools.diff(RUNNER, repo.checkouts, git_tools.Diff(base="main", head="feature", stat=True))
+    assert stat == f"{git_tools.DATA_NOTE}\n\n1\t0\tnotes.md\n1\t1\tretry.py"
+    only = git_tools.diff(
+        RUNNER,
+        repo.checkouts,
+        git_tools.Diff(base="main", head="feature", paths=["retry.py"], stat=True),
+    )
+    assert only.endswith("\n\n1\t1\tretry.py")
+
+
+def test_grep_finds_a_text_in_the_files_at_a_commit(repo: Repo) -> None:
+    (repo.path / "lib").mkdir()
+    (repo.path / "lib" / "use.py").write_text("from retry import retry\nretry()\nRETRY = 3\n")
+    (repo.path / "lib" / "data.bin").write_bytes(b"retry\0")
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "use it", cwd=repo.path)
+    at = repo.checkouts
+
+    found = git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="retry()"))
+    assert found == f"{git_tools.DATA_NOTE}\n\nlib/use.py:2:retry()\nretry.py:1:def retry():"
+    # At the base, before the branch: the commit named, not the checkout's files.
+    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="main", text="return")).endswith("\n\nretry.py:2:    return 1")
+    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="RETRY", paths=["lib"])).endswith(
+        "\n\nlib/use.py:3:RETRY = 3",
+    )
+    either = git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="RETRY", ignore_case=True, paths=["lib"]))
+    assert either.count("lib/use.py:") == 3
+    # The text as written, never a pattern or an option; and a miss says so.
+    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="re.ry")).startswith(
+        "No file at feature holds",
+    )
+    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="--all")).startswith("No file at feature")
+
+
+def test_files_lists_the_paths_at_a_commit_by_name(repo: Repo) -> None:
+    (repo.path / "tests").mkdir()
+    (repo.path / "tests" / "test_retry.py").write_text("")
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "tests", cwd=repo.path)
+    at = repo.checkouts
+    assert git_tools.files(RUNNER, at, git_tools.Files(rev="main")) == f"{git_tools.DATA_NOTE}\n\nretry.py"
+    every = git_tools.files(RUNNER, at, git_tools.Files(rev="feature"))
+    assert every.endswith("\n\nnotes.md\nretry.py\ntests/test_retry.py")
+    # A name matches a file's own name, not its directory.
+    assert git_tools.files(RUNNER, at, git_tools.Files(rev="feature", name="*.py")).endswith(
+        "\n\nretry.py\ntests/test_retry.py",
+    )
+    assert git_tools.files(RUNNER, at, git_tools.Files(rev="feature", name="test_*")).endswith(
+        "\n\ntests/test_retry.py",
+    )
+    assert git_tools.files(RUNNER, at, git_tools.Files(rev="feature", name="tests*")).startswith("No file at feature")
+    assert git_tools.files(RUNNER, at, git_tools.Files(rev="feature", paths=["tests"])).endswith(
+        "\n\ntests/test_retry.py",
+    )
+
+
 def test_log_narrows_to_commits_that_change_a_text_or_say_one_and_follows_a_rename(repo: Repo) -> None:
     git("mv", "retry.py", "retries.py", cwd=repo.path)
     git("commit", "--quiet", "-m", "rename retry", cwd=repo.path)
@@ -114,6 +171,43 @@ def test_blame_names_the_commit_that_last_changed_each_line(repo: Repo) -> None:
     one = git_tools.blame(RUNNER, at, git_tools.Blame(rev="main", path="retry.py", start=2, end=2))
     assert one.endswith(" 2)     return 1")
     assert one.count("\n") == 2
+
+
+def test_blame_can_look_past_a_move_and_a_reindent(repo: Repo) -> None:
+    path = repo.path
+    body = "def retry_with_backoff(attempts):\n    return attempts * 2 + 1\n"
+    (path / "backoff.py").write_text(body)
+    git("add", ".", cwd=path)
+    git("commit", "--quiet", "-m", "write it", cwd=path)
+    wrote = git("rev-parse", "HEAD", cwd=path)
+    (path / "backoff.py").unlink()
+    (path / "notes.md").write_text(f"hello\n{body}")
+    git("add", "-A", cwd=path)
+    git("commit", "--quiet", "-m", "move it", cwd=path)
+    moved = git("rev-parse", "HEAD", cwd=path)
+    (path / "notes.md").write_text(f"hello\n{body.replace('    return', '        return')}")
+    git("commit", "--quiet", "-am", "reindent it", cwd=path)
+    reindented = git("rev-parse", "HEAD", cwd=path)
+    at = repo.checkouts
+
+    def blamed(*, moves: bool = False, ignore_whitespace: bool = False) -> list[str]:
+        asked = git_tools.Blame(
+            rev="HEAD",
+            path="notes.md",
+            start=2,
+            end=3,
+            moves=moves,
+            ignore_whitespace=ignore_whitespace,
+        )
+        found = git_tools.blame(RUNNER, at, asked)
+        return [line.split()[0] for line in found.removeprefix(f"{git_tools.DATA_NOTE}\n\n").splitlines()]
+
+    assert blamed() == [moved, reindented]
+    assert blamed(ignore_whitespace=True) == [moved, moved]
+    # Past the move too, to the commit that wrote the lines, in the file it wrote them in.
+    assert blamed(moves=True, ignore_whitespace=True) == [wrote, wrote]
+    whole = git_tools.Blame(rev="HEAD", path="notes.md", start=2, end=3, moves=True, ignore_whitespace=True)
+    assert all(" backoff.py " in line for line in git_tools.blame(RUNNER, at, whole).splitlines()[2:])
 
 
 def test_what_a_tool_returns_is_bounded(repo: Repo) -> None:
@@ -182,6 +276,16 @@ def test_a_file_that_is_not_text_is_refused_and_a_hidden_character_is_named(repo
         (git_tools.Blame, {"rev": "main", "path": "retry.py", "start": 1, "end": 401}, "at most 400 lines"),
         (git_tools.Blame, {"rev": "main", "path": "../x", "start": 1, "end": 1}, "no `..`"),
         (git_tools.Blame, {"rev": "-L1,2", "path": "retry.py", "start": 1, "end": 1}, "not a revision"),
+        (git_tools.Grep, {"rev": "--no-index", "text": "x"}, "not a revision"),
+        (git_tools.Grep, {"rev": "main", "text": ""}, "at least 1 character"),
+        (git_tools.Grep, {"rev": "main", "text": "a\nb"}, "printable"),
+        (git_tools.Grep, {"rev": "main", "text": "x", "paths": ["../x"]}, "no `..`"),
+        (git_tools.Grep, {"rev": "main", "text": "x", "regex": True}, "Extra inputs are not permitted"),
+        (git_tools.Files, {"rev": "main", "name": "a\tb"}, "printable"),
+        (git_tools.Files, {"rev": "main", "paths": ["/etc"]}, "never starts with"),
+        (git_tools.Diff, {"base": "main", "head": "feature", "stat": "yes"}, "valid boolean"),
+        (git_tools.Blame, {"rev": "main", "path": "retry.py", "start": 1, "end": 1, "moves": 1}, "valid boolean"),
+        (git_tools.Blame, {"rev": "main", "path": "retry.py", "start": 1, "end": 1, "copies": True}, "Extra inputs"),
     ],
 )
 def test_an_argument_that_is_an_option_leaves_the_checkout_or_is_no_revision_is_refused(
@@ -281,6 +385,11 @@ def test_nothing_the_repository_names_runs(repo: Repo, tmp_path: Path) -> None:
     assert git_tools.merge_base(RUNNER, at, git_tools.MergeBase(base="main", head=signed)) == repo.base
     assert git_tools.log(RUNNER, at, git_tools.Log(range=signed, search="hello")).count("commit ") == 1
     assert git_tools.blame(RUNNER, at, git_tools.Blame(rev=signed, path="notes.md", start=1, end=1)).endswith("hello")
+    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev=signed, text="hello")).endswith("notes.md:1:hello")
+    assert git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head=signed, stat=True)).endswith("retry.py")
+    assert git_tools.files(RUNNER, at, git_tools.Files(rev=signed)).endswith("retry.py")
+    past = git_tools.Blame(rev=signed, path="notes.md", start=1, end=1, moves=True, ignore_whitespace=True)
+    assert git_tools.blame(RUNNER, at, past).endswith("hello")
     assert not marker.exists(), marker.read_text()
 
     # The same reads by plain git run what the repository names: the test above would have seen them.
@@ -321,5 +430,7 @@ def test_the_tools_are_named_as_the_definitions_name_them() -> None:
         "canopy_git_log",
         "canopy_git_show",
         "canopy_git_blame",
+        "canopy_git_grep",
+        "canopy_git_files",
     ]
     assert git_tools.inherited(["GIT_DIR", "GIT_EXTERNAL_DIFF", "HOME", "XGIT"]) == {"GIT_DIR", "GIT_EXTERNAL_DIFF"}

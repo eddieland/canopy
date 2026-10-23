@@ -24,6 +24,7 @@ from canopy.core import (
     sql,
 )
 from canopy.core.vocab import ConnectorRunStatus, PrState, SourceKind
+from canopy.reviews import waiting
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -101,8 +102,9 @@ def vcs_request(ctx: Context) -> observe.Request:
     """What a `vcs` source is asked: the PRs the journal watches, the map's repositories, and the review query.
 
     A PR is watched while its unit's ticket is not marked done, merged and closed ones included, while a draft waits
-    on a read of it (§29), a review's draft among them (§34), and while the reader last saw it open, so no PR's
-    observation stays open unread once its ticket is done or forgotten. A PR with the operator's open review request is
+    on a read of it (§29), a review's draft among them (§34), while a requested review's draft waits on the operator
+    and no read has seen it merged or closed (§34), and while the reader last saw it open, so no PR's observation stays
+    open unread once its ticket is done or forgotten. A PR with the operator's open review request is
     watched too, so its review knows the branch it merges into (§21). A PR that is not a PR's URL cannot be read, so it
     is not asked about.
 
@@ -124,6 +126,7 @@ def vcs_request(ctx: Context) -> observe.Request:
         drafts.unchecked_prs(ctx.conn),
         drafts_manage.unsettled_prs(ctx.conn),
         review_drafts_manage.unsettled_prs(ctx.conn),
+        (pr for pr in waiting.unread_prs(ctx.conn) if observe.is_pr_url(pr)),
         (str(r[0]) for r in sql.execute(ctx.conn, seen_open)),
         (r.pr_url for r in review_requests.open_requests(ctx.conn) if observe.is_pr_url(r.pr_url)),
     )
