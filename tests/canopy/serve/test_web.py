@@ -406,6 +406,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         "agent": "planner",
         "model": "acme/fake-model-2",
         "source": "ticket",
+        "variant": None,
     }
     ended_run(ctx, KEY, "implement")
     got = c.get(f"/api/tickets/{KEY}").json()
@@ -416,7 +417,12 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
     ]
     assert [tuple(r) for r in ctx.conn.execute("SELECT kind, channel FROM ticket_overrides")] == [("model", "web")]
     # No model clears it, as `--clear` does.
-    assert choose({"agent": "planner"}).json() == {"agent": "planner", "model": None, "source": "default"}
+    assert choose({"agent": "planner"}).json() == {
+        "agent": "planner",
+        "model": None,
+        "source": "default",
+        "variant": None,
+    }
     assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
     # A list that cannot be read says why, and refuses a choice as the CLI does.
     opencode_state.write_text(json.dumps({"exit": 1}))
@@ -481,6 +487,19 @@ def test_the_mocks_settings_page_names_a_model_for_the_overseer_and_the_chores(b
         ("deps", "anthropic/claude-haiku-4-5", "high", "chore"),
     ]
     assert got["models_file"] == got["chores_file"] == str(backend.user_file)
+
+
+def test_a_configured_model_with_a_variant_is_sent_with_it_so_the_page_offers_it_as_no_choice(ctx: Context) -> None:
+    """Config's model at a variant names the variant, which an override cannot, so the menu offers the model alone."""
+    runtime = ctx.config.runtime.model_copy(update={"models": {"worker": "acme/fake-model-1@high"}})
+    c, _ = signed_in_client(dataclasses.replace(ctx, config=ctx.config.model_copy(update={"runtime": runtime})))
+    ended_run(ctx, KEY, "implement")
+    assert c.get(f"/api/tickets/{KEY}").json()["models"][0] == {
+        "agent": "worker",
+        "model": "acme/fake-model-1@high",
+        "source": "config",
+        "variant": "high",
+    }
 
 
 def test_the_web_lists_the_personas_canopy_personas_lists(ctx: Context) -> None:
