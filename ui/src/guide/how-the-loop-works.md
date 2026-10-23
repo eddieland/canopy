@@ -24,8 +24,9 @@ So does a run ending, a cooldown running out, a chore coming due, or a notice la
 `loop.min_gap_minutes` after the last tick ends, one minute by default. **Tick now** in the header skips even that.
 
 While it waits, the loop also polls: every `connect.every_minutes`, two by default, it runs the connectors that read
-your tracker and GitHub into canopy's own record. A poll runs no overseer, so it keeps that record fresh however long
-you set the wait between ticks. For now nothing acts on what a poll reads, and a poll never starts a tick early.
+your tracker and GitHub into canopy's own record, and the comments on your artifacts if you set up a source for them.
+A poll runs no overseer, so it keeps that record fresh however long you set the wait between ticks. For now nothing
+acts on what a poll reads, and a poll never starts a tick early.
 
 ## Runs
 

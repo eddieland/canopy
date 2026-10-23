@@ -75,7 +75,7 @@ ticket listed or found by a query the harness recorded, no due chore with a `whe
 start: the review query, an operator's request, or a revision) runs no overseer: it still runs steps 1 to 3 and the disk
 check, skips the `canopy` check, owes no duty, makes the harness's dispatches, and closes `ok` with a summary saying so
 and the attention list as it stands, the overseer's items held through it (`loop/tick.py`). `ticks.overseer_ran`
-(migration 0083) records whether it ran, 0 too for a tick halted before it; `canopy spend`, its `--json`, and the spend
+(migration 0084) records whether it ran, 0 too for a tick halted before it; `canopy spend`, its `--json`, and the spend
 page count a tick without it at nothing, never among the runs that reported no cost, and split each group and each cause
 in `woken_by` by how many ran none; `canopy health` names such a tick `no overseer`. Held to the conservative choices
 above: every early tick by `loop.min_gap_minutes`; an `ok` tick that ran no overseer leaves idle pacing's count as it
