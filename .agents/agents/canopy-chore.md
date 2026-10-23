@@ -58,6 +58,9 @@ permission:
   # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
   # above reopens one.
   "canopy_git_*": deny
+  # canopy's read-only reports (DESIGN §27), whose server a chore's run is also given, are for an agent of the
+  # operator's that allows each by name; this one reads none of them.
+  "canopy_reports_*": deny
   # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
   # chore's, allowed by exact name: last, so no pattern above closes it.
   "canopy_chore_history": allow

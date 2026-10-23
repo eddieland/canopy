@@ -5,10 +5,12 @@ the overseer passes in, keys, reasons, phases, cursor ids, and free text, which 
 prompts, and the rules across its fields. The `canopy` commands and the MCP server (`loop.mcp`) both build a request
 and call its verb, so a tool and its command cannot drift apart.
 
-A verb returns the text its command prints. A request that does not validate is what the command calls misuse, exit
-2; a guard's refusal, or a call outside a running tick, is `Refused`, exit 1. Either way the text is the same.
+A verb returns an `Outcome`: the text its command prints, and a result, a model whose fields say what it did and whose
+schema is its tool's output schema. A request that does not validate is what the command calls misuse, exit 2; a
+guard's refusal, or a call outside a running tick, is `Refused`, exit 1. Either way the text is the same.
 
-This module holds what every verb shares, the bounds, the `Request` base, and the running tick, and the ticket's verbs:
+This module holds what every verb shares, the bounds, the `Request` and `Result` bases, and the running tick, and the
+ticket's verbs:
 dispatch, decide, queried, attention, ticket set, and mirror. A feature's own verbs are in a module of their own, the
 reviews' in `loop.review_tools` and the chores' in `loop.chore_tools`.
 """
@@ -18,6 +20,7 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal, Self
 
@@ -316,7 +319,23 @@ class Request(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True, coerce_numbers_to_str=True)
 
 
-# The verbs, each its request, then its function.
+class Result(BaseModel):
+    """The base of every verb's result: its fields are the tool's structured content, its schema the output schema."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+
+@dataclass(frozen=True)
+class Outcome[R: Result]:
+    """What a verb did, as its command prints it and as its tool returns it."""
+
+    #: What the command prints, and the tool's text.
+    text: str
+    #: The same as fields: the tool's structured content.
+    result: R
+
+
+# The verbs, each its request, its result, then its function.
 
 
 class Dispatch(Request):
@@ -388,11 +407,28 @@ class Dispatch(Request):
         return self
 
 
-def dispatch_run(ctx: Context, request: Dispatch) -> str:
+class Dispatched(Result):
+    """A worker started on a ticket, or in a dry run, one its guards would start."""
+
+    #: The ticket.
+    key: Annotated[str, Field(description="The ticket.")]
+    #: What the worker does.
+    kind: Annotated[RunKind, Field(description="What the worker does.")]
+    #: Whether this was a dry run, which started nothing.
+    dry_run: Annotated[bool, Field(description="Whether this was a dry run, which started nothing.")]
+    #: The run that started; none in a dry run.
+    run: Annotated[int | None, Field(description="The run that started; none in a dry run.")]
+    #: The branch it works on; empty for a plan, which works on none.
+    branch: Annotated[str, Field(description="The branch it works on; empty for a plan, which works on none.")]
+    #: The repositories it works in, a unit each.
+    repos: Annotated[tuple[str, ...], Field(description="The repositories it works in, a unit each.")]
+
+
+def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     """Start a worker on a ticket, if its guards allow one now; in a dry run, check them and start nothing (D036).
 
     Returns:
-        What the command prints: the run that started, or what a dry run would have started.
+        What the command prints, the run that started or what a dry run would have started, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or a guard refused the dispatch, which is recorded.
@@ -493,7 +529,10 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
         )
         db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
         log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
-        return f"dry run: recorded dispatch {kind} for {key}; nothing was started"
+        return Outcome(
+            f"dry run: recorded dispatch {kind} for {key}; nothing was started",
+            Dispatched(key=key, kind=kind, dry_run=True, run=None, branch=branch, repos=repo_names),
+        )
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     ticket_cursors = {name: value for name, value in cursor_pairs if name in db.TICKET_CURSORS}
     db.set_ticket(ctx.conn, key, ctx.repo, cursors=ticket_cursors)
@@ -503,7 +542,10 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
     rationale = f"run {started.run_id}: {work}{_where(started)}; {authorized}{requested}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
-    return f"dispatched {kind} for {key}: {rationale}"
+    return Outcome(
+        f"dispatched {kind} for {key}: {rationale}",
+        Dispatched(key=key, kind=kind, dry_run=False, run=started.run_id, branch=branch, repos=repo_names),
+    )
 
 
 class Decide(Request):
@@ -545,11 +587,20 @@ class Decide(Request):
         return self
 
 
-def decide(ctx: Context, request: Decide) -> str:
+class Decided(Result):
+    """A decision recorded about a ticket, or about the whole tick."""
+
+    #: The ticket; none for a tick-wide skip.
+    key: Annotated[str | None, Field(description="The ticket; none for a tick-wide skip.")]
+    #: What was decided.
+    action: Annotated[Literal["wait", "skip", "done"], Field(description="What was decided.")]
+
+
+def decide(ctx: Context, request: Decide) -> Outcome[Decided]:
     """Record a decision.
 
     Returns:
-        What the command prints.
+        What the command prints, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or about a ticket the harness decided this tick, which is recorded.
@@ -559,7 +610,10 @@ def decide(ctx: Context, request: Decide) -> str:
         _refuse_decided(ctx, current.id, request.key, "decide")
         db.touch_ticket(ctx.conn, request.key, ctx.repo)
     db.record_decision(ctx.conn, current.id, request.key, request.action, request.rationale)
-    return f"recorded {request.action} for {request.key or 'this tick'}"
+    return Outcome(
+        f"recorded {request.action} for {request.key or 'this tick'}",
+        Decided(key=request.key, action=request.action),
+    )
 
 
 class Queried(Request):
@@ -579,18 +633,28 @@ class Queried(Request):
         return self
 
 
-def queried(ctx: Context, request: Queried) -> str:
+class QueryRecorded(Result):
+    """The tracker query recorded, with the open tickets it returned."""
+
+    #: Each open ticket named, once, in the order first named.
+    keys: Annotated[tuple[str, ...], Field(description="Each open ticket named, once, in the order first named.")]
+
+
+def queried(ctx: Context, request: Queried) -> Outcome[QueryRecorded]:
     """Record the tracker query, and each ticket it returned, which is owed a decision this tick.
 
     Returns:
-        What the command prints.
+        What the command prints, and the same as fields.
 
     Raises:
         Refused: Outside a running tick.
     """
     current = running_tick(ctx)
     found = duties.record_queried(ctx.conn, current.id, ctx.repo, request.keys)
-    return f"recorded the query: {found} open ticket(s)"
+    return Outcome(
+        f"recorded the query: {found} open ticket(s)",
+        QueryRecorded(keys=tuple(dict.fromkeys(request.keys))),
+    )
 
 
 class Attention(Request):
@@ -617,11 +681,24 @@ class Attention(Request):
         return self
 
 
-def attend(ctx: Context, request: Attention) -> str:
+class AttentionRecorded(Result):
+    """An attention item recorded."""
+
+    #: Why the operator is needed.
+    reason: Annotated[str, Field(description="Why the operator is needed.")]
+    #: The ticket; none for a PR with no ticket.
+    key: Annotated[str | None, Field(description="The ticket; none for a PR with no ticket.")]
+    #: The repository of the ticket's unit it is about, if it names one.
+    repo: Annotated[str | None, Field(description="The repository of the unit it is about, if it names one.")]
+    #: The PR it is about, if it names one.
+    pr: Annotated[str | None, Field(description="The PR it is about, if it names one.")]
+
+
+def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
     """Record an attention item.
 
     Returns:
-        What the command prints.
+        What the command prints, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, `repo` is not a repository in this workspace, or the item is about a ticket
@@ -638,7 +715,10 @@ def attend(ctx: Context, request: Attention) -> str:
         detail = f"{detail}; {grants.hint(pr)}"
     action = f"{attention.ACTION_PREFIX}{request.reason}"
     db.record_decision(ctx.conn, current.id, key, action, detail, repo=unit, pr=pr)
-    return f"recorded attention {request.reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}"
+    return Outcome(
+        f"recorded attention {request.reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}",
+        AttentionRecorded(reason=request.reason, key=key, repo=unit, pr=pr),
+    )
 
 
 class TicketSet(Request):
@@ -685,19 +765,37 @@ class TicketSet(Request):
         return self
 
 
-def ticket_set(ctx: Context, request: TicketSet) -> str:
+class TicketUpdated(Result):
+    """What was recorded of a ticket, or of one of its units."""
+
+    #: The ticket.
+    key: Annotated[str, Field(description="The ticket.")]
+    #: The unit's repository, when the call named one.
+    repo: Annotated[str | None, Field(description="The unit's repository, when the call named one.")]
+    #: The phase set, if one was.
+    phase: Annotated[str | None, Field(description="The phase set, if one was.")]
+    #: The cursors advanced; a dry run advances none.
+    cursors: Annotated[tuple[CursorName, ...], Field(description="The cursors advanced; a dry run advances none.")]
+    #: Whether the ticket was marked done; a dry run marks none.
+    done: Annotated[bool, Field(description="Whether the ticket was marked done; a dry run marks none.")]
+    #: Whether this was in a dry run.
+    dry_run: Annotated[bool, Field(description="Whether this was in a dry run.")]
+
+
+def ticket_set(ctx: Context, request: TicketSet) -> Outcome[TicketUpdated]:
     """Record a ticket's phase, cursors, done flag, or title, or a unit's phase and cursors.
 
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
     phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in. It runs
-    outside a tick too.
+    outside a tick too, where the operator runs it and its cursors are not checked.
 
     Returns:
-        What the command prints, naming what a dry run did not do.
+        What the command prints, naming what a dry run did not do, and the same as fields.
 
     Raises:
         Refused: CANOPY_TICK_ID names no running tick, `repo` is not a repository in this workspace, or inside a tick
-            the harness decided the ticket in, which is recorded.
+            the harness decided the ticket in, or a cursor names no item observed or passes one the state block left
+            out, each of which is recorded.
     """
     key, phase, done = request.key, request.phase, request.done
     cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
@@ -707,6 +805,8 @@ def ticket_set(ctx: Context, request: TicketSet) -> str:
     current = current_tick(ctx)
     if current is not None:
         _refuse_decided(ctx, current.id, key, "ticket set")
+        if cursor_pairs:
+            _check_cursors(ctx, current.id, key, unit, dict(cursor_pairs))
     # A dry run must not advance cursors or mark a ticket done: the first live tick would then miss everything the dry
     # runs saw, or never see the ticket at all.
     dry_run = current is not None and current.dry_run
@@ -731,7 +831,34 @@ def ticket_set(ctx: Context, request: TicketSet) -> str:
     if unit is not None and (unit_phase is not None or unit_cursors):
         db.set_unit(ctx.conn, key, ctx.repo, unit, phase=unit_phase, cursors=unit_cursors)
     note = f"; dry run, {' and '.join(ignored)}" if ignored else ""
-    return f"updated {key if request.repo is None else attention.subject(key, unit)}{note}"
+    return Outcome(
+        f"updated {key if request.repo is None else attention.subject(key, unit)}{note}",
+        TicketUpdated(
+            key=key,
+            repo=unit,
+            phase=phase,
+            cursors=() if dry_run else tuple(request.cursors),
+            done=done and not dry_run,
+            dry_run=dry_run,
+        ),
+    )
+
+
+def _check_cursors(ctx: Context, tick_id: int, key: str, repo: str | None, cursors: Mapping[str, str]) -> None:
+    """Check a `ticket set`'s cursors against what the connectors observed, as a dispatch's are (DESIGN §35).
+
+    A dry run checks them too, so its plan holds the refusals a live tick would get (D036).
+
+    Raises:
+        Refused: A cursor names no item observed, or passes one the state block left out; the refusal is recorded.
+    """
+    db.touch_ticket(ctx.conn, key, ctx.repo)
+    try:
+        claims.check_cursors(ctx, tick_id, datetime.now(UTC), key=key, repo=repo, cursors=cursors)
+    except dispatch.Refusal as r:
+        db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
+        logs.for_tick(tick_id).info("ticket set refused", extra={"ticket": key, "guard": r.guard, "reason": r.reason})
+        raise Refused(f"ticket set refused ({r.guard}): {r.reason}; the refusal was recorded") from None
 
 
 class Mirror(Request):
@@ -752,13 +879,24 @@ class Mirror(Request):
     ]
 
 
-def mirror(ctx: Context, request: Mirror) -> str:
+class CommentMirrored(Result):
+    """A tracker comment, as the ticket's conversation in the journal holds it."""
+
+    #: The journal's message that holds it.
+    message: Annotated[int, Field(description="The journal's message that holds it.")]
+    #: Whether this call recorded it, rather than finding it already recorded.
+    new: Annotated[bool, Field(description="Whether this call recorded it, rather than finding it already recorded.")]
+    #: Whether its body was cut.
+    truncated: Annotated[bool, Field(description="Whether its body was cut.")]
+
+
+def mirror(ctx: Context, request: Mirror) -> Outcome[CommentMirrored]:
     """Record a tracker comment in a ticket's conversation. Recording it again records nothing new.
 
     A mirrored comment is a copy for the operator to read, and authorizes nothing.
 
     Returns:
-        What the command prints.
+        What the command prints, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or a guard refused the comment, which is recorded.
@@ -793,10 +931,13 @@ def mirror(ctx: Context, request: Mirror) -> str:
         "comment mirrored",
         extra={"ticket": key, "comment": comment_id, "message_id": mirrored.message_id, "new": mirrored.new},
     )
+    result = CommentMirrored(message=mirrored.message_id, new=mirrored.new, truncated=mirrored.truncated)
     if mirrored.new:
         cut = ", truncated" if mirrored.truncated else ""
-        return f"mirrored comment {comment_id} on {ref} as message {mirrored.message_id} ({mirrored.source}{cut})"
-    return f"comment {comment_id} on {ref} is already message {mirrored.message_id}; nothing new recorded"
+        text = f"mirrored comment {comment_id} on {ref} as message {mirrored.message_id} ({mirrored.source}{cut})"
+        return Outcome(text, result)
+    text = f"comment {comment_id} on {ref} is already message {mirrored.message_id}; nothing new recorded"
+    return Outcome(text, result)
 
 
 # The running tick, which every verb but `ticket set` needs (D020).

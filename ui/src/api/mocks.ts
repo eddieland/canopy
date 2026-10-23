@@ -11,6 +11,8 @@ import type {
     ReviewThread,
     Run,
     SearchHit,
+    TaskRun,
+    TaskSummary,
     TicketSummary,
 } from './types'
 
@@ -187,6 +189,112 @@ export const mockChores: ChoreSummary[] = [
     },
 ]
 
+/** A run of a task, ended done in web, with whatever `fields` replace. */
+export function mockTaskRun(fields: Partial<TaskRun> = {}): TaskRun {
+    return {
+        id: 1,
+        status: 'done',
+        state: 'done',
+        started_at: '2026-10-08T05:02:00Z',
+        ended_at: '2026-10-08T05:40:00Z',
+        branch: 'agent/task/1',
+        head: '5e0b7c2a9d41f3e86a2c4b7d9e1f0a3c5b8d2e4f',
+        summary: 'Cut the checkout bundle from 934 kB to 612 kB; filed two tickets for what is left.',
+        prs: ['https://github.com/acme/web/pull/97'],
+        reported: true,
+        session_id: 'ses_task1',
+        cost_usd: 2.12,
+        new_tokens: 48210,
+        peak_context: 61200,
+        log_path: '.canopy/task-runs/1.log',
+        ...fields,
+    }
+}
+
+/** Four tasks, the newest first as `GET /api/tasks` sends them: queued, running, waiting on a reply, and done. */
+export const mockTasks: TaskSummary[] = [
+    {
+        id: 7,
+        text: 'List the endpoints that still accept API keys in the query string.',
+        repo: 'api',
+        project: null,
+        branch: 'agent/task/7',
+        channel: 'cli',
+        submitted_at: '2026-10-08T11:59:00Z',
+        stopped_at: null,
+        standing: 'queued',
+        question_id: null,
+        latest: null,
+        runs: 0,
+    },
+    {
+        id: 6,
+        text: "Add a dark launch screen to match the app's theme.",
+        repo: 'mobile',
+        project: null,
+        branch: 'agent/task/6',
+        channel: 'cli',
+        submitted_at: '2026-10-08T11:58:00Z',
+        stopped_at: null,
+        standing: 'running',
+        question_id: null,
+        latest: mockTaskRun({
+            id: 8,
+            status: 'running',
+            state: 'running',
+            started_at: '2026-10-08T11:58:30Z',
+            ended_at: null,
+            branch: 'agent/task/6',
+            head: null,
+            summary: null,
+            prs: [],
+            reported: false,
+            cost_usd: 0.31,
+        }),
+        runs: 1,
+    },
+    {
+        id: 4,
+        text: 'Rename the `billing_v1` feature flag to `billing_legacy` everywhere it is read.',
+        repo: 'web',
+        project: 'ABC',
+        branch: 'agent/task/4',
+        channel: 'cli',
+        submitted_at: '2026-10-08T11:20:00Z',
+        stopped_at: null,
+        standing: 'awaiting_reply',
+        question_id: 41,
+        latest: mockTaskRun({
+            id: 5,
+            status: 'blocked',
+            state: 'blocked',
+            started_at: '2026-10-08T11:21:00Z',
+            ended_at: '2026-10-08T11:34:00Z',
+            branch: 'agent/task/4',
+            head: null,
+            summary: 'The flag is also read by the billing worker in api; rename it there too?',
+            prs: [],
+            reported: false,
+            cost_usd: 0.44,
+        }),
+        runs: 1,
+    },
+    {
+        id: 1,
+        text: "The checkout page's bundle grew past 900 kB.\n\nFind out what grew and cut it back.",
+        repo: 'web',
+        project: 'ABC',
+        branch: 'agent/task/1',
+        channel: 'web',
+        submitted_at: '2026-10-08T05:00:00Z',
+        stopped_at: null,
+        standing: 'done',
+        question_id: null,
+        latest: mockTaskRun(),
+        runs: 1,
+    },
+]
+
 /** A search hit: a worker's report on ABC-099, with whatever `fields` replace. */
 export function hit(fields: Partial<SearchHit> = {}): SearchHit {
     return {
@@ -229,8 +337,8 @@ export function draft(fields: Partial<Draft> = {}): Draft {
 }
 
 /**
- * Review 5's draft of a review on Carol's PR 14, waiting at its first version: the summary and a finding off the diff
- * in the body, and a comment made from finding 1 on line 15 of the diff's first file, `fields` over it.
+ * Review 5's draft of a review on Carol's PR 14, waiting at its first version: the reviewer's body and a finding off
+ * the diff in the body, and a comment made from finding 1 on line 15 of the diff's first file, `fields` over it.
  */
 export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
     return {
@@ -240,9 +348,11 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
         hash: '3f9a1c27b0de',
         author: 'reviewer',
         channel: null,
-        change: "made from review run 5's summary and findings",
+        change: "made from review run 5's body and findings",
         refused: [],
-        body: 'The retry works for a 503.\n\n`tests/test_upstream.py`\n\nNo test stops the backoff',
+        body:
+            "Could the client's own retry transport do this, rather than a loop of our own?\n\n" +
+            '`tests/test_upstream.py`\n\nNo test stops the backoff',
         comments: [
             {
                 number: 1,
@@ -262,7 +372,7 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
                 hash: '3f9a1c27b0de',
                 author: 'reviewer',
                 channel: null,
-                change: "made from review run 5's summary and findings",
+                change: "made from review run 5's body and findings",
                 created_at: '2026-10-08T11:30:00Z',
             },
         ],
@@ -270,6 +380,9 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
         moved_head: null,
         published_at: null,
         published_url: null,
+        notes: [],
+        revisions: [],
+        revision_limit: 3,
         ...fields,
     }
 }

@@ -28,6 +28,7 @@ from canopy.core import (
     hostgit,
     outbox,
     pools,
+    progress,
     review_diff,
     review_drafts,
     review_revisions,
@@ -220,6 +221,8 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
         conversation.RUN_ID_ENV: f"review-{run_id}",
         **git_tools.run_env({start.CHECKOUT_LINK: slot}, cwd=ctx.ws.root.absolute()),
     }
+    out.write("--- reviewer stdout ---\n")
+    out.flush()
     with run_offers.probing(ctx.conn, "review_runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
         done = ctx.runner.run(
             argv,
@@ -228,8 +231,19 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
             stdin=command.stdin,
             timeout=timeout_minutes * 60,
             on_start=lambda pid: db.set_agent_pid(ctx.conn, "review_runs", run_id, pid),
+            # Each line reaches the run log as the reviewer prints it, so a running review's transcript is what it did
+            # so far.
+            on_line=progress.Progress(
+                ctx.conn,
+                "review_runs",
+                run_id,
+                out,
+                log,
+                agent="reviewer",
+                fields={"review_run_id": run_id},
+            ),
         )
-    out.write(f"--- reviewer stdout ---\n{done.stdout}\n--- reviewer stderr ---\n{done.stderr}\n")
+    out.write(f"\n--- reviewer stderr ---\n{done.stderr}\n")
     out.write(f"--- reviewer exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.

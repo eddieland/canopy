@@ -232,6 +232,33 @@ export function hasVersions(entry: Pick<MemoryEntry, 'version' | 'status' | 'sco
     return entry.version > 1 || (entry.status === 'superseded' && entry.scope !== 'proposal')
 }
 
+/** One group of the memory page's lessons. */
+export interface LessonGroup<T> {
+    /** Its name, which heads it while it is `pinned` or not, and names its section. */
+    label: string
+    /** Whether it holds the pinned lessons, the rest, or, undefined, every lesson, unheaded. */
+    pinned?: boolean
+    /** Its lessons, in the order they came. */
+    entries: T[]
+}
+
+/**
+ * The memory page's lessons in their groups: while any is pinned, the pinned ones, then the rest, each headed;
+ * else one group, unheaded, since a heading over the whole list would only say what the panel's does. Each keeps
+ * the server's order, which puts the pinned first as runs are served them.
+ */
+export function lessonGroups<T extends Pick<MemoryEntry, 'pinned_at'>>(lessons: readonly T[]): LessonGroup<T>[] {
+    const pinned = lessons.filter((m) => m.pinned_at !== null)
+    if (pinned.length === 0) {
+        return [{ label: 'Lessons', entries: [...lessons] }]
+    }
+    const rest = lessons.filter((m) => m.pinned_at === null)
+    return [
+        { label: 'Pinned', pinned: true, entries: pinned },
+        ...(rest.length > 0 ? [{ label: 'Up for review', pinned: false, entries: rest }] : []),
+    ]
+}
+
 /** The lessons whose review date has come, the longest overdue first, as a `lesson_review` item names them. */
 export function dueForReview<T extends Pick<MemoryEntry, 'id' | 'review_at'>>(lessons: readonly T[], now: number): T[] {
     return lessons

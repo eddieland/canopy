@@ -20,6 +20,7 @@ import type {
     Replied,
     ReviewDismissed,
     ReviewDraft,
+    ReviewDraftNoted,
     ReviewDraftPublished,
     ReviewRequested,
     ReviewRequestStopped,
@@ -194,6 +195,14 @@ export function reviewDraftEditedText(run: number, draft: ReviewDraft): string {
     return `Review run ${run}'s draft is version ${draft.version} now, hash ${draft.hash}: ${draft.change}.`
 }
 
+/** What a note on review run `run`'s draft recorded, as `canopy reply review:ID` says it. */
+export function reviewDraftNotedText(run: number, noted: ReviewDraftNoted): string {
+    return (
+        `Recorded note ${noted.note} on review run ${run}'s draft, at version ${noted.after_version}. The next tick ` +
+        'revises it, unless you change the draft first.'
+    )
+}
+
 /**
  * What a publish of review run `run`'s draft did, as `canopy review publish` says it, where the draft's own linked
  * line does not say it: perhaps posted, which a read of the PR settles; or not published, and why. Null for a publish
@@ -214,7 +223,8 @@ export function reviewDraftPublishedText(run: number, published: ReviewDraftPubl
             )
         }
         case 'waiting':
-        case 'publishing': {
+        case 'publishing':
+        case 'discarded': {
             return `${version} was not published: ${published.failed ?? draft.why ?? 'nothing was posted'}`
         }
     }
@@ -239,10 +249,16 @@ export function reviewDraftPublishedToast(run: number, prUrl: string, published:
             return { title: `${capitalized(version)} may have been posted`, tone: 'failed' }
         }
         case 'waiting':
-        case 'publishing': {
+        case 'publishing':
+        case 'discarded': {
             return { title: `${capitalized(version)} was not published`, tone: 'failed' }
         }
     }
+}
+
+/** The toast a discard shows, in the words `canopy review discard` says it with, and the PR it was of. */
+export function reviewDraftDiscardedToast(run: number, prUrl: string): NewToast {
+    return { title: `Discarded review run ${run}'s draft; nothing was posted`, detail: prUrl, tone: 'done' }
 }
 
 function capitalized(text: string): string {

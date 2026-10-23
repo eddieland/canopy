@@ -179,6 +179,18 @@ export const ROW_COLUMNS = {
         ['age', AGE, 3],
     ],
     /**
+     * A task: where it stands (`waiting on you`, its latest run's status, `queued`, or `stopped`), its id, its
+     * repository, the first line of its text, and when it was submitted. Its latest run's summary goes under its text.
+     */
+    task: [
+        ['state', '8rem', 3],
+        // Room for `task:1234`.
+        ['id', '5.5rem'],
+        ['repo', '6rem', 1],
+        ['title', FREE],
+        ['age', AGE, 2],
+    ],
+    /**
      * A worktree slot: its state, its number, what holds it, its branch and processes, and for how long. The branch
      * names the slot, so it never gets under room for one whole (`agent/ABC-104-retry-queue`), and what holds it goes
      * first: the branch names its ticket too.
