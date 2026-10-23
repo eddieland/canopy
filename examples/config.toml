@@ -145,6 +145,10 @@ comment_suffix = ""
 # commit_trailer = true
 # commit_trailer_name = "canopy worker"
 # commit_trailer_email = "noreply@canopy.invalid"
+# Text git puts before the subject of every commit a worker makes, "{key}" filled with its ticket's key, as
+# "[PROJ-123] ", but a fixup!, squash!, or amend! commit's, which --autosquash matches by its subject. A task's run,
+# which has no ticket, gets none that names "{key}". Empty: none.
+# commit_prefix = ""
 # Set if your repositories refuse merge commits: workers then rebase onto a base branch instead of merging it in, and
 # push the result with --force-with-lease to their own branch, never any other force (TRUST_MODEL T1).
 # rebase = false

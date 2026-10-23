@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from canopy.core import personas
-from canopy.core.config import CANOPY_REVIEWER, DEFAULT_TRAILER_EMAIL, DEFAULT_TRAILER_NAME
+from canopy.core.config import CANOPY_REVIEWER, DEFAULT_TRAILER_EMAIL, DEFAULT_TRAILER_NAME, KEY_PLACEHOLDER
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.infra import resources
 
@@ -548,6 +548,19 @@ def commit_trailer(config: Config, model: str | None = None) -> str:
     return f"Co-authored-by: {name} <{config.trust.commit_trailer_email}>"
 
 
+def commit_prefix(config: Config, key: str | None) -> str:
+    """Return what canopy's git hooks put before each commit's subject: `trust.commit_prefix`, its `{key}` filled.
+
+    Returns:
+        The prefix; "" when none is set, or when it names the key and the run, a task's, has no ticket.
+    """
+    template = config.trust.commit_prefix
+    if KEY_PLACEHOLDER in template and key is None:
+        return ""
+    # A ticket key holds letters, digits, `-`, and `_` alone (`conversation.KEY_RE`), so it ends no backtick.
+    return template.replace(KEY_PLACEHOLDER, key or "")
+
+
 def planner_trailer(config: Config, model: str | None) -> str | None:
     """Return the trailer that credits the planner of the plan a worker follows, beside the worker's own.
 
@@ -564,21 +577,33 @@ def planner_trailer(config: Config, model: str | None) -> str | None:
     return f"Co-authored-by: {model} ({PLANNER_TRAILER_NAME}) <{config.trust.commit_trailer_email}>"
 
 
-def commit_attribution(config: Config, model: str | None = None, planner_model: str | None = None) -> str:
+def commit_attribution(
+    config: Config,
+    model: str | None = None,
+    planner_model: str | None = None,
+    prefix: str = "",
+) -> str:
     """Return the instruction for a worker's commits: keep the runtime's trailer, and canopy's while it is on.
 
-    canopy's git hooks add its trailers (`commit_hooks`), so the worker is told what to keep, not what to add. `model`
-    is the worker's chosen model, which canopy's trailer may name (`commit_trailer`), and `planner_model` that of the
-    planner whose approved plan it follows, which a second trailer names (`planner_trailer`).
+    canopy's git hooks add its trailers and `prefix` (`commit_hooks`), so the worker is told what to keep, not what to
+    add. `model` is the worker's chosen model, which canopy's trailer may name (`commit_trailer`), `planner_model` that
+    of the planner whose approved plan it follows, which a second trailer names (`planner_trailer`), and `prefix` what
+    starts each commit's subject (`commit_prefix`).
     """
     if not config.trust.commit_trailer:
-        return "Keep the agent runtime's attribution trailer on commits, if it adds one, and add no co-author trailer."
-    planner = planner_trailer(config, planner_model)
-    if planner is None:
-        added = f"git adds `{commit_trailer(config, model)}` to each commit; keep it"
+        text = "Keep the agent runtime's attribution trailer on commits, if it adds one, and add no co-author trailer."
     else:
-        added = f"git adds `{commit_trailer(config, model)}` and `{planner}` to each commit; keep them"
-    return f"{added}, and the agent runtime's attribution trailer if it adds one."
+        planner = planner_trailer(config, planner_model)
+        if planner is None:
+            added = f"git adds `{commit_trailer(config, model)}` to each commit; keep it"
+        else:
+            added = f"git adds `{commit_trailer(config, model)}` and `{planner}` to each commit; keep them"
+        text = f"{added}, and the agent runtime's attribution trailer if it adds one."
+    if not prefix:
+        return text
+    return (
+        f"{text} git starts each commit's subject with `{prefix}`, except a `fixup!`, `squash!`, or `amend!` commit's."
+    )
 
 
 def branch_update(config: Config, branch: str) -> str:
@@ -766,6 +791,7 @@ def render_worker(
     else:
         name, base = WORKER[kind], REQUIRED_WORKER
     persona = persona or _default_persona(config, name)
+    prefix = commit_prefix(config, values.get("KEY"))
     values = {
         # Agent memory's parts (DESIGN §28): empty unless dispatch rendered them, so with memory off every prompt is
         # the same bytes as before it existed.
@@ -778,7 +804,7 @@ def render_worker(
         **_standing_values(standing_instructions(config), _worker_reader(kind, private=private)),
         "PERSONA": persona.text if persona is not None else "",
         "NOTICE": notice,
-        "COMMIT_ATTRIBUTION": commit_attribution(config, model, planner_model),
+        "COMMIT_ATTRIBUTION": commit_attribution(config, model, planner_model, prefix),
         "COMMIT_TRAILER": commit_trailer(config, model),
         "BRANCH_UPDATE": branch_update(config, values.get("BRANCH") or ""),
     }
@@ -853,7 +879,8 @@ def render_task(
         **values,
         **_standing_values(standing_instructions(config), "private"),
         "NOTICE": notice,
-        "COMMIT_ATTRIBUTION": commit_attribution(config, model),
+        # A task has no ticket, so a prefix that names the key gives it none (`commit_prefix`).
+        "COMMIT_ATTRIBUTION": commit_attribution(config, model, prefix=commit_prefix(config, None)),
         "COMMIT_TRAILER": commit_trailer(config, model),
         "OPEN_PR": open_pr(config.runtime.pr_skill),
     }

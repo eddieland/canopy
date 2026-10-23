@@ -212,6 +212,26 @@ def _trailer_email(value: str) -> str:
     return value
 
 
+MAX_COMMIT_PREFIX = 60
+#: The placeholder `trust.commit_prefix` names the run's ticket key with.
+KEY_PLACEHOLDER = "{key}"
+#: How git's `--autosquash` finds the commit a fixup is for: by its subject, which a prefix must leave as it is.
+AUTOSQUASH = ("fixup!", "squash!", "amend!")
+
+
+def _commit_prefix(value: str) -> str:
+    # Prompts quote it in backticks, and git reads a subject that starts with `#` as a comment and drops it.
+    rest = value.replace(KEY_PLACEHOLDER, "")
+    one_line = len(value) <= MAX_COMMIT_PREFIX and value.isprintable() and value == value.lstrip()
+    quotable = not any(c in rest for c in "`{}")
+    if value and not (one_line and quotable and not value.startswith(("#", *AUTOSQUASH))):
+        raise ValueError(
+            f"must be one line of at most {MAX_COMMIT_PREFIX} characters with no backtick, no brace but in "
+            f"{KEY_PLACEHOLDER}, and no leading space, '#', or {', '.join(AUTOSQUASH)}",
+        )
+    return value
+
+
 MAX_REVIEWER = 100
 # The `trust.trusted_reviewers` entry for canopy's own reviewer (DESIGN §21). A login cannot hold a colon, so no account
 # can be read as it; canopy's reviewer posts as the operator, so the operator's login cannot stand for it.
@@ -614,6 +634,10 @@ class Trust(Section):
     commit_trailer: Annotated[StrictBool, Scope.PRIVATE] = True
     commit_trailer_name: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trailer_name)] = DEFAULT_TRAILER_NAME
     commit_trailer_email: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trailer_email)] = DEFAULT_TRAILER_EMAIL
+    # What canopy's git hooks put before the subject of each commit a worker makes, `{key}` filled with its ticket's
+    # key, but a `fixup!`, `squash!`, or `amend!` one's (TRUST_MODEL T5); empty for none. Private, as the trailer is:
+    # the commits are the operator's, and a shared file must not write into their messages.
+    commit_prefix: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_commit_prefix)] = ""
     # Whether workers bring a base branch in by rebasing, and push the result with a lease, instead of merging it
     # (TRUST_MODEL T1, D056), for repositories that refuse merge commits. Private: a shared file must not let
     # workers replace a branch's history.

@@ -521,12 +521,13 @@ but must be distinguishable:
   (DESIGN §13), as `provider/model (canopy worker)`, and a worker following an approved plan carries a second,
   `provider/model (canopy planner)`, for the model canopy chose for its planner; a name the operator set is used as
   set, alone. git adds them, through hooks in canopy's snapshot that a worker's environment points git at (DESIGN §8),
-  so a worker that forgets them still carries them. They are a mark, not a guard: a worker can commit around the hooks,
-  and canopy names such a commit in the run's report and does not rewrite it. Never hidden: a worker never strips the
-  runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also private), as when the
-  runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime that adds none, the
-  commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can neither turn it off nor
-  rename it.
+  so a worker that forgets them still carries them, and with `trust.commit_prefix` (private) put the operator's prefix,
+  which may name the ticket's key, before each subject but a fixup's. They are a mark, not a guard: a worker can commit
+  around the hooks, and canopy names such a commit in the run's report and does not rewrite it. Never hidden: a worker
+  never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
+  private), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
+  that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
+  neither turn it off nor rename it.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the

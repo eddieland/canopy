@@ -172,7 +172,8 @@ Rules:
 - The commit trailer keys set the `Co-authored-by` trailer git adds to a worker's commits, through canopy's hooks (§8,
   TRUST_MODEL T5). It names agent work, never a person: it is how a reader tells the work is an agent's.
   Left as the default, its name credits the model canopy chose for the worker (§13, Each agent's model), and a
-  second trailer that of the planner whose approved plan it follows (§25).
+  second trailer that of the planner whose approved plan it follows (§25). `trust.commit_prefix`, private too, is
+  text git puts before each subject, `{key}` naming the ticket.
 - `trust.rebase` lets workers rebase and push with `--force-with-lease` instead of merging a base in, for hosts that
   refuse merge commits; `_run`'s own push leases the commit the run started from (§8, TRUST_MODEL T1).
 - `canopy init` sets up a workspace in the current directory or fills in the one it is inside (§18). Never in the home

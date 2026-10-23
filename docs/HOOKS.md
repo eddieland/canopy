@@ -21,8 +21,9 @@ Every git canopy itself runs has hooks turned off (D107). So a hook checks only 
 A hook is not a guard: a worker can still commit with `--no-verify`, and canopy does not stop it (step 5 below).
 
 A worker's git finds your hooks through canopy's own: its environment points `core.hooksPath` at hooks canopy ships,
-which add canopy's commit trailers (TRUST_MODEL T5) and then run the hook of the same name from wherever git would have
-looked without them, your primary clone's or a `core.hooksPath` your config sets. Nothing here changes for that.
+which add canopy's commit trailers and prefix (TRUST_MODEL T5) and then run the hook of the same name from wherever
+git would have looked without them, your primary clone's or a `core.hooksPath` your config sets. Nothing here changes
+for that.
 
 ## 1. Install prek where workers can run it
 

@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import hostgit
+from canopy.core import commit_hooks, hostgit
+from canopy.core.config import AUTOSQUASH
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 _GIT_TIMEOUT_SECONDS = 300
-# The most commits a note names that lack canopy's trailer; it counts the rest.
+# The most commits a note names that lack one of canopy's marks; it counts the rest.
 _MAX_NAMED = 5
 
 
@@ -163,41 +164,53 @@ def remote_head(git: Git, branch: str) -> str:
     return listed.split()[0] if listed else ""
 
 
-def unattributed(git: Git, branch: str, start: Start, base: str, trailers: Sequence[str]) -> str:
-    """Return a harness note naming the run's commits on origin's `branch` that lack one of `trailers`, else "".
+def unmarked(git: Git, branch: str, start: Start, base: str, marks: commit_hooks.Marks) -> list[str]:
+    """Return a harness note for each of `marks` that a run's commit on origin's `branch` lacks, naming those commits.
 
     The run's commits are those the branch holds that neither HEAD at the start nor origin's `base` does. canopy's
-    hooks add the trailers (`commit_hooks`, TRUST_MODEL T5); a commit made around them is reported, never rewritten.
-    Best effort: a git step that fails reports nothing.
+    hooks put the marks on them (`commit_hooks`, TRUST_MODEL T5); a commit made around them is reported, never
+    rewritten. A fixup, which keeps its subject for `--autosquash`, needs no prefix. Best effort: a git step that fails
+    reports nothing.
+
+    Returns:
+        A note for the trailers and one for the prefix, each only when a commit lacks it.
 
     Raises:
         SetupError: git could not start, or timed out.
     """
-    remote = remote_head(git, branch) if trailers else ""
+    remote = remote_head(git, branch) if marks.trailers or marks.prefix else ""
     if not remote:
-        return ""
-    # Unfolded and joined, each commit's trailers fit on its line.
+        return []
+    # Unfolded and joined, each commit's subject and trailers fit on its line.
     listed = git.result(
         "log",
-        "--format=%h %(trailers:only,unfold,separator=%x1f)",
+        "--format=%h%x1f%s%x1f%(trailers:only,unfold,separator=%x1e)",
         remote,
         f"^{start.commit}",
         f"^refs/remotes/origin/{base}",
         "--",
     )
     if not listed.ok:
-        return ""
-    lacking = []
+        return []
+    untrailed: list[str] = []
+    unprefixed: list[str] = []
     for line in listed.stdout.splitlines():
-        commit, _, found = line.partition(" ")
-        if not set(trailers) <= set(found.split("\x1f")):
-            lacking.append(commit)
-    if not lacking:
-        return ""
-    shown = ", ".join(lacking[:_MAX_NAMED])
-    more = f" and {len(lacking) - _MAX_NAMED} more" if len(lacking) > _MAX_NAMED else ""
-    commits = "1 commit pushed to {} lacks" if len(lacking) == 1 else f"{len(lacking)} commits pushed to {{}} lack"
-    return f"{git.where}{commits.format(branch)} canopy's trailer: {shown}{more}"
+        commit, subject, found = [*line.split("\x1f"), "", ""][:3]
+        if not set(marks.trailers) <= set(found.split("\x1e")):
+            untrailed.append(commit)
+        if marks.prefix and not subject.startswith((marks.prefix, *AUTOSQUASH)):
+            unprefixed.append(commit)
+    notes = [(untrailed, "canopy's trailer"), (unprefixed, f"the prefix `{marks.prefix}`")]
+    return [f"{git.where}{_lacking(commits, branch, what)}" for commits, what in notes if commits]
+
+
+def _lacking(commits: Sequence[str], branch: str, what: str) -> str:
+    named = ", ".join(commits[:_MAX_NAMED])
+    more = f" and {len(commits) - _MAX_NAMED} more" if len(commits) > _MAX_NAMED else ""
+    pushed = (
+        f"1 commit pushed to {branch} lacks" if len(commits) == 1 else f"{len(commits)} commits pushed to {branch} lack"
+    )
+    return f"{pushed} {what}: {named}{more}"
 
 
 def ignore(git: Git, name: str) -> None:
