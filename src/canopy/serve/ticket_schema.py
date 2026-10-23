@@ -13,7 +13,7 @@ from pydantic import Field
 from canopy.serve.draft_schema import Draft
 from canopy.serve.model_schema import AgentModel
 from canopy.serve.persona_schema import AgentPersona
-from canopy.serve.schema import CostTotal, Decision, Limit, Message, Model, Run, TicketSummary
+from canopy.serve.schema import Attachments, CostTotal, Decision, Limit, Message, Model, Run, TicketSummary
 
 type GrantKind = Annotated[
     Literal["implement", "resume"],
@@ -81,6 +81,8 @@ class TicketDetail(Model):
     models: list[AgentModel] = []
     """The model each of its agents runs on at its next run (DESIGN §13): its workers', its planner's, and its
     reviewer's, in that order. What the operator may choose from is `GET /models`', read when they ask."""
+    attachments: Attachments
+    """The files the operator attached to it, which its runs read (DESIGN §22)."""
 
 
 class Started(Model):

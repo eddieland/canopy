@@ -5,7 +5,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
-import { mockAttention, mockTickets } from '@/api/mocks'
+import { mockAttention, mockNoAttachments, mockTickets } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { AttentionItem, Limit, Message, TicketDetail, TicketSummary } from '@/api/types'
 import { renderRouted } from '@/test-utils'
@@ -34,6 +34,7 @@ const AT_LIMIT: Limit = { kind: 'resume', repo: 'web', pr_url: null, runs: 2, li
 const DETAIL: TicketDetail = {
     ticket: TICKET,
     units: [],
+    attachments: mockNoAttachments,
     limits: [AT_LIMIT],
     runs: [],
     messages: [QUESTION],

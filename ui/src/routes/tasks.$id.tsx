@@ -5,6 +5,7 @@ import { ApiError } from '@/api/client'
 import { taskQuery } from '@/api/queries'
 import type { TaskDetail } from '@/api/types'
 import { Age } from '@/components/age'
+import { Attachments } from '@/components/attachments'
 import { Notice } from '@/components/notice'
 import { ListPanel } from '@/components/list-panel'
 import { Empty, PageHeader, Panel, PanelLoading, PanelScroll } from '@/components/panel'
@@ -104,6 +105,13 @@ function Task({ detail }: { detail: TaskDetail }) {
             >
                 <Panel className="2xl:col-start-1 2xl:row-start-1" data-testid="task-conversation">
                     <TaskStory detail={detail} />
+                    {/* What you attached for its runs to read; your text and replies say what to do with it (§22). */}
+                    <Attachments
+                        subject={{ kind: 'task', id: task.id }}
+                        attachments={detail.attachments}
+                        closed={task.stopped_at !== null}
+                        className="border-t"
+                    />
                 </Panel>
                 <TaskReportPanel task={task} runs={runs} className="2xl:col-start-2 2xl:row-span-3 2xl:row-start-1" />
                 <TaskLeft task={task} runs={runs} tickets={tickets} className="2xl:col-start-1 2xl:row-start-2" />

@@ -317,6 +317,46 @@ class Message(Model):
     """The tracker comment it mirrors, for one that came from the tracker."""
 
 
+class Attachment(Model):
+    """A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22)."""
+
+    name: str
+    """What its runs see it as: a plain file name of letters, digits, `.`, `_`, and `-`."""
+    size: int
+    """How many bytes its text holds."""
+    channel: str
+    """How the operator attached it: cli | web"""
+    added_at: datetime
+    """When the operator attached it."""
+
+
+class Attachments(Model):
+    """A ticket's or a task's attachments, and the limits `policy` holds them to (DESIGN §22)."""
+
+    items: list[Attachment]
+    """Each attachment it holds, the first attached first."""
+    max_files: int
+    """How many it may hold at once, `policy.max_attachments`; 0 when attaching is off."""
+    max_file_bytes: int
+    """The most bytes one may hold, `policy.max_attachment_kib`."""
+    max_total_bytes: int
+    """The most bytes all of them may hold together, `policy.max_attachments_total_kib`."""
+
+
+class Attached(Model):
+    """What `canopy attach` recorded: the attachment, as its subject's page lists it."""
+
+    attachment: Attachment
+    """The attachment."""
+
+
+class Detached(Model):
+    """What `canopy detach` removed: the attachment, now gone from its subject and its file deleted."""
+
+    name: str
+    """The name it had."""
+
+
 class Decision(Model):
     """One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals."""
 

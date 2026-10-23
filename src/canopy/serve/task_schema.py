@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.serve.schema import Message, Model, ModelsServed, RunState
+from canopy.serve.schema import Attachments, Message, Model, ModelsServed, RunState
 
 type TaskStanding = Annotated[
     Literal[
@@ -127,6 +127,8 @@ class TaskDetail(Model):
     """Its conversation, the oldest first: its runs' reports and questions, and the operator's replies."""
     tickets: list[TaskTicket]
     """The tickets its runs filed, the oldest first."""
+    attachments: Attachments
+    """The files the operator attached to it, which its runs read (DESIGN §22)."""
 
 
 class TaskRunDetail(Model):

@@ -114,6 +114,11 @@ end, and the line under the box says which run that is. A task never retries on 
 failed until you say what to do differently. What you write is kept while the tab is open, and a reply sent twice
 after a flaky connection is recorded once.
 
+Under Stop, **Attach a file** uploads a text file for the task's runs to read, such as the design doc you want
+checked against the code, the same as `canopy attach task:N FILE`; your text or a reply says what to do with it. Each
+later run gets a copy in its worktree, and the ✕ beside a file removes it. It works as on a ticket, limits and all:
+[Attaching files](tickets#attaching-files) has the details. A stopped task keeps its list and takes no more files.
+
 Stop ends the task, and it asks once more first, because nothing starts a stopped task again: there is no Start for a
 task, only a new one. A queued run is dropped, and a running one finishes its work. Stop now, there while a run
 works, ends that run too and gives its slot back, after its own second click. A stopped task takes no more replies,

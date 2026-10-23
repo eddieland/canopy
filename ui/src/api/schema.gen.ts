@@ -1479,6 +1479,33 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{task_id}/attachments/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Attach a file to a task
+         * @description `canopy attach task:N FILE --name NAME`: keep the body's text as NAME, for the task's later runs to read.
+         *
+         *     Refused as the CLI is: `unknown` for a task canopy has no record of, `stopped` for one the operator stopped,
+         *     `bad_name`, `not_text`, `empty`, `too_large`, `too_many`, and `taken`.
+         */
+        put: operations["attachTask"];
+        post?: never;
+        /**
+         * Remove a task's attachment
+         * @description `canopy detach task:N NAME`: its file is deleted, and later runs no longer get it. Refused `unknown` for none.
+         */
+        delete: operations["detachTask"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{task_id}/replies": {
         parameters: {
             query?: never;
@@ -1642,6 +1669,33 @@ export type paths = {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/attachments/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Attach a file to a ticket
+         * @description `canopy attach KEY FILE --name NAME`: keep the body's text as NAME, for the ticket's later runs to read.
+         *
+         *     Refused as the CLI is: `unknown` for a ticket canopy has no record of, `bad_name`, `not_text`, `empty`,
+         *     `too_large`, `too_many`, and `taken` for a name the ticket's attachments have.
+         */
+        put: operations["attachTicket"];
+        post?: never;
+        /**
+         * Remove a ticket's attachment
+         * @description `canopy detach KEY NAME`: its file is deleted, and later runs no longer get it. Refused `unknown` for none.
+         */
+        delete: operations["detachTicket"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2157,6 +2211,67 @@ export type components = {
              * @enum {string}
              */
             source: "ticket" | "config" | "default";
+        };
+        /**
+         * Attached
+         * @description What `canopy attach` recorded: the attachment, as its subject's page lists it.
+         */
+        Attached: {
+            /** @description The attachment. */
+            attachment: components["schemas"]["Attachment"];
+        };
+        /**
+         * Attachment
+         * @description A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22).
+         */
+        Attachment: {
+            /**
+             * Added At
+             * Format: date-time
+             * @description When the operator attached it.
+             */
+            added_at: string;
+            /**
+             * Channel
+             * @description How the operator attached it: cli | web
+             */
+            channel: string;
+            /**
+             * Name
+             * @description What its runs see it as: a plain file name of letters, digits, `.`, `_`, and `-`.
+             */
+            name: string;
+            /**
+             * Size
+             * @description How many bytes its text holds.
+             */
+            size: number;
+        };
+        /**
+         * Attachments
+         * @description A ticket's or a task's attachments, and the limits `policy` holds them to (DESIGN §22).
+         */
+        Attachments: {
+            /**
+             * Items
+             * @description Each attachment it holds, the first attached first.
+             */
+            items: components["schemas"]["Attachment"][];
+            /**
+             * Max File Bytes
+             * @description The most bytes one may hold, `policy.max_attachment_kib`.
+             */
+            max_file_bytes: number;
+            /**
+             * Max Files
+             * @description How many it may hold at once, `policy.max_attachments`; 0 when attaching is off.
+             */
+            max_files: number;
+            /**
+             * Max Total Bytes
+             * @description The most bytes all of them may hold together, `policy.max_attachments_total_kib`.
+             */
+            max_total_bytes: number;
         };
         /**
          * AttentionItem
@@ -2903,6 +3018,17 @@ export type components = {
              * @description The ticket it is about, when it is about one.
              */
             ticket_key: string | null;
+        };
+        /**
+         * Detached
+         * @description What `canopy detach` removed: the attachment, now gone from its subject and its file deleted.
+         */
+        Detached: {
+            /**
+             * Name
+             * @description The name it had.
+             */
+            name: string;
         };
         /**
          * DiffFile
@@ -6939,6 +7065,8 @@ export type components = {
          * @description One task: what `canopy show task:N` prints.
          */
         TaskDetail: {
+            /** @description The files the operator attached to it, which its runs read (DESIGN §22). */
+            attachments: components["schemas"]["Attachments"];
             /**
              * Messages
              * @description Its conversation, the oldest first: its runs' reports and questions, and the operator's replies.
@@ -7584,6 +7712,8 @@ export type components = {
          * @description One ticket: what `canopy show` prints, and the latest decisions about it.
          */
         TicketDetail: {
+            /** @description The files the operator attached to it, which its runs read (DESIGN §22). */
+            attachments: components["schemas"]["Attachments"];
             /** @description What every run of it and every review run naming it cost; not the overseer, whose ticks serve the workspace. */
             cost: components["schemas"]["CostTotal"];
             /**
@@ -13984,6 +14114,187 @@ export interface operations {
             };
         };
     };
+    attachTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description What its runs see it as: a plain file name, such as `design.md`. */
+                name: string;
+                /** @description The task's id, as `task:N` names it. */
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        /** @description The file's text, UTF-8, as its bytes. */
+        requestBody: {
+            content: {
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attached"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    detachTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description What its runs see it as: a plain file name, such as `design.md`. */
+                name: string;
+                /** @description The task's id, as `task:N` names it. */
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detached"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     replyTask: {
         parameters: {
             query?: never;
@@ -14599,6 +14910,187 @@ export interface operations {
             };
             /** @description No such ticket. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    attachTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+                /** @description What its runs see it as: a plain file name, such as `design.md`. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        /** @description The file's text, UTF-8, as its bytes. */
+        requestBody: {
+            content: {
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attached"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    detachTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+                /** @description What its runs see it as: a plain file name, such as `design.md`. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detached"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

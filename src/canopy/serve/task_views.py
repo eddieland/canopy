@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import contract, conversation, db, plans, sql, task_tickets, tasks
 from canopy.core.vocab import RunStatus
+from canopy.serve import views
 from canopy.serve.task_schema import TaskDetail, TaskReport, TaskRun, TaskRunDetail, TaskSummary, TaskTicket
 from canopy.serve.transcript_views import removed_after, session_transcript
 from canopy.serve.views import lines, message, models_served, new_tokens, run_state, said, shown_path
@@ -74,6 +75,7 @@ def task_detail(ctx: Context, task_id: int) -> TaskDetail | None:
         runs=[task_run(r, root) for r in runs],
         messages=[message(m) for m in tasks.messages_of(ctx.conn, task_id)],
         tickets=[_ticket(t) for t in task_tickets.of_task(ctx.conn, task_id)],
+        attachments=views.attachments_of(ctx, conversation.Ref(conversation.TASK, str(task_id))),
     )
 
 

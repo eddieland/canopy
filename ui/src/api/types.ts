@@ -177,6 +177,14 @@ export type TaskSubmitted = Schemas['TaskSubmitted']
 export type TaskReplied = Schemas['TaskReplied']
 /** What a stop of a task did: already stopped, or dropped while queued, and the run still working it. */
 export type TaskStopped = Schemas['TaskStopped']
+/** A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22). */
+export type Attachment = Schemas['Attachment']
+/** A ticket's or a task's attachments, and the limits `policy` holds them to. */
+export type Attachments = Schemas['Attachments']
+/** What an upload recorded: the attachment, as its subject's page lists it. */
+export type Attached = Schemas['Attached']
+/** What a removal of an attachment removed: its name. */
+export type Detached = Schemas['Detached']
 /** What a run's or chore run's log, or a tick's output, holds of its session, read from its events (DESIGN §22). */
 export type Transcript = Schemas['Transcript']
 /** One entry of a transcript, told apart by its `kind`: text, a tool call, a model call's end, or an error. */

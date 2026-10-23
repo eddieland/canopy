@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from canopy.serve.api import (
+    attachments,
     chores,
     deps,
     docs,
@@ -55,6 +56,7 @@ _RESOURCES = (
     ticks,
     chores,
     tasks,
+    attachments,
     loop,
     settings,
     worktrees,

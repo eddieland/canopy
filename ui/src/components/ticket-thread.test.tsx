@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { mockTickets } from '@/api/mocks'
+import { mockNoAttachments, mockTickets } from '@/api/mocks'
 import type { Message, TicketDetail, TicketForget, TicketSummary } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
@@ -52,6 +52,7 @@ function detail(messages: Message[], forgets: TicketForget[] = []): TicketDetail
         ticket: TICKET,
         units: [],
         limits: [],
+        attachments: mockNoAttachments,
         runs: [],
         messages,
         forgets,

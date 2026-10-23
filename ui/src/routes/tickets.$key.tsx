@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import { loopQuery, ticketMemoryQuery, ticketPlansQuery, ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Age } from '@/components/age'
+import { Attachments } from '@/components/attachments'
 import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
@@ -186,7 +187,19 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 >
                     <TicketAnswer
                         detail={detail}
-                        after={<TicketVerbs ticket={ticket} limits={limits} place="after" testId="ticket-actions" />}
+                        after={
+                            <>
+                                <TicketVerbs ticket={ticket} limits={limits} place="after" testId="ticket-actions" />
+                                {/* What you attached for its runs to read, such as a design doc someone sent
+                                    you (DESIGN §22): beside the reply that says what to do with it, as on a task's
+                                    page. */}
+                                <Attachments
+                                    subject={{ kind: 'ticket', key: ticket.key }}
+                                    attachments={detail.attachments}
+                                    className="border-t"
+                                />
+                            </>
+                        }
                     />
                 </Panel>
                 {/* Each list is its header alone while it holds nothing (ListPanel): the count says so. */}

@@ -27,6 +27,7 @@ only, on tasks and on every ticket, public ones too, with the limits as config k
 Accept: on the operator's workspace, a design doc attached to a task asking for a review against the code, and to a
 private ticket, each read by its next run, whose report or plan cites it.
 
-Status: in progress. Stages 1 and 2 are built: `canopy attach` and `detach`, the `attachments` table, and the three
+Status: in progress. All three stages are built: `canopy attach` and `detach`, the `attachments` table, and the three
 limits; each ticket's run, plan and feedback plan among them, and each task's, copies its subject's attachments and
-names them in its prompt.
+names them in its prompt; and a ticket's and a task's pages upload and remove them, with the limits on Settings. Left:
+the live check in Accept.
