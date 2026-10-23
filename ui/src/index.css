@@ -91,8 +91,11 @@
 /*
  * What the page scrolls in, everything under the header (AppShell), so a scrollbar never sits beside the header. Its
  * gutter is kept whether or not the page is long enough to need it: no layout shift when a page grows a scrollbar.
+ * Positioned, so it is the containing block of what is absolute inside it, such as an `sr-only` file input, and clips
+ * it: else that box sits where the page's scrolled content puts it and stretches the window past its height.
  */
 @utility page-scroll {
+    position: relative;
     overflow-y: auto;
     scrollbar-gutter: stable;
     @media print {
