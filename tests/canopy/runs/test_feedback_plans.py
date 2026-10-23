@@ -20,7 +20,6 @@ from canopy.core.vocab import (
     PlanStatus,
     Proposal,
     ResumeReason,
-    ReviewItem,
     RunKind,
     RunStatus,
 )
