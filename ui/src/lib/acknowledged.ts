@@ -1,4 +1,4 @@
-import type { AttentionItem, Message, TicketSummary } from '@/api/types'
+import type { AttentionItem, Message, TaskSummary, TicketSummary } from '@/api/types'
 
 /**
  * Whether one of the operator's messages still waits for a tick (DESIGN §22): no `ok` tick has read it, so
@@ -12,10 +12,19 @@ export function awaitsTick(message: Pick<Message, 'id' | 'source'>, acknowledged
 /**
  * Whether an item was answered since the tick that listed it: an `awaiting_reply` item's ticket, still started, or
  * public with a planner's question (DESIGN §25), waits on no question now, or a `plan_review` item's plan waits on the
- * operator no more, approved, skipped, or sent back for changes. The list is the latest `ok` tick's (DESIGN §14), so
- * the item stays until the next one.
+ * operator no more, approved, skipped, or sent back for changes. A task's `awaiting_reply` item is answered once its
+ * task waits on no reply, replied to or stopped (DESIGN §36). The list is the latest `ok` tick's (DESIGN §14), so the
+ * item stays until the next one.
  */
-export function answered(item: AttentionItem, tickets: TicketSummary[] | undefined): boolean {
+export function answered(
+    item: AttentionItem,
+    tickets: TicketSummary[] | undefined,
+    tasks?: readonly TaskSummary[],
+): boolean {
+    if (item.task !== null) {
+        const task = tasks?.find((t) => t.id === item.task)
+        return item.reason === 'awaiting_reply' && task !== undefined && task.standing !== 'awaiting_reply'
+    }
     if (item.ticket_key === null) {
         return false
     }

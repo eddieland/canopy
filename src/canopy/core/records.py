@@ -1220,6 +1220,9 @@ class Run(Row):
     #: run from before canopy recorded it.
     persona: str | None
     persona_digest: str | None
+    #: The model canopy chose for its agent, from `runtime.models` (DESIGN §13), as it asked the runtime for it; None
+    #: when it chose none, so the run went to the runtime's default, and for a run from before canopy chose one.
+    model: str | None
 
 
 @dataclass(frozen=True)

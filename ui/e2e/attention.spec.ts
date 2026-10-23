@@ -212,13 +212,14 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
 }) => {
     await page.goto('attention')
     await settled(page)
-    await expect(page.getByTestId('counter-running')).toContainText('2')
-    await expect(page.getByTestId('counter-waiting')).toContainText('1')
+    // ABC-101's and ABC-104's runs, and task 6's; ABC-102, and task 4, waiting on a reply.
+    await expect(page.getByTestId('counter-running')).toContainText('3')
+    await expect(page.getByTestId('counter-waiting')).toContainText('2')
     await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
     await expect(page.getByTestId('counter-attention')).toContainText('9')
     // The split is the nav's, and what waits on you the counter's value: no line under them says either again.
     await expect(page.getByTestId('counter-attention')).toHaveText('Attention9')
-    await expect(page.getByTestId('counter-running')).toHaveText('Running2')
+    await expect(page.getByTestId('counter-running')).toHaveText('Running3')
     // Outside the rail and the nav, the page says it once: the counter's label.
     await expect(page.getByRole('main').getByText(/waiting on you/iu)).toHaveCount(1)
 
