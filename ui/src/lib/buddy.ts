@@ -50,6 +50,14 @@ export const TIPS = {
         'Dear diary, filtered the tickets to the ones waiting on you. It was all of them. Again.',
         'Riddle: what is open, blocked, and done all at once? Nothing. Please. Not a ticket.',
     ],
+    '/tasks/': [
+        "It looks like you're handing out tasks. Would you like one about watering me?",
+        'Fun fact: a task is a ticket that skipped the meeting.',
+        'Unhelpful tip: "find out why it\'s slow" is a task. "Make it fast" is a lifestyle.',
+        'Dear diary, a task asked a question. Nobody has answered. I know the feeling.',
+        'Hot take: every big feature starts as a task. Every sprout starts as me.',
+        'Did you know? A task that pushes nothing has not failed. Sometimes I also do nothing, successfully.',
+    ],
     '/tickets/$key': [
         "It looks like you're reading a ticket. Would you like me to read it louder?",
         'Unhelpful tip: Forget makes canopy forget a ticket. I forget tickets for free, all day.',

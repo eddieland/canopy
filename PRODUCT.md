@@ -53,7 +53,7 @@ faster.
 
 ## Capabilities and Constraints
 
-- Routes today: attention, runs, ticks, tickets, pull requests, reviews, worktrees, chores, search, settings.
+- Routes today: attention, runs, ticks, tickets, tasks, pull requests, reviews, worktrees, chores, search, settings.
 - Terminology is fixed by the docs and code. Ticket, run, tick, worktree/slot, overseer, worker, attention item, chore,
   review, finding, grant, guard, journal. Run kinds are implement, resume, and plan; older runs may be fix-ci or split.
   Attention reasons include `needs_human`, `green_unreviewed`, `untrusted_review`, and `attempt_limit`. Use these words;

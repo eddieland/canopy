@@ -2,13 +2,13 @@
 
 SQLite has no change notifications, so each stream holds its own journal connection and reads `PRAGMA data_version` four
 times a second: it changes whenever another connection commits. Only then, or when the loop has read its config again
-(`Backend.use`), does the stream read the attention list, the runs, the tickets, the chores, the review runs, the review
-requests waiting on one, the last day's and 30 days' spend, the latest tick, and the loop's pause again, and it sends
-each that differs from what it sent last, plus `ticket.changed` for each ticket whose summary changed. A reload
-commits nothing, but the chores and the attention list are read through the config: a chore added to it shows without a
-journal write. The stream never writes, so its own reads never move `data_version`. Each such read is one snapshot of
-the journal, in a read transaction, so a commit landing partway through cannot pair one list's old rows with another's
-new ones.
+(`Backend.use`), does the stream read the attention list, the runs, the tickets, the chores, the tasks, the review
+runs, the review requests waiting on one, the last day's and 30 days' spend, the latest tick, and the loop's pause
+again, and it sends each that differs from what it sent last, plus `ticket.changed` for each ticket whose summary
+changed. A reload commits nothing, but the chores and the attention list are read through the config: a chore added to
+it shows without a journal write. The stream never writes, so its own reads never move `data_version`. Each such read
+is one snapshot of the journal, in a read transaction, so a commit landing partway through cannot pair one list's old
+rows with another's new ones.
 
 The connection is opened, read, and closed on a thread of the stream's own, never on the server's event loop: on a
 journal with months of history one read of the lists takes tens of milliseconds, every open stream reads them on each
@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import sql
 from canopy.infra import logs
-from canopy.serve import chore_views, reviews, spend_views, tick_views, views
+from canopy.serve import chore_views, reviews, spend_views, task_views, tick_views, views
 from canopy.serve.event_schema import (
     AttentionUpdated,
     ChoresUpdated,
@@ -40,6 +40,7 @@ from canopy.serve.event_schema import (
     SpendUpdated,
     StreamEnding,
     StreamEvent,
+    TasksUpdated,
     TicketChanged,
     TicketsUpdated,
     TickUpdated,
@@ -166,6 +167,7 @@ class _Sent:
         self.attention: AttentionUpdated | None = None
         self.runs: RunsUpdated | None = None
         self.chores: ChoresUpdated | None = None
+        self.tasks: TasksUpdated | None = None
         self.reviews: ReviewsUpdated | None = None
         self.requested: ReviewRequestsUpdated | None = None
         self.tickets: dict[str, TicketSummary] | None = None
@@ -202,18 +204,15 @@ class _Sent:
         if runs != self.runs:
             self.runs = runs
             found.append(StreamEvent(runs))
-        tickets = views.tickets(ctx)
-        by_key = {t.key: t for t in tickets}
-        if self.tickets is None or by_key != self.tickets:
-            before = self.tickets or {}
-            changed = [k for k, t in by_key.items() if self.tickets is not None and before.get(k) != t]
-            self.tickets = by_key
-            found.append(StreamEvent(TicketsUpdated(tickets=tickets)))
-            found.extend(StreamEvent(TicketChanged(key=k)) for k in changed)
+        found.extend(self._tickets(ctx))
         chores = ChoresUpdated(chores=chore_views.chores(backend, ctx))
         if chores != self.chores:
             self.chores = chores
             found.append(StreamEvent(chores))
+        tasks_event = TasksUpdated(tasks=task_views.tasks_list(ctx))
+        if tasks_event != self.tasks:
+            self.tasks = tasks_event
+            found.append(StreamEvent(tasks_event))
         reviewed = ReviewsUpdated(reviews=reviews.reviews(ctx))
         if reviewed != self.reviews:
             self.reviews = reviewed
@@ -240,6 +239,21 @@ class _Sent:
                 ),
             )
         return found
+
+    def _tickets(self, ctx: Context) -> list[StreamEvent]:
+        """Read the tickets again, and say what changed since they were last sent.
+
+        Returns:
+            The tickets list, then a `TicketChanged` for each ticket whose summary changed; empty when none did.
+        """
+        tickets = views.tickets(ctx)
+        by_key = {t.key: t for t in tickets}
+        if self.tickets is not None and by_key == self.tickets:
+            return []
+        before = self.tickets or {}
+        changed = [k for k, t in by_key.items() if self.tickets is not None and before.get(k) != t]
+        self.tickets = by_key
+        return [StreamEvent(TicketsUpdated(tickets=tickets)), *(StreamEvent(TicketChanged(key=k)) for k in changed)]
 
 
 @contextmanager
