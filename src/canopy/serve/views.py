@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import (
+    attachments,
     contract,
     conversation,
     db,
@@ -30,6 +31,8 @@ from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunStatus
 from canopy.serve import draft_views, memory_views
 from canopy.serve.persona_schema import AgentPersona, PersonaChoice
 from canopy.serve.schema import (
+    Attachment,
+    Attachments,
     AttentionItem,
     Capacity,
     Comment,
@@ -550,7 +553,32 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         drafts=draft_views.of_ticket(ctx.conn, key),
         personas=[agent_persona(n) for n in personas.next_for(ctx.conn, ctx.config, key)],
         persona_names=[p.name for p in personas.listed(ctx.config)],
+        attachments=attachments_of(ctx, conversation.Ref(conversation.TICKET, key)),
     )
+
+
+def attachments_of(ctx: Context, ref: conversation.Ref) -> Attachments:
+    """A ticket's or a task's attachments, as `canopy show` lists them, with the limits they are held to (§22).
+
+    Returns:
+        Each attachment it holds, and `policy`'s limits.
+    """
+    limits = attachments.Limits.from_policy(ctx.config.policy)
+    return Attachments(
+        items=[attachment(a) for a in attachments.of(ctx.conn, ref)],
+        max_files=limits.files,
+        max_file_bytes=limits.file_bytes,
+        max_total_bytes=limits.total_bytes,
+    )
+
+
+def attachment(row: records.Attachment) -> Attachment:
+    """One attachment, as the API sends it.
+
+    Returns:
+        Its name, size, channel, and when it was attached.
+    """
+    return Attachment(name=row.name, size=row.size, channel=row.channel, added_at=db.parse_time(row.added_at))
 
 
 def agent_persona(found: personas.Next) -> AgentPersona:

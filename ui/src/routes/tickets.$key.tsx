@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import { loopQuery, ticketMemoryQuery, ticketPlansQuery, ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Age } from '@/components/age'
+import { Attachments } from '@/components/attachments'
 import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
@@ -172,6 +173,12 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         ticketKey={ticket.key}
                         personas={detail.personas}
                         names={detail.persona_names}
+                        className="border-t"
+                    />
+                    {/* What you attached for its runs to read, such as a design doc someone sent you (DESIGN §22). */}
+                    <Attachments
+                        subject={{ kind: 'ticket', key: ticket.key }}
+                        attachments={detail.attachments}
                         className="border-t"
                     />
                 </Panel>

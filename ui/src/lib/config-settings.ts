@@ -183,6 +183,15 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
         ],
     },
     {
+        title: 'Attachments',
+        blurb: 'How much text you may attach to one ticket or task. Each of its runs gets every file.',
+        keys: [
+            { name: 'policy.max_attachments', label: 'Files per ticket or task' },
+            { name: 'policy.max_attachment_kib', label: 'KiB per file' },
+            { name: 'policy.max_attachments_total_kib', label: 'KiB per ticket or task' },
+        ],
+    },
+    {
         title: 'Pace',
         blurb: "How often the loop ticks, which is most of the overseer's spend.",
         keys: [

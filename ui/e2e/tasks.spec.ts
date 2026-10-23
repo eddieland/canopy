@@ -63,6 +63,30 @@ test('a refused reply to a task names its guard, and keeps what was written', as
     await expect(form.getByRole('textbox')).toHaveValue('Rename it in api too.')
 })
 
+test("a task's attachments are listed, and a file uploads as its own bytes under a plain name", async ({ page }) => {
+    // Answered by the route, so the root server's journal never changes.
+    const sent: { url: string; body: string | null }[] = []
+    await page.route('**/api/tasks/1/attachments/*', async (route) => {
+        sent.push({ url: route.request().url(), body: route.request().postData() })
+        await route.fulfill({
+            json: { attachment: { name: 'my-notes.md', size: 5, channel: 'web', added_at: '2026-10-08T12:00:00Z' } },
+        })
+    })
+    await page.goto('tasks/1')
+    await settled(page)
+    const section = page.getByRole('region', { name: 'Attachments' })
+    await expect(section.getByRole('listitem')).toContainText('importer-design-v2.md')
+    await section
+        .getByLabel('File to attach')
+        .setInputFiles({ name: 'my notes.md', mimeType: 'text/markdown', buffer: Buffer.from('# Hi\n') })
+    await expect(section.getByRole('status')).toHaveText(
+        'Attached my-notes.md (5 bytes) to task:1; its next run reads it.',
+    )
+    expect(sent).toEqual([
+        { url: expect.stringMatching(/\/api\/tasks\/1\/attachments\/my-notes\.md$/u), body: '# Hi\n' },
+    ])
+})
+
 test('a stopped task takes no reply', async ({ page }) => {
     await page.goto('tasks/3')
     await settled(page)

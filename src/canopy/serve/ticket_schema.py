@@ -12,7 +12,7 @@ from pydantic import Field
 
 from canopy.serve.draft_schema import Draft
 from canopy.serve.persona_schema import AgentPersona
-from canopy.serve.schema import CostTotal, Decision, Limit, Message, Model, Run, TicketSummary
+from canopy.serve.schema import Attachments, CostTotal, Decision, Limit, Message, Model, Run, TicketSummary
 
 type GrantKind = Annotated[
     Literal["implement", "resume"],
@@ -77,6 +77,8 @@ class TicketDetail(Model):
     reviewer's, in that order."""
     persona_names: list[str] = []
     """Every persona a run could get, by name, as `canopy personas` lists them: what the operator may choose from."""
+    attachments: Attachments
+    """The files the operator attached to it, which its runs read (DESIGN §22)."""
 
 
 class Started(Model):

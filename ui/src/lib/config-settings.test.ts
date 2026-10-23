@@ -135,7 +135,7 @@ describe('config groups', () => {
     it('name every key the server edits in some panel', () => {
         const named = CONFIG_GROUPS.flatMap((g) => g.keys.map((k) => k.name))
         expect(new Set(named).size).toBe(named.length)
-        expect(named).toHaveLength(17)
+        expect(named).toHaveLength(20)
     })
 
     it('count the unsaved changes', () => {

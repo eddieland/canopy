@@ -4,6 +4,8 @@ import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
     AgentPersona,
+    Attached,
+    Detached,
     ChoreTried,
     ConfigReload,
     ConfigSaved,
@@ -641,6 +643,50 @@ export async function refreshTask(client: QueryClient, id: number): Promise<void
         client.invalidateQueries({ queryKey: keys.tasks }),
         client.invalidateQueries({ queryKey: keys.attention }),
     ])
+}
+
+/** What an attachment is on: a ticket, by its key, or a task, by its id (DESIGN §22). */
+export type AttachmentSubject = { kind: 'ticket'; key: string } | { kind: 'task'; id: number }
+
+/**
+ * `canopy attach REF FILE --name NAME`: keep `text`, a file read as UTF-8, as NAME, for the subject's later runs to
+ * read. It is sent as the file's own bytes, not JSON, so the server's bound on a body holds the largest file it takes.
+ */
+export async function attachFile(subject: AttachmentSubject, name: string, text: string): Promise<Attached> {
+    const sent = { body: text, bodySerializer: (body: string) => body, headers: { 'Content-Type': 'text/plain' } }
+    if (subject.kind === 'ticket') {
+        return unwrap(
+            await api.PUT('/api/tickets/{key}/attachments/{name}', {
+                params: { path: { key: subject.key, name } },
+                ...sent,
+            }),
+        )
+    }
+    return unwrap(
+        await api.PUT('/api/tasks/{task_id}/attachments/{name}', {
+            params: { path: { task_id: subject.id, name } },
+            ...sent,
+        }),
+    )
+}
+
+/** `canopy detach REF NAME`: its file is deleted, and the subject's later runs no longer get it. */
+export async function detachFile(subject: AttachmentSubject, name: string): Promise<Detached> {
+    if (subject.kind === 'ticket') {
+        return unwrap(
+            await api.DELETE('/api/tickets/{key}/attachments/{name}', { params: { path: { key: subject.key, name } } }),
+        )
+    }
+    return unwrap(
+        await api.DELETE('/api/tasks/{task_id}/attachments/{name}', {
+            params: { path: { task_id: subject.id, name } },
+        }),
+    )
+}
+
+/** After an attachment changed: read its ticket or task again now. */
+export function refreshSubject(client: QueryClient, subject: AttachmentSubject): Promise<void> {
+    return subject.kind === 'ticket' ? refreshTicket(client, subject.key) : refreshTask(client, subject.id)
 }
 
 /** A submission id for a reply form, drawn when the form is rendered and kept until the reply is recorded. */

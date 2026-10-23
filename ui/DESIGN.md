@@ -1425,6 +1425,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   description.
   A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
   to the config: `Clear the override`, or `Use the default`.
+- **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, at the
+  foot of a ticket's Work panel and under a task's conversation: each file a row of its name in monospace, its size
+  muted, and a ghost `icon-xs` ✕ named `Remove NAME`; an outline `xs` **Attach a file** beside the heading opens the
+  browser's file picker, from a visually hidden input. A muted line says how much of the limits it holds. The page
+  refuses a file over the bound or not UTF-8 before sending it, as an `ApiError` naming the CLI's guard, so it reads in
+  the `Notice` as the server's refusal would.
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, after its reply on its page and
   on its attention item (The answer, above), but under the run on a broken run's item, which asks for another try
   first, and in the foot of a PR's Pull request panel, under the operator's review request. While something is stuck

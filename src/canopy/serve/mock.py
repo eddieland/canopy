@@ -297,9 +297,29 @@ def seed(directory: Path) -> Backend:
             mock_feedback_plans.seed(ctx.conn, ws.state_dir, at, ctx.config.trust, slot_path(root, "web", 3))
             mock_personas.seed(ctx.conn, ctx.config, at)
             mock_tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
+            _attachments(ctx.conn)
         mock_reviews.drafts(ctx.conn, at)
     mock_transcripts.write(ws.state_dir, T0)
     return backend
+
+
+def _attachments(conn: sqlite3.Connection) -> None:
+    """Attach a design doc to ABC-102 and to task 1, so their pages show one (DESIGN §22): rows alone, unread."""
+    for kind, subject, name, size, added in (
+        ("ticket", "ABC-102", "sso-design.md", 18_432, -300),
+        ("task", "1", "importer-design-v2.md", 9_216, -420),
+    ):
+        insert = sql.insert(
+            "attachments",
+            subject_kind=kind,
+            subject_id=subject,
+            name=name,
+            size=size,
+            sha256="0" * 64,
+            channel="web",
+            added_at=at(added),
+        )
+        sql.execute(conn, insert)
 
 
 def _attention(ctx: Context) -> list[Item]:

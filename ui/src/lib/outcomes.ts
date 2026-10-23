@@ -1,5 +1,7 @@
 import { ApiError } from '@/api/client'
 import type {
+    Attached,
+    Detached,
     AgentPersona,
     ChoreTried,
     ConfigReload,
@@ -668,4 +670,15 @@ export function memoryForgottenText(forgot: MemoryForgotten): string {
         `${head} A reader held the journal's write-ahead log open, so the deleted text may stay in the log until ` +
         "SQLite's next checkpoint."
     )
+}
+
+/** What an upload did, as `canopy attach` says it (canopy/cli/attachments.py): the name, its size, and the subject. */
+export function attachedText(ref: string, attached: Attached): string {
+    const { name, size } = attached.attachment
+    return `Attached ${name} (${size} bytes) to ${ref}; its next run reads it.`
+}
+
+/** What a removal did, as `canopy detach` says it. */
+export function detachedText(ref: string, detached: Detached): string {
+    return `Removed ${detached.name} from ${ref}.`
 }

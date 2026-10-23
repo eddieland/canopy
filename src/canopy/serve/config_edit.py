@@ -87,6 +87,10 @@ EDITABLE: tuple[Editable, ...] = (
     _count("policy.max_implement_attempts", 10),
     _count("policy.max_resume_attempts", 10),
     _count("policy.max_reviews_per_pr", 25),
+    # The page's bound is the key's own ceiling: attachments cost a run reading them, never another run.
+    _count("policy.max_attachments", config.ATTACHMENTS_CEILING),
+    _count("policy.max_attachment_kib", config.ATTACHMENT_KIB_CEILING),
+    _count("policy.max_attachments_total_kib", config.ATTACHMENTS_TOTAL_KIB_CEILING),
     _pace("policy.ci_cooldown_minutes", 5),
     _pace("loop.interval_minutes", 2),
     _pace("loop.idle_max_minutes", 2),
