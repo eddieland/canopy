@@ -94,6 +94,7 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
         return c.get(f"/api/runs/{run_id}").json()["models"]
 
     assert models() == {"status": "running", "models": [], "error": None}
+    assert [r["models"] for r in c.get(f"/api/tickets/{KEY}").json()["runs"]] == [models()]  # its ticket's runs too
     db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
     assert models()["status"] == "no_session"  # the runtime reported none, so there is nothing to read
     db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", None)
@@ -115,6 +116,7 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
         "error": None,
     }
     assert [r["models"] for r in c.get("/api/runs").json()] == [models()]  # the runs list carries them too
+    assert [r["models"] for r in c.get(f"/api/tickets/{KEY}").json()["runs"]] == [models()]
     found = models()
     # Read again, as 0069 has every found run read: what was found stays shown while the read is due, fails, or finds
     # the session gone.

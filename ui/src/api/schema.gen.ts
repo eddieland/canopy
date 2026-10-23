@@ -6183,7 +6183,10 @@ export type components = {
              *     for a run from before canopy chose one.
              */
             model: string | null;
-            /** @description Which models served it, on its page and in the runs list; None where another page lists it. */
+            /**
+             * @description Which models served it, on its page, in the runs list, and in a ticket's or a PR's runs; None where another page
+             *     lists it.
+             */
             models: components["schemas"]["ModelsServed"] | null;
             /**
              * New Tokens

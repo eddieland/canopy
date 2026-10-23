@@ -249,7 +249,8 @@ class Run(Model):
     from its start, before its session is read; None when it asked for none, so the runtime's default served it, and
     for a run from before canopy chose one."""
     models: ModelsServed | None = None
-    """Which models served it, on its page and in the runs list; None where another page lists it."""
+    """Which models served it, on its page, in the runs list, and in a ticket's or a PR's runs; None where another page
+    lists it."""
 
 
 class TicketSummary(Model):

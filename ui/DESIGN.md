@@ -762,7 +762,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   waits for a run to end. A ticket's page lists its runs flat
   (`RunsTable`), since every row there is the same ticket's. A run's line of links names its first three worktrees,
   then `+N more worktrees` with every one in its tip, never `+1 more`, which would take the room the fourth's path
-  does: a ticket across many repositories holds a slot in each, and its run's page lists them all.
+  does: a ticket across many repositories holds a slot in each, and its run's page lists them all. Beside its session
+  it names the model that served it, muted mono, as its list names it (`modelNames` in `src/lib/models.ts`: without its
+  provider unless another provider's in the list shares the name), `+1` for each other it switched to, each whole in
+  its tip with its cost; until its session is read, the model canopy asked for (`asked X`), else `model none`, why in
+  its tip; one that served other than the one asked for says both in `status-blocked`, as its page's field does. An
+  earlier run's line has it before what it said, so a ticket's runs read down by model.
 - **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
   (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.

@@ -54,6 +54,11 @@ def test_the_list_has_each_pr_once_with_its_ticket_branch_and_latest_review(back
 def test_a_prs_page_has_the_runs_that_pushed_to_it_its_reviews_and_its_decisions(backend: Backend) -> None:
     page = client(None, backend).get("/api/pull-request", params={"url": mock_reviews.PR_88}).json()
     assert [(r["id"], r["kind"]) for r in page["runs"]] == [(45, "resume"), (39, "implement")]
+    # Each names the models that served it, as the runs list does: 39 switched models partway.
+    assert [m["model"] for m in page["runs"][1]["models"]["models"]] == [
+        "anthropic/claude-opus-4-1",
+        "anthropic/claude-sonnet-4-5",
+    ]
     assert [r["id"] for r in page["reviews"]] == [4, 1]
     assert page["threads"]  # run 45 drafted replies to its threads, which canopy read
     assert {d["action"] for d in page["decisions"]} == {"wait", "attention:needs_reviewer"}
