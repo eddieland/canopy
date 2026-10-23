@@ -662,7 +662,8 @@ def test_the_server_answers_in_the_version_asked_or_its_newest_writes_no_stderr_
     assert (served.stderr, served.returncode) == ("", 0)
 
 
-# A chore's run: `canopy _mcp --chore` serves it its own history alone (DESIGN §19, §27).
+# A chore's run: `canopy _mcp --chore` serves it its own history alone, and `canopy _mcp --reports` canopy's read-only
+# reports (DESIGN §19, §27).
 
 
 def two_chore_runs(env: CanopyEnv) -> sqlite3.Connection:
@@ -675,7 +676,7 @@ def two_chore_runs(env: CanopyEnv) -> sqlite3.Connection:
     return conn
 
 
-def test_a_chores_run_is_served_its_history_and_canopys_reports_alone(overseen: CanopyEnv) -> None:
+def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
     conn = two_chore_runs(overseen)
     for run in ("chore-2", "chore-try:build-health"):
         with in_run(run):
@@ -684,7 +685,7 @@ def test_a_chores_run_is_served_its_history_and_canopys_reports_alone(overseen: 
                 tool_call("decide", key="PROJ-1", action="wait", rationale="r"),
                 chore=True,
             )
-        assert served.listed() == ["history", *reports.TOOLS], run
+        assert served.listed() == ["history"], run
         # None of the overseer's verbs is served to a chore, whatever it asks.
         assert served.responses[2]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
     schema = served.responses[1]["result"]["tools"][0]["inputSchema"]
@@ -700,15 +701,17 @@ def test_nothing_is_served_where_no_chores_run_is(overseen: CanopyEnv, run: str 
     conn = two_chore_runs(overseen)
     read = tool_call("history", name="build-health")
     with in_tick(conn), in_run(run) if run is not None else contextlib.nullcontext():
-        served = mcp_session(LIST_TOOLS, read, *(tool_call(name) for name in reports.TOOLS), chore=True)
+        served = mcp_session(LIST_TOOLS, read, chore=True)
+        reported = mcp_session(LIST_TOOLS, *(tool_call(name) for name in reports.TOOLS), reports=True)
     assert served.listed() == []
     assert served.said(2) == (
         "chore history refused (not_chore): the history tool serves a chore's own runs alone, and this is none",
         True,
     )
-    for n, name in enumerate(reports.TOOLS, 3):
-        assert served.said(n) == (
-            f"{name} refused (not_chore): canopy's chore tools serve a chore's own run alone, and this is none",
+    assert reported.listed() == []
+    for n, name in enumerate(reports.TOOLS, 2):
+        assert reported.said(n) == (
+            f"{name} refused (not_chore): canopy's reports are served to a chore's run alone, and this is none",
             True,
         )
 
@@ -785,7 +788,18 @@ REPORT_READS: list[tuple[Mapping[str, object], list[str]]] = [
 ]
 
 
-def test_a_chores_report_tools_say_what_their_commands_print(
+def test_the_reports_server_serves_canopys_reports_alone(overseen: CanopyEnv) -> None:
+    conn = two_chore_runs(overseen)
+    with in_run("chore-2"):
+        served = mcp_session(LIST_TOOLS, tool_call("history", name="build-health"), reports=True)
+    assert served.listed() == list(reports.TOOLS)
+    # A chore's history is its own server's; the reports' serves none of it, nor the overseer's verbs.
+    assert served.responses[2]["error"] == {"code": -32602, "message": "no tool named 'history'"}
+    with in_tick(conn), in_run("chore-2"):
+        assert mcp_session(LIST_TOOLS).listed() == []
+
+
+def test_the_reports_say_what_their_commands_print(
     overseen: CanopyEnv,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -804,7 +818,7 @@ def test_a_chores_report_tools_say_what_their_commands_print(
     calls = [tool_call(_report_tool(command), **arguments) for arguments, command in REPORT_READS]
     # From a `cwd` outside the workspace, as a chore's may be: its run names the workspace.
     with in_run("chore-2"), mock.patch.dict(os.environ, env), contextlib.chdir(elsewhere):
-        served = mcp_session(*calls, chore=True)
+        served = mcp_session(*calls, reports=True)
     printed: list[str] = []
     with in_run("chore-2"):
         for _, command in REPORT_READS:
@@ -818,7 +832,7 @@ def test_a_chores_report_tools_say_what_their_commands_print(
     assert json.loads(served.said(4).text)["lessons"][0]["text"] == "Run `make lint`<U+200B> first."
 
 
-def test_a_chores_report_tools_refuse_what_their_commands_refuse(overseen: CanopyEnv) -> None:
+def test_the_reports_refuse_what_their_commands_refuse(overseen: CanopyEnv) -> None:
     two_chore_runs(overseen)
     refused = [
         ("health", {"days": 0}, "days: Input should be greater than or equal to 1"),
@@ -829,7 +843,7 @@ def test_a_chores_report_tools_refuse_what_their_commands_refuse(overseen: Canop
         ("memory-proposals", {"all": True}, "all: Extra inputs are not permitted"),
     ]
     with in_run("chore-2"):
-        served = mcp_session(*(tool_call(name, **arguments) for name, arguments, _ in refused), chore=True)
+        served = mcp_session(*(tool_call(name, **arguments) for name, arguments, _ in refused), reports=True)
     for n, (_, _, refusal) in enumerate(refused, 1):
         said = served.said(n)
         assert said.error
@@ -916,6 +930,8 @@ def test_git_reads_no_variable_the_runtime_passes_down(git_pool: GitPool, tmp_pa
 
 def test_the_git_server_takes_absolute_checkouts_and_serves_nothing_else() -> None:
     assert main(["_mcp", "--chore", "--git", "checkout=/repo"]) == 2
+    assert main(["_mcp", "--reports", "--git", "checkout=/repo"]) == 2
+    assert main(["_mcp", "--chore", "--reports"]) == 2
     assert main(["_mcp", "--git", "checkout=repo"]) == 2
     assert main(["_mcp", "--git", "Checkout=/repo"]) == 2
     with (

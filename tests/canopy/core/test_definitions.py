@@ -468,12 +468,13 @@ def test_an_example_chores_agent_is_canopy_chore_with_its_prompts_commands_and_r
     could not."""
     definition = (resources.example_chores_dir() / "agents" / f"{agent}.md").read_text()
     commands, reads = CHORE_AGENTS[agent]
-    allows = {f'  "{servers.tool_name(history.SERVER, tool)}": allow' for tool in reads}
+    allows = {f'  "{servers.tool_name(reports.SERVER, tool)}": allow' for tool in reads}
     outside = [line for line in _outside_bash(definition) if line not in allows]
     assert outside == _outside_bash((resources.agents_dir() / "canopy-chore.md").read_text())
     tools = _rules_in(definition)
-    for tool in (history.TOOL, *reports.TOOLS):
-        assert _allowed(tools, servers.tool_name(history.SERVER, tool)) is (tool in (history.TOOL, *reads)), tool
+    assert _allowed(tools, CHORE_HISTORY)
+    for tool in reports.TOOLS:
+        assert _allowed(tools, servers.tool_name(reports.SERVER, tool)) is (tool in reads), tool
     if not commands:
         # No shell at all: a scalar, which a repository's config cannot loosen (D044).
         assert "\n  bash: deny\n" in definition
@@ -540,8 +541,8 @@ def test_the_planner_reads_the_ticket_and_writes_nothing(canopy_env: CanopyEnv, 
 CHORE_HISTORY = history.tool_name()
 
 
-#: canopy's read-only reports, which a chore's server also serves (DESIGN §27), as the runtime names them.
-CHORE_REPORTS = [servers.tool_name(history.SERVER, tool) for tool in reports.TOOLS]
+#: canopy's read-only reports, whose server a chore's run is also given (DESIGN §27), as the runtime names them.
+REPORTS = reports.tool_names()
 
 
 @pytest.mark.parametrize("provider", ["github", "jira"])
@@ -551,17 +552,21 @@ def test_a_chore_may_call_its_history_tool_alone_and_has_no_shell(canopy_env: Ca
     _set_provider(canopy_env, provider)
     ruleset = _ruleset(canopy_env, agents.CHORE)
     assert _opencode_action(ruleset, CHORE_HISTORY, "*") == "allow"
-    assert [tool for tool in CHORE_REPORTS if not _opencode_disabled(ruleset, tool)] == []
+    assert [tool for tool in REPORTS if not _opencode_disabled(ruleset, tool)] == []
     assert _opencode_disabled(ruleset, "bash")
     assert _opencode_action(ruleset, "bash", "canopy chore history build-health") == "deny"
 
 
 @pytest.mark.parametrize("provider", ["github", "jira"])
 @pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - {agents.CHORE}))
-def test_no_other_agent_may_call_a_chores_tools(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
+def test_no_other_agent_may_call_a_chores_history_tool_or_canopys_reports(
+    canopy_env: CanopyEnv,
+    agent: str,
+    provider: str,
+) -> None:
     _set_provider(canopy_env, provider)
     ruleset = _ruleset(canopy_env, agent)
-    assert [tool for tool in (CHORE_HISTORY, *CHORE_REPORTS) if not _opencode_disabled(ruleset, tool)] == []
+    assert [tool for tool in (CHORE_HISTORY, *REPORTS) if not _opencode_disabled(ruleset, tool)] == []
 
 
 #: canopy's read-only git tools, the reviewer's and the planner's (DESIGN §27), as the runtime names them.

@@ -63,11 +63,11 @@ permission:
   "canopy_git_*": deny
   # Its tools of canopy's, each allowed by exact name: last, so no pattern above closes one. Its own chore's earlier
   # runs (DESIGN §19, History), which refuses any other chore's, and the health and spend reports its prompts name
-  # (DESIGN §27), which write nothing; the rest of the server's tools are denied.
-  "canopy_chore_*": deny
+  # (DESIGN §27), which write nothing; the reports' server's other tools are denied.
+  "canopy_reports_*": deny
   "canopy_chore_history": allow
-  "canopy_chore_health": allow
-  "canopy_chore_spend": allow
+  "canopy_reports_health": allow
+  "canopy_reports_spend": allow
 ---
 
 The system prompt is supplied by the harness at invocation time via the

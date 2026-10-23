@@ -1,8 +1,9 @@
 """canopy's read-only reports as an agent reads them, one JSON object each: health, spend, and agent memory.
 
 `canopy health --json`, `canopy spend --json`, and `canopy memory lessons`, `proposals`, and `list` with `--json` print
-them, and a chore's run reads them through tools of the same names, `canopy_chore_health` and so on, which `canopy _mcp
---chore` serves (DESIGN §27). Both build a request here and call its function, in the style of the overseer's verbs
+them, and an agent reads them through tools of the same names, `canopy_reports_health` and so on, which `canopy _mcp
+--reports` serves (DESIGN §27). The server is named for what it serves, not for whom: a chore's run is the one given it
+today. Both build a request here and call its function, in the style of the overseer's verbs
 (`loop.tools`), so a tool and its command take the same bounds and say the same text. None of them writes.
 
 What a worker wrote, a memory's text, is printed with every character that hides text named, as the listings print it.
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import sys
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -19,6 +21,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, S
 
 from canopy.core import config, conversation, db, health, memory, memory_manage, spend
 from canopy.core.memory_text import quoted
+from canopy.runtime import servers
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -26,7 +29,13 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.context import Context
 
-#: The tools a chore's server serves of these, by their own names: each command's, with hyphens for spaces.
+#: The MCP server of these reports, as a run's inline config names it. The runtime joins it to each tool's name,
+#: `canopy_reports_health`; no tool's own name holds an underscore, as none of canopy's tools do (DESIGN §27).
+SERVER = "canopy_reports"
+#: How the runtime starts that server: this interpreter's canopy, which `-P` keeps off the working directory's modules
+#: (TRUST_MODEL T7).
+SERVER_COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp", "--reports")
+#: The tools it serves, by their own names: each command's, with hyphens for spaces.
 HEALTH = "health"
 SPEND = "spend"
 MEMORY_LESSONS = "memory-lessons"
@@ -151,6 +160,15 @@ def read_notes(ctx: Context, request: MemoryList) -> str:
     found = memory.notes(ctx.conn, request.key, every=request.all)
     seen = memory.reads(ctx.conn, [n.id for n in found])
     return report_json({"modes": _modes(ctx), "notes": [_note_json(n, read_of(seen, n)) for n in found]})
+
+
+def tool_names() -> list[str]:
+    """The names an agent, and the definitions' rules, know the reports by.
+
+    Returns:
+        Each tool's name as the runtime names it, such as `canopy_reports_health`.
+    """
+    return [servers.tool_name(SERVER, tool) for tool in TOOLS]
 
 
 def report_json(report: dict[str, Any]) -> str:

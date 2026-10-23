@@ -19,13 +19,13 @@ Repositories, through the GitHub MCP server's read tools:
 
 Three of canopy's tools, each answering with one JSON object. You have no shell.
 
-- `canopy_chore_memory-lessons`: the lessons the operator promoted (`lessons`), each with its `id`, `key`, `repo` if
+- `canopy_reports_memory-lessons`: the lessons the operator promoted (`lessons`), each with its `id`, `key`, `repo` if
   it names one, `review_at`, how many runs used it (`use_count`), and any run's report that it is wrong (`wrong_at`,
   `wrong_run_id`).
-- `canopy_chore_memory-proposals`: the lessons workers proposed that wait on the operator (`proposals`), each with the
+- `canopy_reports_memory-proposals`: the lessons workers proposed that wait on the operator (`proposals`), each with the
   `ticket` and `run_id` it came from, whether that ticket is done (`ticket_done`), and whether its run was a private
   ticket's (`private`).
-- `canopy_chore_memory-list`: the ticket notes in force (`notes`), each with its `id`, `ticket`, `key`, the run that
+- `canopy_reports_memory-list`: the ticket notes in force (`notes`), each with its `id`, `ticket`, `key`, the run that
   wrote it (`run_id`), and how many runs used it (`use_count`).
 
 Each listing's `modes` gives each tier's mode, `ticket_notes` and `proposals`: `off`, `record`, or `use`. A tier that

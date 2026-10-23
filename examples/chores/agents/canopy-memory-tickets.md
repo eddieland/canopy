@@ -53,13 +53,13 @@ permission:
   # above reopens one.
   "canopy_git_*": deny
   # Its tools of canopy's, each allowed by exact name: last, so no pattern above closes one. Its own chore's earlier
-  # runs (DESIGN §19, History), which refuses any other chore's, and the three listings of agent memory its prompt
-  # names (DESIGN §27), which write nothing; the rest of the server's tools are denied.
-  "canopy_chore_*": deny
+  # runs (DESIGN §19, History), which refuses any other chore's, and the three listings of agent memory its prompt names
+  # (DESIGN §27), which write nothing; the reports' server's other tools are denied.
+  "canopy_reports_*": deny
   "canopy_chore_history": allow
-  "canopy_chore_memory-lessons": allow
-  "canopy_chore_memory-proposals": allow
-  "canopy_chore_memory-list": allow
+  "canopy_reports_memory-lessons": allow
+  "canopy_reports_memory-proposals": allow
+  "canopy_reports_memory-list": allow
 ---
 
 The system prompt is supplied by the harness at invocation time via the

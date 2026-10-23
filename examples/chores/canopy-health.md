@@ -8,10 +8,10 @@ nothing. Your only output is the result line the `## Run` section describes.
 
 Two of canopy's tools, each answering with one JSON object:
 
-- `canopy_chore_health` with `days` 7: each kind of run by how it ended and what that cost (`outcomes`, with `failed`
+- `canopy_reports_health` with `days` 7: each kind of run by how it ended and what that cost (`outcomes`, with `failed`
   true for a status that is a failure), the newest failures with a note and an id (`failures`), and the overseer's asks
   a guard refused, by guard (`refusals`).
-- `canopy_chore_spend` with `days` 7: what each kind's tool calls returned and how many of them errored (`tools`).
+- `canopy_reports_spend` with `days` 7: what each kind's tool calls returned and how many of them errored (`tools`).
 
 And only these commands, each as one command on one line, from this directory, which is the workspace's root. No other
 command will run.

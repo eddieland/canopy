@@ -224,7 +224,7 @@ timeout_minutes = 15
 ```
 
 - **Its agent comes with it.** [`canopy-introspect`](agents/canopy-introspect.md) is `canopy-chore` with two more of
-  canopy's tools, `canopy_chore_health` and `canopy_chore_spend`, and bash allowed for exactly the commands the
+  canopy's tools, `canopy_reports_health` and `canopy_reports_spend`, and bash allowed for exactly the commands the
   prompts use. `canopy chore install` copies it into the workspace's
   `.canopy/chore-agents/<name>/`, and starts the table's `cmd` with `env OPENCODE_CONFIG_DIR=` that directory, so the
   chore runs the copy, which stays as installed when canopy is upgraded until you install the chore again. Each
@@ -288,11 +288,11 @@ timeout_minutes = 20
 
   ```yaml
   bash: deny
-  "canopy_chore_*": deny
+  "canopy_reports_*": deny
   "canopy_chore_history": allow
-  "canopy_chore_memory-lessons": allow
-  "canopy_chore_memory-proposals": allow
-  "canopy_chore_memory-list": allow
+  "canopy_reports_memory-lessons": allow
+  "canopy_reports_memory-proposals": allow
+  "canopy_reports_memory-list": allow
   ```
 
 - **MCP read tools, not write tools.** It searches the tracker and GitHub to leave out what is already filed, and reads
