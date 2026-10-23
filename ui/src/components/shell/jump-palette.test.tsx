@@ -101,6 +101,16 @@ describe('JumpPalette', () => {
         expect(parseRecent(localStorage.getItem(STORAGE_KEY)).map((t) => t.key)).toEqual(['ABC-1', 'ABC-2'])
     })
 
+    it('keeps a ticket viewed after the tickets list was read, which that list cannot know', async () => {
+        // Viewed a minute from now: after the list the test seeds, as a ticket opened from a link before the stream
+        // sent the list again.
+        const later = new Date(Date.now() + 60_000).toISOString()
+        await renderPalette([{ key: 'NEW-1', title: 'Just made', viewedAt: later }, ...RECENT])
+        act(pressJump)
+        expect(options()[0]).toContain('NEW-1')
+        expect(parseRecent(localStorage.getItem(STORAGE_KEY)).map((t) => t.key)).toEqual(['NEW-1', 'ABC-1', 'ABC-2'])
+    })
+
     it('opens the ticket the keys are on with Enter, and closes', async () => {
         const router = await renderPalette()
         act(pressJump)
