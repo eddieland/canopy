@@ -314,8 +314,9 @@ Controls:
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
 - No agent has web tools (D077). Every canopy definition denies `webfetch`, `websearch`, and `codesearch` as scalars,
-  which a repository's config cannot loosen (D044). Fetched and searched pages are text anyone can shape, and an agent
-  that reaches for them on its own reads them with the operator's credentials in reach. The untrusted text an agent
+  which a repository's config cannot loosen (D044), and `execute`, OpenCode 2's code mode, whose code can make HTTP
+  requests. Fetched and searched pages are text anyone can shape, and an agent that reaches for them on its own reads
+  them with the operator's credentials in reach. The untrusted text an agent
   reads is then what its task brings: the ticket, the PR and its comments, CI output, and the repository.
 
 Residual: a worker can still be talked into writing bad code on its own
