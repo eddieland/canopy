@@ -156,7 +156,7 @@ class TaskReport(Model):
     run_id: int
     """The run that left it."""
     path: str
-    """Its file, `<state_dir>/tasks/<task>/<run>.md`."""
+    """Its file, `<state_dir>/tasks/<task>/<run>.md`: from the workspace root when under it, as a log path is."""
     text: str | None = None
     """Its Markdown, control characters dropped, or none when the file is not a report any more: `problem` says why.
     Agent-written and untrusted: the UI renders it as text."""

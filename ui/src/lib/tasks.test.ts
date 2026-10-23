@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { mockTasks } from '@/api/mocks'
+import { mockTaskRun, mockTasks } from '@/api/mocks'
 import type { TaskSummary } from '@/api/types'
 
-import { TASK_LOOK, taskTitle, tasksShown } from './tasks'
+import { noReport, replyCommand, reportRun, TASK_LOOK, taskPrs, taskTitle, tasksShown } from './tasks'
 
 /** The ids of `tasks`, in order. */
 function ids(tasks: readonly TaskSummary[]) {
@@ -29,6 +29,45 @@ describe('tasksShown', () => {
         expect(ids(tasksShown(mockTasks, 'web'))).toEqual([4, 1])
         expect(ids(tasksShown(mockTasks, 'api,mobile'))).toEqual([7, 6])
         expect(ids(tasksShown(mockTasks, 'docs'))).toEqual([])
+    })
+})
+
+describe('reportRun', () => {
+    it("shows the newest run's report that left one, though a later run left none", () => {
+        const runs = [
+            mockTaskRun({ id: 1, reported: true }),
+            mockTaskRun({ id: 2, reported: true }),
+            mockTaskRun({ id: 3, reported: false, status: 'running', state: 'running' }),
+        ]
+        expect(reportRun(runs)?.id).toBe(2)
+        expect(reportRun([mockTaskRun({ reported: false })])).toBeUndefined()
+    })
+})
+
+describe('noReport', () => {
+    it('says what comes next, or that no run left one', () => {
+        expect(noReport({ standing: 'queued' }, [])).toBe('no report yet: the next tick starts its first run')
+        expect(noReport({ standing: 'stopped' }, [])).toBe('no report: it was stopped before its first run')
+        const running = mockTaskRun({ status: 'running', state: 'running', reported: false })
+        expect(noReport({ standing: 'running' }, [running])).toBe('no report yet: its run is working')
+        const failed = mockTaskRun({ status: 'failed', state: 'failed', reported: false })
+        expect(noReport({ standing: 'failed' }, [failed])).toBe('no report: its run left none')
+        expect(noReport({ standing: 'failed' }, [failed, failed])).toBe('no report: none of its runs left one')
+    })
+})
+
+describe('taskPrs', () => {
+    it('names each PR once, in the order the runs first named it', () => {
+        const a = 'https://github.com/acme/web/pull/97'
+        const b = 'https://github.com/acme/web/pull/98'
+        expect(taskPrs([mockTaskRun({ prs: [a] }), mockTaskRun({ prs: [b, a] })])).toEqual([a, b])
+        expect(taskPrs([])).toEqual([])
+    })
+})
+
+describe('replyCommand', () => {
+    it('names the task as the CLI reads it', () => {
+        expect(replyCommand(4)).toBe('canopy reply task:4')
     })
 })
 

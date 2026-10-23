@@ -33,6 +33,9 @@ export const keys = {
     ticketPlan: (key: string, id: number) => ['ticket', key, 'plans', id] as const,
     chores: ['chores'] as const,
     tasks: ['tasks'] as const,
+    // A task's page, and its runs' reports under it, so the stream's `task.changed` marks both stale.
+    task: (id: number) => ['task', id] as const,
+    taskReport: (id: number, run: number) => ['task', id, 'report', run] as const,
     chore: (name: string) => ['chore', name] as const,
     // A chore run, and its transcript: read again only when the stream says the run's status changed.
     choreRun: (name: string, id: number) => ['chore-run', name, id] as const,
@@ -259,6 +262,32 @@ export const tasksQuery = queryOptions({
     queryKey: keys.tasks,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/tasks', { signal })),
 })
+
+/** One task, as `canopy show task:N` prints it. The stream marks it stale when it says that task changed. */
+export function taskQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.task(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/tasks/{task_id}', { params: { path: { task_id: id } }, signal })),
+        // A task from another page's data is a different task: never show it while this one loads.
+        placeholderData: undefined,
+    })
+}
+
+/** The report a task's run left, as its file stands now: read again whenever its task changes. */
+export function taskReportQuery(id: number, run: number) {
+    return queryOptions({
+        queryKey: keys.taskReport(id, run),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/tasks/{task_id}/runs/{run_id}/report', {
+                    params: { path: { task_id: id, run_id: run } },
+                    signal,
+                }),
+            ),
+        placeholderData: undefined,
+    })
+}
 
 /** One chore, as `canopy show chore:NAME` prints it. The stream marks it stale whenever the chores list changes. */
 export function choreQuery(name: string) {

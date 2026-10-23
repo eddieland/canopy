@@ -122,6 +122,7 @@ export const PAGE_GUIDES = {
     '/tickets/$key_/plan': 'plans',
     '/plan-editor': 'plans',
     '/tasks/': 'tasks',
+    '/tasks/$id': 'tasks#a-tasks-page',
     '/pull-requests/': 'pull-requests',
     '/pull-requests/pr': 'pull-requests#the-pull-requests-page',
     '/reviews/': 'pull-requests#the-reviews-page',

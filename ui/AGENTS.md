@@ -20,8 +20,9 @@ memory, and do not upgrade in passing.
   elsewhere. A control Radix has a primitive for uses its wrapper, never hand-written ARIA state (`DESIGN.md`).
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
 - Tiptap on ProseMirror for the plan editor alone (D120): only `src/lib/plan-*.ts` and
-  `src/components/plan-editor.tsx` import it, and only the pages that show a plan load it: a ticket's plan page and
-  the sample editor, never the ticket's page, whose plan card does not import it.
+  `src/components/plan-editor.tsx` import it, and only the pages that show a plan load it: a ticket's plan page, the
+  sample editor, and a task's page, whose report it lays out read only (`PlanDocument`); never the ticket's page,
+  whose plan card does not import it.
 - Shiki for a review's diff and the guide's code blocks alone (D121): only `src/lib/highlight.ts` and
   `src/lib/languages.ts`, its grammars, import it, and only on demand, each grammar its own chunk.
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
@@ -72,7 +73,8 @@ dozen. When every screenshot differs, check the browser before the change.
 - **Live data comes from the stream, not polling.** No `refetchInterval`, but for the worktrees. Server pushes arrive
   through
   `useEventStream` (`src/api/live.ts`, `src/hooks/use-live-updates.ts`): a list arrives whole and is written with
-  `setQueryData`; `ticket.changed` marks that ticket's query stale, which refetches only if a page shows it, and
+  `setQueryData`; `ticket.changed` marks that ticket's query stale, which refetches only if a page shows it, as
+  `task.changed` does a task's and its reports, and
   `chores.updated` marks every chore's (a new note changes the list it carries); `tick.updated` marks the ticks, a
   tick's page, and the ticket shown. A new
   event type is a pydantic model in the `StreamEvent` union, a case in `applyStreamEvent`, and a check in

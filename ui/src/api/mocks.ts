@@ -190,7 +190,7 @@ export const mockChores: ChoreSummary[] = [
 ]
 
 /** A run of a task, ended done in web, with whatever `fields` replace. */
-function taskRun(fields: Partial<TaskRun> = {}): TaskRun {
+export function mockTaskRun(fields: Partial<TaskRun> = {}): TaskRun {
     return {
         id: 1,
         status: 'done',
@@ -238,7 +238,7 @@ export const mockTasks: TaskSummary[] = [
         stopped_at: null,
         standing: 'running',
         question_id: null,
-        latest: taskRun({
+        latest: mockTaskRun({
             id: 8,
             status: 'running',
             state: 'running',
@@ -264,7 +264,7 @@ export const mockTasks: TaskSummary[] = [
         stopped_at: null,
         standing: 'awaiting_reply',
         question_id: 41,
-        latest: taskRun({
+        latest: mockTaskRun({
             id: 5,
             status: 'blocked',
             state: 'blocked',
@@ -290,7 +290,7 @@ export const mockTasks: TaskSummary[] = [
         stopped_at: null,
         standing: 'done',
         question_id: null,
-        latest: taskRun(),
+        latest: mockTaskRun(),
         runs: 1,
     },
 ]
