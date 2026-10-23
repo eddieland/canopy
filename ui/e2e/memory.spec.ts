@@ -62,7 +62,15 @@ test('the memory page heads each tier with what reads it, and shows what a worke
     await expect(lessons.getByTestId('memory-band')).toHaveText(
         'lessons: recordingRecording only. Workers propose lessons and you may promote them; no run reads them.',
     )
-    await expect(lessons.getByTestId('memory-lessons-count')).toHaveText('1')
+    await expect(lessons.getByTestId('memory-lessons-count')).toHaveText('3')
+    // The mock's two pinned lessons lead, under their own heading, as runs are served them; lesson 8 follows.
+    const [pinned, rest] = [
+        lessons.getByRole('region', { name: 'Pinned' }),
+        lessons.getByRole('region', { name: 'Up for review' }),
+    ]
+    await expect(pinned.getByTestId(/^memory-\d+$/u)).toHaveText([/api-migrations/u, /staging-db-shared/u])
+    await expect(pinned.getByTestId('memory-10')).toContainText('pinned')
+    await expect(rest.getByTestId(/^memory-\d+$/u)).toHaveText([/billing-client/u])
     // Recording, so the lesson in force reads as recorded: no run reads it.
     await expect(lessons.getByTestId('memory-8').getByTestId('memory-stand')).toHaveText('recorded')
     // What every run would be served is folded until asked for.

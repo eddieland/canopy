@@ -50,7 +50,7 @@ type TicketChange = Literal["phase", "title", "done", "plan_setting"]
 # report, and its close. A table name in SQL comes from here, never from input.
 type RunTable = Literal["runs", "chore_runs", "review_runs", "task_runs"]
 # The rows whose agent's progress `set_progress` records as it prints; a worker run's is `set_run_progress`.
-type ProgressTable = Literal["ticks", "chore_runs", "task_runs"]
+type ProgressTable = Literal["ticks", "chore_runs", "task_runs", "review_runs"]
 RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs", "task_runs")
 # What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
 # process group the run's own process starts, which outlives that process if it dies.
@@ -1024,7 +1024,7 @@ def set_progress(
     *,
     usage: Usage | None = None,
 ) -> None:
-    """Record what a running tick's overseer or chore run's agent has reported so far (§6, §19).
+    """Record what a running tick's overseer, or a chore, task, or review run's agent, has reported so far (§6, §19).
 
     Its session always, and what it has spent so far when `usage` is given. Nothing changes for one not running.
     """

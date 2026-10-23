@@ -207,18 +207,19 @@ RECORDS = [
     pytest.param(
         Verb(
             "ticket-set",
-            # A tracker's ids sent as numbers are taken as strings, and a null as the field left out.
+            # A tracker's ids sent as numbers are taken as strings, and a null as the field left out. No ci cursor:
+            # the PR is never observed, so one is refused (test_claims).
             {
                 "key": "PROJ-1",
                 "repo": "repo",
                 "phase": "ci_red",
-                "cursors": {"comment": 7, "ci": 99},
+                "cursors": {"comment": 7},
                 "done": None,
                 "title": "Fix the\nlogin",
             },
             [
                 *("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", "ci_red", "--cursor", "comment=7"),
-                *("--cursor", "ci=99", "--title", "Fix the\nlogin"),
+                *("--title", "Fix the\nlogin"),
             ],
         ),
         id="ticket-set",

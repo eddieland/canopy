@@ -1,8 +1,9 @@
-"""A dispatch's claims checked in code against the connectors' observations (DESIGN §35, ROADMAP M37).
+"""A dispatch's claims, and a ticket set's cursors, checked in code against the connectors' observations (DESIGN §35).
 
 Each case writes what the connectors observed by hand, at the real time, since a dispatch reads them at it, and
 dispatches through the `canopy dispatch` command and the `dispatch` tool, each in a dry-run tick of its own: both must
-record the same decision, a refusal or the run the dispatch would have started.
+record the same decision, a refusal or the run the dispatch would have started. A ticket set goes through `canopy
+ticket set` and the `ticket-set` tool the same way, and records a decision only when it is refused.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import conversation, db
 from canopy.loop import observations
-from tests.canopy.helpers import KEY, LABEL, decisions, in_tick, mcp_session, operator, tool_call
+from tests.canopy.helpers import KEY, LABEL, decisions, in_tick, mcp_session, operator, present, tool_call
 from tests.canopy.observation_helpers import (
     HEAD,
     PR,
@@ -300,6 +301,98 @@ def test_an_unobserved_ticket_keeps_its_claims(canopy_env: CanopyEnv, conn: sqli
     assert found[0] == "dispatch:resume"
 
 
+@pytest.mark.parametrize(
+    ("cursors", "why"),
+    [
+        pytest.param({"comment": "999"}, "comment cursor 999 names no comment observed", id="a-comment"),
+        pytest.param({"review": LATER}, f"review cursor {LATER} is the time of no review item", id="a-time"),
+        pytest.param({"ci": "77"}, f"ci cursor 77 names no check run observed at the head of {PR}", id="ci"),
+    ],
+)
+def test_a_ticket_set_cursor_naming_nothing_observed_is_unobserved(
+    observed: sqlite3.Connection,
+    cursors: Mapping[str, str],
+    why: str,
+) -> None:
+    comment(observed, "101", "acc-1", EARLIER, "Go ahead.")
+    review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    check(observed, "build", "completed", "failure", run_id=12)
+    [(action, reason)] = ticket_set(observed, cursors)
+    assert action == "refused:unobserved"
+    assert reason.startswith(why)
+    assert ticket_set(observed, {"comment": "101", "review": EARLIER, "ci": "12"}) == []
+
+
+def test_a_ticket_set_cursor_past_what_the_block_left_out_is_unobserved(observed: sqlite3.Connection) -> None:
+    count = observations.MAX_NEW_ITEMS + 1
+    for n in range(count):
+        comment(observed, f"{200 + n}", "acc-1", f"2026-10-01T10:{n:02}:00Z", f"Comment {n}.")
+    assert ticket_set(observed, {"comment": str(200 + count - 2)}) == []
+    [(action, reason)] = ticket_set(observed, {"comment": str(200 + count - 1)})
+    assert action == "refused:unobserved"
+    assert "passes comments on PROJ-1 the state block left out" in reason
+
+
+def test_a_review_cursor_may_name_a_review_runs_end(observed: sqlite3.Connection) -> None:
+    # The block shows the PR's latest review run's end as `reviewed_at`, which the overseer passes as the cursor.
+    tick_id = db.start_tick(observed, dry_run=False)
+    observed.execute(
+        "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, started_at, ended_at, status, log_path) "
+        "VALUES (?, ?, 'abc1234', ?, ?, ?, 'done', 'x')",
+        (tick_id, PR, KEY, "2026-10-01T11:59:00.000Z", "2026-10-01T12:00:00.250Z"),
+    )
+    assert ticket_set(observed, {"review": "2026-10-01T12:00:00Z"}) == []
+
+
+@pytest.mark.parametrize(
+    ("stale", "cursors", "why"),
+    [
+        pytest.param("ticket", {"comment": "101"}, "comment cursor 101 passes comments on PROJ-1", id="the-ticket"),
+        pytest.param("pr", {"review": EARLIER}, f"review cursor {EARLIER}: {KEY} in repo is stale", id="its-units-pr"),
+    ],
+)
+def test_a_ticket_set_cursor_on_a_stale_subject_passes_nothing_new(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    stale: str,
+    cursors: Mapping[str, str],
+    why: str,
+) -> None:
+    # It starts nothing, so it is not refused stale, but the block shows nothing new of a stale subject to pass.
+    canopy_env.configure(canopy_env.user_file, {**TRACKER, **TRUST})
+    held(canopy_env, conn, KEY, at=ago(hours=2))
+    with_unit(canopy_env, conn, KEY)
+    observe_ticket(conn, at=ago(hours=1) if stale == "ticket" else ago())
+    observe_pr(conn, at=ago(hours=1) if stale == "pr" else ago())
+    branches_read(conn, at=ago())
+    comment(conn, "101", "acc-1", EARLIER, "Go ahead.")
+    review(conn, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    [(action, reason)] = ticket_set(conn, cursors)
+    assert action == "refused:unobserved"
+    assert reason.startswith(why)
+
+
+def test_a_ticket_set_on_a_private_or_unobserved_ticket_is_not_refused(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    # No tracker source covers it: its cursor stays the overseer's word, as a dispatch's does.
+    held(canopy_env, conn, KEY, at=ago(hours=1))
+    with_unit(canopy_env, conn, KEY, pr=None)
+    assert ticket_set(conn, {"comment": "999", "ci": "77"}) == []
+    # Its start record authorizes a private one, whatever was observed of it (DESIGN §22).
+    canopy_env.configure(canopy_env.user_file, TRACKER)
+    observe_ticket(conn, at=ago(hours=1))
+    assert operator("start", KEY) == 0
+    assert ticket_set(conn, {"comment": "999"}) == []
+
+
+def test_the_operators_ticket_set_is_not_checked(observed: sqlite3.Connection) -> None:
+    # Outside a tick it is the operator's, not a claim of the overseer's.
+    assert operator("ticket", "set", KEY, "--cursor", "comment=999") == 0
+    assert present(db.get_ticket(observed, KEY)).last_comment_id == "999"
+
+
 def dispatched(
     conn: sqlite3.Connection,
     *,
@@ -330,6 +423,25 @@ def dispatched(
     assert by_command == by_tool
     [decision] = by_command
     return decision
+
+
+def ticket_set(conn: sqlite3.Connection, cursors: Mapping[str, str]) -> list[tuple[str, str]]:
+    """Move KEY's cursors in `repo` through `canopy ticket set`, then its tool, each in a dry-run tick of its own.
+
+    Returns:
+        The decisions both recorded: none when they took the cursors, else the refusal.
+    """
+    command = ["ticket", "set", KEY, "--repo", "repo"]
+    command += [arg for name, value in cursors.items() for arg in ("--cursor", f"{name}={value}")]
+    with in_tick(conn, dry_run=True) as tick_id:
+        code = main(command)
+        by_command = decisions(conn, tick_id)
+    with in_tick(conn, dry_run=True) as tick_id:
+        said = mcp_session(tool_call("ticket-set", key=KEY, repo="repo", cursors=dict(cursors))).said()
+        by_tool = decisions(conn, tick_id)
+    assert by_command == by_tool
+    assert (code != 0, said.error) == (bool(by_command), bool(by_command)), said.text
+    return by_command
 
 
 def with_unit(env: CanopyEnv, conn: sqlite3.Connection, key: str, *, pr: str | None = PR) -> None:

@@ -82,9 +82,15 @@ waits a tick, as the block already said; the prompt is unchanged, its refusals s
 Built (2026-10-22): the duties check owing `canopy queried` only on a tick whose query no source read. When the query is
 due and the block shows it `fresh`, the harness records its result before the overseer runs as `canopy queried` would,
 touching each ticket into the journal, and each is owed a decision; the prompt neither runs nor records such a query.
-Chosen conservatively: a fresh read is any within `connect.max_age_minutes`, the poll's included, so the harness records
-what the block shows; a query not due is not recorded though a source read it, so `query_every_minutes` still spaces out
-new tickets.
+Chosen conservatively: a fresh read is any within `connect.max_age_minutes`, the poll's included, so the harness
+records what the block shows; a query not due is not recorded though a source read it, so `query_every_minutes` still
+spaces out new tickets.
+Built (2026-10-22): the cursor check on `canopy ticket set`, through the command and the tool alike, in a tick
+(`claims.check_cursors`): `unobserved` for a cursor naming nothing observed or passing what the block left out; none
+for a private ticket or an unobserved subject. Chosen conservatively: it is never refused `stale`, since it starts
+nothing, but a stale subject's cursors move no further than what they already passed, since the block shows none of its
+items; a unit with no PR is unobserved; a `review` cursor may name the end of any canopy review run of the PR; and the
+operator's own `canopy ticket set`, outside a tick, is not checked.
 Built (2026-10-22): `handled`, on the `ci` cursor as it is: each completed check run a source observes is kept by its
 run id across reads (`observed_check_runs`), so a re-run at the same head is told from the run it repeats, and a
 `resume` for `ci` alone is refused `handled` when every failure at the head is at or behind the cursor or repeats, at
@@ -93,9 +99,8 @@ the same head. Chosen conservatively, for the operator to change: a failure with
 cursor empty or not a number refuses nothing, nor does a head whose only failures are `human_checks` or that has none;
 and the prompt has the overseer record `flaky_rerun` on a `handled` refusal, a new head or an operator message starting
 the next.
-Left: the cursor check on `canopy ticket set`, journal-numbered cursors and their migration, the mirror's retirement
-with comments recorded in the conversation, the design folded into the sections it names, pruning
-`observed_check_runs`, which nothing prunes yet (M47's garbage-collection pass would name it), and the live
-re-measurement.
+Left: journal-numbered cursors and their migration, the mirror's retirement with comments recorded in the
+conversation, the design folded into the sections it names, pruning `observed_check_runs`, which nothing prunes yet
+(M47's garbage-collection pass would name it), and the live re-measurement.
 Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker` source is
 required (recommended: required), and how many new items a subject shows before the rest are counted.

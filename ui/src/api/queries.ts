@@ -406,8 +406,8 @@ export function reviewQuery(id: number) {
 }
 
 /**
- * A review run's session, read back from its log by the server on every fetch (DESIGN §22). The reviewer's output
- * reaches the log when it ends, so the stream marks it stale when the review's row moves (live.ts).
+ * A review run's session, read back from its log by the server on every fetch (DESIGN §22). The reviewer's events reach
+ * the log as it prints them, so the stream marks it stale when the review's row moves (live.ts).
  */
 export function reviewTranscriptQuery(id: number) {
     return queryOptions({
