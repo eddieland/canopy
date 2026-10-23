@@ -273,7 +273,10 @@ def check_kind(kind: str) -> None:
         Refusal: `bad_kind`, for `fix-ci`, `split`, or `needs-plan`.
     """
     if kind == policy.RETIRED:
-        raise Refusal("bad_kind", "fix-ci is retired: a resume fixes CI now; dispatch resume --reason ci")
+        raise Refusal(
+            "bad_kind",
+            "fix-ci is retired: a resume fixes CI now; dispatch kind resume, reasons ci (--kind resume --reason ci)",
+        )
     if kind == policy.SPLIT:
         raise Refusal(
             "bad_kind",
@@ -475,22 +478,26 @@ def _check_reasons(kind: str, reasons: Collection[str], cursors: AbstractSet[str
     """
     if kind != RunKind.RESUME:
         if reasons:
-            raise Refusal("bad_reason", "--reason says why a resume runs; it is for resume only")
+            raise Refusal("bad_reason", "reasons (--reason) say why a resume runs; they are for resume only")
         return
     if not reasons:
         raise Refusal(
             "bad_reason",
-            f"--reason is required for a resume: name why it runs, one or more of {', '.join(ResumeReason)}",
+            f"reasons is required for a resume (--reason): name why it runs, one or more of {', '.join(ResumeReason)}",
         )
     for cursor in sorted(cursors):
         needed = REASON_CURSORS.get(cursor)
         if needed is not None and needed not in reasons:
-            moved = "--review-run" if cursor == "review_run" else f"--cursor {cursor}"
-            raise Refusal("bad_reason", f"{moved} is handled by a resume for {needed}: add --reason {needed}")
+            moved = "review_run (--review-run)" if cursor == "review_run" else f"cursor {cursor} (--cursor {cursor})"
+            raise Refusal(
+                "bad_reason",
+                f"{moved} is handled by a resume for {needed}: add {needed} to reasons (--reason {needed})",
+            )
     if ResumeReason.RETARGET in reasons and base is not None:
         raise Refusal(
             "bad_reason",
-            "--reason retarget is for a PR whose blocker merged, and --base says it is still open",
+            "reasons retarget (--reason retarget) is for a PR whose blocker merged, and base (--base) says it is still "
+            "open",
         )
 
 
@@ -557,7 +564,7 @@ def _check_label(labels: Sequence[str], key: str, label: str | None) -> str:
         Refusal: `unauthorized`, when no label is named or it is not a configured queue label.
     """
     if label is None:
-        raise Refusal("unauthorized", f"--label is required: name the queue label you read on {key}")
+        raise Refusal("unauthorized", f"label is required (--label): name the queue label you read on {key}")
     for configured in labels:
         if configured.casefold() == label.casefold():
             return configured
@@ -579,7 +586,7 @@ def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...
     ws = ctx.workspace
     names = ", ".join(r.name for r in ws.repos) or "none yet"
     if not repos:
-        raise Refusal("unknown_repo", f"--repo is required: name the repositories for {key} ({names})")
+        raise Refusal("unknown_repo", f"repos is required (--repo): name the repositories for {key} ({names})")
     chosen: list[str] = []
     for repo in repos:
         found = ws.repo(repo)
@@ -612,10 +619,13 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
                 raise Refusal("bad_slug", f"slug must match {SLUG_RE.pattern}")
             return branch_name(ctx.config.trust.branch_prefix, key, slug)
         if slug is not None and branch_name(ctx.config.trust.branch_prefix, key, slug) != recorded:
-            raise Refusal("bad_slug", f"{key}'s branch is {recorded}, named by its first implement; leave out --slug")
+            raise Refusal(
+                "bad_slug",
+                f"{key}'s branch is {recorded}, named by its first implement; leave out slug (--slug)",
+            )
         return recorded
     if slug is not None:
-        raise Refusal("bad_slug", f"{kind} continues the ticket's recorded branch; --slug is for implement")
+        raise Refusal("bad_slug", f"{kind} continues the ticket's recorded branch; slug (--slug) is for implement")
     if recorded is None:
         raise Refusal("no_branch", f"{key} has no branch in the journal for {kind} to continue; dispatch implement")
     with_branch = {str(u.repo) for u in db.units(ctx.conn, key) if u.branch}
@@ -623,7 +633,8 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
         if repo not in with_branch:
             raise Refusal(
                 "no_branch",
-                f"{key} has no branch in {repo} for {kind} to continue; dispatch implement with --repo {repo}",
+                f"{key} has no branch in {repo} for {kind} to continue; dispatch implement with repos {repo} "
+                f"(--repo {repo})",
             )
     return recorded
 
@@ -636,7 +647,7 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
     """
     tail = base.removeprefix(prefix)
     if tail == base or BASE_TAIL_RE.fullmatch(tail) is None:
-        raise Refusal("bad_base", f"--base must be another ticket's branch, {prefix}<KEY>-<slug>")
+        raise Refusal("bad_base", f"base (--base) must be another ticket's branch, {prefix}<KEY>-<slug>")
     if base == branch:
         raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
 

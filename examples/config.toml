@@ -77,12 +77,12 @@ worker_timeout_minutes = 45
 # worker_cmd_suffix = "--model provider/model"
 # Optional: commands an agent may run beyond its own bash rules, such as a tracker's CLI for the overseer while its MCP
 # server is down. An allow in your runtime's own config cannot beat canopy's deny; these can (DESIGN §13). The
-# overseer, planner, worker, and worker-private take them; the overseer runs only `canopy`, `treehouse status`, and
-# these, the planner only these, and a worker every command but those its rules deny, so for one an allow undoes a
-# deny, such as the private worker's of a tracker's CLI (TRUST_MODEL T6). canopy refuses a shell, an interpreter, a
-# wrapper such as env or xargs, git, gh, curl, and its own tools, and you answer for what an allowed command can do
-# (TRUST_MODEL T1). Tell the overseer when to use them in paths.overseer_instructions, and the planner and workers in
-# paths.worker_instructions. `canopy agents` lists them.
+# overseer, planner, worker, and worker-private take them; the overseer, which acts through canopy's tools and has no
+# shell otherwise, and the planner run only these, and a worker every command but those its rules deny, so for one an
+# allow undoes a deny, such as the private worker's of a tracker's CLI (TRUST_MODEL T6). canopy refuses a shell, an
+# interpreter, a wrapper such as env or xargs, git, gh, curl, and its own tools, and you answer for what an allowed
+# command can do (TRUST_MODEL T1). Tell the overseer when to use them in paths.overseer_instructions, and the planner
+# and workers in paths.worker_instructions. `canopy agents` lists them.
 # [runtime.allow_bash]
 # overseer = ["jira issue list *", "jira issue view *"]
 # planner = ["jira issue view *"]

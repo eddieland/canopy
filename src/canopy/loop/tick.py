@@ -1,4 +1,4 @@
-"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run and check the overseer, publish.
+"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check the overseer's tools, run and check it, publish.
 
 A live tick starts the operator's queued one-off tasks after reconcile, in code, before the overseer (DESIGN §36). A
 tick that closes `ok` notes, on each ticket, what it did about the operator's messages it read (`acknowledge.py`).
@@ -6,6 +6,7 @@ tick that closes `ok` notes, on each ticket, what it did about the operator's me
 
 from __future__ import annotations
 
+import json
 import shutil
 from collections import Counter
 from dataclasses import dataclass, replace
@@ -41,6 +42,7 @@ from canopy.loop import (
     duties,
     gc_pass,
     harness,
+    mcp,
     observations,
     phases,
     state,
@@ -52,7 +54,7 @@ from canopy.reviews import view as review_view
 from canopy.reviews import waiting as review_waiting
 from canopy.runs import drafted, policy, reconcile
 from canopy.runs import tasks as task_starts
-from canopy.runtime import project_config, stdout
+from canopy.runtime import project_config, servers, stdout
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -64,10 +66,10 @@ if TYPE_CHECKING:
 TICK_ID_ENV = conversation.TICK_ID_ENV
 # A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
 DONE_LINE = "CANOPY_TICK_DONE"
-# The overseer acts only through `canopy`, so a tick runs this as the overseer would, for nothing, before paying for
-# the overseer (DESIGN §6). When it fails, the tick closes with this status and raises an item of the same name.
-CANOPY_CHECK = ("canopy", "--version")
-CANOPY_CHECK_TIMEOUT_SECONDS = 60
+# The overseer acts only through canopy's tools, so a tick starts their server as the runtime would, and asks it to
+# `initialize`, before paying for the overseer (DESIGN §6, §27). When it fails, the tick closes `canopy_unavailable`
+# and raises an item of the same name.
+SERVER_CHECK_TIMEOUT_SECONDS = 60
 MIB = 1024 * 1024
 # How long a ticket marked done stays in the state block's `recently_done` while the query still finds it, so the
 # overseer leaves it out while a human has yet to close it in the tracker (DESIGN §7). One still open after that is read
@@ -237,7 +239,6 @@ def _render(
         operator=operator,
         planned=planned,
         feedback_planned=_feedback_plans(ctx, tickets, now),
-        mirror_delimiter=conversation.body_delimiter(),
         attention=attention.for_overseer(ctx.conn),
         query_due=query_due,
         operator_sent=drafts.sent_by_pr(ctx.conn),
@@ -570,7 +571,7 @@ def _record_connector_failed(ctx: Context, tick_id: int) -> None:
 
 
 def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter) -> tuple[TickStatus, str] | None:
-    """Check what the overseer needs before paying for it: free disk, then `canopy` as it runs it (DESIGN §6 step 5).
+    """Check what the overseer needs before paying for it: free disk, then its tools' server (DESIGN §6 step 5).
 
     A check that fails records the attention item named for the status the tick closes with.
 
@@ -581,11 +582,11 @@ def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter) -> tuple[TickStatus
     if low is not None:
         status, summary, then = TickStatus.DISK_LOW, low, "Free space there, and the next tick runs it"
     else:
-        unavailable = _check_canopy(ctx, tick_id, log)
+        unavailable = _check_server(ctx, tick_id, log)
         if unavailable is None:
             return None
         status, summary = TickStatus.CANOPY_UNAVAILABLE, unavailable
-        then = "Make `canopy --version` work where the loop runs"
+        then = "Make `canopy _mcp` start where the loop runs"
     _harness_item(ctx, tick_id, None, status, f"{summary}; the overseer did not run. {then}")
     return status, summary
 
@@ -615,33 +616,64 @@ def _check_disk(ctx: Context, log: logs.TickAdapter) -> str | None:
     return None
 
 
-def _check_canopy(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | None:
-    """Run `canopy --version` as the overseer would run `canopy`: from its PATH, cwd, and environment (DESIGN §6).
+def _check_server(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | None:
+    """Start `canopy _mcp` as the runtime would for the overseer, in its cwd, and ask it to `initialize` (DESIGN §6).
 
-    A launcher whose environment is gone (an uninstall, a cleared cache) fails to start as a missing one does.
+    An interpreter that is gone (an uninstall, a cleared cache) fails to start as a missing one does. The server exits
+    once its stdin closes, after answering.
 
     Returns:
-        Why `canopy` does not work for the overseer, or None when it does.
+        Why the overseer would have no tools, or None when the server answers.
     """
+    hello: dict[str, object] = {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": mcp.PROTOCOL_VERSIONS[0],
+            "capabilities": {},
+            "clientInfo": {"name": "canopy-tick", "version": db.CANOPY_VERSION},
+        },
+    }
     try:
         result = ctx.runner.run(
-            CANOPY_CHECK,
+            mcp.COMMAND,
             cwd=ctx.repo_root,
             env={TICK_ID_ENV: str(tick_id)},
-            timeout=CANOPY_CHECK_TIMEOUT_SECONDS,
+            stdin=json.dumps(hello) + "\n",
+            timeout=SERVER_CHECK_TIMEOUT_SECONDS,
         )
     except procs.ProcError as e:
-        failure = f"`canopy` does not start for the overseer: {e}"
+        failure = f"`canopy _mcp` does not start for the overseer: {e}"
     else:
         if result.timed_out:
-            failure = f"`canopy --version` did not finish in {CANOPY_CHECK_TIMEOUT_SECONDS} seconds"
+            failure = f"`canopy _mcp` did not answer initialize in {SERVER_CHECK_TIMEOUT_SECONDS} seconds"
         elif result.returncode != 0:
             said = one_line(result.stderr or result.stdout)[-300:]
-            failure = f"`canopy --version` exited {result.returncode}" + (f": {said}" if said else "")
+            failure = f"`canopy _mcp` exited {result.returncode}" + (f": {said}" if said else "")
+        elif not _initialized(result.stdout):
+            said = one_line(result.stdout)[:300]
+            failure = "`canopy _mcp` did not answer initialize" + (f": {said}" if said else "")
         else:
             return None
     log.error("overseer not started", extra={"reason": failure})
     return failure
+
+
+def _initialized(out: str) -> bool:
+    """Whether `out`, what `canopy _mcp` printed, opens with its answer to `initialize`, as canopy's server.
+
+    Returns:
+        True when its first line is a JSON-RPC result for request 0 from a server named canopy.
+    """
+    first = out.partition("\n")[0]
+    try:
+        answer = json.loads(first)
+    except json.JSONDecodeError:
+        return False
+    result = answer.get("result") if isinstance(answer, dict) and answer.get("id") == 0 else None
+    info = result.get("serverInfo") if isinstance(result, dict) else None
+    return isinstance(info, dict) and info.get("name") == mcp.SERVER
 
 
 def _run_overseer(
@@ -677,6 +709,9 @@ def _run_overseer(
     command = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, title)
     argv = command.argv
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
+    # Its tools, in its process's environment alone (DESIGN §27). A call may take as long as the overseer may: a
+    # dispatch can wait on a lease, and one the runtime gave up on would still be served, holding up each call after.
+    served = servers.env({mcp.SERVER: mcp.COMMAND}, cwd=ctx.repo_root, timeout_seconds=timeout_minutes * 60)
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     out_dir = ctx.state_dir / "ticks"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -684,7 +719,7 @@ def _run_overseer(
     out_path = out_dir / f"{tick_id}.log"
     with logs.open_private(out_path) as out:
         watch = progress.Progress(ctx.conn, "ticks", tick_id, out, log, agent="overseer", fields={})
-        env = {TICK_ID_ENV: str(tick_id)}
+        env = {TICK_ID_ENV: str(tick_id), **served}
         try:
             with run_offers.probing(ctx.conn, "ticks", tick_id, ctx.runner, argv, cwd=ctx.repo_root, env=env, log=log):
                 result = ctx.runner.run(

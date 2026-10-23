@@ -14,7 +14,8 @@ Keys of the state besides `sessions`, each optional:
 
     exit    the exit code of every export and debug command, with `stderr`, for an OpenCode that fails. Default none.
     stderr  text printed on stderr with `exit`.
-    config  what `debug config` prints, as JSON. Default `{"mcp": {}}`.
+    config  what `debug config` prints, as JSON. Default `{"mcp": {}}`. The servers of an inline config in
+            `OPENCODE_CONFIG_CONTENT`, as canopy gives a run its own, are merged over its `mcp`, as OpenCode does.
     skills  the names `debug skill` lists. Default none.
     agents  each agent's permission rules by name, `[permission, pattern, action]` each, that `debug agent NAME` prints
             after an allow of everything. Default none.
@@ -64,6 +65,8 @@ def debug(command: list[str]) -> int:
     match command:
         case ["config"]:
             printed: Any = state.get("config", {"mcp": {}})
+            inline = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
+            printed = {**printed, "mcp": {**printed.get("mcp", {}), **inline}}
         case ["skill"]:
             printed = [
                 {"name": name, "description": "d", "location": "x", "content": "x"} for name in state.get("skills", [])
