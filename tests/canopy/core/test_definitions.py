@@ -448,15 +448,16 @@ def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
 #: commands their prompts run, and canopy's reports they read through tools (DESIGN §27).
 CHORE_AGENTS: Mapping[str, tuple[Sequence[str], Sequence[str]]] = {
     "canopy-introspect": (
+        (),
         (
-            "canopy decisions 12",
-            "canopy show run:4",
-            "canopy show chore:canopy-health",
-            "canopy config show --json",
-            "canopy agents --json",
-            "canopy chore history canopy-health",
+            reports.HEALTH,
+            reports.SPEND,
+            reports.DECISIONS,
+            reports.SHOW_RUN,
+            reports.SHOW_CHORE,
+            reports.CONFIG_SHOW,
+            reports.AGENTS,
         ),
-        (reports.HEALTH, reports.SPEND),
     ),
     "canopy-memory-tickets": ((), (reports.MEMORY_LESSONS, reports.MEMORY_PROPOSALS, reports.MEMORY_LIST)),
 }
