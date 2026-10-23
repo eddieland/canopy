@@ -1,5 +1,7 @@
-"""Plans archived to a clone of the operator's each live tick (DESIGN §25): exported, committed, pushed, and an item
-raised while the archive is not on its upstream."""
+"""Plans archived to a clone of the operator's each live tick (DESIGN §25).
+
+They are exported, committed, and pushed, and an item is raised while the archive is not on its upstream.
+"""
 
 from pathlib import Path
 from unittest import mock

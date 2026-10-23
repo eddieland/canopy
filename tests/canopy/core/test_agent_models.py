@@ -129,8 +129,10 @@ def test_a_template_prefix_or_suffix_that_passes_a_model_is_refused(
     value: str,
     role: str,
 ) -> None:
-    """A model or variant on the command line beats the one in the agent's definition, so the run would record one and
-    run on another (DESIGN §13). The error names the key to set instead."""
+    """A model or variant on the command line beats the one in the agent's definition (DESIGN §13).
+
+    So the run would record one and run on another. The error names the key to set instead.
+    """
     canopy_env.configure(canopy_env.user_file, {"runtime": {key: value}})
     with pytest.raises(ConfigError) as e:
         config.load(canopy_env.root, canopy_env.user_file)
@@ -247,7 +249,7 @@ def test_a_chore_whose_model_and_command_could_disagree_is_refused(
 
 
 def test_an_agent_of_the_operators_own_may_take_a_model_on_its_command_line(canopy_env: CanopyEnv) -> None:
-    """canopy chooses no model for it, and records what served it from the session, as before."""
+    """No model is chosen for it, and canopy records what served it from the session, as before."""
     canopy_env.configure(canopy_env.user_file, {"chores": chore(cmd=f"{OWN_CMD} --model {MODEL}")})
     assert config.load(canopy_env.root, canopy_env.user_file).chores["triage"].cmd == f"{OWN_CMD} --model {MODEL}"
 

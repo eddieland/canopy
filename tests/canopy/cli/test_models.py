@@ -1,5 +1,8 @@
-"""`canopy models` (DESIGN §13, Each agent's model): the models the runtime lists, read from it now in the workspace
-root, and the agents `[runtime.models]` gives each; it exits 1 when an agent's runs would be refused their model."""
+"""`canopy models` (DESIGN §13, Each agent's model): the models the runtime lists, and the agents given each.
+
+The list is read from the runtime now, in the workspace root, and the agents are those `[runtime.models]` gives each
+model. It exits 1 when an agent's runs would be refused their model.
+"""
 
 import json
 from pathlib import Path

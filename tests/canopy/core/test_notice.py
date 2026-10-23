@@ -1,5 +1,8 @@
-"""The operator's notice to workers (DESIGN §8, §22, ROADMAP M35): set and cleared by the operator alone, bounded when
-it is set, and heard while it is in force by every run that builds or reads CI, by the overseer, and by the loop."""
+"""The operator's notice to workers (DESIGN §8, §22, ROADMAP M35): set and cleared by the operator alone.
+
+It is bounded when it is set, and heard while it is in force by every run that builds or reads CI, by the overseer, and
+by the loop.
+"""
 
 import os
 import sqlite3

@@ -437,8 +437,10 @@ class Reviewing:
 
 
 class Refused(UserList[tuple[str, str]]):
-    """What canopy refused: the decisions of the tick it refused in, as (action, rationale), the refusal and the
-    attention it raised, if any, and beside them that tick, its decisions whole, and what the refused command printed.
+    """What canopy refused: the decisions of the tick it refused in, as (action, rationale).
+
+    Those are the refusal and the attention it raised, if any. Beside them it holds that tick, its decisions whole, and
+    what the refused command printed.
     """
 
     def __init__(
@@ -568,8 +570,9 @@ class Scenario:
         worker: Worker | None = None,
         runner: InlineRunner | None = None,
     ) -> Ran:
-        """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and run it in this
-        process, its worker doing `worker`, made for the ticket `command` names.
+        """Dispatch `command` in a tick of its own, and run it in this process, its worker doing `worker`.
+
+        `command` is a `dispatches(...)`, KEY's `implement` if None, and `worker` is made for the ticket it names.
 
         The overseer is not run, so a run's story can start without a tick's. `runner` runs its processes, one that
         times a worker out, say, or a plain `InlineRunner` if None.
@@ -597,8 +600,10 @@ class Scenario:
         return ran
 
     def starts(self, command: list[str] | None = None, *, worker: Worker | None = None) -> Working:
-        """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and hold its worker
-        at work, the worker set to do `worker`, made for the ticket `command` names, once the test lets it go on.
+        """Dispatch `command` in a tick of its own, and hold its worker at work.
+
+        `command` is a `dispatches(...)`, KEY's `implement` if None. The worker is set to do `worker`, made for the
+        ticket `command` names, once the test lets it go on.
 
         The run is detached, as a tick's is, and the overseer is not run.
 
@@ -629,8 +634,10 @@ class Scenario:
         reviewer: Worker | None = None,
         runner: InlineRunner | None = None,
     ) -> Reviewed:
-        """Start the review `command`, a `reviews(...)` or a `revises(...)`, in a tick of its own, and do it in this
-        process, its reviewer doing `reviewer`, a `reviewer_reports(...)`, or the fake's default report if None.
+        """Start the review `command` in a tick of its own, and do it in this process, its reviewer doing `reviewer`.
+
+        `command` is a `reviews(...)` or a `revises(...)`, and `reviewer` a `reviewer_reports(...)`, or the fake's
+        default report if None.
 
         The overseer is not run. `runner` runs the reviewer's processes, one that times it out, say, or a plain
         `InlineRunner` if None.
@@ -657,8 +664,10 @@ class Scenario:
         return reviewed
 
     def reviews_each(self, command: list[str], *, reviewer: Worker | None = None) -> list[Reviewed]:
-        """Start the reviews `command`, a `reviews(...)`, starts in a tick of its own, one in each persona chosen for
-        the PR, side by side, then do each in this process in turn, its reviewer doing `reviewer`.
+        """Start the reviews `command`, a `reviews(...)`, starts in a tick of its own, then do each in this process.
+
+        It starts one in each persona chosen for the PR, side by side, and they are done in turn, each reviewer doing
+        `reviewer`.
 
         Returns:
             The review runs, closed, in the order they started.
@@ -687,8 +696,10 @@ class Scenario:
         return done
 
     def starts_review(self, command: list[str], *, reviewer: Worker | None = None) -> Reviewing:
-        """Start the review `command`, a `reviews(...)` or a `revises(...)`, in a tick of its own, and hold its
-        reviewer at work, the reviewer set to do `reviewer`, a `reviewer_reports(...)`, once the test lets it go on.
+        """Start the review `command` in a tick of its own, and hold its reviewer at work.
+
+        `command` is a `reviews(...)` or a `revises(...)`. The reviewer is set to do `reviewer`, a
+        `reviewer_reports(...)`, once the test lets it go on.
 
         The review run is detached, as the overseer's is, and the overseer is not run.
 
@@ -712,8 +723,9 @@ class Scenario:
         return reviewing
 
     def refuses(self, command: list[str], *, dry_run: bool = False) -> Refused:
-        """Dispatch `command`, a `dispatches(...)`, or start the review `command`, a `reviews(...)` or a
-        `revises(...)`, in a tick of its own, which canopy must refuse, starting no run.
+        """Dispatch or start the review `command` in a tick of its own, which canopy must refuse, starting no run.
+
+        `command` is a `dispatches(...)`, or a `reviews(...)` or a `revises(...)`.
 
         Returns:
             The tick's decisions, as (action, rationale): the refusal, and the attention it raised, if any; the tick,
@@ -733,8 +745,11 @@ class Scenario:
         return refused
 
     def polls(self) -> None:
-        """The connectors read the world between ticks, as the loop's poll does (DESIGN §6): a PR a run opened is then
-        observed, as the next tick's sources would observe it before its dispatches rest on it (DESIGN §35)."""
+        """The connectors read the world between ticks, as the loop's poll does (DESIGN §6).
+
+        A PR a run opened is then observed, as the next tick's sources would observe it before its dispatches rest on it
+        (DESIGN §35).
+        """
         assert poll.run(context(self.env), logs.for_tick(None)) is not None, "a tick holds the lock"
         self.story.append("the connectors poll")
 
@@ -773,8 +788,9 @@ class Scenario:
         return printed
 
     def overseer(self, *args: str, code: int = 0, dry_run: bool = False) -> Printed:
-        """Run one of the overseer's commands, `canopy ARGS`, in the tick `ticking` holds open, or in a tick of its own
-        that ends ok, a dry run with `dry_run`; it must exit `code`.
+        """Run one of the overseer's commands, `canopy ARGS`, which must exit `code`.
+
+        It runs in the tick `ticking` holds open, or in a tick of its own that ends ok, a dry run with `dry_run`.
 
         Returns:
             What it printed, as the overseer would read it.
@@ -794,9 +810,10 @@ class Scenario:
 
     @contextmanager
     def ticking(self, *, dry_run: bool = False) -> Iterator[int]:
-        """Hold a tick open for the overseer's commands, a dry run with `dry_run`: each `overseer` move inside the block
-        runs in it, the test may look at the tick while it is still running, and it ends ok as the block does, as one
-        whose overseer finished, so what they raised is the attention list.
+        """Hold a tick open for the overseer's commands, a dry run with `dry_run`.
+
+        Each `overseer` move inside the block runs in it, the test may look at the tick while it is still running, and
+        it ends ok as the block does, as one whose overseer finished, so what they raised is the attention list.
 
         Yields:
             The tick's id.
@@ -876,8 +893,10 @@ class Scenario:
         return Ran(row, reasons, self.env.state_dir / "runs" / f"{run_id}.prompt")
 
     def close(self) -> None:
-        """Stop what is left of every run held at work, its `canopy _run` and its worker both, and of every review run,
-        its `canopy _review` and its reviewer, as the test ends."""
+        """Stop what is left of every run and review run held at work, as the test ends.
+
+        That is a run's `canopy _run` and its worker both, and a review run's `canopy _review` and its reviewer.
+        """
         for run_id in self.held:
             row = present(db.get_run(self.conn, run_id))
             if row["status"] == RunStatus.RUNNING:
@@ -985,8 +1004,10 @@ def reviews(
     ticket: str | None = None,
     context: str | None = None,
 ) -> list[str]:
-    """The overseer starts a review of `pr` at `sha` in `repo`, of `ticket`'s PR if given, with `context` for the
-    reviewer."""
+    """The overseer starts a review of `pr` at `sha` in `repo`.
+
+    It reviews `ticket`'s PR if given, with `context` for the reviewer.
+    """
     flags = _option("--ticket", ticket) + _option("--context", context)
     return canopy("review", "run", "--pr", pr, "--sha", sha, "--repo", repo, *flags)
 
@@ -1021,8 +1042,9 @@ def pushes(
     repos: Sequence[str] = (),
     **reported: object,
 ) -> Script:
-    """The worker commits `message`, pushes `branch`, and reports it done with a PR, its result carrying `reported`
-    too: `pushes(notes=[...])`.
+    """The worker commits `message`, pushes `branch`, and reports it done with a PR.
+
+    Its result carries `reported` too: `pushes(notes=[...])`.
 
     What is left out is its ticket's own: the branch an `implement` without a slug pushes, `agent/<KEY>-work`; the
     message `<KEY>: the change`; and the PR, `https://example.test/pr/<the key's number>`. A joint run's worker, in a
@@ -1063,14 +1085,18 @@ def fails(summary: str = "could not build") -> Script:
 
 
 def sends_drafts(entries: object, *, pr: str = DRAFTS_PR) -> Script:
-    """The worker pushes its ticket's branch and reports it done with `pr` open in `repo`, sending `entries` as its
-    drafts, whatever they hold, so a test can send ones canopy refuses."""
+    """The worker pushes its ticket's branch and reports it done with `pr` open in `repo`.
+
+    It sends `entries` as its drafts, whatever they hold, so a test can send ones canopy refuses.
+    """
     return pushes(prs={"repo": pr}, drafts=entries)
 
 
 def with_a_pr(scenario: Scenario, *, approve: bool = True) -> None:
-    """KEY's implement pushes its branch and opens DRAFTS_PR; with `approve`, feedback plans are on, and alice is
-    trusted (DESIGN §32)."""
+    """KEY's implement pushes its branch and opens DRAFTS_PR.
+
+    With `approve`, feedback plans are on, and alice is trusted (DESIGN §32).
+    """
     scenario.run(dispatches(slug="work"), worker=pushes(prs={"repo": DRAFTS_PR}))
     if approve:
         scenario.configures("private", policy={"feedback_plan": "approve"}, trust={"trusted_reviewers": ["alice"]})
@@ -1088,8 +1114,9 @@ def github_shows(
 
 
 def feedback_planned(scenario: Scenario, github_state: Path, result: object = None) -> int:
-    """A feedback plan run on alice's and bob's comments, `build` red, that writes FEEDBACK_TEXT and reports `result`,
-    FEEDBACK_PLANNED by default.
+    """A feedback plan run on alice's and bob's comments, `build` red.
+
+    It writes FEEDBACK_TEXT and reports `result`, FEEDBACK_PLANNED by default.
 
     Returns:
         Its run id.
