@@ -165,6 +165,8 @@ export type TaskDetail = Schemas['TaskDetail']
 export type TaskTicket = Schemas['TaskTicket']
 /** The report a task run left, as its file stands now, or why it is no report any more (DESIGN §36). */
 export type TaskReport = Schemas['TaskReport']
+/** What a task's submission recorded: its id, where it runs, and whether any tick may start it (DESIGN §36). */
+export type TaskSubmitted = Schemas['TaskSubmitted']
 /** What a run's or chore run's log, or a tick's output, holds of its session, read from its events (DESIGN §22). */
 export type Transcript = Schemas['Transcript']
 /** One entry of a transcript, told apart by its `kind`: text, a tool call, a model call's end, or an error. */

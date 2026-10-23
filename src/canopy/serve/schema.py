@@ -73,6 +73,8 @@ class Meta(Model):
     goes, from `branch_url` or a GitHub `url`. A repository without one is left out."""
     workspace_root: str
     """The workspace's root, absolute: a path a page shows from it is joined to it to copy it whole."""
+    repos: list[str]
+    """The workspace's repositories, by name, in its file's order: the ones a task may be submitted to run in."""
 
 
 class Session(Model):
