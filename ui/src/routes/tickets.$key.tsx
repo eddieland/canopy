@@ -169,15 +169,21 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     <Fields className="pt-1.5">
                         <CostTotalRow cost={cost} />
                     </Fields>
-                    {/* Who its runs write as, from the next: yours to choose, here or with `canopy persona`. */}
-                    <TicketPersonas
-                        ticketKey={ticket.key}
-                        personas={detail.personas}
-                        names={detail.persona_names}
-                        className="border-t"
-                    />
-                    {/* What its runs run on, from the next: yours to choose, here or with `canopy model`. */}
-                    <TicketModels ticketKey={ticket.key} models={detail.models} className="border-t" />
+                    {/* Who its runs write as and what they run on, from the next: yours to choose, here or with */}
+                    {/* `canopy persona` and `canopy model`. Side by side once the panel has room, each agent's */}
+                    {/* model level with its persona, so the conversation under the panel stays in reach. */}
+                    <div className="grid border-t @3xl:grid-cols-2">
+                        <TicketPersonas
+                            ticketKey={ticket.key}
+                            personas={detail.personas}
+                            names={detail.persona_names}
+                        />
+                        <TicketModels
+                            ticketKey={ticket.key}
+                            models={detail.models}
+                            className="border-t @3xl:border-t-0 @3xl:border-l"
+                        />
+                    </div>
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}

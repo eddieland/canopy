@@ -134,16 +134,21 @@ pick another.
 
 ## Choosing a model
 
-Under the personas, the **models** row names, for each of the same three agents, the model its next run goes to. One
-this ticket overrides is marked **override**; hover an agent, or open its menu, to see where the others come from,
-`[runtime.models]` in your config or nothing, which leaves it to the runtime's own default.
+Beside the personas, or under them when the panel is narrow, a row for each of the same three agents names the model
+its next run goes to, then where that comes from, as the persona rows do: **this ticket's override** or
+`[runtime.models]` in your config. When
+nothing sets one, the button just says **runtime default**, which is honest but names nothing you could look up. So
+once canopy has read the session of that agent's latest run on this ticket, the row adds **last served** and the model
+that actually answered. It shows on any row whose last run went somewhere other than the button says, such as the run
+before you changed the override.
 
 Open an agent's menu there to set this ticket's override, as `canopy model KEY MODEL --agent AGENT` does. The menu
 asks the runtime for its models each time it opens, the same list `canopy models` prints, so it may take a moment to
 fill. If the runtime can't answer, the menu says why in red and offers **Read again**; until it answers, the only
 thing you can do is clear the override, since canopy won't take a model it can't look up. Picking one saves it after
-the runtime's list is read once more, so the button shows your pick with a trailing `…` for those few seconds. The
-override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
+the runtime's list is read once more, so the button shows your pick with a trailing `…` for those few seconds, then a
+green **saved** beside it, in the row itself so nothing below jumps. It stays until the ticket's models change again.
+The override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
 **Clear the override**. That is the canary: one ticket on the new model, the rest on the one you trust, and
 [the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run's page names the model
 it asked for while it works, then the model that served it, and both when they differ, so you can check the canary

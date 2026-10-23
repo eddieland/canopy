@@ -555,25 +555,25 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     await page.goto('tickets/ABC-104')
     const models = page.getByTestId('ticket-models')
     const worker = models.getByTestId('ticket-model').first()
-    await expect(worker).toHaveAttribute('title', 'nothing sets one')
-    await models.getByRole('button', { name: "worker model: the runtime's default" }).click()
+    await models.getByRole('button', { name: 'worker model: runtime default' }).click()
     // The mock's runtime lists the models its runs' sessions name.
     const first = page.getByRole('menuitemradio').first()
     const model = (await first.textContent()) ?? ''
     expect(model).toMatch(/^[\w.-]+\/[\w.:@/+-]+$/u)
     await first.click()
-    await expect(models.getByRole('status')).toHaveText(
-        `ABC-104's worker runs use ${model} from their next run: this ticket's override.`,
+    // Confirmed in the worker's row, in place.
+    await expect(worker.getByRole('status')).toHaveText(
+        `saved: ABC-104's worker runs use ${model} from their next run: this ticket's override.`,
     )
     const chosen = models.getByRole('button', { name: `worker model: ${model}` })
     await expect(chosen).toBeVisible()
-    await expect(worker).toContainText('override')
+    await expect(worker).toContainText("this ticket's override")
     await chosen.click()
     await page.getByRole('menuitem', { name: 'Clear the override' }).click()
-    await expect(models.getByRole('status')).toHaveText(
-        "ABC-104's worker runs use the runtime's default from their next run: nothing sets one.",
+    await expect(worker.getByRole('status')).toHaveText(
+        "saved: ABC-104's worker runs use the runtime's default from their next run: nothing sets one.",
     )
-    await expect(models.getByRole('button', { name: "worker model: the runtime's default" })).toBeVisible()
+    await expect(models.getByRole('button', { name: 'worker model: runtime default' })).toBeVisible()
 })
 
 test("a PR at its review limit is granted one more review from its ticket's attention item", async ({ page }) => {

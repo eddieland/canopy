@@ -9,9 +9,9 @@ import type { AgentModel } from '@/api/types'
 import { ModelAttention } from './model-attention'
 
 const MODELS: AgentModel[] = [
-    { agent: 'worker', model: 'acme/gone-1', source: 'ticket', variant: null },
-    { agent: 'planner', model: 'acme/fast-1', source: 'config', variant: null },
-    { agent: 'reviewer', model: null, source: 'default', variant: null },
+    { agent: 'worker', model: 'acme/gone-1', source: 'ticket', variant: null, last_served: null },
+    { agent: 'planner', model: 'acme/fast-1', source: 'config', variant: null, last_served: null },
+    { agent: 'reviewer', model: null, source: 'default', variant: null, last_served: null },
 ]
 
 // The paths the block reads; the server stand-in answers each with the runtime's list.

@@ -150,22 +150,26 @@ export function personaText(ticketKey: string, now: AgentPersona): string {
     return `${ticketKey}'s ${now.agent} runs write in ${now.persona} from their next run: ${source}.`
 }
 
-/** Where an agent's model comes from, in the words `canopy model KEY` uses. */
+/**
+ * Where an agent's model comes from, as its row on a ticket's page says it: `canopy model KEY`'s words, but for the
+ * runtime's default, which the row names as the model does.
+ */
 export const MODEL_SOURCES: Record<AgentModel['source'], string> = {
     ticket: "this ticket's override",
     config: '[runtime.models]',
-    default: 'nothing sets one',
+    default: 'runtime default',
 }
 
-/** An agent's model as the page names it: its id, or the runtime's default when nothing sets one. */
+/** An agent's model as a ticket's page names it: its id, or the runtime's default when nothing sets one. */
 export function modelName(model: string | null): string {
-    return model ?? "the runtime's default"
+    return model ?? MODEL_SOURCES.default
 }
 
 /** What choosing or clearing a ticket's model did, as `canopy model` says it. */
 export function modelText(ticketKey: string, now: AgentModel): string {
-    const source = MODEL_SOURCES[now.source]
-    return `${ticketKey}'s ${now.agent} runs use ${modelName(now.model)} from their next run: ${source}.`
+    const source = now.source === 'default' ? 'nothing sets one' : MODEL_SOURCES[now.source]
+    const model = now.model ?? "the runtime's default"
+    return `${ticketKey}'s ${now.agent} runs use ${model} from their next run: ${source}.`
 }
 
 /**

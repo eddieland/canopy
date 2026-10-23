@@ -64,7 +64,7 @@ from canopy.serve.transcript_views import raw_output, removed_after, session_tra
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from datetime import datetime
 
     from canopy.core.context import Context
@@ -531,6 +531,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
     if not rows:
         return None
     [row] = rows
+    served = ticket_models.last_served(ctx.conn, key)
     units = [
         Unit(
             repo=str(u.repo) if u.repo else None,
@@ -557,7 +558,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         drafts=draft_views.of_ticket(ctx.conn, key),
         personas=[agent_persona(n) for n in personas.next_for(ctx.conn, ctx.config, key)],
         persona_names=[p.name for p in personas.listed(ctx.config)],
-        models=[agent_model(n) for n in ticket_models.next_for(ctx.conn, ctx.config, key)],
+        models=[agent_model(n, served) for n in ticket_models.next_for(ctx.conn, ctx.config, key)],
         attachments=attachments_of(ctx, conversation.Ref(conversation.TICKET, key)),
     )
 
@@ -603,14 +604,26 @@ def agent_persona(found: personas.Next) -> AgentPersona:
     )
 
 
-def agent_model(found: ticket_models.Next) -> AgentModel:
+def agent_model(found: ticket_models.Next, served: Mapping[ticket_models.Agent, str] | None = None) -> AgentModel:
     """The model one of a ticket's agents runs on at its next run, as the API sends it.
 
+    Args:
+        found: The agent's next model, and where it comes from.
+        served: The model that served each agent's latest read run for the ticket (`ticket_models.last_served`); None
+            when it is not wanted, which sends none.
+
     Returns:
-        The agent, its model, or None for the runtime's default, where that comes from, and the model's variant.
+        The agent, its model, or None for the runtime's default, where that comes from, the model's variant, and the
+        model that last served it.
     """
     variant = agent_models.parse(found.model).variant if found.model is not None else None
-    return AgentModel(agent=found.agent, model=found.model, source=found.source, variant=variant)
+    return AgentModel(
+        agent=found.agent,
+        model=found.model,
+        source=found.source,
+        variant=variant,
+        last_served=served.get(found.agent) if served is not None else None,
+    )
 
 
 def persona_choice(found: personas.Listed) -> PersonaChoice:
