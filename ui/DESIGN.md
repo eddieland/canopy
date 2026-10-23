@@ -1388,9 +1388,9 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
   does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list, as compact as a ticket's
   `Start privately` (`StartTicket`): the PR's URL in a monospace field and an outline `Review` beside it, the form's
-  submit, with the CLI's command on hover; under them `Show persona and notes`, a `Disclosure`, beside a muted line
-  naming the personas it will use, and a `Notice` saying its review is a draft the operator may publish as their own,
-  which a refusal replaces. The send key's keycap shows only while the notes are open. On success the form opens the
+  submit, with the CLI's command on hover; under them the notes, always open since the operator often has some, then
+  `Show persona`, a `Disclosure`, beside a muted line naming the personas it will use, and a `Notice` saying its
+  review is a draft the operator may publish as their own, which a refusal replaces. On success the form opens the
   PR's page. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open request wears a
   `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its Pull request
   panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has. While none is

@@ -169,15 +169,16 @@ reviewed, and **Review again** once it has, or once your request has ended, say 
 same request, in the personas its menu names: the last request's, or those [Settings](settings#reviews) prefers. The
 loop's own PRs have neither button. `review.agent_prs` reviews those, and canopy would refuse the request anyway.
 
-**Show persona and notes**, under the URL, opens the rest of the form. **Notes for the reviewer** takes whatever you
-want the reviewer to know before it starts: what the author asked you to look at, the part of the change that worries
-you, or why the PR exists at all. It's optional, and it's `--notes` on the command line. The reviewer weighs your
-notes ahead of the overseer's pointers, but they don't narrow the review: it still reads the whole change. The PR's
-page shows the notes with the request. Asking again for a PR that's already waiting, with new notes, replaces the old
-ones; a review already running keeps the notes it started with.
+**Notes for the reviewer**, under the URL, takes whatever you want the reviewer to know before it starts: what the
+author asked you to look at, the part of the change that worries you, or why the PR exists at all. It's optional, and
+it's `--notes` on the command line. The reviewer weighs your notes ahead of the overseer's pointers, but they don't
+narrow the review: it still reads the whole change. The PR's page shows the notes with the request. Asking again for
+a PR that's already waiting, with new notes, replaces the old ones; a review already running keeps the notes it
+started with.
 
-**Persona** picks the voice the review is written in, as `--persona` does. Left alone, it reads `(default)` beside
-`[personas] reviewer`'s, which is usually `canopy`; folded, the form says which it will use. Each persona in the menu
+**Show persona**, under the notes, opens the **Persona** menu, which picks the voice the review is written in, as
+`--persona` does. Left alone, it reads `(default)` beside `[personas] reviewer`'s, which is usually `canopy`; folded,
+the form says which it will use. Each persona in the menu
 says what it is under its name, in its own words. Check one persona, say `skeptic`, and the review is
 written in it; check several, up to ten, and canopy reviews the PR once in each, side by side, which is the cheapest
 way to learn which reviewer you actually like. Each is a run of its own, billed as one. A persona canopy would refuse
