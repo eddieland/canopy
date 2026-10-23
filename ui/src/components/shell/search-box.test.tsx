@@ -73,6 +73,27 @@ describe('SearchBox', () => {
         expect(at(router)).toBe('/search?q=csv')
     })
 
+    it("opens a task's page on Enter when the box holds its reference alone", async () => {
+        const { router } = await renderRouted(<SearchBox onJump={vi.fn<() => void>()} />, { at: '/runs' })
+
+        type(' task:4 ')
+        await act(async () => {
+            fireEvent.submit(box())
+            await Promise.resolve()
+        })
+        expect(at(router)).toBe('/tasks/4')
+        // The wait typing started is dropped, so the search does not open over the task.
+        await wait(SEARCH_DEBOUNCE_MS)
+        expect(at(router)).toBe('/tasks/4')
+
+        type('task:4 report')
+        await act(async () => {
+            fireEvent.submit(box())
+            await Promise.resolve()
+        })
+        expect(at(router)).toBe('/search?q=task%3A4+report')
+    })
+
     it('sends nothing the server would refuse, and leaves the page as it is', async () => {
         const { router } = await renderRouted(<SearchBox onJump={vi.fn<() => void>()} />, { at: '/search?q=export' })
 

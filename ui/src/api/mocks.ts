@@ -304,6 +304,8 @@ export function hit(fields: Partial<SearchHit> = {}): SearchHit {
         snippet: 'Search now debounces input and cancels stale requests.',
         ticket_key: 'ABC-099',
         chore: null,
+        task_id: null,
+        task_title: null,
         run_id: 39,
         tick_id: null,
         label: 'report',

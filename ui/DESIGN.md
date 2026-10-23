@@ -1592,9 +1592,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   keycap, its shortcut from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the
   keycap's `bg-muted` when hovered) takes the keycap's place: it empties the field and keeps the focus there. An empty
   field, by the button or by deleting its text, empties the search page if it is open, and leaves any other page as it
-  is. The search page has a panel per source with hits, in the server's order, its count in the header (`newest 20` when
-  the source has more). A hit is a row: where it opens (its ticket or chore with the run that said it, a chore run as
-  itself, `chore:deps#2` opening its page, or the tick that decided it), its label as a chip (a chore run's status as
+  is. Enter on a task's reference alone (`task:4`) opens the task instead of searching. The search page has a panel per
+  source with hits, in the server's order, its count in the header (`newest 20` when the source has more). A hit is a
+  row: where it opens (its ticket or chore with the run that said it, a chore run as itself, `chore:deps#2` opening its
+  page, the tick that decided it, or a task, `task:4`, or its run that said it, `task:4#5`, over the task's first line
+  in `muted-foreground`, cut to the column), its label as a chip (a chore run's status as
   its dot and word, as its chore's page lists it), the snippet with the query's words marked on the accent's tint
   (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL short. While the
   next query's hits load, the last ones stay, dimmed to 60%. While empty, the field's end also holds the jump palette's

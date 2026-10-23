@@ -13,6 +13,7 @@ export const SEARCH_DEBOUNCE_MS = 250
 /** The order the server reads its sources in, and each one's panel. `satisfies` fails the typecheck on a new source. */
 export const SEARCH_SOURCES = [
     'ticket',
+    'task',
     'message',
     'chore_run',
     'decision',
@@ -22,6 +23,7 @@ export const SEARCH_SOURCES = [
 /** Each source's panel title. */
 export const SOURCE_LABEL: Record<SearchSource, string> = {
     ticket: 'Tickets',
+    task: 'Tasks',
     message: 'Messages',
     chore_run: 'Chore runs',
     decision: 'Decisions',
