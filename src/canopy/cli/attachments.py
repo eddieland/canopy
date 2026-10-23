@@ -82,8 +82,6 @@ def cmd_detach(click_ctx: click.Context, ref: str, name: str) -> int:
         removed = attachments.remove(ctx.conn, ctx.state_dir, subject, name, channel=CLI)
     except conversation.Refused as r:
         raise CliError(f"detach refused ({r.guard}): {r.reason}") from None
-    except OSError as e:
-        raise CliError(f"detach refused: {name}'s file could not be deleted: {e.strerror}") from None
     logs.for_tick(None).info(
         "operator removed an attachment",
         extra={"subject": str(subject), "attachment": removed.id},
