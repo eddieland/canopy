@@ -43,6 +43,7 @@ const DETAIL: TicketDetail = {
     drafts: [],
     personas: [],
     persona_names: [],
+    models: [],
 }
 
 // Every reply sent, each recorded as a new message answering the question.

@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, StrictStr
 
 from canopy.core import (
+    agent_models,
     attachments,
     contract,
     conversation,
@@ -446,7 +447,9 @@ def _run_agent(
     if refused is not None:
         raise SetupError(refused)
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
-    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
+    # The model the run recorded, which its ticket's override may have chosen in place of config's (DESIGN §13).
+    models = agent_models.of_run(ctx.config, template, run["model"])
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config, models)
     command = ctx.config.runtime.worker_template(template)
     rendered = render_command(command, prompt, snapshot, title)
     argv = sandboxing.wrap(ctx.config.runtime, [s.repo for s in slots], "worker", rendered.argv, snapshot)

@@ -1,9 +1,10 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
 The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
-reload, a tick asked for, the attempt and review limits and their grants, a chore's try, and the pools' slots are
-stand-ins, since the first six belong to the loop, `runs`, `reviews`, and `chores`, and there is no treehouse to ask
-(backend.py). A try records its run and starts nothing, so the run stays running.
+reload, a tick asked for, the attempt and review limits and their grants, a chore's try, the pools' slots, and the
+models the runtime lists are stand-ins, since the first six belong to the loop, `runs`, `reviews`, and `chores`, and
+there is no treehouse or runtime to ask (backend.py): the models are those its runs' sessions name. A try records its
+run and starts nothing, so the run stays running.
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19), `deps` and
 `build-health`. Two ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). The
@@ -24,11 +25,12 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_runs, chore_view, config, conversation, db, pools, review_runs, sql, workspace
+from canopy.core import chore_runs, chore_view, config, conversation, db, pools, records, review_runs, sql, workspace
 from canopy.core.context import db_path
 from canopy.core.items import Item
 from canopy.core.vocab import RunKind, RunStatus
 from canopy.infra import resources
+from canopy.runtime.report import ModelList
 from canopy.serve import (
     mock_chores,
     mock_drafts,
@@ -46,7 +48,6 @@ if TYPE_CHECKING:
     import sqlite3
     from pathlib import Path
 
-    from canopy.core import records
     from canopy.core.context import Context
 
 T0 = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
@@ -285,6 +286,7 @@ def seed(directory: Path) -> Backend:
         clock=lambda: T0,
         runner=lambda: mock_drafts.GitHub(db_path(ws)),
         user_file=user_file,
+        models=_models_listed,
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())
@@ -427,6 +429,16 @@ def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> 
             ),
         )
         return Granted(repo=repo, runs=current.runs, limit=current.limit + 1)
+
+
+def _models_listed(ctx: Context) -> ModelList:
+    """The models the mock's runtime lists: those its journal says served its runs, so a ticket's page may choose one.
+
+    Returns:
+        Each model a run's session names, once.
+    """
+    served = records.fetch_all(ctx.conn, records.RunModel, sql.select("*").from_("run_models"))
+    return ModelList(frozenset(m.model for m in served))
 
 
 def _try_chore(ctx: Context, name: str) -> int:
