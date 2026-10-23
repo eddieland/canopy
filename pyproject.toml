@@ -52,6 +52,8 @@ canopy = "canopy.cli.launcher:main"
 canopy-notify-desktop = "canopy.notify.desktop:main"
 # Its own distribution, a workspace member (D041); listed so the install that puts canopy on PATH puts it there too.
 canopy-notify-slack = "canopy_notify_slack:main"
+# Its reader of the replies in the sink's ticket threads, a connector's command (ROADMAP M64).
+canopy-connect-slack = "canopy_notify_slack.connect:main"
 # canopy's GitHub reader and poster, a workspace member too: commands, so the harness holds no token (DESIGN §29).
 canopy-connect-github = "canopy_github.connect:main"
 canopy-post-github = "canopy_github.post:main"

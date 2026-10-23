@@ -14,6 +14,7 @@ import canopy_notify_slack as slack
 import pytest
 from click.testing import Result
 
+from tests.canopy_notify_slack.helpers import token_file
 from tests.conftest import invoke
 
 MESSAGE: dict[str, Any] = {
@@ -467,13 +468,6 @@ def api() -> Generator[str]:
     server.server_close()
 
 
-def token_file(tmp_path: Path, token: str = "xoxb-1-2-secret", mode: int = 0o600) -> Path:  # noqa: S107
-    path = tmp_path / "slack-token"
-    path.write_text(token + "\n")
-    path.chmod(mode)
-    return path
-
-
 def test_the_slack_sink_posts_with_a_bot_token(api: str, tmp_path: Path) -> None:
     argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path))]
     assert _sink(argv, json.dumps(MESSAGE), api_url=api).exit_code == 0
@@ -698,15 +692,20 @@ def test_threads_hold_tickets_and_reviews_for_a_day_chores_stay_out(threaded: _T
 
     _Api.received.clear()
     assert threaded(_delivery("2026-09-26T12:30:00Z", [_run("PROJ-1", 8, "done")])).exit_code == 0
-    # A new day starts a new thread, and forgets the old day's.
+    # A new day starts a new thread, and keeps the old day's among the earlier, for a week.
     assert [(ts, shown) for ts, shown, _ in _posts()] == [(None, False), ("1790.000001", False)]
     state = json.loads((tmp_path / "state" / "canopy" / "slack-threads.json").read_text())
     assert state == {
-        "version": 1,
+        "version": 2,
         "scopes": {
             '["C0123ABCD", "/r/api"]': {
                 "threads": {"PROJ-1": {"day": "2026-09-26", "ts": "1790.000001"}},
                 "posted": [],
+                "earlier": {
+                    "PROJ-1": [{"day": "2026-09-24", "ts": "1790.000002"}],
+                    "PROJ-2": [{"day": "2026-09-24", "ts": "1790.000003"}],
+                    "review:https://x.test/pr/9": [{"day": "2026-09-24", "ts": "1790.000004"}],
+                },
             },
         },
     }
@@ -830,13 +829,36 @@ def test_a_save_keeps_the_scopes_of_other_channels_and_repositories(tmp_path: Pa
     assert sorted(p.name for p in tmp_path.iterdir()) == ["slack-threads.json", "slack-threads.json.lock"]
 
 
-def test_finishing_forgets_only_earlier_days(tmp_path: Path) -> None:
+def test_finishing_keeps_earlier_days_threads_for_a_week(tmp_path: Path) -> None:
     threads = slack.Threads.load(tmp_path / "slack-threads.json", "C1", "/r/api")
     threads.threads = {"OLD": ("2026-09-23", "1.1"), "NOW": ("2026-09-24", "1.2"), "LATER": ("2026-09-25", "1.3")}
+    threads.earlier = {"NOW": [("2026-09-17", "1.0"), ("2026-09-18", "1.01")]}
     threads.posted = {"f" * 64}
     threads.finish("2026-09-24")
     assert threads.threads == {"NOW": ("2026-09-24", "1.2"), "LATER": ("2026-09-25", "1.3")}
+    # A thread started before the day is an earlier one now, and an earlier one past the week is forgotten.
+    assert threads.earlier == {"OLD": [("2026-09-23", "1.1")], "NOW": [("2026-09-18", "1.01")]}
     assert threads.posted == set()
+    assert slack.Threads.load(tmp_path / "slack-threads.json", "C1", "/r/api") == threads
+
+
+def test_a_new_days_thread_keeps_the_one_it_replaces(tmp_path: Path) -> None:
+    threads = slack.Threads.load(tmp_path / "slack-threads.json", "C1", "/r/api")
+    threads.start("PROJ-1", "2026-09-24", "1.1")
+    threads.start("PROJ-1", "2026-09-25", "1.2")
+    assert threads.threads == {"PROJ-1": ("2026-09-25", "1.2")}
+    assert threads.earlier == {"PROJ-1": [("2026-09-24", "1.1")]}
+    assert threads.recent("2026-09-25", 1) == {"PROJ-1": [("2026-09-25", "1.2")]}
+    assert threads.recent("2026-09-25", 2) == {"PROJ-1": [("2026-09-24", "1.1"), ("2026-09-25", "1.2")]}
+
+
+def test_a_version_1_threads_file_reads_with_no_earlier_threads(tmp_path: Path) -> None:
+    path = tmp_path / "slack-threads.json"
+    scope = '["C1", "/r/api"]'
+    thread = {"PROJ-1": {"day": "2026-09-24", "ts": "1.1"}, "BAD": {"day": "Tuesday", "ts": "1.2"}}
+    path.write_text(json.dumps({"version": 1, "scopes": {scope: {"threads": thread, "posted": []}}}))
+    threads = slack.Threads.load(path, "C1", "/r/api")
+    assert (threads.threads, threads.earlier) == ({"PROJ-1": ("2026-09-24", "1.1")}, {})
 
 
 def test_slack_links_each_item_and_event_to_its_page_in_the_web_ui() -> None:
