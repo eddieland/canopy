@@ -24,6 +24,7 @@ const QUESTION: Message = {
     channel: 'run',
     answers: null,
     run_id: null,
+    task_run_id: null,
     comment: null,
 }
 

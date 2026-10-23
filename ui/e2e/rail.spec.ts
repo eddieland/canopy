@@ -36,6 +36,7 @@ test('the nav lists the sections by how often the operator opens them, and the f
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link')).toHaveText([
         /^Attention/u,
         'Tickets',
+        'Tasks',
         'Pull requests',
         /^Reviews/u,
         'Runs',

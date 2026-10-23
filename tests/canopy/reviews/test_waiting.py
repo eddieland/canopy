@@ -37,7 +37,7 @@ def test_a_requested_review_waits_on_the_operator_until_they_stage_it_and_then_u
     assert (item.ticket_key, item.reason, item.repo) == (ITEM, waiting.WAITING_REASON, None)
     assert item.detail == (
         f"review:{requested}, which you asked for, is done: its draft of {THEIRS} waits on you to publish or stage it "
-        f"(`canopy review draft {requested}`)"
+        f"(`canopy review draft {requested}`), or discard it (`canopy review discard {requested}`)"
     )
     # The harness's alone: the overseer is never shown it to record.
     assert attention.for_overseer(scenario.conn) == []
@@ -106,3 +106,9 @@ def test_a_requested_review_of_a_pr_a_ticket_holds_or_seen_merged_waits_on_nobod
         merged = {"repository": "acme/api", "number": 8, "base_ref": "main", "state": "merged", "draft": 0}
         sql.execute(conn, sql.insert("observed_prs", url=THEIRS, observed_at=db.now(), **merged))
     assert waiting.items(conn) == []
+
+
+def test_a_discarded_draft_waits_on_nobody(scenario: Scenario, requested: int) -> None:
+    assert [i.reason for i in waiting.items(scenario.conn)] == [waiting.WAITING_REASON]
+    scenario.operator("review", "discard", str(requested))
+    assert waiting.items(scenario.conn) == []

@@ -210,7 +210,7 @@ describe('MemoryRows', () => {
     it('says a pinned lesson is pinned, with no review date', async () => {
         const pinned = { ...NOTE, scope: 'lesson' as const, pinned_at: '2026-10-01T12:00:00Z' }
         await renderRows(<MemoryRows entries={[pinned]} />)
-        expect(screen.getByText('pinned')).toBeDefined()
+        expect(screen.getByTitle(/^pinned at .*: never due, and served first$/u).textContent).toBe('pinned')
         expect(screen.queryByText(/^review /u)).toBeNull()
     })
 

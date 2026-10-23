@@ -13,14 +13,14 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
-from canopy.core import conversation, db, outbox, plans, pools, records, sql, task_tickets
+from canopy.core import contract, conversation, db, outbox, plans, pools, records, sql, task_tickets
 from canopy.core.conversation import Refused
 from canopy.core.vocab import RunStatus
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
     from pathlib import Path
 
     from canopy.core.config import Config
@@ -40,6 +40,12 @@ BRANCH_PART = "task/"
 REPORT = ".canopy-task-report.md"
 #: Where reports are kept, `<state_dir>/tasks/<id>/<run>.md`, readable only by the operator, as plans are (§25).
 REPORTS_DIR = "tasks"
+#: The longest PR URL a task's result may name and have shown.
+MAX_PR_URL = 500
+
+#: Where a task stands: stopped, queued for a run a tick will start, waiting on the operator's reply to its latest
+#: run's question, or its latest run's status.
+type Standing = Literal["stopped", "queued", "awaiting_reply"] | RunStatus
 
 
 @dataclass(frozen=True)
@@ -130,6 +136,31 @@ def queued(conn: sqlite3.Connection) -> list[records.Task]:
     return records.fetch_all(conn, records.Task, query)
 
 
+def standing(
+    task: records.Task,
+    latest: records.TaskRun | None,
+    *,
+    queued: bool,
+    awaiting: bool = False,
+) -> Standing:
+    """Where `task` stands, given its latest run, `latest`: `stopped`, `queued`, `awaiting_reply`, or that run's status.
+
+    `queued` says whether a tick would start a run of it now: its first, or the one a reply asked for. `awaiting` says
+    whether its latest question waits on a reply (`awaiting`); left False, a task waiting on one stands as its blocked
+    run does, as `canopy task list` words it.
+
+    Returns:
+        `stopped` once stopped and no run of it runs, `queued`, `awaiting_reply` when `awaiting`, else its latest run's.
+    """
+    if task.stopped_at is not None and (latest is None or latest.status is not RunStatus.RUNNING):
+        return "stopped"
+    if latest is None or queued:
+        return "queued"
+    if awaiting and latest.status is not RunStatus.RUNNING:
+        return "awaiting_reply"
+    return latest.status
+
+
 def moved_after(conn: sqlite3.Connection, since: str) -> bool:
     """Whether the operator submitted, replied to, or stopped a task after `since`, a time the journal wrote (§6, §36).
 
@@ -201,6 +232,24 @@ def messages_of(conn: sqlite3.Connection, task_id: int) -> list[records.Message]
     return records.fetch_all(conn, records.Message, query)
 
 
+def newest_messages(conn: sqlite3.Connection) -> dict[int, int]:
+    """Return the id of each task's newest message, by the task's id; a task with none is not listed.
+
+    A reply to a task whose run still runs queues nothing yet, so it changes no summary: this is how a reader of the
+    tasks list knows a conversation moved all the same.
+
+    Returns:
+        The ids.
+    """
+    query = (
+        sql.select("subject_id, max(id)")
+        .from_("messages")
+        .where("subject_kind = ?", conversation.TASK)
+        .group_by("subject_id")
+    )
+    return {int(r[0]): int(r[1]) for r in sql.execute(conn, query)}
+
+
 def runs_of(conn: sqlite3.Connection, task_id: int) -> list[records.TaskRun]:
     """Return task `task_id`'s runs, the oldest first."""
     query = sql.select("*").from_("task_runs").where("task_id = ?", task_id).order_by("id")
@@ -257,6 +306,17 @@ def stop(conn: sqlite3.Connection, task_id: int) -> Stopped:
 def branch(prefix: str, task_id: int) -> str:
     """Return task `task_id`'s branch, `<prefix>task/<id>`: every run of the task works on it (DESIGN §36)."""
     return f"{prefix}{BRANCH_PART}{task_id}"
+
+
+def prs(result: Mapping[str, object]) -> list[str]:
+    """The PRs a task run's stored result names, each a plain printable https:// URL; anything else is left out.
+
+    Returns:
+        The URLs, in the order the result lists them.
+    """
+    found = result.get("prs")
+    listed = cast("list[object]", found) if isinstance(found, list) else list[object]()
+    return [u for u in listed if isinstance(u, str) and contract.plain_url(u, MAX_PR_URL) and u.isprintable()]
 
 
 def holder(task_id: int) -> str:

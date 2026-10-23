@@ -463,6 +463,13 @@ class InlineRunner:
         return os.getpid()
 
 
+def inline_context(env: CanopyEnv, runner: InlineRunner | None = None) -> Context:
+    """The workspace's context as its config now stands, migrated, whose runner starts no detached process."""
+    found = context(env, runner or InlineRunner())
+    db.migrate(found.conn, resources.migrations_dir())
+    return found
+
+
 # Scripting the fake agents (tests/fakes/agent)
 #
 # A `*_does` helper scripts what an agent does from start to end: its commands, none if not given, then its result
@@ -889,6 +896,10 @@ class Served:
         [content] = response["result"]["content"]
         return Said(content["text"], response["result"]["isError"])
 
+    def structured(self, request_id: int = 1) -> Mapping[str, Any] | None:
+        """What tool call `request_id` came back with as structured content; None when it came back with none."""
+        return self.responses[request_id]["result"].get("structuredContent")
+
     def listed(self, request_id: int = 1) -> list[str]:
         """The name of each tool `tools/list` request `request_id` was answered with."""
         return [t["name"] for t in self.responses[request_id]["result"]["tools"]]
@@ -898,18 +909,20 @@ def mcp_session(
     *requests: Mapping[str, object],
     raw: Sequence[str] = (),
     chore: bool = False,
+    reports: bool = False,
     git: Sequence[str] = (),
 ) -> Served:
-    """Talk to `canopy _mcp` as the runtime does for the overseer, with `chore` for a chore's run, or with `git`, each
-    `NAME=PATH`, for a review's or a plan's, here, in this environment: open the session, send each of `requests`
-    numbered from 1, then each line of `raw` as it is, and close the server's stdin.
+    """Talk to `canopy _mcp` as the runtime does for the overseer, with `chore` for a chore's run, `reports` for the
+    server of canopy's reports, or with `git`, each `NAME=PATH`, for a review's or a plan's, here, in this environment:
+    open the session, send each of `requests` numbered from 1, then each line of `raw` as it is, and close the server's
+    stdin.
 
     The server answers one message at a time, and the session waits for it to exit, which it must on its own.
     """
     numbered = [{"jsonrpc": "2.0", "id": n, **request} for n, request in enumerate(requests, 1)]
     lines = [*(json.dumps(m) for m in (*MCP_OPENING, *numbered)), *raw]
     checkouts = [arg for checkout in git for arg in ("--git", checkout)]
-    server = (*MCP_SERVER, *(["--chore"] if chore else []), *checkouts)
+    server = (*MCP_SERVER, *(["--chore"] if chore else []), *(["--reports"] if reports else []), *checkouts)
     result = procs.SubprocessRunner().run(server, stdin="".join(f"{line}\n" for line in lines), timeout=60)
     assert not result.timed_out, f"canopy _mcp did not exit when its stdin closed: {result.stderr}"
     answers = [json.loads(line) for line in result.stdout.splitlines()]

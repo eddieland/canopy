@@ -20,7 +20,7 @@ from canopy.core import config, conversation, db, prompts, records, run_models, 
 from canopy.core.context import Context
 from canopy.core.items import Item
 from canopy.core.vocab import RunStatus
-from canopy.infra import logs, resources
+from canopy.infra import logs
 from canopy.loop import attention
 from canopy.notify import message
 from canopy.runs import reconcile
@@ -30,10 +30,10 @@ from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
     commit_and_push,
-    context,
     has_deadline,
     in_run,
     in_tick,
+    inline_context,
     json_block,
     messages,
     operator,
@@ -74,13 +74,6 @@ class DeadOnSpawn(InlineRunner):
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
         super().spawn(args, cwd=cwd, log_path=log_path)
         return DEAD_PID
-
-
-def inline_context(env: CanopyEnv, runner: InlineRunner | None = None) -> Context:
-    """The workspace's context as its config now stands, migrated, whose runner starts no detached process."""
-    found = context(env, runner or InlineRunner())
-    db.migrate(found.conn, resources.migrations_dir())
-    return found
 
 
 @pytest.fixture
