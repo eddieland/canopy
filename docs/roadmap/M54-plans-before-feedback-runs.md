@@ -54,9 +54,8 @@ a new CI state reaches the PR before they accept. The design is DESIGN §32, bes
   untrusted one does the same and raises no `untrusted_review`; an approval by item sends a `resume` with exactly those
   items; a new comment, a new head, and a changed check each mark a waiting plan `stale`; the quiet period holds a
   re-plan; approving a stale plan refused once; the attempt limit; `"off"` leaves every snapshot unchanged.
-- **A plan that changes nothing.** A plan whose items are all `leave`, `decline`, or `ask` changes no code, so under
-  M53's `approve` it needs no approval: its `resume` only drafts the replies, which wait on the operator anyway. Under
-  `post` it needs approval as any plan does, since its replies would go out unseen.
+- Settled by the operator (2026-10-23): a plan whose items are all `leave`, `decline`, or `ask` waits for approval as
+  any plan does. Choosing to do nothing is still a decision, which may want a reply on the PR or a follow-up ticket.
 - Settled by the operator (2026-10-17): the quiet period is 10 minutes by default, six feedback plans a unit, and the
   setting private.
 - **Drafts start from the plan.** The `resume` that follows an approved plan starts each draft (M53) from the reply
@@ -140,4 +139,4 @@ under `post` the prompt gives no proposed reply; only a thread's draft starts fr
 departs when the run's own first text differs from the proposed reply past whitespace at either end, when its `did` is
 not the plan's change or decline, when the plan proposed no reply (`ask`, `leave`), or when the approval left the item
 out; the operator's edits are not compared; and the card marks a departure and shows the proposal, with no word diff.
-Left: the plan that changes nothing, and a merged blocker as an item.
+Left: a merged blocker as an item.
