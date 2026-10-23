@@ -791,9 +791,10 @@ Controls:
   or prompts, and never reaches an agent's environment except the server that checks it.
 - Whoever holds the secret acts as the operator: they can prompt a worker directly, outside the authorized-replier
   check (T1). That is the point, and it is why the secret is an operator credential.
-- A listener only reads state and passes the operator's own input to agents. It does not lift any guard in §6: a
-  worker prompted through it still cannot merge, approve, or push outside its branch, and capacity and attempt limits
-  still hold.
+- A listener only reads state, passes the operator's own input to agents, and changes the few config keys the web UI
+  may, within bounds in code (below). It does not lift any guard in §6: a worker prompted through it still cannot
+  merge, approve, or push outside its branch, and capacity and attempt limits still hold, at whatever value the config
+  then gives them.
 
 The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 
@@ -868,13 +869,30 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   are the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
-  editor read it; and the operator's comments on a plan's passages, in the journal. Nothing else, but the record of
-  its writes above. It cannot write config: a reload reads only the operator's own files, and a `serve.*` change
-  waits for a restart, so the listener's bind and port never change under it. A forget must carry the ticket's key
+  editor read it; and the operator's comments on a plan's passages, in the journal. It also writes the limits and
+  trust settings below, in the workspace's private file. Nothing else, but the record of its writes above. A reload
+  reads only the operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port
+  never change under it. A forget must carry the ticket's key
   typed out, checked in code, and a memory's forget its ref (`memory:42`). A grant
   allows one more run a request, with `canopy grant`'s guards. A try is the operator's, as the CLI's is: it waits for
   no `every_minutes`, hours, or `capacity.max_chores` (DESIGN §19), and only a run of the same chore already running
   refuses it.
+- Its config writes (DESIGN §12, §22, D128) are an allowlist in code, by key name, never a section's wildcard, so a key
+  added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
+  count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt
+  limits and the CI cooldown in `policy`, and `loop.interval_minutes` and `loop.idle_max_minutes`. Trust settings
+  move only toward stricter: `policy.stacking` to `"never"`, an entry removed from `trust.authorized_repliers` or
+  `trust.trusted_reviewers` (never added), `trust.rebase` to false, and `trust.commit_trailer` to true. Nothing that
+  runs a command, chooses a prompt, is read as words, or moves the listener: no `runtime.*`, `notify.*`, `chores`,
+  `paths.*`, `review.*`, `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the
+  secret, which is why trust only tightens: a replier added through a stolen session would go on steering workers after
+  a new secret ended it. It writes the workspace's private file alone (M49), never the workspace file (T7) nor the user
+  file, which serves every workspace: a key from the user file is written to the private file, where it shadows the user
+  file's for this workspace alone. It keeps the file as it was as `config.toml.bak`; refuses a private file that is a
+  symlink or not the operator's (D053's check), one tomlkit would not write back byte for byte, and one that changed
+  since the page read it; validates the result as any `canopy` command would load it; and refuses inside a tick or run
+  (`inside_run`). Each change is logged with its old and new values. A running run keeps the prompt and permissions it
+  started with, so a stricter setting reaches only runs started after it.
 
 The mock server is not such a listener: it serves a journal seeded from fixtures, on loopback for development, or
 under public host names as the web UI's demo on a host such as Vercel (D122). It holds nothing of the operator's, so it
@@ -903,7 +921,9 @@ for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
-cannot be ended alone before its 30 days: a new secret ends them all. Plain HTTP on a private address can be read on
+cannot be ended alone before its 30 days: a new secret ends them all. Whoever holds a session can raise the limits up
+to their ceilings for that workspace, and that outlives a new secret until the operator reads the private file or the
+log: the residual is spend, bounded by the ceilings, never authority. Plain HTTP on a private address can be read on
 the network (D076), transcripts included: a secret a worker's tool printed into its log is then on the network too.
 Tick now, asked again and again, runs the overseer back to back, past `loop.min_gap_minutes`, as `t` held down at the
 loop's terminal would.

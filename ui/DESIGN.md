@@ -1388,6 +1388,18 @@ sliver beside four others; and its axis names short call numbers without measuri
   opened is listed first, so nothing moves under the pointer. It is kept in `?repo=` as names joined by commas
   (`src/lib/repo-filter.ts`), replacing the history entry as a filter field does, and a row shows when it is in any of
   them. In a form (`RepoSelect`) it takes one, and picking it closes the list.
+- **A config page** (`ConfigForm`, `/settings/limits`, which Settings links to from a one-line panel so Settings stays
+  short): the keys in panels by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), two to a row on a
+  wide window and Trust across the whole row, a key no panel names in an `Other` panel. A row is the key in words over
+  its name in the file in monospace, where its value comes from, and how far the page may take it, and its control at
+  the row's end: a numeric field in `readout` type, a checkbox for a switch, and a list's entries as checkboxes to
+  clear. A switch already on its stricter side is disabled, not hidden, so the page still says what it is.
+  `capacity.repo_slots` lists only the repositories with a count of their own, a field each, and under them a repository
+  picker (`RepoSelect`) to give another one a count, so a workspace of many repositories does not get a field per
+  repository. One save bar, sticky at the page's foot so a change far down the page is never left unseen, says how many
+  changes wait, with Discard and Save, each disabled until something changed; a field that is not a whole number is
+  named in its `Notice` and keeps Save disabled. A save reads the file again, and the `Notice` keeps what the save did
+  over the fresh form.
 - **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above), under a
   ticket's reply (The answer, above), or under its form, with one line under it (`Notice`): what the action did, in
   the CLI's words, or its refusal in

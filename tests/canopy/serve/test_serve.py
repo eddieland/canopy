@@ -1179,6 +1179,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/loop/notice/clear",
         "/api/loop/reload",
         "/api/loop/tick",
+        "/api/config",
     }
     assert set(schema["paths"]) == paths
 
