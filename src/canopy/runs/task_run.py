@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, TextIO
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import (
+    attachments,
     contract,
     conversation,
     db,
@@ -284,6 +285,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     git = checkpoint.Git(ctx.runner, slot, run.repo)
     start = checkpoint.check_out(git, run.base_branch, run.branch)
     _place_report(ctx, git, run, log)
+    _place_attachments(ctx, git, run, log)
     done, text = _run_agent(ctx, run, task, out, log)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(TaskResult, text)
@@ -341,6 +343,28 @@ def _place_report(ctx: Context, git: checkpoint.Git, run: records.TaskRun, log: 
     except OSError as e:
         raise SetupError(f"{git.where}could not write the copy of the task's report: {e}") from e
     log.info("task's latest report copied in", extra={"task_run_id": run.id, "from_run": earlier.id})
+
+
+def _place_attachments(ctx: Context, git: checkpoint.Git, run: records.TaskRun, log: logs.TickAdapter) -> None:
+    """Copy the attachments the run's prompt names, and the task still holds, into the slot, which git ignores (§22).
+
+    Raises:
+        SetupError: an attachment's file is gone or changed since it was attached, so the worker gets none of them; or
+            the exclude file or a copy could not be written.
+    """
+    ref = conversation.Ref(conversation.TASK, str(run.task_id))
+    try:
+        found = attachments.copies(ctx.conn, ctx.state_dir, ref, run.started_at)
+    except attachments.AttachmentFileError as e:
+        raise SetupError(f"{e}; the worker did not start") from e
+    if not found:
+        return
+    checkpoint.ignore(git, attachments.RUN_DIR)
+    try:
+        attachments.place(Path(run.slot_path) / attachments.RUN_DIR, found)
+    except OSError as e:
+        raise SetupError(f"{git.where}could not write the attachments' copies: {e}") from e
+    log.info("task's attachments copied in", extra={"task_run_id": run.id, "attachments": len(found)})
 
 
 def _forced(git: checkpoint.Git, branch: str, start: checkpoint.Start, head: str | None) -> str:

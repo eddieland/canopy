@@ -98,6 +98,9 @@ REQUIRED_OPERATOR = ("OPERATOR_MESSAGES",)
 # Placeholders an implement's or a resume's prompt must use once the ticket has an approved plan (DESIGN §25): an older
 # override would otherwise run the work without the plan the operator approved for it.
 REQUIRED_PLAN_COPY = ("PLAN",)
+#: Placeholders a worker's or a task's prompt must use once its subject has attachments (DESIGN §22): an older override
+#: would otherwise run the work without the files the operator attached for it.
+REQUIRED_ATTACHMENTS = ("ATTACHMENTS",)
 _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 # A section that renders only while its placeholder has a value: `{{#NAME}}` ending a line, a blank line, the section,
 # a blank line, and `{{/NAME}}`, so each marker is a paragraph of its own to a Markdown linter. Not nested.
@@ -415,6 +418,21 @@ def plan_note(copy: Path, outline: Sequence[str], *, by_planner: bool = False) -
     who = _BY_PLANNER if by_planner else "the operator approved"
     lines = [f"`{copy}` is the plan {who} for this ticket, a copy written for this run alone."]
     return "\n".join([*lines, *_outline(outline)])
+
+
+def attachments_note(directory: Path, files: Sequence[tuple[str, str]]) -> str | None:
+    """Return a worker's or a task's `{{ATTACHMENTS}}`: where its copies of its subject's attachments are (DESIGN §22).
+
+    `files` are each attachment's name, which is plain (`attachments.NAME_RE`), and its size as said to a person. The
+    text is never in the prompt: the worker reads each copy as it needs it.
+
+    Returns:
+        A line naming the directory, then one per file; or None for a subject with none, which leaves the section out.
+    """
+    if not files:
+        return None
+    lines = [f"Copies written for this run alone, in `{directory}`:", ""]
+    return "\n".join([*lines, *(f"- `{directory / name}` ({size})" for name, size in files)])
 
 
 def _outline(outline: Sequence[str]) -> list[str]:
@@ -754,6 +772,8 @@ def render_worker(
         **dict.fromkeys(MEMORY_PARTS, ""),
         # A planner's word on review (DESIGN §25): empty unless dispatch rendered it with `policy.planner_may_approve`.
         "PLAN_REVIEW": "",
+        # The operator's attachments (DESIGN §22): none unless dispatch named some, which leaves the section out.
+        "ATTACHMENTS": None,
         **values,
         **_standing_values(standing_instructions(config), _worker_reader(kind, private=private)),
         "PERSONA": persona.text if persona is not None else "",
@@ -819,7 +839,8 @@ def render_task(
 ) -> str:
     """Return a one-off task's prompt (DESIGN §36) with every `{{NAME}}` replaced from `values`.
 
-    It must carry `REQUIRED_TASK`, and is held to what a worker's that commits is: `{{OPEN_PR}}` with
+    It must carry `REQUIRED_TASK`, and `REQUIRED_ATTACHMENTS` when `values` names attachments, and is held to what a
+    worker's that commits is: `{{OPEN_PR}}` with
     `runtime.pr_skill` set, `{{NOTICE}}` while a notice is in force, the standing instructions to workers once
     `paths.worker_instructions` is set, and the commit attribution the config asks for, naming `model`, the private
     worker's chosen model (`render_worker`).
@@ -828,6 +849,7 @@ def render_task(
         The rendered prompt.
     """
     values = {
+        "ATTACHMENTS": None,
         **values,
         **_standing_values(standing_instructions(config), "private"),
         "NOTICE": notice,
@@ -837,8 +859,9 @@ def render_task(
     }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill else ()
     noticed = REQUIRED_NOTICE if notice is not None else ()
+    attached = REQUIRED_ATTACHMENTS if values["ATTACHMENTS"] is not None else ()
     standing = (REQUIRED_STANDING,) if config.paths.worker_instructions is not None else ()
-    required = (*REQUIRED_TASK, *pr_skill, *noticed)
+    required = (*REQUIRED_TASK, *pr_skill, *noticed, *attached)
     return render(config, TASK, values, required=required, one_of=(*standing, _required_attribution(config)))
 
 

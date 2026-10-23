@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import hostgit, plans
+from canopy.core import attachments, hostgit, plans
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -77,11 +77,11 @@ def tidy(
     log: logs.TickAdapter,
     fields: Mapping[str, object],
 ) -> bool:
-    """Remove a plan's copy, put back the slot's `.git` file and `commondir` if they changed, and move it off `objects`.
+    """Remove a run's copies, put back the slot's `.git` file and `commondir` if changed, and move it off `objects`.
 
     The slot is moved off any object only `objects` holds. The plan's copy, `.canopy-plan.md` at the worktree's root,
-    is written for one run alone (DESIGN §25); it is ignored by git, so nothing else would remove it before the next
-    lease.
+    and the attachments' copies, `.canopy-attachments/`, are written for one run alone (DESIGN §22, §25); git ignores
+    them, so nothing else would remove them before the next lease.
 
     The slot is checked out detached at `origin/<base>`, which `_run` fetched into the shared directory before the
     worker started and a sandboxed worker cannot move. Its own refs, `ORIG_HEAD`, `FETCH_HEAD`, and its HEAD reflog,
@@ -92,6 +92,7 @@ def tidy(
         is left leased, and the object directory kept, for the operator.
     """
     _drop_copy(slot, log, fields)
+    _drop_attachments(slot, log, fields)
     if link is not None and hostgit.read_link(slot) != link:
         try:
             hostgit.restore_link(slot, link)
@@ -132,6 +133,15 @@ def _drop_copy(slot: Path, log: logs.TickAdapter, fields: Mapping[str, object]) 
     except OSError as e:
         # A directory a worker made in its place: it holds no plan canopy wrote, and the next copy refuses it.
         log.warning("plan copy not removed", extra={**fields, "error": str(e)})
+
+
+def _drop_attachments(slot: Path, log: logs.TickAdapter, fields: Mapping[str, object]) -> None:
+    """Remove the attachments' copies at the slot's root, written for one run alone (§22), never following a link."""
+    try:
+        attachments.clear(slot / attachments.RUN_DIR)
+    except OSError as e:
+        # The next run's copies are written afresh, whatever is left here.
+        log.warning("attachments' copies not removed", extra={**fields, "error": str(e)})
 
 
 def remove_objects(path: Path, log: logs.TickAdapter) -> None:

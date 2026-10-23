@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import agent_models, conversation, db, notice, pools, prompts, tasks
+from canopy.core import agent_models, attachments, conversation, db, notice, pools, prompts, tasks
 from canopy.core.vocab import RunStatus
 from canopy.infra import lock, logs, procs
 
@@ -171,6 +171,11 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
         "CONVERSATION": conversation.prompt_task_conversation(ctx.conn, task.id, run.message_id),
         "REPORT": tasks.REPORT,
         "TICKETS": _tickets(ctx, task, run.branch),
+        # Those the task held when its run started, which `_task` copies into the slot (DESIGN §22).
+        "ATTACHMENTS": prompts.attachments_note(
+            lease.path / attachments.RUN_DIR,
+            attachments.sizes(attachments.held_at(ctx.conn, _ref(task), run.started_at)),
+        ),
     }
     log_path = Path(run.log_path)
     # The private worker's chosen model, which canopy writes into its definition, for the commit trailer to name.
@@ -192,6 +197,10 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
         raise _NotStarted(str(e)) from e
     db.claim_run(ctx.conn, "task_runs", run_id, pid)
     return pid
+
+
+def _ref(task: records.Task) -> conversation.Ref:
+    return conversation.Ref(conversation.TASK, str(task.id))
 
 
 def _tickets(ctx: Context, task: records.Task, branch: str) -> str:
