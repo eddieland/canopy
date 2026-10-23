@@ -2,9 +2,10 @@
 
 Attention items are decisions with action `attention:<reason>`, recorded every tick the cause holds: by the overseer
 for what it reads in the world, and by the harness for runs that ended in a way a human must look at (`from_runs`). The
-current list is therefore the items of the latest tick whose overseer finished; an item disappears when a tick no
-longer records it. One the overseer recorded is held through a tick that did not give the overseer its subject, such as
-a ticket the harness decided, and goes once its ticket is done or stopped (`current`, DESIGN §37). A tick that could not
+current list is therefore the items of the latest `ok` tick; an item disappears when a tick no longer records it. One
+the overseer recorded is held through a tick that did not give the overseer its subject, such as a ticket the harness
+decided, or any subject in a tick that ran no overseer, and goes once its ticket is done or stopped (`current`, DESIGN
+§37, §39). A tick that could not
 run the overseer because `canopy` does not work for it adds one item of its own to that list, while it is the latest
 tick.
 
@@ -170,23 +171,22 @@ def current(conn: sqlite3.Connection) -> list[Item]:
     It is the latest `ok` tick's items, each open since the first tick of its unbroken run. An item the harness raises
     is recorded every tick its cause holds, so it is open only while the latest `ok` tick recorded it. One the overseer
     recorded is held besides through every `ok` tick that did not give the overseer its subject (`_gave`), such as a
-    ticket the harness decided there (DESIGN §37): the overseer cannot record again what it was not shown. It goes the
+    ticket the harness decided there (DESIGN §37), or one that ran no overseer at all (§39): the overseer cannot record
+    again what it was not shown. It goes the
     first tick the overseer is given its subject and leaves it out, or once its ticket is done or stopped.
     """
-    ticks = [
-        int(r[0])
-        for r in sql.execute(
-            conn,
-            sql.select("id").from_("ticks").where("status = 'ok'").order_by("id DESC").limit(HISTORY_TICKS),
-        )
-    ]
+    rows = sql.execute(
+        conn,
+        sql.select("id, overseer_ran").from_("ticks").where("status = 'ok'").order_by("id DESC").limit(HISTORY_TICKS),
+    ).fetchall()
+    ticks = [int(r[0]) for r in rows]
     if not ticks:
         return _halted(conn, None)
     by_tick = _recorded(conn, ticks)
     subjects = {i[0] for found in by_tick.values() for i, r in found.items() if r.held and i[0] is not None}
     given = _given(conn, ticks, subjects)
-    # Every `ok` tick ran the overseer.
-    ran = frozenset(ticks)
+    # A tick from before it was recorded that closed `ok` ran its overseer (DESIGN §39).
+    ran = frozenset(int(r[0]) for r in rows if r[1] != 0)
     open_items: dict[_ItemId, _Open] = {}
     for tick_id in reversed(ticks):
         now: dict[_ItemId, _Open] = {}
