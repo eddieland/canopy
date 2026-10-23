@@ -99,8 +99,13 @@ _MARKUP_RE = re.compile(r"([\\`*_~\[\]()<>|&$])")
 _PROMPT_NAME_RE = re.compile(r"\d+-(?:PROMPT|prompt)\.md")
 # What a planner's heading opens with before the ticket's title (the plan prompts' outline): `Plan: KEY`.
 _HEADING_PREFIX = re.compile(r"(?:feedback\s+)?plan(?:\s*:|\s*$)\s*", re.IGNORECASE)
-# What a planner puts between a heading's key and its title, or leaves at either end: `PROJ-1 — Title`, `Title -`.
-_EDGE_SEPARATORS = re.compile(r"^[\s\-\u2010-\u2015:,;|/·•]+|[\s\-\u2010-\u2015:,;|/·•]+$")
+# What a planner puts between a heading's key and its title, as `PROJ-1 — Title`, or leaves at its end, as `Title -`:
+# a character class's members. Each is the planner's only where a space sets it apart, so `--dry-run` keeps its own.
+_SEPARATORS = r"\-\u2010-\u2015:,;|/·•"
+# A separator a space sets apart at a title's end.
+_TRAILING_SEPARATOR = re.compile(rf"(?:\s+[{_SEPARATORS}]+)+$")
+# A heading's closing sequence: `#`s a space sets apart at its end, or the whole of it, so `C#` keeps its own.
+_CLOSING_HASHES = re.compile(r"(?:^|\s+)#+$")
 # How long before an export a file must have last changed for its stat to stand for its bytes. A file changed in the
 # same tick of the filesystem's clock as it was read can change again with the same stat, git's "racily clean" case.
 _SETTLED_NS = 2_000_000_000
@@ -937,8 +942,8 @@ def _own_title(text: str, key: str) -> str:
     """The plan's first `# ` heading, less a leading `Plan:` or `Feedback plan:` and the ticket's key.
 
     A heading of the key alone takes its title from the first line of text below it, unless that is a heading: a
-    planner can read the outline's "then the ticket's title" as the line after. Either way, the separators a planner
-    leaves at its ends, as the dash in `Plan: KEY — Title` or `Title -`, are not the title's.
+    planner can read the outline's "then the ticket's title" as the line after. A separator after the key, as the dash
+    in `Plan: KEY — Title`, is not the title's, nor is one a space sets apart at its end, as in `Title -`.
 
     Returns:
         The title, or "" when the plan has no such heading or nothing past its prefix.
@@ -947,13 +952,16 @@ def _own_title(text: str, key: str) -> str:
     at = next((i for i, line in enumerate(lines) if line.startswith("# ")), None)
     if at is None:
         return ""
-    title = _HEADING_PREFIX.sub("", lines[at][2:].strip().rstrip("#").strip(), count=1)
+    heading = _CLOSING_HASHES.sub("", lines[at][2:].strip())
+    title = _HEADING_PREFIX.sub("", heading, count=1)
     # The key alone, never the start of a longer one: `PROJ-1` stays in `PROJ-12`.
-    rest = re.sub(rf"^{re.escape(key)}(?![A-Za-z0-9])", "", title, flags=re.IGNORECASE)
+    # A separator after it only when a space or the heading's end follows: `PROJ-1 --dry-run` keeps its own.
+    keyed = rf"^{re.escape(key)}(?![A-Za-z0-9])\s*(?:[{_SEPARATORS}]+(?=\s|$))?\s*"
+    rest = re.sub(keyed, "", title, flags=re.IGNORECASE)
     if rest == title or any(c.isalnum() for c in rest):
-        return _EDGE_SEPARATORS.sub("", rest)
+        return _TRAILING_SEPARATOR.sub("", rest)
     below = next((line.strip() for line in lines[at + 1 :] if line.strip()), "")
-    return "" if below.startswith("#") else _EDGE_SEPARATORS.sub("", below)
+    return "" if below.startswith("#") else _TRAILING_SEPARATOR.sub("", below)
 
 
 def _slug(title: str) -> str:

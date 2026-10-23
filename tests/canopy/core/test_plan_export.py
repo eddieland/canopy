@@ -882,7 +882,8 @@ def test_a_title_shows_in_an_index_as_text_alone(conn: sqlite3.Connection, state
         f"# Plan: {KEY}, Export reports",
         f"# Plan: {KEY} Export reports -",
         "# Export reports \u2013",
-        f"# Plan: {KEY} -\n\n: Export reports ·",
+        f"# Plan: {KEY} -\n\nExport reports ·",
+        f"# Plan: {KEY} / Export reports - - #",
     ],
 )
 def test_an_index_shows_a_title_without_the_separators_at_its_ends(
@@ -900,6 +901,24 @@ def test_an_index_shows_a_title_without_the_separators_at_its_ends(
         f"| [{run_id}]({run_id}-PROPOSED-export-reports.md) | Export reports |"
         in (dest / KEY / "README.md").read_text()
     )
+
+
+@pytest.mark.parametrize(
+    "title",
+    ["--dry-run for export", "/healthz endpoint", "Support C#", "Port to F#", "Export a-b-", "Mount /var/"],
+)
+def test_an_index_keeps_a_title_s_own_characters_at_its_ends(
+    title: str,
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
+    proposed(conn, state_dir, f"# Plan: {KEY} {title}\n")
+    dest = tmp_path / "archive"
+
+    indexed(conn, state_dir, dest)
+
+    assert f" | {title} | " in (dest / KEY / "README.md").read_text()
 
 
 def test_a_long_title_is_cut_short_in_an_index(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
