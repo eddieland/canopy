@@ -486,7 +486,9 @@ but must be distinguishable:
 
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>`, whose name and address the operator may
-  change in their own config (`trust.commit_trailer_*`, private), or the runtime's own attribution. Never hidden: a
+  change in their own config (`trust.commit_trailer_*`, private), or the runtime's own attribution. The harness forms
+  it, never the agent: left as the default, the name credits the model canopy chose for the worker (DESIGN §13), as
+  `provider/model (canopy worker)`, and a name the operator set is used as set. Never hidden: a
   worker never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
   private), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
   that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can

@@ -1,7 +1,7 @@
 """A worker's or a planner's model (DESIGN §13, Each agent's model): `runtime.models`' for its agent, written into the
 agent's definition, recorded on the run, and looked up in the runtime's list before the run starts, never fallen back
 from: a model the list lacks, or a list that cannot be read, refuses the run with an attention item, spending no attempt
-and leasing no slot."""
+and leasing no slot. canopy's commit trailer names it, while the operator has not named the trailer themselves."""
 
 import json
 from pathlib import Path
@@ -35,6 +35,8 @@ def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
     # The list is read in the workspace root, not in the run's slot, whose own runtime config could change it.
     assert calls(opencode_state) == [(["models"], str(scenario.env.root))]
     assert f"  model {MODEL}  log {run.row['log_path']}\n" in scenario.operator("status").out
+    # Its commits credit the model that did the work (TRUST_MODEL T5).
+    assert f"`Co-authored-by: {MODEL} (canopy worker) <noreply@canopy.invalid>`" in run.prompt_file.read_text()
 
 
 def test_a_run_with_no_model_chosen_goes_to_the_runtimes_default_and_reads_no_list(
@@ -46,6 +48,22 @@ def test_a_run_with_no_model_chosen_goes_to_the_runtimes_default_and_reads_no_li
     assert run.row["model"] is None
     assert calls(opencode_state) == []
     assert "  model " not in scenario.operator("status").out
+    assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>`" in run.prompt_file.read_text()
+
+
+def test_a_trailer_name_the_operator_set_is_used_as_set_whatever_the_model(
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    listed(opencode_state, MODEL)
+    scenario.configures(
+        runtime={"models": {"worker": MODEL}},
+        trust={"commit_trailer_name": "Acme Agent", "commit_trailer_email": "agent@acme.test"},
+    )
+    prompt = scenario.run(worker=pushes()).prompt_file.read_text()
+    assert "`Co-authored-by: Acme Agent <agent@acme.test>`" in prompt
+    assert MODEL not in prompt
 
 
 def test_each_agents_model_reaches_its_runs_and_no_other(
