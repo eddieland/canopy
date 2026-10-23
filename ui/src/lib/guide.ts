@@ -19,6 +19,7 @@ import pullRequests from '@/guide/pull-requests.md?raw'
 import runs from '@/guide/runs.md?raw'
 import settings from '@/guide/settings.md?raw'
 import signingIn from '@/guide/signing-in.md?raw'
+import slack from '@/guide/slack.md?raw'
 import tasks from '@/guide/tasks.md?raw'
 import tickets from '@/guide/tickets.md?raw'
 import ticks from '@/guide/ticks.md?raw'
@@ -99,6 +100,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['ticks', ticks],
             ['chores', chores],
             ['memory', memory],
+            ['slack', slack],
             ['settings', settings],
         ],
     },

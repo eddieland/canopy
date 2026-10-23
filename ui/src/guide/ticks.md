@@ -63,8 +63,8 @@ rest of it spends like the start did. The bar fills with the budget spent, and t
 the month you are, so a bar past its mark is spending faster than the budget allows. It reads **On budget**, then
 **Headed over** once the pace passes the budget, then **Over budget**. The pace waits for the month's first day to end,
 since one morning's runs would otherwise forecast something dramatic. Nothing stops at the budget: it's a number to
-watch, not a brake. A sink that takes `loop` events hears once when the month reaches it, and again only if you raise
-the budget and the month reaches that too.
+watch, not a brake. A [sink](slack#choosing-what-it-hears) that takes `loop` events hears once when the month
+reaches it, and again only if you raise the budget and the month reaches that too.
 
 Want a heads-up before the bill, not after? Add alerts at other percentages of the budget, `50, 80` say, or `150` for
 when the month really gets away from you. Each is sent once a month, as the spend reaches it, and the ones short of the
