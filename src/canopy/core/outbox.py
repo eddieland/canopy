@@ -25,6 +25,8 @@ CHORES = "chores"
 REVIEWS = "reviews"
 #: A one-off task's runs (DESIGN §36): a group of its own, which no sink takes unless the operator lists it.
 TASKS = "tasks"
+#: What canopy did with a reply it read from Slack (DESIGN §20): a mention it recorded, and any reply it refused.
+REPLIES = "replies"
 #: The kind of the event that says the month's spend reached one of its budget's alerts.
 BUDGET_REACHED = "loop.budget_reached"
 SUMMARY_LIMIT = 300
@@ -135,6 +137,29 @@ class TaskEnded(TypedDict):
     message: int | None
     #: The tickets the run filed that canopy recorded against the task, at most `MAX_FOLLOW_UPS`, in its result's order.
     tickets: list[str]
+
+
+class ReplyRecorded(TypedDict):
+    """A `reply.recorded` event's fields: a Slack mention of canopy recorded as the operator's message on a ticket."""
+
+    ticket: str
+    #: The operator message it recorded.
+    message: int
+    #: The Slack message's `ts`.
+    ts: str
+    body: str
+
+
+class ReplyRefused(TypedDict):
+    """A `reply.refused` event's fields: a reply read from Slack that canopy took nothing from, and why."""
+
+    #: The ticket it named, or None for a mention that named none.
+    ticket: str | None
+    #: The Slack message's `ts`, which a sink answers under.
+    ts: str
+    #: The guard that refused it, as `canopy reply` names one, or `no_ticket`.
+    guard: str
+    reason: str
 
 
 class LoopFailing(TypedDict):
@@ -397,6 +422,30 @@ def task_ended(
         "tickets": list(tickets[:MAX_FOLLOW_UPS]),
     }
     return Event(TASKS, "task.ended", fields)
+
+
+def reply_recorded(config: Config, *, key: str, ts: str, body: str) -> Callable[[int], Event | None]:
+    """Return what builds a `reply.recorded` event from the operator message's id, for `conversation.reply`."""
+
+    def build(message: int) -> Event | None:
+        if not config.notify.takes(REPLIES):
+            return None
+        fields: ReplyRecorded = {"ticket": key, "message": message, "ts": ts, "body": cut(body, SUMMARY_LIMIT)}
+        return Event(REPLIES, "reply.recorded", fields)
+
+    return build
+
+
+def reply_refused(config: Config, *, key: str | None, ts: str, guard: str, reason: str) -> Event | None:
+    """A `reply.refused` event, or None if no sink takes replies.
+
+    Returns:
+        The event.
+    """
+    if not config.notify.takes(REPLIES):
+        return None
+    fields: ReplyRefused = {"ticket": key, "ts": ts, "guard": guard, "reason": cut(reason, DETAIL_LIMIT)}
+    return Event(REPLIES, "reply.refused", fields)
 
 
 def loop_failing(count: int, status: str, tick_id: int, log: str) -> Event:

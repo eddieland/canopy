@@ -141,8 +141,8 @@ operator's programs. This generalizes `notify.cmd` (§14), which stays and behav
 
 A closed set, written by the harness from the journal, in groups: `attention` (an item opened or resolved), `runs` (a
 worker started or ended, a plan proposed or approved by its planner, §25, follow-ups filed, §18), `chores` (§19),
-`reviews` (§21), `tasks` (a task's run ended, §36), and `loop` (ticks failing and recovering, a sink failing, the
-month's spend reaching its budget or one of its alerts). Each
+`reviews` (§21), `tasks` (a task's run ended, §36), `replies` (a reply read from Slack recorded or refused, below),
+and `loop` (ticks failing and recovering, a sink failing, the month's spend reaching its budget or one of its alerts). Each
 carries only bounded fields, its text on one line. No plan event carries the plan's text. `run.ended` carries a
 `blocked` run's question, since the needs-human label is not an attention item.
 
@@ -212,7 +212,11 @@ Lightly two-way, with no listener: a listener must follow TRUST_MODEL T8 (D055),
 inbound internet access, stays out. Reading a thread is an outbound call, as posting is, so a `slack` source (§30)
 reads the replies in the sink's ticket threads on the loop's polls, and a reply from a Slack id the operator listed is
 their message on the ticket, as `canopy reply` records one (§22). The sink keeps each ticket's threads a week, so a
-reply in yesterday's still reaches it. Only replies on tickets: plans, starts, and the other verbs stay in canopy.
+reply in yesterday's still reaches it. A ticket with no thread is answered by mentioning canopy's bot in the channel,
+then the ticket's key: `@canopy PROJ-123 use the staging config`. Sinks that take `replies` hear what came of it, so
+the sink acknowledges a mention in the ticket's thread and answers a refused reply under the operator's own message,
+once each; a reply in a thread needs no acknowledgement. Only replies on tickets: plans, starts, and the other verbs
+stay in canopy.
 
 ### Trust model changes
 

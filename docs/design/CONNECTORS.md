@@ -21,7 +21,8 @@ the measurement read.
 ### Sources
 
 There is at most one source of each kind, `tracker`, `vcs`, `artifacts` (an artifact store's comment feed, §38), and
-`slack` (the replies in the Slack sink's ticket threads, §20), each a command run with no shell (§20) under a timeout.
+`slack` (the operator's replies in the Slack sink's threads and mentions of its bot, §20), each a command run with
+no shell (§20) under a timeout.
 Every `connect.*` key is private (§12, TRUST_MODEL T7), since each runs a command with the operator's credentials. The
 `vcs` source defaults to canopy's own programs (§29), so PRs are observed with nothing configured. There is no default
 `tracker` source, since the harness never branches on `tracker.provider` (§17); without one, tickets are not observed,

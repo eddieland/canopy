@@ -282,8 +282,9 @@ cmd = ""
 #
 # And, with the Slack sink on a bot token and --threads, a source that reads the replies in its ticket threads (ROADMAP
 # M64). A reply from an id in `operators` is your message on the ticket, as `canopy reply` records one: list only your
-# own Slack member id. The bot also needs channels:history (groups:history for a private channel). --channel is the
-# sink's own, by id.
+# own Slack member id. So is `@canopy PROJ-123 your reply` in the channel, for a ticket with no thread; add "replies"
+# to the sink's events to see what came of it. The bot also needs channels:history (groups:history for a private
+# channel). --channel is the sink's own, by id.
 # [connect.sources.slack]
 # kind = "slack"
 # cmd = "canopy-connect-slack --channel C0123ABCD"
