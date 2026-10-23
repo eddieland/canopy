@@ -37,11 +37,14 @@ Below:
 
 - **Work**: the ticket's phase, its branch, each PR with its own phase (a ticket that spans repositories has one per
   repository), what the ticket has cost so far, and the persona each of its agents writes in next and the model it
-  runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model).
+  runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model). Once more than
+  one model has served the ticket, a line under its total cost splits it by model, with `none` for runs whose
+  sessions canopy hasn't read: the canary's bill, itemized.
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
-- **Runs**: every run on the ticket, each linking to its transcript ([Runs](runs#a-runs-page)).
+- **Runs**: every run on the ticket, each linking to its transcript ([Runs](runs#a-runs-page)), and naming the model
+  that served it beside its session.
 - **Decisions**: what each tick decided about the ticket, and why, in the overseer's words. A `refused` decision names
   the [guard](how-the-loop-works#guards) that stopped it, and an `attention` decision the reason it reached your list.
 - **Memory**, while ticket notes are on: the notes its runs left for the runs after them. It arrives folded, since
@@ -150,9 +153,9 @@ the runtime's list is read once more, so the button shows your pick with a trail
 green **saved** beside it, in the row itself so nothing below jumps. It stays until the ticket's models change again.
 The override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
 **Clear the override**. That is the canary: one ticket on the new model, the rest on the one you trust, and
-[the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run's page names the model
-it asked for while it works, then the model that served it, and both when they differ, so you can check the canary
-actually sang.
+[the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run names the model it
+asked for while it works, then the model that served it, and both when they differ, on its page and in the ticket's
+Runs panel, so a canary ticket reads straight down the panel and you can check the canary actually sang.
 
 An override names the model alone. If your config runs an agent at a variant, such as `openai/gpt-5@high`, the menu
 shows it greyed out as **config's, with a variant**, and offers `openai/gpt-5` itself: the variant, a reasoning effort,

@@ -34,6 +34,11 @@ function run(fields: Partial<Run>): Run {
     return { ...BLOCKED, ...fields }
 }
 
+// A run one model served whole.
+function servedBy(id: number, model: string): Run {
+    return run({ id, models: { status: 'found', models: [{ model, replies: 3, cost_usd: 0.1 }], error: null } })
+}
+
 describe('RunsTable', () => {
     it('names each run’s ticket and opens its page, and the run’s own', async () => {
         await renderRuns([RUNNING])
@@ -80,6 +85,49 @@ describe('RunsTable', () => {
         const more = screen.getByText('+2 more worktrees')
         expect(tipOf(more)).toBe('the worktrees it holds:\nw/1\nw/2\nw/3\nw/4\nw/5')
     })
+
+    it('names each run’s model without its provider, +1 for a switch, each whole in its tip', async () => {
+        const OPUS = { model: 'anthropic/claude-opus-4-1', replies: 23, cost_usd: 1.65 }
+        const SONNET = { model: 'anthropic/claude-sonnet-4-5', replies: 1, cost_usd: 0.66 }
+        const split = run({ id: 43, models: { status: 'found', models: [OPUS, SONNET], error: null } })
+        await renderRuns([BLOCKED, split], { ticket: false })
+        const one = within(screen.getByTestId('run-42')).getByTestId('run-model')
+        expect(one.textContent).toBe('model claude-sonnet-4-5')
+        expect(one.className).toContain('text-muted-foreground')
+        const two = within(screen.getByTestId('run-43')).getByTestId('run-model')
+        expect(two.textContent).toBe('model claude-opus-4-1 +1')
+        expect(tipOf(two)).toBe(
+            'anthropic/claude-opus-4-1 $1.65, 23 replies\nanthropic/claude-sonnet-4-5 $0.66, 1 reply',
+        )
+    })
+
+    it('keeps the provider of a model another provider names alike', async () => {
+        await renderRuns([servedBy(43, 'openai/gpt-5'), servedBy(44, 'azure/gpt-5'), BLOCKED])
+        const named = screen.getAllByTestId('run-model').map((model) => model.textContent)
+        expect(named).toEqual(['model openai/gpt-5', 'model azure/gpt-5', 'model claude-sonnet-4-5'])
+    })
+
+    it('names the model canopy asked for until the session is read, else none, and why in its tip', async () => {
+        await renderRuns([RUNNING, run({ id: 43, model: 'anthropic/claude-opus-4-1', models: RUNNING.models })])
+        const none = within(screen.getByTestId('run-41')).getByTestId('run-model')
+        expect(none.textContent).toBe('model none')
+        expect(tipOf(none)).toBe('none: read from its session once it ends')
+        const asked = within(screen.getByTestId('run-43')).getByTestId('run-model')
+        expect(asked.textContent).toBe('asked claude-opus-4-1')
+        expect(tipOf(asked)).toBe('asked anthropic/claude-opus-4-1, none served: read from its session once it ends')
+    })
+
+    it('says what served and what canopy asked for, as needing a look, when they differ', async () => {
+        await renderRuns([run({ model: 'anthropic/claude-opus-4-1' })])
+        const model = screen.getByTestId('run-model')
+        expect(model.textContent).toBe('model claude-sonnet-4-5, asked claude-opus-4-1')
+        expect(model.className).toContain('text-status-blocked')
+    })
+
+    it('names no model where its page sends none and canopy asked for none', async () => {
+        await renderRuns([run({ models: null })])
+        expect(screen.queryByTestId('run-model')).toBeNull()
+    })
 })
 
 describe('SubjectRunsTable', () => {
@@ -106,6 +154,11 @@ describe('SubjectRunsTable', () => {
         // An earlier run says the first line of what it said; its page has the rest.
         expect(earlier.getByText('Asked about the color.')).toBeDefined()
         expect(screen.queryByText(/The rest of what it said/u)).toBeNull()
+        // Each names its model too, so a canary ticket's runs read down by model.
+        expect(earlier.getAllByTestId('run-model').map((model) => model.textContent)).toEqual([
+            'model claude-sonnet-4-5',
+            'model claude-sonnet-4-5',
+        ])
 
         fireEvent.click(hide)
         expect(screen.queryByRole('link', { name: 'run:46' })).toBeNull()
