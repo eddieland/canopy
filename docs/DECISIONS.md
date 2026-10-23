@@ -326,6 +326,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - Every definition denies `webfetch`, `websearch`, `codesearch`. Web content is untrusted text; bash still reaches the
   network (a T1 residual).
+- And `execute`, OpenCode 2's code mode, whose code can make HTTP requests; an MCP server an agent needs is set to
+  `codemode: false` rather than reached through it (the operator, 2026-10-23).
 - Revisit: when workers are sandboxed with egress controls, or if missing lookups measurably hurt runs.
 
 ## D079. The web UI is a single-page app in `ui/`

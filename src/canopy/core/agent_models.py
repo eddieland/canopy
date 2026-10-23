@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
+    from canopy.core.config import Config
     from canopy.infra import procs
 
 #: Each key of `[runtime.models]`, the role it chooses a model for, and the agents that role is, by the names the
@@ -110,8 +111,37 @@ def chore_template(template: str, chore: str, model: str | None) -> str:
     return template if model is None else invocation.with_agent(template, agents.chore_agent(chore))
 
 
-def check(runner: procs.Runner, root: Path, model: Model) -> None:
+def chores(config: Config) -> dict[str, str]:
+    """Return each chore's own `model`, by the chore's name, for the chores that have one.
+
+    Returns:
+        The models, as config spells them.
+    """
+    return {name: chore.model for name, chore in config.chores.items() if chore.model is not None}
+
+
+def of_run(config: Config, template: str, model: str | None) -> dict[str, Model]:
+    """Return each agent's model by its name for a run of `template` recorded as asking for `model`.
+
+    That is `config`'s, but for the agent the template runs, which gets `model`, or none for None: a run renders the
+    model it recorded, which a ticket's override may have chosen in place of config's, so what is recorded is what runs
+    (DESIGN §13).
+
+    Returns:
+        Each agent with a model, by its name, for the runtime to write into the run's definitions.
+    """
+    found = by_agent(config.runtime.models, chores(config))
+    agent = invocation.agent_of(template)
+    if agent is None:
+        return found
+    found.pop(agent, None)
+    return found | ({agent: parse(model)} if model is not None else {})
+
+
+def check(runner: procs.Runner, root: Path, model: Model, *, chosen: str = "in runtime.models") -> None:
     """Refuse `model` unless the runtime, started in the workspace root `root`, lists it, and its variant if it has one.
+
+    `chosen` says where the model was chosen, to name it in a refusal: in `runtime.models`, or by a ticket's override.
 
     Raises:
         ModelError: (`MISSING`) the runtime does not list the model or its variant, or (`LIST_FAILED`) its list could
@@ -121,13 +151,13 @@ def check(runner: procs.Runner, root: Path, model: Model) -> None:
     if found.error is not None:
         raise ModelError(
             LIST_FAILED,
-            f"could not look up the model {model.name} chosen in runtime.models: {found.error}. Nothing ran on another "
+            f"could not look up the model {model.name} chosen {chosen}: {found.error}. Nothing ran on another "
             "model; the work resumes once the list can be read",
         )
     if model.id not in found.models:
         raise ModelError(
             MISSING,
-            f"{invocation.NAME} does not list the model {model.id} chosen in runtime.models, so a run on it would fail "
+            f"{invocation.NAME} does not list the model {model.id} chosen {chosen}, so a run on it would fail "
             "before its first call; nothing ran on another model. Choose a model it lists, or set up its provider",
         )
     if model.variant is not None and model.variant not in found.variants.get(model.id, ()):
@@ -136,7 +166,7 @@ def check(runner: procs.Runner, root: Path, model: Model) -> None:
         has = f"it lists {some}" if listed else "it lists none for it"
         raise ModelError(
             MISSING,
-            f"{invocation.NAME} lists the model {model.id} chosen in runtime.models but not its variant "
+            f"{invocation.NAME} lists the model {model.id} chosen {chosen} but not its variant "
             f"{model.variant} ({has}), and would run it at its default unseen; nothing ran. Choose a variant it lists",
         )
 

@@ -241,7 +241,8 @@ Agent definitions ship in `agents/`:
 Every definition but the overseer's denies canopy's own tools, `canopy_*`; a chore's then allows its history, and the
 reviewer's and the planner's canopy's read-only git tools, each by exact name (§27).
 
-None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
+None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch`, and code mode's `execute`,
+whose code can fetch, so an MCP server an agent needs is set to `codemode: false` (TRUST_MODEL T1, D077).
 A tool an agent never calls is denied whole, since the runtime sends every schema it allows on every call and none it
 denies: GitHub's tools no prompt asks for, by name, as the server's own name is the operator's, and its issue tools,
 from both workers and the planner too, off a GitHub tracker. A pattern that would take one of the tracker's own tools
@@ -302,10 +303,11 @@ what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 
-Built as far as each agent's default in `[runtime.models]`, a chore's own model, variants, the check of a model and
-its variant before a worker or plan run, and recording what served (REQUIREMENTS R23). The ticket's override, the web
-UI's control, and the check before a review, a chore, or a tick's overseer are still to come; until then such a run on
-an unlisted model fails as it starts, and one at an unlisted variant runs at the model's default.
+Built as far as each agent's default in `[runtime.models]`, a chore's own model, variants, the ticket's override
+from `canopy model` or the ticket's page, the check of a model and its variant before a worker or plan run, and
+recording what served (REQUIREMENTS R23). The check before a review, a chore, or a tick's overseer is still to come;
+until then such a run on an unlisted model fails as it starts, and one at an unlisted variant runs at the model's
+default.
 
 The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
@@ -316,7 +318,8 @@ promises:
   chore's default (§19). A model may name the variant it runs at, such as a reasoning effort, as
   `provider/model@variant`. `runtime.models` is private (T7): a model
   is what the operator's spend buys, and its provider is sent the ticket and the code. The override is set only by the
-  operator's `canopy model`, refused inside an agent run (T1); the overseer, a dispatch, and ticket text choose none.
+  operator's `canopy model` or the ticket's page, through one function refused inside an agent run (T1); the
+  overseer, a dispatch, and ticket text choose none.
 - **What is recorded is what served.** No event names the model a call went to, so canopy reads each run's session
   from the runtime's own record once the run ends: the process that ran it reads it as it closes the run, and the wait
   after a live tick reads the rest, one at a time, never-read runs the newest first, past ones among them. A read

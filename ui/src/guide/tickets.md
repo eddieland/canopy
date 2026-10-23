@@ -36,8 +36,8 @@ ticket's comments stay on the tracker, and a reply you send from here stays in c
 Below:
 
 - **Work**: the ticket's phase, its branch, each PR with its own phase (a ticket that spans repositories has one per
-  repository), what the ticket has cost so far, and the persona each of its agents writes in next. See
-  [Choosing a persona](#choosing-a-persona).
+  repository), what the ticket has cost so far, and the persona each of its agents writes in next and the model it
+  runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model).
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
@@ -131,3 +131,20 @@ an override on that row trades them for its one.
 A persona changes voice, never a guard. If its file is gone by the time a run starts, that run is refused rather than
 run in some other voice, its row says why in red, and the ticket lands on your attention list. Put the file back, or
 pick another.
+
+## Choosing a model
+
+Under the personas, the **models** row names, for each of the same three agents, the model its next run goes to. One
+this ticket overrides is marked **override**; hover an agent, or open its menu, to see where the others come from,
+`[runtime.models]` in your config or nothing, which leaves it to the runtime's own default.
+
+Open an agent's menu there to set this ticket's override, as `canopy model KEY MODEL --agent AGENT` does. The menu
+asks the runtime for its models each time it opens, the same list `canopy models` prints, so it may take a moment to
+fill. The override holds for every run of that agent on this ticket, a `resume` after review comments included,
+until you pick **Clear the override**. That is the canary: one ticket on the new model, the rest on the one you
+trust, and [the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run's page names
+the model that served it, so you can check the canary actually sang.
+
+The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
+override names drops off the runtime's list before the next run, that run is refused rather than sent to another
+model, and the ticket lands on your attention list as `model_missing`. Pick another, or set its provider up again.
