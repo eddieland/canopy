@@ -75,6 +75,8 @@ def test_sync_leaves_a_clone_with_anything_to_lose_where_it_is(
             git("checkout", "--quiet", "--detach", cwd=clone)
         case _:
             git("remote", "set-head", "origin", "--delete", cwd=clone)
+            # Since git 2.48 a fetch makes a missing origin/HEAD again, unless the clone says not to.
+            git("config", "remote.origin.followRemoteHEAD", "never", cwd=clone)
     before = head(ws, "api")
 
     assert main(["workspace", "sync"]) == 0
