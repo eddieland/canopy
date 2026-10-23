@@ -6,7 +6,9 @@ clone's top level with `paths.plan_archive_workspace_dir` off (`plan_export`), e
 README.md indexing each ticket's plans and every ticket, commits what changed there and nothing else, under a message
 naming each file it adds or changes, and pushes the clone's branch to its upstream. At the top level, "there" is what
 the export wrote (`plan_export.owned`): each planned ticket's directory, and the index of every ticket while it is
-canopy's, so the operator's own files beside them are never committed. A dry run only reads the clone.
+canopy's, so the operator's own files beside them are never committed. When the upstream refuses the push for commits
+the clone lacks, as another clone pushed, they are fetched, this clone's commits rebased onto them, and the push made
+again, so a push is always a fast-forward. A dry run only reads the clone.
 Either way the tick raises `archive_unpushed` while the archive is not all on its upstream, so a push that failed is
 retried each live tick and the operator sees why until one succeeds. A tick writes at most `PER_TICK` files, so a long
 history goes in over several ticks, each commit and push bounded, and the item stays open until it all has.
@@ -123,8 +125,35 @@ def _commit_and_push(
         pushed = git.run("push", "--quiet")
         if not pushed.ok:
             log.warning("plan archive not pushed", extra={"error": pushed.stderr.strip()[:_MAX_ERROR]})
-            return git.failed("push", pushed)
+            return _catch_up(git, log, pushed)
     return None
+
+
+def _catch_up(git: _Git, log: logs.TickAdapter, refused: procs.Result) -> str | None:
+    """Rebase the branch onto commits its upstream has that the clone lacks, then push again, after a refused push.
+
+    Only the fetch tells canopy whether the upstream moved, so a push refused for another reason, or an upstream that
+    cannot be reached, keeps the push's own failure. A rebase that cannot finish, for a conflict or the operator's own
+    changes in the clone, is aborted, so the clone is left as it was.
+
+    Returns:
+        Why the archive is not pushed, or None when the second push succeeded.
+    """
+    fetched = git.run("fetch", "--quiet")
+    if not fetched.ok or not git.behind():
+        return git.failed("push", refused)
+    # Never the operator's autostash: changes of theirs in the clone refuse the rebase, rather than being set aside.
+    rebased = git.run("rebase", "--quiet", "--no-autostash", "@{upstream}")
+    if not rebased.ok:
+        log.warning("plan archive not rebased", extra={"error": rebased.stderr.strip()[:_MAX_ERROR]})
+        if git.rebasing():
+            aborted = git.run("rebase", "--abort")
+            if not aborted.ok:
+                return f"{git.failed('rebase --abort', aborted)}, so the clone is left mid-rebase"
+        return f"its upstream has commits the clone lacks, and {git.failed('rebase', rebased)}"
+    log.info("plan archive rebased onto its upstream", extra={"clone": str(git.clone)})
+    pushed = git.run("push", "--quiet")
+    return None if pushed.ok else git.failed("push", pushed)
 
 
 def _stage(git: _Git, place: _Place, paths: Sequence[str], removed: Sequence[str]) -> str | None:
@@ -325,8 +354,24 @@ class _Git:
         Returns:
             The count, or None when git cannot tell, as for a branch with no upstream.
         """
-        counted = self.run("rev-list", "--count", "@{upstream}..HEAD")
-        return int(counted.stdout.strip()) if counted.ok and counted.stdout.strip().isdigit() else None
+        return self._count("@{upstream}..HEAD")
+
+    def behind(self) -> int | None:
+        """How many commits the upstream has that HEAD does not, as git last fetched it.
+
+        Returns:
+            The count, or None when git cannot tell, as for a branch with no upstream.
+        """
+        return self._count("HEAD..@{upstream}")
+
+    def rebasing(self) -> bool:
+        """Whether a rebase stopped in the clone, by either of git's backends.
+
+        Returns:
+            True while one waits to be continued or aborted.
+        """
+        found = self.run("rev-parse", "--git-path", "rebase-merge", "--git-path", "rebase-apply")
+        return found.ok and any((self.clone / path).exists() for path in found.stdout.splitlines())
 
     def failed(self, step: str, result: procs.Result) -> str:
         """An item's detail for a git step that failed: what git said, cut short.
@@ -338,3 +383,12 @@ class _Git:
         if result.timed_out:
             said = f"timed out after {_GIT_TIMEOUT_SECONDS}s"
         return f"git {step} in {self.clone} failed: {said}"
+
+    def _count(self, revisions: str) -> int | None:
+        """How many commits `revisions` names.
+
+        Returns:
+            The count, or None when git cannot tell.
+        """
+        counted = self.run("rev-list", "--count", revisions)
+        return int(counted.stdout.strip()) if counted.ok and counted.stdout.strip().isdigit() else None

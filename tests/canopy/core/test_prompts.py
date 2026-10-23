@@ -373,6 +373,39 @@ def test_shipped_prompts_that_commit_name_the_configured_trailer(
     assert "canopy.invalid" not in text
 
 
+@pytest.mark.parametrize("private", [False, True])
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_the_default_trailer_names_the_chosen_model_and_a_set_name_stays_as_set(
+    canopy_env: CanopyEnv,
+    kind: str,
+    *,
+    private: bool,
+) -> None:
+    values = {**PROMPT_VALUES, "CONVERSATION": "None."}
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    text = prompts.render_worker(cfg, kind, values, private=private, model="provider/model-a")
+    assert "`Co-authored-by: provider/model-a (canopy worker) <noreply@canopy.invalid>`" in text
+    # The operator's name is theirs: a chosen model does not change it.
+    with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    text = prompts.render_worker(cfg, kind, values, private=private, model="provider/model-a")
+    assert "`Co-authored-by: Acme Agent <agent@acme.test>`" in text
+    assert "model-a" not in text
+
+
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_with_a_chosen_model_an_override_spelling_out_the_default_trailer_still_renders(
+    canopy_env: CanopyEnv,
+    kind: str,
+) -> None:
+    # The trailer it spells out still credits canopy's worker, if not its model: no reason to refuse the run.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add the canopy worker trailer\n")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert prompts.render_worker(cfg, kind, PROMPT_VALUES, model="provider/model-a").startswith("Work PROJ-1")
+
+
 @pytest.mark.parametrize("kind", prompts.COMMITS)
 def test_with_a_custom_trailer_an_override_must_name_it(canopy_env: CanopyEnv, kind: str) -> None:
     # An override that still spells out the default trailer would credit commits to it: fail closed.

@@ -47,7 +47,7 @@ from pydantic import (
     model_validator,
 )
 
-from canopy.core import bash_allows, chore_result, contract, hostgit
+from canopy.core import agent_models, bash_allows, chore_result, contract, hostgit
 from canopy.core.vocab import MemoryMode, PoolKind, ReplyMode
 from canopy.infra import procs
 from canopy.runtime import agents, invocation
@@ -308,6 +308,30 @@ def _setup_command(value: str) -> str:
     return value
 
 
+def _no_model(*roles: str, run_args: bool = False) -> AfterValidator:
+    """Refuse a template, prefix, or suffix that passes the runtime a model (DESIGN §13).
+
+    canopy writes each agent's model into its definition, from `runtime.models`, and a model on the command line would
+    beat it unseen, so a run would record one model and run on another. `roles` are the keys of `runtime.models` to set
+    instead. With `run_args`, every word is an argument of the agent's run, as a suffix's are.
+
+    Returns:
+        The validator.
+    """
+    keys = " or ".join(f"runtime.models.{role}" for role in roles)
+
+    def check(value: str) -> str:
+        found = invocation.model_option(shlex.split(value), run_args=run_args)
+        if found is not None:
+            raise ValueError(
+                f"must not pass a model ({found!r}): canopy writes the model into the agent's definition, and one "
+                f"passed here would override it unseen. Set {keys} instead",
+            )
+        return value
+
+    return AfterValidator(check)
+
+
 def _wrapper(value: str) -> str:
     # `runtime.worker_cmd_prefix` or `worker_cmd_suffix`. It may name `{definitions_dir}` and `{title}`, replaced as in
     # the template it wraps, but the prompt is that template's to place, exactly once (D023).
@@ -355,6 +379,9 @@ UserPath = Annotated[Path, AfterValidator(_user_path)]
 PersonaName = Annotated[StrictStr, AfterValidator(_persona_name)]
 #: One of canopy's agents `runtime.allow_bash` names, and the commands it allows that agent (`canopy.core.bash_allows`).
 BashRole = Annotated[str, AfterValidator(bash_allows.check_role)]
+#: One of canopy's agents `runtime.models` names, and the model it chooses for that agent (`canopy.core.agent_models`).
+ModelRole = Annotated[str, AfterValidator(agent_models.check_role)]
+ModelId = Annotated[StrictStr, AfterValidator(agent_models.check_model)]
 BashAllows = Annotated[
     tuple[Annotated[StrictStr, AfterValidator(bash_allows.check_pattern)], ...],
     AfterValidator(bash_allows.check_patterns),
@@ -637,29 +664,31 @@ def _default_cmd(agent: str) -> str:
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
-    overseer_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.OVERSEER)
-    #: The overseer's temperature, or -1 to set none and leave the model's own: set -1 when `overseer_cmd` names a
+    overseer_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("overseer")] = _default_cmd(agents.OVERSEER)
+    #: The overseer's temperature, or -1 to set none and leave the model's own: set -1 when the overseer runs on a
     #: model that refuses one, such as OpenAI's reasoning models.
     overseer_temperature: Annotated[Temperature, Scope.PRIVATE] = 0.1
-    worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.WORKER)
+    worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("worker")] = _default_cmd(agents.WORKER)
     # A private ticket's worker: its own agent, which cannot write to the tracker (DESIGN §22). Shares the worker's
     # timeout.
-    private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PRIVATE_WORKER)
+    private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("worker")] = _default_cmd(
+        agents.PRIVATE_WORKER,
+    )
     # The planner is its own agent, with no edit or shell tools and only the tracker's read tools (DESIGN §25); it
     # shares the worker's timeout.
-    plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PLANNER)
+    plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("planner")] = _default_cmd(agents.PLANNER)
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
-    chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.CHORE)
-    # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
-    review_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.REVIEWER)
+    chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("chore")] = _default_cmd(agents.CHORE)
+    # The reviewer; running it on a different model from the worker's, `models.reviewer`, is recommended (DESIGN §21).
+    review_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("reviewer")] = _default_cmd(agents.REVIEWER)
     #: The reviewer's temperature, or -1, the default, to set none and leave the model's own. The reviewer is meant to
     #: run on another model than the worker's (DESIGN §21), and some, such as OpenAI's reasoning models, refuse a
-    #: request that sets one; set a low one when `review_cmd` names a model that takes it.
+    #: request that sets one; set a low one when the reviewer runs on a model that takes it.
     review_temperature: Annotated[Temperature, Scope.PRIVATE] = NO_TEMPERATURE
     # Words before and after each command a worker run starts (`worker_cmd`, `private_worker_cmd`, `plan_cmd`), such as
-    # a sandbox wrapper or a model option, so one key covers all three (DESIGN §12).
-    worker_cmd_prefix: Annotated[Wrapper, Scope.PRIVATE] = ""
-    worker_cmd_suffix: Annotated[Wrapper, Scope.PRIVATE] = ""
+    # a sandbox wrapper, so one key covers all three (DESIGN §12). Neither may pass a model: `models` chooses it.
+    worker_cmd_prefix: Annotated[Wrapper, Scope.PRIVATE, _no_model("worker", "planner")] = ""
+    worker_cmd_suffix: Annotated[Wrapper, Scope.PRIVATE, _no_model("worker", "planner", run_args=True)] = ""
     review_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 45
@@ -673,6 +702,11 @@ class Runtime(Section):
     #: Commands an agent may run beyond its own bash rules, by its role: the overseer's, the planner's, and the workers'
     #: (DESIGN §13). Private: it widens what an agent's shell reaches (TRUST_MODEL T1, T7).
     allow_bash: Annotated[dict[BashRole, BashAllows], Scope.PRIVATE] = {}
+    #: Each agent's model, `provider/model`, by its role: `worker` (both workers, and a task's runs), `planner`,
+    #: `reviewer`, `overseer`, and `chore`. canopy writes it into the agent's definition; an agent not named runs on the
+    #: runtime's default. Private: it chooses what the operator's spend buys, and which provider is sent the ticket and
+    #: the code (DESIGN §13, TRUST_MODEL T7).
+    models: Annotated[dict[ModelRole, ModelId], Scope.PRIVATE] = {}
 
     def worker_template(self, template: str) -> str:
         """Return `template`, one of a worker run's commands, between `worker_cmd_prefix` and `worker_cmd_suffix`.

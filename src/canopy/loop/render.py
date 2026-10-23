@@ -92,6 +92,17 @@ def persona_of(row: sqlite3.Row) -> str:
     return f"  persona {row['persona']} {str(row['persona_digest'])[:DIGEST_WIDTH]}"
 
 
+def model_of(row: sqlite3.Row) -> str:
+    """The model canopy chose for a worker run's agent (DESIGN §13), as `  model provider/model`.
+
+    Returns:
+        The model with two leading spaces, to append to a line, or "" for a run on the runtime's default.
+    """
+    if row["model"] is None:
+        return ""
+    return f"  model {row['model']}"
+
+
 def chore_line(state: chore_view.ChoreState, now: datetime) -> str:
     """A chore's state on one line: running, or its last run and when it is due.
 
