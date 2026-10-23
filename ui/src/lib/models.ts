@@ -64,6 +64,15 @@ export function runModelIds(runs: Iterable<Run>): string[] {
     return ids
 }
 
+/**
+ * Whether `model` ran `run`: it served the run, as its session says, or, until the session names any, canopy asked
+ * for it. The runs page's `?model=` keeps these.
+ */
+export function ranOn(run: Run, model: string): boolean {
+    const served = run.models?.status === 'found' ? run.models.models : []
+    return served.length === 0 ? run.model === model : served.some((m) => m.model === model)
+}
+
 // A model's name after its provider, the first part of its id; an id with none is its own name.
 function withoutProvider(id: string): string {
     const slash = id.indexOf('/')

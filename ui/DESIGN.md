@@ -756,10 +756,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   chips (`resume (ci)`, `review`, `chore`), and in the free column the ticket's title, or a review's PR, commit, and
   verdict. What goes under it starts under the title. A ticket that asked, got its answer, and asked again is one
   blocked row, not two. The kind and state filters keep each other, and the state filter goes by each subject's
-  latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing. Under the page's
-  description, a line counts what runs against each `[capacity]` limit as the harness counts it (`workers 2 of 2`,
-  reviews among them, and `chores` apart), a full one in `status-blocked` with `full`: the next start of its kind
-  waits for a run to end. A ticket's page lists its runs flat
+  latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing. `?model=`, which
+  By model links to, keeps the worker runs that model ran (`ranOn`) before they are grouped, and leaves out reviews and
+  chores, whose rows name no model; its filter shows in the header only once chosen, with `all` to take it off.
+  Under the page's description, a line counts what runs against each `[capacity]` limit as the harness counts it
+  (`workers 2 of 2`, reviews among them, and `chores` apart), a full one in `status-blocked` with `full`: the next
+  start of its kind waits for a run to end. A ticket's page lists its runs flat
   (`RunsTable`), since every row there is the same ticket's. A run's line of links names its first three worktrees,
   then `+N more worktrees` with every one in its tip, never `+1 more`, which would take the room the fourth's path
   does: a ticket across many repositories holds a slot in each, and its run's page lists them all. Beside its session
@@ -770,7 +772,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   earlier run's line has it before what it said, so a ticket's runs read down by model.
 - **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
-  (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
+  (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones. A ticket's,
+  once more than one model served its runs, splits under it by model, mono and muted, each named as a run's row
+  names it with its cost, then `none` for what no session named a model for.
 - **The tickets list**: where the ticket stands (`TicketState`), the key, the phase (cut to fit, the CLI's spelling in
   its tip), the `public` or `private, started` chip, the title in the free column, and the age. Where it stands is the
   running run or `waiting on you`, each with its run's dot, else `done` or `open` with the dot of a run that ended so,
@@ -885,7 +889,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   and what reported no cost while no run ended. The window is a segmented control (`ToggleGroup`) in the totals' panel
   header, kept in `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
   runs page's kind filter in each one's header keeps one kind's (`?model_kind=`, `?tool_kind=`), and offers only the
-  kinds the window has rows of. A window switch keeps both filters.
+  kinds the window has rows of. A window switch keeps both filters. By model sets each id in mono, as every page
+  does, a link to the runs page's runs on it (`?model=`), and gives each model's `per run` beside what it spent, so
+  models with different run counts compare; its header says the `none` row's share of the table (`43% not yet
+  attributed`, `unattributedShare`), since that row is often the largest and sits last.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.

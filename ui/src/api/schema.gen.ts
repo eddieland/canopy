@@ -2948,6 +2948,13 @@ export type components = {
              */
             cost_usd: number | null;
             /**
+             * Models
+             * @description A ticket's: what each model their sessions named cost, the most costly first; the rest of `cost_usd` is the
+             *     runs no session named a model for. Empty for a PR's.
+             * @default []
+             */
+            models: components["schemas"]["ModelCost"][];
+            /**
              * Priced
              * @description How many of those runs and review runs reported a cost.
              */
@@ -4377,6 +4384,27 @@ export type components = {
          * @enum {string}
          */
         ModelAgent: "worker" | "planner" | "reviewer";
+        /**
+         * ModelCost
+         * @description What one model cost over a subject's agent runs, as their sessions say (DESIGN §13).
+         */
+        ModelCost: {
+            /**
+             * Cost Usd
+             * @description What the sessions priced its replies at, in US dollars.
+             */
+            cost_usd: number;
+            /**
+             * Model
+             * @description As `provider/model`, as the runtime names it.
+             */
+            model: string;
+            /**
+             * Runs
+             * @description How many of the runs it wrote a reply of: a run on two models counts under each.
+             */
+            runs: number;
+        };
         /**
          * ModelList
          * @description The models the runtime lists to run an agent on, as `canopy models` prints them: what the operator may choose.

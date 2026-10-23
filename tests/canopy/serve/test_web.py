@@ -735,7 +735,13 @@ def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_30_days_a
 def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     first = running_run(ctx, KEY)
-    assert c.get(f"/api/tickets/{KEY}").json()["cost"] == {"runs": 1, "reviews": 0, "priced": 0, "cost_usd": None}
+    assert c.get(f"/api/tickets/{KEY}").json()["cost"] == {
+        "runs": 1,
+        "reviews": 0,
+        "priced": 0,
+        "cost_usd": None,
+        "models": [],
+    }
 
     second = running_run(ctx, KEY)
     running_run(ctx, "PROJ-2")  # another ticket's
@@ -755,7 +761,7 @@ def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Conte
     ctx.conn.execute("UPDATE ticks SET cost_usd = 3.0 WHERE id = ?", (tick_id,))  # the overseer's is the workspace's
 
     cost = c.get(f"/api/tickets/{KEY}").json()["cost"]
-    assert cost == {"runs": 2, "reviews": 1, "priced": 2, "cost_usd": pytest.approx(1.75)}
+    assert cost == {"runs": 2, "reviews": 1, "priced": 2, "cost_usd": pytest.approx(1.75), "models": []}
 
 
 def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) -> None:

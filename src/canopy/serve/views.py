@@ -44,6 +44,7 @@ from canopy.serve.schema import (
     Message,
     MessageKind,
     MessageSource,
+    ModelCost,
     ModelsServed,
     NoticeChannel,
     Pause,
@@ -663,6 +664,7 @@ def _ticket_cost(conn: sqlite3.Connection, key: str) -> CostTotal:
         reviews=int(row["reviews"]),
         priced=int(row["priced"]),
         cost_usd=float(cost) if cost is not None else None,
+        models=[ModelCost(model=m.model, runs=m.runs, cost_usd=m.cost_usd) for m in run_models.of_ticket(conn, key)],
     )
 
 

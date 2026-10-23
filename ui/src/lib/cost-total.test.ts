@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { costText, countedText } from './cost-total'
+import { costText, countedText, unattributedCost } from './cost-total'
 
 describe('costText', () => {
     it('shows dollars to the cent, or a dash when nothing reported a cost', () => {
@@ -40,5 +40,20 @@ describe('countedText', () => {
 
     it('says so when nothing has run', () => {
         expect(countedText({ runs: 0, reviews: 0, priced: 0, cost_usd: null })).toBe('nothing has run')
+    })
+})
+
+describe('unattributedCost', () => {
+    const OPUS = { model: 'anthropic/claude-opus-4-1', runs: 2, cost_usd: 1.5 }
+    const SONNET = { model: 'anthropic/claude-sonnet-4-5', runs: 1, cost_usd: 0.25 }
+
+    it('is what is left of the total once each model named has its cost', () => {
+        expect(unattributedCost({ cost_usd: 2.25, models: [OPUS, SONNET] })).toBe(0.5)
+    })
+
+    it('is nothing when the models account for it all, to the cent, or none is named', () => {
+        expect(unattributedCost({ cost_usd: 1.750_000_1, models: [OPUS, SONNET] })).toBeNull()
+        expect(unattributedCost({ cost_usd: 2.25, models: [] })).toBeNull()
+        expect(unattributedCost({ cost_usd: null, models: [] })).toBeNull()
     })
 })
