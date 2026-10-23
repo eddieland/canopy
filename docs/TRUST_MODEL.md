@@ -617,13 +617,18 @@ Controls:
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
   one tool of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs and writes nothing, and denies
   MCP write tools by name. That tool's server is named in the chore run's environment alone (DESIGN §27), lists nothing
-  outside a chore's run, refuses another chore's history as the command does, and every other definition denies it. Off
-  a GitHub tracker, the tracker's server is denied whole but its read tools, allowed by name, as for the reviewer. The
-  agents example chores come with, `canopy-introspect` and `canopy-memory-tickets`, which `canopy chore install` copies
-  into the workspace's state directory for a chore's `cmd` to name, are the same, but for that rendering, with a shell
-  for canopy's read-only commands as well: `canopy chore history`, `canopy health --json`, `canopy spend --json`,
-  `canopy decisions`, `canopy show` of a run or a chore, and `opencode mcp list`; and `canopy memory lessons`,
-  `proposals`, and `list`. None of those writes, and the memory commands that do refuse inside any run.
+  outside a chore's run, refuses another chore's history as the command does, and every other definition denies it.
+  A chore's run is also given a server of canopy's read-only reports of the whole workspace, `canopy_reports`: health,
+  spend, and the three listings of agent memory, as `canopy health`, `spend`, and `memory lessons`, `proposals`, and
+  `list` print them with `--json`. It is named in the same environment, lists nothing outside a chore's run, and writes
+  nothing; `canopy-chore` and every other definition deny it, so only an agent that allows a report by name reads it.
+  Off a GitHub tracker, the tracker's server is denied whole but its read tools, allowed by name, as for the reviewer.
+  The agents example chores come with, `canopy-introspect` and `canopy-memory-tickets`, which `canopy chore install`
+  copies into the workspace's state directory for a chore's `cmd` to name, are the same, but for that rendering, with
+  the reports their prompts read allowed: health and spend for `canopy-introspect`, memory's listings for
+  `canopy-memory-tickets`, which has no shell. `canopy-introspect` keeps a shell for canopy's other read-only commands:
+  `canopy chore history`, `canopy decisions`, `canopy show` of a run or a chore, `canopy config show --json`, and
+  `canopy agents --json`. None of those writes.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.

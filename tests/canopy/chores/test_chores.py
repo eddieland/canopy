@@ -18,7 +18,7 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.chores import execute, history, start
 from canopy.cli.main import main
 from canopy.core import chore_result as result
-from canopy.core import chore_runs, db, definitions, prompts, run_models, workspace
+from canopy.core import chore_runs, db, definitions, prompts, reports, run_models, workspace
 from canopy.core import chore_view as view
 from canopy.core.config import Chore, load
 from canopy.core.context import Context
@@ -151,8 +151,12 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         # Its own timeout's deadline, not the tick's it was started in (DESIGN §33).
         timeout = load(canopy_env.root, canopy_env.user_file).chores["build-health"].timeout_minutes
         assert has_deadline(agent, timeout, before=before, after=after)
-        # Its own history's server, and no other (DESIGN §27), with code mode off, which would hide it.
-        given = servers.env(history.SERVER, history.SERVER_COMMAND, cwd=canopy_env.root.absolute())
+        # Its own history's server and canopy's reports', and no other (DESIGN §27), with code mode off, which would
+        # hide them.
+        given = servers.env(
+            {history.SERVER: history.SERVER_COMMAND, reports.SERVER: reports.SERVER_COMMAND},
+            cwd=canopy_env.root.absolute(),
+        )
         assert {name: agent["env"].get(name) for name in given} == given
         prompt = agent["argv"][3]
         assert prompt.startswith("# Build health\n\nLook at the build queue.\n\n## Run\n")
@@ -982,6 +986,8 @@ def test_a_chore_reads_its_earlier_runs_through_its_tool_from_a_cwd_outside_the_
     assert agent["env"]["CANOPY_CHORE_WORKSPACE"] == str(root)
     entry = json.loads(agent["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["canopy_chore"]
     assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--chore"], str(root))
+    entry = json.loads(agent["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"][reports.SERVER]
+    assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--reports"], str(root))
     assert agent["env"]["OPENCODE_EXPERIMENTAL_CODE_MODE"] == "false"
     assert json_block(agent["argv"][3])["history"] == tool == history.tool_name()
     listed, whole, other, both = agent["tools"]
