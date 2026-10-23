@@ -5,15 +5,16 @@ socket, and serves tools and nothing else: JSON-RPC 2.0, one message to a line, 
 `notifications/initialized`, `ping`, `tools/list`, and `tools/call`. Rejected: the `mcp` SDK, a runtime dependency
 with its own async stack and HTTP transports, for these few methods.
 
-It serves in one of four modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the
-same command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call
-at a time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every call. A chore's
-(`CHORE`, `canopy _mcp --chore`) is one tool, its own chore's history (`chores.history`, DESIGN §19), which `canopy
-chore history` also reads. The reports' (`REPORTS`, `canopy _mcp --reports`) are canopy's read-only reports, health,
-spend, and the memory listings, which those commands print with `--json` (`core.reports`). Each lists and serves its
-tools only where CANOPY_RUN_ID names a chore's run, and serves nothing of the overseer's. The reviewer's and the
-planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in the checkouts its command line names,
-the run's own (`core.git_tools`); it opens no workspace, and serves nothing else.
+It serves in one of four modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the same
+command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call at a
+time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every call. A chore's (`CHORE`,
+`canopy _mcp --chore`) is one tool, its own chore's history (`chores.history`, DESIGN §19), which `canopy chore history`
+also reads. The reports' (`REPORTS`, `canopy _mcp --reports`) are canopy's read-only reports, health, spend, the memory
+listings, the config's settings, and what each agent is offered, which those commands print with `--json`
+(`core.reports`), and the read-back of a tick's decisions, a run, and a chore (`loop.readback`). Each lists and serves
+its tools only where CANOPY_RUN_ID names a chore's run, and serves nothing of the overseer's. The reviewer's and the
+planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in the checkouts its command line names, the
+run's own (`core.git_tools`); it opens no workspace, and serves nothing else.
 
 An overseer's tool lists its result's schema as its output schema, and answers with the text the command prints and
 the result as structured content. A refusal or an invalid argument is a tool error, `isError`, with the text the command
@@ -38,7 +39,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, Validat
 from canopy.chores import history
 from canopy.core import config, context, conversation, db, git_tools, reports
 from canopy.infra import logs
-from canopy.loop import chore_tools, review_tools, tools
+from canopy.loop import chore_tools, readback, review_tools, tools
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
@@ -249,9 +250,10 @@ _CHORES_ALONE = "canopy's reports are served to a chore's run alone, and this is
 
 
 def _report[R: BaseModel](name: str, description: str, request: type[R], do: Callable[[Context, R], str]) -> Tool:
-    """Make report `do` a tool, taking `request` as its arguments: what its command prints with `--json`.
+    """Make report `do` a tool, taking `request` as its arguments: what its command prints.
 
-    Every call is refused but in a chore's run, as the history tool's is.
+    Every call is refused but in a chore's run, as the history tool's is, and a report that cannot say what was asked
+    is refused with what its command says.
 
     Returns:
         The tool.
@@ -264,7 +266,10 @@ def _report[R: BaseModel](name: str, description: str, request: type[R], do: Cal
                 history.run_chore(ctx.conn)
             except history.Refused as r:
                 raise tools.Refused(f"{name} refused ({r.guard}): {_CHORES_ALONE}") from None
-            return do(ctx, asked)
+            try:
+                return do(ctx, asked)
+            except reports.Refused as e:
+                raise tools.Refused(str(e)) from None
 
     return Tool(name, description, request, call)
 
@@ -307,6 +312,43 @@ REPORT_TOOLS = (
         "wrote it and how many runs read and cited it; and each tier's mode (modes).",
         reports.MemoryList,
         reports.read_notes,
+    ),
+    _report(
+        reports.DECISIONS,
+        "One tick's decisions, as text: the tick's status, summary, and cost, then each decision's subject, action, "
+        "and rationale, of one ticket if asked; the latest tick's unless tick names one. A failure in health names its "
+        "tick.",
+        readback.Decisions,
+        readback.read_decisions,
+    ),
+    _report(
+        reports.SHOW_RUN,
+        "One worker or plan run, as text: its ticket, kind, and status, its slots, PRs, cost, session, log, and the "
+        "messages it sent. A failure in health names its run.",
+        readback.ShowRun,
+        readback.read_run,
+    ),
+    _report(
+        reports.SHOW_CHORE,
+        "One chore, as text: when it last ran and is next due, its latest run, its open findings, and the operator's "
+        "notes its next run reads.",
+        readback.ShowChore,
+        readback.read_chore,
+    ),
+    _report(
+        reports.CONFIG_SHOW,
+        "Each number, switch, and choice in canopy's config, as JSON (settings): its value, default, the file that set "
+        "it, and the choices or bounds it takes. Keys that hold text, commands, or paths are left out.",
+        reports.ConfigShow,
+        reports.read_config,
+    ),
+    _report(
+        reports.AGENTS,
+        "What each of canopy's agents is offered once the operator's runtime config is merged into canopy's, as JSON: "
+        "every MCP server and skill, each server's reach per agent, and the commands runtime.allow_bash gives each. "
+        "It starts the runtime to ask, so it takes a few seconds.",
+        reports.Agents,
+        reports.read_agents,
     ),
 )
 

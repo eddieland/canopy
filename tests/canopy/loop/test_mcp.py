@@ -4,6 +4,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import sqlite3
 import time
 from collections.abc import Iterator, Mapping, Sequence
@@ -19,7 +20,7 @@ from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
 from canopy.core import chore_runs, db, git_tools, reports
 from canopy.core.context import Context
-from canopy.core.vocab import ChoreRunStatus, TickStatus
+from canopy.core.vocab import ChoreRunStatus, RunKind, TickStatus
 from canopy.infra import procs
 from canopy.loop import mcp
 from canopy.runs import policy
@@ -770,13 +771,21 @@ def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
         assert mcp_session(LIST_TOOLS).listed() == []
 
 
+#: Arguments each report needs, for a call that a guard, not the request, refuses.
+REPORT_ARGUMENTS: Mapping[str, Mapping[str, object]] = {
+    reports.SHOW_RUN: {"run": 1},
+    reports.SHOW_CHORE: {"name": "build-health"},
+}
+
+
 @pytest.mark.parametrize("run", [None, "7", "review-1", "chore-99", "chore-x"])
 def test_nothing_is_served_where_no_chores_run_is(overseen: CanopyEnv, run: str | None) -> None:
     conn = two_chore_runs(overseen)
     read = tool_call("history", name="build-health")
     with in_tick(conn), in_run(run) if run is not None else contextlib.nullcontext():
         served = mcp_session(LIST_TOOLS, read, chore=True)
-        reported = mcp_session(LIST_TOOLS, *(tool_call(name) for name in reports.TOOLS), reports=True)
+        asked = (tool_call(name, **REPORT_ARGUMENTS.get(name, {})) for name in reports.TOOLS)
+        reported = mcp_session(LIST_TOOLS, *asked, reports=True)
     assert served.listed() == []
     assert served.said(2) == (
         "chore history refused (not_chore): the history tool serves a chore's own runs alone, and this is none",
@@ -849,16 +858,22 @@ def test_a_chores_history_tool_refuses_what_its_command_refuses(
         assert "run (--run) prints one run and before (--before) pages" in capsys.readouterr().err
 
 
-#: Each of canopy's reports a chore reads, as a tool's call and the command that prints the same, `--json`.
-REPORT_READS: list[tuple[Mapping[str, object], list[str]]] = [
-    ({}, ["health", "--json"]),
-    ({"days": 30}, ["health", "--json", "--days", "30"]),
-    ({"days": 1}, ["spend", "--json", "--days", "1"]),
-    ({}, ["memory", "lessons", "--json"]),
-    ({"repo": "repo"}, ["memory", "lessons", "--json", "--repo", "repo"]),
-    ({}, ["memory", "proposals", "--json"]),
-    ({}, ["memory", "list", "--json"]),
-    ({"key": "PROJ-1", "all": True}, ["memory", "list", "PROJ-1", "--all", "--json"]),
+#: Each of canopy's reports a chore reads, as a tool's call and the command that prints the same.
+REPORT_READS: list[tuple[str, Mapping[str, object], list[str]]] = [
+    (reports.HEALTH, {}, ["health", "--json"]),
+    (reports.HEALTH, {"days": 30}, ["health", "--json", "--days", "30"]),
+    (reports.SPEND, {"days": 1}, ["spend", "--json", "--days", "1"]),
+    (reports.MEMORY_LESSONS, {}, ["memory", "lessons", "--json"]),
+    (reports.MEMORY_LESSONS, {"repo": "repo"}, ["memory", "lessons", "--json", "--repo", "repo"]),
+    (reports.MEMORY_PROPOSALS, {}, ["memory", "proposals", "--json"]),
+    (reports.MEMORY_LIST, {}, ["memory", "list", "--json"]),
+    (reports.MEMORY_LIST, {"key": "PROJ-1", "all": True}, ["memory", "list", "PROJ-1", "--all", "--json"]),
+    (reports.DECISIONS, {}, ["decisions"]),
+    (reports.DECISIONS, {"tick": 1, "ticket": "PROJ-1"}, ["decisions", "1", "--ticket", "PROJ-1"]),
+    (reports.SHOW_RUN, {"run": 1}, ["show", "run:1"]),
+    (reports.SHOW_CHORE, {"name": "build-health"}, ["show", "chore:build-health"]),
+    (reports.CONFIG_SHOW, {}, ["config", "show", "--json"]),
+    (reports.AGENTS, {}, ["agents", "--json"]),
 ]
 
 
@@ -886,35 +901,66 @@ def test_the_reports_say_what_their_commands_print(
         ("Run `make lint`\u200b first.", db.now(), db.now(), db.now()),
     )
     conn.commit()
+    # A tick that decided about PROJ-1 and PROJ-2, and started a run of PROJ-1.
+    with in_tick(conn, ends_ok=True) as tick_id:
+        db.touch_ticket(conn, "PROJ-1", "repo")
+        db.record_decision(conn, tick_id, "PROJ-1", "dispatch:implement", "labelled agent-ready")
+        db.record_decision(conn, tick_id, "PROJ-2", "wait", "blocked on PROJ-1")
+        db.insert_run(
+            conn,
+            tick_id=tick_id,
+            key="PROJ-1",
+            kind=RunKind.IMPLEMENT,
+            branch="agent/PROJ-1-work",
+            slots=(),
+            runs_dir=overseen.state_dir,
+        )
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     env = {history.WORKSPACE_ENV: str(overseen.root)}
-    calls = [tool_call(_report_tool(command), **arguments) for arguments, command in REPORT_READS]
+    calls = [tool_call(tool, **arguments) for tool, arguments, _ in REPORT_READS]
     # From a `cwd` outside the workspace, as a chore's may be: its run names the workspace.
     with in_run("chore-2"), mock.patch.dict(os.environ, env), contextlib.chdir(elsewhere):
         served = mcp_session(*calls, reports=True)
     printed: list[str] = []
     with in_run("chore-2"):
-        for _, command in REPORT_READS:
-            assert main(command) == 0
+        for _, _, command in REPORT_READS:
+            assert main(command) == 0, command
             printed.append(capsys.readouterr().out)
     for n, out in enumerate(printed, 1):
         said = served.said(n)
         assert not said.error, said.text
-        assert f"{said.text}\n" == out
-    assert json.loads(served.said(1).text)["outcomes"][0]["what"] == "build-health"
+        assert _aged(f"{said.text}\n") == _aged(out)
+    assert "build-health" in [o["what"] for o in json.loads(served.said(1).text)["outcomes"]]
     assert json.loads(served.said(4).text)["lessons"][0]["text"] == "Run `make lint`<U+200B> first."
+    assert "PROJ-2  wait" in served.said(9).text
+    assert "PROJ-2" not in served.said(10).text
+    assert served.said(11).text.startswith("run:1: implement of PROJ-1, ")
+    assert served.said(12).text.startswith("chore:build-health: last ok ")
+    assert json.loads(served.said(13).text)["settings"]
+
+
+def _aged(text: str) -> str:
+    """`text` with each age under an hour, `40s` or `5m`, made one: the tool and its command read the clock apart."""
+    return re.sub(r"\b\d+[sm]\b", "<age>", text)
 
 
 def test_the_reports_refuse_what_their_commands_refuse(overseen: CanopyEnv) -> None:
     two_chore_runs(overseen)
-    refused = [
+    refused: list[tuple[str, Mapping[str, object], str]] = [
         ("health", {"days": 0}, "days: Input should be greater than or equal to 1"),
         ("spend", {"days": 367}, "days: Input should be less than or equal to 366"),
         ("spend", {"days": "7"}, "days: Input should be a valid integer"),
         ("memory-lessons", {"repo": "../web"}, "invalid repository name '../web'"),
         ("memory-list", {"key": "PROJ 1"}, "invalid ticket key 'PROJ 1'"),
         ("memory-proposals", {"all": True}, "all: Extra inputs are not permitted"),
+        ("decisions", {"tick": 99}, "no tick 99"),
+        ("decisions", {"tick": 0}, "tick: Input should be greater than or equal to 1"),
+        ("show-run", {"run": 99}, "no run 99"),
+        ("show-run", {}, "run: Field required"),
+        ("show-chore", {"name": "queue-age"}, "no chore 'queue-age' is configured for this workspace"),
+        ("show-chore", {"name": "../x"}, "invalid chore name '../x'"),
+        ("config-show", {"json": True}, "json: Extra inputs are not permitted"),
     ]
     with in_run("chore-2"):
         served = mcp_session(*(tool_call(name, **arguments) for name, arguments, _ in refused), reports=True)
@@ -922,11 +968,6 @@ def test_the_reports_refuse_what_their_commands_refuse(overseen: CanopyEnv) -> N
         said = served.said(n)
         assert said.error
         assert refusal in said.text, said.text
-
-
-def _report_tool(command: Sequence[str]) -> str:
-    """The tool that reads what `command` prints: `memory lessons --json` is `memory-lessons`."""
-    return "-".join(word for word in command[: 2 if command[0] == "memory" else 1])
 
 
 # A review's or a plan's run: `canopy _mcp --git NAME=PATH` serves it read-only git in those checkouts alone (§27).

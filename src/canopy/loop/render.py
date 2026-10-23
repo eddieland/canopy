@@ -1,4 +1,7 @@
-"""How `canopy status`, `canopy show`, and the other read-back commands name tickets, runs, costs, and chores."""
+"""How the read-back commands and reports name tickets, runs, costs, and chores.
+
+`canopy status` and `canopy show` print them so, and so does what a chore reads through its reports (`loop.readback`).
+"""
 
 from __future__ import annotations
 
