@@ -237,9 +237,9 @@ Controls:
   at `use`, framed as the operator's words that the prompt's obligations come before; reviews, chores, and the
   overseer hear none. A run's report that a lesson is wrong retires nothing: it raises `lesson_wrong` for the
   operator. The proposals list, and `promote` of a proposal or a note in its own words, warn on one from a private
-  ticket's run, whose text may hold what the operator kept off the tracker. Residual, D076's: until workers are
-  sandboxed (M26), a steered worker's bash runs as the operator and could insert a `lesson` row into the journal, as it
-  could a `notices` row.
+  ticket's run, whose words come from a conversation the operator kept off the tracker, which a lesson would carry
+  into public tickets' runs. Residual, D076's: until workers are sandboxed (M26), a steered worker's bash runs as the
+  operator and could insert a `lesson` row into the journal, as it could a `notices` row.
 - Personas (DESIGN §31, ROADMAP M60) are operator text, as the standing instructions are: a short file of voice and
   emphasis in every planner's, reviewer's, or worker's prompt it reaches, below the prompt's obligations, which the
   prompt says come first. Only the operator chooses one, in `[personas]`, private config (T7), for one ticket's agent
