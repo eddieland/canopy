@@ -763,10 +763,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     # a side output must not cost the run its PRs (DESIGN §18).
     filed = _check_follow_ups(ctx, run, follow_ups.parse(text)) if parsed is not None else None
     filed_note = filed.note() if filed is not None else ""
-    # Only a resume is handed review findings to answer (DESIGN §21).
-    answered = None
-    if parsed is not None and run["kind"] == RunKind.RESUME:
-        answered = review_answers.check(ctx.conn, review_answers.parse(text), key=str(run["ticket_key"]))
+    answered = _check_answers(ctx, run, text) if parsed is not None else None
     answered_note = answered.note() if answered is not None else ""
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
@@ -831,6 +828,17 @@ def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow
         repos={r.name for r in ctx.workspace.repos},
         limit=ctx.config.policy.max_follow_ups,
     )
+
+
+def _check_answers(ctx: Context, run: sqlite3.Row, text: str) -> review_answers.Checked | None:
+    """Check the answers a worker gave to the review findings it was handed, which only a resume is (DESIGN §21).
+
+    Returns:
+        The answers to record when the run is closed, and those refused; None for a run of another kind.
+    """
+    if run["kind"] != RunKind.RESUME:
+        return None
+    return review_answers.check(ctx.conn, review_answers.parse(text), key=str(run["ticket_key"]))
 
 
 def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:
