@@ -128,6 +128,11 @@ in its own panel, at most 20 of each; a panel that found more says `newest 20`. 
 or agent memory. While the next search loads, the last one's results stay, dimmed, so the page never blanks between
 keystrokes. The box's clear button starts over.
 
+To get back to a ticket, press `⌘K` (`Ctrl+K` off a Mac) from anywhere, even mid-reply. It lists the tickets you've
+opened lately in this browser, newest first, each with where it stands now; Enter opens the top one, which is the
+ticket you were on before this one, so `⌘K` Enter flips between two. Type to narrow the list by key or title, or to
+find a ticket you haven't opened yet. The list lives in your browser, not the journal: canopy has enough to remember.
+
 ## Acting from the UI
 
 Where a page shows you something, it usually lets you act on it with the CLI's own verbs: reply, start and stop,

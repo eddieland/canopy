@@ -30,6 +30,7 @@ import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { ticketDescription } from '@/lib/descriptions'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { useViewedTicket } from '@/lib/recent-tickets'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 import { None } from '@/components/none'
@@ -90,6 +91,7 @@ function TicketPage() {
 function Ticket({ detail }: { detail: TicketDetail }) {
     const { ticket, units, limits, runs, decisions, cost } = detail
     const tracker = useTicketUrl(ticket.key)
+    useViewedTicket(ticket.key, ticket.title)
     const branchUrl = useBranchUrls()
     const branch = ticket.branch
     const branches = units.flatMap((u) => {

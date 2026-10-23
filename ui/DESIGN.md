@@ -1565,7 +1565,16 @@ sliver beside four others; and its axis names short call numbers without measuri
   itself, `chore:deps#2` opening its page, or the tick that decided it), its label as a chip (a chore run's status as
   its dot and word, as its chore's page lists it), the snippet with the query's words marked on the accent's tint
   (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL short. While the
-  next query's hits load, the last ones stay, dimmed to 60%.
+  next query's hits load, the last ones stay, dimmed to 60%. While empty, the field's end also holds the jump palette's
+  keys (`⌘K`, `Ctrl+K` off an Apple keyboard) in a keycap that opens it.
+- **The jump palette** (`JumpPalette`, `src/components/shell/jump-palette.tsx`) jumps to a ticket from anywhere: `⌘K`
+  opens and closes it, from a text field too, as a `Dialog` in the window's top sixth over the canvas at 70%. Its field
+  is over the tickets viewed last, newest first, without the one on screen, so `⌘K` Enter goes back to the ticket
+  before it; typing narrows them by key or title and lists the other tickets that match under them, at most 20 then
+  `+N more` to the tickets page, and with none, the journal's search for the words. A row is the key, the title, where
+  the ticket stands now in its state's color (waiting on you, its plan waiting, its run) or its phase muted, and for a
+  ticket viewed, how long ago. What was viewed, a ticket's page or its plan's, is this browser's alone: localStorage
+  (`src/lib/recent-tickets.ts`), never the journal, and a ticket the journal no longer holds leaves it.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.
   Signed out by a 401 to an action, the card says under its heading, in `status-failed`, that the action was not sent
   (`unsentQuery`). A reply being written outlives the page that held it: the reply form keeps what is written, with its
