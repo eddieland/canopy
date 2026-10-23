@@ -7,6 +7,7 @@ import exampleWorkspace from '../../../examples/canopy-workspace.toml?raw'
 import exampleConfig from '../../../examples/config.toml?raw'
 import attention from '@/guide/attention.md?raw'
 import chores from '@/guide/chores.md?raw'
+import codeReview from '@/guide/code-review.md?raw'
 import configFiles from '@/guide/config-files.md?raw'
 import glossary from '@/guide/glossary.md?raw'
 import howTheLoopWorks from '@/guide/how-the-loop-works.md?raw'
@@ -88,6 +89,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['plans', plans],
             ['tasks', tasks],
             ['pull-requests', pullRequests],
+            ['code-review', codeReview],
         ],
     },
     {
