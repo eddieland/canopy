@@ -100,6 +100,28 @@ def test_an_untracked_file_does_not_hold_a_fast_forward_back(
     assert (ws.clone("api") / "scratch.txt").read_text() == "the operator's\n"
 
 
+def test_an_untracked_file_the_fast_forward_would_overwrite_holds_it_back(
+    ws: Ws,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    other = tmp_path / "other-api"
+    git("clone", "--quiet", str(ws.origins["api"]), str(other), cwd=tmp_path)
+    (other / "notes.txt").write_text("theirs\n")
+    git("add", "notes.txt", cwd=other)
+    git("commit", "--quiet", "-m", "notes", cwd=other)
+    git("push", "--quiet", "origin", "main", cwd=other)
+    (ws.clone("api") / "notes.txt").write_text("the operator's\n")
+    before = head(ws, "api")
+
+    assert main(["workspace", "sync"]) == 0
+
+    out = capsys.readouterr().out
+    assert "api: not fast-forwarded: git merge refused: The following untracked working tree files would be " in out
+    assert head(ws, "api") == before
+    assert (ws.clone("api") / "notes.txt").read_text() == "the operator's\n"
+
+
 def test_a_dry_run_fetches_nothing(ws: Ws, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     before = git("rev-parse", "origin/main", cwd=ws.clone("api"))
     origin_moves_on(ws, "api", tmp_path)

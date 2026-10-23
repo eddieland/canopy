@@ -320,9 +320,9 @@ def fast_forward(runner: procs.Runner, repo: workspace.Repo) -> Checked:
     """Fetch the clone's `origin`, and fast-forward its default branch where that is checked out with nothing to lose.
 
     The primary clone's checkout is the operator's, since a run starts from `origin/<base>` in a slot. So it moves only
-    when it is on the branch `origin/HEAD` names, has no uncommitted change to a tracked file, and has no commit that
-    branch lacks; otherwise it stays as it is, and the detail says why. The fetch updates the remote-tracking refs
-    every slot shares, as a lease's does.
+    when it is on the branch `origin/HEAD` names, has no uncommitted change to a tracked file and no commit that branch
+    lacks, and the move would overwrite no untracked file; otherwise it stays as it is, and the detail says why. The
+    fetch updates the remote-tracking refs every slot shares, as a lease's does.
 
     Returns:
         `fast-forwarded` with the commits it moved between, `up to date`, `not fast-forwarded` with why, or `failed`
@@ -339,7 +339,10 @@ def fast_forward(runner: procs.Runner, repo: workspace.Repo) -> Checked:
         before, after = (git("rev-parse", "--short", rev) for rev in ("HEAD", upstream))
         if before == after:
             return Checked(repo, "up to date", f"{on} at {after}")
-        git("merge", "--quiet", "--ff-only", upstream)
+        # An untracked file the fast-forward would overwrite is the operator's, as a local change is.
+        refused = git.refusal("merge", "--quiet", "--ff-only", upstream)
+        if refused is not None:
+            return Checked(repo, "not fast-forwarded", refused)
     except _GitFailedError as e:
         return Checked(repo, "failed", str(e))
     return Checked(repo, "fast-forwarded", f"{on} from {before} to {after}")
@@ -415,6 +418,21 @@ class _Git:
             _GitFailedError: it exited with any other.
         """
         return self._run(args, _GIT_TIMEOUT_SECONDS, (0, 1)).returncode
+
+    def refusal(self, *args: str) -> str | None:
+        """Run `git <args>`, which exits 1 when it refuses and changes nothing, as `merge --ff-only` does.
+
+        Returns:
+            None when it did what it was asked, else why it refused, as git says it on one line.
+
+        Raises:
+            _GitFailedError: it exited with any code but 0 or 1.
+        """
+        result = self._run(args, _GIT_TIMEOUT_SECONDS, (0, 1))
+        if result.returncode == 0:
+            return None
+        said = " ".join((result.stderr.strip() or result.stdout.strip()).split()).removeprefix("error: ")
+        return f"git {args[0]} refused: {said[:500]}"
 
     def _run(self, args: Sequence[str], timeout: int, ok_codes: Collection[int]) -> procs.Result:
         try:
