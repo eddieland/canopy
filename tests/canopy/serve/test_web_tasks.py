@@ -158,7 +158,9 @@ def test_a_task_runs_report_is_its_file_as_text_and_says_when_it_was_edited_or_i
     found = c.get(url).json()
     # Markup stays its characters; a control character is a space.
     assert found["text"] == REPORT.replace("\x1b", " ")
-    assert (found["path"], found["problem"], found["edited"]) == (str(path), None, False)
+    # Its path from the workspace root, as a run's log path is shown, so a page never shows a machine's temp dir.
+    shown = str(path.relative_to(backend.workspace.root))
+    assert (found["path"], found["problem"], found["edited"]) == (shown, None, False)
     assert c.get(f"/api/tasks/{task.id}").json()["runs"][0]["reported"] is True
 
     path.write_text("# Edited by hand\n")

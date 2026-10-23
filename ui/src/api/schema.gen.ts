@@ -6339,7 +6339,23 @@ export type components = {
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["TasksUpdated"] | components["schemas"]["ReviewsUpdated"] | components["schemas"]["ReviewRequestsUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["TasksUpdated"] | components["schemas"]["TaskChanged"] | components["schemas"]["ReviewsUpdated"] | components["schemas"]["ReviewRequestsUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
+        /**
+         * TaskChanged
+         * @description Something about one task changed, its summary or its conversation: a page showing it reads it again.
+         */
+        TaskChanged: {
+            /**
+             * Id
+             * @description The task's id, as `task:N` names it.
+             */
+            id: number;
+            /**
+             * @description What the event is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            type: "task.changed";
+        };
         /**
          * TaskDetail
          * @description One task: what `canopy show task:N` prints.
@@ -6402,7 +6418,7 @@ export type components = {
             edited: boolean;
             /**
              * Path
-             * @description Its file, `<state_dir>/tasks/<task>/<run>.md`.
+             * @description Its file, `<state_dir>/tasks/<task>/<run>.md`: from the workspace root when under it, as a log path is.
              */
             path: string;
             /** @description Why it is not: missing, not a regular file, unreadable, not UTF-8, empty, or over the bound. */

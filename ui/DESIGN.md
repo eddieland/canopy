@@ -774,10 +774,25 @@ sliver beside four others; and its axis names short call numbers without measuri
   ticket too, then its age. At half a monitor (an 820px window, a list about 44rem wide) a run keeps its age and a
   slot its branch. Money and tokens go before what names a row. Each kind's order is in `ROW_COLUMNS`.
 - **The tasks list**: where the task stands (`TASK_LOOK` in `src/lib/tasks.ts`, a run state's dot and color: `waiting
-  on you` in blocked's, `queued` muted, else its latest run's status), `task:N`, the repository, the text's first line
-  in the free column, and the age since it was submitted; under the text, the first line of what its latest run said.
+  on you` in blocked's, `queued` muted, else its latest run's status), `task:N` (opening its page), the repository,
+  the text's first line in the free column, and the age since it was submitted; under the text, the first line of
+  what its latest run said.
   The tasks waiting on the operator's reply come first, the rest newest first, so it has no `OrderToggle`. Narrow, the
   repository goes first, then the age, then where it stands. A repository picker (`?repo=`) narrows it.
+- **A task** (`/tasks/$id`) is one story: its title `task:N` and its text's first line, its description where it
+  stands (in its look's color), its runs, and when it was submitted. Then the detail skeleton, with the story as its
+  thread: a Conversation panel (`TaskStory`) whose oldest end is the operator's instruction, whole, as their own bubble
+  (`task:4 you instruction via cli`), then its messages, each naming its run as `task:4#5`, text until a task run has a
+  page; no tick chips, since no tick reads them. It ends on the run working now, as a ticket's does. The panel's foot
+  is where the reply form will be: while a question waits, a band on the `status-blocked` tint naming its message and
+  `canopy reply task:N TEXT` with a copy button; otherwise a muted line on what a reply does; a stopped task none. Its
+  main content is the Report panel (`TaskReportPanel`), its newest run's report that left one, laid out read only
+  through the plan's schema (`PlanDocument`), so it reads as a document and stays text; its header names the run and
+  `edited`, its foot the file's path, and with none an `Empty` saying what comes next or why. Then What it left
+  (`TaskLeft`): its repository, its branch, each run's pushed head commit (its run, then the short hash, the whole in
+  its tip and copied whole), the draft PR, the tickets filed (`TicketLink`, with the run that filed each), a `None`
+  with its reason for what it left nothing of, and under them one muted line saying all of it is throwaway until given
+  a pass. Then its Runs, oldest first. Wide, the report takes the second column beside the rest.
 - **The tickets filters** narrow the list two ways at once (`src/lib/ticket-filter.ts`). Where a ticket stands is the
   runs page's chips, in the Tickets panel's header (`?show=`): `open` (not done), `working` (a run on it now) and
   `waiting on you` (a question waiting), each with its run's dot, `blocked` (the overseer's phase for a ticket an
@@ -1234,16 +1249,16 @@ sliver beside four others; and its axis names short call numbers without measuri
   button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
   goes under the row, once clicked.
 - **Names** (`src/lib/refs.ts`): what canopy keeps by id is named as the CLI reads a reference, `KIND:ID`, in rows,
-  trails, titles, and the tab alike: `run:41`, `review:4`, `chore:deps`, and in the same grammar `tick:2`, which the
-  CLI takes no reference for. A chore run has no reference of its own, so it is its chore's and its number,
-  `chore:deps#2`, as GitHub writes an issue's. Each has a link component that opens its page (`RunLink`, `TickLink`,
-  `ReviewLink`, `ChoreLink`, `ChoreRunLink`), used wherever it is named, a message's head and a worktree's holder
-  included; a page's title calls the same function. A message is `#5`, as its conversation numbers it, and a worktree
-  slot `#3`, as treehouse does (`messageRef`, `slotRef`). A note, proposal, or lesson is `memory:3` in the same
-  grammar (`memoryRef`), so a list of them never shows a bare number that reads as a row's. Nothing builds a
-  reference in place. A PR is named as GitHub writes a reference, `org/repo#123` (`pullRequestLabel`; any other
-  host's URL as written without `https://`), and only through `PullRequestLink`. A link into a GitHub PR, such as to
-  one of its threads, is the PR all the same: its name goes in to the PR's page and its icon out to the thread.
+  trails, titles, and the tab alike: `run:41`, `review:4`, `chore:deps`, and in the same grammar `tick:2`, which the CLI
+  takes no reference for. A chore run has no reference of its own, so it is its chore's and its number, `chore:deps#2`,
+  as GitHub writes an issue's, and a task's run the same, `task:4#5`. Each has a link component that opens its page
+  (`RunLink`, `TickLink`, `ReviewLink`, `ChoreLink`, `ChoreRunLink`, `TaskLink`), used wherever it is named, a message's
+  head and a worktree's holder included; a page's title calls the same function. A message is `#5`, as its conversation
+  numbers it, and a worktree slot `#3`, as treehouse does (`messageRef`, `slotRef`). A note, proposal, or lesson is
+  `memory:3` in the same grammar (`memoryRef`), so a list of them never shows a bare number that reads as a row's.
+  Nothing builds a reference in place. A PR is named as GitHub writes a reference, `org/repo#123` (`pullRequestLabel`;
+  any other host's URL as written without `https://`), and only through `PullRequestLink`. A link into a GitHub PR, such
+  as to one of its threads, is the PR all the same: its name goes in to the PR's page and its icon out to the thread.
 - **The label goes in, the icon goes out.** A PR or a ticket named anywhere is its name linking to its page in canopy,
   then a small icon (`LinkOut`) opening the same thing outside canopy in a new tab, named for a screen reader and on
   hover (`acme/web#88 on GitHub`, `ABC-102 in the tracker`): `PullRequestLink`, and `TicketLink` when

@@ -72,6 +72,15 @@ class TasksUpdated(Model):
     """The tasks, as `GET /tasks` returns them."""
 
 
+class TaskChanged(Model):
+    """Something about one task changed, its summary or its conversation: a page showing it reads it again."""
+
+    type: Literal["task.changed"] = "task.changed"
+    """What the event is."""
+    id: int
+    """The task's id, as `task:N` names it."""
+
+
 class ReviewsUpdated(Model):
     """The review runs changed: one started or ended. The payload is the whole list, as `GET /reviews` returns it."""
 
@@ -153,6 +162,7 @@ class StreamEvent(
             | TicketChanged
             | ChoresUpdated
             | TasksUpdated
+            | TaskChanged
             | ReviewsUpdated
             | ReviewRequestsUpdated
             | SpendUpdated
