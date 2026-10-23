@@ -22,6 +22,7 @@ import secrets
 import sqlite3
 import stat
 from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -380,7 +381,7 @@ class Store:
             At most `limit` changes, oldest first, then the `end` line naming the `seq` the page covers through: the
             last change's when the page is full, else the store's newest, so the next page starts past changes the
             filter left out. Each change is as the comment and thread are when read: a deleted comment's body is
-            empty in every change to it.
+            empty in every change to it, and its anchor is looked for in the artifact's latest version.
 
         Raises:
             Refused: `invalid` for a limit outside 1 to `MAX_FEED`, or a negative `since`.
@@ -408,8 +409,10 @@ class Store:
                     "limit": limit,
                 },
             ).fetchall()
+            latest = self._latest_texts({str(row["artifact_id"]) for row in rows})
         through = int(rows[-1]["seq"]) if len(rows) == limit else max(newest, since)
-        return [*(_change_json(row) for row in rows), {"kind": "end", "through": through}]
+        changes = [{**_change_json(row), "anchor_status": _status(latest, row)} for row in rows]
+        return [*changes, {"kind": "end", "through": through}]
 
     def reply(self, thread_id: str, body: str) -> dict[str, object]:
         """Reply in a thread, open or resolved.
@@ -494,6 +497,19 @@ class Store:
             self._conn.execute("ROLLBACK")
             raise
         self._conn.execute("COMMIT")
+
+    def _latest_texts(self, artifact_ids: AbstractSet[str]) -> dict[str, str]:
+        """Read the text of each artifact's latest version, which a change's anchor is looked for in.
+
+        Returns:
+            Each text, by its artifact's id.
+        """
+        rows = self._conn.execute(
+            "SELECT a.id, v.text FROM artifacts a JOIN versions v ON v.artifact_id = a.id AND v.n = a.latest_version"
+            " WHERE a.id IN (SELECT value FROM json_each(?))",
+            (json.dumps(sorted(artifact_ids)),),
+        ).fetchall()
+        return {str(row["id"]): str(row["text"]) for row in rows}
 
     def _writable(self) -> None:
         if self.scope.read_only:
@@ -680,6 +696,18 @@ def _origin(pairs: Mapping[str, str]) -> dict[str, str]:
 def _anchor(thread: sqlite3.Row) -> Anchor | None:
     exact = thread["exact"]
     return None if exact is None else Anchor(str(exact), str(thread["prefix"]), str(thread["suffix"]))
+
+
+def _status(texts: Mapping[str, str], row: sqlite3.Row) -> str | None:
+    """Say whether a change's anchor is in its artifact's latest version, as `thread_list` says of a thread's.
+
+    Returns:
+        `found` or `passage_gone`; None for a thread on the whole artifact.
+    """
+    anchor = _anchor(row)
+    if anchor is None:
+        return None
+    return "found" if locate(texts[str(row["artifact_id"])], anchor) is not None else "passage_gone"
 
 
 def _anchor_json(row: sqlite3.Row) -> dict[str, str] | None:

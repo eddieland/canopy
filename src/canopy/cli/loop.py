@@ -166,7 +166,11 @@ def _print_connectors(ctx: Context) -> None:
             continue
         how = f"{s.latest.status}: {s.latest.missed}" if s.latest.missed else str(s.latest.status)
         ages = [f"oldest observation {attention.age(s.oldest)} old"] if s.oldest is not None else []
-        if s.never:
+        if s.through is not None:
+            # An artifact store's feed is read past a cursor, never whole: its one observation is how far.
+            read = f"read to its end {attention.age(s.oldest)} ago" if s.oldest is not None else "never read to its end"
+            ages = [f"feed through change {s.through}, {read}"]
+        elif s.never:
             ages.append(f"{s.never} never observed")
         stale = ", stale" if s.stale else ""
         seen = f"; {', '.join(ages)}{stale}" if ages else ""
