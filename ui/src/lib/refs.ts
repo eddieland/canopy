@@ -59,6 +59,15 @@ export function taskRef(id: number | string): string {
     return `task:${id}`
 }
 
+// A task's reference alone, as `canopy show` reads it, with the id's leading zeros dropped as it drops them.
+const TASK_REF = /^task:0*([1-9]\d{0,15})$/u
+
+/** The task `text` names when it is a task's reference and nothing else (`task:4`, spaces around it aside). */
+export function parseTaskRef(text: string): number | undefined {
+    const id = TASK_REF.exec(text.trim())?.[1]
+    return id === undefined ? undefined : Number(id)
+}
+
 /** One run of a task, which has no reference of its own: its task, then its number, as a chore run is: `task:4#5`. */
 export function taskRunRef(task: number | string, id: number | string): string {
     return `${taskRef(task)}#${id}`

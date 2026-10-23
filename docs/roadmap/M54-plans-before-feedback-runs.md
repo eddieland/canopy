@@ -115,6 +115,10 @@ out goes to the next plan as an uncovered item does; and the overseer gives the 
 named by its number on input, and by number and id wherever canopy mentions it; and an approval answers no question a
 run asked, which still waits on a reply. Settled for it, open to the operator: an approved plan not yet spent may be
 approved again for other items or with a message, which writes a new message; whole approval writes a message too; and
-an item left out is not marked handled, so its next plan offers it whatever changed. Left: the PR page's threads view
-and T8's web approval, drafts starting from the plan, the plan that changes nothing, and failed checks and conflicts as
-items with ids of their own.
+an item left out is not marked handled, so its next plan offers it whatever changed. Built 2026-10-22, against the
+fakes, the plan on the PR's page: its threads carry the ticket's current feedback plan, where it stands (waiting, stale
+with each change in the harness's words, approved, or spent), its file as text, and each item's proposal and reply on
+its thread's card, an item on no thread listed with its reply; and the page approves it whole or by item, with the
+operator's words, through `canopy plan --approve`'s function in channel `web`, refused as the CLI is, a write T8 now
+names with its residual. Left: drafts starting from the plan, the plan that changes nothing, and failed checks and
+conflicts as items with ids of their own.

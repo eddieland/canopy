@@ -33,6 +33,25 @@ export function poolsLine(pools: readonly Pool[], readAt: number, now: number): 
     return [counted(pools.length, 'pool'), counted(slots, 'slot'), read].join(' · ')
 }
 
+/**
+ * The Working counter's line: what holds the working slots, each kind only when one does, and how many pools they are
+ * in, as `runs and tasks, in 2 pools`; `no run, review, or task` while none works.
+ */
+export function workingLine(pools: readonly Pool[]): string {
+    const working = pools.flatMap((p) => p.worktrees).filter((w) => w.state === 'working')
+    const kinds = [
+        ['runs', working.some((w) => w.run !== null)],
+        ['reviews', working.some((w) => w.review !== null)],
+        ['tasks', working.some((w) => w.task !== null)],
+    ] as const
+    const held = kinds.filter(([, any]) => any).map(([kind]) => kind)
+    if (held.length === 0) {
+        return 'no run, review, or task'
+    }
+    const repos = pools.filter((p) => p.worktrees.some((w) => w.state === 'working')).length
+    return `${new Intl.ListFormat('en', { type: 'conjunction' }).format(held)}, in ${counted(repos, 'pool')}`
+}
+
 /** What the Needs a look counter counts, and its line. */
 export interface NeedsLook {
     /** Dirty slots, broken slots, and pools that could not be read, together. */

@@ -91,8 +91,11 @@ describe('TaskRunRow', () => {
         )
     })
 
-    it('keeps its reference as text: a task run has no page of its own yet', async () => {
+    it("names itself as a link to the run's page", async () => {
         const shown = await runRow(mockTaskRun({ id: 3, prs: [], session_id: null }))
-        expect(within(shown).queryAllByRole('link')).toEqual([])
+        const links = within(shown).getAllByRole('link')
+        expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+            ['task:1#3', '/tasks/1/runs/3'],
+        ])
     })
 })

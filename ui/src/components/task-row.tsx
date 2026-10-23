@@ -7,10 +7,9 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
-import { TaskLink } from '@/components/task-link'
+import { TaskLink, TaskRunLink } from '@/components/task-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped } from '@/components/tip'
-import { taskRunRef } from '@/lib/refs'
 import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import { TASK_LOOK, taskTitle } from '@/lib/tasks'
@@ -46,9 +45,8 @@ export function TaskRow({ task }: { task: TaskSummary }) {
 }
 
 /**
- * One run of a task on its page, in a run's columns there (`own-run`): its state, its reference (`task:4#5`, text
- * until a task's run has a page of its own), cost, and when; under them, what it said, the PRs it named, and its
- * session.
+ * One run of a task on its page, in a run's columns there (`own-run`): its state, its reference (`task:4#5`, opening
+ * its page), cost, and when; under them, what it said, the PRs it named, and its session.
  */
 export function TaskRunRow({ task, run }: { task: number; run: TaskRun }) {
     return (
@@ -57,7 +55,7 @@ export function TaskRunRow({ task, run }: { task: number; run: TaskRun }) {
                 <RunDot state={run.state} />
                 <Word word={run.status} />
             </span>
-            <span className="readout text-xs">{taskRunRef(task, run.id)}</span>
+            <TaskRunLink task={task} run={run.id} />
             <span className="text-right text-xs text-muted-foreground">
                 <Cost usd={run.cost_usd} />
             </span>

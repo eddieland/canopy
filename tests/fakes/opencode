@@ -7,7 +7,8 @@ environment:
 
     FAKE_OPENCODE_STATE     the state file, JSON, {"sessions": {ID: [[provider, model, cost], ...]}}. Missing, or no
                             entry for ID: OpenCode's `Session not found: ID` on stderr, and exit 1.
-    FAKE_OPENCODE_LOG       if set, one JSON line {"argv": [...], "cwd": ...} is appended per run.
+    FAKE_OPENCODE_LOG       if set, one JSON line {"argv": [...], "cwd": ..., "env": [...]} is appended per run, `env`
+                            the names of the OPENCODE_* variables it was started with.
 
 Keys of the state besides `sessions`, each optional:
 
@@ -37,7 +38,8 @@ def main() -> int:
     log = os.environ.get("FAKE_OPENCODE_LOG")
     if log:
         with Path(log).open("a") as f:
-            f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd()}) + "\n")
+            env = sorted(name for name in os.environ if name.startswith("OPENCODE_"))
+            f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "env": env}) + "\n")
     match sys.argv[1:]:
         case ["export", session_id, "--sanitize"]:
             return export(session_id)

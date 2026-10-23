@@ -6,9 +6,10 @@ import { Age } from '@/components/age'
 import { LinkedText } from '@/components/linked-text'
 import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
+import { TaskRunLink } from '@/components/task-link'
 import { Timestamp } from '@/components/timestamp'
 import { awaitsTick } from '@/lib/acknowledged'
-import { messageRef, taskRunRef } from '@/lib/refs'
+import { messageRef } from '@/lib/refs'
 import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -187,10 +188,12 @@ function Head({
                             <RunLink id={message.run_id} />)
                         </>
                     )}
-                    {/* A task's run has no page of its own yet: its reference, as text. */}
-                    {task !== undefined &&
-                        message.task_run_id !== null &&
-                        ` (${taskRunRef(task, message.task_run_id)})`}
+                    {task !== undefined && message.task_run_id !== null && (
+                        <>
+                            {' ('}
+                            <TaskRunLink task={task} run={message.task_run_id} />)
+                        </>
+                    )}
                     {message.answers === null ? '' : ` answering ${messageRef(message.answers)}`}
                     {message.source === 'operator' ? ` via ${message.channel}` : ''}
                 </span>

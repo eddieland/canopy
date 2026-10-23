@@ -8,6 +8,7 @@ import { ChoreLink, ChoreRunLink } from '@/components/chore-link'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
+import { TaskLink, TaskRunLink } from '@/components/task-link'
 import { MarkedText } from '@/components/marked-text'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
@@ -37,8 +38,8 @@ function SearchPage() {
                 title={q === undefined ? 'Search' : `“${q}”`}
                 tab={q === undefined ? 'Search' : `Search “${q}”`}
             >
-                Tickets by key, title, and branch, every conversation, chore runs, decisions, and ticks that hold every
-                word, newest first. Not searched: transcripts and reviews.
+                Tickets by key, title, and branch, tasks by their text, every conversation, chore runs, decisions, and
+                ticks that hold every word, newest first. Not searched: transcripts, reviews, and task reports.
             </PageHeader>
             {q === undefined ? (
                 <Panel>
@@ -139,8 +140,16 @@ function Label({ hit }: { hit: SearchHit }) {
 
 const SUBJECT_FIRST: ReadonlySet<SearchSource> = new Set(['ticket', 'message', 'chore_run'])
 
-/** Where a hit opens: its ticket or chore, then the run that said it or the tick that decided it. */
+/**
+ * Where a hit opens: its ticket or chore, then the run that said it or the tick that decided it; or a task, or the
+ * task's run that said it, over the task's first line.
+ */
 function Where({ hit }: { hit: SearchHit }) {
+    if (hit.task_id !== null) {
+        return (
+            <TaskWhere task={hit.task_id} run={hit.source === 'message' ? hit.run_id : null} title={hit.task_title} />
+        )
+    }
     const subject =
         hit.ticket_key === null ? (
             hit.chore === null ? null : hit.source === 'chore_run' && hit.run_id !== null ? (
@@ -166,6 +175,23 @@ function Where({ hit }: { hit: SearchHit }) {
         <>
             {tick}
             {subject}
+        </>
+    )
+}
+
+/**
+ * A task's hit: the task, or for a message one of its runs reported, that run (`task:4#5`, which names the task too),
+ * over the task's first line, cut to the column with the whole line in its tip. The line is the operator's text.
+ */
+function TaskWhere({ task, run, title }: { task: number; run: number | null; title: string | null }) {
+    return (
+        <>
+            {run === null ? <TaskLink id={task} /> : <TaskRunLink task={task} run={run} />}
+            {title !== null && title !== '' && (
+                <span className="truncate text-xs text-muted-foreground" title={title}>
+                    {title}
+                </span>
+            )}
         </>
     )
 }
