@@ -128,7 +128,8 @@ def connector_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
 def opencode_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
     """The fake `opencode` on PATH, knowing no session until the test writes the yielded state file.
 
-    Each run appends its argv and cwd to `opencode.jsonl` beside it. See tests/fakes/opencode for its keys.
+    Each run appends its argv, cwd, and OPENCODE_* variables' names to `opencode.jsonl` beside it. See
+    tests/fakes/opencode for its keys.
     """
     state = tmp_path / "opencode.json"
     with mock.patch.dict(
