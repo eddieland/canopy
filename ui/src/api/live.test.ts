@@ -81,16 +81,22 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.ticket('ABC-999'))?.isInvalidated).toBe(false)
     })
 
-    it("marks a changed task's page and its reports stale and leaves the other tasks alone", () => {
+    it("marks a changed task's page, reports, and runs' pages and transcripts stale, and no other task's", () => {
         const client = new QueryClient()
         client.setQueryData(keys.task(4), { task: mockTasks[0] })
         client.setQueryData(keys.taskReport(4, 5), { text: 'old' })
+        client.setQueryData(keys.taskRun(4, 5), { task_id: 4 })
+        client.setQueryData(keys.taskRunTranscript(4, 5), { status: 'read' })
+        client.setQueryData(keys.taskRun(1, 1), { task_id: 1 })
         client.setQueryData(keys.task(1), { task: mockTasks[0] })
 
         applyStreamEvent(client, { type: 'task.changed', id: 4 })
 
         expect(client.getQueryState(keys.task(4))?.isInvalidated).toBe(true)
         expect(client.getQueryState(keys.taskReport(4, 5))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.taskRun(4, 5))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.taskRunTranscript(4, 5))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.taskRun(1, 1))?.isInvalidated).toBe(false)
         expect(client.getQueryState(keys.task(1))?.isInvalidated).toBe(false)
     })
 

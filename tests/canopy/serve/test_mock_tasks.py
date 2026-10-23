@@ -57,3 +57,12 @@ def test_a_stop_clears_a_task_s_items(backend: Backend) -> None:
         tasks.stop(ctx.conn, 4)
         tasks.stop(ctx.conn, 5)
         assert mock_tasks.attention(ctx.conn) == []
+
+
+def test_task_1_s_run_left_its_session_s_events_for_its_transcript(backend: Backend) -> None:
+    found = client(None, backend).get("/api/tasks/1/runs/1/transcript").json()
+    assert (found["status"], found["session_id"]) == ("read", "ses_task1")
+    steps = [e for e in found["entries"] if e["kind"] == "step"]
+    # Its three model calls cost what its row says.
+    assert sum(s["cost_usd"] for s in steps) == pytest.approx(2.12)
+    assert len(steps) == 3

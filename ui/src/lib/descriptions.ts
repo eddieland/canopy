@@ -8,6 +8,7 @@ import type {
     ReviewDraft,
     ReviewSummary,
     Run,
+    TaskRun,
     Tick,
     TicketPlans,
     TicketSummary,
@@ -84,6 +85,11 @@ export function choreRunDescription(run: Pick<ChoreRun, 'status' | 'more_finding
     const ok = run.status === 'ok'
     const more = ok && run.more_findings > 0 ? `${run.more_findings} not listed` : null
     return line(readable(run.status), ok ? counted(findings, 'finding') : null, more)
+}
+
+/** A task run's page: how it ended, alone. Its task is the trail's, and what it filed its Run panel's fields. */
+export function taskRunDescription(run: Pick<TaskRun, 'status'>): string {
+    return readable(run.status)
 }
 
 /** A tick's page: how it ended, how many decisions it recorded, and what woke the loop for it. */

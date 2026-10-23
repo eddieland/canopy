@@ -48,6 +48,36 @@ test("a task's open question is marked, and its foot names the command that answ
     await expect(foot).toContainText('canopy reply task:4 TEXT')
 })
 
+test("a task's run opens its page: what it said, in full, over its session's transcript", async ({ page }) => {
+    await page.goto('tasks/1')
+    await settled(page)
+    await page.getByTestId('task-run-1').getByRole('link', { name: 'task:1#1', exact: true }).click()
+    await expect(page).toHaveURL(/\/tasks\/1\/runs\/1$/u)
+    await settled(page)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+        "task:1#1 The checkout page's bundle grew past 900 kB after the last two releases, and the first paint on a " +
+            'mid-range phone is',
+    )
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Tasks' })).toHaveAttribute(
+        'data-status',
+        'active',
+    )
+    await expect(page.locator('main dl').first()).toContainText('ABC-120')
+
+    const transcript = page.getByTestId('transcript')
+    await expect(transcript).toContainText('session ses_task1')
+    const measure = transcript.getByTestId('transcript-tool').filter({ hasText: 'Measure the checkout bundle again' })
+    await measure.locator('summary').click()
+    await expect(measure).toContainText('612.48 kB')
+
+    // Its task is its trail's step, linked there alone.
+    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'task:1' }).click()
+    await expect(page).toHaveURL(/\/tasks\/1$/u)
+
+    await page.goto('tasks/1/runs/2')
+    await expect(page.getByText('task:1 has no run 2')).toBeVisible()
+})
+
 test('a task canopy has no record of says so', async ({ page }) => {
     await page.goto('tasks/999')
     await settled(page)
