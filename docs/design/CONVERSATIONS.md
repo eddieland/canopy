@@ -111,8 +111,9 @@ and its controls TRUST_MODEL T8's.
 
 ### Search
 
-One box finds a ticket, or the run or tick that said something, by substring over the journal's text. It serves only
-what the other pages serve, so T8 is unchanged. Rejected for now: SQLite's FTS5, whose index is three times the text.
+One box finds a ticket or a task, or the run or tick that said something, by substring over the journal's text. It
+serves only what the other pages serve, so T8 is unchanged. Rejected for now: SQLite's FTS5, whose index is three
+times the text.
 
 ### Trust model changes
 

@@ -46,7 +46,7 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
     {
         to: '/tasks',
         icon: Sprout,
-        hint: 'One-off work you handed canopy in your own words, about no ticket, and where each stands',
+        hint: 'One-off work you handed canopy in your own words, about no ticket, and a form to submit one',
     },
     {
         to: '/pull-requests',

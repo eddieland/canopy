@@ -44,19 +44,21 @@ A chore trials it first (ROADMAP M48, stage 1b). `canopy _mcp --chore`, a server
 inline config, serves that run one tool, `history`, which the chore sees as `canopy_chore_history`: its own chore's
 history (§19), the request and text `canopy chore history` has, refused for any other chore. Beside it, `canopy _mcp
 --reports`, named `canopy_reports`, serves canopy's read-only reports, `health`, `spend`, `memory-lessons`,
-`memory-proposals`, and `memory-list`, each the request and JSON its command prints with `--json`. It is named for what
-it serves, not for whom: a chore's run is the one given it today, and its tools refuse in any other. Neither lists
-anything where `CANOPY_RUN_ID` names no chore's run, or serves the overseer's tools. `canopy-chore` allows `history` by
-exact name, denies the reports and bash; an agent of the operator's allows each report it reads by name; every other
-definition denies both. Each run canopy starts drops the variables that name a server, so none passes below the run it
-was given to.
+`memory-proposals`, `memory-list`, `config-show`, `agents`, `decisions`, `show-run`, and `show-chore`, each the request
+and text its command prints, with `--json` where it has one; there is no page of a ticket, which holds its conversation.
+It is named for what it serves, not for whom: a chore's run is the one given it today, and its tools refuse in any
+other. Neither lists anything where `CANOPY_RUN_ID` names no chore's run, or serves the overseer's tools. `canopy-chore`
+allows `history` by exact name, denies the reports and bash; an agent of the operator's allows each report it reads by
+name; every other definition denies both. Each run canopy starts drops the variables that name a server, so none passes
+below the run it was given to.
 
 The reviewer, which has no shell, and the planner, whose shell runs only what `runtime.allow_bash` names, never git,
 read git so too. `canopy _mcp --git NAME=PATH`, named `canopy_git` in a review's or a plan's inline config, serves
-`merge-base`, `diff`, `log`, `show`, and `blame` over the checkouts the harness names on its command line for that run,
-never the agent. An argument is a revision, a path inside the repository, or text to search for joined to its option,
-never an option itself; git reads commits only, inherits no `GIT_*` variable, and runs no hook, filesystem monitor,
-external diff, textconv, pager, signature check, or transport; output is bounded. Their definitions deny bash, the
+`merge-base`, `diff`, `log`, `show`, `blame`, `grep`, and `files` over the checkouts the harness names on its command
+line for that run, never the agent. An argument is a revision, a path inside the repository, or text to search for
+joined to its option or after `-e`, never an option itself; git reads commits only, inherits no `GIT_*` variable, and
+runs no hook, filesystem monitor, external diff, textconv, pager, signature check, submodule, or transport; output is
+bounded. Their definitions deny bash, the
 planner's but for what `runtime.allow_bash` names (§13), and allow each by exact name; every other definition denies
 `canopy_git_*`. Workers keep their shell, for git's writes.
 

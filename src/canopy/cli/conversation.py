@@ -24,11 +24,8 @@ import click
 from canopy.cli import tasks as tasks_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
-from canopy.cli.render import chore_line, named, phase_of, prs_of, result_of, spent
 from canopy.core import (
-    chore_result,
     chore_view,
-    contract,
     conversation,
     db,
     feedback_items,
@@ -39,6 +36,7 @@ from canopy.core import (
     plan_threads,
     plans,
     prompts,
+    reports,
     review_drafts_manage,
     review_requests,
     review_revisions,
@@ -47,7 +45,8 @@ from canopy.core import (
 from canopy.core.vocab import PlanItem, PlanStatus, RunKind
 from canopy.infra import logs
 from canopy.infra.text import one_line
-from canopy.loop import attention
+from canopy.loop import attention, readback
+from canopy.loop.render import phase_of
 from canopy.reviews import grants
 from canopy.runs import halt, policy
 
@@ -898,86 +897,19 @@ def _show_conversation(ctx: Context, key: str, record: records.Start | None) -> 
 
 
 def _echo_message(m: records.Message) -> None:
-    click.echo(_message_head(m))
-    for line in conversation.printable(m.body).splitlines():
-        click.echo(f"    {line}")
-
-
-def _message_head(m: records.Message) -> str:
-    who = {"worker": "worker", "operator": "you", "tracker": "tracker"}.get(m.source, m.source)
-    if m.comment_id is not None:
-        # A tracker comment the overseer mirrored: a copy, which authorizes nothing (DESIGN §22).
-        cut = ", truncated" if m.truncated else ""
-        return (
-            f"  #{m.id}  {attention.age(m.at)} ago  {who} comment {m.comment_id} by {m.author}, "
-            f"written {m.commented_at}{cut}"
-        )
-    about = f" (run:{m.run_id})" if m.run_id else ""
-    if m.answers:
-        about += f" answering {m.answers}"
-    via = f" via {m.channel}" if m.source == "operator" else ""
-    return f"  #{m.id}  {attention.age(m.at)} ago  {who} {m.kind}{about}{via}"
+    for line in readback.message_lines(m):
+        click.echo(line)
 
 
 def _show_run(ctx: Context, run_id: int) -> None:
-    run = db.get_run(ctx.conn, run_id)
-    if run is None:
-        raise CliError(f"no run {run_id}")
-    private = ", private" if run["private"] else ""
-    click.echo(
-        f"run:{run_id}: {run['kind']} of {named(run['ticket_key'], run['ticket_title'])}{private}, {run['status']}",
-    )
-    click.echo(f"  started {run['started_at']}" + (f", ended {run['ended_at']}" if run["ended_at"] else ""))
-    if run["branch"]:
-        click.echo(f"  branch {run['branch']}")
-    for s in db.run_slots(ctx.conn, run_id):
-        click.echo(f"  {s.repo}  slot {s.slot_path}, from {s.base_branch}")
-    result = result_of(run)
-    for pr in prs_of(result):
-        click.echo(f"  PR {pr}")
-    said = one_line(str(result.get("harness") or ""))
-    if said:
-        click.echo(f"  harness: {said}")
-    session = f"session {run['session_id']}" if run["session_id"] else "no session reported"
-    click.echo(f"  {session}{spent(run)}")
-    click.echo(f"  log {run['log_path']}")
-    messages = db.run_messages(ctx.conn, run_id)
-    if messages:
-        click.echo("\nMessages:")
-    for m in messages:
-        _echo_message(m)
+    try:
+        click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id)))
+    except reports.Refused as e:
+        raise CliError(str(e)) from None
 
 
 def _show_chore(ctx: Context, name: str) -> None:
-    found = [s for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace) if s.name == name]
-    if not found:
-        raise CliError(f"no chore {name!r} is configured for this workspace")
-    [state] = found
-    click.echo(f"chore:{name}: {chore_line(state, datetime.now(UTC))}")
-    latest = state.latest_ended
-    if latest is not None:
-        said = one_line(contract.stored_note(result_of(latest)))
-        click.echo(f"  latest run {latest.id} {latest.status}" + (f": {said}" if said else ""))
-        session = f"session {latest.session_id}" if latest.session_id else "no session reported"
-        click.echo(f"  {session}{spent(latest)}")
-        click.echo(f"  log {latest.log_path}")
-    findings = state.findings()
-    more = state.more_findings()
-    click.echo(f"\nOpen findings ({len(findings)}):")
-    for f in findings:
-        title = one_line(f.finding.title)
-        mark = "  (dismissed)" if f.dismissed else ""
-        click.echo(
-            f"  {f.finding.id}  {attention.age(f.since)}  {title}"
-            + (f"  {f.finding.link}" if f.finding.link else "")
-            + mark,
-        )
-    if more:
-        click.echo(f"  {chore_result.more_text(more)}")
-    elif not findings:
-        click.echo("  none")
-    notes = db.messages_of(ctx.conn, conversation.CHORE, name, conversation.CHORE_NOTES)
-    if notes:
-        click.echo(f"\nYour notes its next run reads ({len(notes)}):")
-    for m in notes:
-        _echo_message(m)
+    try:
+        click.echo(readback.read_chore(ctx, readback.ShowChore(name=name)))
+    except reports.Refused as e:
+        raise CliError(str(e)) from None
