@@ -251,6 +251,12 @@ cmd = ""
 # namespace = "canopy/operator"
 # authorized_authors = ["u_ana", "u_raj"]     # whose comments steer a worker, once comments come back (M62)
 # publish_roles = ["worker"]
+#
+# And a source that reads the store's comments into canopy's journal each tick, the local store's feed here; for now
+# nothing acts on what it reads (DESIGN §30).
+# [connect.sources.artifacts]
+# kind = "artifacts"
+# cmd = "canopy-artifacts feed --store /path/to/your/store --namespace canopy/operator"
 
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
 # what each kind holds and what a pass would remove. A live tick removes the files and the journal's rows once a day,

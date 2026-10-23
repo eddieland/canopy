@@ -413,6 +413,8 @@ class SourceKind(StrEnum):
 
     TRACKER = "tracker"
     VCS = "vcs"
+    #: An artifact store's comment feed (DESIGN §38).
+    ARTIFACTS = "artifacts"
 
 
 class ConnectorRunStatus(StrEnum):
@@ -470,6 +472,29 @@ class MergeState(StrEnum):
     HAS_HOOKS = "has_hooks"
     UNSTABLE = "unstable"
     UNKNOWN = "unknown"
+
+
+class ThreadState(StrEnum):
+    """Whether a thread on an artifact is open, `observed_artifact_threads.state` (DESIGN §38)."""
+
+    OPEN = "open"
+    RESOLVED = "resolved"
+
+
+class AnchorStatus(StrEnum):
+    """Whether a thread's passage is in its artifact's latest version, `observed_artifact_threads.anchor_status`."""
+
+    FOUND = "found"
+    #: Its words are nowhere in the latest version: reworded or removed, and never moved to other words (DESIGN §38).
+    PASSAGE_GONE = "passage_gone"
+
+
+class AuthorKind(StrEnum):
+    """Who wrote a comment on an artifact as its store says, `observed_artifact_comments.author_kind` (DESIGN §38)."""
+
+    PERSON = "person"
+    #: An agent, writing with a token on behalf of the person who minted it: never authority.
+    AGENT = "agent"
 
 
 class ModelsRead(StrEnum):

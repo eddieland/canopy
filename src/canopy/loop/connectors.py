@@ -1,18 +1,20 @@
-"""Each tick's run of the connectors (DESIGN §30, §6 step 3): the `tracker` source, then the `vcs` source, each once.
+"""Each tick's run of the connectors (DESIGN §30, §6 step 3): the `tracker`, `vcs`, and `artifacts` sources, each once.
 
-Each source is asked what the journal watches of its kind, and what it read whole replaces what the journal held; a
-source that fails, or whose output cannot be recorded, keeps its previous observations, and the tick goes on. Nothing
-the overseer reads changes: in M36 the observations are in shadow. The `vcs` run is also §29's reconcile read, so the
-drafts it covers are checked after it.
+Each source is asked what the journal watches of its kind, and what it read whole replaces what the journal held; the
+`artifacts` source is asked for its store's comment feed past its cursor, and moves it on (§38). A source that fails,
+or whose output cannot be recorded, keeps its previous observations, and the tick goes on. The `vcs` run is also §29's
+reconcile read, so the drafts it covers are checked after it. The `artifacts` source is in shadow: what it reads
+reaches no conversation, state block, or dispatch.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 from urllib.parse import urlsplit, urlunsplit
 
 from canopy.core import (
+    artifact_feed,
     connector_runs,
     conversation,
     db,
@@ -55,10 +57,21 @@ def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> Ran:
     read: frozenset[str] = frozenset()
     for name, source in ctx.config.connect.named().items():
         kind = SourceKind(source.kind)
-        request = tracker_request(ctx) if kind is SourceKind.TRACKER else vcs_request(ctx)
+        match kind:
+            case SourceKind.TRACKER:
+                request = tracker_request(ctx)
+            case SourceKind.VCS:
+                request = vcs_request(ctx)
+            case SourceKind.ARTIFACTS:
+                request = observe.Request(since=artifact_feed.cursor(ctx.conn, name))
+            case _:
+                assert_never(kind)
         started = db.now()
         try:
-            observed = observe.observe(ctx.conn, ctx.config, ctx.runner, source, request, log=log)
+            if kind is SourceKind.ARTIFACTS:
+                observed = artifact_feed.read(ctx.conn, ctx.config, ctx.runner, source, request, name=name, log=log)
+            else:
+                observed = observe.observe(ctx.conn, ctx.config, ctx.runner, source, request, log=log)
         except Exception as e:
             # A bug, or a journal constraint the model let through, must not end the tick (DESIGN §30): what the run
             # was recording rolled back with its transaction, so the source keeps its old rows, as a failed run does.

@@ -592,6 +592,19 @@ def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: C
     assert list(cfg.connect.named()) == ["ghe"]
 
 
+def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_source(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_user(
+        '\n[connect.sources.a-feed]\nkind = "artifacts"\ncmd = "canopy-artifacts feed --store /s"\n'
+        '\n[connect.sources.b-jira]\nkind = "tracker"\ncmd = "canopy-connect-jira --site acme.atlassian.net"\n',
+    )
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert [(name, s.kind) for name, s in cfg.connect.named().items()] == [
+        ("b-jira", "tracker"),
+        ("github", "vcs"),
+        ("a-feed", "artifacts"),
+    ]
+
+
 @pytest.mark.parametrize(
     ("toml", "message"),
     [
@@ -606,6 +619,12 @@ def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: C
             '[connect.sources.a]\nkind = "vcs"\ncmd = "r"\n[connect.sources.b]\nkind = "vcs"\ncmd = "s"\n',
             "at most one source of each kind",
         ),
+        (
+            '[connect.sources.a]\nkind = "artifacts"\ncmd = "r"\n[connect.sources.b]\nkind = "artifacts"\ncmd = "s"\n',
+            "at most one source of each kind",
+        ),
+        ('[connect.sources.a]\nkind = "artifacts"\npost_cmd = "post"\n', "an artifacts source needs cmd"),
+        ('[connect.sources.a]\nkind = "artifacts"\ncmd = "r"\npost_cmd = "p"\n', "takes no post_cmd"),
     ],
 )
 def test_review_replies_and_sources_are_checked(canopy_env: CanopyEnv, toml: str, message: str) -> None:
