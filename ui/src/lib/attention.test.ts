@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { mockTickets } from '@/api/mocks'
 import type { AttentionItem } from '@/api/types'
 
 import {
@@ -10,6 +11,8 @@ import {
     bySeverity,
     commandOf,
     countBySeverity,
+    feedbackPlanOf,
+    feedbackPlanReview,
     nextWaiting,
     pullRequestOf,
     reviewOf,
@@ -62,6 +65,9 @@ describe('severity', () => {
         expect(severity(item('a', 'review_limit', '2026-10-08T12:00:00Z'))).toBe('failed')
         expect(severity(item('a', 'canopy_unavailable', '2026-10-08T12:00:00Z'))).toBe('failed')
         expect(severity(item('a', 'disk_low', '2026-10-08T12:00:00Z'))).toBe('failed')
+        // A run refused its model is stalled until the operator chooses another, ranked above a missing clone.
+        expect(severity(item('a', 'model_missing', '2026-10-08T12:00:00Z'))).toBe('failed')
+        expect(severity(item('a', 'model_list_failed', '2026-10-08T12:00:00Z'))).toBe('failed')
         expect(severity(item('a', 'awaiting_reply', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'untrusted_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'drafts_waiting', '2026-10-08T12:00:00Z'))).toBe('waiting')
@@ -166,6 +172,25 @@ describe('ask', () => {
         expect(ask({ ...missing, chore: 'deps', detail: 'run `canopy show chore:deps`' })).toBe('none')
     })
 
+    it("leads a ticket's run refused its model to the ticket's models, and any other to `canopy models`", () => {
+        const missing = {
+            ...item('ABC-1', 'model_missing', at),
+            detail:
+                "OpenCode does not list the model acme/gone-1 chosen for ABC-1's worker runs (`canopy model ABC-1`), " +
+                'so a run on it would fail before its first call',
+        }
+        expect(ask(missing)).toBe('model')
+        expect(ask({ ...missing, reason: 'model_list_failed' })).toBe('model')
+        // The overseer's or a chore's: no ticket's menu fixes it, so the command that says what the runtime lists.
+        const overseer = { ...item('-', 'model_list_failed', at), ticket_key: null, detail: 'could not look it up' }
+        expect(ask(overseer)).toBe('command')
+        expect(commandOf(overseer)).toBe('canopy models')
+        expect(ask({ ...overseer, chore: 'deps' })).toBe('command')
+        expect(commandOf({ ...overseer, reason: 'model_missing' })).toBe('canopy models')
+        // A chore's finding that happens to share the reason is a finding still.
+        expect(ask({ ...overseer, chore: 'deps', finding: true })).toBe('none')
+    })
+
     it("leads a task's item to the task's page, not to the commands its detail names", () => {
         const task = {
             ...item('task:4', 'awaiting_reply', at),
@@ -175,6 +200,37 @@ describe('ask', () => {
         }
         expect(ask(task)).toBe('task')
         expect(ask({ ...task, reason: 'task_ticket_unrecorded' })).toBe('task')
+    })
+})
+
+describe("a feedback plan's review", () => {
+    const at = '2026-10-08T12:00:00Z'
+    const [ticket] = mockTickets
+    if (!ticket) {
+        throw new Error('fixtures are empty')
+    }
+    const waiting = { id: 3, pr_urls: ['https://github.com/acme/web/pull/88'], items: 2, stale: false }
+    const review = item('ABC-102', 'plan_review', at)
+
+    it('is told from a ticket plan by the plan its detail names, waiting or answered', () => {
+        const named = {
+            ...review,
+            detail: 'feedback plan 3 for https://github.com/acme/web/pull/88 waits: canopy plan ABC-102 --approve',
+        }
+        expect(ask(named)).toBe('feedback-plan')
+        expect(ask(named, ticket)).toBe('feedback-plan')
+        expect(feedbackPlanOf(named)).toBe(3)
+        expect(feedbackPlanReview(named, ticket)).toBe(true)
+        expect(feedbackPlanOf({ ...named, reason: 'drafts_waiting' })).toBeNull()
+        const plan = { ...review, detail: 'plan 2 waits: canopy show ABC-102, then canopy plan ABC-102 --approve' }
+        expect(feedbackPlanOf(plan)).toBeNull()
+        expect(ask(plan, ticket)).toBe('plan')
+    })
+
+    it("is told by the ticket's waiting feedback plan when its detail names none, unless its own plan waits", () => {
+        expect(ask(review, { ...ticket, feedback_plan: waiting })).toBe('feedback-plan')
+        expect(ask(review, { ...ticket, feedback_plan: waiting, plan_waits: true })).toBe('plan')
+        expect(ask(review, { ...ticket, plan_waits: true })).toBe('plan')
     })
 })
 

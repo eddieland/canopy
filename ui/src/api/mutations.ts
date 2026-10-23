@@ -11,6 +11,7 @@ import type {
     ConfigReload,
     ConfigSaved,
     ConfigValue,
+    DismissalReason,
     Dismissed,
     Draft,
     DraftsSent,
@@ -302,14 +303,19 @@ export async function dismissFinding(name: string, finding: string, undo: boolea
 }
 
 /**
- * `canopy dismiss review:ID N`: no worker or tick acts on the review's finding number `finding`. With `undo`,
- * `--undo`.
+ * `canopy dismiss review:ID N --reason REASON`: no worker or tick acts on the review's finding number `finding`, and
+ * `reason` says why. With `undo`, `--undo`, which takes no reason.
  */
-export async function dismissReviewFinding(run: number, finding: number, undo: boolean): Promise<ReviewDismissed> {
+export async function dismissReviewFinding(
+    run: number,
+    finding: number,
+    undo: boolean,
+    reason?: DismissalReason,
+): Promise<ReviewDismissed> {
     return unwrap(
         await api.POST('/api/reviews/{run_id}/dismissals', {
             params: { path: { run_id: run } },
-            body: { finding, undo },
+            body: reason === undefined ? { finding, undo } : { finding, undo, reason },
         }),
     )
 }

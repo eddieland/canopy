@@ -169,10 +169,11 @@ Rules:
   operators who never set them (TRUST_MODEL §3). Scope and tighten checks run per file, so an error names its file.
 - Values that reach git's argv, a prompt, or the web UI's links (`trust.branch_prefix`, the comment marks, the commit
   trailer, `tracker.ticket_url`) are validated at load.
-- The commit trailer keys set the `Co-authored-by` trailer a worker adds when the runtime adds no attribution of its
-  own (§8, TRUST_MODEL T5). It names agent work, never a person: it is how a reader tells the work is an agent's.
+- The commit trailer keys set the `Co-authored-by` trailer git adds to a worker's commits, through canopy's hooks (§8,
+  TRUST_MODEL T5). It names agent work, never a person: it is how a reader tells the work is an agent's.
   Left as the default, its name credits the model canopy chose for the worker (§13, Each agent's model), and a
-  second trailer that of the planner whose approved plan it follows (§25).
+  second trailer that of the planner whose approved plan it follows (§25). `trust.commit_prefix`, private too, is
+  text git puts before each subject, `{key}` naming the ticket.
 - `trust.rebase` lets workers rebase and push with `--force-with-lease` instead of merging a base in, for hosts that
   refuse merge commits; `_run`'s own push leases the commit the run started from (§8, TRUST_MODEL T1).
 - `canopy init` sets up a workspace in the current directory or fills in the one it is inside (§18). Never in the home
@@ -374,7 +375,8 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 `review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `flaky_rerun` (§23), `plan_review`,
 `plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28),
 `drafts_waiting` (§29), `connector_failed` (§30), `persona_missing` and `bad_persona` (§31), `model_missing` and
-`model_list_failed` (§13), `review_waiting` and `review_unsettled` (§34), and `task_ticket_unrecorded` (§36). An item
+`model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34), and
+`task_ticket_unrecorded` (§36). An item
 about one unit names its repository, shown as `KEY (repo)`.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
@@ -384,7 +386,8 @@ an authorized replier comments, or the operator sends a message, after the run e
 says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the operator stopped (§22). The harness also
 raises `awaiting_reply` for a started ticket's, a planner's, or a task's unanswered question (§22, §25, §36),
 `repo_missing` for a mapped repository with no clone and `auto_maintenance_on` for a clone whose config leaves git's
-automatic maintenance on (§18), `connector_failed` about the workspace, one item naming
+automatic maintenance on (§18), `git_too_old` while the git on `PATH` is too old for canopy's commit hooks (§8),
+`connector_failed` about the workspace, one item naming
 every source whose run that tick read less than it was asked (§30), and `canopy_unavailable` or `disk_low` for a tick
 whose check of the overseer's tools or free disk failed (§6 step 5). Follow-ups a run filed are an event, not an item:
 the sinks hear of them once, as `follow_ups.filed` (§20), since nothing canopy watches tells when the operator has

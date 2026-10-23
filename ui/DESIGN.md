@@ -756,16 +756,25 @@ sliver beside four others; and its axis names short call numbers without measuri
   chips (`resume (ci)`, `review`, `chore`), and in the free column the ticket's title, or a review's PR, commit, and
   verdict. What goes under it starts under the title. A ticket that asked, got its answer, and asked again is one
   blocked row, not two. The kind and state filters keep each other, and the state filter goes by each subject's
-  latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing. Under the page's
-  description, a line counts what runs against each `[capacity]` limit as the harness counts it (`workers 2 of 2`,
-  reviews among them, and `chores` apart), a full one in `status-blocked` with `full`: the next start of its kind
-  waits for a run to end. A ticket's page lists its runs flat
+  latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing. `?model=`, which
+  By model links to, keeps the worker runs that model ran (`ranOn`) before they are grouped, and leaves out reviews and
+  chores, whose rows name no model; its filter shows in the header only once chosen, with `all` to take it off.
+  Under the page's description, a line counts what runs against each `[capacity]` limit as the harness counts it
+  (`workers 2 of 2`, reviews among them, and `chores` apart), a full one in `status-blocked` with `full`: the next
+  start of its kind waits for a run to end. A ticket's page lists its runs flat
   (`RunsTable`), since every row there is the same ticket's. A run's line of links names its first three worktrees,
   then `+N more worktrees` with every one in its tip, never `+1 more`, which would take the room the fourth's path
-  does: a ticket across many repositories holds a slot in each, and its run's page lists them all.
+  does: a ticket across many repositories holds a slot in each, and its run's page lists them all. Beside its session
+  it names the model that served it, muted mono, as its list names it (`modelNames` in `src/lib/models.ts`: without its
+  provider unless another provider's in the list shares the name), `+1` for each other it switched to, each whole in
+  its tip with its cost; until its session is read, the model canopy asked for (`asked X`), else `model none`, why in
+  its tip; one that served other than the one asked for says both in `status-blocked`, as its page's field does. An
+  earlier run's line has it before what it said, so a ticket's runs read down by model.
 - **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
-  (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
+  (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones. A ticket's,
+  once more than one model served its runs, splits under it by model, mono and muted, each named as a run's row
+  names it with its cost, then `none` for what no session named a model for.
 - **The tickets list**: where the ticket stands (`TicketState`), the key, the phase (cut to fit, the CLI's spelling in
   its tip), the `public` or `private, started` chip, the title in the free column, and the age. Where it stands is the
   running run or `waiting on you`, each with its run's dot, else `done` or `open` with the dot of a run that ended so,
@@ -880,7 +889,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   and what reported no cost while no run ended. The window is a segmented control (`ToggleGroup`) in the totals' panel
   header, kept in `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
   runs page's kind filter in each one's header keeps one kind's (`?model_kind=`, `?tool_kind=`), and offers only the
-  kinds the window has rows of. A window switch keeps both filters.
+  kinds the window has rows of. A window switch keeps both filters. By model sets each id in mono, as every page
+  does, a link to the runs page's runs on it (`?model=`), and gives each model's `per run` beside what it spent, so
+  models with different run counts compare; its header says the `none` row's share of the table (`43% not yet
+  attributed`, `unattributedShare`), since that row is often the largest and sits last.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
@@ -910,7 +922,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   view, and a toast says what the reply did, since the form that said it goes with its item; the row it left keeps
   its `answered` chip. With nothing else waiting the item stays, its form's line saying what the reply did. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
-  `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
+  `attempt_limit`, `chore_failed`, the review reasons, and a run refused its model, `model_missing` and
+  `model_list_failed`, which only the operator clears), then what waits on the operator's answer (`awaiting_reply`,
   `untrusted_review`, `plan_review`), then every other reason, then chores' findings; within each, the item open longest
   first. A row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`, semibold) when
   it is about a ticket, or its task's text's first line when it is about a task, as a message's subject, then its
@@ -937,7 +950,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   text, so the PR is one tab stop. A wait on the operator's answer (`awaiting_reply`, `untrusted_review`): the reply
   form is the action, and a question's head names it, `Waits on your answer to message 5, asked 3m ago`, rather than
   saying it, since the conversation holds it, marked `waiting on you` (One home per fact). A plan (`plan_review`): the
-  plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`. Memory's items
+  plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`; a feedback plan's,
+  which shares the reason and is told apart by its detail or its ticket's `feedback_plan`, a line naming the plan, its
+  PRs, its items, and whether it is stale, with an outline `Approve it on org/repo#N`, a router link to the PR's page at
+  `#feedback-plan`, where it is approved. Memory's items
   (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above).
   Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
   where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,
@@ -945,10 +961,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   for one unsettled), a router link to the review's page its detail names, in place of the PR's review limit. A task's
   (`awaiting_reply`, `task_ticket_unrecorded`): named `task:N` (`TaskLink`) and its text's first line, as its row is,
   a question's head as a ticket's, then an outline `Answer on task:N` (`Open` for the other), a router link to the
-  task's page, which holds its question and its answer, never the `canopy` commands its detail names. An item
-  about nothing the page shows
-  whose detail names a `canopy` command to run (`repo_missing`): the command,
-  `Copyable`, and nothing to answer. A broken run's item shows any limit it is stuck at (below) under its run, as
+  task's page, which holds its question and its answer, never the `canopy` commands its detail names. A ticket's run
+  refused its model (`model_missing`, `model_list_failed`): the ticket's models (`TicketModels`), as its page shows
+  them, the runtime's list read as the item opens rather than when a menu does, so the model it no longer lists is
+  marked already. An item about nothing the page shows whose detail names a `canopy` command to run (`repo_missing`),
+  or the overseer's or a chore's run refused its model, `canopy models`: the command, `Copyable`, and nothing to
+  answer. A broken run's item shows any limit it is stuck at (below) under its run, as
   what it asks for. A ticket's item then shows its answer (below): its conversation, the reply form, and on the
   reasons above the ticket's own verbs (Start or Stop, Forget) and any other limit as a quiet row under the reply,
   Start and Stop as ghost buttons; on any other reason the verbs and the limit lead, under the head, as what it asks.
@@ -1425,6 +1443,19 @@ sliver beside four others; and its axis names short call numbers without measuri
   description.
   A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
   to the config: `Clear the override`, or `Use the default`.
+- **A choice of model** (`src/components/ticket-models.tsx`) is the same menu over the models the runtime lists, read
+  when it opens, in a row per agent laid out as the persona rows are: `worker model`, then the button, then where it
+  comes from in muted `text-xs`, beside the persona rows once the Work panel is `@3xl`, so each agent's model is level
+  with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
+  is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
+  `last served` names the model that served the agent's latest read run when it is not the button's. A choice saved
+  is confirmed in its row, a `saved` in `status-done`, so nothing below moves, until the ticket's models change after
+  it. The menu offers only what the server would take: the model chosen now, when it is not one, is a disabled item
+  with why in muted text after it (`no longer listed; its next run is refused`, `config's, with a variant`), and a
+  model gone from the list marks its
+  trigger in `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
+  `Read again` item. While a choice saves, its trigger names it with a trailing `…` and is `aria-busy`; a refusal's
+  `Notice` names the agent before its guard.
 - **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, under the
   verbs at the foot of a ticket's or a task's conversation, beside the reply that says what to do with them: each file a
   row of its name in monospace, its size muted, and a ghost `icon-xs` ✕ named `Remove NAME`; an outline `xs` **Attach a

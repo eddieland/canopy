@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import (
+    agent_models,
     attachments,
     contract,
     conversation,
@@ -29,7 +30,7 @@ from canopy.core import (
 )
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunStatus
-from canopy.serve import draft_views, memory_views
+from canopy.serve import draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
     Attachments,
@@ -43,6 +44,7 @@ from canopy.serve.schema import (
     Message,
     MessageKind,
     MessageSource,
+    ModelCost,
     ModelsServed,
     NoticeChannel,
     Pause,
@@ -63,7 +65,7 @@ from canopy.serve.transcript_views import raw_output, removed_after, session_tra
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from datetime import datetime
 
     from canopy.core.context import Context
@@ -259,8 +261,6 @@ def runs(ctx: Context) -> list[Run]:
     running = db.running_runs(ctx.conn, "runs")
     recent = db.recent_runs(ctx.conn, RECENT_RUNS)
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
-    ended = [int(r["id"]) for r in recent]
-    reads, models = run_models.reads_of(ctx.conn, "runs", ended), run_models.of_runs(ctx.conn, "runs", ended)
     root = ctx.workspace.root
     running_models = ModelsServed(status="running")
     return [
@@ -268,10 +268,21 @@ def runs(ctx: Context) -> list[Run]:
             run(r, root, [shown_path(str(s.slot_path), root) for s in slots[int(r["id"])]], running_models)
             for r in running
         ),
-        *(
-            run(r, root, models=_served(reads.get(i), models[i], ended=True, session_id=r["session_id"]))
-            for i, r in zip(ended, recent, strict=True)
-        ),
+        *(run(r, root, models=m) for r, m in zip(recent, runs_served(ctx.conn, recent), strict=True)),
+    ]
+
+
+def runs_served(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> list[ModelsServed]:
+    """Which models served each of the `runs` table's `rows`, as `models_served` says for one, in one read.
+
+    Returns:
+        Each row's models, in the order of `rows`.
+    """
+    ids = [int(r["id"]) for r in rows]
+    reads, models = run_models.reads_of(conn, "runs", ids), run_models.of_runs(conn, "runs", ids)
+    return [
+        _served(reads.get(i), models[i], ended=r["ended_at"] is not None, session_id=r["session_id"])
+        for i, r in zip(ids, rows, strict=True)
     ]
 
 
@@ -344,6 +355,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None, models
         activity=_activity(row) if status == "running" else None,
         persona=str(row["persona"]) if row["persona"] is not None else None,
         persona_digest=str(row["persona_digest"]) if row["persona_digest"] is not None else None,
+        model=str(row["model"]) if row["model"] is not None else None,
         models=models,
     )
 
@@ -481,16 +493,17 @@ def tickets(ctx: Context) -> list[TicketSummary]:
     Returns:
         At most `TICKETS` tickets, as the tickets list shows them.
     """
-    return [summary(ctx.conn, row) for row in db.recent_tickets(ctx.conn, TICKETS)]
+    return [summary(ctx, row) for row in db.recent_tickets(ctx.conn, TICKETS)]
 
 
-def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
+def summary(ctx: Context, row: sqlite3.Row) -> TicketSummary:
     """A ticket row, with `active_at` as `db.recent_tickets` adds it, as the tickets list shows it.
 
     Returns:
         The ticket, with whether it was started privately, the question it awaits, its running run, if any, and
-        whether its plan waits on the operator.
+        whether its plan or its feedback plan waits on the operator.
     """
+    conn = ctx.conn
     key = str(row["key"])
     record = conversation.start_of(conn, key)
     status: StartStatus | None = None
@@ -516,6 +529,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
         awaiting=waiting.id if waiting is not None else None,
         running_run=running.id if running is not None else None,
         plan_waits=ticket is not None and plans.waits(conn, ticket),
+        feedback_plan=feedback_plan_views.waiting(ctx, key),
     )
 
 
@@ -529,6 +543,8 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
     if not rows:
         return None
     [row] = rows
+    ran = db.runs_of(ctx.conn, key, TICKET_RUNS)
+    served = ticket_models.last_served(ctx.conn, key)
     units = [
         Unit(
             repo=str(u.repo) if u.repo else None,
@@ -543,11 +559,11 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         if u.pr_url is not None and (found := backend.review_limit(ctx, u.pr_url)) is not None
     ]
     return TicketDetail(
-        ticket=summary(ctx.conn, row),
+        ticket=summary(ctx, row),
         units=units,
         limits=[limit(found) for found in backend.limits(ctx, key)]
         + [limit(found, repo=repo) for repo, found in reviews],
-        runs=[run(r, ctx.workspace.root) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
+        runs=[run(r, ctx.workspace.root, models=m) for r, m in zip(ran, runs_served(ctx.conn, ran), strict=True)],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
         forgets=[forget(f) for f in db.forgets_of(ctx.conn, key)],
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
@@ -555,7 +571,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         drafts=draft_views.of_ticket(ctx.conn, key),
         personas=[agent_persona(n) for n in personas.next_for(ctx.conn, ctx.config, key)],
         persona_names=[p.name for p in personas.listed(ctx.config)],
-        models=[agent_model(n) for n in ticket_models.next_for(ctx.conn, ctx.config, key)],
+        models=[agent_model(n, served) for n in ticket_models.next_for(ctx.conn, ctx.config, key)],
         attachments=attachments_of(ctx, conversation.Ref(conversation.TICKET, key)),
     )
 
@@ -601,13 +617,26 @@ def agent_persona(found: personas.Next) -> AgentPersona:
     )
 
 
-def agent_model(found: ticket_models.Next) -> AgentModel:
+def agent_model(found: ticket_models.Next, served: Mapping[ticket_models.Agent, str] | None = None) -> AgentModel:
     """The model one of a ticket's agents runs on at its next run, as the API sends it.
 
+    Args:
+        found: The agent's next model, and where it comes from.
+        served: The model that served each agent's latest read run for the ticket (`ticket_models.last_served`); None
+            when it is not wanted, which sends none.
+
     Returns:
-        The agent, its model, or None for the runtime's default, and where that comes from.
+        The agent, its model, or None for the runtime's default, where that comes from, the model's variant, and the
+        model that last served it.
     """
-    return AgentModel(agent=found.agent, model=found.model, source=found.source)
+    variant = agent_models.parse(found.model).variant if found.model is not None else None
+    return AgentModel(
+        agent=found.agent,
+        model=found.model,
+        source=found.source,
+        variant=variant,
+        last_served=served.get(found.agent) if served is not None else None,
+    )
 
 
 def persona_choice(found: personas.Listed) -> PersonaChoice:
@@ -650,6 +679,7 @@ def _ticket_cost(conn: sqlite3.Connection, key: str) -> CostTotal:
         reviews=int(row["reviews"]),
         priced=int(row["priced"]),
         cost_usd=float(cost) if cost is not None else None,
+        models=[ModelCost(model=m.model, runs=m.runs, cost_usd=m.cost_usd) for m in run_models.of_ticket(conn, key)],
     )
 
 

@@ -15,7 +15,8 @@ it ended:
 
 - A **worker run** (`run:39`) names its ticket and kind, with a resume's reasons beside it (`resume (ci, review)`),
   and the ticket's title, marked `private` when the ticket is. Under it are its summary, its PRs, the worktrees it
-  holds, its session id with a button that copies it, and, while it runs, its latest tool call.
+  holds, the model that served it, its session id with a button that copies it, and, while it runs, its latest tool
+  call.
 - A **review** (`review:4`) names its ticket, if its PR has one, and the PR's title: its own, or its ticket's until
   a worker reports one. Under it are the PR, the commit it read, and what it found. The findings themselves are on
   [its page](pull-requests#a-reviews-page).
@@ -25,6 +26,13 @@ it ended:
 
 A subject with no title says `untitled`, which for a chore is a hint its prompt could use a first line.
 
+A worker run's model line names the model its session says served it, without the provider unless two models in the
+list share a name, so `claude-opus-4-1` rather than `anthropic/claude-opus-4-1`, and `+1` when it switched partway.
+Hover it for each one whole, with its cost. Until canopy reads the session it names the model canopy asked for,
+`asked claude-opus-4-1`, or says `model none`, with why on hover. A run that got another model than it asked for says
+both, in amber, as [its page](#a-runs-page) does. A ticket's Runs panel shows the same line, so a canary ticket reads
+straight down its runs: opus, opus, opus, and not a sonnet slipped in where you weren't looking.
+
 A long summary shows its first four lines and **show N more lines** for the rest, so one worker with a lot to say
 doesn't push the other rows off the page. In a narrow window, such as half a monitor, the cost goes first and then
 the kind; how long stays.
@@ -33,6 +41,11 @@ The chips filter by kind, `workers`, `reviews`, or `chores`, and by the latest r
 you` (the worker stopped to ask something), `failed`, `stopped`, and `done`. The two keep each other, so `reviews`
 then `failed` is every PR whose latest review failed. A cost of `–` means the runtime reported none, which is not the
 same as free.
+
+A model on [the spend page](ticks#the-spend-page) opens this page filtered to it, `?model=`: the worker runs it served,
+or, until their sessions are read, the ones that asked for it, each ticket's latest of those leading its row. Reviews
+and chores drop out, since this list doesn't name their models, and so do runs older than the recent ones the page
+keeps. **all** beside the model takes the filter off.
 
 Under the page's description, one line says how full each limit is, counted the way canopy counts it before it starts
 anything: `workers 2 of 2` is `capacity.max_workers`, which reviews and task runs count toward, `reviews 0 of 1` is
@@ -53,9 +66,11 @@ digests had it edited between them. **model** names the model that wrote its rep
 session says, so it is right even when a template's option or the runtime's default picked it rather than you. A run
 that switched models partway lists each with its share of the cost. The runtime prints no model while a run works, so
 canopy reads the session as the run ends, and any it missed while the loop waits between ticks; until then, or once the
-runtime has forgotten the session, the field says why it names none. The runs list carries the same, so a run's page
-fills it in without a reload. Last come the places: the branch, its worktrees, and the path of its log, which only you
-can read.
+runtime has forgotten the session, the field says why it names none. When canopy chose the run's model, from
+`[runtime.models]` or the ticket's override, the field says `asked` and that model instead, from the moment it starts,
+with why none served yet on hover. Once the session is read, a model that served other than the one asked for reads
+`served X, asked Y`, in the color of a run waiting on you, since it is worth a look. Last come the places: the branch,
+its worktrees, and the path of its log, which only you can read.
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the

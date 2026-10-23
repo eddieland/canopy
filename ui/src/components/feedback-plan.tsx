@@ -54,7 +54,7 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
     const [shown, setShown] = useState(false)
     const open = plan.status !== 'spent'
     return (
-        <Panel data-testid="feedback-plan" data-status={plan.status}>
+        <Panel id="feedback-plan" data-testid="feedback-plan" data-status={plan.status}>
             <PanelHeader label="Feedback plan">
                 <span className="flex items-center gap-2">
                     <span className="readout text-xs text-muted-foreground">feedback-plan:{plan.id}</span>

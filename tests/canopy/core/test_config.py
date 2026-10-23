@@ -97,6 +97,8 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("paths", "plan_archive_workspace_dir = false"),
         # A conversation, a private ticket's too, would go to a remote the operator never chose for it.
         ("paths", "plan_archive_conversations = true"),
+        # Comments are the operator's words, sent to a remote only they choose.
+        ("paths", "plan_archive_comments = true"),
         ("personas", "worker = 'canopy'"),
         ("personas", "planner = 'skeptic'"),
         ("personas", "reviewer = 'lenient'"),
@@ -606,8 +608,9 @@ def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: C
     assert list(cfg.connect.named()) == ["ghe"]
 
 
-def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_source(canopy_env: CanopyEnv) -> None:
+def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_then_the_slack_source(canopy_env: CanopyEnv) -> None:
     canopy_env.append_user(
+        '\n[connect.sources.a-slack]\nkind = "slack"\ncmd = "canopy-connect-slack --channel C1"\noperators = ["U1A"]\n'
         '\n[connect.sources.a-feed]\nkind = "artifacts"\ncmd = "canopy-artifacts feed --store /s"\n'
         '\n[connect.sources.b-jira]\nkind = "tracker"\ncmd = "canopy-connect-jira --site acme.atlassian.net"\n',
     )
@@ -616,7 +619,9 @@ def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_source(canopy_e
         ("b-jira", "tracker"),
         ("github", "vcs"),
         ("a-feed", "artifacts"),
+        ("a-slack", "slack"),
     ]
+    assert cfg.connect.sources["a-slack"].operators == ("U1A",)
 
 
 @pytest.mark.parametrize(
@@ -639,6 +644,10 @@ def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_source(canopy_e
         ),
         ('[connect.sources.a]\nkind = "artifacts"\npost_cmd = "post"\n', "an artifacts source needs cmd"),
         ('[connect.sources.a]\nkind = "artifacts"\ncmd = "r"\npost_cmd = "p"\n', "takes no post_cmd"),
+        ('[connect.sources.a]\nkind = "slack"\ncmd = "r"\n', "a slack source needs cmd and operators"),
+        ('[connect.sources.a]\nkind = "slack"\ncmd = "r"\noperators = ["U1A"]\npost_cmd = "p"\n', "takes no post_cmd"),
+        ('[connect.sources.a]\nkind = "slack"\ncmd = "r"\noperators = ["@me"]\n', "is not a Slack user id"),
+        ('[connect.sources.a]\nkind = "vcs"\ncmd = "r"\noperators = ["U1A"]\n', "operators is a slack source's"),
     ],
 )
 def test_review_replies_and_sources_are_checked(canopy_env: CanopyEnv, toml: str, message: str) -> None:

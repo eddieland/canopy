@@ -367,6 +367,20 @@ class ReviewDraftAuthor(StrEnum):
     OPERATOR = "operator"
 
 
+class DismissalReason(StrEnum):
+    """Why the operator dismissed a review's finding, `review_dismissals.reason` (DESIGN §21).
+
+    NULL on a dismissal from before canopy asked why.
+    """
+
+    #: The finding does not hold: the reviewer misread the code, or the guard it missed is there.
+    WRONG = "wrong"
+    #: It holds, and the change means it to: the behavior it names is the one wanted.
+    INTENTIONAL = "intentional"
+    #: It holds, and fixing it is not worth the change it takes.
+    NOT_WORTH_IT = "not_worth_it"
+
+
 class Reaction(StrEnum):
     """A reaction a thread's draft stages on the comment it names, `draft_versions.reaction` (DESIGN §29).
 
@@ -415,6 +429,8 @@ class SourceKind(StrEnum):
     VCS = "vcs"
     #: An artifact store's comment feed (DESIGN §38).
     ARTIFACTS = "artifacts"
+    #: The replies people wrote in the Slack sink's ticket threads; a listed operator's is their message (DESIGN §22).
+    SLACK = "slack"
 
 
 class ConnectorRunStatus(StrEnum):

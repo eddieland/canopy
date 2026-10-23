@@ -136,7 +136,7 @@ trusted_reviewers = ["replace-with-your-github-login"]
 # set is never feedback or an instruction.
 comment_prefix = "CANOPY:"
 comment_suffix = ""
-# The Co-authored-by trailer a worker adds to its commits when the agent runtime adds none of its own. Name an agent
+# The Co-authored-by trailer git adds to every commit a worker makes, through canopy's hooks. Name an agent
 # here, such as your team's bot address, never a person: it is how a reader tells the work is an agent's. Left as the
 # default, the name credits the model [runtime.models] chooses for the worker, as "provider/model (canopy worker)",
 # and a worker following an approved plan adds a second trailer for its planner's, "provider/model (canopy planner)";
@@ -145,6 +145,10 @@ comment_suffix = ""
 # commit_trailer = true
 # commit_trailer_name = "canopy worker"
 # commit_trailer_email = "noreply@canopy.invalid"
+# Text git puts before the subject of every commit a worker makes, "{key}" filled with its ticket's key, as
+# "[PROJ-123] ", but a fixup!, squash!, or amend! commit's, which --autosquash matches by its subject. A task's run,
+# which has no ticket, gets none that names "{key}". Empty: none.
+# commit_prefix = ""
 # Set if your repositories refuse merge commits: workers then rebase onto a base branch instead of merging it in, and
 # push the result with --force-with-lease to their own branch, never any other force (TRUST_MODEL T1).
 # rebase = false
@@ -183,6 +187,10 @@ prompt_overrides = "~/.config/canopy/prompts"
 # Set true to archive each planned ticket's conversation beside its plans too: workers' reports and questions, your
 # replies, and mirrored tracker comments, a private ticket's included. `canopy archive DIR --conversations` copies them.
 # plan_archive_conversations = false
+# Each ticket's plans go with your comments on them, as KEY/COMMENTS.md: every thread, the passage it is on, and its
+# replies. Set false to leave them out; `canopy archive DIR` copies them either way. A plan you edited always goes with
+# its original, as the planner wrote it, as RUN-ORIGINAL.md.
+# plan_archive_comments = true
 
 # Optional: the persona each agent writes in, by name: its voice and what it weighs most, never what it may do. A run
 # whose persona has no file is refused, never run in canopy's voice instead (DESIGN §31).
@@ -271,6 +279,15 @@ cmd = ""
 # [connect.sources.artifacts]
 # kind = "artifacts"
 # cmd = "canopy-artifacts feed --store /path/to/your/store --namespace canopy/operator"
+#
+# And, with the Slack sink on a bot token and --threads, a source that reads the replies in its ticket threads (ROADMAP
+# M64). A reply from an id in `operators` is your message on the ticket, as `canopy reply` records one: list only your
+# own Slack member id. The bot also needs channels:history (groups:history for a private channel). --channel is the
+# sink's own, by id.
+# [connect.sources.slack]
+# kind = "slack"
+# cmd = "canopy-connect-slack --channel C0123ABCD"
+# operators = ["U0123ABCD"]
 
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
 # what each kind holds and what a pass would remove. A live tick removes the files and the journal's rows once a day,

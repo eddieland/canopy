@@ -57,8 +57,8 @@ test.describe('in a narrow window', () => {
         expect(column).toBeLessThan(11 * 16)
         await expect(row.getByText('review pending')).toBeHidden()
         const title = await row.getByText(/debounce the search box/u).boundingBox()
-        // More than the free column's floor, 8rem: the room the PR column no longer takes.
-        expect(title?.width ?? 0).toBeGreaterThan(200)
+        // More than the free column's floor, 8rem: the room the PR column, as wide as acme/mobile#61, no longer takes.
+        expect(title?.width ?? 0).toBeGreaterThan(180)
     })
 
     test('the worktrees list lets what holds a slot go before its branch is cut, and keeps its age', async ({
@@ -109,7 +109,7 @@ test.describe('in a narrow window', () => {
         await settled(page)
         const strip = page.getByTestId('rail-strip')
         await expect(strip.getByRole('link', { name: 'Runs' })).toBeVisible()
-        await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^9/u)
+        await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^10/u)
         await expect(page.getByTestId('rail-working')).toHaveCount(0)
 
         await strip.getByRole('button', { name: 'Open the rail' }).click()

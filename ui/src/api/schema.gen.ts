@@ -205,6 +205,28 @@ export type paths = {
         patch: operations["saveConfig"];
         trace?: never;
     };
+    "/api/config/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get each agent's and chore's model
+         * @description The model config chooses for each of canopy's agents and each chore, as the loop runs on it, read only.
+         *
+         *     Each file named is the one its tables come from as the files say now, so the page can say where to edit them.
+         */
+        get: operations["getConfigModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/drafts/send": {
         parameters: {
             query?: never;
@@ -919,7 +941,7 @@ export type paths = {
         put?: never;
         /**
          * Dismiss a review's finding
-         * @description `canopy dismiss review:ID N`: no worker or tick acts on the finding. With `undo`, `--undo` (DESIGN §21).
+         * @description `canopy dismiss review:ID N --reason R`: no worker or tick acts on the finding. With `undo`, `--undo` (§21).
          */
         post: operations["dismissReviewFinding"];
         delete?: never;
@@ -2166,6 +2188,15 @@ export type components = {
             /** @description The agent: `worker` for its implement and resume runs, `planner`, or `reviewer`. */
             agent: components["schemas"]["ModelAgent"];
             /**
+             * Last Served
+             * @description The model that served the agent's latest run for the ticket whose session canopy has read, as `provider/model`,
+             *     the most costly when it called several; None when none of its runs has been read.
+             *
+             *     What served may differ from `model`: a run before the choice changed, or the runtime's default, which `model` cannot
+             *     name.
+             */
+            last_served: string | null;
+            /**
              * Model
              * @description The model, as `provider/model`; None for the runtime's default, when neither the ticket nor config sets one.
              */
@@ -2176,6 +2207,14 @@ export type components = {
              * @enum {string}
              */
             source: "ticket" | "config" | "default";
+            /**
+             * Variant
+             * @description The variant `model` runs at, after its last `@`, as `high` in config's `provider/model@high`; None for none.
+             *
+             *     The runtime's list names the model without it, and a ticket's override names none, so a model with one is not a
+             *     choice the page can make: it chooses the model alone.
+             */
+            variant: string | null;
         };
         /**
          * AgentPersona
@@ -2434,6 +2473,40 @@ export type components = {
              * @description Its title, as the agent wrote it: untrusted text.
              */
             title: string;
+        };
+        /**
+         * ChoreModel
+         * @description The model one chore runs on as config chooses it (DESIGN §13, §19), and where that choice comes from.
+         */
+        ChoreModel: {
+            /**
+             * Agent
+             * @description The agent of the operator's own its command runs, for `agent`; None otherwise, or when the command names none.
+             */
+            agent: string | null;
+            /**
+             * Chore
+             * @description The chore's name, its `[chores.<name>]` table.
+             */
+            chore: string;
+            /**
+             * Model
+             * @description The model, as `provider/model`, without its variant; None when config chooses none.
+             */
+            model: string | null;
+            /**
+             * Source
+             * @description Where it comes from: the chore's own `model`, `runtime.models.chore`, the definition of an agent of the
+             *     operator's own that its command runs, which canopy does not write and config gives no model, or nothing, the
+             *     runtime's default.
+             * @enum {string}
+             */
+            source: "chore" | "config" | "agent" | "default";
+            /**
+             * Variant
+             * @description The variant it runs at; None for the model's default.
+             */
+            variant: string | null;
         };
         /**
          * ChoreRun
@@ -2812,6 +2885,45 @@ export type components = {
             value: components["schemas"]["ConfigValue"];
         };
         /**
+         * ConfigModels
+         * @description The model config chooses for each of canopy's agents and each chore, and the files that set them (DESIGN §13).
+         *
+         *     As the loop runs on it now: an edit to a file shows here once the loop reads its config again.
+         */
+        ConfigModels: {
+            /**
+             * Agents
+             * @description Each key of `[runtime.models]`: `worker`, `planner`, `reviewer`, `overseer`, then `chore`.
+             */
+            agents: components["schemas"]["ConfiguredModel"][];
+            /**
+             * Chores
+             * @description Each chore the config defines for this workspace, by name.
+             */
+            chores: components["schemas"]["ChoreModel"][];
+            /**
+             * Chores File
+             * @description The file the `[chores.*]` tables come from, all from one, as the files say now; None when no file sets one, or
+             *     one cannot be read.
+             */
+            chores_file: string | null;
+            /**
+             * Models File
+             * @description The file `[runtime.models]` comes from, as the files say now; None when none sets it, or one cannot be read.
+             */
+            models_file: string | null;
+            /**
+             * Private File
+             * @description The workspace's private file (M49), which serves this workspace alone.
+             */
+            private_file: string;
+            /**
+             * User File
+             * @description The user config file, which serves every workspace.
+             */
+            user_file: string;
+        };
+        /**
          * ConfigPatch
          * @description A save from the settings page: the keys to change, and the private file's hash as the page read it.
          */
@@ -2852,6 +2964,11 @@ export type components = {
              */
             restart: string[];
         };
+        /**
+         * @description A key of `[runtime.models]` (DESIGN §13): `worker` for both workers and a task's runs, and `chore` for every chore without a `model` of its own.
+         * @enum {string}
+         */
+        ConfigRole: "worker" | "planner" | "reviewer" | "overseer" | "chore";
         /**
          * ConfigSaved
          * @description What a save wrote, apart from what the reload it asked for did (DESIGN §22).
@@ -2925,6 +3042,30 @@ export type components = {
              */
             workspace_file: string;
         };
+        /**
+         * ConfiguredModel
+         * @description The model `[runtime.models]` chooses for one of canopy's agents, as its runs take it but a ticket's override.
+         */
+        ConfiguredModel: {
+            /** @description The key of `[runtime.models]`, the agent it chooses for. */
+            agent: components["schemas"]["ConfigRole"];
+            /**
+             * Model
+             * @description The model, as `provider/model`, without its variant; None when nothing sets one: the runtime's default.
+             */
+            model: string | null;
+            /**
+             * Source
+             * @description Where it comes from: `[runtime.models]`, or nothing, the runtime's default.
+             * @enum {string}
+             */
+            source: "config" | "default";
+            /**
+             * Variant
+             * @description The variant it runs at, such as a reasoning effort; None for the model's default.
+             */
+            variant: string | null;
+        };
         /** @description A config key's value: a count or minutes, a switch, a choice, a list's entries, `spend.budget_alerts`'s percentages, or `capacity.repo_slots`'s counts by repository. None is a pool canopy does not manage, or no budget. */
         ConfigValue: number | boolean | string | string[] | number[] | {
             [key: string]: number;
@@ -2939,6 +3080,13 @@ export type components = {
              * @description What they cost, in US dollars; None when none reported a cost.
              */
             cost_usd: number | null;
+            /**
+             * Models
+             * @description A ticket's: what each model their sessions named cost, the most costly first; the rest of `cost_usd` is the
+             *     runs no session named a model for. Empty for a PR's.
+             * @default []
+             */
+            models: components["schemas"]["ModelCost"][];
             /**
              * Priced
              * @description How many of those runs and review runs reported a cost.
@@ -3102,6 +3250,11 @@ export type components = {
          * @enum {string}
          */
         DiffLineKind: "add" | "del" | "ctx";
+        /**
+         * @description Why the operator dismissed a review's finding (DESIGN §21): `wrong`, it does not hold; `intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix.
+         * @enum {string}
+         */
+        DismissalReasonName: "wrong" | "intentional" | "not_worth_it";
         /**
          * Dismissed
          * @description What a dismissal left: the finding, and whether it is now dismissed.
@@ -4365,6 +4518,27 @@ export type components = {
          */
         ModelAgent: "worker" | "planner" | "reviewer";
         /**
+         * ModelCost
+         * @description What one model cost over a subject's agent runs, as their sessions say (DESIGN §13).
+         */
+        ModelCost: {
+            /**
+             * Cost Usd
+             * @description What the sessions priced its replies at, in US dollars.
+             */
+            cost_usd: number;
+            /**
+             * Model
+             * @description As `provider/model`, as the runtime names it.
+             */
+            model: string;
+            /**
+             * Runs
+             * @description How many of the runs it wrote a reply of: a run on two models counts under each.
+             */
+            runs: number;
+        };
+        /**
          * ModelList
          * @description The models the runtime lists to run an agent on, as `canopy models` prints them: what the operator may choose.
          */
@@ -5385,6 +5559,8 @@ export type components = {
              * @description The finding's number in the review, from 1.
              */
             finding: number;
+            /** @description Why it is dismissed; None after an `undo`. */
+            reason: components["schemas"]["DismissalReasonName"] | null;
             /**
              * Run
              * @description The review run's id.
@@ -5401,6 +5577,8 @@ export type components = {
              * @description The finding's number in the review, from 1.
              */
             finding: number;
+            /** @description Why it is dismissed, as `--reason` says: required to dismiss, refused with `undo`. */
+            reason?: components["schemas"]["DismissalReasonName"] | null;
             /**
              * Undo
              * @description Take the dismissal back, as `--undo` does.
@@ -5794,6 +5972,8 @@ export type components = {
              * @default false
              */
             dismissed: boolean;
+            /** @description Why they dismissed it; None when it is not dismissed, or was before canopy asked why. */
+            dismissed_reason: components["schemas"]["DismissalReasonName"] | null;
             /**
              * File
              * @description The index in the diff's files of the file it is in; None when the diff does not show it.
@@ -6157,7 +6337,17 @@ export type components = {
              * @description Where its log is: from the workspace root when under it, as a worktree's path is.
              */
             log_path: string;
-            /** @description Which models served it, on its page and in the runs list; None where another page lists it. */
+            /**
+             * Model
+             * @description The model canopy asked the runtime for (DESIGN §13, Each agent's model), as `provider/model[@variant]`, known
+             *     from its start, before its session is read; None when it asked for none, so the runtime's default served it, and
+             *     for a run from before canopy chose one.
+             */
+            model: string | null;
+            /**
+             * @description Which models served it, on its page, in the runs list, and in a ticket's or a PR's runs; None where another page
+             *     lists it.
+             */
             models: components["schemas"]["ModelsServed"] | null;
             /**
              * New Tokens
@@ -7991,6 +8181,8 @@ export type components = {
              * @description Whether the overseer marked it done.
              */
             done: boolean;
+            /** @description Its current feedback plan while it waits on the operator, proposed and not yet approved; None otherwise. */
+            feedback_plan: components["schemas"]["WaitingFeedbackPlan"] | null;
             /**
              * Key
              * @description The ticket's key, as the tracker names it.
@@ -8367,6 +8559,32 @@ export type components = {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * WaitingFeedbackPlan
+         * @description A ticket's feedback plan while it waits on the operator (DESIGN §32), as the attention list names it.
+         */
+        WaitingFeedbackPlan: {
+            /**
+             * Id
+             * @description The plan's id, as `feedback-plan:N` names it.
+             */
+            id: number;
+            /**
+             * Items
+             * @description How many items it covers.
+             */
+            items: number;
+            /**
+             * Pr Urls
+             * @description The PRs of the units it covers, by repository: each PR's page shows the plan, where it is approved.
+             */
+            pr_urls: string[];
+            /**
+             * Stale
+             * @description Whether its PRs changed since it was written, so approving it is refused once, naming what changed.
+             */
+            stale: boolean;
         };
         /**
          * WorkerNotice
@@ -9317,6 +9535,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getConfigModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigModels"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */

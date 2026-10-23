@@ -12,12 +12,13 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     await settled(page)
     const rows = page.getByTestId('attention-list').getByRole('link')
     // Broken work, what waits on the operator, the rest by how long it has been open, then a chore's finding.
-    await expect(rows).toHaveCount(9)
+    await expect(rows).toHaveCount(10)
     const reasons = [
         'worker failed',
         'review waiting',
         'drafts waiting',
         'awaiting reply',
+        'plan review',
         'awaiting reply',
         'repo missing',
         'needs reviewer',
@@ -30,10 +31,10 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     // A reason reads as words, and keeps the CLI's spelling on hover.
     await expect(rows.first().getByTitle('worker_failed')).toHaveText('worker failed')
     // A finding's id is the agent's text: its chip says `finding`, and the id sits beside its chore.
-    await expect(rows.nth(8).getByText('finding', { exact: true })).toBeVisible()
+    await expect(rows.nth(9).getByText('finding', { exact: true })).toBeVisible()
     // An item about a ticket names it by its title too; a repository's has none to name.
     await expect(rows.first()).toContainText('Fix the flaky checkout test')
-    await expect(rows.nth(5).getByText('untitled')).toHaveCount(0)
+    await expect(rows.nth(6).getByText('untitled')).toHaveCount(0)
 
     await expect(rows.first()).toHaveAttribute('aria-current', 'page')
     const detail = page.getByTestId('attention-detail')
@@ -212,30 +213,31 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
 }) => {
     await page.goto('attention')
     await settled(page)
-    // ABC-101's and ABC-104's runs, and task 6's; ABC-102, and task 4, waiting on a reply.
+    // ABC-101's and ABC-104's runs, and task 6's; ABC-102, and task 4, waiting on a reply, and the feedback plans of
+    // ABC-099 and ABC-133 to ABC-136 on your approval.
     await expect(page.getByTestId('counter-running')).toContainText('3')
-    await expect(page.getByTestId('counter-waiting')).toContainText('2')
+    await expect(page.getByTestId('counter-waiting')).toContainText('7')
     await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
-    await expect(page.getByTestId('counter-attention')).toContainText('9')
+    await expect(page.getByTestId('counter-attention')).toContainText('10')
     // The split is the nav's, and what waits on you the counter's value: no line under them says either again.
-    await expect(page.getByTestId('counter-attention')).toHaveText('Attention9')
+    await expect(page.getByTestId('counter-attention')).toHaveText('Attention10')
     await expect(page.getByTestId('counter-running')).toHaveText('Running3')
     // Outside the rail and the nav, the page says it once: the counter's label.
     await expect(page.getByRole('main').getByText(/waiting on you/iu)).toHaveCount(1)
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /Runs/u }).click()
     await expect(page.getByTestId('nav-attention-failed')).toHaveText('1')
-    await expect(page.getByTestId('nav-attention-waiting')).toHaveText('4')
+    await expect(page.getByTestId('nav-attention-waiting')).toHaveText('5')
     await expect(page.getByTestId('nav-attention-other')).toHaveText('4')
     // Told apart by color, so said in words too: on hover, and in the link's name.
     await expect(page.getByTestId('nav-attention-count')).toHaveAttribute(
         'title',
-        '1 broken, 4 waiting on you, 4 other',
+        '1 broken, 5 waiting on you, 4 other',
     )
     await expect(
         page
             .getByRole('navigation', { name: 'Main' })
-            .getByRole('link', { name: /1 broken, 4 waiting on you, 4 other/u }),
+            .getByRole('link', { name: /1 broken, 5 waiting on you, 4 other/u }),
     ).toHaveCount(1)
     await expect(page.getByTestId('counters')).toHaveCount(0)
 })
@@ -261,6 +263,25 @@ test("a question's item is answered in its reply, with the ticket's own actions 
     expect(actions !== null && reply !== null && reply.y < actions.y).toBe(true)
     // What is working now is the rail's, on every page; the attention page keeps no list of its own.
     await expect(page.getByTestId('workers')).toHaveCount(0)
+})
+
+test("a feedback plan's review waits on you, and links to the plan on its PR's page", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const row = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'plan review' })
+    await row.click()
+    // Not a ticket plan's: nothing is answered while it waits, and no plan card stands in for it.
+    await expect(row).not.toContainText('answered')
+    const detail = page.getByTestId('attention-detail')
+    await expect(detail.getByTestId('answered-note')).toHaveCount(0)
+    await expect(detail.getByTestId('plan-card')).toHaveCount(0)
+    const plan = detail.getByTestId('attention-feedback-plan')
+    await expect(plan).toHaveText(
+        /^Feedback plan 1 for acme\/web#88 waits on you: 3 items, and its PR has moved on since it was written\./u,
+    )
+    await plan.getByRole('link', { name: 'Approve it on acme/web#88' }).click()
+    await expect(page).toHaveURL(/pull-requests\/pr\?url=.+#feedback-plan$/u)
+    await expect(page.locator('#feedback-plan')).toBeVisible()
 })
 
 test('from a fresh load, the skip link is the first Tab, and the page is the next', async ({ page }) => {

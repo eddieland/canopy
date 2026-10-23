@@ -208,6 +208,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 - The harness makes no network call; Slack is a separate process with its own secret file. The desktop sink, holding
   no secret and needing no network, ships inside canopy.
 - Rejected: HTTP in the harness (T2); the overseer posting via Slack MCP; interactive Slack (needs a listener).
+  Replies read back by a connector, polled outbound, need none (M64).
 
 ## D036. A dry run runs every guard and changes nothing the next live tick reads
 

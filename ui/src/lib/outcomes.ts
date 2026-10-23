@@ -150,22 +150,26 @@ export function personaText(ticketKey: string, now: AgentPersona): string {
     return `${ticketKey}'s ${now.agent} runs write in ${now.persona} from their next run: ${source}.`
 }
 
-/** Where an agent's model comes from, in the words `canopy model KEY` uses. */
+/**
+ * Where an agent's model comes from, as its row on a ticket's page says it: `canopy model KEY`'s words, but for the
+ * runtime's default, which the row names as the model does.
+ */
 export const MODEL_SOURCES: Record<AgentModel['source'], string> = {
     ticket: "this ticket's override",
     config: '[runtime.models]',
-    default: 'nothing sets one',
+    default: 'runtime default',
 }
 
-/** An agent's model as the page names it: its id, or the runtime's default when nothing sets one. */
+/** An agent's model as a ticket's page names it: its id, or the runtime's default when nothing sets one. */
 export function modelName(model: string | null): string {
-    return model ?? "the runtime's default"
+    return model ?? MODEL_SOURCES.default
 }
 
 /** What choosing or clearing a ticket's model did, as `canopy model` says it. */
 export function modelText(ticketKey: string, now: AgentModel): string {
-    const source = MODEL_SOURCES[now.source]
-    return `${ticketKey}'s ${now.agent} runs use ${modelName(now.model)} from their next run: ${source}.`
+    const source = now.source === 'default' ? 'nothing sets one' : MODEL_SOURCES[now.source]
+    const model = now.model ?? "the runtime's default"
+    return `${ticketKey}'s ${now.agent} runs use ${model} from their next run: ${source}.`
 }
 
 /**
@@ -210,11 +214,11 @@ export function dismissedText(dismissed: Dismissed): string {
     return `${head} is listed again while the chore reports it.`
 }
 
-/** What a dismissal of a review's finding did, as `canopy dismiss review:ID N` says it. */
+/** What a dismissal of a review's finding did, as `canopy dismiss review:ID N --reason REASON` says it. */
 export function reviewDismissedText(dismissed: ReviewDismissed): string {
     const head = `review:${dismissed.run} finding ${dismissed.finding}`
     if (dismissed.dismissed) {
-        return `${head} is dismissed: no worker or tick acts on it.`
+        return `${head} is dismissed${dismissedAs(dismissed)}: no worker or tick acts on it.`
     }
     return `${head} is no longer dismissed: a resume hands it to the worker again.`
 }
@@ -226,9 +230,14 @@ export function reviewDismissedText(dismissed: ReviewDismissed): string {
 export function reviewPointText(dismissed: ReviewDismissed): string {
     const head = `review:${dismissed.run} finding ${dismissed.finding}`
     if (dismissed.dismissed) {
-        return `${head} is dismissed: left out of your review.`
+        return `${head} is dismissed${dismissedAs(dismissed)}: left out of your review.`
     }
     return `${head} is no longer dismissed: back in your review, in the reviewer's words.`
+}
+
+// ` as wrong`, as the CLI names the reason a finding was dismissed for; nothing for an answer without one.
+function dismissedAs(dismissed: ReviewDismissed): string {
+    return dismissed.reason === null ? '' : ` as ${dismissed.reason}`
 }
 
 /** What sending a review's findings did, as `canopy send review:ID N...` says it. */

@@ -143,6 +143,8 @@ Built (2026-10-23): OpenCode 2's list, read from `opencode api --standalone mode
 it. Of its binaries: 2.1.2 runs a primary agent on the default model whatever its definition names, and 2.1.4 on the
 definition's model and variant; 2.1.4 refuses a variant the model lacks before its first call, but tries a model its
 list lacks on the provider, so the lookup still guards the run.
-Not built yet: the settings page's read-only `[runtime.models]`; the check before a review, a chore, a task's run,
+Built (2026-10-23): the settings page's read-only Models panel, each agent's model in `[runtime.models]` and each
+chore's, with the file to edit and the runtime's list on demand.
+Not built yet: the check before a review, a chore, a task's run,
 and a tick's overseer, with its tick status, so a reviewer override whose model has gone fails as the review starts;
 and `canopy status` naming the models that served a run.

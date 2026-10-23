@@ -4,7 +4,7 @@ How to have canopy's workers run your repository's fast checks before they push,
 fails in the worker's own shell, where it fixes it, instead of in CI, where it costs a run of every job and often another
 worker run to fix. The examples use [prek](https://github.com/j178/prek), which reads pre-commit's
 `.pre-commit-config.yaml`; plain git hooks and pre-commit itself work the same way. Everything here is your own setup,
-in your primary clones and your repository: canopy knows nothing about hooks, and none of this is required to run it.
+in your primary clones and your repository: canopy needs none of it, and none of this is required to run it.
 For why canopy's own git runs no hooks, see DESIGN §8 and §24.
 
 ## Which git runs your hooks
@@ -19,6 +19,12 @@ Every git canopy itself runs has hooks turned off (D107). So a hook checks only 
 - **A joint run:** each repository's hooks apply in its own slot.
 
 A hook is not a guard: a worker can still commit with `--no-verify`, and canopy does not stop it (step 5 below).
+
+A worker's git finds your hooks through canopy's own: its environment points `core.hooksPath` at hooks canopy ships,
+which add canopy's commit trailers and prefix (TRUST_MODEL T5) and then run the hook of the same name from wherever
+git would have looked without them, your primary clone's or a `core.hooksPath` your config sets. Nothing here changes
+for that. It needs git 2.31 or later, which reads `GIT_CONFIG_COUNT`; an older git runs your hooks alone, each tick
+raises `git_too_old` on the attention list, and each run's note names the commits that lack canopy's marks.
 
 ## 1. Install prek where workers can run it
 

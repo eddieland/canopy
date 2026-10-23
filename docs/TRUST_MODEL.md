@@ -152,9 +152,21 @@ Controls:
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
   it into every public worker prompt itself (`implement`, `resume`), and refuses a prompt override that
   would drop it (D093).
+- A reply in the Slack sink's ticket thread (DESIGN §22, M64) is an operator message only when the Slack user id that
+  wrote it is one a `slack` source's `operators` lists (private, T7), and only on a ticket the journal already has.
+  The ids are enforced twice: `canopy-connect-slack` is asked for their replies alone, and refuses to run without one,
+  so nobody else's words reach canopy; and the harness checks each line's id against config in code, whatever the
+  connector printed, so a connector of the operator's own that prints more widens nothing. It is recorded through
+  `core/conversation.py`'s `reply`, with its guards and its bound, on the channel `slack`, once per Slack message. That
+  channel proves the operator by three things of theirs: the command in their private config, the bot token in their
+  operator-only file, and the ids they listed, each of which Slack's own sign-in proves. A reply from anyone else, or
+  from a bot, records nothing, not even as data, and a dry run records none (D036). Residual: whoever controls a listed
+  Slack account, or a Slack admin able to act as it, can answer and resume a ticket's worker as the operator; and a
+  reply edited after canopy read it keeps the words first read.
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
-  `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). With `tracker.private`
+  `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8), and for a reply, a listed
+  Slack id's in the sink's thread (above). With `tracker.private`
   set (private), a labeled ticket canopy never ran is started by its first dispatch instead, on the overseer's
   `label` claim, which the harness checks against config as for any public dispatch (D119). No worker re-reads the
   labels for it, then or later, and removing the label does not stop it: an overseer that claims a label a ticket
@@ -359,7 +371,9 @@ Controls:
 - Listeners follow T8. No outbound calls from the harness except through the
   configured commands. canopy ships programs that make them, each a separate distribution it runs only as a command.
   The Slack sink (DESIGN §20) runs only as a sink the operator configured, and reads its webhook or bot token from an
-  operator-only file of its own, never from canopy's config, argv, journal, or logs. The GitHub reader and poster,
+  operator-only file of its own, never from canopy's config, argv, journal, or logs; `canopy-connect-slack`, which
+  reads the replies in its threads, reads the same file and sends the token only to Slack's API. The GitHub reader and
+  poster,
   `canopy-connect-github` and `canopy-post-github` (DESIGN §29), read the token `gh` holds for the host a PR's or an
   issue's URL, or a repository's clone URL in the map, names, when they run, only once `gh` names that host as one it
   is logged in to, and send it only to that host's API, following no redirect; canopy never reads it. Lint bans network
@@ -516,11 +530,15 @@ but must be distinguishable:
 
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>`, whose name and address the operator may
-  change in their own config (`trust.commit_trailer_*`, private), or the runtime's own attribution. The harness forms
-  it, never the agent: left as the default, the name credits the model canopy chose for the worker (DESIGN §13), as
-  `provider/model (canopy worker)`, and a worker following an approved plan adds a second, `provider/model (canopy
-  planner)`, for the model canopy chose for its planner; a name the operator set is used as set, alone. Never hidden: a
-  worker never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
+  change in their own config (`trust.commit_trailer_*`, private), beside the runtime's own attribution if it adds one.
+  The harness forms it, never the agent: left as the default, the name credits the model canopy chose for the worker
+  (DESIGN §13), as `provider/model (canopy worker)`, and a worker following an approved plan carries a second,
+  `provider/model (canopy planner)`, for the model canopy chose for its planner; a name the operator set is used as
+  set, alone. git adds them, through hooks in canopy's snapshot that a worker's environment points git at (DESIGN §8),
+  so a worker that forgets them still carries them, and with `trust.commit_prefix` (private) put the operator's prefix,
+  which may name the ticket's key, before each subject but a fixup's. They are a mark, not a guard: a worker can commit
+  around the hooks, and canopy names such a commit in the run's report and does not rewrite it. Never hidden: a worker
+  never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
   private), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
   that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
   neither turn it off nor rename it.
@@ -588,8 +606,11 @@ Controls:
   planner's persona, models (canopy's choice and those its session names), and runs' cost. So does each plan's
   prompt unless `paths.plan_archive_prompts`, private and on by default, is off: the operator's messages and standing
   instructions, agent memory's lessons, and the persona that prompt carried, with local paths and repository names.
-  With `paths.plan_archive_conversations`, private and off by default, so does each planned ticket's conversation:
-  workers' reports and questions, the operator's replies, and mirrored tracker comments. A private ticket's
+  So does each edited plan's original, the plan as its planner wrote it, and each ticket's index, which names the
+  runs that followed its plans with their statuses and its PRs' URLs and states. So do the operator's comments on
+  each ticket's plans, with the passages they quote, unless `paths.plan_archive_comments`, private and on by default,
+  is off. With `paths.plan_archive_conversations`, private and off by default, so does each planned ticket's
+  conversation: workers' reports and questions, the operator's replies, and mirrored tracker comments. A private ticket's
   conversation still never reaches the tracker (DESIGN §22); it reaches this remote only when the operator turns that
   on. The keys are private, so a shared workspace file can neither name a remote nor change what goes there (T7). The
   harness, never an agent, does it: no agent runs git there, and `canopy archive` refuses inside a tick or run. It uses
@@ -599,9 +620,9 @@ Controls:
   upstream refuses a push for commits the clone lacks, it fetches them and rebases the clone's unpushed commits,
   the operator's included, onto them, never stashing the operator's changes, and aborts a rebase that cannot finish.
   A prompt is exported only from beside its run's log under the state directory, never through a link. Residual:
-  anyone who can read that remote reads every plan, prompt, and conversation there, so the operator keeps it private;
-  the clone's own git config, such as its remote or `core.sshCommand`, is the operator's to keep, as their home
-  directory is.
+  anyone who can read that remote reads every plan, prompt, comment, and conversation there, so the operator keeps it
+  private; the clone's own git config, such as its remote or `core.sshCommand`, is the operator's to keep, as their
+  home directory is.
 - With `trust.review_replies = "approve"`, a worker's comments and reactions leave the machine only as the operator
   sent them: its prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the
   GitHub server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker
@@ -1017,8 +1038,10 @@ loop's terminal would.
   under your account, though it posts nothing. A reviewer definition of your own that runs commands runs the PR's
   code on your machine.
 - Point a notification sink only at a place whose audience may read the tickets and PRs it quotes, and keep the
-  Slack sink's webhook or token file readable only by you. Give a bot token only the `chat:write` scope: the file holds
-  whatever the token can do. People who can read the channel see what the loop does; they cannot steer it.
+  Slack sink's webhook or token file readable only by you. Give a bot token only the `chat:write` scope, and for a
+  `slack` source the one history scope its channel needs, `channels:history` or `groups:history`: the file holds
+  whatever the token can do. People who can read the channel see what the loop does; only the Slack accounts a `slack`
+  source's `operators` lists can steer it, as you, by replying in a ticket's thread. List only your own.
 - If you allow a tool in a chore's agent definition, you are responsible for what that tool can do. canopy's controls
   assume chore tools only read.
 - If you sandbox runs (T4), prefix every command docs/SANDBOX.md lists, `private_worker_cmd` included, or name the

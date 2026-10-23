@@ -109,7 +109,8 @@ rarely still has observations as fresh as they ask for (operator, 2026-10-19). A
 skipped, not waited for, while a tick holds it; none runs while the loop is paused. It records its runs with no tick
 and checks the drafts its `vcs` run read (§29). It raises no attention item, since the list is a tick's and the next
 tick runs every source again before recording its items, and it ends no wait: nothing acts on an observation yet
-(§30), and M39's early tick on one is not built. A hand-run `canopy tick` runs the sources as any tick does, and
+(§30), and M39's early tick on one is not built. A reply a `slack` source records is the operator's message, not an
+observation, and ends the wait as any does (§20). A hand-run `canopy tick` runs the sources as any tick does, and
 nothing polls without the loop.
 
 ### Idle pacing
@@ -262,6 +263,11 @@ Every git the harness runs has hooks, the filesystem monitor, submodule fetches,
 maintenance off (D107): a worker can write the git directory its slot shares, and a hook it planted would otherwise run
 on the host. A command named in that directory's config still runs (§24, Git state).
 
+A worker's own git runs canopy's hooks, from the snapshot (§13), in place of the repository's: `prepare-commit-msg`
+adds canopy's trailers and the operator's subject prefix, if set, but not to a `fixup!`, `squash!`, or `amend!` subject,
+which `--autosquash` matches; and each hook then runs the repository's own of its name, so the operator's hooks run as
+before. Step 5 names a pushed commit that lacks either in the run's note, and never rewrites it (TRUST_MODEL T5).
+
 Worker result contract, one JSON line, the last of the worker's text (§13); `prs` maps each repository the run worked
 in to its PR, and `pr_titles` is optional and for display only. An `implement` or `resume` may add `"created"`, the
 follow-up tickets it filed, each with its repository or null, which authorize nothing (§18). `flaky` is a `resume`'s
@@ -277,7 +283,8 @@ for `ci`, true when it left a failed check a rerun would pass (§23):
 
 - Work only inside the worktree or desk. Push only to the ticket's branch, from the detached HEAD, never with force;
   with `trust.rebase`, a lease is the one force the worker's definition allows (TRUST_MODEL T1).
-- Keep the runtime's attribution trailer on commits or add canopy's, unless the operator turned it off (TRUST_MODEL T5).
+- Keep the runtime's attribution trailer on commits, and canopy's, which git adds, unless the operator turned it off
+  (TRUST_MODEL T5).
 - Mark every comment and reply it posts with the configured marks (D069), or draft it for approval (§29). Everything
   posts as the operator (D010), so only the marks keep a worker's comment from reading as review feedback or an
   authorized reply; they only take authority away, so they need no protection.

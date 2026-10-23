@@ -206,11 +206,13 @@ text runs nothing.
 Lint keeps the network out of the harness, as D015 keeps processes in one module: `urllib.request`, `http.client`, and
 `socket` are banned everywhere in `src/canopy`, and so is any import of the Slack sink.
 
-### Two-way, later
+### Replies from Slack
 
-Not built. A listener must follow TRUST_MODEL T8 (D055), so Slack's Events API, which needs inbound internet access,
-stays out. Today an authorized reply on the ticket resumes the worker: Slack is the pager, the ticket the conversation.
-Replies read in Slack would need each ticket's thread, Slack ids among authorized repliers, and a T1 change (§22).
+Lightly two-way, with no listener: a listener must follow TRUST_MODEL T8 (D055), so Slack's Events API, which needs
+inbound internet access, stays out. Reading a thread is an outbound call, as posting is, so a `slack` source (§30)
+reads the replies in the sink's ticket threads on the loop's polls, and a reply from a Slack id the operator listed is
+their message on the ticket, as `canopy reply` records one (§22). The sink keeps each ticket's threads a week, so a
+reply in yesterday's still reaches it. Only replies on tickets: plans, starts, and the other verbs stay in canopy.
 
 ### Trust model changes
 
@@ -219,7 +221,8 @@ Replies read in Slack would need each ticket's thread, Slack ids among authorize
 - T6: notifications carry agent- and org-member-written text off the machine. Controls: only bounded fields; Slack
   escaping. Residual: a steered agent picks text shown in the channel, and a link can carry data.
 - §7: point a sink only where the audience may read what it quotes; keep the secret file the operator's alone, and
-  give a bot token only `chat:write`. Channel readers see what the loop does but cannot steer it.
+  give a bot token only `chat:write`, and a `slack` source's one history scope. Channel readers see what the loop
+  does; only the Slack ids a `slack` source lists steer it, by replying (T1).
 
 ### Open
 
@@ -327,8 +330,10 @@ Reviews are read from the journal only, apart from worker runs; a review's text 
 ### Dismissing and sending findings
 
 A dismissed finding stays listed but leaves what a `resume` hands the worker. A review whose findings are all dismissed
-moves on as a clean one. Sending findings is the operator's go-ahead on an `own` review's findings while its ticket has
-the PR: an operator message on the ticket names them by number, never quoting them, since the reviewer's text is data
+moves on as a clean one. A dismissal says why: `wrong`, `intentional`, or `not_worth_it`, so the operator's dismissals
+measure the reviewer's noise by severity, persona, and model, which is what would justify a verifier's spend. Sending
+findings is the operator's go-ahead on an `own` review's findings while its ticket has the PR: an operator message on
+the ticket names them by number, never quoting them, since the reviewer's text is data
 (T1) and the message an instruction. The next tick dispatches a `resume` with them (§7, D089), whether or not
 `canopy:review` is trusted. A dismissed finding, or one on a PR not the loop's own, cannot be sent. Both are refused
 inside a run, so no agent can hold a finding back from a worker or start work in the operator's name.

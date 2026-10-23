@@ -39,7 +39,7 @@ from canopy.core import (
 )
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
-from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
+from canopy.core.vocab import DismissalReason, PlanSetting, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
 from canopy.infra import lock
 from canopy.infra.text import printable, quoted
 
@@ -96,6 +96,8 @@ PR = "pr"
 CHORE = "chore"
 RUN = "run"
 REVIEW = "review"
+# What a review's dismissal may give as its reason, as a refusal names them.
+_REASONS = ", ".join(f"`{r}`" for r in DismissalReason)
 #: A one-off task the operator submitted (DESIGN §36), `task:N`.
 TASK = "task"
 # The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review`, `stop`, and
@@ -498,6 +500,7 @@ def dismiss(
     channel: str,
     chores: Mapping[str, Chore],
     undo: bool = False,
+    reason: DismissalReason | None = None,
 ) -> None:
     """Dismiss findings: a chore's, named by their ids (DESIGN §19), or a review run's, by their numbers (§21).
 
@@ -505,21 +508,37 @@ def dismiss(
     page still shows it, marked dismissed, and once an `ok` run leaves it out the dismissal is spent, so the finding is
     listed again if it comes back. A review's finding stays on the review's page, marked, and is left out of what a
     `resume` hands a worker and of the overseer's state block; on a review of a PR the loop does not own, what it made
-    of the review's draft is dropped, and taking the dismissal back restores it (DESIGN §34). Dismissing one again
-    records the time anew; `undo` takes a dismissal back. The findings are dismissed together or not at all: one
-    refused leaves every other as it was.
+    of the review's draft is dropped, and taking the dismissal back restores it (DESIGN §34). A review's finding is
+    dismissed for a `reason`, which tells the reviewer's noise from a finding that held; a chore's takes none.
+    Dismissing one again records the time and the reason anew; `undo` takes a dismissal back. The findings are
+    dismissed together or not at all: one refused leaves every other as it was.
 
     Raises:
         Refused: `unsupported` for a subject that is not a chore or a review, `unknown` for a chore not in `chores`, a
             review run that does not exist or found nothing, or a finding the subject does not have (with `undo`, one
-            not dismissed), and `bad_finding` for no findings, or an id or number no finding can have.
+            not dismissed), `bad_finding` for no findings, or an id or number no finding can have, and `bad_reason`
+            for a review's dismissal without a reason, or a reason given to a chore's dismissal or to an `undo`.
     """
     check_verb(ref, "dismiss")
     if not findings:
         raise Refused("bad_finding", "name one or more findings")
+    if reason is not None and (undo or ref.kind != REVIEW):
+        raise Refused("bad_reason", "only a review's dismissal takes a reason; taking one back takes none")
     if ref.kind == REVIEW:
-        _dismiss_review(conn, ref, findings, channel=channel, undo=undo)
-        return
+        _dismiss_review(conn, ref, findings, channel=channel, undo=undo, reason=reason)
+    else:
+        _dismiss_chore(conn, ref, findings, channel=channel, chores=chores, undo=undo)
+
+
+def _dismiss_chore(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    findings: Collection[str],
+    *,
+    channel: str,
+    chores: Mapping[str, Chore],
+    undo: bool,
+) -> None:
     if ref.id not in chores:
         raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
     if any(len(f) > MAX_ID or not FINDING_ID_RE.fullmatch(f) for f in findings):
@@ -539,7 +558,15 @@ def dismiss(
             chore_runs.set_dismissal(conn, ref.id, finding, channel=channel)
 
 
-def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str], *, channel: str, undo: bool) -> None:
+def _dismiss_review(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    findings: Collection[str],
+    *,
+    channel: str,
+    undo: bool,
+    reason: DismissalReason | None,
+) -> None:
     if not all(f.isascii() and f.isdigit() and 0 < len(f) <= 2 and int(f) > 0 for f in findings):  # noqa: PLR2004
         raise Refused("bad_finding", f"a review's finding is its number, from 1 to {review_result.MAX_FINDINGS}")
     numbers, run_id = sorted({int(f) for f in findings}), int(ref.id)
@@ -549,6 +576,8 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str
                 if not review_runs.delete_review_dismissal(conn, run_id, number):
                     raise Refused("unknown", f"{ref} has no dismissed finding {number}")
         else:
+            if reason is None:
+                raise Refused("bad_reason", f"say why: a review's finding is dismissed as {_REASONS}")
             run = review_runs.get_review_run(conn, run_id)
             if run is None:
                 raise Refused("unknown", f"there is no review run {run_id}")
@@ -557,7 +586,7 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str
             if numbers[-1] > found:
                 raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
             for number in numbers:
-                review_runs.set_review_dismissal(conn, run_id, number, channel=channel)
+                review_runs.set_review_dismissal(conn, run_id, number, reason=reason, channel=channel)
         # A review of a PR the loop does not own drafts a review on it: a dismissal drops what the finding made of the
         # draft, and taking it back restores it (DESIGN §34).
         review_drafts.dismissed(conn, run_id, numbers, undo=undo, channel=channel)

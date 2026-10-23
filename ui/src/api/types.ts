@@ -29,6 +29,8 @@ export type TicketDetail = Schemas['TicketDetail']
 export type TicketForget = Schemas['TicketForget']
 /** What a ticket's or a PR's agent runs cost in all (DESIGN §13), and how many runs and reviews that counts. */
 export type CostTotal = Schemas['CostTotal']
+/** What one model cost over a ticket's runs, as their sessions say (DESIGN §13). */
+export type ModelCost = Schemas['ModelCost']
 /** A ticket's plans: whether it needs one, its newest as the file stands, every plan, and the operator's comments. */
 export type TicketPlans = Schemas['TicketPlans']
 /** A plan as its file stands now, read bounded and never through a link (DESIGN §25). */
@@ -67,6 +69,12 @@ export type AgentPersona = Schemas['AgentPersona']
 export type AgentModel = Schemas['AgentModel']
 /** The models the runtime lists, as `canopy models` prints them (DESIGN §13): what the operator may choose from. */
 export type ModelList = Schemas['ModelList']
+/** The model config chooses for each of canopy's agents and each chore, and the files that set them (DESIGN §13). */
+export type ConfigModels = Schemas['ConfigModels']
+/** The model `[runtime.models]` chooses for one of canopy's agents, or none: the runtime's default. */
+export type ConfiguredModel = Schemas['ConfiguredModel']
+/** The model one chore runs on as config chooses it, and where that choice comes from (DESIGN §13, §19). */
+export type ChoreModel = Schemas['ChoreModel']
 /** A persona a run could get, as `canopy personas` lists it (DESIGN §31): what the operator may choose from. */
 export type PersonaChoice = Schemas['PersonaChoice']
 /** Every persona a run could get, and the one a review request that chooses none is reviewed in (DESIGN §31). */
@@ -235,6 +243,8 @@ export type ReviewDraftPublished = Schemas['ReviewDraftPublished']
 export type ReviewDraftNoted = Schemas['ReviewDraftNoted']
 /** How much a finding holds the merge: `blocking`, `major`, or `minor`. */
 export type FindingSeverity = Schemas['FindingSeverity']
+/** Why the operator dismissed a review's finding: `wrong`, `intentional`, or `not_worth_it` (DESIGN §21). */
+export type DismissalReason = Schemas['DismissalReasonName']
 /** The reviewed commit's diff: the PR's own text, untrusted and bounded. */
 export type ReviewDiff = Schemas['ReviewDiff']
 /** One file the reviewed commit changes, with its hunks. */
@@ -265,6 +275,8 @@ export type FeedbackPlanStatus = Schemas['FeedbackPlanStatusName']
 export type FeedbackPlanItem = Schemas['FeedbackPlanItem']
 /** What an approval of a feedback plan did: the items it addresses, those it leaves out, and its message. */
 export type FeedbackPlanApproved = Schemas['FeedbackPlanApproved']
+/** A ticket's feedback plan while it waits on the operator, as its ticket's summary names it for the attention list. */
+export type WaitingFeedbackPlan = Schemas['WaitingFeedbackPlan']
 
 /** Every run state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss. */
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]

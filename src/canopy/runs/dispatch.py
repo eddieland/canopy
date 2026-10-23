@@ -711,7 +711,8 @@ def _check_model(ctx: Context, key: str, kind: str, *, private: bool) -> str | N
     if model is None:
         return None
     if ticket_models.override(ctx.conn, key, agent) == model.name:
-        chosen = f"for {key}'s {agent} runs (canopy model {key}{_agent_flag(agent)})"
+        # A code span, so the web UI sets the command as code, as any other item's command (ui/DESIGN.md).
+        chosen = f"for {key}'s {agent} runs (`canopy model {key}{_agent_flag(agent)}`)"
     else:
         chosen = "in runtime.models"
     try:

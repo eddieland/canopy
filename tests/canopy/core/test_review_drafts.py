@@ -142,7 +142,7 @@ def test_each_edit_drop_addition_and_dismissal_is_a_new_version(scenario: Scenar
     scenario.operator("review", "edit", run, "--add", "retry.py:2", "--text", "Call what?")
     scenario.operator("review", "edit", run, "--body", "--text", "Two things, mainly.")
     scenario.operator("review", "edit", run, "--drop", "2")
-    scenario.operator("dismiss", f"review:{reviewed}", "1")
+    scenario.operator("dismiss", f"review:{reviewed}", "1", "--reason", "wrong")
     scenario.operator("dismiss", f"review:{reviewed}", "1", "--undo")
     versions = review_drafts.versions(scenario.conn, draft_of(scenario, reviewed).id)
     assert [(v.number, v.author, v.channel, v.change) for v in versions] == [
@@ -160,7 +160,7 @@ def test_each_edit_drop_addition_and_dismissal_is_a_new_version(scenario: Scenar
     assert versions[6].comments == [ON_LINE]
     # A finding off the diff is in the body, and goes from it with its dismissal.
     scenario.operator("review", "edit", run, "--body", "--text", f"Two defects.\n\n{OFF_DIFF}")
-    scenario.operator("dismiss", f"review:{reviewed}", "2")
+    scenario.operator("dismiss", f"review:{reviewed}", "2", "--reason", "wrong")
     assert newest(scenario, reviewed).body == "Two defects."
     findings = present(review_result.stored(present(review_runs.get_review_run(scenario.conn, reviewed)).result_json))
     assert review_drafts.in_body(newest(scenario, reviewed).body, findings.findings) == []

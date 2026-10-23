@@ -82,12 +82,13 @@ Analyze canopy's plans from the last 30 days, then advise me on the planner's pr
    `policy.feedback_plan = "approve"`, the same planner also writes feedback plans for what comes back on a PR
    (`feedback_plans`, run kind `feedback-plan`): measure those the same way, apart from ticket plans.
 
-2. Read the plans themselves. If `paths.plan_archive` is set, read that clone: each plan sits beside the prompt its
-   planner was given, and its git history may hold a plan as proposed before I edited it (`git log -p` on the file).
-   Otherwise run `canopy archive` into a new temporary directory and read that. Read at least five plans I approved as
-   written, every plan I edited or sent back, and every plan the planner approved itself (`approved_channel` =
-   `planner`). For each approved plan, compare it with what the worker then did: the PR in `canopy show KEY`, and the
-   branch's commits in the ticket's repository under `repos/`.
+2. Read the plans themselves. If `paths.plan_archive` is set, read that clone; otherwise run `canopy archive` into a
+   new temporary directory and read that. Each plan sits beside the prompt its planner was given, a plan I edited
+   beside its original as the planner wrote it (`RUN-ORIGINAL.md`; diff the two), and each ticket's `COMMENTS.md`
+   holds my comments on its plans. Read at least five plans I approved as written, every plan I edited or sent back,
+   and every plan the planner approved itself (`approved_channel` = `planner`). For each approved plan, compare it with
+   what the worker then did: its ticket's `README.md` lists the runs that followed each plan and its PRs, and the
+   branch's commits are in the ticket's repository under `repos/`.
 
 3. Measure, overall and for each model and variant that served plans:
    - received: approved as written, approved after my edits, sent back for changes, still waiting;
@@ -184,11 +185,12 @@ variant before model, with the exact `[runtime.models]` line.
 ```text
 Judge whether canopy's PR reviews are worth what they cost.
 
-Run `canopy review show` and `canopy config show` (for `runtime.models.reviewer` and the review settings). Over the
-last 30 days of `review_runs`, count findings by severity, the ones I dismissed (`review_dismissals`) and the ones I
-sent to a worker (`canopy send`, a reply in the ticket's conversation), and the cost of reviews by model. Read a sample
-of dismissed findings and say why each was wrong: a misreading, a style point, or a matter of taste. Read a sample of
-sent ones and say whether a later push fixed them. Recommend whether to keep, change, or drop the reviewer's model or
+Run `canopy review show`, `canopy review noise --days 30 --json`, and `canopy config show` (for
+`runtime.models.reviewer` and the review settings). From the noise counts, take the findings by severity, persona, and
+model, and the ones I dismissed by reason: `wrong` is the reviewer's noise, `intentional` and `not_worth_it` held. Count
+the ones I sent to a worker (`canopy send`, a reply in the ticket's conversation), and the cost of reviews by model.
+Read a sample of `wrong` ones and say why each was wrong: a misreading, a style point, or a matter of taste. Read a
+sample of sent ones and say whether a later push fixed them. Recommend whether to keep, change, or drop the reviewer's model or
 variant, and draft any lines for `paths.reviewer_instructions` that would cut the findings I keep dismissing.
 ```
 

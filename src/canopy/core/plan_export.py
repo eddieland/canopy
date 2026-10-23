@@ -20,18 +20,31 @@ wrote them beside the run's log. It never changes, so its name changes only wher
 `<run>-prompt.md`. A plan whose run has no prompt there, as one from before prompts were kept, has none exported, and
 one exported before is left.
 
+Beside a plan the operator edited goes the plan as its planner wrote it, `<run>-ORIGINAL.md`: the copy `plans.write`
+kept, its bytes as written, and only while that copy still has the hash its row recorded. Like a prompt it never
+changes, and one exported before is left. A plan as its planner wrote it has none, nor does one written before canopy
+kept the copy.
+
 Beside a ticket's plans goes its conversation (DESIGN §22) when `conversations` is on: `CONVERSATION.md`, every message
 the journal records on the ticket, oldest first, each body quoted under a heading of what canopy recorded of it, so no
 body can pass for another message. A message is never changed or deleted, so the file changes only when one is added;
 one exported before is left when `conversations` is off.
 
-With `indexes`, each ticket's directory gets a `README.md` listing its plans, newest first, each linked with its prompt
-and its conversation, and `dest` one listing every ticket by its newest plan, so a forge that shows a directory's
-README shows each listing. An index is canopy's only while `INDEX_MARK` opens it: a `README.md` that does not, a link
-among them, is the operator's and never touched, and deleting the line takes one over. A plan's title is model text
-(TRUST_MODEL T1), so an index escapes every character in it Markdown reads as markup and never puts it inside a link:
-it shows as text, never as a link with a hidden target, an image, or HTML. An index is written once its ticket, or for
-`dest` every ticket, was checked, so `limit` leaves it for the export that finishes them. A plan an index lists without
+Beside them too go the operator's comments on the ticket's plans (DESIGN §25, Commenting on a plan) when `comments` is
+on: `COMMENTS.md`, every thread, open and resolved, with its passage and its replies, each quoted as a conversation's
+bodies are. A thread can be edited, resolved, or deleted, so the file is rewritten whenever it changes, and once
+exported, it is kept up to date even after its last thread is deleted.
+
+With `indexes`, each ticket's directory gets a `README.md` listing its plans, newest first, each linked with its prompt,
+its original, its conversation, and its comments, then the work that followed them: each implement and resume, with the
+plan it followed, and each PR of the ticket's with its state as canopy last read it. `dest` gets one listing every
+ticket by its newest plan, with its PRs' states, so a forge that shows a directory's README shows each listing. An
+index is canopy's only while `INDEX_MARK` opens it: a `README.md` that does not, a link among them, is the operator's
+and never touched, and deleting the line takes one over. A plan's title is model text (TRUST_MODEL T1), so an index
+escapes every character in it Markdown reads as markup and never puts it inside a link: it shows as text, never as a
+link with a hidden target, an image, or HTML. A PR's URL is a link only when it is a plain PR URL with nothing Markdown
+reads in it. An index is written once its ticket, or for `dest` every ticket, was checked, so `limit` leaves it for the
+export that finishes them. A plan an index lists without
 reading it has the title kept with its fingerprint.
 
 A history of thousands of plans is exported each tick, so an export reads only what may have changed: for each plan it
@@ -42,6 +55,7 @@ it stops once it has written that many files, so a long history goes in over sev
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import dataclasses
 import hashlib
@@ -58,8 +72,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Self
 from urllib.parse import quote
 
-from canopy.core import db, plans, records, run_models, sql
-from canopy.core.conversation import KEY_RE, MAX_KEY
+from canopy.core import contract, db, plan_threads, plans, records, run_models, sql
+from canopy.core.conversation import KEY_RE, MAX_KEY, MAX_PR_URL, PR_URL_RE
 from canopy.core.vocab import PlanStatus, RunKind
 from canopy.infra.text import printable
 
@@ -73,6 +87,17 @@ type Kind = Literal["plan", "feedback plan"]
 
 #: A ticket's conversation's name in an export, beside its plans.
 CONVERSATION_NAME = "CONVERSATION.md"
+#: The name of the operator's comments on a ticket's plans in an export, beside its plans.
+COMMENTS_NAME = "COMMENTS.md"
+#: Each sort of file an export writes, as `counted` counts them, in its order: the noun, then its plural.
+SORTS: Sequence[tuple[str, str]] = (
+    ("plan", "plans"),
+    ("original", "originals"),
+    ("prompt", "prompts"),
+    ("conversation", "conversations"),
+    ("comments file", "comments files"),
+    ("README", "READMEs"),
+)
 #: An index's name in an export: one in each ticket's directory, and one in `dest` for every ticket.
 INDEX_NAME = "README.md"
 #: The line that opens every index canopy writes, so an export rewrites only its own.
@@ -84,7 +109,7 @@ _FILE_MODE = 0o600
 _FRONT_MATTER = "---\n"
 # Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
 # and compared again.
-_FORMAT = 8
+_FORMAT = 9
 # The decimal places of a cost in a front matter: a millionth of a dollar, below what any run's cost is reported to.
 _COST_DIGITS = 6
 # The most characters of a title a file's name carries.
@@ -97,8 +122,21 @@ _MARKUP_RE = re.compile(r"([\\`*_~\[\]()<>|&$])")
 # A prompt's name in an export, `<run>-PROMPT.md`, or `<run>-prompt.md` as earlier exports wrote it: never a plan's,
 # which always has a status after its run.
 _PROMPT_NAME_RE = re.compile(r"\d+-(?:PROMPT|prompt)\.md")
+# An original's name in an export, `<run>-ORIGINAL.md`: never a plan's either.
+_ORIGINAL_NAME_RE = re.compile(r"\d+-ORIGINAL\.md")
+# What a PR's URL holds to be a link in an index: nothing that could end the link or start markup of its own.
+_LINKABLE_URL_RE = re.compile(r"https://[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+")
+# The runs an index lists as the work that followed a ticket's plans: every kind that works on its branch.
+_WORK_KINDS = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
 # What a planner's heading opens with before the ticket's title (the plan prompts' outline): `Plan: KEY`.
 _HEADING_PREFIX = re.compile(r"(?:feedback\s+)?plan(?:\s*:|\s*$)\s*", re.IGNORECASE)
+# What a planner puts between a heading's key and its title, as `PROJ-1 — Title`, or leaves at its end, as `Title -`:
+# a character class's members. Each is the planner's only where a space sets it apart, so `--dry-run` keeps its own.
+_SEPARATORS = r"\-\u2010-\u2015:,;|/·•"
+# A separator a space sets apart at a title's end.
+_TRAILING_SEPARATOR = re.compile(rf"(?:\s+[{_SEPARATORS}]+)+$")
+# A heading's closing sequence: `#`s a space sets apart at its end, or the whole of it, so `C#` keeps its own.
+_CLOSING_HASHES = re.compile(r"(?:^|\s+)#+$")
 # How long before an export a file must have last changed for its stat to stand for its bytes. A file changed in the
 # same tick of the filesystem's clock as it was read can change again with the same stat, git's "racily clean" case.
 _SETTLED_NS = 2_000_000_000
@@ -161,13 +199,16 @@ def export(
     limit: int | None = None,
     prompts: bool = True,
     conversations: bool = False,
+    comments: bool = False,
     indexes: bool = False,
 ) -> Exported:
     """Export every plan and feedback plan in the journal into `dest`, made operator-only if it is missing.
 
-    With `limit`, stop once that many files are written; the plans after them are left for the next export. With
-    `prompts`, each plan's prompt goes beside it, with `conversations`, each planned ticket's conversation, and with
-    `indexes`, a `README.md` listing each ticket's plans in its directory and one listing every ticket in `dest`.
+    With `limit`, stop once that many files are written; the plans after them are left for the next export. Each plan
+    the operator edited has its original beside it. With `prompts`, each plan's prompt goes beside it, with
+    `conversations`, each planned ticket's conversation, with `comments`, the operator's comments on its plans, and
+    with `indexes`, a `README.md` listing each ticket's plans and work in its directory and one listing every ticket in
+    `dest`.
 
     Returns:
         The files written and removed, how many were already as they stand, the plans whose files are not plans, and
@@ -192,6 +233,8 @@ def export(
     last_messages: dict[str, int] = (
         {k: m for k, m in _last_messages(conn).items() if k in planned} if conversations else {}
     )
+    threads = _threads(conn, planned) if comments else {}
+    work = _work(conn, planned) if indexes else {}
     tally = _Tally()
     checked = 0
     # Each ticket whose every plan, and conversation if it has one, was checked, for the index in `dest`.
@@ -227,12 +270,20 @@ def export(
                         ),
                     )
                 done = len(listed) == len(ticket_rows)
-                last = last_messages.get(key)
-                if last is not None:
-                    done = done and not tally.full(limit)
-                    if done:
-                        checked += 1
-                        _export_conversation(conn, last, dirs, seen, tally, settled_before=settled_before)
+                if done:
+                    # Comments exported before are kept up to date when the ticket's last thread is deleted.
+                    commented = comments and (key in threads or COMMENTS_NAME in dirs.listing)
+                    beside, done = _export_beside(
+                        conn,
+                        dirs,
+                        seen,
+                        tally,
+                        last=last_messages.get(key),
+                        threads=threads.get(key, []) if commented else None,
+                        limit=limit,
+                        settled_before=settled_before,
+                    )
+                    checked += beside
                 if indexes and done and not tally.full(limit):
                     checked += 1
                     # What the ticket's directory holds now: as listed, less what was removed, and what was written.
@@ -240,7 +291,7 @@ def export(
                         *(set(dirs.listing) - {Path(r).name for r in tally.removed[removed_before:]}),
                         *(Path(w).name for w in tally.written[written_before:]),
                     }
-                    data = _ticket_index(key, listed, present)
+                    data = _ticket_index(key, listed, present, work.get(key, _Work()))
                     _export_index(
                         dir_fd,
                         dest / key,
@@ -250,7 +301,7 @@ def export(
                         tally=tally,
                         settled_before=settled_before,
                     )
-                    indexed.append(_Ticket(key, listed))
+                    indexed.append(_Ticket(key, listed, work.get(key, _Work())))
         if indexes and planned and len(indexed) == len(planned) and not tally.full(limit):
             checked += 1
             top = _top_index(indexed)
@@ -260,7 +311,7 @@ def export(
         written=tally.written,
         unchanged=tally.unchanged,
         skipped=tally.skipped,
-        left=len(rows) + len(last_messages) + index_items - checked,
+        left=len(rows) + len(last_messages) + len(threads) + index_items - checked,
         removed=tally.removed,
     )
 
@@ -306,6 +357,24 @@ def is_prompt(file_name: str) -> bool:
         True for a name `prompt_name` gives, or an earlier export gave.
     """
     return _PROMPT_NAME_RE.fullmatch(file_name) is not None
+
+
+def original_name(run_id: int) -> str:
+    """The name of the plan of run `run_id` as its planner wrote it, in an export.
+
+    Returns:
+        The name, as `412-ORIGINAL.md`.
+    """
+    return f"{run_id}-ORIGINAL.md"
+
+
+def is_original(file_name: str) -> bool:
+    """Whether `file_name` in an export is a plan as its planner wrote it, before the operator's edits.
+
+    Returns:
+        True for a name `original_name` gives.
+    """
+    return _ORIGINAL_NAME_RE.fullmatch(file_name) is not None
 
 
 def document(
@@ -364,6 +433,49 @@ def is_index(file_name: str) -> bool:
     return file_name == INDEX_NAME
 
 
+def is_comments(file_name: str) -> bool:
+    """Whether `file_name` in an export is the operator's comments on a ticket's plans.
+
+    Returns:
+        True for `COMMENTS_NAME`.
+    """
+    return file_name == COMMENTS_NAME
+
+
+def sort(file_name: str) -> str:
+    """Which of `SORTS` the file `file_name` in an export is.
+
+    Returns:
+        Its noun: a prompt, an original, a conversation, a comments file, or a README by its name, else a plan.
+    """
+    if is_prompt(file_name):
+        return "prompt"
+    if is_original(file_name):
+        return "original"
+    if is_conversation(file_name):
+        return "conversation"
+    if is_comments(file_name):
+        return "comments file"
+    return "README" if is_index(file_name) else "plan"
+
+
+def counted(file_names: Iterable[str], *, always: AbstractSet[str] = frozenset()) -> str:
+    """How many files of each sort `file_names` holds, in the order of `SORTS`, as `2 plans, 1 prompt and 1 README`.
+
+    A sort none of them is counted only when its noun is in `always`, as `0 prompts`.
+
+    Returns:
+        The count; "" when there is nothing to count.
+    """
+    counts = collections.Counter(map(sort, file_names))
+    *rest, last = [
+        f"{counts[noun]} {noun if counts[noun] == 1 else plural}"
+        for noun, plural in SORTS
+        if counts[noun] or noun in always
+    ] or [""]
+    return f"{', '.join(rest)} and {last}" if rest else last
+
+
 def owned(conn: sqlite3.Connection, dest: Path) -> list[str]:
     """What an export wrote in `dest`, told apart from what the operator keeps beside it there.
 
@@ -415,8 +527,42 @@ def conversation_document(key: str, messages: Sequence[records.Message]) -> byte
     ]
     for m in messages:
         lines.extend(["\n", f"## {m.id}. {_heading(m)}\n", "\n"])
-        quoted = printable(m.body).rstrip("\n").split("\n")
-        lines.extend(f"> {line}\n" if line else ">\n" for line in quoted)
+        lines.extend(_quoted(m.body))
+    return "".join(lines).encode("utf-8")
+
+
+def comments_document(key: str, threads: Iterable[plan_threads.Thread]) -> bytes:
+    """The operator's comments on a ticket's plans as they are exported: a front matter, then each thread, oldest first.
+
+    A thread's heading says whether it is open, and when it was written and resolved; below it, the passage it is on
+    and the comment, then each reply under a heading of its own. The passage is the plan's text (TRUST_MODEL T1), so it
+    is quoted as every body is, its lines made one, and nothing in it or a comment can end a quote or start a heading.
+
+    Returns:
+        The file's bytes, UTF-8.
+    """
+    threads = list(threads)
+    lines = [
+        _FRONT_MATTER,
+        f"kind: {json.dumps('comments')}\n",
+        f"ticket_key: {json.dumps(key)}\n",
+        f"threads: {len(threads)}\n",
+        _FRONT_MATTER,
+        "\n",
+        f"# Comments: {key}\n",
+    ]
+    for t in threads:
+        thread = t.thread
+        state = "Open" if thread.resolved_at is None else "Resolved"
+        heading = f"{thread.id}. {state}, written at {thread.created_at}"
+        if thread.resolved_at is not None:
+            heading += f", resolved at {thread.resolved_at}"
+        lines.extend(["\n", f"## {' '.join(printable(heading).split())}\n", "\n", "Passage:\n", "\n"])
+        lines.extend(_quoted(" ".join(thread.quote.split())))
+        lines.extend(["\n", "Comment:\n", "\n", *_quoted(thread.body)])
+        for r in t.replies:
+            lines.extend(["\n", f"### {' '.join(printable(f'Reply {r.id}, at {r.created_at}').split())}\n", "\n"])
+            lines.extend(_quoted(r.body))
     return "".join(lines).encode("utf-8")
 
 
@@ -442,8 +588,9 @@ class _Prompt:
     path: Path | None
 
 
-#: The stat of a plan run's prompt and of the file exported from it, each None where it is missing.
-type _PromptStats = tuple[os.stat_result | None, os.stat_result | None]
+#: The stat of a file beside a plan, its prompt or its original, and of the file exported from it, each None where it
+#: is missing.
+type _Stats = tuple[os.stat_result | None, os.stat_result | None]
 
 
 @dataclass
@@ -479,11 +626,47 @@ class _Listed:
 
 
 @dataclass(frozen=True)
+class _WorkRun:
+    """A run that worked on a ticket's branch after its plans, as its index lists it."""
+
+    id: int
+    kind: str
+    status: str
+    started_at: str
+    ended_at: str | None
+    #: The run of the plan or feedback plan it followed; None when it followed none.
+    followed: int | None
+
+
+@dataclass(frozen=True)
+class _Pr:
+    """A PR of a ticket's, as its index lists it."""
+
+    #: The repository of the ticket's unit that opened it; None in a workspace of one repository.
+    repo: str | None
+    url: str
+    #: Its state and whether it is a draft, as canopy's GitHub reader last read it; None for one never read.
+    state: str | None
+    draft: bool
+    #: The unit's phase, as canopy last derived it.
+    phase: str | None
+
+
+@dataclass(frozen=True)
+class _Work:
+    """What followed a ticket's plans: the runs on its branch, oldest first, and its PRs."""
+
+    runs: Sequence[_WorkRun] = ()
+    prs: Sequence[_Pr] = ()
+
+
+@dataclass(frozen=True)
 class _Ticket:
-    """A ticket as the index of every ticket lists it: its plans, every one of them checked."""
+    """A ticket as the index of every ticket lists it: its plans, every one of them checked, and its work."""
 
     key: str
     listed: Sequence[_Listed]
+    work: _Work
 
 
 def _export_plan(
@@ -502,14 +685,14 @@ def _export_plan(
 
     `planner` is what the journal records of its run, for its front matter, and `ticket_title` its ticket's, for its
     name when it has no title of its own. With `prompt`, its run's prompt goes beside it too, unless that is there as
-    it stands.
+    it stands, and its original does when the operator edited it.
 
     Returns:
         The plan as its ticket's index lists it: under the name it is exported as, or for a plan not exported, the
         one name an earlier export left it under.
 
     Raises:
-        ExportError: its file, or its prompt, could not be written, or an earlier one removed.
+        ExportError: its file, its prompt, or its original could not be written, or an earlier one removed.
     """
     plan = f"{dirs.key}/{row.run_id}"
     source_name = plans.file_name(row.run_id)
@@ -518,6 +701,7 @@ def _export_plan(
     # Each stat before its file is read, so a change after the read shows on the next export.
     source_stat = None if dirs.source_fd is None else _stat(source_name, dirs.source_fd)
     prompt_stats = None if prompt is None else _prompt_stats(prompt, row.run_id, dirs.dest_fd)
+    original_stats = _original_stats(row.run_id, dirs)
     # A prompt still under the name earlier exports gave it is renamed, so read as if no fingerprint were kept.
     if len(names) == 1 and (prompt is None or _earlier_prompt_name(row.run_id) not in dirs.listing):
         exported = _stat(names[0], dirs.dest_fd)
@@ -531,6 +715,7 @@ def _export_plan(
             exported_name=names[0],
             exported=exported,
             prompt=prompt_stats,
+            original=original_stats,
         ):
             tally.unchanged += 1
             return _Listed(kind, row, names[0], seen.title(plan))
@@ -553,8 +738,9 @@ def _export_plan(
     # Only once the plan is in place under its name, so a failed write leaves it under the earlier one.
     _remove_earlier(names, exported_name, dirs, tally)
     prompt_held = None if prompt is None else _export_prompt(prompt, row.run_id, dirs, tally)
-    # Kept only when the plan, and its prompt if it has one, were found as they stand.
-    if held is not None and (prompt is None or prompt_held is not None):
+    original_held = _export_original(row, reading.sha256, original_stats, dirs, tally)
+    # Kept only when the plan, its prompt if it has one, and its original were found as they stand.
+    if held is not None and (prompt is None or prompt_held is not None) and original_held is not None:
         seen.record(
             plan,
             kind,
@@ -565,10 +751,48 @@ def _export_plan(
             exported_name=exported_name,
             exported=held,
             prompt=prompt_held,
+            original=original_held,
             title=title,
             settled_before=settled_before,
         )
     return _Listed(kind, row, exported_name, title)
+
+
+def _export_beside(
+    conn: sqlite3.Connection,
+    dirs: _Dirs,
+    seen: _Seen,
+    tally: _Tally,
+    *,
+    last: int | None,
+    threads: Sequence[plan_threads.Thread] | None,
+    limit: int | None,
+    settled_before: int,
+) -> tuple[int, bool]:
+    """Export what goes beside a ticket's plans once they are: its conversation, up to message `last`, and `threads`.
+
+    Each is exported unless it is None. Comments with no thread keep an earlier export of them up to date, and count as
+    no item of the export's.
+
+    Returns:
+        How many of them it checked, and whether it checked all of them before `limit` was written.
+
+    Raises:
+        ExportError: one could not be written.
+    """
+    checked = 0
+    if last is not None:
+        if tally.full(limit):
+            return checked, False
+        checked += 1
+        _export_conversation(conn, last, dirs, seen, tally, settled_before=settled_before)
+    if threads is not None:
+        if tally.full(limit):
+            return checked, False
+        if threads:
+            checked += 1
+        _export_comments(comments_document(dirs.key, threads), dirs, seen, tally, settled_before=settled_before)
+    return checked, True
 
 
 def _export_conversation(
@@ -600,6 +824,88 @@ def _export_conversation(
     seen.record_conversation(dirs.key, last, held, settled_before=settled_before)
 
 
+def _export_comments(data: bytes, dirs: _Dirs, seen: _Seen, tally: _Tally, *, settled_before: int) -> None:
+    """Write `data`, a ticket's comments, as `COMMENTS_NAME` in its directory, unless it is there as it stands.
+
+    Raises:
+        ExportError: it could not be written.
+    """
+    exported_as = f"{dirs.key}/{COMMENTS_NAME}"
+    if seen.computed_matches(exported_as, data, _stat(COMMENTS_NAME, dirs.dest_fd)):
+        tally.unchanged += 1
+        return
+    held = _held(dirs.dest_fd, COMMENTS_NAME, data) if COMMENTS_NAME in dirs.listing else None
+    if held is None:
+        _write(dirs.dest_fd, dirs.dest / COMMENTS_NAME, data)
+        tally.written.append(exported_as)
+        return
+    tally.unchanged += 1
+    seen.record_computed(exported_as, data, held, settled_before=settled_before)
+
+
+def _threads(conn: sqlite3.Connection, planned: AbstractSet[str]) -> dict[str, list[plan_threads.Thread]]:
+    """The operator's comments on each planned ticket's plans, in two queries for every ticket.
+
+    Returns:
+        Each thread, oldest first, with its replies, by its ticket's key; a ticket with none is not there.
+    """
+    found = records.fetch_all(conn, records.PlanThread, sql.select("*").from_("plan_threads").order_by("id"))
+    replies: dict[int, list[records.PlanReply]] = {}
+    for r in records.fetch_all(conn, records.PlanReply, sql.select("*").from_("plan_replies").order_by("id")):
+        replies.setdefault(r.thread_id, []).append(r)
+    threads: dict[str, list[plan_threads.Thread]] = {}
+    for t in found:
+        if t.ticket_key in planned:
+            threads.setdefault(t.ticket_key, []).append(plan_threads.Thread(t, replies.get(t.id, [])))
+    return threads
+
+
+def _work(conn: sqlite3.Connection, planned: AbstractSet[str]) -> dict[str, _Work]:
+    """What followed each planned ticket's plans: the runs on its branch, and its PRs.
+
+    A run that wrote a plan is never work, whatever its kind.
+
+    Returns:
+        Each ticket's work, by its key; a ticket with none is not there.
+    """
+    plan_runs = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
+    runs = (
+        sql.select("r.id, r.ticket_key, r.kind, r.status, r.started_at, r.ended_at, p.run_id AS plan, f.run_id AS fb")
+        .from_("runs r")
+        .left_join("plans p ON p.id = r.plan_id")
+        .left_join("feedback_plans f ON f.id = r.feedback_plan_id")
+        .where("r.kind IN (?, ?, ?) AND r.id NOT IN ({})", *_WORK_KINDS, plan_runs)
+        .order_by("r.id")
+    )
+    found_runs: dict[str, list[_WorkRun]] = {}
+    for r in sql.execute(conn, runs):
+        if r["ticket_key"] in planned:
+            followed = r["fb"] if r["fb"] is not None else r["plan"]
+            found_runs.setdefault(str(r["ticket_key"]), []).append(
+                _WorkRun(
+                    int(r["id"]),
+                    str(r["kind"]),
+                    str(r["status"]),
+                    str(r["started_at"]),
+                    r["ended_at"],
+                    None if followed is None else int(followed),
+                ),
+            )
+    prs = (
+        sql.select("u.ticket_key, u.repo, u.pr_url, u.phase, o.state, o.draft")
+        .from_("ticket_units u")
+        .left_join("observed_prs o ON o.url = u.pr_url")
+        .where("u.pr_url IS NOT NULL")
+        .order_by("u.ticket_key, u.repo")
+    )
+    found_prs: dict[str, list[_Pr]] = {}
+    for r in sql.execute(conn, prs):
+        if r["ticket_key"] in planned:
+            pr = _Pr(r["repo"], str(r["pr_url"]), r["state"], bool(r["draft"]), r["phase"])
+            found_prs.setdefault(str(r["ticket_key"]), []).append(pr)
+    return {key: _Work(found_runs.get(key, ()), found_prs.get(key, ())) for key in {*found_runs, *found_prs}}
+
+
 def _last_messages(conn: sqlite3.Connection) -> dict[str, int]:
     """The newest message of each ticket that has one.
 
@@ -628,6 +934,15 @@ def _messages(conn: sqlite3.Connection, key: str, last: int) -> list[records.Mes
         .order_by("id")
     )
     return records.fetch_all(conn, records.Message, query)
+
+
+def _quoted(text: str) -> list[str]:
+    """`text` as lines of a Markdown quote, control characters made spaces, so nothing in it can end the quote.
+
+    Returns:
+        Each line, `> ` before it, and `>` alone for an empty one.
+    """
+    return [f"> {line}\n" if line else ">\n" for line in printable(text).rstrip("\n").split("\n")]
 
 
 def _heading(m: records.Message) -> str:
@@ -723,7 +1038,7 @@ def _export_index(
         ExportError: it could not be written.
     """
     exported = _stat(INDEX_NAME, dir_fd)
-    if seen.index_matches(exported_as, data, exported):
+    if seen.computed_matches(exported_as, data, exported):
         return
     found = _read_head(dir_fd, INDEX_NAME, len(data) + 1)
     if found is None:
@@ -734,31 +1049,33 @@ def _export_index(
         return
     held, head = found
     if head == data:
-        seen.record_index(exported_as, data, held, settled_before=settled_before)
+        seen.record_computed(exported_as, data, held, settled_before=settled_before)
     elif head.startswith(INDEX_MARK.encode()):
         _write(dir_fd, dir_path / INDEX_NAME, data)
         tally.written.append(exported_as)
 
 
-def _ticket_index(key: str, listed: Sequence[_Listed], present: AbstractSet[str]) -> bytes:
-    """A ticket's index: its conversation when it is exported, then a table of its plans, newest first.
+def _ticket_index(key: str, listed: Sequence[_Listed], present: AbstractSet[str], work: _Work) -> bytes:
+    """A ticket's index: its conversation and comments when exported, a table of its plans, newest first, then its work.
 
-    `present` is the names in the ticket's directory, so a prompt or a conversation is linked only where it is.
+    `present` is the names in the ticket's directory, so a prompt, an original, a conversation, or comments are linked
+    only where they are.
 
     Returns:
         The file's bytes, UTF-8.
     """
     lines = [INDEX_MARK, "\n", f"# {key}\n", "\n"]
-    if CONVERSATION_NAME in present:
-        lines.extend([f"Conversation: [{CONVERSATION_NAME}]({CONVERSATION_NAME})\n", "\n"])
+    for label, file_name in (("Conversation", CONVERSATION_NAME), ("Comments", COMMENTS_NAME)):
+        if file_name in present:
+            lines.extend([f"{label}: [{file_name}]({file_name})\n", "\n"])
     lines.extend(
         [
-            "| Run | Title | Kind | Status | Written | Approved | Prompt |\n",
-            "| --- | --- | --- | --- | --- | --- | --- |\n",
+            "| Run | Title | Kind | Status | Written | Approved | Prompt | Original |\n",
+            "| --- | --- | --- | --- | --- | --- | --- | --- |\n",
         ],
     )
     for entry in sorted(listed, key=lambda e: e.row.run_id, reverse=True):
-        row, prompt = entry.row, prompt_name(entry.row.run_id)
+        row, prompt, original = entry.row, prompt_name(entry.row.run_id), original_name(entry.row.run_id)
         approved = "" if row.approved_at is None else f"{row.approved_at[:10]}, {row.approved_channel or 'unknown'}"
         cells = [
             _run_cell(entry, ""),
@@ -768,13 +1085,84 @@ def _ticket_index(key: str, listed: Sequence[_Listed], present: AbstractSet[str]
             row.created_at[:10],
             approved,
             f"[prompt]({quote(prompt)})" if prompt in present else "",
+            f"[original]({quote(original)})" if original in present else "",
         ]
         lines.append(f"| {' | '.join(cells)} |\n")
+    lines.extend(_work_lines(work, {entry.row.run_id: entry for entry in listed}))
     return "".join(lines).encode("utf-8")
 
 
+def _work_lines(work: _Work, plans_by_run: Mapping[int, _Listed]) -> list[str]:
+    """What followed a ticket's plans, as its index shows it: a table of its runs, then one of its PRs, each if any.
+
+    Returns:
+        The lines; none for a ticket with no work.
+    """
+    lines: list[str] = []
+    if work.runs:
+        lines.extend(
+            [
+                "\n",
+                "## Work\n",
+                "\n",
+                "| Run | Kind | Followed | Status | Started | Ended |\n",
+                "| --- | --- | --- | --- | --- | --- |\n",
+            ],
+        )
+        for run in work.runs:
+            followed = plans_by_run.get(run.followed) if run.followed is not None else None
+            cells = [
+                str(run.id),
+                run.kind,
+                _run_cell(followed, "") if followed is not None else str(run.followed or ""),
+                run.status,
+                run.started_at[:10],
+                (run.ended_at or "")[:10],
+            ]
+            lines.append(f"| {' | '.join(cells)} |\n")
+    if work.prs:
+        lines.extend(
+            [
+                "\n",
+                "## Pull requests\n",
+                "\n",
+                "| Repository | PR | State | Phase |\n",
+                "| --- | --- | --- | --- |\n",
+            ],
+        )
+        for pr in work.prs:
+            cells = [_escaped_title(pr.repo or ""), _pr_cell(pr.url), _pr_state(pr), pr.phase or ""]
+            lines.append(f"| {' | '.join(cells)} |\n")
+    return lines
+
+
+def _pr_cell(url: str) -> str:
+    """A PR's URL as an index's cell: a link to it, named for its number, only when nothing in it is Markdown.
+
+    A URL comes from what a worker reported or the GitHub reader printed, so one that is not a plain PR URL shows as
+    escaped text, never as a link.
+
+    Returns:
+        The cell's Markdown.
+    """
+    if contract.plain_url(url, MAX_PR_URL) and PR_URL_RE.fullmatch(url) and _LINKABLE_URL_RE.fullmatch(url):
+        return f"[#{url.rstrip('/').rpartition('/')[2]}]({url})"
+    return _escaped_title(url)
+
+
+def _pr_state(pr: _Pr) -> str:
+    """A PR's state as an index shows it.
+
+    Returns:
+        Its state, `draft` for an open draft, or `unread` for one canopy's GitHub reader never read.
+    """
+    if pr.state is None:
+        return "unread"
+    return "draft" if pr.state == "open" and pr.draft else pr.state
+
+
 def _top_index(tickets: Iterable[_Ticket]) -> bytes:
-    """The index of every ticket: a table of each, by its newest plan, the ticket with the newest first.
+    """The index of every ticket: a table of each, by its newest plan and with its PRs' states, the newest first.
 
     Returns:
         The file's bytes, UTF-8.
@@ -784,8 +1172,8 @@ def _top_index(tickets: Iterable[_Ticket]) -> bytes:
         "\n",
         "# Plans\n",
         "\n",
-        "| Ticket | Plans | Newest | Title | Kind | Status | Written |\n",
-        "| --- | --- | --- | --- | --- | --- | --- |\n",
+        "| Ticket | Plans | Newest | Title | Kind | Status | Written | PRs |\n",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |\n",
     ]
     newest = [(t, max(t.listed, key=lambda e: e.row.run_id)) for t in tickets]
     for ticket, entry in sorted(newest, key=lambda t_e: t_e[1].row.run_id, reverse=True):
@@ -797,6 +1185,7 @@ def _top_index(tickets: Iterable[_Ticket]) -> bytes:
             entry.kind,
             entry.row.status.value,
             entry.row.created_at[:10],
+            ", ".join(map(_pr_state, ticket.work.prs)),
         ]
         lines.append(f"| {' | '.join(cells)} |\n")
     return "".join(lines).encode("utf-8")
@@ -854,7 +1243,7 @@ def _prompt_paths(conn: sqlite3.Connection, state_dir: Path) -> dict[int, Path]:
     return paths
 
 
-def _prompt_stats(prompt: _Prompt, run_id: int, dest_fd: int) -> _PromptStats:
+def _prompt_stats(prompt: _Prompt, run_id: int, dest_fd: int) -> _Stats:
     """The stat of a plan run's prompt and of its export, neither read.
 
     Returns:
@@ -867,7 +1256,7 @@ def _prompt_stats(prompt: _Prompt, run_id: int, dest_fd: int) -> _PromptStats:
     return source, _stat(prompt_name(run_id), dest_fd)
 
 
-def _export_prompt(prompt: _Prompt, run_id: int, dirs: _Dirs, tally: _Tally) -> _PromptStats | None:
+def _export_prompt(prompt: _Prompt, run_id: int, dirs: _Dirs, tally: _Tally) -> _Stats | None:
     """Export a plan run's prompt beside its plan, unless it is there as it stands or the run has none.
 
     Returns:
@@ -889,6 +1278,51 @@ def _export_prompt(prompt: _Prompt, run_id: int, dirs: _Dirs, tally: _Tally) -> 
     earlier = _earlier_prompt_name(run_id)
     _remove_earlier([earlier] if earlier in dirs.listing else [], exported_name, dirs, tally)
     return None if held is None else (source, held)
+
+
+def _original_stats(run_id: int, dirs: _Dirs) -> _Stats:
+    """The stat of the plan's original under the state directory and of its export, neither read.
+
+    Returns:
+        Each stat, None where its file is missing; the original's also where it is not a regular file.
+    """
+    source = None if dirs.source_fd is None else _stat(plans.original_name(run_id), dirs.source_fd)
+    if source is not None and not stat.S_ISREG(source.st_mode):
+        source = None
+    return source, _stat(original_name(run_id), dirs.dest_fd)
+
+
+def _export_original(
+    row: records.Plan | records.FeedbackPlan,
+    sha256: str | None,
+    stats: _Stats,
+    dirs: _Dirs,
+    tally: _Tally,
+) -> _Stats | None:
+    """Export the plan as its planner wrote it, when its file as read, of hash `sha256`, is no longer that.
+
+    `stats` are the original's and its export's, taken before the plan was read. Only an original that still has the
+    hash its row recorded is the plan as written; one that does not, or a plan with none, has nothing exported.
+
+    Returns:
+        The stat of the original and of its export when nothing was written; None when it was.
+
+    Raises:
+        ExportError: it could not be written.
+    """
+    if sha256 == row.sha256:
+        return stats
+    found = _read_regular(dirs.source / plans.original_name(row.run_id))
+    if found is None or hashlib.sha256(found[1]).hexdigest() != row.sha256:
+        return stats
+    source, data = found
+    exported_name = original_name(row.run_id)
+    held = _held(dirs.dest_fd, exported_name, data) if exported_name in dirs.listing else None
+    if held is None:
+        _write(dirs.dest_fd, dirs.dest / exported_name, data)
+        tally.written.append(f"{dirs.key}/{exported_name}")
+        return None
+    return source, held
 
 
 def _remove_earlier(names: Iterable[str], exported_name: str, dirs: _Dirs, tally: _Tally) -> None:
@@ -935,7 +1369,8 @@ def _own_title(text: str, key: str) -> str:
     """The plan's first `# ` heading, less a leading `Plan:` or `Feedback plan:` and the ticket's key.
 
     A heading of the key alone takes its title from the first line of text below it, unless that is a heading: a
-    planner can read the outline's "then the ticket's title" as the line after.
+    planner can read the outline's "then the ticket's title" as the line after. A separator after the key, as the dash
+    in `Plan: KEY — Title`, is not the title's, nor is one a space sets apart at its end, as in `Title -`.
 
     Returns:
         The title, or "" when the plan has no such heading or nothing past its prefix.
@@ -944,13 +1379,16 @@ def _own_title(text: str, key: str) -> str:
     at = next((i for i, line in enumerate(lines) if line.startswith("# ")), None)
     if at is None:
         return ""
-    title = _HEADING_PREFIX.sub("", lines[at][2:].strip().rstrip("#").strip(), count=1)
+    heading = _CLOSING_HASHES.sub("", lines[at][2:].strip())
+    title = _HEADING_PREFIX.sub("", heading, count=1)
     # The key alone, never the start of a longer one: `PROJ-1` stays in `PROJ-12`.
-    rest = re.sub(rf"^{re.escape(key)}(?![A-Za-z0-9])", "", title, flags=re.IGNORECASE)
+    # A separator after it only when a space or the heading's end follows: `PROJ-1 --dry-run` keeps its own.
+    keyed = rf"^{re.escape(key)}(?![A-Za-z0-9])\s*(?:[{_SEPARATORS}]+(?=\s|$))?\s*"
+    rest = re.sub(keyed, "", title, flags=re.IGNORECASE)
     if rest == title or any(c.isalnum() for c in rest):
-        return rest
+        return _TRAILING_SEPARATOR.sub("", rest)
     below = next((line.strip() for line in lines[at + 1 :] if line.strip()), "")
-    return "" if below.startswith("#") else below
+    return "" if below.startswith("#") else _TRAILING_SEPARATOR.sub("", below)
 
 
 def _slug(title: str) -> str:
@@ -1022,11 +1460,13 @@ class _Seen:
         source: os.stat_result | None,
         exported_name: str,
         exported: os.stat_result | None,
-        prompt: _PromptStats | None,
+        prompt: _Stats | None,
+        original: _Stats,
     ) -> bool:
         """Whether `plan`, `KEY/RUN`, was found exported as it stands under `exported_name`, and nothing changed since.
 
-        `prompt` is the stat of its prompt and of that prompt's export, None while prompts are not exported.
+        `prompt` is the stat of its prompt and of that prompt's export, None while prompts are not exported, and
+        `original` the same of its original.
 
         Returns:
             False when either of the plan's files is missing, or nothing was kept for `plan`.
@@ -1046,6 +1486,7 @@ class _Seen:
                 planner=planner,
                 ticket_title=ticket_title,
                 prompt=prompt,
+                original=original,
             )
         )
 
@@ -1060,7 +1501,8 @@ class _Seen:
         source: os.stat_result | None,
         exported_name: str,
         exported: os.stat_result,
-        prompt: _PromptStats | None,
+        prompt: _Stats | None,
+        original: _Stats,
         title: str,
         settled_before: int,
     ) -> None:
@@ -1069,7 +1511,7 @@ class _Seen:
         A file changed too recently cannot be told unchanged by its stat; a plan's file that could not be statted before
         it was read is not kept either.
         """
-        stats = [source, exported, *(prompt or ())]
+        stats = [source, exported, *(prompt or ()), *original]
         if source is not None and all(
             max(s.st_mtime_ns, s.st_ctime_ns) < settled_before for s in stats if s is not None
         ):
@@ -1082,6 +1524,7 @@ class _Seen:
                 planner=planner,
                 ticket_title=ticket_title,
                 prompt=prompt,
+                original=original,
             )
             self.changed |= self.fingerprints.get(plan) != fingerprint or self.titles.get(plan) != title
             self.fingerprints[plan] = fingerprint
@@ -1095,19 +1538,19 @@ class _Seen:
         """
         return self.titles.get(plan, "")
 
-    def index_matches(self, exported_as: str, data: bytes, exported: os.stat_result | None) -> bool:
-        """Whether the index `exported_as` was found holding `data`, and unchanged since.
+    def computed_matches(self, exported_as: str, data: bytes, exported: os.stat_result | None) -> bool:
+        """Whether `exported_as`, an index or comments an export computes whole, was found holding `data`, unchanged.
 
         Returns:
             False when it is missing, or nothing was kept for it.
         """
         kept = self.fingerprints.get(exported_as)
-        return kept is not None and exported is not None and kept == _index_fingerprint(data, exported)
+        return kept is not None and exported is not None and kept == _computed_fingerprint(data, exported)
 
-    def record_index(self, exported_as: str, data: bytes, exported: os.stat_result, *, settled_before: int) -> None:
-        """Keep that the index `exported_as` was found holding `data`, unless it changed too recently to tell."""
+    def record_computed(self, exported_as: str, data: bytes, exported: os.stat_result, *, settled_before: int) -> None:
+        """Keep that `exported_as` was found holding `data`, unless it changed too recently to tell."""
         if max(exported.st_mtime_ns, exported.st_ctime_ns) < settled_before:
-            fingerprint = _index_fingerprint(data, exported)
+            fingerprint = _computed_fingerprint(data, exported)
             self.changed |= self.fingerprints.get(exported_as) != fingerprint
             self.fingerprints[exported_as] = fingerprint
 
@@ -1149,9 +1592,9 @@ def _load(path: Path) -> tuple[dict[str, str], dict[str, str]]:
     """The fingerprints and titles kept at `path`.
 
     Returns:
-        Each plan's fingerprint by its `KEY/RUN`, each conversation's by `KEY/conversation`, and each index's by its
-        path in `dest`; then each plan's title by its `KEY/RUN`. Neither has any when the file is missing,
-        unreadable, not canopy's, or from another format.
+        Each plan's fingerprint by its `KEY/RUN`, each conversation's by `KEY/conversation`, and each index's and
+        comments file's by its path in `dest`; then each plan's title by its `KEY/RUN`. Neither has any when the file
+        is missing, unreadable, not canopy's, or from another format.
     """
     try:
         kept: object = json.loads(path.read_bytes())
@@ -1187,19 +1630,21 @@ def _fingerprint(
     *,
     planner: Planner,
     ticket_title: str | None,
-    prompt: _PromptStats | None,
+    prompt: _Stats | None,
+    original: _Stats,
 ) -> str:
-    """A plan's row, planner, ticket title, file's stat, export's name and stat, and its prompt's, as a digest.
+    """A plan's row, planner, ticket title, file's stat, export's name and stat, and its prompt's and original's.
 
     The ticket's title is in it for a plan named for that title, so a ticket retitled moves the plan to its new name.
 
     Returns:
-        The digest, hex.
+        Their digest, hex.
     """
     stats = [_identity(s) for s in (source, exported)]
     prompt_stats = None if prompt is None else [None if s is None else _identity(s) for s in prompt]
+    original_stats = [None if s is None else _identity(s) for s in original]
     # A row's repr names each column and its value, so it changes with either, and with a column added.
-    digested = (_FORMAT, kind, row, planner, ticket_title, exported_name, stats, prompt_stats)
+    digested = (_FORMAT, kind, row, planner, ticket_title, exported_name, stats, prompt_stats, original_stats)
     return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
 
 
@@ -1222,8 +1667,8 @@ def _conversation_fingerprint(last: int, exported: os.stat_result) -> str:
     return hashlib.blake2b(repr(digested).encode(), digest_size=16).hexdigest()
 
 
-def _index_fingerprint(data: bytes, exported: os.stat_result) -> str:
-    """An index's bytes and the stat of its file, as one digest.
+def _computed_fingerprint(data: bytes, exported: os.stat_result) -> str:
+    """The bytes of a file an export computes whole, an index or comments, and the stat of its file, as one digest.
 
     Returns:
         The digest, hex.

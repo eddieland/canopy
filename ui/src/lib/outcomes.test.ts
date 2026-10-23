@@ -221,10 +221,10 @@ describe('outcomes', () => {
     })
 
     it("say what a dismissal of a review's finding did", () => {
-        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: true })).toBe(
-            'review:4 finding 2 is dismissed: no worker or tick acts on it.',
+        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: true, reason: 'not_worth_it' })).toBe(
+            'review:4 finding 2 is dismissed as not_worth_it: no worker or tick acts on it.',
         )
-        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: false })).toBe(
+        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: false, reason: null })).toBe(
             'review:4 finding 2 is no longer dismissed: a resume hands it to the worker again.',
         )
     })

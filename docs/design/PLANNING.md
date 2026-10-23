@@ -91,12 +91,18 @@ from; a plan run keeps its prompt as long as its plan (§26). It rewrites a file
 removes only a plan's own earlier name when its status or title moved it, so the directory can be a repository the
 operator pushes and git sees a rename. Asked to, it also writes each planned ticket's conversation (§22) beside its
 plans, every message oldest first, each body quoted under a heading canopy writes, so no body can pass for another
-message. A `README.md` in each ticket's directory lists its plans, and one in the directory every ticket, so a forge
-shows the listing; an index is canopy's only while its first line says so, so the operator's own is never touched, and a
-title in one is escaped text, never inside a link (T1).
+message. An edit replaces a plan's file, so canopy keeps a copy of each plan as its planner wrote it, never rewritten,
+and an edited plan goes with that original beside it, so what the operator changed before approving can always be
+read. The operator's comments on a ticket's plans go beside them too, each thread with its passage and replies, quoted
+as a conversation's bodies are. A `README.md` in each ticket's directory lists its plans, then the implements and
+resumes that followed them, each with the plan it followed, and the ticket's PRs with their states as last read, so the
+archive alone says what came of a plan; one in the directory lists every ticket. An index is canopy's only while its
+first line says so, so the operator's own is never touched, and a title in one is escaped text, never inside a link,
+as is a PR's URL that is not a plain one (T1).
 With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, or into the top
 level itself with `paths.plan_archive_workspace_dir` off, prompts too unless `paths.plan_archive_prompts` is off,
-conversations only with `paths.plan_archive_conversations`, commits what it wrote there alone (at the top level, each
+comments unless `paths.plan_archive_comments` is off, conversations only with `paths.plan_archive_conversations`,
+commits what it wrote there alone (at the top level, each
 planned ticket's directory and its own index, never the operator's files beside them), and pushes to the clone's
 upstream, never forcing: an upstream that refuses it for commits another clone pushed has them fetched and this clone's
 commits rebased onto them, so the push is a fast-forward, and a rebase that cannot finish is aborted. `archive_unpushed`
