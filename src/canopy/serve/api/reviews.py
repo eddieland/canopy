@@ -2,9 +2,9 @@
 
 Each review run is readable on its own too, apart from its results: its session's transcript and its log's end. A
 review of a PR the loop does not own is a draft of a review on it (DESIGN §34), edited, noted for a revision, and
-published through `canopy review edit`'s, `canopy reply review:ID`'s, and `publish`'s functions, so with their
-refusals: what posts is the version the page showed, named by its hash, word for word, as the operator's own comment
-review, pending for them to submit unless they ask canopy to submit it.
+published or discarded through `canopy review edit`'s, `canopy reply review:ID`'s, `publish`'s, and `discard`'s
+functions, so with their refusals: what posts is the version the page showed, named by its hash, word for word, as the
+operator's own comment review, pending for them to submit unless they ask canopy to submit it.
 """
 
 from __future__ import annotations
@@ -345,6 +345,29 @@ def draft_publish(run_id: ReviewId, body: ReviewDraftPublishRequest, backend: Ba
             },
         )
         return ReviewDraftPublished(draft=_draft(ctx, run_id), published=done.version.number, failed=done.failed)
+
+
+@router.post(
+    "/reviews/{run_id}/draft/discard",
+    operation_id="discardReviewDraft",
+    summary="Discard a review's draft, posting nothing",
+    responses=REFUSED,
+)
+def draft_discard(run_id: ReviewId, backend: BackendDep) -> ReviewDraft:
+    """`canopy review discard ID`: the operator has seen the draft and will not post it.
+
+    Nothing posts, and the draft takes no edit, note, or publish after. Refused as the CLI refuses it: `no_draft`, a
+    status past edits (`published`, `staged`, `discarded`, ...), and `revising` while a revision of it runs.
+    """
+    with backend.open() as ctx:
+        try:
+            review_drafts_manage.discard(ctx.conn, run_id, channel=WEB)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        # Discarded, a requested review waits on the operator no more (DESIGN §34).
+        backend.write_attention(ctx)
+        _log.info("review draft discarded", extra={"review_run_id": run_id, "channel": WEB})
+        return _draft(ctx, run_id)
 
 
 def _draft(ctx: Context, run_id: int) -> ReviewDraft:
