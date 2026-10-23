@@ -53,9 +53,12 @@ digests had it edited between them. **model** names the model that wrote its rep
 session says, so it is right even when a template's option or the runtime's default picked it rather than you. A run
 that switched models partway lists each with its share of the cost. The runtime prints no model while a run works, so
 canopy reads the session as the run ends, and any it missed while the loop waits between ticks; until then, or once the
-runtime has forgotten the session, the field says why it names none. The runs list carries the same, so a run's page
-fills it in without a reload. Last come the places: the branch, its worktrees, and the path of its log, which only you
-can read.
+runtime has forgotten the session, the field says why it names none. When canopy chose the run's model, from
+`[runtime.models]` or the ticket's override, the field says `asked` and that model instead, from the moment it starts,
+with why none served yet on hover. Once the session is read, a model that served other than the one asked for reads
+`served X, asked Y`, in the color of a run waiting on you, since it is worth a look. The runs list carries the same, so
+a run's page fills it in without a reload. Last come the places: the branch, its worktrees, and the path of its log,
+which only you can read.
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the

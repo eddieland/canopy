@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from canopy.core import db, records, sql
+from canopy.core.vocab import DismissalReason
 
 if TYPE_CHECKING:
     import sqlite3
@@ -77,14 +78,25 @@ def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
     sql.execute(conn, sql.delete("review_runs").where("id = ? AND pid IS NULL", run_id))
 
 
-def review_dismissals(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
-    """Return the numbers, from 1, of review run `run_id`'s findings the operator dismissed (DESIGN §21)."""
-    query = sql.select("finding").from_("review_dismissals").where("review_run_id = ?", run_id)
-    return frozenset(int(r[0]) for r in sql.execute(conn, query))
+def review_dismissals(conn: sqlite3.Connection, run_id: int) -> dict[int, DismissalReason | None]:
+    """Return review run `run_id`'s findings the operator dismissed (DESIGN §21), by their numbers from 1.
+
+    Returns:
+        Each dismissed finding's number, with why it was dismissed: None for a dismissal from before canopy asked.
+    """
+    query = sql.select("finding, reason").from_("review_dismissals").where("review_run_id = ?", run_id)
+    return {int(r[0]): DismissalReason(r[1]) if r[1] is not None else None for r in sql.execute(conn, query)}
 
 
-def set_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int, *, channel: str) -> None:
-    """Record that the operator dismissed review run `run_id`'s finding number `finding` now."""
+def set_review_dismissal(
+    conn: sqlite3.Connection,
+    run_id: int,
+    finding: int,
+    *,
+    reason: DismissalReason,
+    channel: str,
+) -> None:
+    """Record that the operator dismissed review run `run_id`'s finding number `finding` now, for `reason`."""
     sql.execute(
         conn,
         sql.insert(
@@ -93,8 +105,10 @@ def set_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int, *,
             finding=finding,
             dismissed_at=db.now(),
             channel=channel,
+            reason=reason,
         ).on_conflict(
-            "(review_run_id, finding) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel",
+            "(review_run_id, finding) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel, "
+            "reason = excluded.reason",
         ),
     )
 

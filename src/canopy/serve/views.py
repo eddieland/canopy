@@ -345,6 +345,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None, models
         activity=_activity(row) if status == "running" else None,
         persona=str(row["persona"]) if row["persona"] is not None else None,
         persona_digest=str(row["persona_digest"]) if row["persona_digest"] is not None else None,
+        model=str(row["model"]) if row["model"] is not None else None,
         models=models,
     )
 

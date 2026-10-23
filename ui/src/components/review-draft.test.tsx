@@ -445,6 +445,7 @@ function carolFindings(fields: Partial<ReviewFinding>[] = []): ReviewFinding[] {
         file: 0,
         line,
         dismissed: false,
+        dismissed_reason: null,
         ...fields[n - 1],
     })
     return [at(15, 1), at(9, 2), at(null, 3)]
@@ -502,13 +503,25 @@ describe('ReviewDiffPanels with a draft', () => {
     })
 
     it('leaves a finding out, and puts it back, by its dismissal, one control for both', async () => {
-        answer = () => Response.json({ run: 5, finding: 1, dismissed: true })
+        answer = () => Response.json({ run: 5, finding: 1, dismissed: true, reason: 'not_worth_it' })
         const point = await diffWith(reviewDraft())
-        fireEvent.click(within(point(1)).getByRole('button', { name: 'leave out' }))
-        await within(point(1)).findByText('review:5 finding 1 is dismissed: left out of your review.')
+        // Leaving it out is dismissing it, which says why.
+        fireEvent.pointerDown(within(point(1)).getByRole('button', { name: 'leave out' }), {
+            button: 0,
+            ctrlKey: false,
+        })
+        fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: /^not worth it/u }))
+        await within(point(1)).findByText('review:5 finding 1 is dismissed as not_worth_it: left out of your review.')
+        expect(writes()).toEqual([
+            {
+                method: 'POST',
+                path: '/api/reviews/5/dismissals',
+                body: { finding: 1, undo: false, reason: 'not_worth_it' },
+            },
+        ])
         cleanup()
         sent = []
-        answer = () => Response.json({ run: 5, finding: 1, dismissed: false })
+        answer = () => Response.json({ run: 5, finding: 1, dismissed: false, reason: null })
         const out = await diffWith(reviewDraft({ comments: [] }), carolFindings([{ dismissed: true }]))
         const left = out(1)
         expect(within(left).getByText('left out')).toBeTruthy()

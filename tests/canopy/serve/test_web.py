@@ -39,9 +39,9 @@ from tests.canopy.helpers import (
     present,
     running_run,
 )
-from tests.canopy.scenario_helpers import raises
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, client, free_port, refused, signed_in_client
-from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
+from tests.conftest import SHARED_TOML, CanopyEnv, GitPool, user_toml
 
 
 def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journals(ctx: Context) -> None:
@@ -125,6 +125,30 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
     assert models() == found
     run_models.record(ctx.conn, due, ModelsRead.MISSING)
     assert models() == found
+
+
+def test_a_runs_page_names_the_model_canopy_asked_for_while_it_runs_before_its_session_is_read(
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    opencode_state.write_text(json.dumps({"models": ["acme/fake-model-1"]}))
+    scenario.configures(runtime={"models": {"worker": "acme/fake-model-1"}})
+    working = scenario.starts(worker=pushes())
+    c, _ = signed_in_client(context(scenario.env))
+
+    def asked() -> list[tuple[str | None, str]]:
+        found = [c.get(f"/api/runs/{working.id}").json(), *c.get("/api/runs").json()]
+        return [(r["model"], r["models"]["status"]) for r in found]
+
+    # Known from its start, while what served it is read only once it ends.
+    assert asked() == [("acme/fake-model-1", "running")] * 2
+    working.finishes()
+    assert [m for m, _ in asked()] == ["acme/fake-model-1"] * 2
+    # A run canopy chose no model for went to the runtime's default: it asked for none.
+    scenario.configures(runtime={"models": {"worker": None}})
+    ran = scenario.run(dispatches("PROJ-2"), worker=pushes())
+    assert c.get(f"/api/runs/{ran.id}").json()["model"] is None
 
 
 def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context) -> None:
