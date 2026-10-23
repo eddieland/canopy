@@ -156,7 +156,7 @@ def test_bad_slugs_are_usage_errors(scenario: Scenario, slug: str) -> None:
 @pytest.mark.parametrize(
     ("label", "reason"),
     [
-        (None, "--label is required: name the queue label you read on PROJ-1"),
+        (None, "label is required (--label): name the queue label you read on PROJ-1"),
         ("agent-ready-someone-else", "'agent-ready-someone-else' is not a configured queue label"),
     ],
 )

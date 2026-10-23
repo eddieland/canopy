@@ -486,7 +486,8 @@ def _check_ours(ctx: Context, request: Request, repo: str) -> None:
     if request.ticket is not None and not review_runs.is_unit_pr(ctx.conn, request.ticket, request.pr, repo=repo):
         raise Refusal(
             "not_ours",
-            f"{request.ticket}'s unit in {repo} did not open {request.pr}; --ticket is only for the loop's own PR",
+            f"{request.ticket}'s unit in {repo} did not open {request.pr}; ticket (--ticket) is only for the loop's "
+            "own PR",
         )
 
 
@@ -595,11 +596,11 @@ def _check_shape(request: Request) -> None:
         Refusal: (`bad_pr`) the URL is not a plain https:// URL, the commit is not a full sha, or the key is invalid.
     """
     if not contract.plain_url(request.pr, MAX_PR_URL):
-        raise Refusal("bad_pr", f"--pr must be the PR's plain https:// URL, at most {MAX_PR_URL} characters")
+        raise Refusal("bad_pr", f"pr (--pr) must be the PR's plain https:// URL, at most {MAX_PR_URL} characters")
     if SHA_RE.fullmatch(request.sha) is None:
-        raise Refusal("bad_pr", "--sha must be the full head commit: 40 or 64 lowercase hex characters")
+        raise Refusal("bad_pr", "sha (--sha) must be the full head commit: 40 or 64 lowercase hex characters")
     if request.ticket is not None and KEY_RE.fullmatch(request.ticket) is None:
-        raise Refusal("bad_pr", f"--ticket must match {KEY_RE.pattern}")
+        raise Refusal("bad_pr", f"ticket (--ticket) must match {KEY_RE.pattern}")
 
 
 def check_repo(ctx: Context, repo: str | None) -> str:
@@ -614,7 +615,7 @@ def check_repo(ctx: Context, repo: str | None) -> str:
     ws = ctx.workspace
     names = ", ".join(r.name for r in ws.repos) or "none yet"
     if repo is None:
-        raise Refusal("unknown_repo", f"--repo is required: name the PR's repository ({names})")
+        raise Refusal("unknown_repo", f"repo is required (--repo): name the PR's repository ({names})")
     found = ws.repo(repo)
     if found is None:
         raise Refusal("unknown_repo", f"{repo!r} is not a repository in this workspace ({names})")

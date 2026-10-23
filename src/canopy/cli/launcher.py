@@ -1,8 +1,8 @@
 """The `canopy` console script and `python -m canopy`: `canopy --version` answered without loading the CLI.
 
-Every tick runs `canopy --version` to check the overseer can start `canopy` (DESIGN §6). The CLI's imports, click, the
-config, and pydantic, are most of a start's cost, so the check pays only for an interpreter and a metadata read. Any
-other arguments go to `canopy.cli.main`.
+Scripts and checks run `canopy --version` to see that canopy starts, such as the install check. The CLI's imports,
+click, the config, and pydantic, are most of a start's cost, so the check pays only for an interpreter and a metadata
+read. Any other arguments go to `canopy.cli.main`.
 """
 
 import sys

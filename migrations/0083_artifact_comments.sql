@@ -5,7 +5,7 @@
 
 -- SQLite cannot change a CHECK in place, so `connector_runs` is rebuilt with every row it had, its `kind` naming
 -- `artifacts` too; nothing references it.
-CREATE TABLE connector_runs_0082 (
+CREATE TABLE connector_runs_0083 (
     id                   INTEGER PRIMARY KEY,
     tick_id              INTEGER REFERENCES ticks(id),
     source               TEXT NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE connector_runs_0082 (
     review_query_result  TEXT,
     CHECK ((status = 'ok') = (missed IS NULL))
 );
-INSERT INTO connector_runs_0082 (
+INSERT INTO connector_runs_0083 (
     id, tick_id, source, kind, started_at, ended_at, status, request, recorded, refused, missed, stderr, query_result,
     review_query_result
 )
@@ -31,7 +31,7 @@ SELECT
     review_query_result
 FROM connector_runs;
 DROP TABLE connector_runs;
-ALTER TABLE connector_runs_0082 RENAME TO connector_runs;
+ALTER TABLE connector_runs_0083 RENAME TO connector_runs;
 CREATE INDEX connector_runs_source ON connector_runs(source, id);
 CREATE INDEX connector_runs_tick ON connector_runs(tick_id);
 

@@ -15,7 +15,9 @@ In order, it:
 
 1. Drops from its own environment what would point git at another repository (`GIT_DIR` and its kind), every
    relative `PATH` entry, which would find `git` or `srt` in the checkout, and `BASH_ENV` and `ENV`, which the shell
-   `srt` starts would source. The command inherits the same.
+   `srt` starts would source. The command inherits the same. On a Linux host whose kernel has no IPv6, it sets
+   `SOCAT_DEFAULT_LISTEN_IP=4` there, unless the operator set it, so that srt's network bridge inside the sandbox can
+   listen at all.
 2. Finds the worktrees the run works in, and each one's own and shared git directories: for a worker or setup, the
    cwd, or each worktree a joint run's desk links to; for a review, the checkout its directory links to. A chore has
    none.
@@ -74,12 +76,14 @@ Stdlib only.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
 import shlex
 import shutil
 import signal
+import socket
 import stat
 import subprocess
 import sys
@@ -126,6 +130,10 @@ SAFE_GIT = (
 UNSAFE_PATH = re.compile(r'[:"\n\r\\]')
 # Read by the shell `srt` runs the command in: a non-interactive bash sources BASH_ENV, and sh in some modes ENV.
 SHELL_STARTUP = ("BASH_ENV", "ENV")
+# On Linux, srt runs socat inside the sandbox to carry its network to srt's proxy outside. socat listens on IPv6
+# unless this says otherwise, and on a kernel without IPv6 exits at once, which srt does not report: every request from
+# the sandbox then fails to connect.
+SOCAT_LISTEN = "SOCAT_DEFAULT_LISTEN_IP"
 # The `git` the command finds first on PATH, for a worker or setup (git_shim). POSIX sh, so that a git call costs one
 # more git to find the repository, not a Python start.
 GIT_SHIM = r"""#!/bin/sh
@@ -240,6 +248,7 @@ def run(argv: list[str]) -> int:
         `srt`'s exit status, or 2 when the command could not be sandboxed and did not run.
     """
     scrub(os.environ)
+    listen_without_ipv6(os.environ)
     try:
         role, reads, command = parse(argv)
         objects = objects_dir(role)
@@ -279,6 +288,28 @@ def scrub(env: MutableMapping[str, str]) -> None:
     for name in (*GIT_LOCATION, *SHELL_STARTUP):
         env.pop(name, None)
     env["PATH"] = os.pathsep.join(p for p in env.get("PATH", "").split(os.pathsep) if Path(p).is_absolute())
+
+
+def listen_without_ipv6(env: MutableMapping[str, str]) -> None:
+    """Have srt's network bridge inside the sandbox listen on IPv4 on a Linux host without IPv6, unless `env` says.
+
+    The sandbox's network namespace has IPv6 only when the host's kernel does. Off Linux, srt runs no such bridge.
+    """
+    if sys.platform == "linux" and ipv6_missing():
+        env.setdefault(SOCAT_LISTEN, "4")
+
+
+def ipv6_missing() -> bool:
+    """Whether this kernel has no IPv6, so that no IPv6 socket can be opened, as socat opens one to listen.
+
+    Returns:
+        True when it has none.
+    """
+    try:
+        socket.socket(socket.AF_INET6, socket.SOCK_STREAM).close()
+    except OSError as e:
+        return e.errno == errno.EAFNOSUPPORT
+    return False
 
 
 def parse(argv: list[str]) -> tuple[str, list[Path], list[str]]:

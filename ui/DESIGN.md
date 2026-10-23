@@ -159,10 +159,11 @@ Rules:
   and each spend window what it covers, as a native `title`; a spend window opens the spend page over its week or
   month. Each block under the nav is a hairline and a `panel-label` over its content, but the spend's, where each
   window's name is the label. What is working is every agent run running,
-  worker runs, reviews of PRs, and chore runs alike, then the worker runs waiting on the operator's answer, each oldest
-  first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the PR, the
-  chore), how long it has run (or `waiting on you` in `status-blocked`), and under it the ticket's title, the review's
-  reference and ticket, or `chore run #N`, opening the run's page; at most four, then `+N more` to the page of
+  worker runs, reviews of PRs, chore runs, and task runs alike, then the worker runs waiting on the operator's answer,
+  each oldest first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the
+  PR, the chore, the task run's `task:N#M`), how long it has run (or `waiting on you` in `status-blocked`), and under it
+  the ticket's title, the review's reference and ticket, `chore run #N`, or the task's first line, opening the run's
+  page; at most four, then `+N more` to the page of
   the ones left out, or the runs page for a mix, so the sticky part fits an 800px window. The
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, on one line, each cost in a
   small readout after its window's name, so the block takes a line's height (a cost too long to share it puts the 30
@@ -376,9 +377,10 @@ Rules:
   route to it. A list of links named by its region (the guide's sidebar groups) is not a heading.
 - **A detail page leads with what it is about.** Its title is its subject's, after its reference in a muted
   monospace (`PageHeader`'s `subject`), as a ticket's page has always led: `run:39 Debounce search input`,
-  `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its ticket's title. With no subject (a
-  tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference alone is the title. Its
-  description is that subject's state, a line of facts (`src/lib/descriptions.ts`): `done · implement · ABC-099`,
+  `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its PR's title, its ticket's while the
+  PR has none. With no subject (a tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference
+  alone is the title. Its description is that subject's state, a line of facts (`src/lib/descriptions.ts`):
+  `done · implement · ABC-099`,
   `review:4 3 findings, 1 major · at its review limit`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`,
   so no two pages of a kind say the same thing there. What every page of its kind shows, the same each time, is its
   `help`, on the title's hover, as the nav's items say what their pages hold. A ticket is named one way in every
@@ -1490,8 +1492,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   `status-blocked`, else plain), so a review with a blocking finding never reads as calm as a clean one, and the worst
   in words, since color alone says nothing to some (`verdictText`: `3 findings, 1 major`, or `1 blocking finding` when
   every finding is that bad); the review's link; its ticket
-  (or `None`, its reason on hover), its impact, then in the free column the PR (`PullRequestLink`) and the commit's
-  first 7 characters, then cost and age. A review's page colors its verdict the same way.
+  (or `None`, its reason on hover), its impact, then in the free column the PR (`PullRequestLink`), its title
+  (`TicketTitle`: the PR's own, else as canopy's reader last read it, else its ticket's, and nothing without one) in
+  what room the rest leaves, left out below `@6xl`, where that room is a word at best, and the commit's first 7
+  characters, then cost and age. A review's page colors its verdict the same way.
 - **A review's draft** (`ReviewDraftPanel`, DESIGN §34), on a review of a PR the loop does not own, leads its page,
   which is the draft's one record: the title is `review:5 Your review of acme/api#14 by carol` (the PR alone while
   canopy has not read its author), and the description the draft's state (`ReviewDraftState`), its status chip

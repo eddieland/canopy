@@ -157,7 +157,7 @@ def test_resuming_needs_a_recorded_branch(scenario: Scenario, treehouse_state: P
 
 
 def test_slug_is_for_implement_only(scenario: Scenario) -> None:
-    reason = "resume continues the ticket's recorded branch; --slug is for implement"
+    reason = "resume continues the ticket's recorded branch; slug (--slug) is for implement"
     other = dispatches(kind=RunKind.RESUME, reasons=[CI], slug="other")
     assert scenario.refuses(other) == [("refused:bad_slug", reason)]
 
@@ -166,7 +166,7 @@ def test_slug_is_for_implement_only(scenario: Scenario) -> None:
 def test_fix_ci_is_refused_naming_resume(scenario: Scenario, mode: str) -> None:
     with_branch(scenario.conn)
     fix_ci = canopy("dispatch", KEY, "--repo", "repo", *LABEL, "--kind", "fix-ci", "--context", CHECK)
-    reason = "fix-ci is retired: a resume fixes CI now; dispatch resume --reason ci"
+    reason = "fix-ci is retired: a resume fixes CI now; dispatch kind resume, reasons ci (--kind resume --reason ci)"
     assert scenario.refuses(fix_ci, dry_run=mode == "dry run") == [("refused:bad_kind", reason)]
 
 
@@ -191,26 +191,35 @@ def test_needs_plan_is_refused_naming_plan(scenario: Scenario, mode: str) -> Non
         (
             (),
             (
-                "--reason is required for a resume: name why it runs, one or more of ci, review, reply, conflict, "
-                "no_pr, retarget"
+                "reasons is required for a resume (--reason): name why it runs, one or more of ci, review, reply, "
+                "conflict, no_pr, retarget"
             ),
         ),
-        (("--reason", "review", "--cursor", "ci=run-7"), "--cursor ci is handled by a resume for ci: add --reason ci"),
+        (
+            ("--reason", "review", "--cursor", "ci=run-7"),
+            "cursor ci (--cursor ci) is handled by a resume for ci: add ci to reasons (--reason ci)",
+        ),
         (
             ("--reason", "ci", "--cursor", "review=2026-10-17T09:30:00Z"),
-            "--cursor review is handled by a resume for review: add --reason review",
+            (
+                "cursor review (--cursor review) is handled by a resume for review: add review to reasons "
+                "(--reason review)"
+            ),
         ),
         (
             ("--reason", "ci", "--cursor", "comment=c1"),
-            "--cursor comment is handled by a resume for reply: add --reason reply",
+            "cursor comment (--cursor comment) is handled by a resume for reply: add reply to reasons (--reason reply)",
         ),
         (
             ("--reason", "ci", "--cursor", "message=4"),
-            "--cursor message is handled by a resume for reply: add --reason reply",
+            "cursor message (--cursor message) is handled by a resume for reply: add reply to reasons (--reason reply)",
         ),
         (
             ("--reason", "retarget", "--base", "agent/PROJ-9-other"),
-            "--reason retarget is for a PR whose blocker merged, and --base says it is still open",
+            (
+                "reasons retarget (--reason retarget) is for a PR whose blocker merged, and base (--base) says it is "
+                "still open"
+            ),
         ),
     ],
 )
@@ -227,7 +236,7 @@ def test_a_resume_names_why_it_runs_and_each_cursor_needs_its_reason(
 
 def test_a_reason_is_for_resume_only(scenario: Scenario) -> None:
     assert scenario.refuses(dispatches(reasons=[CI])) == [
-        ("refused:bad_reason", "--reason says why a resume runs; it is for resume only"),
+        ("refused:bad_reason", "reasons (--reason) say why a resume runs; they are for resume only"),
     ]
 
 

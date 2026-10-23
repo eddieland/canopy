@@ -25,7 +25,7 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_the_console_script_answers_version_without_loading_the_cli() -> None:
-    # Every tick runs `canopy --version` (DESIGN §6); click, the config, and pydantic are most of a start-up.
+    # A version check should cost little: click, the config, and pydantic are most of a start-up.
     code = (
         "import sys; sys.argv = ['canopy', '--version']; from canopy.cli import launcher; "
         "code = launcher.main(); print(code, *sys.modules, sep='\\n')"

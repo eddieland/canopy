@@ -4,9 +4,11 @@ The fake `srt` on PATH records the policy and environment the wrapper hands it, 
 These tests check what the wrapper asks of the sandbox, not that the sandbox holds: that is the canary's job (§6).
 """
 
+import contextlib
 import json
 import os
 import shutil
+import signal
 import sqlite3
 import sys
 import tempfile
@@ -84,6 +86,18 @@ def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Itera
 
 def wrap(*args: str, cwd: Path, env: Mapping[str, str] | None = None) -> procs.Result:
     return SubprocessRunner().run([str(WRAPPER), *args], cwd=cwd, env=env)
+
+
+def wrap_here(*args: str, cwd: Path, ipv6: bool) -> int:
+    """Run the wrapper in this process, as `wrap` runs it in its own, on a host whose kernel has IPv6 or has none."""
+    with (
+        mock.patch.object(canopy_sandbox, "ipv6_missing", autospec=True, return_value=not ipv6),
+        mock.patch.object(signal, "signal", autospec=True),  # the handlers it sets would outlast it here
+        mock.patch.object(tempfile, "tempdir", None),  # read TMPDIR again, as a process of its own does
+        mock.patch.dict(os.environ),  # which it scrubs
+        contextlib.chdir(cwd),
+    ):
+        return canopy_sandbox.run(list(args))
 
 
 def linked_worktree(tmp_path: Path, name: str) -> tuple[Path, Path]:
@@ -164,6 +178,7 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     cache = sandbox.caches() / "worker"
     assert str(cache) in filesystem["allowRead"]
     assert str(cache) in filesystem["allowWrite"]
+    call["env"].pop(canopy_sandbox.SOCAT_LISTEN, None)  # as this host has IPv6 or not
     assert call["env"] == {
         "CANOPY_GIT_OBJECTS": str(objects),
         "CLAUDE_CODE_TMPDIR": tmp,
@@ -405,6 +420,7 @@ def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp
     assert done.ok, done.stderr
     assert done.stdout.strip() == git("rev-parse", "HEAD", cwd=slot)
     call = sandbox.only_call()
+    call["env"].pop(canopy_sandbox.SOCAT_LISTEN, None)  # as this host has IPv6 or not
     filesystem = call["settings"]["filesystem"]
     tmp = call["env"]["TMPDIR"]
     own, shared = primary / ".git" / "worktrees" / "slot", primary / ".git"
@@ -481,6 +497,28 @@ def test_a_temp_directory_too_deep_for_srts_sockets_runs_nothing(sandbox: Sandbo
     assert f"the temp directory {deep} has too long a path for srt's sockets" in done.stderr
     assert not sandbox.log.exists()
     assert list((deep / f"canopy-sandbox-{os.getuid()}").iterdir()) == []
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="srt bridges the network with socat on Linux alone")
+@pytest.mark.parametrize(
+    ("ipv6", "operators", "listen"),
+    [(True, None, None), (False, None, "4"), (False, "6", "6")],
+    ids=["with-ipv6", "without", "without-but-the-operator-chose"],
+)
+def test_on_a_host_without_ipv6_srts_bridge_listens_on_ipv4(
+    sandbox: Sandbox,
+    tmp_path: Path,
+    ipv6: bool,  # noqa: FBT001  (a parameter)
+    operators: str | None,
+    listen: str | None,
+) -> None:
+    """socat, srt's bridge into the sandbox, listens on IPv6 unless told not to, and without it exits unreported."""
+    with mock.patch.dict(os.environ, {canopy_sandbox.SOCAT_LISTEN: operators or ""}):
+        if operators is None:
+            os.environ.pop(canopy_sandbox.SOCAT_LISTEN)
+        assert wrap_here("chore", "true", cwd=tmp_path, ipv6=ipv6) == 0
+
+    assert sandbox.only_call()["env"].get(canopy_sandbox.SOCAT_LISTEN) == listen
 
 
 def test_the_commands_exit_status_is_the_wrappers(sandbox: Sandbox, tmp_path: Path) -> None:
