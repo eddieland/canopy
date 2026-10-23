@@ -28,9 +28,12 @@ import type {
     Started,
     Stopped,
     TaskSubmitted,
+    TaskReplied,
+    TaskStopped,
 } from '@/api/types'
 import { currentClock } from '@/lib/clock'
 import { REACTION_LOOKS } from '@/lib/drafts'
+import { taskRef } from '@/lib/refs'
 import { localTime } from '@/lib/time'
 import type { NewToast } from '@/lib/toasts'
 
@@ -89,6 +92,31 @@ export function stoppedText(key: string, stopped: Stopped, now: boolean): string
     return stopped.ended
         ? `${head} Run ${stopped.running_run} was ended and its slots returned.`
         : `${head} Run ${stopped.running_run} had already ended.`
+}
+
+/**
+ * What a stop of a task did, as `canopy stop task:N` says it (canopy/cli/tasks.py): already stopped, dropped before
+ * its first run, or stopped; then the run still working it, which finishes unless `now` ended it. Stop now is the
+ * page's `--now`.
+ */
+export function taskStoppedText(id: number, stopped: TaskStopped, now: boolean): string {
+    const ref = taskRef(id)
+    let head = `${ref} is stopped; nothing starts it again.`
+    if (stopped.already) {
+        head = `${ref} was already stopped.`
+    } else if (stopped.dropped) {
+        head = `${ref} is stopped; it had not started, and nothing starts it now.`
+    }
+    const run = stopped.running_run
+    if (run === null) {
+        return head
+    }
+    if (!now) {
+        return `${head} Its run ${run} is still working and will finish; Stop now ends it.`
+    }
+    return stopped.ended
+        ? `${head} Its run ${run} was ended and its slot returned.`
+        : `${head} Its run ${run} had already ended.`
 }
 
 /** What a forget cleared, and what is left for the operator: closing its PRs and deleting its branch on origin. */
@@ -417,6 +445,23 @@ export function taskSubmittedToast(submitted: TaskSubmitted): NewToast {
         detail: `${submitted.repo} on ${submitted.branch}`,
         tone: 'done',
     }
+}
+
+/**
+ * What a reply to a task did, as `canopy reply task:N` says it: the message it recorded, or the one that already said
+ * it, then what starts the task's next run: the first tick after its running run ends, or the next tick.
+ */
+export function taskRepliedText(id: number, replied: TaskReplied): string {
+    const next =
+        replied.running_run === null
+            ? 'The next tick starts its next run, on its branch.'
+            : `Its run ${replied.running_run} is still working; the first tick after it ends starts the next run.`
+    const ref = taskRef(id)
+    const answered = replied.answers === null ? '' : `, answering message ${replied.answers}`
+    const head = replied.new
+        ? `Recorded message ${replied.message_id} on ${ref}${answered}.`
+        : `Message ${replied.message_id} on ${ref} already says this${answered}; nothing new recorded.`
+    return `${head} ${next}`
 }
 
 /** What setting a notice did, as `canopy notice` says it: the runs that hear it. The banner says until when. */

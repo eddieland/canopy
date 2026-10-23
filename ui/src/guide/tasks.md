@@ -73,9 +73,9 @@ stands, how many runs it has had, and when you submitted it.
 **Conversation** starts with your instruction, whole and in your own words, on your side of the thread. Then come what
 its runs said and your replies, in order, each message naming the run that wrote it (`task:4#5` is task 4's run
 number 5, counted across every task's runs). While a run works, the thread ends on it, `working now`, with what it
-has cost so far. A question waiting on you wears `waiting on you`, and the band under the thread says how to answer
-it: from your shell for now, with `canopy reply task:N "TEXT"`, which the band offers to copy. With no question
-waiting, the same line says a reply queues the next run.
+has cost so far. A question waiting on you wears `waiting on you`. Under the thread is the reply box, and while a
+question waits it sits on the same amber band, naming the run that asked and the message it answers. Under that is
+Stop.
 
 **Report** is the page's main content: the newest report a run left, laid out as a document. It is the agent's
 Markdown, drawn as a plan is, so headings, lists, and code read as they should and anything else (HTML, an image, a
@@ -107,10 +107,17 @@ has printed so far, and the page reads it again as the task moves.
 ## Replying and stopping
 
 A run that needs something from you ends `blocked` with a question, and the task goes on the attention list as
-`awaiting_reply`. Answer it with `canopy reply task:N "TEXT"`. A reply is also how you ask for more after a run is
-done: the next tick starts another run on the same branch, with the conversation so far and the latest report.
-A task never retries on its own; a run that failed stays failed until you say what to do differently.
+`awaiting_reply`. Answer it in the box under the task's conversation, or with `canopy reply task:N "TEXT"`; they are
+the same reply. A reply is also how you ask for more after a run is done: the next tick starts another run on the same
+branch, with the conversation so far and the latest report. If a run is still working, the next one waits for it to
+end, and the line under the box says which run that is. A task never retries on its own; a run that failed stays
+failed until you say what to do differently. What you write is kept while the tab is open, and a reply sent twice
+after a flaky connection is recorded once.
 
-`canopy show task:N` prints the task, each run, the tickets it filed, and its latest report. `canopy stop task:N` ends
-it: a queued run is dropped, and a running one finishes unless you add `--now`. A stopped task is never deleted, so
-its runs, its report, and what it cost stay there to read.
+Stop ends the task, and it asks once more first, because nothing starts a stopped task again: there is no Start for a
+task, only a new one. A queued run is dropped, and a running one finishes its work. Stop now, there while a run
+works, ends that run too and gives its slot back, after its own second click. A stopped task takes no more replies,
+so its page has no box; it is never deleted, so its runs, its report, and what it cost stay there to read.
+
+From the shell, `canopy show task:N` prints the task, each run, the tickets it filed, and its latest report, and
+`canopy stop task:N` stops it, with `--now` for Stop now.

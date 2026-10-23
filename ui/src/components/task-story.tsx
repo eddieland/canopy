@@ -1,22 +1,23 @@
 import type { TaskDetail, TaskRun } from '@/api/types'
 import { Age } from '@/components/age'
 import { Conversation } from '@/components/conversation'
-import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { OrderToggle } from '@/components/order-toggle'
 import { PanelHeader, ThreadScroll } from '@/components/panel'
+import { ReplyForm } from '@/components/reply-form'
 import { RunDot } from '@/components/status'
+import { TaskActions } from '@/components/task-actions'
 import { TaskRunLink } from '@/components/task-link'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { messageRef, taskRef } from '@/lib/refs'
-import { replyCommand, waits } from '@/lib/tasks'
+import { waits } from '@/lib/tasks'
 import { cn } from '@/lib/utils'
 
 /**
  * A task's story (DESIGN §36), inside its Conversation panel: the operator's instruction at its oldest end, in their
  * own words, then what its runs said and the operator's replies, in the operator's order, ending on the run working it
- * now, as a ticket's does. The question waiting on the operator wears its chip, and the panel's foot says how to answer
- * it: from the shell, `canopy reply task:N TEXT`, until the page has a reply box of its own.
+ * now, as a ticket's does. The question waiting on the operator wears its chip, and the panel's foot answers it: the
+ * reply form, then the task's stop.
  */
 export function TaskStory({ detail }: { detail: TaskDetail }) {
     const { task, messages, runs } = detail
@@ -47,7 +48,7 @@ export function TaskStory({ detail }: { detail: TaskDetail }) {
                 />
                 {order === 'oldest' && now}
             </ThreadScroll>
-            <ReplyFoot detail={detail} />
+            <TaskAnswer detail={detail} running={working?.id ?? null} />
         </>
     )
 }
@@ -72,37 +73,41 @@ function WorkingNow({ task, run }: { task: number; run: TaskRun }) {
 }
 
 /**
- * Where the reply box will be: how to answer the task from the shell. While a question waits, a band in what waits on
- * the operator's tint, naming the message it asks in; otherwise one muted line on what a reply does. A stopped task
- * takes no reply, so it has none.
+ * Where the task is answered, at its conversation's foot as a ticket's is: the reply form, then its stop, under a
+ * hairline, so the reply is the first stop the keyboard reaches after the conversation and Stop never stands between
+ * them. While a question waits, the form sits on what waits on the operator's tint, under a line naming the message it
+ * asks in. A stopped task takes no reply, so it has no form, and its stop only what is still left to end.
  */
-function ReplyFoot({ detail }: { detail: TaskDetail }) {
+function TaskAnswer({ detail, running }: { detail: TaskDetail; running: number | null }) {
     const { task } = detail
-    if (task.standing === 'stopped') {
-        return null
-    }
-    const command = replyCommand(task.id)
-    const waiting = waits(task) && task.question_id !== null
+    const question = waits(task) ? task.question_id : null
+    // The run that asked, which the band names as a message's head does, opening its page.
+    const asker = detail.messages.find((message) => message.id === question)?.task_run_id ?? null
     return (
-        <section
-            aria-label={waiting ? 'A question waiting on you' : 'Reply'}
-            data-testid="task-reply"
-            className={cn(
-                'flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t px-3 py-2 text-xs',
-                waiting ? 'border-status-blocked/40 bg-status-blocked/8' : 'text-muted-foreground',
+        <>
+            {/* One element whether a question waits or not, so the form keeps what it said as its reply clears it. */}
+            {task.stopped_at === null && (
+                <div
+                    role={question === null ? undefined : 'region'}
+                    aria-label={question === null ? undefined : 'A question waiting on you'}
+                    className={cn(question !== null && 'border-t border-status-blocked/40 bg-status-blocked/8')}
+                >
+                    {question !== null && (
+                        <p className="px-3 pt-3 text-xs">
+                            <span className="font-medium text-status-blocked">Waiting on you: </span>
+                            {asker === null ? 'its run' : <TaskRunLink task={task.id} run={asker} />} asked a question
+                            in {messageRef(question)}.
+                        </p>
+                    )}
+                    <ReplyForm
+                        key={`reply-${task.id}`}
+                        target={{ kind: 'task', id: task.id }}
+                        waiting={question}
+                        className={cn(question !== null && 'border-t-0')}
+                    />
+                </div>
             )}
-        >
-            {waiting ? (
-                <span>
-                    <span className="font-medium text-status-blocked">Waiting on you: </span>
-                    its run asked a question in {messageRef(task.question_id ?? 0)}. Answer it from your shell:
-                </span>
-            ) : (
-                <span>A reply queues its next run, on the same branch. Send one from your shell:</span>
-            )}
-            <Copyable text={command} label="reply command" className="font-mono text-foreground">
-                {command} <span className="text-muted-foreground">TEXT</span>
-            </Copyable>
-        </section>
+            <TaskActions key={`actions-${task.id}`} task={task} running={running} />
+        </>
     )
 }
