@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Pool, WorktreeState } from '@/api/types'
+import type { Pool, Run, Worktree, WorktreeState } from '@/api/types'
 
-import { heldBy, needsLook, overSize, poolsLine, poolShown, slotGroups, slotsRoot } from './worktree-state'
+import { heldBy, needsLook, overSize, poolsLine, poolShown, slotGroups, slotsRoot, workingLine } from './worktree-state'
 
 const slot = { name: '1', path: '.treehouse/web-3f9c2a1b/1/web', status: 'available', state: 'idle' } as const
 const pool = (size: number | null, slots: number): Pool =>
@@ -131,5 +131,34 @@ describe('heldBy', () => {
 
     it('says nothing holds one when none is held', () => {
         expect(heldBy([inState('idle'), inState('working', 'canopy:ABC-101')])).toBe('nothing')
+    })
+})
+
+// A working slot held by what `by` names, and a pool of the slots given.
+function held(by: Partial<Pick<Worktree, 'run' | 'review' | 'task'>>): Worktree {
+    return { ...inState('working'), run: null, review: null, task: null, ...by }
+}
+
+function inPool(...worktrees: Worktree[]): Pool {
+    return { ...pool(4, 0), worktrees }
+}
+
+describe('workingLine', () => {
+    const run = { id: 43 } as unknown as Run
+    const review = { id: 7, pr_url: 'https://example.test/pull/7', started_at: '2026-10-08T12:00:00Z' }
+    const task = { task_id: 6, run_id: 6, started_at: '2026-10-08T12:00:00Z' }
+
+    it("names what holds the working slots, a task's run among them, and the pools they are in", () => {
+        expect(workingLine([inPool(held({ run }), held({ run })), inPool(held({ task }))])).toBe(
+            'runs and tasks, in 2 pools',
+        )
+        expect(workingLine([inPool(held({ run }), held({ review }), held({ task }), inState('idle'))])).toBe(
+            'runs, reviews, and tasks, in 1 pool',
+        )
+        expect(workingLine([inPool(held({ task })), pool(2, 2)])).toBe('tasks, in 1 pool')
+    })
+
+    it('says nothing works when no slot does', () => {
+        expect(workingLine([pool(2, 2)])).toBe('no run, review, or task')
     })
 })
