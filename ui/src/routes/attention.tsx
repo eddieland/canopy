@@ -104,6 +104,7 @@ function AttentionPage() {
     const toast = useToast()
     const { data } = useQuery(attentionQuery)
     const tickets = useQuery(ticketsQuery).data
+    const tasks = useQuery(tasksQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
     const rows = useLeavingRows(data, items)
     // The item asked for while it is listed; else the most severe one about a ticket, which has a thread to show.
@@ -131,7 +132,7 @@ function AttentionPage() {
     }
 
     function isDone(item: AttentionItem): boolean {
-        return answered(item, tickets)
+        return answered(item, tickets, tasks)
     }
 
     // A reply that answers its item moves on to the next that waits on the operator, its row chosen and focused, the
@@ -178,13 +179,17 @@ function AttentionPage() {
                                     <ul className="stagger flex flex-col gap-0.5 p-1.5">
                                         {rows.map(({ item, leaving }) =>
                                             leaving ? (
-                                                <Leaving key={item.id} item={item} done={answered(item, tickets)} />
+                                                <Leaving
+                                                    key={item.id}
+                                                    item={item}
+                                                    done={answered(item, tickets, tasks)}
+                                                />
                                             ) : (
                                                 <Row
                                                     key={item.id}
                                                     item={item}
                                                     selected={item.id === selected?.id}
-                                                    done={answered(item, tickets)}
+                                                    done={answered(item, tickets, tasks)}
                                                     onChoose={choose}
                                                 />
                                             ),
@@ -211,7 +216,7 @@ function AttentionPage() {
                                 <Detail
                                     key={selected.id}
                                     item={selected}
-                                    done={answered(selected, tickets)}
+                                    done={answered(selected, tickets, tasks)}
                                     onReplied={(said) => moveOn(selected, said)}
                                 />
                             )}
