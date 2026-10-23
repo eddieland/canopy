@@ -14,7 +14,7 @@ from canopy.chores import start as chore_start
 from canopy.core import chore_view, config, db
 from canopy.infra import logs
 from canopy.loop import attention
-from canopy.loop.tools import Refused, Request, Text, matching, running_tick, truncate
+from canopy.loop.tools import Outcome, Refused, Request, Result, Text, matching, running_tick, truncate
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -35,11 +35,22 @@ class ChoreRun(Request):
     ] = None
 
 
-def chore_run(ctx: Context, request: ChoreRun) -> str:
+class ChoreStarted(Result):
+    """A run of a chore started, or in a dry run, one its guards would start."""
+
+    #: The chore.
+    name: Annotated[str, Field(description="The chore.")]
+    #: Whether this was a dry run, which started nothing.
+    dry_run: Annotated[bool, Field(description="Whether this was a dry run, which started nothing.")]
+    #: The chore's run that started; none in a dry run.
+    run: Annotated[int | None, Field(description="The chore's run that started; none in a dry run.")]
+
+
+def chore_run(ctx: Context, request: ChoreRun) -> Outcome[ChoreStarted]:
     """Start a run of a chore, if its guards allow one now; in a dry run, check them and start nothing.
 
     Returns:
-        What the command prints.
+        What the command prints, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or a guard refused the run, which is recorded.
@@ -61,11 +72,17 @@ def chore_run(ctx: Context, request: ChoreRun) -> str:
     if started is None:
         rationale = truncate(f"dry run: not dispatched{on_context}")
         db.record_decision(ctx.conn, tick_id, None, chore_start.DISPATCH_ACTION, rationale, chore=name)
-        return f"dry run: recorded chore run {name}; nothing was started"
+        return Outcome(
+            f"dry run: recorded chore run {name}; nothing was started",
+            ChoreStarted(name=name, dry_run=True, run=None),
+        )
     rationale = truncate(f"chore run {started.run_id}{on_context}")
     db.record_decision(ctx.conn, tick_id, None, chore_start.DISPATCH_ACTION, rationale, chore=name)
     log.info("chore run started", extra={"chore": name, "chore_run_id": started.run_id, "pid": started.pid})
-    return f"started chore {name}: run {started.run_id}"
+    return Outcome(
+        f"started chore {name}: run {started.run_id}",
+        ChoreStarted(name=name, dry_run=False, run=started.run_id),
+    )
 
 
 class ChoreWait(Request):
@@ -77,11 +94,18 @@ class ChoreWait(Request):
     rationale: Annotated[Text, Field(description="Why it should not run now, in your own words.")]
 
 
-def chore_wait(ctx: Context, request: ChoreWait) -> str:
+class ChoreWaitRecorded(Result):
+    """That a chore is due but should not run now, recorded."""
+
+    #: The chore.
+    name: Annotated[str, Field(description="The chore.")]
+
+
+def chore_wait(ctx: Context, request: ChoreWait) -> Outcome[ChoreWaitRecorded]:
     """Record that a chore is due but should not run now, and why.
 
     Returns:
-        What the command prints.
+        What the command prints, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or no chore of that name is configured here.
@@ -90,4 +114,4 @@ def chore_wait(ctx: Context, request: ChoreWait) -> str:
     if request.name not in chore_view.configured(ctx.config, ctx.workspace):
         raise Refused(f"no chore named {request.name!r} is configured for this workspace")
     db.record_decision(ctx.conn, current.id, None, "wait", request.rationale, chore=request.name)
-    return f"recorded wait for {attention.CHORE_PREFIX}{request.name}"
+    return Outcome(f"recorded wait for {attention.CHORE_PREFIX}{request.name}", ChoreWaitRecorded(name=request.name))

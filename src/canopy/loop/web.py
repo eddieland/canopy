@@ -1,10 +1,10 @@
 """The web UI for `canopy loop` (DESIGN §22, D073): the listener secret checked, the server's backend wired, started.
 
 The server is a feature (`canopy.serve`) and cannot import the loop, `runs`, `reviews`, or `chores`, so this hands it
-the attention list as `canopy status` shows it, `runs.halt.end`, which `canopy stop --now` uses, for a stop with `now`,
-a way to ask the loop to read its config again, as SIGHUP does, and one to ask it for a tick now, as `t` does, the
-attempt and review limits with the grants that `canopy grant` records (`runs.policy`, `reviews.grants`), and a chore's
-try (`chores.trial`).
+the attention list as `canopy status` shows it, `runs.halt.end` and `runs.task_run.stop_now`, which `canopy stop --now`
+uses for a ticket and a task, for a stop with `now`, a way to ask the loop to read its config again, as SIGHUP does,
+and one to ask it for a tick now, as `t` does, the attempt and review limits with the grants that `canopy grant`
+records (`runs.policy`, `reviews.grants`), and a chore's try (`chores.trial`).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from canopy.core import conversation, review_runs
 from canopy.infra import logs, resources
 from canopy.loop import attention, reread, tick_now
 from canopy.reviews import grants
-from canopy.runs import halt, policy
+from canopy.runs import halt, policy, task_run
 from canopy.serve import secret
 from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
@@ -84,6 +84,9 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Bac
     def end_run(run_ctx: Context, run: records.Run) -> bool:
         return halt.end(run_ctx, run, logs.for_tick(None))
 
+    def end_task_run(run_ctx: Context, run: records.TaskRun) -> bool:
+        return task_run.stop_now(run_ctx, run, logs.for_tick(None))
+
     def reload_config(current: Context) -> Reloading:
         # Read here first, so a config that does not load is refused to the operator who asked, not only logged.
         found = reread.load(current)
@@ -99,6 +102,7 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Bac
         workspace=ctx.ws,
         attention=attention.listed,
         end_run=end_run,
+        end_task_run=end_task_run,
         reload=reload_config,
         tick_now=ask_tick,
         limits=limits,

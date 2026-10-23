@@ -16,7 +16,7 @@ import json
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
 #: The variable OpenCode reads inline config from, merged after every config file but those managed for the operator.
@@ -27,14 +27,17 @@ CODE_MODE_ENV = "OPENCODE_EXPERIMENTAL_CODE_MODE"
 VARIABLES = frozenset({INLINE_CONFIG_ENV, CODE_MODE_ENV})
 
 
-def env(server: str, command: Sequence[str], *, cwd: Path) -> dict[str, str]:
-    """The environment that gives a run local MCP server `server`, run as `command` in `cwd`.
+def env(commands: Mapping[str, Sequence[str]], *, cwd: Path) -> dict[str, str]:
+    """The environment that gives a run each local MCP server `commands` names, each run as its command in `cwd`.
 
     Returns:
-        The variables to set on the run's process: the server in its inline config, and code mode off.
+        The variables to set on the run's process: the servers in its inline config, and code mode off.
     """
-    entry = {"type": "local", "command": list(command), "cwd": str(cwd), "enabled": True}
-    return {INLINE_CONFIG_ENV: json.dumps({"mcp": {server: entry}}), CODE_MODE_ENV: "false"}
+    entries = {
+        server: {"type": "local", "command": list(command), "cwd": str(cwd), "enabled": True}
+        for server, command in commands.items()
+    }
+    return {INLINE_CONFIG_ENV: json.dumps({"mcp": entries}), CODE_MODE_ENV: "false"}
 
 
 def tool_name(server: str, tool: str) -> str:

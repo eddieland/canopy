@@ -243,6 +243,44 @@ describe('ReviewDraftPanel', () => {
         expect(await within(found).findByText('refused (stale):')).toBeTruthy()
     })
 
+    it('discards the draft, as canopy review discard does, once asked in its place', async () => {
+        answer = () => Response.json(reviewDraft({ status: 'discarded', why: 'discarded by you through web' }))
+        const found = await panel()
+        const discard = within(found).getByRole('button', { name: 'Discard' })
+        expect(discard.getAttribute('title')).toBe('canopy review discard 5')
+        fireEvent.click(discard)
+        // Asked in its place, Keep takes the focus and changes nothing.
+        const keep = within(found).getByRole('button', { name: 'Keep' })
+        expect(document.activeElement).toBe(keep)
+        fireEvent.click(keep)
+        expect(writes()).toEqual([])
+        fireEvent.click(within(found).getByRole('button', { name: 'Discard' }))
+        fireEvent.click(within(found).getByRole('button', { name: 'Discard the draft' }))
+        await waitFor(() => {
+            expect(toasts).toEqual([
+                { title: "Discarded review run 5's draft; nothing was posted", detail: PR, tone: 'done' },
+            ])
+        })
+        expect(writes()).toEqual([{ method: 'POST', path: '/api/reviews/5/draft/discard', body: null }])
+
+        cleanup()
+        const discarded = await panel(reviewDraft({ status: 'discarded' }))
+        expect(within(discarded).getByTestId('draft-discarded').textContent).toMatch(/^You discarded this draft/u)
+        expect(within(discarded).queryByRole('button', { name: /Publish|Discard/u })).toBeNull()
+    })
+
+    it('names the guard of a refused discard, as the CLI does', async () => {
+        answer = () =>
+            Response.json(
+                { detail: { guard: 'revising', reason: "review run 9 is revising review run 5's draft" } },
+                { status: 409 },
+            )
+        const found = await panel()
+        fireEvent.click(within(found).getByRole('button', { name: 'Discard' }))
+        fireEvent.click(within(found).getByRole('button', { name: 'Discard the draft' }))
+        expect(await within(found).findByText('refused (revising):')).toBeTruthy()
+    })
+
     it('edits the body in the operator’s words, a new version', async () => {
         const found = await panel()
         fireEvent.click(within(found).getByRole('button', { name: 'edit' }))

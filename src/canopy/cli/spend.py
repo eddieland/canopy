@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import dataclasses
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import click
 
 from canopy.cli.common import open_context
-from canopy.cli.render import report_json
-from canopy.core import db, spend
+from canopy.core import db, reports, spend
 from canopy.runtime.report import count_text
 
 if TYPE_CHECKING:
@@ -75,26 +73,12 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     sessions name; --json adds every ticket, PR, and tool, and each kind's first model calls by definitions snapshot.
     """
     ctx = open_context(click_ctx)
-    found = spend.breakdown(ctx.conn, datetime.now(UTC), days)
     if as_json:
-        click.echo(report_json(as_dict(found)))
+        click.echo(reports.read_spend(ctx, reports.Spend(days=days)))
         return 0
-    for line in render(found):
+    for line in render(spend.breakdown(ctx.conn, datetime.now(UTC), days)):
         click.echo(line)
     return 0
-
-
-def as_dict(found: Breakdown) -> dict[str, Any]:
-    """The breakdown as JSON-ready values, each set of costs with its total.
-
-    Returns:
-        A dict `json.dumps` takes as it is.
-    """
-    data = dataclasses.asdict(found)
-    for day, row in zip(data["per_day"], found.per_day, strict=True):
-        day["costs"]["total"] = row.costs.total
-    data["totals"]["total"] = found.totals.total
-    return data
 
 
 def render(found: Breakdown) -> list[str]:

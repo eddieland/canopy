@@ -22,9 +22,10 @@ ticket's unit holds, has no draft, checked in code, and keeps §21's send. The d
 source rather than a run, kept with the review rather than a ticket: versioned, each version recording who wrote it, the
 reviewer, the reviser, or the operator, and through which channel. A review the operator asked for waits on them, as
 a worker's drafts do: the harness raises `review_waiting` about its PR until a draft of the PR's newest reviewed commit
-is published or staged, the operator empties it of all it would post, or the PR is seen merged or closed. A draft
-staged or of unknown outcome raises `review_unsettled` until a read settles it. A `review.query` match's draft waits on
-nobody, and none need ever be published.
+is published, staged, or discarded, the operator empties it of all it would post, or the PR is seen merged or closed.
+A draft staged or of unknown outcome raises `review_unsettled` until a read settles it. A `review.query` match's draft
+waits on nobody, and none need ever be published. Discarding is the operator's word that a waiting draft is seen and
+will not post: it posts nothing and takes no edit, note, or publish after.
 
 A version is exactly what would post: a body, and comments, each on a line of the diff the review kept (§21, The diff),
 on the commit's side. canopy makes the first from the review's body, what the reviewer would tell the PR's author and
@@ -100,9 +101,9 @@ publishing, T3 with revisions, and T8 with the review page.
   identity (D010), nothing on GitHub says a model wrote it but what the operator leaves in.
 - T6: the reviewer and the reviser still hold no write tool. Residual: a steered reviewer can put a link carrying data
   in a comment the operator publishes unread.
-- T8: the web channel gains editing a review's draft, asking for a revision, publishing, and staging. Its residual
-  widens to every PR canopy reviewed: a stolen session can post text of its choosing, as the operator, on a coworker's
-  PR.
+- T8: the web channel gains editing a review's draft, asking for a revision, publishing, staging, and discarding. Its
+  residual widens to every PR canopy reviewed: a stolen session can post text of its choosing, as the operator, on a
+  coworker's PR.
 
 ### Open
 

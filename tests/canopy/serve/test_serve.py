@@ -24,7 +24,7 @@ import uvicorn
 from pydantic import ValidationError
 from starlette.types import Message, Receive, Scope, Send
 
-from canopy.core import conversation, db, review_runs
+from canopy.core import conversation, db, review_runs, tasks
 from canopy.core.context import Context, db_path
 from canopy.infra import logs
 from canopy.serve import live, mock_reviews, secret, server, views
@@ -45,6 +45,8 @@ from canopy.serve.event_schema import (
     SpendUpdated,
     StreamEnding,
     StreamEvent,
+    TaskChanged,
+    TasksUpdated,
     TicketChanged,
     TicketsUpdated,
     TickUpdated,
@@ -475,16 +477,20 @@ def read_events(port: int, n: int) -> tuple[httpx2.Headers, list[StreamEvent]]:
 
 
 def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) -> None:
-    headers, events = read_events(served, 11)
+    headers, events = read_events(served, 12)
     assert headers["content-type"].startswith("text/event-stream")
     assert headers["x-accel-buffering"] == "no"
     assert headers["cache-control"] == "no-cache"
-    first, runs, tickets, chores, reviews, requested, spend, tick, loop, changed, spent = (e.root for e in events)
+    first, runs, tickets, chores, tasks_event, reviews, requested, spend, tick, loop, changed, spent = (
+        e.root for e in events
+    )
     assert isinstance(first, AttentionUpdated)
     assert isinstance(runs, RunsUpdated)
     assert isinstance(tickets, TicketsUpdated)
     assert isinstance(chores, ChoresUpdated)
     assert [c.name for c in chores.chores] == ["build-health", "deps"]
+    assert isinstance(tasks_event, TasksUpdated)
+    assert [t.id for t in tasks_event.tasks] == [7, 6, 5, 4, 3, 2, 1]
     assert isinstance(reviews, ReviewsUpdated)
     assert reviews.reviews
     assert isinstance(requested, ReviewRequestsUpdated)
@@ -629,6 +635,34 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None
     assert [e.key for e in events if isinstance(e, TicketChanged)] == ["ABC-103"]
 
 
+def test_a_task_submitted_sends_the_tasks_again(backend: Backend) -> None:
+    with backend.open() as ctx:
+        sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+        sent.changes(backend, ctx)
+        task = tasks.submit(ctx.conn, ctx.workspace, "Tidy the README.", repo="web", project=None, channel="cli")
+        events = [e.root for e in sent.changes(backend, ctx)]
+    [tasks_event] = [e for e in events if isinstance(e, TasksUpdated)]
+    assert [(t.id, t.standing) for t in tasks_event.tasks[:1]] == [(task.id, "queued")]
+
+
+def test_a_message_about_a_task_names_the_task_though_its_summary_holds(backend: Backend) -> None:
+    with backend.open() as ctx:
+        task = tasks.submit(ctx.conn, ctx.workspace, "Tidy the README.", repo="web", project=None, channel="cli")
+        sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+        first = [e.root for e in sent.changes(backend, ctx)]
+        # A reply while its run still runs queues nothing: the list is as it was, but its page shows the reply.
+        ctx.conn.execute(
+            "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
+            "VALUES ('task', ?, '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')",
+            (str(task.id),),
+        )
+        events = [e.root for e in sent.changes(backend, ctx)]
+    # The first read names no task: there was nothing sent before it to differ from.
+    assert not any(isinstance(e, TaskChanged) for e in first)
+    assert not any(isinstance(e, TasksUpdated) for e in events)
+    assert [e.id for e in events if isinstance(e, TaskChanged)] == [task.id]
+
+
 def test_a_review_run_starting_sends_the_reviews_again(backend: Backend, tmp_path: Path) -> None:
     with backend.open() as ctx:
         sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
@@ -674,7 +708,7 @@ def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(
     async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
         with closing(live.Stream(backend)) as opened:
             stream = opened.events(poll_seconds=0.01)
-            first = [await anext(stream) for _ in range(9)]
+            first = [await anext(stream) for _ in range(10)]
             # A reload commits nothing to the journal: the stream sees it in the config it serves.
             chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
             backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
@@ -1079,6 +1113,8 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/chores/{name}/runs/{run_id}/transcript",
         "/api/tasks",
         "/api/tasks/{task_id}",
+        "/api/tasks/{task_id}/replies",
+        "/api/tasks/{task_id}/stop",
         "/api/tasks/{task_id}/runs/{run_id}",
         "/api/tasks/{task_id}/runs/{run_id}/transcript",
         "/api/tasks/{task_id}/runs/{run_id}/report",
@@ -1103,6 +1139,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/reviews/{run_id}/draft/comments/{number}/drop",
         "/api/reviews/{run_id}/draft/notes",
         "/api/reviews/{run_id}/draft/publish",
+        "/api/reviews/{run_id}/draft/discard",
         "/api/seen",
         "/api/pull-requests",
         "/api/pull-request",
