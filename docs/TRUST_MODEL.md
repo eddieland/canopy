@@ -562,10 +562,13 @@ Controls:
   harness, never an agent, does it: no agent runs git there, and `canopy archive` refuses inside a tick or run. It uses
   only a path that is a clone's own top level, never a directory inside a repository the operator works in, commits
   only the workspace's own directory there, or with `paths.plan_archive_workspace_dir` off only each planned ticket's
-  directory and canopy's own index at its top level, runs git with hooks off (D107), and never forces a push. A prompt
-  is exported only from beside its run's log under the state directory, never through a link. Residual: anyone who can
-  read that remote reads every plan, prompt, and conversation there, so the operator keeps it private; the clone's
-  own git config, such as its remote or `core.sshCommand`, is the operator's to keep, as their home directory is.
+  directory and canopy's own index at its top level, runs git with hooks off (D107), and never forces a push. When the
+  upstream refuses a push for commits the clone lacks, it fetches them and rebases the clone's unpushed commits,
+  the operator's included, onto them, never stashing the operator's changes, and aborts a rebase that cannot finish.
+  A prompt is exported only from beside its run's log under the state directory, never through a link. Residual:
+  anyone who can read that remote reads every plan, prompt, and conversation there, so the operator keeps it private;
+  the clone's own git config, such as its remote or `core.sshCommand`, is the operator's to keep, as their home
+  directory is.
 - With `trust.review_replies = "approve"`, a worker's comments and reactions leave the machine only as the operator
   sent them: its prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the
   GitHub server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker
