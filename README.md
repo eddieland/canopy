@@ -242,6 +242,9 @@ there, one stage at a time:
 To run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config, run
 `canopy sandbox setup` and follow [docs/SANDBOX.md](docs/SANDBOX.md). It is opt-in, and not yet proven.
 
+To have your own agent judge how canopy is working for you, from where the spend goes to whether the planner is on the
+right model, paste one of the prompts in [docs/INSIGHTS.md](docs/INSIGHTS.md) into a session with canopy's skill.
+
 ## Troubleshooting
 
 - **canopy cannot find `treehouse`:** check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is
