@@ -455,16 +455,19 @@ Controls now:
 - Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
   operator prefixes `worker_cmd`, `private_worker_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
   each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
-  it writes for the run from the operator's template for that role. Under the shipped templates a sandboxed run reads, under
+  it writes for the run from the operator's template for that role; or names repositories in `runtime.sandbox_repos`,
+  and canopy starts their worker runs, setup, and reviews in the wrapper itself, by its absolute path, refusing a joint
+  run whose repositories disagree. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
   files: not `~/.ssh`, other repositories, `~/.config/canopy`, or the workspace's `.canopy/`. It writes only its
   worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and temp directory, and the runtime's
   data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on the host later
   reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
-- The prefix is in the user file or the workspace's private file, which no repository or workspace file can set (T7)
-  and no sandboxed run can write, so neither removes it. The harness never learns whether a run is sandboxed: it runs
-  the template (D023, D118).
+- The prefix and `runtime.sandbox_repos` are in the user file or the workspace's private file, which no repository or
+  workspace file can set (T7) and no sandboxed run can write, so neither removes them. Beyond adding the wrapper for
+  the repositories that key names, the harness never learns whether a run is sandboxed: it runs the template (D023,
+  D118).
 - With or without the sandbox, the harness's own steps after a worker run read nothing it could have planted: every
   git the harness runs has hooks and the filesystem monitor off (D107); a run that changed a slot's `.git` link or
   `commondir` is `crashed`, and no git runs in its slots until both are put back (DESIGN §8); and a slot whose run
@@ -963,8 +966,8 @@ loop's terminal would.
   whatever the token can do. People who can read the channel see what the loop does; they cannot steer it.
 - If you allow a tool in a chore's agent definition, you are responsible for what that tool can do. canopy's controls
   assume chore tools only read.
-- If you sandbox runs (T4), prefix every command docs/SANDBOX.md lists, `private_worker_cmd` included, and run its
-  check. Keep each template's allowlist and `allowRead` to what the runs need: every host and file there is in a
-  steered worker's reach.
+- If you sandbox runs (T4), prefix every command docs/SANDBOX.md lists, `private_worker_cmd` included, or name the
+  repositories in `runtime.sandbox_repos`, and run its check. Keep each template's allowlist and `allowRead` to what
+  the runs need: every host and file there is in a steered worker's reach.
 - Keep the listener secret file private, and bind a listener to a private-network address only on a network whose
   members may see the operator's tickets and code (T8). Label only PRs you are willing to have a worker push to.

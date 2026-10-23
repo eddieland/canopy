@@ -90,6 +90,8 @@ DEFINITIONS_DIR = "{definitions_dir}"
 # `review <PR URL>` (DESIGN §13). Optional in every template.
 TITLE = "{title}"
 _PLACEHOLDER_RE = re.compile(r"\{prompt\}|\{definitions_dir\}|\{title\}")
+#: The sandbox wrapper canopy installs beside itself (DESIGN §24), by the name its command is installed as.
+SANDBOX_WRAPPER = "canopy-sandbox"
 # A repository name is a directory name, a treehouse leaf, and a `--repo` argument (DESIGN §18).
 REPO_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 # A chore's name appears in file paths and on the command line (DESIGN §19).
@@ -707,6 +709,25 @@ class Runtime(Section):
     #: runtime's default. Private: it chooses what the operator's spend buys, and which provider is sent the ticket and
     #: the code (DESIGN §13, TRUST_MODEL T7).
     models: Annotated[dict[ModelRole, ModelId], Scope.PRIVATE] = {}
+    #: The repositories, by name, whose runs canopy starts in the sandbox wrapper itself: each worker run's commands,
+    #: `setup_cmd`, and a review's, with the role each takes (DESIGN §24). Names need not be in this workspace's map,
+    #: as the user file serves every workspace. Private: it decides what a run may reach (TRUST_MODEL T4, T7).
+    sandbox_repos: Annotated[tuple[RepoName, ...], Scope.PRIVATE] = ()
+
+    @model_validator(mode="after")
+    def _sandboxed_once(self) -> Runtime:
+        # A command already wrapped would be wrapped again, a sandbox inside a sandbox, which the wrapper cannot run.
+        if not self.sandbox_repos:
+            return self
+        keys = ("worker_cmd_prefix", "worker_cmd", "private_worker_cmd", "plan_cmd", "setup_cmd", "review_cmd")
+        for key in keys:
+            words = shlex.split(getattr(self, key))
+            if words and Path(words[0]).name == SANDBOX_WRAPPER:
+                raise ValueError(
+                    f"runtime.{key} starts with {SANDBOX_WRAPPER}, and runtime.sandbox_repos has canopy add it: "
+                    f"remove one, or the runs of {', '.join(self.sandbox_repos)} would be sandboxed twice",
+                )
+        return self
 
     def worker_template(self, template: str) -> str:
         """Return `template`, one of a worker run's commands, between `worker_cmd_prefix` and `worker_cmd_suffix`.
