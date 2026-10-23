@@ -2176,6 +2176,14 @@ export type components = {
              * @enum {string}
              */
             source: "ticket" | "config" | "default";
+            /**
+             * Variant
+             * @description The variant `model` runs at, after its last `@`, as `high` in config's `provider/model@high`; None for none.
+             *
+             *     The runtime's list names the model without it, and a ticket's override names none, so a model with one is not a
+             *     choice the page can make: it chooses the model alone.
+             */
+            variant: string | null;
         };
         /**
          * AgentPersona

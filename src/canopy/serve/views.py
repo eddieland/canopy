@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import (
+    agent_models,
     attachments,
     contract,
     conversation,
@@ -605,9 +606,10 @@ def agent_model(found: ticket_models.Next) -> AgentModel:
     """The model one of a ticket's agents runs on at its next run, as the API sends it.
 
     Returns:
-        The agent, its model, or None for the runtime's default, and where that comes from.
+        The agent, its model, or None for the runtime's default, where that comes from, and the model's variant.
     """
-    return AgentModel(agent=found.agent, model=found.model, source=found.source)
+    variant = agent_models.parse(found.model).variant if found.model is not None else None
+    return AgentModel(agent=found.agent, model=found.model, source=found.source, variant=variant)
 
 
 def persona_choice(found: personas.Listed) -> PersonaChoice:

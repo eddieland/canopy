@@ -27,6 +27,12 @@ class AgentModel(Model):
     """The model, as `provider/model`; None for the runtime's default, when neither the ticket nor config sets one."""
     source: Literal["ticket", "config", "default"]
     """Where it comes from: the ticket's override, `[runtime.models]` in config, or neither, the runtime's default."""
+    variant: str | None = None
+    """The variant `model` runs at, after its last `@`, as `high` in config's `provider/model@high`; None for none.
+
+    The runtime's list names the model without it, and a ticket's override names none, so a model with one is not a
+    choice the page can make: it chooses the model alone.
+    """
 
 
 class ModelRequest(Model):
