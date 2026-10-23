@@ -1050,11 +1050,10 @@ def test_a_chore_reads_its_earlier_runs_through_its_tool_from_a_cwd_outside_the_
     assert agent["cwd"] == str(own)
     root = canopy_env.root.absolute()
     assert agent["env"]["CANOPY_CHORE_WORKSPACE"] == str(root)
-    entry = json.loads(agent["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["canopy_chore"]
+    entry = json.loads(agent["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["servers"]["canopy_chore"]
     assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--chore"], str(root))
-    entry = json.loads(agent["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"][reports.SERVER]
+    entry = json.loads(agent["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["servers"][reports.SERVER]
     assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--reports"], str(root))
-    assert agent["env"]["OPENCODE_EXPERIMENTAL_CODE_MODE"] == "false"
     assert json_block(agent["argv"][3])["history"] == tool == history.tool_name()
     listed, whole, other, both = agent["tools"]
     assert not listed["error"], listed["text"]

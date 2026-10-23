@@ -934,9 +934,8 @@ def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
 
     [reviewer] = agent_runs(scenario.agent_log)
     slot = Path(present(reviewed.row.slot_path))
-    entry = json.loads(reviewer["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["canopy_git"]
+    entry = json.loads(reviewer["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["servers"]["canopy_git"]
     assert entry["command"][-3:] == ["_mcp", "--git", f"checkout={slot}"]
-    assert reviewer["env"]["OPENCODE_EXPERIMENTAL_CODE_MODE"] == "false"
     fork, diff, log, root, escape, option = reviewer["tools"]
     assert [call["error"] for call in (fork, diff, log, root)] == [False] * 4, [fork, diff, log, root]
     assert fork["text"] == head(git_pool)

@@ -50,8 +50,12 @@ def test_the_snapshot_is_unwritable_by_anyone_its_owner_included(tmp_path: Path)
     snapshot = definitions.ensure(tmp_path)
     found = [snapshot, *snapshot.rglob("*")]
     assert {p.relative_to(snapshot).as_posix() for p in found} >= {".", "plugins", "plugins/canopy.js"}
-    assert [p for p in found if p.lstat().st_mode & 0o222] == []
-    assert all(p.lstat().st_mode & stat.S_IRUSR for p in found)
+    # Its links lead to the operator's own config, which stays theirs to change; a link's own mode means nothing.
+    links = [p for p in found if p.is_symlink()]
+    assert {p.name: p.readlink() for p in links} == runtime_definitions.links()
+    owned = [p for p in found if not p.is_symlink()]
+    assert [p for p in owned if p.lstat().st_mode & 0o222] == []
+    assert all(p.lstat().st_mode & stat.S_IRUSR for p in owned)
     # Still the operator's alone, as canopy checks before loading one.
     assert definitions.ensure(tmp_path) == snapshot
 
@@ -122,7 +126,7 @@ def test_losing_the_race_to_create_a_snapshot_uses_the_winners(tmp_path: Path) -
     real_rename = os.rename
 
     def another_process_wins(src: Path, dst: Path) -> None:
-        shutil.copytree(src, final)
+        shutil.copytree(src, final, symlinks=True)
         final.chmod(0o700)
         (final / "winner").touch()
         final.chmod(0o500)

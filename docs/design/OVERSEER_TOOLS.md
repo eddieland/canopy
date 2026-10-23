@@ -94,7 +94,8 @@ it is listed with. A refusal carries the text alone.
 - Each request the runtime makes of the server, a tool call included, may take as long as the overseer's run may: a
   dispatch can wait on the dispatch lock and a pool's lease, and the server answers one call at a time, so a call the
   runtime gave up on would still hold up the calls after it.
-- The harness turns OpenCode's code mode off in the overseer's environment: code mode offers no MCP tools.
+- The server's entry takes it out of OpenCode's code mode (`codemode: false`), which would offer its tools only
+  through `execute`, which every agent is denied (D077).
 - §6 step 5 checks that the server, started as the runtime starts it, answers `initialize`; on failure the tick closes
   `canopy_unavailable`. A run that never had the tools records nothing, and the duties check (§6) fails it.
 
@@ -111,7 +112,9 @@ these:
 - A local server's `timeout` bounds each request to it, connecting and calling a tool alike; without one, a tool call
   waits a minute.
 - Code mode, on with `OPENCODE_EXPERIMENTAL_CODE_MODE`, or with `OPENCODE_EXPERIMENTAL` when that is unset, offers no
-  MCP tool; the first set to false turns it off whatever the second says.
+  MCP tool; the first set to false turns it off whatever the second says. OpenCode 2 (2.1.4, 2026-10-23) has no such
+  variable: a server's own `codemode: false` takes it out of code mode. It sends a session's first model call no MCP
+  tool until the server's tools are registered, which canopy's plugin waits for (§33).
 
 D124 holds that canopy serves MCP itself, over stdio only. §35 retires mirroring, and with it the `mirror` tool.
 
@@ -119,4 +122,5 @@ D124 holds that canopy serves MCP itself, over stdio only. §35 retires mirrorin
 
 - Structured results: JSON a tool returns instead of the CLI's text, once no command prints the same thing.
 - A validate-only `check_result` tool for workers, once workers are measured losing runs to results that do not parse.
-- Where OpenCode 2 reads a local server's request timeout, unread from its source: there its own default applies.
+- Where OpenCode 2 reads a local server's request timeout, unread from its source: its own default applies, so a
+  call that waits on the dispatch lock may be given up on sooner than the run.

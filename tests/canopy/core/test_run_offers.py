@@ -26,7 +26,11 @@ def offered(conn: sqlite3.Connection, table: RunTable, run_id: int) -> tuple[obj
     return found.asked.agent, found.asked.error, servers, tuple(s.skill for s in found.skills)
 
 
-def tools_and_rules(conn: sqlite3.Connection, table: RunTable, run_id: int) -> tuple[object, ...]:
+def tools_and_rules(
+    conn: sqlite3.Connection,
+    table: RunTable,
+    run_id: int,
+) -> tuple[tuple[str, ...], dict[str, list[str]]]:
     """The built-in tools a run was offered, and the rules that leave it some of a server's tools, as plain values."""
     found = run_offers.of_run(conn, table, run_id)
     assert found is not None
@@ -110,7 +114,8 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
     opencode_state.write_text(
         json.dumps(
             {
-                "config": {"mcp": {"github": {"type": "remote"}, "sentry": {"enabled": False}}},
+                # GitHub's outside code mode, as a server an agent needs is set, since every agent is denied it.
+                "config": {"mcp": {"github": {"type": "remote", "codemode": False}, "sentry": {"enabled": False}}},
                 "skills": ["pdf", "tracker-jira"],
                 "agents": {
                     "canopy-overseer": [
@@ -120,7 +125,6 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
                         ["canopy_dispatch", "*", "allow"],
                     ],
                 },
-                "tools": {"canopy-worker": {"bash": True, "edit": True, "task": False}},
             },
         ),
     )
@@ -143,12 +147,15 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
         (("github", "all"),),
         ("pdf", "tracker-jira"),
     )
-    assert tools_and_rules(scenario.conn, "runs", run.id) == (("bash", "edit"), {})
-    # Each asked where its agent ran: the overseer in the repository, the worker in its worktree.
+    tools, rules = tools_and_rules(scenario.conn, "runs", run.id)
+    assert {"edit", "shell"} <= set(tools)
+    assert rules == {}
+    # Each asked where its agent ran, by a server started there: the overseer in the repository, the worker in its
+    # worktree.
     log = [json.loads(line) for line in opencode_state.with_name("opencode.jsonl").read_text().splitlines()]
-    asked = {(entry["argv"][-1], entry["cwd"]) for entry in log if entry["argv"][:2] == ["debug", "agent"]}
+    asked = {entry["cwd"] for entry in log if entry["argv"][:1] == ["serve"]}
     ran = [json.loads(line) for line in agent_log.read_text().splitlines()]
-    assert asked == {(entry["argv"][entry["argv"].index("--agent") + 1], entry["cwd"]) for entry in ran}
+    assert asked == {entry["cwd"] for entry in ran}
     assert len(asked) == 2
 
 

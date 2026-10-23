@@ -747,8 +747,8 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         )
     # What each running run's worker did last, as `_run` records it from the events its log holds (transcripts.py).
     activities = (
-        (LIVE_RUN, "bash", "npm test -- login", 27),
-        (43, "bash", "cat /home/op/acme/.treehouse/web-3f9c2a1b/2/web/.github/workflows/ci.yml", 29),
+        (LIVE_RUN, "shell", "npm test -- login", 27),
+        (43, "shell", "cat /home/op/acme/.treehouse/web-3f9c2a1b/2/web/.github/workflows/ci.yml", 29),
     )
     for run_id, tool, did, minutes in activities:
         sql.execute(

@@ -46,7 +46,7 @@ def ended_ticks(conn: sqlite3.Connection, n: int) -> None:
 
 def exported(state: Path) -> list[str]:
     """The sessions the fake `opencode` exported, in order."""
-    return [argv[1] for argv, _ in exports(state)]
+    return [argv[-1] for argv, _ in exports(state)]
 
 
 def reads(conn: sqlite3.Connection) -> list[tuple[str, int, str, str | None, int]]:
@@ -67,7 +67,9 @@ def test_a_live_tick_reads_which_models_served_its_overseer_once(scenario: Scena
         ("anthropic/claude-x", 2, 0.5),
     ]
     # Read where the overseer runs, its text left out.
-    assert exports(opencode_state) == [(["export", SESSION, "--sanitize"], str(scenario.env.root))]
+    assert exports(opencode_state) == [
+        (["session", "export", "--standalone", "--sanitize", SESSION], str(scenario.env.root)),
+    ]
     second = scenario.tick()
     # Each tick reads its own overseer's session, and none read already.
     assert reads(scenario.conn) == [
@@ -108,7 +110,7 @@ def test_a_failing_opencode_never_fails_the_tick(scenario: Scenario, opencode_st
     assert ticked.tick.status == "ok"
     # Failed in canopy's words, not OpenCode's, and read again later.
     assert reads(scenario.conn) == [
-        ("ticks", ticked.tick.id, "failed", "`opencode export --sanitize` exited 1", 1),
+        ("ticks", ticked.tick.id, "failed", "`opencode session export --sanitize` exited 1", 1),
     ]
 
 

@@ -462,7 +462,9 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
     )
     runtime = load(canopy_env.root, canopy_env.user_file).runtime
     for template in (runtime.overseer_cmd, runtime.worker_cmd):
-        assert template.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-")
+        assert template.startswith(
+            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --standalone --agent canopy-",
+        )
     # One word, so even a title that read as an option could not be taken for one (DESIGN §13).
     for template in (
         runtime.overseer_cmd,

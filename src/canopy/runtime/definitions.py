@@ -13,6 +13,7 @@ from canopy.runtime.implementation import definitions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
     from canopy.runtime.agents import Rules
 
@@ -45,6 +46,18 @@ def agent_names() -> list[str]:
 def bundled() -> dict[str, bytes]:
     """Return the bundled agents, skills, and plugins as a config directory holds them, by relative path, unrendered."""
     return definitions.bundled()
+
+
+def links() -> dict[str, Path]:
+    """Return the files the snapshot links to rather than holds, by the relative path of each link.
+
+    A runtime that reads canopy's definitions directory in place of the operator's own config reads that config
+    through these, so the operator's servers and providers reach every run.
+
+    Returns:
+        Each link's target by its path in the snapshot; empty when the runtime reads its own config beside it.
+    """
+    return definitions.links()
 
 
 def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:

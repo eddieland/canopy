@@ -157,8 +157,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   a change through it. A class that keeps state it changes is not frozen. `tests/canopy/test_frozen.py` fails on a
   `list`, `dict`, or `set` field.
 - Deterministic core. The Python code never calls an LLM. It runs agent processes and reads their output.
-- Everything canopy knows of the agent runtime, OpenCode, lives in `src/canopy/runtime/opencode/` (D009): its command
-  line and variables, the events it prints, the format of canopy's agent definitions, and its config files. Code
+- Everything canopy knows of the agent runtime, OpenCode, lives in its implementations, `src/canopy/runtime/opencode2/`
+  (OpenCode 2, the one bound) and `src/canopy/runtime/opencode/` (OpenCode 1's, beside it) (D009): its command line
+  and variables, the events it prints, the format of canopy's agent definitions, and its config files. Code
   elsewhere calls the `runtime` package's surface, which names no runtime; only `runtime/implementation.py` imports the
   implementation. `tests/canopy/test_layers.py` fails on a string outside it that names OpenCode, or an import past it.
 - Every external process (`treehouse`, `git`, the agent runtime, `notify`) goes through `src/canopy/infra/procs.py`.
