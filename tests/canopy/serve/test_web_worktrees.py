@@ -9,7 +9,8 @@ from pathlib import Path
 from canopy.core import db, pools, review_runs, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import PoolKind, TickStatus
-from canopy.serve import mock, mock_tasks
+from canopy.serve import mock
+from canopy.serve.mock import tasks as mock_tasks
 from tests.canopy.helpers import KEY, running_run
 from tests.canopy.web_helpers import client, signed_in_client
 from tests.conftest import pool_state

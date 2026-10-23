@@ -55,8 +55,8 @@ SHARED = {"canopy.runtime.opencode2": frozenset({"canopy.runtime.opencode.defini
 NAMES_RUNTIME = {
     # The web UI's demo: its made-up pools' slots run the runtime's process, and its made-up runs' transcripts print
     # what the runtime prints, which the runtime package reads.
-    "serve/mock.py",
-    "serve/mock_transcripts.py",
+    "serve/mock/__init__.py",
+    "serve/mock/transcripts.py",
 }
 
 

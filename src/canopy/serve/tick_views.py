@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from canopy.core import gc_passes, records
     from canopy.core.context import Context
-    from canopy.serve.transcript_schema import RawOutput, Transcript
+    from canopy.serve.schema.transcript import RawOutput, Transcript
 
 #: The ticks list, newest first.
 TICKS = 50

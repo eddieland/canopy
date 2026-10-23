@@ -27,7 +27,7 @@ from starlette.types import Message, Receive, Scope, Send
 from canopy.core import conversation, db, review_runs, tasks
 from canopy.core.context import Context, db_path
 from canopy.infra import logs
-from canopy.serve import live, mock_reviews, secret, server, views
+from canopy.serve import live, secret, server, views
 from canopy.serve import mock as serve_mock
 from canopy.serve import options as serve_options
 from canopy.serve.__main__ import main
@@ -35,7 +35,11 @@ from canopy.serve.api import session
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
 from canopy.serve.backend import Backend
-from canopy.serve.event_schema import (
+from canopy.serve.guard import MAX_BODY_BYTES, host_name
+from canopy.serve.mock import reviews as mock_reviews
+from canopy.serve.options import ServeOptions
+from canopy.serve.schema import TicketSummary
+from canopy.serve.schema.event import (
     AttentionUpdated,
     ChoresUpdated,
     LoopUpdated,
@@ -51,9 +55,6 @@ from canopy.serve.event_schema import (
     TicketsUpdated,
     TickUpdated,
 )
-from canopy.serve.guard import MAX_BODY_BYTES, host_name
-from canopy.serve.options import ServeOptions
-from canopy.serve.schema import TicketSummary
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
 from tests.canopy.helpers import granted_meanwhile, present

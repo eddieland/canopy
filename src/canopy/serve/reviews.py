@@ -26,7 +26,7 @@ from canopy.core import (
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus, SeenKind
 from canopy.serve import review_draft_views
-from canopy.serve.review_schema import (
+from canopy.serve.schema.review import (
     DiffFile,
     DiffHunk,
     DiffLine,
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
     from canopy.core import records
     from canopy.core.context import Context
-    from canopy.serve.transcript_schema import RawOutput, Transcript
+    from canopy.serve.schema.transcript import RawOutput, Transcript
 
 # How many review runs the reviews list carries, newest first.
 RECENT_REVIEWS = 100

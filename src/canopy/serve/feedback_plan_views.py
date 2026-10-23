@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Literal
 
 from canopy.core import db, feedback_items, feedback_plans, plans, records, sql
 from canopy.core.vocab import PlanStatus, ReviewItem
-from canopy.serve.feedback_plan_schema import FeedbackPlan, FeedbackPlanApproved, FeedbackPlanItem, ItemName
+from canopy.serve.schema.feedback_plan import FeedbackPlan, FeedbackPlanApproved, FeedbackPlanItem, ItemName
 
 if TYPE_CHECKING:
     import sqlite3
