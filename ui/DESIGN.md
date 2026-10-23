@@ -1492,9 +1492,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   in words, since color alone says nothing to some (`verdictText`: `3 findings, 1 major`, or `1 blocking finding` when
   every finding is that bad); the review's link; its ticket
   (or `None`, its reason on hover), its impact, then in the free column the PR (`PullRequestLink`), its title
-  (`TicketTitle`: the PR's own, else its ticket's, and nothing when it has neither) in what room the rest leaves, left
-  out below `@6xl`, where that room is a word at best, and the commit's first 7 characters, then cost and age. A
-  review's page colors its verdict the same way.
+  (`TicketTitle`: the PR's own, else as canopy's reader last read it, else its ticket's, and nothing without one) in
+  what room the rest leaves, left out below `@6xl`, where that room is a word at best, and the commit's first 7
+  characters, then cost and age. A review's page colors its verdict the same way.
 - **A review's draft** (`ReviewDraftPanel`, DESIGN §34), on a review of a PR the loop does not own, leads its page,
   which is the draft's one record: the title is `review:5 Your review of acme/api#14 by carol` (the PR alone while
   canopy has not read its author), and the description the draft's state (`ReviewDraftState`), its status chip
