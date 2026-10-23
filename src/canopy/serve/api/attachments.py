@@ -126,15 +126,12 @@ def _detach(backend: Backend, ref: conversation.Ref, name: str) -> Detached:
         What was removed.
 
     Raises:
-        RefusedError: a guard refused it, or its file could not be deleted (`not_removed`).
+        RefusedError: a guard refused it.
     """
     with backend.open() as ctx:
         try:
             removed = attachments.remove(ctx.conn, ctx.state_dir, ref, name, channel=WEB)
         except conversation.Refused as r:
             raise RefusedError(r) from None
-        except OSError as e:
-            refused = conversation.Refused("not_removed", f"{name}'s file could not be deleted: {e.strerror}")
-            raise RefusedError(refused) from None
     _log.info("operator removed an attachment", extra={"subject": str(ref), "attachment": removed.id, "channel": WEB})
     return Detached(name=removed.name)
