@@ -130,6 +130,21 @@ def test_leases_are_all_or_nothing(ws_scenario: Scenario, ws: Ws, treehouse_stat
     assert [c[0] for c in calls] == ["get", "get", "return"]
 
 
+def test_a_joint_run_over_sandboxed_and_unsandboxed_repositories_is_refused(
+    ws_scenario: Scenario,
+    treehouse_state: Path,
+) -> None:
+    ws_scenario.configures(runtime={"sandbox_repos": ["api"]})
+
+    # One run is one command, so it cannot run in a sandbox for api and outside one for web (DESIGN §24).
+    [(action, reason)] = ws_scenario.refuses(dispatches(repo=("api", "web")))
+    assert action == "refused:mixed_sandbox"
+    assert reason.startswith("api runs sandboxed and web does not (runtime.sandbox_repos)")
+    assert pool_statuses(treehouse_state) == ["available", "available"]  # refused before any lease
+    # web alone is not sandboxed, and runs as before.
+    assert ws_scenario.run(dispatches(repo="web"), worker=pushes(repos=("web",))).status == "done"
+
+
 def test_a_joint_run_is_unpushed_if_any_repository_is(ws_scenario: Scenario, ws: Ws, treehouse_state: Path) -> None:
     hook = ws.origins["web"] / "hooks" / "pre-receive"
     executable(hook, "#!/bin/sh\necho 'push refused by test hook' >&2\nexit 1\n")

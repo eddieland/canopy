@@ -143,8 +143,9 @@ cannot reach internal systems and require handing a vendor write access.
   loopback or the operator's private network, behind the operator's secret (TRUST_MODEL T8, D055); none is built yet.
 - Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
   provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
-- A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), and the harness
-  never learns whether a run is sandboxed (D118).
+- A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), which canopy adds
+  itself only for the repositories the operator lists; beyond that, the harness never learns whether a run is
+  sandboxed (D118).
 
 ## 4. Principles
 

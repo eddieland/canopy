@@ -314,6 +314,15 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         ("[runtime]\nreview_temperature = true\n", r"runtime\.review_temperature: Input should be a valid number"),
         ("[runtime]\nreview_temperature = '0.1'\n", r"runtime\.review_temperature: Input should be a valid number"),
         ("[runtime]\noverseer_temperature = -0.5\n", "must be from 0 to 2, or -1 to set none"),
+        ("[runtime]\nsandbox_repos = ['API']\n", "repository name 'API' must match"),
+        (
+            "[runtime]\nsandbox_repos = ['api']\nworker_cmd_prefix = 'canopy-sandbox worker --'\n",
+            r"runtime\.worker_cmd_prefix starts with canopy-sandbox, and runtime\.sandbox_repos has canopy add it",
+        ),
+        (
+            "[runtime]\nsandbox_repos = ['api']\nsetup_cmd = '/opt/bin/canopy-sandbox setup -- make'\n",
+            r"runtime\.setup_cmd starts with canopy-sandbox",
+        ),
     ],
 )
 def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) -> None:
