@@ -160,14 +160,15 @@ test('search params are typed: a known state filters, an unknown one is dropped'
     const filters = page.getByRole('navigation', { name: 'Filter by state' })
     await expect(filters.getByRole('link', { name: 'waiting on you' })).toHaveAttribute('data-selected', 'true')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'false')
-    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(1)
+    // A ticket's worker and task 4's run each asked a question.
+    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(2)
     // The panel is named for its noun and counts what it lists, as every Runs panel does.
-    await expect(page.getByTestId('runs-count')).toHaveText('1')
+    await expect(page.getByTestId('runs-count')).toHaveText('2')
 
     // The router leaves the URL as typed; what matters is the page never sees the value.
     await page.goto('runs?state=bogus')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'true')
-    await expect(page.getByTestId('runs').locator(':scope > li')).not.toHaveCount(1)
+    await expect(page.getByTestId('runs').locator(':scope > li')).not.toHaveCount(2)
 })
 
 test('the runs page lists a ticket once, by its latest run, and opens its earlier runs under it', async ({ page }) => {
@@ -225,6 +226,35 @@ test('the runs page lists the reviews and chore runs beside the workers, and wha
     await filters.getByRole('link', { name: 'chores' }).click()
     await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(1)
     await expect(page.getByTestId('chore-run-build-health-4')).toBeVisible()
+})
+
+test('the runs page lists a task by its newest run, counted in the workers it fills, and opens its run', async ({
+    page,
+}) => {
+    await page.goto('runs')
+    await settled(page)
+    // Workers 3 of 3 is runs 41 and 43 and task 6's run: each is listed running, beside the chore that runs apart.
+    await expect(page.getByTestId('capacity-workers')).toHaveText('workers 3 of 3 · full')
+    await page.getByTestId('capacity-workers').hover()
+    await expect(page.getByRole('tooltip')).toHaveText(
+        'capacity.max_workers: worker runs, reviews, and task runs at once (0 running a review, 1 a task)',
+    )
+    await page.goto('runs?state=running')
+    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(4)
+    for (const id of ['run-41', 'run-43', 'task-run-6-6', 'chore-run-build-health-4']) {
+        await expect(page.getByTestId(id)).toBeVisible()
+    }
+
+    await page.goto('runs?kind=task')
+    const filters = page.getByRole('navigation', { name: 'Filter by kind' })
+    await expect(filters.getByRole('link', { name: 'tasks' })).toHaveAttribute('data-selected', 'true')
+    // Every task that has run, by its newest run; task 7 is queued and has none.
+    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(6)
+    const task = page.getByTestId('task-run-6-6')
+    await expect(task).toContainText("Add a dark launch screen to match the app's theme.")
+    await task.getByRole('link', { name: 'task:6#6' }).click()
+    await expect(page).toHaveURL(/\/tasks\/6\/runs\/6$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('task:6#6')
 })
 
 test('an unknown route renders the not-found page inside the shell', async ({ page }) => {

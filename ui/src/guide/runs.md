@@ -5,10 +5,10 @@ and what it cost; the worktrees page is the pools they work in.
 
 ## The runs page
 
-[Runs](/runs) lists every agent canopy runs: workers on tickets, reviews of PRs, and chores. Each gets one row per
-subject, by its latest run: a ticket's, a PR's, a chore's. The running ones come first, then the ones that ended
-most recently. A subject with earlier runs shows **Show N earlier runs** under it, so a PR reviewed at every push is
-one row and not a wall of them.
+[Runs](/runs) lists every agent canopy runs: workers on tickets, reviews of PRs, chores, and tasks. Each gets one row
+per subject, by its latest run: a ticket's, a PR's, a chore's, a task's. The running ones come first, then the ones
+that ended most recently. A subject with earlier runs shows **Show N earlier runs** under it, so a PR reviewed at
+every push is one row and not a wall of them.
 
 Each row has the run's state, its id, what it works for, its kind, what it cost, and how long it ran or how long since
 it ended:
@@ -23,6 +23,9 @@ it ended:
 - A **chore run** (`#2`, beside its chore, so it reads `chore:deps #2`) has its chore's title, the `# heading` its
   prompt opens with, and its summary under it. [Its chore's page](chores#a-chores-page) has every run; here you get the
   latest, and the one before it while one runs.
+- A **task run** (`task:6#6`) names the repository its task runs in and the first line of what you asked, with its
+  summary and any PRs it named under it. It is the task's newest run only: the rest, and the conversation, are on
+  [the task's page](tasks#a-tasks-page).
 
 A subject with no title says `untitled`, which for a chore is a hint its prompt could use a first line.
 
@@ -37,10 +40,10 @@ A long summary shows its first four lines and **show N more lines** for the rest
 doesn't push the other rows off the page. In a narrow window, such as half a monitor, the cost goes first and then
 the kind; how long stays.
 
-The chips filter by kind, `workers`, `reviews`, or `chores`, and by the latest run's state: `running`, `waiting on
-you` (the worker stopped to ask something), `failed`, `stopped`, and `done`. The two keep each other, so `reviews`
-then `failed` is every PR whose latest review failed. A cost of `–` means the runtime reported none, which is not the
-same as free.
+The chips filter by kind, `workers`, `reviews`, `chores`, or `tasks`, and by the latest run's state: `running`,
+`waiting on you` (the worker stopped to ask something), `failed`, `stopped`, and `done`. The two keep each other, so
+`reviews` then `failed` is every PR whose latest review failed. A cost of `–` means the runtime reported none, which
+is not the same as free.
 
 A model on [the spend page](ticks#the-spend-page) opens this page filtered to it, `?model=`: the worker runs it served,
 or, until their sessions are read, the ones that asked for it, each ticket's latest of those leading its row. Reviews
@@ -48,10 +51,11 @@ and chores drop out, since this list doesn't name their models, and so do runs o
 keeps. **all** beside the model takes the filter off.
 
 Under the page's description, one line says how full each limit is, counted the way canopy counts it before it starts
-anything: `workers 2 of 2` is `capacity.max_workers`, which reviews and task runs count toward, `reviews 0 of 1` is
-`capacity.max_reviews` within it, and `chores 1 of 1` is `capacity.max_chores`, which stands apart. A full one turns
-amber and says `full`: the next dispatch of its kind waits for a run to end, however urgent the overseer thinks it
-is. When a ticket sits in the queue looking neglected, this line usually explains why. A limit of 0 reads `off`.
+anything: `workers 2 of 2` is `capacity.max_workers`, which reviews and task runs count toward (its hover says how
+many of each are in it), `reviews 0 of 1` is `capacity.max_reviews` within it, and `chores 1 of 1` is
+`capacity.max_chores`, which stands apart. A full one turns amber and says `full`: the next dispatch of its kind waits
+for a run to end, however urgent the overseer thinks it is. When a ticket sits in the queue looking neglected, this
+line usually explains why. A limit of 0 reads `off`.
 
 ## A run's page
 

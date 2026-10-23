@@ -179,6 +179,20 @@ describe('subjectRuns', () => {
         ])
         expect(runsListed(groups)).toBe(3)
     })
+
+    it('lists each task that has run by its newest run, beside the rest, and leaves out a task not yet run', () => {
+        const runs = [at(9, 'running', '2026-10-08T12:10:00Z', 'A')]
+        const groups = subjectRuns({ runs, tasks: mockTasks })
+        // Task 6 runs, started before run 9; task 4 waits on a reply; task 1 is done; task 7 is queued.
+        expect(subjects(groups)).toEqual([
+            ['task', 8, []],
+            ['worker', 9, []],
+            ['task', 5, []],
+            ['task', 1, []],
+        ])
+        expect(groups.flatMap((g) => (g.of === 'task' ? [g.task.id] : []))).toEqual([6, 4, 1])
+        expect(runsListed(groups)).toBe(4)
+    })
 })
 
 describe('busy', () => {

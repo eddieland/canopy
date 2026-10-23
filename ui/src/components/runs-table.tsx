@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-import type { ChoreRun, ReviewSummary, Run, RunState } from '@/api/types'
+import type { ChoreRun, ReviewSummary, Run, RunState, TaskRun, TaskSummary } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
 import { Copyable } from '@/components/copy-button'
@@ -17,6 +17,7 @@ import { RunDoing } from '@/components/run-doing'
 import { RunLink } from '@/components/run-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot, Word } from '@/components/status'
+import { TaskRunLink } from '@/components/task-link'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
@@ -28,6 +29,7 @@ import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import type { SubjectRuns } from '@/lib/run-state'
+import { taskTitle } from '@/lib/tasks'
 import { cn } from '@/lib/utils'
 import { NO_TICKET, runKind } from '@/lib/words'
 
@@ -53,8 +55,8 @@ export function RunsTable({ runs, ticket = true, ownPr }: { runs: Run[]; ticket?
 
 /**
  * Every run on the runs page, a row per subject by its latest run (`subjectRuns`): a ticket's worker run, as
- * `RunsTable` shows it, a PR's review, or a chore's run, each in the same columns, its kind in the kind's. A toggle
- * under it opens the runs before it, so a ticket that asked twice, or a PR reviewed at each push, is one row.
+ * `RunsTable` shows it, a PR's review, a chore's run, or a task's, each in the same columns, its kind in the kind's. A
+ * toggle under it opens the runs before it, so a ticket that asked twice, or a PR reviewed at each push, is one row.
  */
 export function SubjectRunsTable({ groups }: { groups: SubjectRuns[] }) {
     const names = modelNames(runModelIds(groups.flatMap((g) => (g.of === 'worker' ? [g.latest, ...g.earlier] : []))))
@@ -67,7 +69,8 @@ export function SubjectRunsTable({ groups }: { groups: SubjectRuns[] }) {
     )
 }
 
-// Unique across the three kinds: a ticket's key, a PR's URL, and a chore's name are each their own namespace.
+// Unique across the four kinds: a ticket's key, a PR's URL, a chore's name, and a task's id are each their own
+// namespace.
 function subjectKey(group: SubjectRuns): string {
     switch (group.of) {
         case 'worker': {
@@ -78,6 +81,9 @@ function subjectKey(group: SubjectRuns): string {
         }
         case 'chore': {
             return `chore-${group.chore}`
+        }
+        case 'task': {
+            return `task-${group.task.id}`
         }
     }
 }
@@ -139,6 +145,14 @@ function SubjectRow({ group, names }: { group: SubjectRuns; names: ModelNames })
                         <EarlierChoreRow key={run.id} chore={group.chore} run={run} />
                     ))}
                 />
+            )
+        }
+        case 'task': {
+            // A task lists its newest run alone: the ones before it are on the task's page.
+            return (
+                <ListRow kind="run" className="group/copy" data-testid={`task-run-${group.task.id}-${group.latest.id}`}>
+                    <TaskRunBody task={group.task} run={group.latest} />
+                </ListRow>
             )
         }
     }
@@ -304,6 +318,34 @@ function EarlierChoreRow({ chore, run }: { chore: string; run: ChoreRun }) {
             </Clipped>
             <Readouts cost={run.cost_usd} started={run.started_at} ended={run.ended_at} />
         </ListRow>
+    )
+}
+
+/**
+ * A task's newest run on the runs page, in a worker run's columns: how it went, its reference (`task:6#6`, opening its
+ * page), the repository it runs in, `task`, the first line of the task's text, cost, and when, and under them what it
+ * said and the PRs it named. The task's conversation, and its runs before this one, are on the task's page.
+ */
+function TaskRunBody({ task, run }: { task: TaskSummary; run: TaskRun }) {
+    return (
+        <>
+            <StateCell state={run.state} status={run.status} />
+            <TaskRunLink task={task.id} run={run.id} />
+            <Clipped text={task.repo} mono className="text-xs text-muted-foreground" />
+            <span className="flex min-w-0 items-center gap-3">
+                <Chip word="task" />
+            </span>
+            <TicketTitle title={taskTitle(task.text)} />
+            <Readouts cost={run.cost_usd} started={run.started_at} ended={run.ended_at ?? null} />
+            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={rowLineFrom('title')} />}
+            {run.prs.length > 0 && (
+                <RowLine from="title" className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
+                    {run.prs.map((pr) => (
+                        <PullRequestLink key={pr} url={pr} />
+                    ))}
+                </RowLine>
+            )}
+        </>
     )
 }
 

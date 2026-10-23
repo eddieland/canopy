@@ -12,7 +12,7 @@ import { RunDot } from '@/components/status'
 import { Tip } from '@/components/tip'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { ranOn } from '@/lib/models'
-import { busy, RUN_WORD, RUNS_OF, RUNS_OF_WORD, runsListed, subjectRuns } from '@/lib/run-state'
+import { busy, RUN_WORD, RUNS_OF, RUNS_OF_WORD, runningTasks, runsListed, subjectRuns } from '@/lib/run-state'
 import type { EveryRun, RunsOf } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
@@ -23,11 +23,11 @@ interface RunsSearch {
 }
 
 /**
- * Every run of an agent, a row per subject by its latest run: a ticket's worker runs, a PR's reviews, a chore's runs.
- * Running ones first, then the ones that ended last. `?state=` keeps the subjects whose latest run is in that state,
- * and `?kind=` those of one kind. `?model=`, which the spend page's By model links to, keeps the worker runs that model
- * ran (`ranOn`), each ticket by its latest of them: reviews and chores are listed without their models, so it leaves
- * them out.
+ * Every run of an agent, a row per subject by its latest run: a ticket's worker runs, a PR's reviews, a chore's runs, a
+ * task's newest run. Running ones first, then the ones that ended last. `?state=` keeps the subjects whose latest run
+ * is in that state, and `?kind=` those of one kind. `?model=`, which the spend page's By model links to, keeps the
+ * worker runs that model ran (`ranOn`), each ticket by its latest of them: reviews, chores, and tasks are listed
+ * without their models, so it leaves them out.
  */
 export const Route = createFileRoute('/runs/')({
     // Typed search params: `?state=blocked` filters; anything else is dropped, never trusted. Return every key, even
@@ -47,8 +47,8 @@ function RunsPage() {
     const chores = useQuery(choresQuery).data
     const tasks = useQuery(tasksQuery).data
     const capacity = useQuery(loopQuery).data?.capacity
-    // The worker runs lead the page: it waits on them, and lists the reviews and chores as they arrive.
-    const groups = runs === undefined ? undefined : subjectRuns(onModel({ runs, reviews, chores }, model))
+    // The worker runs lead the page: it waits on them, and lists the reviews, chores, and tasks as they arrive.
+    const groups = runs === undefined ? undefined : subjectRuns(onModel({ runs, reviews, chores, tasks }, model))
     const shown = groups?.filter((g) => (state === undefined || g.latest.state === state) && (kind ?? g.of) === g.of)
     const order = useListOrder('runs')
     return (
@@ -58,12 +58,17 @@ function RunsPage() {
                 links={
                     runs !== undefined &&
                     capacity !== undefined && (
-                        <CapacityLine capacity={capacity} busy={busy({ runs, reviews, chores, tasks })} />
+                        <CapacityLine
+                            capacity={capacity}
+                            busy={busy({ runs, reviews, chores, tasks })}
+                            tasks={runningTasks(tasks ?? []).length}
+                        />
                     )
                 }
             >
-                Every agent canopy runs: workers on tickets, reviews of PRs, and chores, each subject&apos;s latest run
-                first, running ones on top, then the ones that ended last. A subject&apos;s earlier runs open under it.
+                Every agent canopy runs: workers on tickets, reviews of PRs, chores, and tasks, each subject&apos;s
+                latest run first, running ones on top, then the ones that ended last. A subject&apos;s earlier runs open
+                under it.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Runs">
@@ -135,7 +140,8 @@ function RunsPage() {
     )
 }
 
-// Every run the page lists, or under a model the worker runs it ran alone: reviews and chores come without models.
+// Every run the page lists, or under a model the worker runs it ran alone: reviews, chores, and tasks come without
+// models.
 function onModel(every: EveryRun, model: string | undefined): EveryRun {
     return model === undefined ? every : { runs: every.runs.filter((r) => ranOn(r, model)) }
 }
@@ -152,18 +158,22 @@ function emptyWords(state: RunState | undefined, kind: RunsOf | undefined, model
 }
 
 /**
- * What runs now against each limit of `[capacity]`, as the harness counts it when it refuses a start: the worker runs
- * and reviews against `max_workers`, the reviews against `max_reviews` within it, and the chores against `max_chores`.
- * A limit that is full says so: the next dispatch of its kind waits for a run to end.
+ * What runs now against each limit of `[capacity]`, as the harness counts it when it refuses a start: the worker runs,
+ * reviews, and task runs against `max_workers`, of which `tasks` are task runs, the reviews against `max_reviews`
+ * within it, and the chores against `max_chores`. A limit that is full says so: the next dispatch of its kind waits
+ * for a run to end.
  */
-function CapacityLine({ capacity, busy: running }: { capacity: Capacity; busy: Capacity }) {
+function CapacityLine({ capacity, busy: running, tasks }: { capacity: Capacity; busy: Capacity; tasks: number }) {
     return (
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs" data-testid="runs-capacity">
             <Limit
                 name="workers"
                 running={running.workers}
                 limit={capacity.workers}
-                fact={`capacity.max_workers: worker runs and reviews at once (${running.reviews} running a review)`}
+                fact={
+                    `capacity.max_workers: worker runs, reviews, and task runs at once ` +
+                    `(${running.reviews} running a review, ${tasks} a task)`
+                }
             />
             <Limit
                 name="reviews"
