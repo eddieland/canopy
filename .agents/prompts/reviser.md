@@ -9,7 +9,8 @@ it. This is revision {{ATTEMPT}} of at most {{MAX_ATTEMPTS}} of this draft.
   not whatever the PR's head is by the time you read it.
 - Checkout: `{{CHECKOUT}}` is the repository at that commit. Read what you need; change nothing (you have no tools
   to, and anything left there is discarded). Your git tools, `canopy_git_merge-base`, `canopy_git_diff`,
-  `canopy_git_log`, `canopy_git_show`, and `canopy_git_blame`, read its history, as the review's did.
+  `canopy_git_log`, `canopy_git_show`, `canopy_git_blame`, `canopy_git_grep`, and `canopy_git_files`, read its
+  history, as the review's did.
 
 ## The operator's notes
 

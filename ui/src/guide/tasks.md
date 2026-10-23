@@ -22,16 +22,31 @@ open a terminal and an agent session for twenty minutes, it's a task.
 
 ## Submitting one
 
-For now you submit a task from the shell:
+The **Submit a task** panel at the top of [Tasks](/tasks) takes your text. It starts one line high and grows as you
+write, so a paragraph is fine. Enter submits it, Shift+Enter starts a new line, and Settings can change the send key as
+it does for a reply. Beside the text:
+
+- **The repository** it runs in, shown only when the workspace has more than one. It starts at the one the list is
+  narrowed to, else the one your newest task ran in, so a run of tasks against one repository needs no clicking.
+- **The project**, optional: the tracker project it may file tickets in. Leave it empty and it files none.
+
+The line under them is the whole of what a task may do outside its branch: it opens a PR, as a draft, only when your
+text asks for one, and files tickets only in the project you name, with no queue label, so none of them is worked until
+you say so. A refusal takes that line's place and names its guard, as the shell would: `bad_project` for a project that
+isn't a plain key, `unknown_repo` for a repository the workspace doesn't have.
+
+Once it's recorded, a note says so in the CLI's words (that the next tick starts it, and that none will while
+`capacity.max_tasks` is 0) and you land on the task's page. Its row reaches the list the way every other change does,
+over the live stream.
+
+From the shell it's the same verb:
 
 ```sh
 canopy task submit "Find out why the Android build takes twelve minutes."
 ```
 
-In a workspace of several repositories, name the one it runs in with `--repo NAME`. A task files tickets only when you
-name a tracker project with `--project KEY`, and only there, with no queue label, so none of them is worked until you
-say so. It opens a PR, as a draft, only when your text asks for one. Pass `-` as the text to read it from stdin, which
-is easier for a paragraph than shell quoting is.
+Name the repository with `--repo NAME` and the project with `--project KEY`. Pass `-` as the text to read it from
+stdin, which is easier for a paragraph than shell quoting is.
 
 The next tick starts it, before the overseer runs, as capacity allows: tasks share `capacity.max_workers` with
 everything else, and `capacity.max_tasks` caps how many of those may be tasks, so your side quests never starve the
@@ -58,9 +73,9 @@ stands, how many runs it has had, and when you submitted it.
 **Conversation** starts with your instruction, whole and in your own words, on your side of the thread. Then come what
 its runs said and your replies, in order, each message naming the run that wrote it (`task:4#5` is task 4's run
 number 5, counted across every task's runs). While a run works, the thread ends on it, `working now`, with what it
-has cost so far. A question waiting on you wears `waiting on you`, and the band under the thread says how to answer
-it: from your shell for now, with `canopy reply task:N "TEXT"`, which the band offers to copy. With no question
-waiting, the same line says a reply queues the next run.
+has cost so far. A question waiting on you wears `waiting on you`. Under the thread is the reply box, and while a
+question waits it sits on the same amber band, naming the run that asked and the message it answers. Under that is
+Stop.
 
 **Report** is the page's main content: the newest report a run left, laid out as a document. It is the agent's
 Markdown, drawn as a plan is, so headings, lists, and code read as they should and anything else (HTML, an image, a
@@ -74,14 +89,35 @@ a ticket should build on a task's work: the branch moves with every later reply,
 under the panel is the whole policy: all of it is throwaway until you give it a pass of its own.
 
 **Runs** lists every run, the first first: its status, `task:N#M`, cost, how long it took, and what it said.
+`task:N#M` opens the run's page, here and wherever the page names a run.
+
+## A task's run
+
+A run's page is a worker run's page with the task in its trail: its title is `task:N#M` and your text's first line,
+and under it how the run ended. **Run** has the whole of what it said, never cut to a line, and its question when it
+asked one; for a run that failed, the call it ended on; the harness's note when canopy decided how it ended; the PRs it
+named and the tickets it filed; when it ran, what it spent and on which models; its branch, the commit it pushed, and
+its log.
+
+Under it is the **transcript**, the session's events read from the run's log: what the worker wrote, each tool call
+with its input and output, and what each model call cost, with the context chart one click away, as on a run's page.
+It is the place to check how a run got its answer before you build on it. A run still working shows what its worker
+has printed so far, and the page reads it again as the task moves.
 
 ## Replying and stopping
 
 A run that needs something from you ends `blocked` with a question, and the task goes on the attention list as
-`awaiting_reply`. Answer it with `canopy reply task:N "TEXT"`. A reply is also how you ask for more after a run is
-done: the next tick starts another run on the same branch, with the conversation so far and the latest report.
-A task never retries on its own; a run that failed stays failed until you say what to do differently.
+`awaiting_reply`. Answer it in the box under the task's conversation, or with `canopy reply task:N "TEXT"`; they are
+the same reply. A reply is also how you ask for more after a run is done: the next tick starts another run on the same
+branch, with the conversation so far and the latest report. If a run is still working, the next one waits for it to
+end, and the line under the box says which run that is. A task never retries on its own; a run that failed stays
+failed until you say what to do differently. What you write is kept while the tab is open, and a reply sent twice
+after a flaky connection is recorded once.
 
-`canopy show task:N` prints the task, each run, the tickets it filed, and its latest report. `canopy stop task:N` ends
-it: a queued run is dropped, and a running one finishes unless you add `--now`. A stopped task is never deleted, so
-its runs, its report, and what it cost stay there to read.
+Stop ends the task, and it asks once more first, because nothing starts a stopped task again: there is no Start for a
+task, only a new one. A queued run is dropped, and a running one finishes its work. Stop now, there while a run
+works, ends that run too and gives its slot back, after its own second click. A stopped task takes no more replies,
+so its page has no box; it is never deleted, so its runs, its report, and what it cost stay there to read.
+
+From the shell, `canopy show task:N` prints the task, each run, the tickets it filed, and its latest report, and
+`canopy stop task:N` stops it, with `--now` for Stop now.

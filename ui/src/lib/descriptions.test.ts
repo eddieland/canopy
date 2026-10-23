@@ -10,6 +10,7 @@ import {
     reviewDraftDescription,
     reviewDraftTitle,
     runDescription,
+    taskRunDescription,
     tickDescription,
     ticketDescription,
 } from './descriptions'
@@ -135,6 +136,13 @@ describe('choreRunDescription', () => {
 
     it('says only how a run ended that reported nothing', () => {
         expect(choreRunDescription({ status: 'timeout', more_findings: 0 }, 0)).toBe('timeout')
+    })
+})
+
+describe('taskRunDescription', () => {
+    it('says how the run ended, alone, in words', () => {
+        expect(taskRunDescription({ status: 'blocked' })).toBe('blocked')
+        expect(taskRunDescription({ status: 'done' })).toBe('done')
     })
 })
 

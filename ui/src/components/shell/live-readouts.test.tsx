@@ -18,6 +18,7 @@ const META: Meta = {
     ticket_url: null,
     version: '0.4.0',
     workspace_root: '/w',
+    repos: ['repo'],
 }
 
 const TICK: Tick = {
