@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { GitPullRequestDraft, Pencil, Send, WandSparkles } from 'lucide-react'
-import { useId, useState } from 'react'
-import type { SubmitEvent } from 'react'
+import { GitPullRequestDraft, Pencil, Send, Trash2, WandSparkles } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, SubmitEvent } from 'react'
 
 import {
     addReviewDraftComment,
+    discardReviewDraft,
     dropReviewDraftComment,
     editReviewDraftBody,
     editReviewDraftComment,
@@ -32,6 +33,7 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { reviewDraftDescription } from '@/lib/descriptions'
 import {
+    reviewDraftDiscardedToast,
     reviewDraftEditedText,
     reviewDraftNotedText,
     reviewDraftPublishedText,
@@ -497,7 +499,8 @@ function standingText(run: number, draft: ReviewDraft): string {
  * review for the operator to submit there. A line beside them says what posts, as whom, on whose PR, and on which
  * commit. A toast says what a publish did; a draft staged or published says so in one linked line, and one of unknown
  * outcome or not published says why. A publish that posted the review, and only that, drops a leaf off the footer, as
- * approving a plan does: the review is done with, and nothing else waits on it here.
+ * approving a plan does: the review is done with, and nothing else waits on it here. A ghost `Discard`, as `canopy
+ * review discard RUN`, asks in its place whether to post nothing, and a discarded draft says so in one line.
  */
 function PublishFooter({
     run,
@@ -529,6 +532,15 @@ function PublishFooter({
             void showReviewDraft(client, run, published.draft)
         },
     })
+    const [discarding, setDiscarding] = useState(false)
+    const discard = useMutation({
+        mutationFn: () => discardReviewDraft(run),
+        onSuccess: (saved) => {
+            setDiscarding(false)
+            toast(reviewDraftDiscardedToast(run, prUrl))
+            void showReviewDraft(client, run, saved)
+        },
+    })
     const empty = draft.body === '' && draft.comments.length === 0
     // Which of the two is on its way, so only that one says so.
     const submitting = publish.isPending ? publish.variables : null
@@ -536,7 +548,14 @@ function PublishFooter({
         <PanelFooter className="relative">
             {/* Placed from the footer's corner, over room the buttons leave once published, so it takes none. */}
             {posted > 0 && <Leaf key={posted} className="top-1 right-3" />}
-            {editable(draft) && (
+            {editable(draft) && discarding && (
+                <ConfirmDiscard
+                    pending={discard.isPending}
+                    onConfirm={() => discard.mutate()}
+                    onKeep={() => setDiscarding(false)}
+                />
+            )}
+            {editable(draft) && !discarding && (
                 <span className="flex flex-wrap items-center gap-2">
                     <Button
                         onClick={() => publish.mutate(true)}
@@ -554,6 +573,15 @@ function PublishFooter({
                     >
                         <GitPullRequestDraft />
                         {submitting === false ? 'Starting the review…' : 'Start the review on GitHub'}
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        onClick={() => setDiscarding(true)}
+                        disabled={publish.isPending}
+                        title={`canopy review discard ${run}`}
+                    >
+                        <Trash2 />
+                        Discard
                     </Button>
                     <span className="text-xs text-muted-foreground" data-testid="draft-posts">
                         {empty ? (
@@ -598,8 +626,50 @@ function PublishFooter({
                     . A later commit&apos;s review is a draft of its own.
                 </p>
             )}
-            <Notice error={publish.error}>{said}</Notice>
+            {draft.status === 'discarded' && (
+                <p className="text-sm" data-testid="draft-discarded">
+                    You discarded this draft, so nothing was posted. A later commit&apos;s review is a draft of its own.
+                </p>
+            )}
+            <Notice error={publish.error ?? discard.error}>{said}</Notice>
         </PanelFooter>
+    )
+}
+
+// Discarding asked about in its place in the foot, as skipping a plan is: nothing on this page undoes it. Keep, the
+// choice that loses nothing, takes the focus, and Escape keeps too.
+function ConfirmDiscard({
+    pending,
+    onConfirm,
+    onKeep,
+}: {
+    pending: boolean
+    onConfirm: () => void
+    onKeep: () => void
+}) {
+    const keep = useRef<HTMLButtonElement>(null)
+    useEffect(() => {
+        keep.current?.focus()
+    }, [])
+    function onKey(event: ReactKeyboardEvent<HTMLButtonElement>) {
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            onKeep()
+        }
+    }
+    return (
+        <fieldset className="flex flex-wrap items-center gap-2">
+            <legend className="float-left mr-1 text-sm">
+                Discard the draft? Nothing posts, and it takes no edit after.
+            </legend>
+            <Button ref={keep} type="button" variant="ghost" onClick={onKeep} onKeyDown={onKey}>
+                Keep
+            </Button>
+            <Button type="button" variant="outline" onClick={onConfirm} onKeyDown={onKey} disabled={pending}>
+                <Trash2 />
+                {pending ? 'Discarding…' : 'Discard the draft'}
+            </Button>
+        </fieldset>
     )
 }
 

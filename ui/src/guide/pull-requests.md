@@ -352,8 +352,13 @@ looked at, so if anything changed it since, the publish is refused as `stale` an
 once; a later commit's review is a draft of its own. If the PR has moved on since, the panel says so: your comments
 would land on the old commit and show as outdated.
 
+Not every review deserves to go out. **Discard**, after the two, asks right there whether you mean it, and then marks
+the draft seen and not posted: nothing reaches GitHub, the draft takes no more edits, and it stops waiting on you. It's
+`canopy review discard RUN`. Nothing on the page undoes it, which is fine, since the only thing lost is a review you
+had already decided nobody needed to read.
+
 The [attention list](attention) holds a `review waiting` item while a review you asked for has a draft you
-haven't published or staged, and a `review unsettled` one while a staged review waits for you on GitHub, or a post
-never said whether it landed. A review `review.query` found raises neither until you stage it.
+haven't published, staged, or discarded, and a `review unsettled` one while a staged review waits for you on GitHub,
+or a post never said whether it landed. A review `review.query` found raises neither until you stage it.
 
 canopy can't take a published review back, and nothing on GitHub says a model wrote it but what you leave in.

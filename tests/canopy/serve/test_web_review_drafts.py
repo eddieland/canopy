@@ -241,6 +241,27 @@ def test_staging_from_the_page_takes_a_requested_review_off_the_attention_list(
     assert "review_waiting" not in (scenario.env.state_dir / "attention.md").read_text()
 
 
+def test_discarding_from_the_page_posts_nothing_and_takes_a_requested_review_off_the_attention_list(
+    scenario: Scenario,
+    requested: int,
+    ctx: Context,
+    github_state: Path,
+) -> None:
+    c, write = signed_in_client(ctx)
+    scenario.tick(*waits("PROJ-1", rationale="its PR is out for review"))
+    path = f"/api/reviews/{requested}/draft/discard"
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "review-9"}):
+        assert refused(c.post(path, headers=write)).startswith("inside_run: ")
+    discarded = c.post(path, headers=write)
+    assert discarded.status_code == 200, discarded.text
+    assert discarded.json()["status"] == ReviewDraftStatus.DISCARDED
+    assert present(review_drafts.of_review(scenario.conn, requested)).why == "discarded by you through web"
+    assert "review_waiting" not in [i["reason"] for i in c.get("/api/attention").json()]
+    assert "review_waiting" not in (scenario.env.state_dir / "attention.md").read_text()
+    assert refused(c.post(path, headers=write)).startswith("discarded: ")
+    assert reads(github_state, "post") == []
+
+
 #: What the operator's note asks of a revision, and what the reviser reports on it: the body alone, gentler.
 NOTE = "Say it more gently."
 GENTLER: dict[str, object] = {"status": "done", "body": "One defect, gently put.", "comments": []}

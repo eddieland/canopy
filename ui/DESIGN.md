@@ -1492,20 +1492,21 @@ sliver beside four others; and its axis names short call numbers without measuri
   `Publish version N`, which submits it, and beside it an outline `Start the review on GitHub`, which stages it, each
   with its command on hover, and a muted line by them saying what posts: as you, on the PR's author's PR (`the PR` when
   canopy has not read it), the body and how many comments, on which commit. A publish says what it did in a toast;
-  staged or published, the foot says so in one line linked to GitHub instead, never a raw URL. On the diff, one card per
-  point of the review: each finding's card is its comment's too (`ReviewPointCard`, a draft's card, above, never a
-  `FindingCard` beside a comment's card). It heads with the finding's number, severity, title, and location, then a
-  chip, `in your review` or `left out`; in the review as a comment, its text is that comment as it will post, with
-  `Edit` while the draft waits; through the body, or left out, the reviewer's detail, and a muted line saying where it
-  posts or how to have it back. One ghost `xs` control ends its head line where a finding's `dismiss` is: `leave out`
-  dismisses it, `put back` takes that back (`useDismissReviewFinding` with the draft's words), so the two are one
-  choice, as DESIGN §34 ties them. A finding left out by a drop or a body edit rather than a dismissal shows `dismiss`,
-  since the server puts a finding back only by taking its dismissal back. Once the draft is published or on its way, the
-  control is the plain `dismiss` or `undo`. A comment the operator added keeps a card of its own (`DraftCommentCard`)
-  under its line after the findings there, with `Edit` and `Drop` while the draft waits; with no diff kept, every
-  comment's card is in the panel's list, as before. While it waits, each line of the new side has a ghost `+` beside its
-  number (`DiffPanels`' `onAdd`), shown on the row's hover or its focus, which opens a new comment's card under the
-  line, its form open.
+  staged or published, the foot says so in one line linked to GitHub instead, never a raw URL. A ghost `Discard` after
+  them asks in its place, as skipping a plan does (Keep focused, Escape keeps), and a discarded draft's foot says so in
+  one line. On the diff, one card per point of the review: each finding's card is its comment's too (`ReviewPointCard`,
+  a draft's card, above, never a `FindingCard` beside a comment's card). It heads with the finding's number, severity,
+  title, and location, then a chip, `in your review` or `left out`; in the review as a comment, its text is that comment
+  as it will post, with `Edit` while the draft waits; through the body, or left out, the reviewer's detail, and a muted
+  line saying where it posts or how to have it back. One ghost `xs` control ends its head line where a finding's
+  `dismiss` is: `leave out` dismisses it, `put back` takes that back (`useDismissReviewFinding` with the draft's words),
+  so the two are one choice, as DESIGN §34 ties them. A finding left out by a drop or a body edit rather than a
+  dismissal shows `dismiss`, since the server puts a finding back only by taking its dismissal back. Once the draft is
+  published or on its way, the control is the plain `dismiss` or `undo`. A comment the operator added keeps a card of
+  its own (`DraftCommentCard`) under its line after the findings there, with `Edit` and `Drop` while the draft waits;
+  with no diff kept, every comment's card is in the panel's list, as before. While it waits, each line of the new side
+  has a ghost `+` beside its number (`DiffPanels`' `onAdd`), shown on the row's hover or its focus, which opens a new
+  comment's card under the line, its form open.
   A review whose request made others of the same commit in other personas names them in a muted line under the intro,
   `Also reviewed as skeptic, eddie`, each persona a `ReviewLink` to its page, and that each is a draft of its own:
   the operator picks one to publish, and publishing it changes none of the others.

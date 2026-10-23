@@ -256,6 +256,11 @@ export function reviewDraftPublishedToast(run: number, prUrl: string, published:
     }
 }
 
+/** The toast a discard shows, in the words `canopy review discard` says it with, and the PR it was of. */
+export function reviewDraftDiscardedToast(run: number, prUrl: string): NewToast {
+    return { title: `Discarded review run ${run}'s draft; nothing was posted`, detail: prUrl, tone: 'done' }
+}
+
 function capitalized(text: string): string {
     return text.charAt(0).toUpperCase() + text.slice(1)
 }
