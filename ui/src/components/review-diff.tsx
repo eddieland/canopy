@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import type { DiffFile, DiffLine, ReviewDiff, ReviewDraft } from '@/api/types'
 import { CodeTokens } from '@/components/code-tokens'
 import { Disclosure } from '@/components/disclosure'
-import { useDismissReviewFinding } from '@/components/dismiss-finding'
+import { dismissedLabel, useDismissReviewFinding } from '@/components/dismiss-finding'
 import { FoldButton } from '@/components/fold-button'
 import { Panel, PanelHeader } from '@/components/panel'
 import { DraftCommentCard, NewCommentCard, ReviewPointCard } from '@/components/review-draft'
@@ -510,7 +510,7 @@ export function FindingCard({
                 {finding.location && (
                     <span className="font-mono text-xs break-all text-muted-foreground">{finding.location}</span>
                 )}
-                {finding.dismissed && <Chip>dismissed</Chip>}
+                {finding.dismissed && <Chip>{dismissedLabel(finding)}</Chip>}
                 <span className="ml-auto">{button}</span>
             </header>
             {finding.detail && <RichText text={finding.detail} className="mt-1.5 text-muted-foreground" />}

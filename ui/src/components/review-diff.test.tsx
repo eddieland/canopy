@@ -38,7 +38,16 @@ const DIFF: ReviewDiff = {
 }
 
 function finding(title: string, line: number): ReviewFinding {
-    return { severity: 'minor', title, location: `notes.txt:${line}`, detail: '', file: 0, line, dismissed: false }
+    return {
+        severity: 'minor',
+        title,
+        location: `notes.txt:${line}`,
+        detail: '',
+        file: 0,
+        line,
+        dismissed: false,
+        dismissed_reason: null,
+    }
 }
 
 function diff(
