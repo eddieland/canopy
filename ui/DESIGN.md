@@ -1559,13 +1559,21 @@ sliver beside four others; and its axis names short call numbers without measuri
   `Send N waiting`, which sends every waiting draft as one comment review, its command on hover, and an outline `Start a
   review on GitHub` beside it, which stages them in a pending review instead, its reactions added at once, with a muted
   line saying what each does; while the PR holds a staged review, neither shows, and a `staged-review` line links to the
-  PR's files on GitHub to finish it. Then the diff (`DiffPanels`), each thread's card
+  PR's files on GitHub to finish it. Then, while its ticket has a current feedback plan (docs/design §32), a `Feedback
+  plan` panel (`FeedbackPlanPanel`): `feedback-plan:N` and its status as a chip in its header (waiting and stale in
+  `status-blocked`, approved as running, spent plain), a muted line of who planned it and what its status means, a
+  stale plan's changes in `status-blocked`, a row per item (a `Checkbox` until a resume spends it, its number and id,
+  its proposal as a chip, its author, `trusted`, where it is, and a reply no thread card shows, as `MemoryText`), and
+  in its foot the operator's words and `Approve whole` or `Approve N of M`, its command on hover, then a `Disclosure`
+  of the plan's file as `MemoryText`. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
   `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
   `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain,
   its line breaks and tabs kept and every other hidden character named, never Markdown or a link; a draft's text the
-  same. A comment's `<details>` blocks are the one thing read in it (`CommentText`, `src/lib/details.ts`): each folds,
+  same. A thread the feedback plan covers carries its proposal above its drafts (`PlanProposal`, a dashed hairline
+  box): `Plan item N`, the proposal as a chip, `left out` once an approval left it out, and the reply as `MemoryText`.
+  A comment's `<details>` blocks are the one thing read in it (`CommentText`, `src/lib/details.ts`): each folds,
   as on GitHub, in a hairline box under a `Collapsible` row of a chevron and its summary in `font-medium`, open when
   written `<details open>`, and a closed one that folds a hidden character carries `hides a character` in
   `status-failed`. Only bare `<details>`, `<details open>`, and `<summary>` are read, so a dropped tag hides nothing.

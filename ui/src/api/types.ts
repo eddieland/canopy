@@ -243,6 +243,14 @@ export type DraftStatus = Schemas['DraftStatusName']
 export type Reaction = Schemas['ReactionName']
 /** What a send did: the drafts posted, sent before, not sent and why, and those it cannot say of. */
 export type DraftsSent = Schemas['DraftsSent']
+/** A ticket's current feedback plan, as its PR's page shows it beside the threads (DESIGN §32). */
+export type FeedbackPlan = Schemas['FeedbackPlan']
+/** Where a feedback plan stands: waiting, stale, approved, or spent by the resume that went ahead on it. */
+export type FeedbackPlanStatus = Schemas['FeedbackPlanStatusName']
+/** An item a feedback plan covers, and what it proposes for it. */
+export type FeedbackPlanItem = Schemas['FeedbackPlanItem']
+/** What an approval of a feedback plan did: the items it addresses, those it leaves out, and its message. */
+export type FeedbackPlanApproved = Schemas['FeedbackPlanApproved']
 
 /** Every run state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss. */
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]
