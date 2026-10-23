@@ -843,12 +843,32 @@ class Loop(Section):
         return self
 
 
+#: The most budget alerts, and the highest percentage one may name: ten times the budget.
+MAX_ALERTS = 10
+MAX_ALERT_PERCENT = 1000
+
+
+def _distinct_alerts(value: tuple[int, ...]) -> tuple[int, ...]:
+    twice = sorted({p for p in value if value.count(p) > 1})
+    if twice:
+        raise ValueError(f"names {', '.join(map(str, twice))} more than once")
+    return value
+
+
 class Spend(Section):
     """The `[spend]` table: what the operator means to spend on agent runs (DESIGN §11). Read, never enforced."""
 
     #: In whole US dollars: what the local calendar month's runs may cost, as `canopy spend` and the spend page track
     #: it. A sink that takes `loop` hears once when the month's spend reaches it. None tracks no budget.
     monthly_budget_usd: Annotated[Annotated[StrictInt, Field(ge=1)] | None, Scope.PRIVATE] = None
+    #: Percentages of the budget, besides the 100 always sent, at which that sink also hears the month reached it:
+    #: `[50, 80]` warns at half and at four fifths, `[150]` when the month runs well past it.
+    budget_alerts: Annotated[
+        tuple[Annotated[StrictInt, Field(ge=1, le=MAX_ALERT_PERCENT)], ...],
+        Scope.PRIVATE,
+        Field(max_length=MAX_ALERTS),
+        AfterValidator(_distinct_alerts),
+    ] = ()
 
 
 # Host names that mean loopback. The web UI's Host and Origin checks accept these and the bind address (DESIGN §22).

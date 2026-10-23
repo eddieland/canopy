@@ -852,3 +852,17 @@ def test_canopy_spend_names_no_month_without_a_budget(
     assert capsys.readouterr().out.splitlines()[1] == ""
     assert main(["spend", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["month"] is None
+
+
+def test_a_month_s_alerts_are_100_and_the_operator_s_and_it_names_the_highest_reached(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, "2026-10-02T09:00:00.000Z", 8.5)
+    found = spend.month(conn, NOW, 10, (150, 50, 80))
+    assert (found.alerts, found.reached) == ((50, 80, 100, 150), 80)
+    assert spend.month(conn, NOW, 10).alerts == (100,)
+    assert spend.month(conn, NOW, 10).reached is None
+    assert spend.month(conn, NOW, 5, (50,)).reached == 100
+    assert spend.month(conn, NOW, 100, (50,)).reached is None

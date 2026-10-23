@@ -333,6 +333,29 @@ def test_a_monthly_budget_may_be_set_raised_to_its_ceiling_and_lowered(ctx: Cont
     assert canopy_env.private_file.read_text().startswith(COMMENTED)
 
 
+def test_the_budget_s_alerts_are_set_whole_to_anything_the_loader_takes(ctx: Context, canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private(COMMENTED)
+    c, headers = signed_in_client(ctx)
+    assert key(settings(c), "spend.budget_alerts") == {
+        "name": "spend.budget_alerts",
+        "value": [],
+        "source": "default",
+        "kind": "free",
+        "bound": None,
+        "looser": None,
+    }
+
+    assert save(c, headers, {"spend.budget_alerts": [80, 50]}).status_code == 200
+    assert "budget_alerts = [80, 50]" in canopy_env.private_file.read_text()
+    # Entries added and dropped alike: the 100% alert is sent whatever the list holds.
+    assert save(c, headers, {"spend.budget_alerts": [150]}).status_code == 200
+    assert key(settings(c), "spend.budget_alerts")["value"] == [150]
+    assert save(c, headers, {"spend.budget_alerts": []}).status_code == 200
+    for bad in ([0], [1001], [50, 50], list(range(1, 12)), ["half"]):
+        assert refused(save(c, headers, {"spend.budget_alerts": bad})).startswith("config_invalid: "), bad
+    assert canopy_env.private_file.read_text().startswith(COMMENTED)
+
+
 def test_a_save_on_a_stale_hash_is_refused(ctx: Context, canopy_env: CanopyEnv) -> None:
     c, headers = signed_in_client(ctx)
     read = read_hash(c)

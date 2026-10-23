@@ -76,7 +76,7 @@ def spend_breakdown_hours(backend: Backend, ctx: Context, hours: int) -> SpendBr
 
 
 def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> SpendBreakdown:
-    budget = ctx.config.spend.monthly_budget_usd
+    month = spending.budget_month(ctx.conn, now, ctx.config.spend)
     return SpendBreakdown(
         since=db.parse_time(found.since),
         days=found.days,
@@ -132,7 +132,7 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> 
             SpendModel(kind=m.kind, model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd)
             for m in found.models
         ],
-        month=_spend_month(spending.month(ctx.conn, now, budget)) if budget is not None else None,
+        month=_spend_month(month) if month is not None else None,
     )
 
 
@@ -145,6 +145,7 @@ def _spend_month(found: spending.Month) -> SpendMonth:
         spent_usd=found.spent_usd,
         elapsed=found.elapsed,
         projected_usd=found.projected_usd,
+        alerts=list(found.alerts),
     )
 
 

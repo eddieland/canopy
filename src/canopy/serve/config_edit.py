@@ -4,7 +4,8 @@ Only the keys `EDITABLE` names, never a section's wildcard: a key added to a sec
 is named here. A limit may be raised or lowered, but the page cannot loosen one past its bound, a count's ceiling or a
 pace's floor; the file can set any value, and the page may still tighten one the file set past its bound. A trust key
 moves only toward stricter: a config write outlives the listener secret, so a replier added through a stolen session
-would go on steering workers after a new secret ended it (TRUST_MODEL T8).
+would go on steering workers after a new secret ended it (TRUST_MODEL T8). The budget's alerts are set whole, to
+anything the loader takes: none of their values silences the 100% alert, which is always sent.
 
 A save writes the workspace's private file only (M49), never the workspace file (TRUST_MODEL T7) nor the user file,
 which serves every workspace. A key whose value comes from the user file is written to the private file, where it
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Config
 
-type Value = int | bool | str | tuple[str, ...] | dict[str, int] | None
+type Value = int | bool | str | tuple[str, ...] | tuple[int, ...] | dict[str, int] | None
 type Source = Literal["private", "user", "workspace", "default"]
 
 # Read by name from the request, so each guard's words are the operator's to act on.
@@ -57,8 +58,9 @@ class Editable:
     """A key the settings page may change, and how far."""
 
     name: str
-    # `limit`: raised or lowered, within `bound`. `stricter`: only toward stricter.
-    kind: Literal["limit", "stricter"]
+    # `limit`: raised or lowered, within `bound`. `stricter`: only toward stricter. `free`: set to anything the loader
+    # takes, for a key no value of which loosens a guard.
+    kind: Literal["limit", "stricter", "free"]
     # A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes.
     bound: int | None = None
     # Which way loosens a limit: a count's higher spends more, a pace's lower does.
@@ -96,6 +98,8 @@ EDITABLE: tuple[Editable, ...] = (
     _pace("loop.idle_max_minutes", 2),
     # Spends nothing itself, but a raised budget keeps a sink from hearing the month reached it: bounded the same way.
     _count("spend.monthly_budget_usd", 10000),
+    # Free: an alert dropped is a warning less, but the 100% alert is always sent, whatever the list holds.
+    Editable("spend.budget_alerts", "free"),
     Editable("policy.stacking", "stricter"),
     Editable("trust.authorized_repliers", "stricter"),
     Editable("trust.trusted_reviewers", "stricter"),
@@ -185,9 +189,9 @@ def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, objec
     """Write `changes` to the private file of the workspace at `root`, read with hash `expected`, if each is allowed.
 
     The private file is loaded over `user_file`, as the loop loads them, before and after. A list's value is the entries
-    to keep, in the file's order; `capacity.repo_slots`'s is the repositories whose count changes. Nothing is written
-    when every value is already so, or when anything is refused. The user file and the workspace file are never
-    written.
+    to keep, in the file's order, but for `spend.budget_alerts`, which is its new value whole; `capacity.repo_slots`'s
+    is the repositories whose count changes. Nothing is written when every value is already so, or when anything is
+    refused. The user file and the workspace file are never written.
 
     Returns:
         The keys changed, with their values before and after, and the file's hash now.
@@ -271,6 +275,8 @@ def value(cfg: Config, name: str) -> Value:
     found: object = getattr(getattr(cfg, section), key)
     if isinstance(found, dict):
         return {str(k): int(v) for k, v in found.items()}
+    if isinstance(found, tuple) and all(isinstance(v, int) for v in found):
+        return tuple(int(v) for v in found)
     if isinstance(found, tuple):
         return tuple(str(v) for v in found)
     if found is None or isinstance(found, bool | int | str):
@@ -380,7 +386,7 @@ def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config, 
         _set_slots(table, name, wanted, value(old, key.name))
         return
     current = value(old, key.name)
-    if isinstance(current, tuple) and isinstance(wanted, list):
+    if key.kind == "stricter" and isinstance(current, tuple) and isinstance(wanted, list):
         added = [str(v) for v in wanted if v not in current]
         if added:
             raise conversation.Refused(
@@ -439,6 +445,8 @@ def _check(key: Editable, change: Change, old: Config, path: Path) -> None:
         Refused: `past_bound` for a limit past its bound and looser than before; `not_stricter` for a trust key
             loosened.
     """
+    if key.kind == "free":
+        return
     if key.kind == "limit":
         pairs: list[tuple[str, object, object]]
         if isinstance(change.new, dict):

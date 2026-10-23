@@ -119,6 +119,9 @@ interval_minutes = 15
 # What a calendar month of agent runs should cost, in whole US dollars. Nothing stops at it: `canopy spend` and the web
 # UI's spend page track the month against it, and a sink that takes `loop` events hears once when the month reaches it.
 # monthly_budget_usd = 300
+# Percentages of it at which that sink also hears, each once a month: a warning at half and at four fifths, here. The
+# 100% alert is always sent. Empty by default.
+# budget_alerts = [50, 80]
 
 [trust]
 # Tracker account ids whose ticket comments may resume your blocked work. Use the

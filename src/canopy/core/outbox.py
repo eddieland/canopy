@@ -25,6 +25,8 @@ CHORES = "chores"
 REVIEWS = "reviews"
 #: A one-off task's runs (DESIGN §36): a group of its own, which no sink takes unless the operator lists it.
 TASKS = "tasks"
+#: The kind of the event that says the month's spend reached one of its budget's alerts.
+BUDGET_REACHED = "loop.budget_reached"
 SUMMARY_LIMIT = 300
 DETAIL_LIMIT = 500
 #: How many follow-ups a `follow_ups.filed` event names; the rest are counted.
@@ -157,13 +159,15 @@ class SinkFailing(TypedDict):
     error: str
 
 
-class OverBudget(TypedDict):
-    """A `loop.over_budget` event's fields: the local month's spend reached `spend.monthly_budget_usd`."""
+class BudgetReached(TypedDict):
+    """A `loop.budget_reached` event's fields: the local month's spend reached one of its alerts."""
 
     #: The month, `YYYY-MM`, in local time.
     month: str
     #: The budget, in whole US dollars.
     budget: int
+    #: The alert reached, as a percentage of the budget: 100 for the budget itself.
+    percent: int
     #: What the month's runs cost so far, in US dollars, rounded to the cent.
     spent: float
     #: What the month will cost at this pace, in US dollars, rounded to the cent; None in its first day.
@@ -425,16 +429,18 @@ def sink_failing(sink: str, error: str) -> Event:
     return Event(LOOP, "loop.sink_failing", fields)
 
 
-def over_budget(month: spend.Month) -> Event:
-    """The local month's spend reached the operator's monthly budget.
+def budget_reached(month: spend.Month, percent: int) -> Event:
+    """The local month's spend reached `percent` of the operator's monthly budget.
 
     Returns:
-        The `loop.over_budget` event, naming the month, the budget, what it spent, and where it is headed.
+        The `loop.budget_reached` event, naming the month, the budget, the alert, what it spent, and where it is
+        headed.
     """
-    fields: OverBudget = {
+    fields: BudgetReached = {
         "month": month.month,
         "budget": month.budget_usd,
+        "percent": percent,
         "spent": round(month.spent_usd or 0.0, 2),
         "projected": round(month.projected_usd, 2) if month.projected_usd is not None else None,
     }
-    return Event(LOOP, "loop.over_budget", fields)
+    return Event(LOOP, BUDGET_REACHED, fields)

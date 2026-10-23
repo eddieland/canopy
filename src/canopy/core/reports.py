@@ -180,8 +180,7 @@ def read_spend(ctx: Context, request: Spend) -> str:
         The breakdown's JSON, with the local month against `spend.monthly_budget_usd`: None when none is set.
     """
     now = datetime.now(UTC)
-    budget = ctx.config.spend.monthly_budget_usd
-    month = spend.month(ctx.conn, now, budget) if budget is not None else None
+    month = spend.budget_month(ctx.conn, now, ctx.config.spend)
     return report_json(spend_dict(spend.breakdown(ctx.conn, now, request.days), month))
 
 

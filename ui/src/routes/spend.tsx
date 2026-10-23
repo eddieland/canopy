@@ -23,6 +23,8 @@ import { useClock } from '@/lib/clock'
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import {
+    alertMarks,
+    alertsText,
     budgetPercent,
     budgetState,
     budgetText,
@@ -378,13 +380,23 @@ function Budget({ month }: { month: SpendMonth | null }) {
                     className={cn('h-full rounded-full', BUDGET_FILL[state])}
                     style={{ width: `${Math.min(100, budgetPercent(month))}%` }}
                 />
+                {alertMarks(month).map((percent) => (
+                    <div
+                        key={percent}
+                        className="absolute top-full mt-0.5 h-1.5 w-px bg-muted-foreground"
+                        style={{ left: `${percent}%` }}
+                        data-testid={`spend-budget-alert-${percent}`}
+                    />
+                ))}
                 <div
                     className="absolute -inset-y-1 w-0.5 rounded-full bg-foreground"
                     style={{ left: `${Math.round(month.elapsed * 1000) / 10}%` }}
                 />
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground" data-testid="spend-budget-alerts">
                 The mark is how much of the month has gone by: a bar past it is spending faster than the budget allows.
+                {alertMarks(month).length > 0 && ' The ticks under it are your alerts short of the budget.'}{' '}
+                {alertsText(month)}
             </p>
         </div>
     )

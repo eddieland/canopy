@@ -40,6 +40,13 @@ const REVIEWERS: ConfigKey = {
 }
 const REBASE: ConfigKey = { ...REVIEWERS, name: 'trust.rebase', value: true, source: 'default' }
 const STACKING: ConfigKey = { ...REVIEWERS, name: 'policy.stacking', value: 'auto', source: 'default' }
+const ALERTS: ConfigKey = {
+    ...REVIEWERS,
+    name: 'spend.budget_alerts',
+    value: [50, 80],
+    source: 'private',
+    kind: 'free',
+}
 const KEYS = [WORKERS, SLOTS, PER_REPO, PACE, REVIEWERS, REBASE]
 
 const SAVED: ConfigSaved = {
@@ -123,6 +130,20 @@ describe('config settings', () => {
     })
 })
 
+describe('budget alerts', () => {
+    it('send the percentages typed whole, commas or spaces between, when they differ from the ones read', () => {
+        expect(configForm([ALERTS], { [ALERTS.name]: '50, 80' }).changes).toEqual({})
+        expect(configForm([ALERTS], { [ALERTS.name]: '25 50,80' }).changes).toEqual({ [ALERTS.name]: [25, 50, 80] })
+        expect(configForm([ALERTS], { [ALERTS.name]: '80, 50' }).changes).toEqual({ [ALERTS.name]: [80, 50] })
+        expect(configForm([ALERTS], { [ALERTS.name]: ' ' }).changes).toEqual({ [ALERTS.name]: [] })
+    })
+
+    it('name a list with something other than a whole number in it, and send nothing for it', () => {
+        expect(configForm([ALERTS], { [ALERTS.name]: '50, most' })).toEqual({ changes: {}, invalid: [ALERTS.name] })
+        expect(boundText(ALERTS)).toBe('percentages, comma separated; 100% is always sent')
+    })
+})
+
 describe('config groups', () => {
     it('put each key in its panel with its words, and a key no panel names in Other', () => {
         const odd: ConfigKey = { ...WORKERS, name: 'capacity.max_something_new' }
@@ -135,7 +156,7 @@ describe('config groups', () => {
     it('name every key the server edits in some panel', () => {
         const named = CONFIG_GROUPS.flatMap((g) => g.keys.map((k) => k.name))
         expect(new Set(named).size).toBe(named.length)
-        expect(named).toHaveLength(21)
+        expect(named).toHaveLength(22)
     })
 
     it('count the unsaved changes', () => {

@@ -426,4 +426,8 @@ test('this month reads against the budget whatever the window, and is headed ove
     await expect(page.getByTestId('spend-budget-text')).toContainText('$15.76 of $40 (39%), on pace for')
     await page.getByTestId('spend-window-30').click()
     await expect(page.getByTestId('spend-budget-text')).toContainText('$15.76 of $40 (39%)')
+    // The mock alerts at half and four fifths of the budget too: each a tick under the bar, and named under it.
+    await expect(page.getByTestId('spend-budget-alert-50')).toBeAttached()
+    await expect(page.getByTestId('spend-budget-alert-80')).toBeAttached()
+    await expect(page.getByTestId('spend-budget-alerts')).toContainText('hears at 50%, 80%, and 100%.')
 })

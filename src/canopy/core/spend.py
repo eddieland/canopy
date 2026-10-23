@@ -28,6 +28,8 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
+    from canopy.core import config
+
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
 type Kind = Literal["overseer", "workers", "plans", "chores", "reviews", "tasks"]
 type Done = Literal["merged", "closed"]
@@ -61,6 +63,8 @@ _TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
     "tasks": ("task_runs", _EVERY),
 }
 _ALL_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
+#: The budget whole, as a percentage of it: the alert always sent.
+FULL = 100
 # About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
 CHARS_PER_TOKEN = 4
 # The overseer's series, each from the ticks.
@@ -282,6 +286,8 @@ class Month:
     #: What the month will cost if the rest of it spends as it has so far; None in its first day, when a few runs would
     #: read as a month's worth, or when nothing reported a cost.
     projected_usd: float | None
+    #: The percentages of the budget a sink hears the month reach, lowest first: 100 and `spend.budget_alerts`.
+    alerts: Sequence[int] = (FULL,)
 
     @property
     def share(self) -> float:
@@ -293,12 +299,29 @@ class Month:
         """Whether the month has spent its budget."""
         return self.share >= 1
 
+    @property
+    def reached(self) -> int | None:
+        """The highest of `alerts` the month's spend has reached; None before it reaches the lowest."""
+        return max((p for p in self.alerts if (self.spent_usd or 0.0) * 100 >= self.budget_usd * p), default=None)
 
-def month(conn: sqlite3.Connection, now: datetime, budget_usd: int) -> Month:
+
+def budget_month(conn: sqlite3.Connection, now: datetime, budget: config.Spend) -> Month | None:
+    """The local month holding `now` against the operator's budget and alerts, from their `[spend]` table.
+
+    Returns:
+        The month, or None when no budget is set.
+    """
+    if budget.monthly_budget_usd is None:
+        return None
+    return month(conn, now, budget.monthly_budget_usd, budget.budget_alerts)
+
+
+def month(conn: sqlite3.Connection, now: datetime, budget_usd: int, alerts: Iterable[int] = ()) -> Month:
     """What the local calendar month holding `now` has cost so far, against `budget_usd`.
 
     Returns:
-        The month, its spend so far, and where that spend is headed.
+        The month, its spend so far, where that spend is headed, and the percentages of the budget a sink hears of:
+        100, and each of `alerts`.
     """
     today = now.astimezone().date()
     first = today.replace(day=1)
@@ -316,6 +339,7 @@ def month(conn: sqlite3.Connection, now: datetime, budget_usd: int) -> Month:
         spent_usd=spent,
         elapsed=elapsed,
         projected_usd=projected,
+        alerts=tuple(sorted({FULL, *alerts})),
     )
 
 

@@ -78,8 +78,7 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
         click.echo(reports.read_spend(ctx, reports.Spend(days=days)))
         return 0
     now = datetime.now(UTC)
-    budget = ctx.config.spend.monthly_budget_usd
-    month = spend.month(ctx.conn, now, budget) if budget is not None else None
+    month = spend.budget_month(ctx.conn, now, ctx.config.spend)
     for line in render(spend.breakdown(ctx.conn, now, days), month):
         click.echo(line)
     return 0

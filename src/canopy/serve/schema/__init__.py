@@ -652,10 +652,11 @@ class ConfigReload(Model):
 
 
 type ConfigValue = Annotated[
-    int | bool | str | list[str] | dict[str, int] | None,
+    int | bool | str | list[str] | list[int] | dict[str, int] | None,
     Field(
-        description="A config key's value: a count or minutes, a switch, a choice, a list's entries, or "
-        "`capacity.repo_slots`'s counts by repository. None is a pool canopy does not manage.",
+        description="A config key's value: a count or minutes, a switch, a choice, a list's entries, "
+        "`spend.budget_alerts`'s percentages, or `capacity.repo_slots`'s counts by repository. None is a pool canopy "
+        "does not manage, or no budget.",
     ),
 ]
 
@@ -671,8 +672,9 @@ class ConfigKey(Model):
     """Which file the value comes from: the workspace's private file, the user file (a save writes it to the private
     file, where it shadows the user file's for this workspace), the workspace file (a shared `policy.*` key), or
     none."""
-    kind: Literal["limit", "stricter"]
-    """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries)."""
+    kind: Literal["limit", "stricter", "free"]
+    """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries). `free`:
+    set whole to anything the config loader takes (`spend.budget_alerts`, beside the 100% alert always sent)."""
     bound: int | None
     """A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes. The file can set any."""
     looser: Literal["higher", "lower"] | None

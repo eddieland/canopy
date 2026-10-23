@@ -106,11 +106,12 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
         return f"! loop recovered after {f.get('failed')} failed ticks"
     if kind == "loop.sink_failing":
         return _line(f"! sink {f.get('sink')} has failed 3 deliveries in a row: {f.get('error')}")
-    if kind == "loop.over_budget":
-        spent, projected = f.get("spent"), f.get("projected")
+    if kind == "loop.budget_reached":
+        spent, projected, percent = f.get("spent"), f.get("projected"), f.get("percent")
         so_far = _usd(spent) if isinstance(spent, int | float) else "-"
         pace = f", on pace for {_usd(projected)}" if isinstance(projected, int | float) else ""
-        return _line(f"! spend for {f.get('month')} reached its budget: {so_far} of ${f.get('budget')}{pace}")
+        what = "its budget" if percent == spend.FULL else f"{percent}% of its budget"
+        return _line(f"! spend for {f.get('month')} reached {what}: {so_far} of ${f.get('budget')}{pace}")
     if kind == "test":
         return _line(f"* {f.get('text')}")
     return _line(f"{kind} {json.dumps(f)}")
@@ -150,7 +151,7 @@ def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str |
             return page(ui, "reviews", f["run"])
         case "loop.failing" if f.get("tick"):
             return page(ui, "ticks", f["tick"])
-        case "loop.over_budget":
+        case "loop.budget_reached":
             return page(ui, "spend")
         case _:
             return None

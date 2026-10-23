@@ -926,8 +926,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt
   limits, the attachment limits under their own ceilings, and the CI cooldown in `policy`, `loop.interval_minutes`
   and `loop.idle_max_minutes`, and `spend.monthly_budget_usd`, which spends nothing but would silence the sink that
-  hears the month reached it. Trust settings move only toward stricter: `policy.stacking` to `"never"`, an entry
-  removed from `trust.authorized_repliers` or `trust.trusted_reviewers` (never added), `trust.rebase` to false, and
+  hears the month reached it. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100%
+  alert. Trust settings move only toward stricter: `policy.stacking` to `"never"`, an entry removed from
+  `trust.authorized_repliers` or `trust.trusted_reviewers` (never added), `trust.rebase` to false, and
   `trust.commit_trailer` to true. Nothing that
   runs a command, chooses a prompt, is read as words, or moves the listener: no `runtime.*`, `notify.*`, `chores`,
   `paths.*`, `review.*`, `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the

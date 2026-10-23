@@ -315,6 +315,17 @@ export function budgetPercent(month: SpendMonth): number {
     return Math.floor(((month.spent_usd ?? 0) / month.budget_usd) * 100)
 }
 
+/** The alerts a sink hears the month reach, in words: `A sink that takes loop events hears at 50%, 80%, and 100%.` */
+export function alertsText(month: SpendMonth): string {
+    const percents = new Intl.ListFormat('en-US').format(month.alerts.map((p) => `${p}%`))
+    return `A sink that takes loop events hears at ${percents}.`
+}
+
+/** The alerts below the budget, which the bar has room to mark: those at or past 100% are past its end. */
+export function alertMarks(month: SpendMonth): number[] {
+    return month.alerts.filter((p) => p < 100)
+}
+
 /** The month in words, `October 2026`, from its `YYYY-MM`, as the operator's calendar names it. */
 export function monthName(month: SpendMonth): string {
     const [year, number] = month.month.split('-').map(Number)

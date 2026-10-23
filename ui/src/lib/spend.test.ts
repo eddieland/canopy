@@ -4,6 +4,8 @@ import type { SpendCosts, SpendDay, SpendModel, SpendMonth, SpendTool } from '@/
 import type { Clock } from '@/lib/clock'
 
 import {
+    alertMarks,
+    alertsText,
     budgetPercent,
     budgetState,
     budgetText,
@@ -201,6 +203,7 @@ function month(spent: number | null, projected: number | null): SpendMonth {
         spent_usd: spent,
         elapsed: 0.25,
         projected_usd: projected,
+        alerts: [50, 80, 100],
     }
 }
 
@@ -218,6 +221,12 @@ describe('monthly budget', () => {
         expect(budgetPercent(month(50, null))).toBe(125)
         // Short of the budget never reads as all of it.
         expect(budgetPercent(month(39.84, null))).toBe(99)
+    })
+
+    it('names each alert, and marks those short of the budget on the bar', () => {
+        expect(alertsText(month(1, null))).toBe('A sink that takes loop events hears at 50%, 80%, and 100%.')
+        expect(alertMarks({ ...month(1, null), alerts: [50, 100, 150] })).toEqual([50])
+        expect(alertsText({ ...month(1, null), alerts: [100] })).toBe('A sink that takes loop events hears at 100%.')
     })
 
     it('names the month as a calendar does', () => {

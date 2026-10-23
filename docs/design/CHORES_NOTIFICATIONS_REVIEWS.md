@@ -142,7 +142,7 @@ operator's programs. This generalizes `notify.cmd` (§14), which stays and behav
 A closed set, written by the harness from the journal, in groups: `attention` (an item opened or resolved), `runs` (a
 worker started or ended, a plan proposed or approved by its planner, §25, follow-ups filed, §18), `chores` (§19),
 `reviews` (§21), `tasks` (a task's run ended, §36), and `loop` (ticks failing and recovering, a sink failing, the
-month's spend reaching its budget). Each
+month's spend reaching its budget or one of its alerts). Each
 carries only bounded fields, its text on one line. No plan event carries the plan's text. `run.ended` carries a
 `blocked` run's question, since the needs-human label is not an attention item.
 

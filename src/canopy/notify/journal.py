@@ -93,19 +93,19 @@ def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
 
     Returns:
         How many were deleted. The newest `loop.failing` or `loop.recovered` event is kept, and the newest
-        `loop.over_budget`.
+        `loop.budget_reached`.
     """
     cursors = [int(r[0]) for r in sql.execute(conn, sql.select("cursor").from_("notify_sinks"))]
     passed = min(cursors) if cursors else newest_event_id(conn)
     # The newest `loop.failing` or `loop.recovered` stays: it is how a long streak is told from a new one. So does the
-    # newest `loop.over_budget`: it is how a month already told is told from a new one.
+    # newest `loop.budget_reached`: it is how an alert already told is told from a new one.
     streak = sql.execute(
         conn,
         sql.select("coalesce(max(id), 0)").from_("notify_events").where("kind IN ('loop.failing', 'loop.recovered')"),
     ).fetchone()[0]
     budget = sql.execute(
         conn,
-        sql.select("coalesce(max(id), 0)").from_("notify_events").where("kind = 'loop.over_budget'"),
+        sql.select("coalesce(max(id), 0)").from_("notify_events").where("kind = 'loop.budget_reached'"),
     ).fetchone()[0]
     cur = sql.execute(
         conn,

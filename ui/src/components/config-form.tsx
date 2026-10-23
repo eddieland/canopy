@@ -265,7 +265,7 @@ function RepoSlots({
     )
 }
 
-/** The control for one key: a number field, a switch, or a list's entries to keep. */
+/** The control for one key: a number field, a switch, a list's entries to keep, or the budget's alerts as typed. */
 function Control({
     setting,
     draft,
@@ -276,20 +276,34 @@ function Control({
     onDraft: (value: ConfigDrafts[string]) => void
 }) {
     const { name, value } = setting
+    if (setting.kind === 'free') {
+        return (
+            <Input
+                aria-label={name}
+                value={typeof draft === 'string' ? draft : Array.isArray(value) ? value.join(', ') : ''}
+                placeholder="none"
+                className="readout h-8 w-40 text-right"
+                data-testid={name}
+                onChange={(event) => onDraft(event.currentTarget.value)}
+            />
+        )
+    }
     if (Array.isArray(value)) {
-        const kept = Array.isArray(draft) ? draft : value
-        if (value.length === 0) {
+        // A stricter key's entries are names; only the budget's alerts, drawn above, are numbers.
+        const entries = value.map(String)
+        const kept = Array.isArray(draft) ? draft : entries
+        if (entries.length === 0) {
             return <span className="text-xs text-muted-foreground">none</span>
         }
         return (
             <fieldset aria-label={name} className="flex flex-wrap justify-end gap-3">
-                {value.map((entry) => (
+                {entries.map((entry) => (
                     <label key={entry} className="inline-flex items-center gap-2 font-mono text-xs">
                         <Checkbox
                             checked={kept.includes(entry)}
                             data-testid={`${name}-${entry}`}
                             onCheckedChange={(checked) =>
-                                onDraft(value.filter((e) => (e === entry ? checked === true : kept.includes(e))))
+                                onDraft(entries.filter((e) => (e === entry ? checked === true : kept.includes(e))))
                             }
                         />
                         {entry}

@@ -36,6 +36,9 @@ export function boundText(key: ConfigKey): string {
     if (key.kind === 'stricter') {
         return 'stricter only'
     }
+    if (key.kind === 'free') {
+        return 'percentages, comma separated; 100% is always sent'
+    }
     if (key.bound === null) {
         return ''
     }
@@ -61,6 +64,16 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
     for (const key of keys) {
         const draft = drafts[key.name]
         if (draft === undefined) {
+            continue
+        }
+        if (key.kind === 'free' && typeof draft === 'string') {
+            // The budget's alerts, typed as a list: sent whole, the loader checking each.
+            const percents = wholeNumbers(draft)
+            if (percents === 'invalid') {
+                invalid.push(key.name)
+            } else if (!sameNumbers(percents, key.value)) {
+                changes[key.name] = percents
+            }
             continue
         }
         if (key.kind === 'stricter' && !Array.isArray(draft)) {
@@ -98,6 +111,17 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
         }
     }
     return { changes, invalid }
+}
+
+/** The whole numbers `text` lists, split on commas and spaces; none when empty; `invalid` when one is not a number. */
+function wholeNumbers(text: string): number[] | 'invalid' {
+    const parts = text.split(/[\s,]+/u).filter((part) => part !== '')
+    return parts.every((part) => /^\d+$/u.test(part)) ? parts.map(Number) : 'invalid'
+}
+
+/** Whether `numbers` is the value read, entry for entry, in order. */
+function sameNumbers(numbers: number[], was: ConfigValue): boolean {
+    return Array.isArray(was) && was.length === numbers.length && numbers.every((n, i) => was[i] === n)
 }
 
 /** The count `text` holds when it differs from `was`; null when empty or the same; `invalid` when not a number. */
@@ -203,8 +227,11 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
         title: 'Budget',
         blurb:
             'What a month of agent runs should cost. Nothing stops at it: the spend page tracks it, and a sink ' +
-            'that takes loop events hears once the month reaches it.',
-        keys: [{ name: 'spend.monthly_budget_usd', label: 'Monthly budget, in US dollars' }],
+            'that takes loop events hears once the month reaches it, and each alert you add.',
+        keys: [
+            { name: 'spend.monthly_budget_usd', label: 'Monthly budget, in US dollars' },
+            { name: 'spend.budget_alerts', label: 'Also alert at, in percent of the budget' },
+        ],
     },
     {
         title: 'Trust',

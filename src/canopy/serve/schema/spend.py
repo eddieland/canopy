@@ -218,6 +218,9 @@ class SpendMonth(Model):
     projected_usd: float | None = None
     """What the month will cost if the rest of it spends as it has so far, in US dollars; None in its first day, or
     when nothing reported a cost."""
+    alerts: list[int]
+    """The percentages of the budget a sink that takes `loop` hears the month reach, lowest first: 100, always, and
+    `spend.budget_alerts`."""
 
 
 class SpendBreakdown(Model):

@@ -2785,10 +2785,11 @@ export type components = {
             bound: number | null;
             /**
              * Kind
-             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries).
+             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries). `free`:
+             *     set whole to anything the config loader takes (`spend.budget_alerts`, beside the 100% alert always sent).
              * @enum {string}
              */
-            kind: "limit" | "stricter";
+            kind: "limit" | "stricter" | "free";
             /**
              * Looser
              * @description Which way loosens a limit: a count's higher, a pace's lower. None for a `stricter` key.
@@ -2924,8 +2925,8 @@ export type components = {
              */
             workspace_file: string;
         };
-        /** @description A config key's value: a count or minutes, a switch, a choice, a list's entries, or `capacity.repo_slots`'s counts by repository. None is a pool canopy does not manage. */
-        ConfigValue: number | boolean | string | string[] | {
+        /** @description A config key's value: a count or minutes, a switch, a choice, a list's entries, `spend.budget_alerts`'s percentages, or `capacity.repo_slots`'s counts by repository. None is a pool canopy does not manage, or no budget. */
+        ConfigValue: number | boolean | string | string[] | number[] | {
             [key: string]: number;
         } | null;
         /**
@@ -6767,6 +6768,12 @@ export type components = {
          * @description The local calendar month so far against the operator's monthly budget (`spend.monthly_budget_usd`).
          */
         SpendMonth: {
+            /**
+             * Alerts
+             * @description The percentages of the budget a sink that takes `loop` hears the month reach, lowest first: 100, always, and
+             *     `spend.budget_alerts`.
+             */
+            alerts: number[];
             /**
              * Budget Usd
              * @description The budget, in whole US dollars. Nothing enforces it.
