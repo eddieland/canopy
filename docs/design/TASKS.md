@@ -93,4 +93,3 @@ reaches only sinks that list its group).
 ### Open
 
 - A task across several repositories, in a desk (§18), when one asks for it.
-- Tasks in the web UI: replying, and reading the report.

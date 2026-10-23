@@ -791,9 +791,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   thread: a Conversation panel (`TaskStory`) whose oldest end is the operator's instruction, whole, as their own bubble
   (`task:4 you instruction via cli`), then its messages, each naming its run as `task:4#5`, which opens the run's page
   (`/tasks/$id_/runs/$run`, a chore run's skeleton, its task in the trail); no tick chips, since no tick reads them.
-  It ends on the run working now, as a ticket's does. The panel's foot is where the reply form will be: while a
-  question waits, a band on the `status-blocked` tint naming its message and `canopy reply task:N TEXT` with a copy
-  button; otherwise a muted line on what a reply does; a stopped task none. Its main content is the Report panel
+  It ends on the run working now, as a ticket's does. The panel's foot is its answer, as a ticket's is: the
+  `ReplyForm`, then its stop (`TaskActions`) under a hairline. While a question waits, the form sits on the
+  `status-blocked` tint under a line naming its message, one element either way, so what the form said stays as its
+  reply clears the question. Stop asks once more (`Stop task:N`, `Keep it`), since a task has no start to undo it, and
+  Stop now, while a run works, asks as a ticket's does; a task stopped while its run works keeps Stop now alone. A
+  stopped task has no form. Its main content is the Report panel
   (`TaskReportPanel`), its newest run's report that left one, laid out read only through the plan's schema
   (`PlanDocument`), so it reads as a document and stays text; its header names the run and `edited`, its foot the
   file's path, and with none an `Empty` saying what comes next or why. Then What it left (`TaskLeft`): its repository,
