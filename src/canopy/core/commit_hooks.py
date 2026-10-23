@@ -189,7 +189,7 @@ def git_too_old(config: Config, runner: procs.Runner) -> str | None:
     if not config.trust.commit_trailer and not config.trust.commit_prefix:
         return None
     try:
-        result = runner.run(["git", "--version"], env=hostgit.ENV, timeout=_GIT_VERSION_TIMEOUT_SECONDS)
+        result = runner.run(hostgit.argv("--version"), env=hostgit.ENV, timeout=_GIT_VERSION_TIMEOUT_SECONDS)
     except procs.ProcError:
         return None
     found = _GIT_VERSION_RE.search(result.stdout) if result.ok else None
