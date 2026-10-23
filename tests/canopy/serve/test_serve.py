@@ -820,17 +820,37 @@ def test_the_loop_stopping_its_server_with_a_stream_open_logs_the_cancel_as_info
     assert cancelled.levelno == logging.INFO
 
 
+_SHUTDOWN_CANCEL = "Task cancelled, timeout graceful shutdown exceeded"
+
+
+def _while_handling(error: BaseException, handled: BaseException) -> BaseException:
+    """`error`, as Python leaves it when raised in an `except` block that caught `handled`."""
+    error.__context__ = handled
+    return error
+
+
 @pytest.mark.parametrize(
     ("error", "level"),
     [
+        pytest.param(asyncio.CancelledError(_SHUTDOWN_CANCEL), logging.INFO, id="shutdown"),
         pytest.param(
-            asyncio.CancelledError("Task cancelled, timeout graceful shutdown exceeded"),
+            _while_handling(asyncio.CancelledError(), asyncio.CancelledError(_SHUTDOWN_CANCEL)),
             logging.INFO,
-            id="shutdown",
+            id="raised by a task group while handling the shutdown",
         ),
         pytest.param(asyncio.CancelledError(), logging.ERROR, id="cancelled by the app"),
         pytest.param(
-            ValueError("Task cancelled, timeout graceful shutdown exceeded"),
+            _while_handling(asyncio.CancelledError(), asyncio.CancelledError("by the app")),
+            logging.ERROR,
+            id="cancelled by the app while handling another cancel",
+        ),
+        pytest.param(
+            _while_handling(ValueError(), asyncio.CancelledError(_SHUTDOWN_CANCEL)),
+            logging.ERROR,
+            id="an error raised while handling the shutdown",
+        ),
+        pytest.param(
+            ValueError(_SHUTDOWN_CANCEL),
             logging.ERROR,
             id="not a cancel",
         ),
