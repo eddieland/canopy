@@ -7,6 +7,7 @@ import type { ReactNode } from 'react'
 
 import { reloadConfig, signOut } from '@/api/mutations'
 import { keys, personasQuery, sessionQuery, spendQuery } from '@/api/queries'
+import { ConfigModels } from '@/components/config-models'
 import { Cost } from '@/components/cost'
 import { Disclosure } from '@/components/disclosure'
 import { HatPreview } from '@/components/hat'
@@ -115,6 +116,7 @@ function SettingsPage() {
             <ReviewsPanel />
             <NoticePanel />
             <LimitsPanel />
+            <ModelsPanel />
             <ConfigPanel />
             {/* Second to last: below what changes how canopy works, above signing out. */}
             <FunPanel />
@@ -561,6 +563,19 @@ function LimitsPanel() {
 }
 
 /**
+ * The model config chooses for each agent and each chore, read only: the operator chooses one in the file alone, and a
+ * ticket's override on its own page.
+ */
+function ModelsPanel() {
+    return (
+        <Panel>
+            <PanelHeader label="Models" />
+            <ConfigModels />
+        </Panel>
+    )
+}
+
+/**
  * The personas the operator prefers for a review they request on the reviews page, which its form starts from: their
  * own, apart from `[personas] reviewer` in the config, which none leaves the request to. A preferred persona since
  * removed, or one canopy would refuse to run, is named, since the form leaves it out.
@@ -625,7 +640,12 @@ function NoticePanel() {
 
 /** Asks the loop to read its config files again, as SIGHUP does. A tick running then finishes on the config it had. */
 function ConfigPanel() {
-    const mutation = useMutation({ mutationFn: reloadConfig })
+    const client = useQueryClient()
+    const mutation = useMutation({
+        mutationFn: reloadConfig,
+        // The models shown above are the loop's: a reload may change them.
+        onSuccess: () => client.invalidateQueries({ queryKey: keys.configModels }),
+    })
     return (
         <Panel>
             <PanelHeader label="Config" />

@@ -1,9 +1,9 @@
 # Settings
 
 A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your limits and
-trust settings, reloading your config, and the fun. It opens from the rail's foot, beside the guide. The theme, the
-clock, the send key, your review personas, and the fun are kept in this browser; everything else canopy reads from its
-config files, as it always did.
+trust settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on. It opens
+from the rail's foot, beside the guide. The theme, the clock, the send key, your review personas, and the fun are kept
+in this browser; everything else canopy reads from its config files, as it always did.
 
 ## Theme
 
@@ -76,6 +76,29 @@ then reloads the loop as **Reload** below does. It never touches `canopy-workspa
 `~/.config/canopy/config.toml`; a value that came from the latter is copied into the workspace's file, where it wins for
 this workspace alone. The file as it was is kept beside it as `config.toml.bak`, so undoing a save is a `mv` and a
 Reload. If the file changed since the page read it, the save is refused rather than guessing which of you meant it.
+
+## Models
+
+Which model each agent runs on, as `[runtime.models]` chooses it: a row each for the worker (both workers, and a
+task's runs), the planner, the reviewer, the overseer, and `chore`, which covers every chore without a model of its
+own, then a row for each chore. Each row names the model and the variant it runs at, `provider/model@high` in the file,
+or says `runtime default` when nothing sets one and the runtime picks, which is a choice, just not yours. A chore with
+a `model` in its own table is marked **own model**; one whose command runs an agent of your own names that agent
+instead, since its own definition chooses (see [chores](chores#setting-one-up)).
+
+```toml
+[runtime.models]
+worker = "anthropic/claude-sonnet-4-5"
+reviewer = "openai/gpt-5@high"
+chore = "anthropic/claude-haiku-4-5"
+```
+
+The panel only reads. The line under it names the file to edit: the user file serves every workspace, and
+`.canopy/config.toml` this one alone; the workspace file can't choose a model, since a model is what your spend buys
+and which provider sees the code. It shows what the loop runs on, so an edit appears after **Reload**, and applies from
+each agent's next run; a run already going keeps its model. One ticket's override is set on
+[its page](tickets#choosing-a-model) and never shows here. **Show the runtime's models** lists what you can name, as
+`canopy models` prints it, read only when you open it, since each read starts the runtime.
 
 ## Config
 
