@@ -252,6 +252,19 @@ class Run(Model):
     """Which models served it, on its page and in the runs list; None where another page lists it."""
 
 
+class WaitingFeedbackPlan(Model):
+    """A ticket's feedback plan while it waits on the operator (DESIGN §32), as the attention list names it."""
+
+    id: int
+    """The plan's id, as `feedback-plan:N` names it."""
+    pr_urls: list[str]
+    """The PRs of the units it covers, by repository: each PR's page shows the plan, where it is approved."""
+    items: int
+    """How many items it covers."""
+    stale: bool
+    """Whether its PRs changed since it was written, so approving it is refused once, naming what changed."""
+
+
 class TicketSummary(Model):
     """A ticket as the tickets list shows it."""
 
@@ -281,6 +294,8 @@ class TicketSummary(Model):
     """The run working it now, if one is."""
     plan_waits: bool = False
     """Whether its newest plan waits on the operator: proposed, no planner at work, no changes asked (DESIGN §25)."""
+    feedback_plan: WaitingFeedbackPlan | None = None
+    """Its current feedback plan while it waits on the operator, proposed and not yet approved; None otherwise."""
 
 
 class Comment(Model):

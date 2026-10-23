@@ -22,6 +22,7 @@ const TICKET: TicketSummary = {
     awaiting: null,
     running_run: null,
     plan_waits: false,
+    feedback_plan: null,
 }
 
 // Every action the buttons send, and what the server stand-in answers each.

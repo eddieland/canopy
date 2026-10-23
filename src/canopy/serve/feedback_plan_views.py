@@ -3,7 +3,9 @@
 The plan is its ticket's current one, when it covers the PR's repository: waiting, stale, approved, or spent by the
 `resume` that went ahead on it. Its text is read from its file every time, bounded and never through a link, as
 `canopy show` reads it, and like each item's proposed reply it is model text, sent for the UI to show as plain text.
-Whether it is stale is computed here, from what the connectors last read, as the state block computes it.
+Whether it is stale is computed here, from what the connectors last read, as the state block computes it. A waiting
+plan is also named on its ticket's summary, which is how the attention list tells its `plan_review` from a ticket
+plan's.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 
 from canopy.core import db, feedback_items, feedback_plans, plans, records, sql
 from canopy.core.vocab import PlanStatus, ReviewItem
+from canopy.serve.schema import WaitingFeedbackPlan
 from canopy.serve.schema.feedback_plan import FeedbackPlan, FeedbackPlanApproved, FeedbackPlanItem, ItemName
 
 if TYPE_CHECKING:
@@ -98,6 +101,30 @@ def approved(conn: sqlite3.Connection, plan: records.FeedbackPlan) -> FeedbackPl
         addressed=[ItemName(number=i.number, item_id=i.item_id) for i in covered if not i.left_out],
         left=[ItemName(number=i.number, item_id=i.item_id) for i in covered if i.left_out],
         message=plan.approved_message_id,
+    )
+
+
+def waiting(ctx: Context, key: str) -> WaitingFeedbackPlan | None:
+    """The ticket's current feedback plan while it waits on the operator, as the attention list names it.
+
+    The overseer raises a waiting plan as `plan_review`, as it does a ticket's plan, so this is how the UI tells the
+    two apart, and when the operator answered it.
+
+    Returns:
+        The plan, the PRs it covers, how many items it covers, and whether it is stale; None when the ticket's current
+        feedback plan, if it has one, does not wait: approved or spent.
+    """
+    conn = ctx.conn
+    plan = feedback_plans.current(conn, key)
+    if plan is None or plan.status is not PlanStatus.PROPOSED:
+        return None
+    covered = feedback_plans.repos(conn, plan)
+    units = db.units(conn, key)
+    return WaitingFeedbackPlan(
+        id=plan.id,
+        pr_urls=[str(u.pr_url) for u in units if u.pr_url and u.repo in covered],
+        items=len(feedback_plans.items(conn, plan.id)),
+        stale=bool(feedback_items.changes(conn, ctx.config.trust, plan)),
     )
 
 

@@ -109,7 +109,7 @@ test.describe('in a narrow window', () => {
         await settled(page)
         const strip = page.getByTestId('rail-strip')
         await expect(strip.getByRole('link', { name: 'Runs' })).toBeVisible()
-        await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^9/u)
+        await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^10/u)
         await expect(page.getByTestId('rail-working')).toHaveCount(0)
 
         await strip.getByRole('button', { name: 'Open the rail' }).click()

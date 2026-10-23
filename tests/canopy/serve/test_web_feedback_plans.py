@@ -47,6 +47,18 @@ def plan_of(c: TestClient) -> dict[str, Any]:
     return found
 
 
+def waiting_of(c: TestClient) -> dict[str, Any] | None:
+    """The waiting feedback plan the tickets list and the ticket's page name for `KEY`, the same on both."""
+    listed = c.get("/api/tickets")
+    assert listed.status_code == 200, listed.text
+    [summary] = [t for t in listed.json() if t["key"] == KEY]
+    page = c.get(f"/api/tickets/{KEY}")
+    assert page.status_code == 200, page.text
+    found: dict[str, Any] | None = summary["feedback_plan"]
+    assert page.json()["ticket"]["feedback_plan"] == found
+    return found
+
+
 @pytest.mark.usefixtures("git_pool")
 def test_a_prs_threads_carry_its_waiting_feedback_plan_each_item_on_its_thread(
     scenario: Scenario,
@@ -136,3 +148,19 @@ def test_a_stale_plan_says_what_changed_and_its_approval_is_refused_once(
     assert approved.json()["left"] == []
     # Once approved it is not stale: what changed waits for the next plan.
     assert (plan_of(c)["status"], plan_of(c)["changes"]) == ("approved", [])
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_tickets_summary_names_its_feedback_plan_while_it_waits(scenario: Scenario, github_state: Path) -> None:
+    """The attention list tells a feedback plan's `plan_review` from a ticket plan's, and its answer, by this."""
+    c, write, _ = planned_client(scenario, github_state)
+    plan_id = present(feedback_plans.current(scenario.conn, KEY)).id
+    assert waiting_of(c) == {"id": plan_id, "pr_urls": [PR], "items": 2, "stale": False}
+    github_shows(github_state, ALICES_COMMENT, BOBS_COMMENT, comment(601, "PRRT_3", author="carol", body="And this."))
+    scenario.seen()
+    scenario.tick(*waits(KEY), dry_run=True)
+    assert present(waiting_of(c))["stale"] is True
+    # Approved, it waits on the operator no more: refused once as stale, then approved as it is.
+    refused(c.post(APPROVE, json={}, headers=write))
+    assert c.post(APPROVE, json={}, headers=write).status_code == 200
+    assert waiting_of(c) is None

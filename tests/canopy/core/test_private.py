@@ -514,8 +514,6 @@ def test_a_message_cursor_is_a_message_id(scenario: Scenario) -> None:
 
 
 def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(scenario: Scenario) -> None:
-    conn = scenario.conn
-
     # The overseer records a decision for every ticket it looks at, but not always the ticket's own phase.
     def phase_line() -> str:
         out = scenario.operator("status").out
@@ -523,7 +521,8 @@ def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(scenari
         return line.split("  phase ", 1)[1]
 
     def summary() -> tuple[str | None, str | None]:
-        found = views.summary(conn, db.recent_tickets(conn, 1, key=KEY)[0])
+        ctx = context(scenario.env)
+        found = views.summary(ctx, db.recent_tickets(ctx.conn, 1, key=KEY)[0])
         return found.phase, found.last_decision
 
     scenario.operator("start", KEY)

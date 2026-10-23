@@ -159,6 +159,14 @@ ATTENTION: tuple[Item, ...] = (
         at(-22),
         repo="web",
     ),
+    # Run 46's feedback plan, which waits on the operator to approve it on PR 88's page (DESIGN §32).
+    Item(
+        "ABC-099",
+        "plan_review",
+        "feedback plan 1 for https://github.com/acme/web/pull/88 waits: canopy plan ABC-099 --approve or "
+        "canopy reply ABC-099",
+        at(-10),
+    ),
     # Carol's PR, which the operator asked canopy to review: its review is done, its draft unpublished (DESIGN §34).
     Item(
         f"pr:{reviews.PR_14}",

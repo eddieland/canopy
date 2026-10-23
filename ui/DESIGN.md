@@ -938,7 +938,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   text, so the PR is one tab stop. A wait on the operator's answer (`awaiting_reply`, `untrusted_review`): the reply
   form is the action, and a question's head names it, `Waits on your answer to message 5, asked 3m ago`, rather than
   saying it, since the conversation holds it, marked `waiting on you` (One home per fact). A plan (`plan_review`): the
-  plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`. Memory's items
+  plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`; a feedback plan's,
+  which shares the reason and is told apart by its detail or its ticket's `feedback_plan`, a line naming the plan, its
+  PRs, its items, and whether it is stale, with an outline `Approve it on org/repo#N`, a router link to the PR's page at
+  `#feedback-plan`, where it is approved. Memory's items
   (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above).
   Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
   where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,

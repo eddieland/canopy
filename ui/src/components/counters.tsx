@@ -11,7 +11,8 @@ import { runningTasks } from '@/lib/run-state'
  * The loop at a glance, above the attention list: what runs, what waits on you, and what needs you. What it cost is
  * in the rail, on every page. Only Waiting on you has a line under its value, the oldest question's age, since it has
  * no other home: what waits on you is that counter's value, and how the list splits is the nav's badge. Running and
- * Waiting on you count tasks as they count tickets: a task's run running, and a task waiting on your reply.
+ * Waiting on you count tasks as they count tickets: a task's run running, and a task waiting on your reply. A ticket
+ * waits on you while it waits on your reply, or its feedback plan on your approval (DESIGN §32).
  */
 export function Counters() {
     const runs = useQuery(runsQuery)
@@ -25,7 +26,9 @@ export function Counters() {
             : runs.data.filter((r) => r.state === 'running').length + runningTasks(tasks ?? []).length
     const asking = (tasks ?? []).filter((t) => t.standing === 'awaiting_reply').length
     const waiting =
-        tickets.data === undefined ? undefined : tickets.data.filter((t) => t.awaiting !== null).length + asking
+        tickets.data === undefined
+            ? undefined
+            : tickets.data.filter((t) => t.awaiting !== null || t.feedback_plan !== null).length + asking
     // An answered question stays on the list until the next tick; it waits on the loop now, not on you.
     const questions = attention.data
         ?.filter((i) => i.reason === 'awaiting_reply' && !answered(i, tickets.data, tasks))
