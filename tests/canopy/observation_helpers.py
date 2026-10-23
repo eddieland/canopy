@@ -153,3 +153,31 @@ def review(
         "observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (PR, item, ident, author, bot, state, at, body, f"{PR}#review-{ident}", thread, FRESH),
     )
+
+
+#: Who comments on an artifact in the helpers' changes: a person the store signed in.
+ANA = {"id": "u_ana", "display_name": "Ana", "kind": "person"}
+
+
+def artifact_change(seq: int, kind: str = "comment_created", **more: object) -> dict[str, object]:
+    """A line of an artifact store's comment feed: a change to comment `c{seq}` in thread `t1` of KEY's artifact."""
+    found: dict[str, object] = {
+        "kind": kind,
+        "seq": seq,
+        "at": "2026-10-23T10:00:00Z",
+        "artifact_id": "art_1",
+        "origin": {"canopy.ticket": KEY, "canopy.run": "7"},
+        "thread_id": "t1",
+        "anchor": {"exact": "shard it", "prefix": "We should ", "suffix": "."},
+        "anchored_version": 1,
+        "state": "open",
+        "anchor_status": "found",
+        "comment_id": f"c{seq}",
+        "author": ANA,
+        "via": "web",
+        "body": f"Comment {seq}.",
+        "created_at": "2026-10-23T10:00:00Z",
+        "edited_at": None,
+        "deleted_at": None,
+    }
+    return {**found, **more}
