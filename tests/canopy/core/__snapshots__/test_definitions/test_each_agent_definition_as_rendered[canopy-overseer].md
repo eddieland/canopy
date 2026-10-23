@@ -21,6 +21,9 @@ permission:
   webfetch: deny
   websearch: deny
   codesearch: deny
+  # OpenCode 2's code mode runs the model's JavaScript, which can make HTTP requests of its own, so it is a web
+  # tool too (D077). An MCP server reached only through it is then out of reach: give it `codemode: false`.
+  execute: deny
   # Subagents run with their own, wider permissions; the overseer must not reach them.
   task: deny
   # No shell of its own: the overseer acts through canopy's tools alone (DESIGN §27), and reads the pool from its state

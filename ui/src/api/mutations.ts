@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
+    AgentModel,
     AgentPersona,
     Attached,
     Detached,
@@ -101,6 +102,18 @@ export async function chooseTicketPersona(
     return unwrap(
         await api.POST('/api/tickets/{key}/personas', { params: { path: { key } }, body: { agent, persona } }),
     )
+}
+
+/**
+ * `canopy model KEY MODEL --agent AGENT`, or with `model` null `--clear`: the model the agent's runs for the ticket run
+ * on, from its next run until cleared (DESIGN §13).
+ */
+export async function chooseTicketModel(
+    key: string,
+    agent: AgentModel['agent'],
+    model: string | null,
+): Promise<AgentModel> {
+    return unwrap(await api.POST('/api/tickets/{key}/models', { params: { path: { key } }, body: { agent, model } }))
 }
 
 /**

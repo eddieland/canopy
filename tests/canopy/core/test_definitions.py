@@ -66,10 +66,10 @@ def test_the_snapshots_digest_changes_with_its_plugins(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("name", runtime_definitions.agent_names())
 def test_no_agent_has_web_tools(name: str) -> None:
-    # Fetched and searched pages are text anyone can shape (TRUST_MODEL T1, D077). Scalars, so a repository's config
-    # cannot loosen them (D044).
+    # Fetched and searched pages are text anyone can shape (TRUST_MODEL T1, D077), and code mode's code can fetch them.
+    # Scalars, so a repository's config cannot loosen them (D044).
     frontmatter = (resources.agents_dir() / f"{name}.md").read_text().split("---")[1]
-    for tool in ("webfetch", "websearch", "codesearch"):
+    for tool in ("webfetch", "websearch", "codesearch", "execute"):
         assert f"\n  {tool}: deny\n" in frontmatter
 
 

@@ -1,0 +1,169 @@
+"""The model each of a ticket's agents runs on (DESIGN §13, Each agent's model), and the operator's override of it.
+
+An agent's next run for a ticket runs on the ticket's override for that agent, else the agent's model in
+`[runtime.models]`, else the runtime's default. The override is the operator's alone (TRUST_MODEL T1): `choose`, which
+`canopy model` and the ticket's page both call, refuses inside one of canopy's ticks or runs, and refuses a model the
+runtime does not list. It is a `ticket_overrides` row of kind `model`, which may be set before canopy has seen the
+ticket and outlasts `canopy forget`, and covers every run of its agent for the ticket until it is cleared, so a canary
+ticket stays on one model. The overseer and chores work on no one ticket, so only their default reaches them.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
+
+from canopy.core import agent_models, conversation, db, records, sql
+from canopy.core.vocab import OverrideKind, RunKind
+from canopy.runtime import invocation
+
+if TYPE_CHECKING:
+    import sqlite3
+    from collections.abc import Callable
+
+    from canopy.core.config import Config
+    from canopy.runtime.report import ModelList
+
+#: One of a ticket's agents, each a key of `[runtime.models]`: `worker` covers the public and the private worker.
+Agent = Literal["worker", "planner", "reviewer"]
+#: Every agent of a ticket's, in the order `canopy model KEY` lists them.
+AGENTS: tuple[Agent, ...] = ("worker", "planner", "reviewer")
+#: The guard of an override naming a model the runtime does not list: it is refused when set, as at a run's start.
+UNKNOWN = "unknown_model"
+#: Where an agent's next model comes from: the ticket's override, `[runtime.models]`, or neither, the runtime's default.
+Source = Literal["ticket", "config", "default"]
+
+
+@dataclass(frozen=True)
+class Next:
+    """The model one of a ticket's agents runs on at its next run, and where that choice comes from (DESIGN §13)."""
+
+    agent: Agent
+    #: As `provider/model`; None for the runtime's default, when neither the ticket nor config chooses one.
+    model: str | None
+    source: Source
+
+
+def agent_of(kind: str) -> Agent:
+    """Return the agent a worker run of `kind` is, for its model: `planner` for a plan or feedback plan, else `worker`.
+
+    Returns:
+        The agent.
+    """
+    return "planner" if kind in (RunKind.PLAN, RunKind.FEEDBACK_PLAN) else "worker"
+
+
+def override(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
+    """Return the model the operator chose for `ticket`'s `agent`, or None when they chose none."""
+    found = records.fetch_one(
+        conn,
+        records.TicketOverride,
+        sql.select("*")
+        .from_("ticket_overrides")
+        .where("ticket_key = ? AND agent = ? AND kind = ?", ticket, agent, OverrideKind.MODEL),
+    )
+    return found.value if found is not None else None
+
+
+def models_for(conn: sqlite3.Connection, config: Config, ticket: str, agent: Agent) -> dict[str, str]:
+    """Return `[runtime.models]` with `ticket`'s override for `agent`, if it has one, in the place of config's.
+
+    Returns:
+        Each agent's model by its key of `[runtime.models]`, as a run of `agent` for `ticket` takes them.
+    """
+    models = dict(config.runtime.models)
+    chosen = override(conn, ticket, agent)
+    if chosen is not None:
+        models[agent] = chosen
+    return models
+
+
+def next_for(conn: sqlite3.Connection, config: Config, ticket: str) -> list[Next]:
+    """Return the model each of `ticket`'s agents runs on at its next run, in `AGENTS`' order.
+
+    Returns:
+        A `Next` per agent: its model, and whether the ticket's override, `[runtime.models]`, or neither chose it.
+    """
+    found: list[Next] = []
+    for agent in AGENTS:
+        mine = override(conn, ticket, agent)
+        configured = config.runtime.models.get(agent)
+        if mine is not None:
+            found.append(Next(agent, mine, "ticket"))
+        elif configured is not None:
+            found.append(Next(agent, configured, "config"))
+        else:
+            found.append(Next(agent, None, "default"))
+    return found
+
+
+def choose(
+    conn: sqlite3.Connection,
+    config: Config,
+    ticket: str,
+    agent: Agent,
+    model: str | None,
+    *,
+    listing: Callable[[], ModelList],
+    channel: str,
+) -> Next:
+    """Set `ticket`'s override for `agent` to `model`, or clear it with None (DESIGN §13). Operator only.
+
+    It may be set before canopy has seen the ticket, and covers every run of that agent for the ticket until cleared.
+    `listing` reads the models the runtime lists, only once the operator check has passed: the model must be one of
+    them, as it must again when each run starts.
+
+    Returns:
+        The model the agent's next run for the ticket runs on now, and where it comes from.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs, `model_list_failed` when the runtime's list
+            cannot be read, or `unknown_model` for a model it does not list.
+    """
+    conversation.check_operator()
+    if model is not None:
+        check(model, listing())
+    where = "ticket_key = ? AND agent = ? AND kind = ?"
+    with db.transaction(conn):
+        sql.execute(conn, sql.delete("ticket_overrides").where(where, ticket, agent, OverrideKind.MODEL))
+        if model is not None:
+            sql.execute(
+                conn,
+                sql.insert(
+                    "ticket_overrides",
+                    ticket_key=ticket,
+                    agent=agent,
+                    kind=OverrideKind.MODEL,
+                    value=model,
+                    channel=channel,
+                    set_at=db.now(),
+                ),
+            )
+    return next(n for n in next_for(conn, config, ticket) if n.agent == agent)
+
+
+def check(model: str, listed: ModelList) -> None:
+    """Refuse a model the operator is choosing that the runtime does not list: refused when set, not when a run starts.
+
+    Raises:
+        Refused: `unknown_model` for a model with a variant or one the runtime does not list, or `model_list_failed`
+            when the list could not be read.
+    """
+    named = agent_models.parse(model)
+    if named.variant is not None:
+        # An override names the model alone: the variant, a reasoning effort, stays config's to choose.
+        raise conversation.Refused(
+            UNKNOWN,
+            f"name the model alone, {named.id}, not a variant of it: a ticket's override chooses no variant",
+        )
+    if listed.error is not None:
+        raise conversation.Refused(
+            agent_models.LIST_FAILED,
+            f"could not read the models {invocation.NAME} lists, to look {model} up: {listed.error}",
+        )
+    if model not in listed.models:
+        raise conversation.Refused(
+            UNKNOWN,
+            f"{invocation.NAME} does not list the model {model}: name one `canopy models` lists, or set up its "
+            "provider",
+        )

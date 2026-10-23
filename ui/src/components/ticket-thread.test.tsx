@@ -61,6 +61,7 @@ function detail(messages: Message[], forgets: TicketForget[] = []): TicketDetail
         drafts: [],
         personas: [],
         persona_names: [],
+        models: [],
     }
 }
 

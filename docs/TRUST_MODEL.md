@@ -254,11 +254,13 @@ Controls:
   its bounds is refused, never run in canopy's voice instead, and a prompt override without `{{PERSONA}}` serves only
   a run in canopy's own voice.
 - Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
-  and a chore's `model`, both private (T7), which canopy writes into the agent's definition. The overseer, a dispatch,
-  ticket text, and labels choose none, and a `runtime` template, prefix, or suffix that passes a model or a variant is
-  a config error, as is a chore's command that does while it runs canopy's chore agent, so no agent's command line
-  overrides it unseen. A worker run whose model or variant the runtime does not list, or whose list cannot be read,
-  is refused with an attention item, never run on the runtime's default instead.
+  and a chore's `model`, both private (T7), which canopy writes into the agent's definition, or for one ticket's worker,
+  planner, or reviewer an override of the model alone, set with `canopy model` or the ticket's page (T8), which refuses
+  inside a tick or a run and refuses a model the runtime does not list. The overseer, a dispatch, ticket text, and
+  labels choose none, the overseer's own included, and a `runtime` template, prefix, or suffix that passes a model or a
+  variant is a config error, as is a chore's command that does while it runs canopy's chore agent, so no agent's
+  command line overrides it unseen. A worker run whose model or variant the runtime does not list, or whose list cannot
+  be read, is refused with an attention item, never run on config's model or the runtime's default instead.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like a
   dispatch's `label`, and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds
   the workers' marks (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages
@@ -318,8 +320,9 @@ Controls:
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
 - No agent has web tools (D077). Every canopy definition denies `webfetch`, `websearch`, and `codesearch` as scalars,
-  which a repository's config cannot loosen (D044). Fetched and searched pages are text anyone can shape, and an agent
-  that reaches for them on its own reads them with the operator's credentials in reach. The untrusted text an agent
+  which a repository's config cannot loosen (D044), and `execute`, OpenCode 2's code mode, whose code can make HTTP
+  requests. Fetched and searched pages are text anyone can shape, and an agent that reaches for them on its own reads
+  them with the operator's credentials in reach. The untrusted text an agent
   reads is then what its task brings: the ticket, the PR and its comments, CI output, and the repository.
 
 Residual: a worker can still be talked into writing bad code on its own
@@ -442,11 +445,13 @@ Controls now:
   loads its definition the way canopy loads its own (DESIGN §13), and checks that
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
-- canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose one job today
-  is the clock (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is written,
+- canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
+  clock and, under OpenCode 2, holding a session's first prompt until its MCP tools are registered (DESIGN §33), from
+  the snapshot. canopy takes the snapshot's write permission away once it is written,
   the operator's included, so no run changes it through its permissions or its sandbox, and the runtime installs
-  nothing into it. The plugin reads one variable, `CANOPY_DEADLINE`, and the clock; it writes nothing, refuses no call,
-  grants no tool, and catches its own errors. A repository's own plugins already load in the same process (T7).
+  nothing into it. The plugin reads one variable, `CANOPY_DEADLINE`, the clock, and under OpenCode 2 the runtime's
+  MCP servers' states and its tools' names; it writes nothing, refuses no call, grants no tool, and catches its own
+  errors. A repository's own plugins already load in the same process (T7).
 - `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
   and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
   the agent runtime's permissions. It is private (T7), and the code is what the worker's own shell runs a moment
@@ -525,7 +530,8 @@ but must be distinguishable:
   own, its attention items and the decisions that need no judgment (DESIGN §37); `canopy decisions` marks the
   harness's. Each worker run and review records the persona it ran in (DESIGN §31), by name and a digest of its
   text as the prompt carried it, so a persona edited between runs splits them. Each worker run records the model canopy
-  chose for its agent (DESIGN §13), the one its definition names, since no template may pass another.
+  chose for its agent (DESIGN §13), from its ticket's override or config, the one its definition names, since no
+  template may pass another.
 - canopy's reviews post nothing the operator has not published (D114). A review of a PR the loop does not own may
   be published by the operator (DESIGN §34): one version of its draft, word for word as they last saw it, named by its
   hash, unmarked, as one comment review on the commit the review read, which approves nothing and resolves no thread.
@@ -871,6 +877,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
   without following links, and rendered as text; it is never served as a file, and taking it runs no diff driver or
   textconv filter the commit names.
+- It serves the models the runtime lists (DESIGN §13), read when the operator opens a ticket's Model menu: it runs
+  the runtime's list command, as `canopy models` does, through the process seam in the workspace root with a 30-second
+  timeout, taking nothing from the request, and serves only the lines that are model ids. A choice of model is looked
+  up in the same list before it is recorded.
 - Each write request, any method but GET and HEAD, that the server lets through is recorded in the journal once it is
   answered: a sign-in with the secret, or a write whose session, token, and Origin the session check accepted, even if
   a verb's own guard then refuses it. The record holds when, its method and path, its status, the peer's address, and
@@ -891,8 +901,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   memory promote`, `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit a run's drafts' text and reaction,
   drop, send, and stage them as `canopy draft edit`, `drop`, `send`, and `stage` do (DESIGN §29), choose or clear the
   persona of one of a ticket's agents as `canopy persona` does, among the personas a run could already get (DESIGN §31),
-attach a text file to a ticket or a task, one a request within the body bound, and remove one, as `canopy attach` and
-`canopy detach` do (DESIGN §22),
+  choose or clear the model of one of a ticket's agents as `canopy model` does, among the models the runtime lists
+  (DESIGN §13), attach a text file to a ticket or a task, one a request within the body bound, and remove one, as
+  `canopy attach` and `canopy detach` do (DESIGN §22),
   edit a review's draft's body and comments, drop one, add one on a line of its kept diff, note what a revision of it
   should change as `canopy reply review:ID` does, publish or stage the version the page showed, named by its hash,
   as `canopy review edit` and `publish` do, and discard a draft as `canopy review discard` does (DESIGN §34), ask the

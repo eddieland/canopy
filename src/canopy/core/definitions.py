@@ -12,7 +12,7 @@ Some definitions are rendered from config: what canopy decides here, from config
 (`canopy.runtime.agents.Rules`), each agent's model among it, the runtime package writes in its own format, with a
 copy of the chore's definition for each chore with a model of its own. The digest covers the rendered text, so a
 config or override change makes a new snapshot rather than changing one a run may be loading, and each set of models
-gets a snapshot of its own.
+gets a snapshot of its own: a run whose ticket chose its agent's model renders that one in place of config's.
 """
 
 from __future__ import annotations
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from canopy.core.config import Config
+    from canopy.runtime.agents import Model
 
 # Kept importable from here: the features catch `DefinitionsError` as the snapshot's.
 __all__ = ["RUNTIME_DIR", "DefinitionsError", "digest", "ensure", "prune", "rules", "sources"]
@@ -49,21 +50,25 @@ _TMP_PREFIX = ".tmp-"
 _STALE_TMP_SECONDS = 3600
 
 
-def sources(config: Config | None = None) -> dict[str, bytes]:
+def sources(config: Config | None = None, models: Mapping[str, Model] | None = None) -> dict[str, bytes]:
     """Return the snapshot's files by relative path.
 
     They are the bundled agents and skills, with the workers', the reviewer's, and the overseer's definitions rendered
-    from `config` when it is given.
+    from `config` when it is given. `models`, each agent's model by its name, takes the place of `runtime.models`'
+    (`rules`).
 
     Raises:
         DefinitionsError: The overseer's prompt cannot be rendered, or a shipped definition cannot be rendered.
     """
     found = runtime_definitions.bundled()
-    return found if config is None else runtime_definitions.render(found, rules(config))
+    return found if config is None else runtime_definitions.render(found, rules(config, models))
 
 
-def rules(config: Config) -> agents.Rules:
+def rules(config: Config, models: Mapping[str, Model] | None = None) -> agents.Rules:
     """Return what `config` lets each agent do, for the runtime to write into its definitions.
+
+    `models` is each agent's model by its name, in place of `runtime.models`', for a run whose ticket chose its agent's
+    (`canopy.core.agent_models.of_run`); None takes config's.
 
     Raises:
         DefinitionsError: The overseer's prompt cannot be rendered (`prompts.render_overseer`).
@@ -74,7 +79,7 @@ def rules(config: Config) -> agents.Rules:
         raise DefinitionsError(str(e)) from e
     runtime = config.runtime
     # A chore with a model of its own runs a copy of the chore's agent made for it (DESIGN §19).
-    chore_models = {name: chore.model for name, chore in config.chores.items() if chore.model is not None}
+    chore_models = agent_models.chores(config)
     temperatures = {
         agents.REVIEWER: runtime.review_temperature,
         agents.OVERSEER: runtime.overseer_temperature,
@@ -89,7 +94,7 @@ def rules(config: Config) -> agents.Rules:
         tracker_provider=config.tracker.provider,
         bash_allows=bash_allows.by_agent(runtime.allow_bash),
         artifacts=config.artifacts.publishing(),
-        models=agent_models.by_agent(runtime.models, chore_models),
+        models=agent_models.by_agent(runtime.models, chore_models) if models is None else models,
         chore_agents=[agents.chore_agent(name) for name in sorted(chore_models)],
     )
 
@@ -104,9 +109,9 @@ def _drafts(config: Config, *, private: bool) -> agents.Drafts:
     )
 
 
-def digest(config: Config | None = None) -> str:
+def digest(config: Config | None = None, models: Mapping[str, Model] | None = None) -> str:
     """Return a digest of the snapshot's files: their relative paths and contents."""
-    return _digest(sources(config))
+    return _digest(sources(config, models))
 
 
 def _digest(files: Mapping[str, bytes]) -> str:
@@ -117,8 +122,10 @@ def _digest(files: Mapping[str, bytes]) -> str:
     return h.hexdigest()[:16]
 
 
-def ensure(state_dir: Path, config: Config | None = None) -> Path:
+def ensure(state_dir: Path, config: Config | None = None, models: Mapping[str, Model] | None = None) -> Path:
     """Return the snapshot for the installed canopy and `config`, creating it, unwritable, if missing.
+
+    `models`, each agent's model by its name, takes the place of `runtime.models`', as `rules` says.
 
     Safe to call from concurrent processes.
 
@@ -130,7 +137,7 @@ def ensure(state_dir: Path, config: Config | None = None) -> Path:
             cannot be rendered.
         OSError: the snapshot could not be written, and no other process put one in its place.
     """
-    files = sources(config)
+    files = sources(config, models)
     runtime = state_dir / RUNTIME_DIR
     final = runtime / _digest(files)
     if final.is_dir() or final.is_symlink():

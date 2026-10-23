@@ -94,6 +94,9 @@ If code and the design disagree, the design doc wins until a decision entry says
     for a new import, module, or test helper, `test_frozen.py` for a dataclass, `test_prompt_sizes.py` for a prompt,
     `core/test_db.py` and `core/test_records.py` for a migration or row type. A change to a shared fixture or helper
     in `tests/` runs the modules that use it. Under `ui/`, the unit tests and specs `ui/AGENTS.md` names.
+  - Bringing the base branch in, by a merge or a rebase: the tests of the files whose conflicts you resolved by hand,
+    and `core/test_db.py` and `core/test_records.py` for a migration you renumbered. A merge git made alone runs no
+    tests: CI runs the suite on the result. Never a whole directory, nor again the tests the branch ran before.
 
   CI skips every check on a pull request that changes only docs, and the Python tests on one that changes only `ui/`
   and docs, so there the checks you run are the only ones.
