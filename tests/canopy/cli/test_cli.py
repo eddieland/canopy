@@ -186,7 +186,13 @@ def test_completion_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixt
         assert f"plain,{overseers}" not in commands
     assert complete(capsys, "canopy chore ") == ["plain,history", "plain,install", "plain,try"]
     assert complete(capsys, "canopy chore install memory-") == ["plain,memory-tickets"]
-    assert complete(capsys, "canopy review ") == ["plain,draft", "plain,edit", "plain,publish", "plain,show"]
+    assert complete(capsys, "canopy review ") == [
+        "plain,discard",
+        "plain,draft",
+        "plain,edit",
+        "plain,publish",
+        "plain,show",
+    ]
     assert complete(capsys, "canopy ticket ") == []
 
 
