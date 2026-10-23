@@ -249,6 +249,20 @@ def test_the_worker_is_the_private_one_and_its_prompt_carries_the_text(inline: C
     assert TEXT in prompt
     assert f"Push only to `{BRANCH}`" in prompt
     assert worker["env"]["CANOPY_RUN_ID"] == f"task-{started.run_id}"
+    assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>`" in prompt
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_the_commit_trailer_names_the_private_workers_chosen_model(canopy_env: CanopyEnv, agent_log: Path) -> None:
+    """A task's run is the private worker's, on the model `runtime.models.worker` chooses (DESIGN §13)."""
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"worker": "provider/model-a"}}})
+    ctx = inline_context(canopy_env)
+    submit()
+    [started] = start(ctx)
+    with private_worker_does(result=DONE):
+        run_task(ctx, started.run_id)
+    [worker] = agent_runs(agent_log)
+    assert "`Co-authored-by: provider/model-a (canopy worker) <noreply@canopy.invalid>`" in worker["argv"][-1]
 
 
 def test_a_pushed_branch_is_recorded_with_its_head_and_the_slot_returned(
