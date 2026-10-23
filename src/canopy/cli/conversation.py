@@ -42,7 +42,7 @@ from canopy.core import (
     review_revisions,
     review_runs,
 )
-from canopy.core.vocab import PlanStatus, RunKind
+from canopy.core.vocab import DismissalReason, PlanStatus, RunKind
 from canopy.infra import logs
 from canopy.infra.text import one_line
 from canopy.loop import attention, readback
@@ -546,16 +546,30 @@ def _grant_reviews(ctx: Context, subject: Ref, *, repo: str | None, runs: int) -
 @click.argument("ref", metavar="REF")
 @click.argument("findings", metavar="FINDING...", nargs=-1, required=True)
 @click.option("--undo", is_flag=True, help="Take the dismissals back.")
+@click.option(
+    "--reason",
+    type=click.Choice([str(r) for r in DismissalReason]),
+    help="Why a review's findings are dismissed: required for a review, refused for a chore and with --undo.",
+)
 @click.pass_context
-def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *, undo: bool) -> int:
+def cmd_dismiss(
+    click_ctx: click.Context,
+    ref: str,
+    findings: tuple[str, ...],
+    *,
+    undo: bool,
+    reason: str | None,
+) -> int:
     """Dismiss a chore's open FINDINGs (`chore:NAME`, by their ids) or a review's (`review:ID`, by their numbers).
 
     A chore's finding is off the attention list until the chore stops reporting it: `canopy show chore:NAME` still
     lists it, marked dismissed, and if it comes back after a run leaves it out, it is listed again. To have the chore
     stop reporting it, write the chore a note with `canopy reply chore:NAME`.
 
-    A review's finding stays in `canopy review show ID`, marked, and is left out of what a resume hands a worker and of
-    what the overseer reads. It is one run's finding: a new commit's review starts fresh.
+    A review's finding stays in `canopy review show ID`, marked with its reason, and is left out of what a resume hands
+    a worker and of what the overseer reads. It is one run's finding: a new commit's review starts fresh. Say why with
+    --reason: `wrong`, it does not hold; `intentional`, it holds but the change means it; `not_worth_it`, it holds and
+    is not worth the fix. `canopy review noise` counts them.
 
     The findings are dismissed together or not at all: one refused leaves every other as it was.
     """
@@ -570,6 +584,7 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *
             channel=CLI,
             chores=chore_view.defined(ctx.config, ctx.workspace),
             undo=undo,
+            reason=DismissalReason(reason) if reason is not None else None,
         )
     except conversation.Refused as r:
         raise CliError(f"dismiss refused ({r.guard}): {r.reason}") from None
@@ -578,7 +593,7 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *
     for finding in named:
         log.info(
             "finding dismissal taken back" if undo else "finding dismissed",
-            extra={"subject": str(subject), "finding": finding, "channel": CLI},
+            extra={"subject": str(subject), "finding": finding, "channel": CLI, "reason": reason},
         )
     listed = ", ".join(named)
     # One finding reads as before; several take the plural.
@@ -588,7 +603,7 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *
         if undo:
             click.echo(f"{noun} {is_} no longer dismissed: a resume hands {it} to the worker again.")
         else:
-            click.echo(f"{noun} {is_} dismissed: no worker or tick acts on {it}.")
+            click.echo(f"{noun} {is_} dismissed as {reason}: no worker or tick acts on {it}.")
         return 0
     attention.write(ctx, log)
     if undo:

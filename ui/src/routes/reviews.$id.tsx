@@ -10,6 +10,7 @@ import { reviewQuery } from '@/api/queries'
 import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
+import { dismissedLabel } from '@/components/dismiss-finding'
 import { Field, Fields } from '@/components/fields'
 import { FoldPanel } from '@/components/fold-panel'
 import { PersonaField } from '@/components/persona-field'
@@ -443,7 +444,7 @@ function FindingRows({
                         >
                             {f.title}
                         </Link>
-                        {f.dismissed && <Chip>dismissed</Chip>}
+                        {f.dismissed && <Chip>{dismissedLabel(f)}</Chip>}
                     </span>
                     <span className="font-mono text-xs text-muted-foreground">
                         {f.line === null ? (f.file === null ? 'not in the diff' : 'on its file') : 'on the diff'}

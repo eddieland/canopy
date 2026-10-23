@@ -10,7 +10,7 @@ control characters dropped, as every page's does, and the diff within `review_di
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -24,12 +24,13 @@ from canopy.core import (
     review_runs,
 )
 from canopy.core import review_result as result
-from canopy.core.vocab import ReviewRunStatus, SeenKind
+from canopy.core.vocab import DismissalReason, ReviewRunStatus, SeenKind
 from canopy.serve import review_draft_views
 from canopy.serve.schema.review import (
     DiffFile,
     DiffHunk,
     DiffLine,
+    DismissalReasonName,
     FindingSeverity,
     RequestedReview,
     ReviewDetail,
@@ -105,7 +106,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         summary=lines(stored.summary) or None if stored is not None else None,
         note=lines(note) or None if isinstance(note, str) else None,
         base_branch=row.base_branch or None,
-        findings=[_finding(f, found, i in dismissed) for i, f in enumerate(stored.findings, 1)]
+        findings=[_finding(f, found, i, dismissed) for i, f in enumerate(stored.findings, 1)]
         if stored is not None
         else [],
         diff=diff,
@@ -232,8 +233,14 @@ def _worst(findings: Iterable[result.Finding]) -> FindingSeverity | None:
     return next((s for s in _SEVERITIES if s in found), None)
 
 
-def _finding(f: result.Finding, diff: review_diff.Diff | None, dismissed: bool) -> ReviewFinding:  # noqa: FBT001
+def _finding(
+    f: result.Finding,
+    diff: review_diff.Diff | None,
+    number: int,
+    dismissed: Mapping[int, DismissalReason | None],
+) -> ReviewFinding:
     file, line = review_diff.anchor(diff, f.location) if diff is not None else (None, None)
+    reason = dismissed.get(number)
     return ReviewFinding(
         severity=f.severity,
         title=lines(f.title),
@@ -241,7 +248,8 @@ def _finding(f: result.Finding, diff: review_diff.Diff | None, dismissed: bool) 
         detail=lines(f.detail),
         file=file,
         line=line,
-        dismissed=dismissed,
+        dismissed=number in dismissed,
+        dismissed_reason=cast("DismissalReasonName", reason.value) if reason is not None else None,
     )
 
 

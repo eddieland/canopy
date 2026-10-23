@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Annotated
 from fastapi import APIRouter, HTTPException, Path, Request, Response
 
 from canopy.core import chore_view, conversation, review_drafts, review_drafts_manage, review_runs
+from canopy.core.vocab import DismissalReason
 from canopy.infra import logs
 from canopy.serve import review_draft_views, reviews
 from canopy.serve.api.deps import BackendDep
@@ -130,21 +131,29 @@ def review_output(run_id: ReviewId, backend: BackendDep) -> RawOutput:
     responses=REFUSED,
 )
 def dismiss(run_id: ReviewId, body: ReviewDismissRequest, backend: BackendDep) -> ReviewDismissed:
-    """`canopy dismiss review:ID N`: no worker or tick acts on the finding. With `undo`, `--undo` (DESIGN §21)."""
+    """`canopy dismiss review:ID N --reason R`: no worker or tick acts on the finding. With `undo`, `--undo` (§21)."""
     ref = conversation.Ref(conversation.REVIEW, str(run_id))
     with backend.open() as ctx:
         try:
             defined = chore_view.defined(ctx.config, ctx.workspace)
-            conversation.dismiss(ctx.conn, ref, [str(body.finding)], channel=WEB, chores=defined, undo=body.undo)
+            conversation.dismiss(
+                ctx.conn,
+                ref,
+                [str(body.finding)],
+                channel=WEB,
+                chores=defined,
+                undo=body.undo,
+                reason=DismissalReason(body.reason) if body.reason is not None else None,
+            )
         except conversation.Refused as r:
             raise RefusedError(r) from None
         # A requested review's draft emptied of all it would post waits on nobody (DESIGN §34).
         backend.write_attention(ctx)
     _log.info(
         "finding dismissal taken back" if body.undo else "finding dismissed",
-        extra={"subject": str(ref), "finding": body.finding, "channel": WEB},
+        extra={"subject": str(ref), "finding": body.finding, "channel": WEB, "reason": body.reason},
     )
-    return ReviewDismissed(run=run_id, finding=body.finding, dismissed=not body.undo)
+    return ReviewDismissed(run=run_id, finding=body.finding, dismissed=not body.undo, reason=body.reason)
 
 
 @router.post(

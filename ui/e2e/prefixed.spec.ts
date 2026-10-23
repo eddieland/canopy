@@ -367,12 +367,16 @@ test('an oversized notice, sent with Enter as a reply is, is refused, naming its
     await expect(page.getByTestId('worker-notice')).toHaveCount(0)
 })
 
-test("a review's finding is dismissed on its card, and kept again", async ({ page }) => {
+test("a review's finding is dismissed on its card for a reason, and kept again", async ({ page }) => {
     await page.goto('reviews/4')
     const card = page.locator('#finding-2')
     await card.getByTestId('dismiss-finding-2').click()
-    await expect(card.getByRole('status')).toHaveText('review:4 finding 2 is dismissed: no worker or tick acts on it.')
+    await page.getByRole('menuitem', { name: /^intentional/u }).click()
+    await expect(card.getByRole('status')).toHaveText(
+        'review:4 finding 2 is dismissed as intentional: no worker or tick acts on it.',
+    )
     await expect(card).toHaveAttribute('data-dismissed', 'true')
+    await expect(card).toContainText('dismissed: intentional')
     await card.getByTestId('undismiss-finding-2').click()
     await expect(card).not.toHaveAttribute('data-dismissed', 'true')
     await expect(card.getByTestId('dismiss-finding-2')).toBeVisible()
@@ -468,6 +472,7 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
     await expect(first).toContainText('Raise once the attempts run out.')
     const second = points.filter({ hasText: 'is never read' })
     await second.getByRole('button', { name: 'leave out' }).click()
+    await page.getByRole('menuitem', { name: /^not worth it/u }).click()
     await expect(second).toContainText('left out')
     // Finding 3 went with the body the operator replaced, which held it: left out, not dismissed.
     await expect(draft.getByTestId('draft-left-out')).toHaveText(

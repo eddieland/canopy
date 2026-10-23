@@ -190,6 +190,7 @@ def test_completion_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixt
         "plain,discard",
         "plain,draft",
         "plain,edit",
+        "plain,noise",
         "plain,publish",
         "plain,show",
     ]

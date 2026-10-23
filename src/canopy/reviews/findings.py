@@ -14,9 +14,10 @@ from canopy.infra.text import printable, quoted
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Sequence
+    from collections.abc import Mapping, Sequence
 
     from canopy.core import records
+    from canopy.core.vocab import DismissalReason
 
 
 class Unusable(Exception):  # noqa: N818  (the dispatch records it as a refusal)
@@ -164,7 +165,7 @@ def _beside(conn: sqlite3.Connection, run: records.ReviewRun) -> list[records.Re
 def _found_by(
     run: records.ReviewRun,
     stored: result.ReviewResult,
-    dismissed: Collection[int],
+    dismissed: Mapping[int, DismissalReason | None],
     *,
     named: bool,
 ) -> list[str]:
@@ -179,14 +180,20 @@ def _found_by(
     ]
 
 
-def _findings(stored: result.ReviewResult, dismissed: Collection[int], *, keep_dismissed: bool) -> list[str]:
+def _findings(
+    stored: result.ReviewResult,
+    dismissed: Mapping[int, DismissalReason | None],
+    *,
+    keep_dismissed: bool,
+) -> list[str]:
     # Every string here is the reviewer's, which read hostile text: printable, so it cannot move a terminal's cursor.
     lines: list[str] = []
     for i, f in enumerate(stored.findings, 1):
         if i in dismissed and not keep_dismissed:
             continue
         where = f" `{printable(f.location)}`" if f.location else ""
-        mark = " (dismissed)" if i in dismissed else ""
+        reason = dismissed.get(i)
+        mark = f" (dismissed: {reason})" if reason is not None else " (dismissed)" if i in dismissed else ""
         lines.append(f"{i}. **{f.severity}**{where}: {printable(f.title)}{mark}")
         lines.extend(f"   > {line}" for line in printable(f.detail).splitlines())
     return lines

@@ -23,6 +23,13 @@ type FindingSeverity = Annotated[
     Literal["blocking", "major", "minor"],
     Field(description="How much a review finding matters (DESIGN §21)."),
 ]
+type DismissalReasonName = Annotated[
+    Literal["wrong", "intentional", "not_worth_it"],
+    Field(
+        description="Why the operator dismissed a review's finding (DESIGN §21): `wrong`, it does not hold; "
+        "`intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix.",
+    ),
+]
 type ReviewDraftStatusName = Annotated[
     Literal["waiting", "publishing", "unconfirmed", "staged", "published", "discarded"],
     Field(
@@ -120,6 +127,8 @@ class ReviewFinding(Model):
     """The line it is on, on the new side; None when the diff does not show it."""
     dismissed: bool = False
     """Whether the operator dismissed it: no worker or tick acts on it (DESIGN §21)."""
+    dismissed_reason: DismissalReasonName | None = None
+    """Why they dismissed it; None when it is not dismissed, or was before canopy asked why."""
 
 
 class DiffLine(Model):
@@ -519,6 +528,8 @@ class ReviewDismissRequest(Model):
     """The finding's number in the review, from 1."""
     undo: bool = False
     """Take the dismissal back, as `--undo` does."""
+    reason: DismissalReasonName | None = None
+    """Why it is dismissed, as `--reason` says: required to dismiss, refused with `undo`."""
 
 
 class ReviewDismissed(Model):
@@ -530,6 +541,8 @@ class ReviewDismissed(Model):
     """The finding's number in the review, from 1."""
     dismissed: bool
     """Whether it is now dismissed: false after an `undo`."""
+    reason: DismissalReasonName | None = None
+    """Why it is dismissed; None after an `undo`."""
 
 
 class SeenRequest(Model):

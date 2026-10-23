@@ -327,8 +327,10 @@ Reviews are read from the journal only, apart from worker runs; a review's text 
 ### Dismissing and sending findings
 
 A dismissed finding stays listed but leaves what a `resume` hands the worker. A review whose findings are all dismissed
-moves on as a clean one. Sending findings is the operator's go-ahead on an `own` review's findings while its ticket has
-the PR: an operator message on the ticket names them by number, never quoting them, since the reviewer's text is data
+moves on as a clean one. A dismissal says why: `wrong`, `intentional`, or `not_worth_it`, so the operator's dismissals
+measure the reviewer's noise by severity, persona, and model, which is what would justify a verifier's spend. Sending
+findings is the operator's go-ahead on an `own` review's findings while its ticket has the PR: an operator message on
+the ticket names them by number, never quoting them, since the reviewer's text is data
 (T1) and the message an instruction. The next tick dispatches a `resume` with them (§7, D089), whether or not
 `canopy:review` is trusted. A dismissed finding, or one on a PR not the loop's own, cannot be sent. Both are refused
 inside a run, so no agent can hold a finding back from a worker or start work in the operator's name.

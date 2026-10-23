@@ -924,6 +924,9 @@ def test_a_dismissed_finding_is_off_the_attention_list_until_the_chore_stops_rep
         assert f"dismiss refused ({guard})" in capsys.readouterr().err
     assert main(["dismiss", "chore:build-health", FINDING["id"], "--undo"]) == 1
     assert "has no dismissed finding" in capsys.readouterr().err
+    # A reason is a review's: a chore's finding takes none.
+    assert main(["dismiss", "chore:build-health", FINDING["id"], "--reason", "wrong"]) == 1
+    assert "dismiss refused (bad_reason)" in capsys.readouterr().err
     # Several are dismissed together or not at all.
     assert main(["dismiss", "chore:build-health", FINDING["id"], "stuck/pr-7"]) == 1
     assert "dismiss refused (unknown)" in capsys.readouterr().err

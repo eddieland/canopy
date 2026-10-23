@@ -1,4 +1,4 @@
-"""`canopy review`: `run`, `wait`, `end`, and `revise` for the overseer; `show`, and a review's draft, for you.
+"""`canopy review`: `run`, `wait`, `end`, and `revise` for the overseer; `show`, `noise`, and drafts, for you.
 
 The detached `_review` does one review run (DESIGN §21), or one revision of a review's draft (§34). A review of a PR
 the loop does not own is a draft of a review on that PR (§34): `draft` shows it as it would post, `edit` changes it,
@@ -11,8 +11,9 @@ inside canopy's own ticks and runs; `canopy reply review:ID` notes what a revisi
 from __future__ import annotations
 
 import contextlib
+import json
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
@@ -34,7 +35,7 @@ from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
 from canopy.loop import review_tools
-from canopy.reviews import execute, findings, view
+from canopy.reviews import execute, findings, noise, view
 
 if TYPE_CHECKING:
     import sqlite3
@@ -132,6 +133,29 @@ def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
         return 0
     lines = findings.listed(ctx.conn, db.format_time(datetime.now(UTC) - view.RECENT))
     click.echo("\n".join(lines) if lines else "no reviews in the last 14 days")
+    return 0
+
+
+@review_group.command("noise")
+@click.option(
+    "--days",
+    type=click.IntRange(min=1, max=3650),
+    default=90,
+    show_default=True,
+    metavar="N",
+    help="How many days of reviews to count.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Print the tallies as one JSON object instead.")
+@click.pass_context
+def cmd_review_noise(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
+    """Count the last days' review findings by severity, persona, and model, and why you dismissed each.
+
+    A finding dismissed `wrong` is the reviewer's noise; `intentional` and `not_worth_it` held and were left. The
+    `wrong` rate is the share of a group's findings dismissed so. A finding not dismissed is not counted as fixed.
+    """
+    ctx = open_context(click_ctx)
+    found = noise.tally(ctx.conn, db.format_time(datetime.now(UTC) - timedelta(days=days)))
+    click.echo(json.dumps(found.as_json(), indent=2) if as_json else "\n".join(noise.lines(found)))
     return 0
 
 

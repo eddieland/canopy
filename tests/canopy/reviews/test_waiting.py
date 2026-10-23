@@ -78,7 +78,7 @@ def test_a_post_of_unknown_outcome_waits_until_a_read_says_nothing_posted_and_th
 
 def test_a_draft_emptied_of_all_it_would_post_waits_on_nobody(scenario: Scenario, requested: int) -> None:
     run = str(requested)
-    scenario.operator("dismiss", f"review:{requested}", "1", "2")
+    scenario.operator("dismiss", f"review:{requested}", "1", "2", "--reason", "wrong")
     assert waiting.items(scenario.conn) == []
     scenario.operator("review", "edit", run, "--body", "--text", "One thing.")
     assert [i.reason for i in waiting.items(scenario.conn)] == [waiting.WAITING_REASON]
