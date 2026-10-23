@@ -1,8 +1,9 @@
 """The directory agent runs load canopy's agent definitions and skills from (DESIGN §13, D040).
 
-canopy snapshots its bundled agents, skills, and plugins into `<state_dir>/runtime/<digest>/`, named for a digest of
-their contents. A snapshot is written to a temporary directory and renamed into place, so a run never sees a partial
-one. Command templates name it with `{definitions_dir}`, and the runtime reads it as its config directory.
+canopy snapshots its bundled agents, skills, and plugins, with the git hooks that put its trailers on a worker's
+commits (`commit_hooks`), into `<state_dir>/runtime/<digest>/`, named for a digest of their contents. A snapshot is
+written to a temporary directory and renamed into place, so a run never sees a partial one. Command templates name it
+with `{definitions_dir}`, and the runtime reads it as its config directory.
 
 A snapshot is unwritable once written, by the operator too, and gets its write permission back only to be removed: the
 runtime installs a package for its plugins into each config directory it can write, and waits on the registry for it
@@ -27,7 +28,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import agent_models, bash_allows, prompts, replies
+from canopy.core import agent_models, bash_allows, commit_hooks, prompts, replies
 from canopy.core.config import NO_TEMPERATURE
 from canopy.core.vocab import ReplyMode, RunKind
 from canopy.infra import logs
@@ -54,14 +55,16 @@ def sources(config: Config | None = None, models: Mapping[str, Model] | None = N
     """Return the snapshot's files by relative path.
 
     They are the bundled agents and skills, with the workers', the reviewer's, and the overseer's definitions rendered
-    from `config` when it is given. `models`, each agent's model by its name, takes the place of `runtime.models`'
-    (`rules`).
+    from `config` when it is given, and canopy's git hooks. `models`, each agent's model by its name, takes the place
+    of `runtime.models`' (`rules`).
 
     Raises:
         DefinitionsError: The overseer's prompt cannot be rendered, or a shipped definition cannot be rendered.
     """
     found = runtime_definitions.bundled()
-    return found if config is None else runtime_definitions.render(found, rules(config, models))
+    rendered = found if config is None else runtime_definitions.render(found, rules(config, models))
+    # The runtime reads none of them: they are here so that every run, a sandboxed one too, can read them (§24).
+    return rendered | commit_hooks.files()
 
 
 def rules(config: Config, models: Mapping[str, Model] | None = None) -> agents.Rules:
@@ -149,6 +152,8 @@ def ensure(state_dir: Path, config: Config | None = None, models: Mapping[str, M
             path = tmp / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
+            if commit_hooks.is_hook(rel):
+                path.chmod(0o700)
         # Before the rename, so no run ever loads it writable. Renamed within its parent, it needs no write of its own.
         _set_writable(tmp, writable=False)
         os.rename(tmp, final)  # noqa: PTH104  (os.rename, unlike Path.replace, never replaces a non-empty directory)

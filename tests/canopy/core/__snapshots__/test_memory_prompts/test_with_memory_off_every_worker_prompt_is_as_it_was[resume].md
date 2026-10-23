@@ -68,7 +68,7 @@ Comment on each PR whose checks you fixed, describing the fix.
   `cd app && cd ../lib` is refused as leaving it: `cd` by a path from /pool/1/repo, or set the command's working directory.
 - Never quote, paraphrase, or mention the operator's messages or notice, or earlier runs' reports (which may repeat
   what the operator said), on the ticket, a PR, or in a commit message: they reach nobody else.
-- Commit your work. Keep the agent runtime's attribution trailer on commits, or add `Co-authored-by: canopy worker <noreply@canopy.invalid>`. Never disguise agent work as human work.
+- Commit your work. git adds `Co-authored-by: canopy worker <noreply@canopy.invalid>` to each commit; keep it, and the agent runtime's attribution trailer if it adds one. Never disguise agent work as human work.
 - Push only to `agent/PROJ-1-work`, with `git push origin HEAD:refs/heads/agent/PROJ-1-work` in each repository you changed.
   Commit on the detached HEAD as it is: create no local branch.
 - Never approve, merge, or close PRs, and never transition the ticket, even indirectly: refer to it by key only, with
