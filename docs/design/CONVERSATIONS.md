@@ -8,10 +8,10 @@ notifications, and reviews](CHORES_NOTIFICATIONS_REVIEWS.md). Next: [Flaky CI](F
 
 The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied,
 and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
-Slack later. Each proves the operator its own way: the tracker by `trust.authorized_repliers`, read by agents; the
-CLI by the operator's shell (T1); the web UI by the listener secret (TRUST_MODEL T8); Slack by user ids the operator
-lists. Outbound, every channel uses §20's events. The overseer and workers never see which channel a message came
-from, so adding one changes no prompt.
+Slack. Each proves the operator its own way: the tracker by `trust.authorized_repliers`, read by agents; the CLI by
+the operator's shell (T1); the web UI by the listener secret (TRUST_MODEL T8); Slack by the user ids a `slack` source
+lists, checked in code, for replies in the sink's ticket threads alone (§20). Outbound, every channel uses §20's
+events. The overseer and workers never see which channel a message came from, so adding one changes no prompt.
 
 A ticket is **public** when one of `tracker.labels` authorizes it, and **private** when the operator starts it in
 canopy, or, with `tracker.private` set, when its label brings it in (below). A started ticket is private whatever labels
@@ -141,6 +141,5 @@ within bounds and trust only stricter (D128).
 
 - Whether a private worker should have no tracker MCP server at all, and where it would read the ticket's text.
 - Deleting a ticket's conversation, for client data the operator must not keep. `forget` keeps it.
-- Slack replies, through a bridge or the overseer's MCP (§20). Either needs a T1 change naming Slack user ids.
 - Seen marks beyond reviews: a plan waiting on the operator (§25), each new plan its own subject, then a chore's
   findings and a run's drafts, each counted where the operator reads it.

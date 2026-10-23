@@ -23,15 +23,17 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 
-def run(ctx: Context, log: logs.TickAdapter) -> Mapping[str, observe.Observed] | None:
+def run(ctx: Context, log: logs.TickAdapter, *, dry_run: bool = False) -> Mapping[str, observe.Observed] | None:
     """Run the connectors once outside a tick, and check the drafts the `vcs` run read whole.
+
+    In a dry run's loop, a `slack` source records no operator message (D036).
 
     Returns:
         How each source's run ended, by its name; None when a tick held the lock, so this poll is skipped.
     """
     try:
         with lock.hold(ctx.lock_path):
-            ran = connectors.run(ctx, None, log)
+            ran = connectors.run(ctx, None, log, dry_run=dry_run)
             drafted.reconcile(ctx, ran.read, log)
     except lock.LockBusyError:
         log.info("poll skipped: a tick holds the lock")

@@ -279,6 +279,15 @@ cmd = ""
 # [connect.sources.artifacts]
 # kind = "artifacts"
 # cmd = "canopy-artifacts feed --store /path/to/your/store --namespace canopy/operator"
+#
+# And, with the Slack sink on a bot token and --threads, a source that reads the replies in its ticket threads (ROADMAP
+# M64). A reply from an id in `operators` is your message on the ticket, as `canopy reply` records one: list only your
+# own Slack member id. The bot also needs channels:history (groups:history for a private channel). --channel is the
+# sink's own, by id.
+# [connect.sources.slack]
+# kind = "slack"
+# cmd = "canopy-connect-slack --channel C0123ABCD"
+# operators = ["U0123ABCD"]
 
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
 # what each kind holds and what a pass would remove. A live tick removes the files and the journal's rows once a day,

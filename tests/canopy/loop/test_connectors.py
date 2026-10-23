@@ -19,8 +19,9 @@ from canopy.core.vocab import (
     SourceKind,
     TicketState,
 )
-from canopy.loop import connectors
-from tests.canopy.helpers import reads, waits
+from canopy.infra import logs
+from canopy.loop import connectors, poll
+from tests.canopy.helpers import context, reads, waits
 from tests.canopy.observation_helpers import artifact_change
 
 if TYPE_CHECKING:
@@ -39,6 +40,9 @@ SOURCES = {
 }
 #: An artifact store's comment feed, the fake connector playing it as `louvre`.
 ARTIFACTS = {"kind": "artifacts", "cmd": "connector louvre", "timeout_minutes": 1}
+#: The Slack sink's ticket threads, the fake connector playing their reader as `slack`, one operator listed.
+OPERATOR = "U0OPERATOR"
+SLACK = {"kind": "slack", "cmd": "connector slack", "timeout_minutes": 1, "operators": [OPERATOR]}
 
 
 def ticket(key: str, title: str = "Fix the build", **more: object) -> dict[str, object]:
@@ -378,6 +382,60 @@ def test_an_artifacts_source_read_short_raises_connector_failed_and_reads_the_ch
     scenario.tick(*waits(*KEYS))
     assert asked(watched)[-1]["request"] == {"since": 1}
     assert scenario.attention() == []
+
+
+def slack_reply(ts: str, body: str, *, user: str = OPERATOR) -> dict[str, object]:
+    """A `reply` line on PROJ-1, as `canopy-connect-slack` prints one."""
+    return {"kind": "reply", "ticket": "PROJ-1", "thread": "1790.000001", "ts": ts, "user": user, "body": body}
+
+
+def operator_replies(scenario: Scenario) -> list[tuple[str, str]]:
+    """Each operator message to PROJ-1, as its channel and body, oldest first."""
+    query = "SELECT channel, body FROM messages WHERE source = 'operator' AND subject_id = 'PROJ-1' ORDER BY id"
+    return [(str(r[0]), str(r[1])) for r in scenario.conn.execute(query)]
+
+
+def test_a_slack_source_records_a_listed_operators_reply_in_a_live_tick_and_a_poll(
+    scenario: Scenario,
+    watched: Path,
+) -> None:
+    scenario.configures("private", connect={"sources": {"slack": SLACK}})
+    first = {"lines": [slack_reply("1790.000005", "Use the staging config.")], "end": {"tickets": ["PROJ-1"]}}
+    plays(watched, slack=first)
+    # A dry tick runs the source, and records no message (D036).
+    assert scenario.tick(*waits(*KEYS), dry_run=True).tick.status == "ok"
+    assert operator_replies(scenario) == []
+    ticked = scenario.tick(*waits(*KEYS))
+    assert [r["name"] for r in asked(watched)][-1] == "slack"
+    # Asked for the operator's replies alone: nobody else's words reach canopy.
+    assert asked(watched)[-1]["request"] == {"repo": str(scenario.env.root), "operators": [OPERATOR]}
+    slack = runs(scenario)[-1]
+    assert (slack.source, slack.kind, slack.status, slack.tick_id) == (
+        "slack",
+        SourceKind.SLACK,
+        ConnectorRunStatus.OK,
+        ticked.tick.id,
+    )
+    assert json.loads(slack.recorded) == {"reply": 1}
+    assert operator_replies(scenario) == [("slack", "Use the staging config.")]
+    assert "  slack  slack  last ran" in scenario.operator("status").out
+
+    # Between ticks, the loop's poll reads it too: a reply it records is an operator message, which ends the wait (§6).
+    later = [slack_reply("1790.000005", "Use the staging config."), slack_reply("1790.000009", "And add a test.")]
+    plays(watched, slack={"lines": later, "end": {"tickets": ["PROJ-1"]}})
+    polled = poll.run(context(scenario.env), logs.for_tick(None))
+    assert polled is not None
+    assert polled["slack"].recorded == {"already": 1, "reply": 1}
+    assert operator_replies(scenario)[-1] == ("slack", "And add a test.")
+
+
+def test_a_slack_source_read_short_raises_connector_failed(scenario: Scenario, watched: Path) -> None:
+    scenario.configures("private", connect={"sources": {"slack": SLACK}})
+    plays(watched, slack={"end": {"tickets": ["PROJ-1"], "unread": ["PROJ-2"]}})
+    ticked = scenario.tick(*waits(*KEYS))
+    [failed] = connector_runs.failures(scenario.conn, ticked.tick.id)
+    assert failed.detail == "slack (slack) partial: did not read the Slack threads of PROJ-2"
+    assert (None, connector_runs.FAILED_REASON) in scenario.attention()
 
 
 def test_a_clone_url_reaches_a_connector_without_its_credentials() -> None:

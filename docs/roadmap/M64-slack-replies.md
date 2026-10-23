@@ -10,7 +10,8 @@ stages, in order, each in its own PRs.
 - **Stage 1, reading threads.** `canopy-connect-slack`, a second command in the `canopy-notify-slack` member,
   importing nothing from canopy, on click (D025). It reads the sink's bot token file, held to the sink's checks, and
   its threads file, and calls `conversations.replies` for each ticket's threads of the last `--days` (3, at most 7).
-  It prints a `reply` line for each message a person wrote, whoever they are: the thread's ticket key, the Slack user
+  It prints a `reply` line for each message one of the ids canopy asks for wrote (stage 2: the source's `operators`,
+  and it refuses to run without one), nobody else's: the thread's ticket key, the Slack user
   id, the message's `ts`, and its text with Slack's escaping undone, whole, since canopy refuses an overlong reply
   (4000 characters, `conversation.MAX_OPERATOR`) rather than cut it; then §30's `end` line, naming the tickets whose
   threads were each read whole. It skips a thread's first post and any message with no user, a `bot_id`, or a
@@ -23,7 +24,7 @@ stages, in order, each in its own PRs.
   settles how many threads one run reads; the number goes in `docs/MEASUREMENTS.md` if a limit bounds it.
 - **Stage 2, replies in the conversation.** A `slack` source kind, at most one, with `operators`, the Slack user ids
   whose replies are the operator's (private, T7). The tick and the loop's polls run it as they run the others; on stdin
-  it gets the tickets canopy knows and the repository the sink scopes its threads by. Each `reply` line from a listed
+  it gets the repository the sink files its threads under. Each `reply` line from a listed
   id, on a ticket canopy knows, is recorded by `conversation.reply` with `channel="slack"` and the message's `ts` as
   its submission id, so a message read again on the next poll records nothing new. Any other line is skipped and
   counted in the source's run, never recorded, not even as data. A reply ends the loop's wait as any operator message
@@ -58,4 +59,7 @@ the reply as its instruction, recorded in the journal with the channel `slack`; 
 records nothing; a reply in the previous day's thread reaches its ticket.
 
 Status: in progress. Stage 1 is built (2026-10-23): `canopy-connect-slack` prints the replies people wrote in the
-sink's ticket threads, and the sink keeps a week of each ticket's threads. Nothing runs it yet; stage 2 is next.
+sink's ticket threads, and the sink keeps a week of each ticket's threads. Stage 2 is built (2026-10-23): the `slack`
+source kind and its `operators`, a listed id's reply recorded as the operator's message on the channel `slack`, on the
+tick's and the poll's runs alike, none in a dry run; a thread Slack no longer has reads as one with no replies. The
+live check in Accept is next.

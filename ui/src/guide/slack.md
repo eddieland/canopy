@@ -177,10 +177,50 @@ events = ["attention", "loop", "runs", "reviews"]
 ```
 
 The sink remembers its threads in `~/.local/state/canopy/slack-threads.json` (under `$XDG_STATE_HOME`, if you set it),
-kept apart by channel and workspace, and forgets each thread once its day is over. canopy's journal knows nothing of
-them. Delete the file and the worst that happens is a fresh thread for each ticket. If Slack refuses a post halfway
-through a delivery, canopy sends the delivery again next tick, and the sink posts only what it hadn't, so nobody reads
-the same run ending twice.
+kept apart by channel and workspace. It posts only in today's, and keeps the rest for a week so a
+[reply](#replying-from-slack) in yesterday's still reaches the ticket. canopy's journal knows nothing of them. Delete
+the file and the worst that happens is a fresh thread for each ticket, and replies in the old ones going unread. If
+Slack refuses a post halfway through a delivery, canopy sends the delivery again next tick, and the sink posts only
+what it hadn't, so nobody reads the same run ending twice.
+
+## Replying from Slack
+
+With threads on, you can answer a ticket where you read about it: reply in its thread, and canopy takes it as if you'd
+typed `canopy reply` with the same words. It answers the worker's waiting question, wakes the loop, and the next tick
+sends a worker off with your reply as its instruction. On the ticket's page it reads `reply via slack`.
+
+There's no server for Slack to call. A connector, `canopy-connect-slack`, installed beside the sink, reads the threads
+on each of the loop's polls, every `connect.every_minutes`, two by default: an outbound call, the same kind the sink
+makes to post. So a reply lands within a couple of minutes, not instantly, and only while `canopy loop` runs.
+
+1. Give the bot one more scope under **OAuth & Permissions**: `channels:history` for a public channel, or
+   `groups:history` for a private one. Reinstall the app when Slack asks. The token file stays as it is.
+2. Find your own Slack member id: your profile, the three dots, **Copy member ID**. It looks like `U0123ABCD`.
+3. Add a `slack` source to your config, its `--channel` exactly the sink's, and list yourself in `operators`.
+4. **Reload**.
+
+```toml
+[connect.sources.slack]
+kind = "slack"
+cmd = "canopy-connect-slack --channel C0123ABCD"
+operators = ["U0123ABCD"]
+```
+
+`operators` is the whole guard, and it's checked twice. canopy asks the connector for those ids' replies alone, so
+a coworker's never even reaches canopy, and then checks every reply's id again itself, in code, so a connector that
+prints more can't widen it. A bot's reply never counts either, even one posting under your name.
+List only yourself. Whoever signs in as a listed account answers your workers as you, and "my laptop was unlocked" is a
+story best told about somebody else's loop.
+
+It reads replies in tickets' threads from the last three days (`--days`, up to seven), and only on tickets canopy
+already knows. A post in the channel itself, a reply in a review's thread, and anything about plans, starts, or
+grants stay in canopy: approve a plan on [its page](plans), not with a thumbs-up. Each Slack message counts once, so the
+connector rereading a thread every poll records nothing twice, and an edit after canopy read it changes nothing; reply
+again instead. A reply over 4,000 characters is refused, as `canopy reply` refuses one, and the loop's log says so. A
+dry run reads the threads and records nothing.
+
+Give the sink its channel by id, not by name, for this: the sink files its threads under whatever `--channel` says,
+and Slack's API reads only an id, so a sink set up with `#canopy` leaves the connector reading nothing at all.
 
 ## Links back here
 
@@ -202,13 +242,8 @@ only at a channel whose readers may read all of that, and keep the secret file y
 
 None of it can do anything in Slack. The sink escapes every piece of journal text, so an `@channel`, a mention, or a
 link dressed up as another can't get through, even if a ticket's title tries. A URL in the text stays a plain link that
-shows itself. And the people in the channel can see what the loop does but can't steer it: nothing anyone writes in
-Slack reaches canopy.
-
-That includes you. Replying to a worker's question in Slack does nothing; answer it on the ticket, where an
-[authorized reply](attention#replying) resumes the worker, or from its page here. Slack is the pager; the ticket is the
-conversation. A two-way Slack, where a reply in a thread reaches the worker, isn't built: it needs Slack's own servers
-to reach your machine, and canopy opens no door for that.
+shows itself. And the people in the channel can see what the loop does but can't steer it: nothing they write in
+Slack reaches canopy, unless you list them as [operators](#replying-from-slack), which you shouldn't.
 
 ## Checking it works
 
@@ -261,7 +296,13 @@ takes `loop` events. A Slack sink can't tell you Slack is down, so give it a sec
   every tick by a minute, so fix it or take it out of the config.
 - Messages arrive with no `open` links: the loop isn't serving the UI, or `serve.url` points somewhere the link
   can't go.
-- **A ticket has a new thread today**: that's the design, not a bug. Yesterday's is still there.
+- **A ticket has a new thread today**: that's the design, not a bug. Yesterday's is still there, and a reply in it
+  still counts.
+- `connector_failed` naming the `slack` source, with `missing_scope`: add `channels:history` or `groups:history` and
+  reinstall the app. With `not_in_channel` or `channel_not_found`, its `--channel` isn't the sink's.
+- A reply in a thread that never shows on the ticket: check that the id in `operators` is yours, that you replied in
+  the thread rather than the channel, and that the ticket's thread is under a week old. `canopy status` shows the
+  `slack` source's last run.
 
 The sink exits 0 when Slack took the post, 1 when Slack refused it or couldn't be reached, and 2 when its command
 line, its secret file, the channel, the threads file, or the message it was given isn't usable. canopy treats anything

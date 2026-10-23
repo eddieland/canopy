@@ -1133,7 +1133,15 @@ GITHUB_POSTER = "canopy-post-github"
 # The name canopy's own `vcs` source goes by when none is configured, in `connector_runs` and `canopy status`.
 DEFAULT_SOURCE = "github"
 #: The order a tick runs the sources in, by kind: the `vcs` run is also the reconcile read of the drafts (DESIGN §29).
-_SOURCE_ORDER = ("tracker", "vcs", "artifacts")
+_SOURCE_ORDER = ("tracker", "vcs", "artifacts", "slack")
+#: A person's Slack user id, as a `slack` source's `operators` names one: `U...`, or `W...` on an Enterprise Grid.
+SLACK_USER_RE = re.compile(r"[UW][A-Z0-9]{2,30}")
+
+
+def _slack_user(value: str) -> str:
+    if not SLACK_USER_RE.fullmatch(value):
+        raise ValueError(f"{value!r} is not a Slack user id, such as U0123ABCD: copy it from the person's profile")
+    return value
 
 
 def _source_name(value: str) -> str:
@@ -1149,13 +1157,16 @@ class Source(Section):
     on stdin, so neither takes a placeholder.
     """
 
-    kind: Literal["vcs", "tracker", "artifacts"]
-    # Reads the source: for `vcs`, a PR's reviews and threads; for `artifacts`, a store's comment feed. Empty for a
-    # source canopy only posts to.
+    kind: Literal["vcs", "tracker", "artifacts", "slack"]
+    # Reads the source: for `vcs`, a PR's reviews and threads; for `artifacts`, a store's comment feed; for `slack`,
+    # the replies in the Slack sink's ticket threads. Empty for a source canopy only posts to.
     cmd: NotifyCommand = ""
     # Posts what the operator approved: for `vcs`, a PR's drafts; for `tracker`, a ticket's.
     post_cmd: NotifyCommand = ""
     timeout_minutes: Minutes = 2
+    #: For a `slack` source, the Slack user ids whose replies in the sink's ticket threads are the operator's own
+    #: messages, as `canopy reply` records one (DESIGN §22, TRUST_MODEL T1).
+    operators: tuple[Annotated[StrictStr, AfterValidator(_slack_user)], ...] = ()
 
     @model_validator(mode="after")
     def _a_command(self) -> Source:
@@ -1165,6 +1176,10 @@ class Source(Section):
             raise ValueError("a vcs source needs cmd: drafts are checked against what it reads")
         if self.kind == "artifacts" and (not notify_words(self.cmd) or notify_words(self.post_cmd)):
             raise ValueError("an artifacts source needs cmd, and takes no post_cmd: workers reply through the store")
+        if self.kind == "slack" and (not notify_words(self.cmd) or notify_words(self.post_cmd) or not self.operators):
+            raise ValueError("a slack source needs cmd and operators, and takes no post_cmd: the sink posts")
+        if self.kind != "slack" and self.operators:
+            raise ValueError("operators is a slack source's: whose replies in the sink's threads are the operator's")
         return self
 
 
@@ -1187,13 +1202,13 @@ class Connect(Section):
     def _one_per_kind(self) -> Connect:
         kinds = [source.kind for source in self.sources.values()]
         if len(kinds) != len(set(kinds)):
-            raise ValueError("at most one source of each kind, tracker, vcs, and artifacts")
+            raise ValueError("at most one source of each kind, tracker, vcs, artifacts, and slack")
         if self.max_age_minutes < self.every_minutes:
             raise ValueError("max_age_minutes must be at least every_minutes")
         return self
 
     def named(self) -> dict[str, Source]:
-        """Each source that reads, by name, in the order a tick runs them: `tracker`, `vcs`, then `artifacts` (§30).
+        """Each source that reads, by name, in the order a tick runs them: `tracker`, `vcs`, `artifacts`, `slack`.
 
         Returns:
             The sources with a `cmd`, canopy's own GitHub reader named `github` when no `vcs` source is configured.
