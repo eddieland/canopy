@@ -87,7 +87,8 @@ never recycles canopy's slots; no key puts them elsewhere (D033). The map declar
 private or user config each pool's size (D066), which a tick never grows. `canopy workspace sync` converges on both:
 it fills each pool, so setup hooks run then rather than in a run's lease; it trims idle slots, and removes a clone the
 map no longer lists, only when nothing would be lost; and it turns off git's automatic maintenance in each primary
-clone, which would prune the git directory every slot shares under other slots' runs.
+clone, which would prune the git directory every slot shares under other slots' runs. Each tick raises
+`auto_maintenance_on` for a clone whose own config does not turn it off, until a sync does.
 
 ### What a pool guarantees
 

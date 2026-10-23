@@ -22,6 +22,7 @@ from canopy.core import (
     drafts,
     feedback_plans,
     follow_ups,
+    hostgit,
     notice,
     plans,
     pools,
@@ -525,6 +526,12 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
         if not repo.cloned:
             detail = f"{repo.path} has no clone; run `canopy workspace sync` in {ctx.repo_root}"
             _harness_item(ctx, tick_id, None, "repo_missing", detail, repo=repo.name)
+        elif keys := hostgit.maintenance_left_on(ctx.runner, repo.path):
+            detail = (
+                f"git's automatic maintenance is on in {repo.path} ({', '.join(keys)} not set), and can prune what "
+                f"running slots use; run `canopy workspace sync` in {ctx.repo_root}"
+            )
+            _harness_item(ctx, tick_id, None, attention.MAINTENANCE_ON, detail, repo=repo.name)
 
 
 def _record_drafts(ctx: Context, tick_id: int) -> None:
