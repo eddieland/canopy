@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import db, feedback_plans, plans, prompts
+from canopy.core import db, feedback_plans, plans, prompts, sql
 from canopy.core.vocab import PlanStatus, RunKind
 from canopy.runs import policy
 
@@ -136,6 +136,9 @@ class Followed:
     note: str
     plan_id: int | None = None
     feedback_plan_id: int | None = None
+    #: The model canopy chose for the run that wrote the plan, which the worker's commits credit beside its own
+    #: (`prompts.planner_trailer`); None when it chose none.
+    planner_model: str | None = None
 
 
 def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection[str]) -> Followed | None:
@@ -164,13 +167,19 @@ def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection
                 message_id=feedback.approved_message_id,
                 by_planner=feedback.approved_channel == plans.PLANNER,
             )
-            return Followed(note=note, feedback_plan_id=feedback.id)
+            return Followed(note=note, feedback_plan_id=feedback.id, planner_model=_model_of(ctx, feedback.run_id))
     approved = plans.approved_of(ctx.conn, key)
     text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None
     if approved is None or text is None:
         return None
     note = prompts.plan_note(copy, plans.outline(text), by_planner=approved.approved_channel == plans.PLANNER)
-    return Followed(note=note, plan_id=approved.id)
+    return Followed(note=note, plan_id=approved.id, planner_model=_model_of(ctx, approved.run_id))
+
+
+def _model_of(ctx: Context, run_id: int) -> str | None:
+    # The model a run asked for (`runs.model`), not the ones its session says served it, which canopy reads later.
+    row = sql.execute(ctx.conn, sql.select("model").from_("runs").where("id = ?", run_id)).fetchone()
+    return None if row is None or row[0] is None else str(row[0])
 
 
 def planner_may_approve(ctx: Context, key: str, kind: str) -> bool:
