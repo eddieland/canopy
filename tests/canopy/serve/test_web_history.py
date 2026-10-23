@@ -83,9 +83,11 @@ def test_the_stream_reads_the_same_lists_over_a_long_history(backend: Backend) -
         add_history(ctx.conn, 0, 1_500)
         events = [e.root for e in live._Sent().changes(backend, ctx)]  # noqa: SLF001  (the stream's own record)
     [tickets] = [e for e in events if isinstance(e, live.TicketsUpdated)]
-    # The mock's seven, newest first, then the history's newest.
-    newest = ["ABC-101", "ABC-104", "ABC-102", "ABC-105", "ABC-099", "ABC-100", "ABC-103", "OLD-0"]
-    assert [t.key for t in tickets.tickets[:8]] == newest
+    # The mock's seven of the day, newest first, its feedback plans' seven of eight days before, then the history's
+    # newest.
+    newest = ["ABC-101", "ABC-104", "ABC-102", "ABC-105", "ABC-099", "ABC-100", "ABC-103"]
+    newest += ["ABC-136", "ABC-135", "ABC-134", "ABC-133", "ABC-132", "ABC-131", "ABC-130", "OLD-0"]
+    assert [t.key for t in tickets.tickets[: len(newest)]] == newest
     assert len(tickets.tickets) == views.TICKETS
     [runs] = [e for e in events if isinstance(e, live.RunsUpdated)]
     assert len([r for r in runs.runs if r.state != "running"]) == views.RECENT_RUNS
