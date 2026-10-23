@@ -623,7 +623,9 @@ export type paths = {
         };
         /**
          * Get the server's meta
-         * @description The server's version and UI build, whether its data is mock, its link templates, and the workspace root.
+         * @description The server's version and UI build, whether its data is mock, its link templates, and the workspace.
+         *
+         *     The workspace is its root and the names of its repositories.
          */
         get: operations["getMeta"];
         put?: never;
@@ -3719,6 +3721,11 @@ export type components = {
              * @description Whether the journal is seeded from fixtures (`python -m canopy.serve --mock`), not the operator's.
              */
             mock: boolean;
+            /**
+             * Repos
+             * @description The workspace's repositories, by name, in its file's order: the ones a task may be submitted to run in.
+             */
+            repos: string[];
             /**
              * Ticket Url
              * @description `tracker.ticket_url`: a ticket's page in the tracker, with `{key}` where its key goes; None when unset.

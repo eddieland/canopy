@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mockTaskRun, mockTasks } from '@/api/mocks'
 import type { TaskSummary } from '@/api/types'
 
-import { noReport, replyCommand, reportRun, TASK_LOOK, taskPrs, taskTitle, tasksShown } from './tasks'
+import { noReport, replyCommand, reportRun, submitRepo, TASK_LOOK, taskPrs, taskTitle, tasksShown } from './tasks'
 
 /** The ids of `tasks`, in order. */
 function ids(tasks: readonly TaskSummary[]) {
@@ -76,5 +76,26 @@ describe('TASK_LOOK', () => {
         expect(TASK_LOOK.awaiting_reply).toEqual({ state: 'blocked', word: 'waiting on you' })
         expect(TASK_LOOK.queued.state).toBe('stopped')
         expect(TASK_LOOK.crashed).toEqual({ state: 'failed', word: 'crashed' })
+    })
+})
+
+describe('submitRepo', () => {
+    const repos = ['api', 'web', 'mobile']
+
+    it('names none in a workspace of one, as the CLI leaves --repo out', () => {
+        expect(submitRepo(['api'], undefined, mockTasks)).toBeNull()
+        expect(submitRepo([], undefined, undefined)).toBeNull()
+    })
+
+    it('starts at the one repository the list is narrowed to', () => {
+        expect(submitRepo(repos, 'mobile', mockTasks)).toBe('mobile')
+    })
+
+    it("else at the newest task's, else at the workspace's first", () => {
+        expect(submitRepo(repos, undefined, [{ repo: 'web' }, { repo: 'api' }])).toBe('web')
+        expect(submitRepo(repos, 'api,web', [{ repo: 'mobile' }])).toBe('mobile')
+        expect(submitRepo(repos, undefined, [{ repo: 'gone' }])).toBe('api')
+        expect(submitRepo(repos, 'gone', [])).toBe('api')
+        expect(submitRepo(repos, undefined, undefined)).toBe('api')
     })
 })

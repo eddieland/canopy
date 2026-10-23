@@ -1,6 +1,6 @@
 import type { RunState, TaskRun, TaskStanding, TaskSummary } from '@/api/types'
 import { taskRef } from '@/lib/refs'
-import { inRepos } from '@/lib/repo-filter'
+import { inRepos, reposIn } from '@/lib/repo-filter'
 
 /** Where a task stands as the tasks list shows it: the run state it is colored as, and the word it reads. */
 export interface TaskLook {
@@ -47,6 +47,31 @@ export function taskTitle(text: string): string {
  */
 export function tasksShown(tasks: readonly TaskSummary[], repo: string | undefined): TaskSummary[] {
     return tasks.filter((task) => inRepos(task.repo, repo)).toSorted((a, b) => Number(waits(b)) - Number(waits(a)))
+}
+
+/**
+ * The repository a new task starts out to run in, in a workspace of `repos`, until the operator picks one: the one the
+ * list is narrowed to (`filter`, `?repo=`), else the one their newest task runs in (`tasks`, newest first, as the
+ * server sends them), else the workspace's first. Null in a workspace of one, where the server takes its only one, as
+ * `canopy task submit` does without `--repo`.
+ */
+export function submitRepo(
+    repos: readonly string[],
+    filter: string | undefined,
+    tasks: readonly Pick<TaskSummary, 'repo'>[] | undefined,
+): string | null {
+    if (repos.length < 2) {
+        return null
+    }
+    const narrowed = reposIn(filter).filter((repo) => repos.includes(repo))
+    const newest = tasks?.[0]?.repo
+    if (narrowed.length === 1) {
+        return narrowed[0] ?? null
+    }
+    if (newest !== undefined && repos.includes(newest)) {
+        return newest
+    }
+    return repos[0] ?? null
 }
 
 /** Whether a task waits on the operator: its latest run asked a question no reply has followed. */

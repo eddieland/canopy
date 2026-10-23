@@ -165,6 +165,7 @@ describe('RailFooter', () => {
         ticket_url: null,
         version: '0.4.0+abc123',
         workspace_root: '/w',
+        repos: ['repo'],
     }
 
     it('names the version canopy serves once it is known', async () => {
