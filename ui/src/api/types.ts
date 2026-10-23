@@ -29,6 +29,8 @@ export type TicketDetail = Schemas['TicketDetail']
 export type TicketForget = Schemas['TicketForget']
 /** What a ticket's or a PR's agent runs cost in all (DESIGN §13), and how many runs and reviews that counts. */
 export type CostTotal = Schemas['CostTotal']
+/** What one model cost over a ticket's runs, as their sessions say (DESIGN §13). */
+export type ModelCost = Schemas['ModelCost']
 /** A ticket's plans: whether it needs one, its newest as the file stands, every plan, and the operator's comments. */
 export type TicketPlans = Schemas['TicketPlans']
 /** A plan as its file stands now, read bounded and never through a link (DESIGN §25). */

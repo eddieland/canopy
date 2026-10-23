@@ -21,6 +21,8 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { costText } from '@/lib/cost-total'
+import { modelNames, runModelIds, unservedReason } from '@/lib/models'
 import { choreRunRef } from '@/lib/refs'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { rowLineFrom } from '@/lib/rows'
@@ -34,14 +36,16 @@ const WORKTREES_SHOWN = 3
 
 /**
  * Runs, one row each: state, the run's id (opening its page), the ticket, the run's kind, the ticket's title, cost,
- * when, and what it said, or while it runs, its latest tool call. `ticket` leaves out the ticket and its title, for a
- * ticket's own page; `ownPr` leaves out the PR whose page it is, among those a run pushed to.
+ * when, and what it said, or while it runs, its latest tool call, then the model that served it beside its session.
+ * `ticket` leaves out the ticket and its title, for a ticket's own page; `ownPr` leaves out the PR whose page it is,
+ * among those a run pushed to.
  */
 export function RunsTable({ runs, ticket = true, ownPr }: { runs: Run[]; ticket?: boolean; ownPr?: string }) {
+    const names = modelNames(runModelIds(runs))
     return (
         <ul className="divide-y" data-testid="runs">
             {runs.map((run) => (
-                <RunRow key={run.id} run={run} ticket={ticket} ownPr={ownPr} />
+                <RunRow key={run.id} run={run} ticket={ticket} ownPr={ownPr} names={names} />
             ))}
         </ul>
     )
@@ -53,10 +57,11 @@ export function RunsTable({ runs, ticket = true, ownPr }: { runs: Run[]; ticket?
  * under it opens the runs before it, so a ticket that asked twice, or a PR reviewed at each push, is one row.
  */
 export function SubjectRunsTable({ groups }: { groups: SubjectRuns[] }) {
+    const names = modelNames(runModelIds(groups.flatMap((g) => (g.of === 'worker' ? [g.latest, ...g.earlier] : []))))
     return (
         <ul className="divide-y" data-testid="runs">
             {groups.map((group) => (
-                <SubjectRow key={subjectKey(group)} group={group} />
+                <SubjectRow key={subjectKey(group)} group={group} names={names} />
             ))}
         </ul>
     )
@@ -77,24 +82,37 @@ function subjectKey(group: SubjectRuns): string {
     }
 }
 
-function RunRow({ run, ticket, ownPr }: { run: Run; ticket: boolean; ownPr: string | undefined }) {
+// How a list names each model its runs name (`modelNames`).
+type ModelNames = ReadonlyMap<string, string>
+
+function RunRow({
+    run,
+    ticket,
+    ownPr,
+    names,
+}: {
+    run: Run
+    ticket: boolean
+    ownPr: string | undefined
+    names: ModelNames
+}) {
     return (
         <ListRow kind={ticket ? 'run' : 'own-run'} className="group/copy" data-testid={`run-${run.id}`}>
-            <RunBody run={run} ticket={ticket} ownPr={ownPr} />
+            <RunBody run={run} ticket={ticket} ownPr={ownPr} names={names} />
         </ListRow>
     )
 }
 
-function SubjectRow({ group }: { group: SubjectRuns }) {
+function SubjectRow({ group, names }: { group: SubjectRuns; names: ModelNames }) {
     switch (group.of) {
         case 'worker': {
             return (
                 <Folding
                     testId={`run-${group.latest.id}`}
                     earlierTestId={`earlier-runs-${group.latest.ticket_key}`}
-                    head={<RunBody run={group.latest} ticket />}
+                    head={<RunBody run={group.latest} ticket names={names} />}
                     earlier={group.earlier.map((run) => (
-                        <EarlierRow key={run.id} run={run} />
+                        <EarlierRow key={run.id} run={run} names={names} />
                     ))}
                 />
             )
@@ -169,10 +187,10 @@ function Folding({
 }
 
 /**
- * One of a ticket's earlier runs, on one line in the columns of the row it sits in: its state, its id, its chips, the
- * first line of what it said where the title is, cost, and when. The rest is on the run's page.
+ * One of a ticket's earlier runs, on one line in the columns of the row it sits in: its state, its id, its chips, its
+ * model and the first line of what it said where the title is, cost, and when. The rest is on the run's page.
  */
-function EarlierRow({ run }: { run: Run }) {
+function EarlierRow({ run, names }: { run: Run; names: ModelNames }) {
     const said = run.summary?.split('\n', 1)[0] ?? ''
     return (
         <ListRow kind="run" className="p-0" data-testid={`run-${run.id}`}>
@@ -180,9 +198,12 @@ function EarlierRow({ run }: { run: Run }) {
             <RunLink id={run.id} />
             <span />
             <RunChips run={run} />
-            <Clipped text={said} className="text-sm text-muted-foreground">
-                <LinkedText text={said} />
-            </Clipped>
+            <span className="flex min-w-0 items-center gap-3">
+                <RunModel run={run} names={names} className="shrink-0 font-mono text-xs" />
+                <Clipped text={said} className="text-sm text-muted-foreground">
+                    <LinkedText text={said} />
+                </Clipped>
+            </span>
             <RunReadouts run={run} />
         </ListRow>
     )
@@ -303,7 +324,17 @@ function ChoreRunNumber({ chore, id }: { chore: string; id: number }) {
     )
 }
 
-function RunBody({ run, ticket, ownPr }: { run: Run; ticket: boolean; ownPr?: string | undefined }) {
+function RunBody({
+    run,
+    ticket,
+    ownPr,
+    names,
+}: {
+    run: Run
+    ticket: boolean
+    ownPr?: string | undefined
+    names: ModelNames
+}) {
     // What goes under the head line starts under the ticket's title, or under the run's id on its subject's page.
     const under = ticket ? 'title' : 'facts'
     // On a PR's page, the PR is its title: its rows name only the others a run pushed to.
@@ -332,12 +363,13 @@ function RunBody({ run, ticket, ownPr }: { run: Run; ticket: boolean; ownPr?: st
                     <RunDoing activity={run.activity} />
                 </RowLine>
             )}
-            {(prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
+            {(prs.length > 0 || run.worktrees.length > 0 || run.session_id || namesModel(run)) && (
                 <RowLine from={under} className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
                     {prs.map((pr) => (
                         <PullRequestLink key={pr} url={pr} />
                     ))}
                     <RunWorktrees paths={run.worktrees} />
+                    <RunModel run={run} names={names} />
                     {run.session_id && (
                         <Copyable text={run.session_id} label="session id" reveal className="text-muted-foreground">
                             <span title="its transcript is on the run's page">session {run.session_id}</span>
@@ -346,6 +378,65 @@ function RunBody({ run, ticket, ownPr }: { run: Run; ticket: boolean; ownPr?: st
                 </RowLine>
             )}
         </>
+    )
+}
+
+// Whether `RunModel` has anything to say of a run: a page that lists it without its models, and no model asked for.
+function namesModel(run: Run): boolean {
+    return run.models !== null || run.model !== null
+}
+
+/**
+ * The model that served a run, as its list names it (`modelNames`), and `+1` for each other it switched to, every one
+ * whole in its tip with its cost; one that served other than the model canopy asked for says both, in
+ * `status-blocked`, as its page does. Until its session is read, the model canopy asked for, else `model none`, why
+ * in its tip.
+ */
+function RunModel({ run, names, className }: { run: Run; names: ModelNames; className?: string }) {
+    const name = (id: string) => names.get(id) ?? id
+    const asked = run.model
+    const served = run.models?.status === 'found' ? run.models.models : []
+    const [first, ...rest] = served
+    if (first === undefined) {
+        const why = run.models === null ? null : unservedReason(run.models)
+        if (asked !== null) {
+            return (
+                <Tip fact={why === null ? `asked ${asked}` : `asked ${asked}, none served: ${why}`} mono>
+                    <span className={cn('text-muted-foreground', className)} data-testid="run-model">
+                        asked {name(asked)}
+                    </span>
+                </Tip>
+            )
+        }
+        if (why === null) {
+            return null
+        }
+        return (
+            <Tip fact={`none: ${why}`} mono>
+                <span className={cn('text-muted-foreground', className)} data-testid="run-model">
+                    model none
+                </span>
+            </Tip>
+        )
+    }
+    const differs = asked !== null && served.some((m) => m.model !== asked)
+    const fact = [
+        ...served.map(
+            (m) => `${m.model} ${costText(m.cost_usd)}, ${m.replies === 1 ? '1 reply' : `${m.replies} replies`}`,
+        ),
+        ...(asked === null ? [] : [`asked ${asked}`]),
+    ].join('\n')
+    return (
+        <Tip fact={fact} mono>
+            <span
+                className={cn(differs ? 'text-status-blocked' : 'text-muted-foreground', className)}
+                data-testid="run-model"
+            >
+                model {name(first.model)}
+                {rest.length > 0 && ` +${rest.length}`}
+                {differs && `, asked ${name(asked)}`}
+            </span>
+        </Tip>
     )
 }
 

@@ -44,6 +44,7 @@ from canopy.serve.schema import (
     Message,
     MessageKind,
     MessageSource,
+    ModelCost,
     ModelsServed,
     NoticeChannel,
     Pause,
@@ -260,8 +261,6 @@ def runs(ctx: Context) -> list[Run]:
     running = db.running_runs(ctx.conn, "runs")
     recent = db.recent_runs(ctx.conn, RECENT_RUNS)
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
-    ended = [int(r["id"]) for r in recent]
-    reads, models = run_models.reads_of(ctx.conn, "runs", ended), run_models.of_runs(ctx.conn, "runs", ended)
     root = ctx.workspace.root
     running_models = ModelsServed(status="running")
     return [
@@ -269,10 +268,21 @@ def runs(ctx: Context) -> list[Run]:
             run(r, root, [shown_path(str(s.slot_path), root) for s in slots[int(r["id"])]], running_models)
             for r in running
         ),
-        *(
-            run(r, root, models=_served(reads.get(i), models[i], ended=True, session_id=r["session_id"]))
-            for i, r in zip(ended, recent, strict=True)
-        ),
+        *(run(r, root, models=m) for r, m in zip(recent, runs_served(ctx.conn, recent), strict=True)),
+    ]
+
+
+def runs_served(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> list[ModelsServed]:
+    """Which models served each of the `runs` table's `rows`, as `models_served` says for one, in one read.
+
+    Returns:
+        Each row's models, in the order of `rows`.
+    """
+    ids = [int(r["id"]) for r in rows]
+    reads, models = run_models.reads_of(conn, "runs", ids), run_models.of_runs(conn, "runs", ids)
+    return [
+        _served(reads.get(i), models[i], ended=r["ended_at"] is not None, session_id=r["session_id"])
+        for i, r in zip(ids, rows, strict=True)
     ]
 
 
@@ -533,6 +543,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
     if not rows:
         return None
     [row] = rows
+    ran = db.runs_of(ctx.conn, key, TICKET_RUNS)
     served = ticket_models.last_served(ctx.conn, key)
     units = [
         Unit(
@@ -552,7 +563,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         units=units,
         limits=[limit(found) for found in backend.limits(ctx, key)]
         + [limit(found, repo=repo) for repo, found in reviews],
-        runs=[run(r, ctx.workspace.root) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
+        runs=[run(r, ctx.workspace.root, models=m) for r, m in zip(ran, runs_served(ctx.conn, ran), strict=True)],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
         forgets=[forget(f) for f in db.forgets_of(ctx.conn, key)],
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
@@ -668,6 +679,7 @@ def _ticket_cost(conn: sqlite3.Connection, key: str) -> CostTotal:
         reviews=int(row["reviews"]),
         priced=int(row["priced"]),
         cost_usd=float(cost) if cost is not None else None,
+        models=[ModelCost(model=m.model, runs=m.runs, cost_usd=m.cost_usd) for m in run_models.of_ticket(conn, key)],
     )
 
 

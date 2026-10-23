@@ -34,6 +34,10 @@ RETRY_AFTER = timedelta(days=1)
 MAX_ATTEMPTS = 3
 
 
+#: The tables of a ticket's runs whose cost is its own: its worker and plan runs, and the review runs naming it.
+_TICKET_TABLES: tuple[Literal["runs", "review_runs"], ...] = ("runs", "review_runs")
+
+
 @dataclass(frozen=True)
 class Due:
     """A run whose session is due to be read: never read, or failed and due again."""
@@ -43,6 +47,18 @@ class Due:
     session_id: str
     #: The reads it has had: 0 for one never read.
     attempts: int
+
+
+@dataclass(frozen=True)
+class ModelTotal:
+    """What one model cost over a subject's runs, as their sessions say."""
+
+    #: As `provider/model`.
+    model: str
+    #: How many of the runs it wrote a reply of: a run on two models counts under each.
+    runs: int
+    #: What the sessions priced its replies at, in US dollars.
+    cost_usd: float
 
 
 def due(conn: sqlite3.Connection, *, limit: int, now: datetime | None = None) -> list[Due]:
@@ -172,6 +188,26 @@ def reads_of(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]
     return {row.run_id: row for row in records.fetch_all(conn, records.RunModelRead, query)}
 
 
+def of_ticket(conn: sqlite3.Connection, key: str) -> list[ModelTotal]:
+    """What each model cost over a ticket's runs and the review runs naming it, as `db.ticket_cost` counts them.
+
+    Returns:
+        A total per model their sessions named, the most costly first; what the rest of the ticket's cost is, no
+        session named a model for.
+    """
+    named = sql.union(*(_ticket_models(table, key) for table in _TICKET_TABLES), every=True)
+    query = (
+        sql.select("model, count(*), SUM(cost_usd)")
+        .from_("({}) AS m", named)
+        .group_by("model")
+        .order_by("SUM(cost_usd) DESC, model")
+    )
+    return [
+        ModelTotal(model=str(model), runs=int(runs), cost_usd=float(cost))
+        for model, runs, cost in sql.execute(conn, query)
+    ]
+
+
 def _retry_before(now: datetime | None = None) -> str:
     return db.format_time((now or datetime.now(UTC)) - RETRY_AFTER)
 
@@ -206,6 +242,15 @@ def _due_in(table: RunTable, retry_before: str) -> sql.Select:
             MAX_ATTEMPTS,
             retry_before,
         )
+    )
+
+
+# One table's runs of a ticket, a row per model its session named, with that model's cost.
+def _ticket_models(table: Literal["runs", "review_runs"], key: str) -> sql.Select:
+    return (
+        sql.select("m.model, m.cost_usd")
+        .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
+        .where("r.ticket_key = ?", key)
     )
 
 

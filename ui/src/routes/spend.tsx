@@ -13,7 +13,7 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { Clipped } from '@/components/tip'
+import { Clipped, Tip } from '@/components/tip'
 import { TickRow } from '@/components/tick-row'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useMeasure } from '@/hooks/use-measure'
@@ -40,6 +40,7 @@ import {
     kindsOffered,
     modelRows,
     monthName,
+    perRun,
     SERIES,
     seriesCost,
     shareText,
@@ -47,6 +48,7 @@ import {
     spendLine,
     spendWindow,
     toolRows,
+    unattributedShare,
     windowId,
     windowName,
 } from '@/lib/spend'
@@ -85,6 +87,7 @@ const EST_TOKENS_HINT =
 
 // What a model's runs count, and why a kind's runs can have no model named, on hover.
 const MODEL_RUNS_HINT = 'The runs it wrote a reply of: a run on two models counts under each'
+const PER_RUN_HINT = 'What it spent over its runs: a run on two models counts its share of the cost under each'
 const NO_MODEL_HINT =
     "Runs whose sessions named no model: not read yet, as a tick reads a few ended runs' sessions; no longer kept by " +
     'the runtime; failed to read; or making no model call. Their cost is what the runs reported'
@@ -264,6 +267,11 @@ function SpendPage() {
                                     kinds={kindsOffered(data?.models ?? [], search.model_kind)}
                                     chosen={search.model_kind}
                                 />
+                                {data !== undefined && (
+                                    <Unattributed
+                                        share={unattributedShare(modelRows(data.models, search.model_kind))}
+                                    />
+                                )}
                                 <span className="readout text-xs text-muted-foreground" data-testid="spend-model-count">
                                     {data === undefined ? '' : modelCount(modelRows(data.models, search.model_kind))}
                                 </span>
@@ -837,8 +845,9 @@ function KindLink({
 
 /**
  * What the runs spent on each model, as their sessions say: every kind's summed, or one kind's, the most costly first,
- * and the runs no session named a model for last, muted. Until a tick has read any run's session, says so rather than
- * list only those.
+ * and the runs no session named a model for last, muted. Each model's id, in mono as every page sets one, opens the
+ * runs page's runs on it (`?model=`), and `per run` makes two models with different run counts comparable. Until a
+ * tick has read any run's session, says so rather than list only those.
  */
 function Models({ models, kind, span }: { models: ModelRow[]; kind: SpendKind | undefined; span: string }) {
     const runs = kind === undefined ? 'run' : KIND_LABEL[kind].replace(/s$/u, '')
@@ -867,6 +876,9 @@ function Models({ models, kind, span }: { models: ModelRow[]; kind: SpendKind | 
                         </th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">replies</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">spent</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap" title={PER_RUN_HINT}>
+                            per run
+                        </th>
                     </tr>
                 </thead>
                 <tbody className="font-mono text-xs">
@@ -880,7 +892,13 @@ function Models({ models, kind, span }: { models: ModelRow[]; kind: SpendKind | 
                                 {m.model === null ? (
                                     <None reason="no session named one" className="block truncate font-sans" />
                                 ) : (
-                                    <Clipped text={m.model} className="block font-sans font-medium" />
+                                    <Link
+                                        to="/runs"
+                                        search={{ model: m.model }}
+                                        className="block text-accent underline-offset-4 hover:underline"
+                                    >
+                                        <Clipped text={m.model} className="block readout" />
+                                    </Link>
                                 )}
                             </th>
                             <td className="readout pl-3">{m.runs}</td>
@@ -890,11 +908,31 @@ function Models({ models, kind, span }: { models: ModelRow[]; kind: SpendKind | 
                             <td className="readout pl-3">
                                 <Cost usd={m.cost_usd} />
                             </td>
+                            <td className="readout pl-3">
+                                <Cost usd={perRun(m)} />
+                            </td>
                         </tr>
                     ))}
                 </tbody>
             </table>
         </PanelScroll>
+    )
+}
+
+/**
+ * How much of what By model shows went on runs no session has named a model for yet (`unattributedShare`): the `none`
+ * row's part, said in the header, since it is often the largest and sits last. Nothing when there is none.
+ */
+function Unattributed({ share }: { share: number | null }) {
+    if (share === null) {
+        return null
+    }
+    return (
+        <Tip fact={NO_MODEL_HINT}>
+            <span className="readout text-xs text-muted-foreground" data-testid="spend-model-unattributed">
+                {shareText(share)} not yet attributed
+            </span>
+        </Tip>
     )
 }
 

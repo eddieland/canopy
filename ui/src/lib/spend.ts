@@ -251,6 +251,21 @@ export function modelRows(models: readonly SpendModel[], kind: SpendKind | undef
     )
 }
 
+/** What a By model row's runs spent each, on average: its cost over its runs; null when they reported none. */
+export function perRun(row: ModelRow): number | null {
+    return row.cost_usd === null || row.runs === 0 ? null : row.cost_usd / row.runs
+}
+
+/**
+ * The share of the By model rows' spend on runs no session has named a model for yet, 0 to 1: the `none` row's cost
+ * over every row's. Null when there is no such spend.
+ */
+export function unattributedShare(rows: readonly ModelRow[]): number | null {
+    const total = rows.reduce((sum, m) => sum + (m.cost_usd ?? 0), 0)
+    const unnamed = rows.find((m) => m.model === null)?.cost_usd ?? 0
+    return unnamed > 0 && total > 0 ? unnamed / total : null
+}
+
 /**
  * The By tool table's rows: one kind's as the server sent them, or with no kind each tool summed over every kind, the
  * most characters returned first, its tokens estimated from the sum as the server estimates each kind's.

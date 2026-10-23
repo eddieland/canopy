@@ -23,7 +23,7 @@ from canopy.serve.schema.review import (
     ReviewDraftStatusName,
     ReviewRequest,
 )
-from canopy.serve.views import decision, limit, run
+from canopy.serve.views import decision, limit, run, runs_served
 
 if TYPE_CHECKING:
     import sqlite3
@@ -66,11 +66,12 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
     else:
         return None
     runs: list[sqlite3.Row] = _runs(ctx.conn, found.ticket_key, url) if found.ticket_key is not None else []
+    shown = runs[:PR_RUNS]
     reviewed = backend.review_limit(ctx, url)
     return PullRequestDetail(
         pull_request=found,
         review_limit=limit(reviewed, repo=found.repo) if reviewed is not None else None,
-        runs=[run(r, ctx.workspace.root) for r in runs[:PR_RUNS]],
+        runs=[run(r, ctx.workspace.root, models=m) for r, m in zip(shown, runs_served(ctx.conn, shown), strict=True)],
         reviews=summaries(ctx.conn, reviews),
         decisions=[decision(d) for d in decisions],
         cost=_cost(runs, reviews),

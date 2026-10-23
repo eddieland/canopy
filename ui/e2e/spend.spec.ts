@@ -269,10 +269,26 @@ test("what the runs spent on each model, every kind's summed, or one kind's from
     await expect(page).toHaveURL(/\/spend\?model_kind=workers$/u)
     await expect(models).toHaveCount(3)
     await expect(models.nth(1).getByRole('rowheader')).toHaveText('anthropic/claude-opus-4-1')
-    await expect(models.nth(1).getByRole('cell')).toHaveText(['1', '23', '$1.65'])
+    // Spent, then per run: one run, so the same.
+    await expect(models.nth(1).getByRole('cell')).toHaveText(['1', '23', '$1.65', '$1.65'])
     await expect(models.last().getByRole('rowheader')).toHaveText('none: no session named one')
     // ABC-099's feedback plan run among them, which recorded no cost.
-    await expect(models.last().getByRole('cell')).toHaveText(['6', '–', '$2.53'])
+    await expect(models.last().getByRole('cell')).toHaveText(['6', '–', '$2.53', '$0.42'])
+    // What the none row holds is said in the header, since it sits last.
+    await expect(page.getByTestId('spend-model-unattributed')).toHaveText(/^\d+% not yet attributed$/u)
+})
+
+test("a model's row opens the runs page on the runs it served", async ({ page }) => {
+    await page.goto('spend?model_kind=workers')
+    await settled(page)
+    await page.getByTestId('spend-model-table').getByRole('link', { name: 'anthropic/claude-opus-4-1' }).click()
+    await expect(page).toHaveURL(/\/runs\?model=anthropic(%2F|\/)claude-opus-4-1$/u)
+    // Run 39 switched from opus to sonnet partway: the one run opus served.
+    await expect(page.getByTestId('runs-count')).toHaveText('1')
+    await expect(page.getByTestId('run-39')).toBeVisible()
+    await page.getByRole('navigation', { name: 'Filter by model' }).getByRole('link', { name: 'all' }).click()
+    await expect(page).toHaveURL(/\/runs$/u)
+    await expect(page.getByRole('navigation', { name: 'Filter by model' })).toHaveCount(0)
 })
 
 test.describe('on a wide monitor', () => {
