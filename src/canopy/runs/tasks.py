@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, notice, pools, prompts, tasks
+from canopy.core import agent_models, conversation, db, notice, pools, prompts, tasks
 from canopy.core.vocab import RunStatus
 from canopy.infra import lock, logs, procs
 
@@ -173,8 +173,10 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
         "TICKETS": _tickets(ctx, task, run.branch),
     }
     log_path = Path(run.log_path)
+    # The private worker's chosen model, which canopy writes into its definition, for the commit trailer to name.
+    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.private_worker_cmd)
     try:
-        prompt = prompts.render_task(ctx.config, values, notice=notice.for_prompt(ctx.conn))
+        prompt = prompts.render_task(ctx.config, values, notice=notice.for_prompt(ctx.conn), model=model)
         logs.write_private(prompt_file(log_path), prompt)
         # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
         argv = [sys.executable, "-m", "canopy", "_task", str(run_id)]

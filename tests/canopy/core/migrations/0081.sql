@@ -1,4 +1,3 @@
--- sha256 of 0081_observed_check_runs.sql: 7fee17ebd4afb195c7d2d0cb6c2363858b3fa8f0142bb50197dec3030468d425
+-- sha256 of 0081_run_model.sql: 66979886f79043c93a6b6a3a95bc5f6b89bd0ba257bf45a1c117a3ca5d11f7a7
 
-INSERT INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at)
-VALUES ('https://e.test/pr/7', 10, 'build', 'abc1234', 'failure', 'x');
+UPDATE runs SET model = 'acme/fake-model' WHERE id = (SELECT min(id) FROM runs);

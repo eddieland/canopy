@@ -10,6 +10,7 @@
 # dispatch refuses a plan then (`no_read_tools`).
 description: canopy planner. Writes a plan for one ticket before it is implemented; reads, and writes only its plan.
 mode: primary
+# canopy: model
 permission:
   bash:
     "*": deny
