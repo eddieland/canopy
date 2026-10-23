@@ -132,8 +132,10 @@ def calls_tools(argv: list[str]) -> bool:
 
 
 def call_tools(argv: list[str]) -> list[dict[str, object]]:
-    """Call each tool the script names, the query's record first, through the server the inline config names for it:
-    one session for each run of calls to the same server, as OpenCode keeps one open for the whole run."""
+    """Call each tool the script names, the query's record first, through the server the inline config names for it.
+
+    One session for each run of calls to the same server, as OpenCode keeps one open for the whole run.
+    """
     keys = queried_keys(argv) if calls_tools(argv) else None
     calls: list[list[Any]] = [*([] if keys is None else [["canopy_queried", {"keys": keys}]])]
     calls += json.loads(setting(argv, "TOOLS", "[]"))
@@ -159,8 +161,11 @@ def call_tools(argv: list[str]) -> list[dict[str, object]]:
 
 
 def served(entry: dict[str, Any], calls: list[list[Any]]) -> list[tuple[str, bool]]:
-    """Open a session with the local server `entry` names, call each of `calls` in it, and close it: each call's text
-    and whether it was a tool error. A server that does not answer fails every call left."""
+    """Open a session with the local server `entry` names, call each of `calls` in it, and close it.
+
+    It gives back each call's text and whether it was a tool error. A server that does not answer fails every call
+    left.
+    """
     proc = subprocess.Popen(  # noqa: S603  (the command canopy's inline config names)
         entry["command"],
         cwd=entry.get("cwd"),

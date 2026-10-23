@@ -1,5 +1,7 @@
-"""The web UI's search over the journal (DESIGN §22, Search; ROADMAP M31): each source it reads, its bounds, and the
-route. Reads only."""
+"""The web UI's search over the journal (DESIGN §22, Search; ROADMAP M31). Reads only.
+
+Each source it reads, its bounds, and the route.
+"""
 
 import json
 

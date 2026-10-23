@@ -1,5 +1,7 @@
-"""`canopy workspace sync` fetches each primary clone and fast-forwards its default branch, only when that is checked
-out with nothing to lose (DESIGN §18)."""
+"""`canopy workspace sync` fetches each primary clone and fast-forwards its default branch (DESIGN §18).
+
+It fast-forwards only when that branch is checked out with nothing to lose.
+"""
 
 import shutil
 from pathlib import Path

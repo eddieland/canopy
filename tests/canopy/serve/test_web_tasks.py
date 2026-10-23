@@ -1,5 +1,8 @@
-"""The web UI's one-off tasks (DESIGN §36): what `canopy task list` and `canopy show task:N` print, each run with its
-transcript, and the report it left, read from the state directory as the CLI reads it."""
+"""The web UI's one-off tasks (DESIGN §36).
+
+What `canopy task list` and `canopy show task:N` print, each run with its transcript, and the report it left, read from
+the state directory as the CLI reads it.
+"""
 
 import json
 from pathlib import Path

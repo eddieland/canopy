@@ -1,8 +1,10 @@
-"""The harness decides what needs no judgment (DESIGN §37, ROADMAP M38): its decisions over journals written by hand,
-what it leaves whole to the overseer, and `decided` for what the overseer records about a ticket it took.
+"""The harness decides what needs no judgment (DESIGN §37, ROADMAP M38).
 
-A ticket the harness takes is one every row of whose derivation is in `harness.ROWS`, rows it reads from its own
-journal alone, so the cases here write the derivation's observations fresh at `NOW` and derive at it.
+The tests cover its decisions over journals written by hand, what it leaves whole to the overseer, and `decided` for
+what the overseer records about a ticket it took.
+
+A ticket the harness takes is one every row of whose derivation is in `harness.ROWS`, rows it reads from its own journal
+alone, so the cases here write the derivation's observations fresh at `NOW` and derive at it.
 """
 
 from __future__ import annotations
@@ -53,8 +55,10 @@ RUNNING = harness.Decision(KEY, Phase.RUNNING, "wait", "running: a worker of it 
 
 @pytest.fixture
 def observed(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> sqlite3.Connection:
-    """A tracker source configured, and KEY held and observed open with the queue label at FRESH. Returns the
-    journal."""
+    """A tracker source configured, and KEY held and observed open with the queue label at FRESH.
+
+    Returns the journal.
+    """
     canopy_env.configure(canopy_env.user_file, TRACKER)
     held(canopy_env, conn, KEY)
     observe_ticket(conn)

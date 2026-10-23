@@ -1,5 +1,7 @@
-"""`canopy gc --git` (DESIGN §26, Git in the primary clones): it packs each primary clone's loose objects and combines
-its packs, losing no commit a slot holds, and skips a repository while a slot of its pool is leased."""
+"""`canopy gc --git` (DESIGN §26, Git in the primary clones): it packs each primary clone's loose objects.
+
+It combines its packs, losing no commit a slot holds, and skips a repository while a slot of its pool is leased.
+"""
 
 import json
 from pathlib import Path

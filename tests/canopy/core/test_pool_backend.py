@@ -1,5 +1,8 @@
-"""Choosing the pool (DESIGN §18; ROADMAP M45, stage 3): `pools.backend`, leases going back to the pool that made them,
-and `canopy workspace sync` carrying the slots over when the operator switches."""
+"""Choosing the pool (DESIGN §18; ROADMAP M45, stage 3): `pools.backend` and `canopy workspace sync`.
+
+Leases go back to the pool that made them, and `canopy workspace sync` carries the slots over when the operator
+switches.
+"""
 
 import dataclasses
 import json

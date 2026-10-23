@@ -1,5 +1,8 @@
-"""The operator's standing instructions to the overseer (DESIGN §12): `paths.overseer_instructions` is rendered into the
-overseer's prompt, never a worker's, and a file that cannot be used fails the tick instead of dropping them."""
+"""The operator's standing instructions to the overseer (DESIGN §12), from `paths.overseer_instructions`.
+
+The file is rendered into the overseer's prompt, never a worker's, and one that cannot be used fails the tick instead of
+dropping them.
+"""
 
 from pathlib import Path
 

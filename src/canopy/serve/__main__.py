@@ -1,7 +1,7 @@
 """Serve mock data for development and tests, or print the OpenAPI schema.
 
 `python -m canopy.serve --mock [--port N] [--base-path /x] [--secret-file F]` serves the UI on loopback, over a journal
-seeded from fixtures in a temporary directory (mock.py), until interrupted. Without `--secret-file` it signs nobody in.
+seeded from fixtures in a temporary directory (mock/), until interrupted. Without `--secret-file` it signs nobody in.
 `python -m canopy.serve openapi` prints the schema the UI's types are generated from (`npm run gen:api` in ui/).
 Not an operator command: `canopy loop` serves the operator's own journal (DESIGN §22).
 """

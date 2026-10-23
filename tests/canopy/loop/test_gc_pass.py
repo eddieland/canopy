@@ -1,5 +1,7 @@
-"""The pass of garbage collection a live tick runs (DESIGN §26): the files it removes, what it never removes, and the
-`gc_passes` row it records, over journals and files written by hand."""
+"""The pass of garbage collection a live tick runs (DESIGN §26), over journals and files written by hand.
+
+The tests cover the files it removes, what it never removes, and the `gc_passes` row it records.
+"""
 
 import json
 import os

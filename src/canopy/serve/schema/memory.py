@@ -1,7 +1,7 @@
 """The API's types for agent memory (DESIGN §28): notes, proposals, and lessons, and what a run wrote and read of them.
 
 Also the operator's promotes, edits, and forgets. Built on `schema.Model`, as every API type is; memory's tiers, which
-the loop's state carries, are shared (schema.py).
+the loop's state carries, are shared (schema/__init__.py).
 """
 
 from __future__ import annotations

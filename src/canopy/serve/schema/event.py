@@ -1,7 +1,7 @@
 """The API's types for the event stream (DESIGN §22): each message it sends, and the union that tells them apart.
 
-Built on `schema.Model`, as every API type is (schema.py). A new event is a model here, in `StreamEvent`'s union
-(ui/AGENTS.md).
+Built on `schema.Model`, as every API type is (schema/__init__.py). A new event is a model here, in `StreamEvent`'s
+union (ui/AGENTS.md).
 """
 
 from __future__ import annotations
@@ -10,8 +10,6 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, RootModel
 
-from canopy.serve.chore_schema import ChoreSummary
-from canopy.serve.review_schema import RequestedReview, ReviewSummary
 from canopy.serve.schema import (
     AttentionItem,
     Capacity,
@@ -23,8 +21,10 @@ from canopy.serve.schema import (
     TicketSummary,
     WorkerNotice,
 )
-from canopy.serve.spend_schema import Spend
-from canopy.serve.task_schema import TaskSummary
+from canopy.serve.schema.chore import ChoreSummary
+from canopy.serve.schema.review import RequestedReview, ReviewSummary
+from canopy.serve.schema.spend import Spend
+from canopy.serve.schema.task import TaskSummary
 
 
 class AttentionUpdated(Model):

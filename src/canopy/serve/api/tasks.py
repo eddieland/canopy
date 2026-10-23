@@ -20,7 +20,7 @@ from canopy.serve import task_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TaskId, TaskRunId, not_found
 from canopy.serve.schema import ReplyRequest
-from canopy.serve.task_schema import (
+from canopy.serve.schema.task import (
     TaskDetail,
     TaskReplied,
     TaskReport,
@@ -30,8 +30,8 @@ from canopy.serve.task_schema import (
     TaskSubmitted,
     TaskSummary,
 )
-from canopy.serve.ticket_schema import StopRequest
-from canopy.serve.transcript_schema import Transcript
+from canopy.serve.schema.ticket import StopRequest
+from canopy.serve.schema.transcript import Transcript
 
 TAG = "tasks"
 router = APIRouter(tags=[TAG])

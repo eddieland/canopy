@@ -1,7 +1,7 @@
 """The API's types for review replies (DESIGN §29): the comments runs drafted in place of posting them.
 
 Also a PR's review threads they answer, and the operator's edits, drops, and sends of them. Built on `schema.Model`,
-as every API type is (schema.py).
+as every API type is (schema/__init__.py).
 """
 
 from __future__ import annotations
@@ -11,9 +11,9 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.serve.feedback_plan_schema import FeedbackPlan
-from canopy.serve.review_schema import ReviewDiff
 from canopy.serve.schema import Model
+from canopy.serve.schema.feedback_plan import FeedbackPlan
+from canopy.serve.schema.review import ReviewDiff
 
 type DraftKindName = Annotated[
     Literal["thread", "pr", "ticket"],

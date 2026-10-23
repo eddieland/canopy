@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import chore_result, chore_runs, chore_view, contract, conversation, db
 from canopy.core.vocab import ChoreRunStatus
-from canopy.serve.chore_schema import (
+from canopy.serve.schema.chore import (
     ChoreDetail,
     ChoreFinding,
     ChoreRun,
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
     from canopy.serve.schema import RunState
-    from canopy.serve.transcript_schema import Transcript
+    from canopy.serve.schema.transcript import Transcript
 
 #: A chore's page: its latest runs.
 CHORE_RUNS = 10

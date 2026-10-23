@@ -12,7 +12,7 @@ workspace's policy allows one resume and two reviews, so ABC-100 is at its resum
 `fix-ci` from before a resume fixed CI, counts as one (§8), and PR 88 at its review limit (§22's grants). Run 43,
 running, is a resume for a failed check and review feedback together. The running runs 41 and 43 have the latest tool
 call on each one's row (§8).
-Each feature's fixtures are in a module of their own beside this one, `mock_<feature>.py`, which `seed` calls: plans,
+Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
 memory, chore runs, review runs, review replies, a feedback plan, personas, one-off tasks, and the runs' transcripts.
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
@@ -31,18 +31,18 @@ from canopy.core.items import Item
 from canopy.core.vocab import RunKind, RunStatus
 from canopy.infra import resources
 from canopy.runtime.report import ModelList
-from canopy.serve import (
-    mock_chores,
-    mock_drafts,
-    mock_feedback_plans,
-    mock_memory,
-    mock_personas,
-    mock_plans,
-    mock_reviews,
-    mock_tasks,
-    mock_transcripts,
-)
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
+from canopy.serve.mock import (
+    chores,
+    drafts,
+    feedback_plans,
+    memory,
+    personas,
+    plans,
+    reviews,
+    tasks,
+    transcripts,
+)
 
 if TYPE_CHECKING:
     import sqlite3
@@ -146,9 +146,9 @@ ATTENTION: tuple[Item, ...] = (
     ),
     # Carol's PR, which the operator asked canopy to review: its review is done, its draft unpublished (DESIGN §34).
     Item(
-        f"pr:{mock_reviews.PR_14}",
+        f"pr:{reviews.PR_14}",
         "review_waiting",
-        f"review:5 and review:6, which you asked for, are done: their drafts of {mock_reviews.PR_14} wait on you to "
+        f"review:5 and review:6, which you asked for, are done: their drafts of {reviews.PR_14} wait on you to "
         "publish or stage one",
         at(-30),
     ),
@@ -189,7 +189,7 @@ def _pools(root: Path) -> dict[str, list[pools.Slot]]:
     """What `treehouse status --json` would show for each cloned repository's pool.
 
     web: the two running runs' slots, a shell someone opened in a third, one idle, and one dirty, five for a declared
-    size of four. mobile: run 43's other slot, and the running task's (mock_tasks).
+    size of four. mobile: run 43's other slot, and the running task's (tasks.py).
 
     Returns:
         Each cloned repository's slots, by repository name, numbered from 1.
@@ -228,8 +228,8 @@ def _pools(root: Path) -> dict[str, list[pools.Slot]]:
             {
                 "status": "leased",
                 "detached": True,
-                "lease_id": mock_tasks.RUNNING_LEASE,
-                "lease_holder": f"canopy:task:{mock_tasks.RUNNING_TASK}",
+                "lease_id": tasks.RUNNING_LEASE,
+                "lease_holder": f"canopy:task:{tasks.RUNNING_TASK}",
                 "leased_at": at(2),
                 "processes": [{"pid": 48644, "name": "opencode"}],
             },
@@ -257,11 +257,11 @@ def seed(directory: Path) -> Backend:
     for repo in _POOLS:
         (root / workspace.REPOS_DIR / repo / ".git").mkdir(parents=True)
     user_file = directory / "config" / "config.toml"
-    chores = user_file.parent / "chores"
-    chores.mkdir(parents=True)
+    prompts = user_file.parent / "chores"
+    prompts.mkdir(parents=True)
     for name, title in ((CHORE, "Dependency advisories"), ("build-health", "Build health")):
-        (chores / f"{name}.md").write_text(f"# {title}\n\nCheck {name} for the mock workspace.\n")
-    user_file.write_text(_USER_TOML.replace("{chores}", str(chores)))
+        (prompts / f"{name}.md").write_text(f"# {title}\n\nCheck {name} for the mock workspace.\n")
+    user_file.write_text(_USER_TOML.replace("{chores}", str(prompts)))
     ws = workspace.load(root)
     cfg = config.load(root, user_file)
     workspace.ensure_state_dir(ws.state_dir)
@@ -284,7 +284,7 @@ def seed(directory: Path) -> Backend:
         mock=True,
         slots=slots,
         clock=lambda: T0,
-        runner=lambda: mock_drafts.GitHub(db_path(ws)),
+        runner=lambda: drafts.GitHub(db_path(ws)),
         user_file=user_file,
         models=_models_listed,
     )
@@ -292,16 +292,16 @@ def seed(directory: Path) -> Backend:
         db.migrate(ctx.conn, resources.migrations_dir())
         with db.transaction(ctx.conn):
             _fixtures(ctx.conn, root)
-            mock_plans.seed(ctx.conn, ws.state_dir, at, root)
-            mock_memory.seed(ctx.conn, at)
-            mock_reviews.seed(ctx.conn, ws.state_dir, at)
-            mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
-            mock_feedback_plans.seed(ctx.conn, ws.state_dir, at, ctx.config.trust, slot_path(root, "web", 3))
-            mock_personas.seed(ctx.conn, ctx.config, at)
-            mock_tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
+            plans.seed(ctx.conn, ws.state_dir, at, root)
+            memory.seed(ctx.conn, at)
+            reviews.seed(ctx.conn, ws.state_dir, at)
+            drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
+            feedback_plans.seed(ctx.conn, ws.state_dir, at, ctx.config.trust, slot_path(root, "web", 3))
+            personas.seed(ctx.conn, ctx.config, at)
+            tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
             _attachments(ctx.conn)
-        mock_reviews.drafts(ctx.conn, at)
-    mock_transcripts.write(ws.state_dir, T0)
+        reviews.drafts(ctx.conn, at)
+    transcripts.write(ws.state_dir, T0)
     return backend
 
 
@@ -335,7 +335,7 @@ def _attention(ctx: Context) -> list[Item]:
         for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace, starts=ctx.finding_starts)
         if f.dismissed
     }
-    return [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed] + mock_tasks.attention(ctx.conn)
+    return [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed] + tasks.attention(ctx.conn)
 
 
 def _end_run(ctx: Context, run: records.Run) -> bool:
@@ -713,7 +713,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 tokens_peak_context=int(cost * 60_000),
             ),
         )
-    # What each running run's worker did last, as `_run` records it from the events its log holds (mock_transcripts).
+    # What each running run's worker did last, as `_run` records it from the events its log holds (transcripts.py).
     activities = (
         (LIVE_RUN, "bash", "npm test -- login", 27),
         (43, "bash", "cat /home/op/acme/.treehouse/web-3f9c2a1b/2/web/.github/workflows/ci.yml", 29),
@@ -723,7 +723,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             conn,
             sql.update("runs").set(activity_tool=tool, activity=did, activity_at=at(minutes)).where("id = ?", run_id),
         )
-    # Run 39's peak is the most one model call in its transcript was sent (mock_transcripts), as its page's chart shows.
+    # Run 39's peak is the most one model call in its transcript was sent (transcripts.py), as its page's chart shows.
     sql.execute(conn, sql.update("runs").set(tokens_peak_context=30200).where("id = 39"))
     run_slots = (
         # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37 and 40 ended long ago
@@ -865,7 +865,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             commented_at=at(-52),
         ),
     )
-    mock_chores.seed(conn, root, at, CHORE)
+    chores.seed(conn, root, at, CHORE)
     _decisions(conn)
     _tools(conn)
     _models(conn)

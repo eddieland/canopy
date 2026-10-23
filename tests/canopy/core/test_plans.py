@@ -1,5 +1,8 @@
-"""Plans on disk and in the journal (DESIGN §25, ROADMAP M44): each plan a file of its own, written once and never
-replaced, read bounded and without following a link, and approved as its file stands, by its hash."""
+"""Plans on disk and in the journal (DESIGN §25, ROADMAP M44).
+
+Each plan is a file of its own, written once and never replaced, read bounded and without following a link, and approved
+as its file stands, by its hash.
+"""
 
 import hashlib
 import os

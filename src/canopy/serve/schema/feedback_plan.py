@@ -1,6 +1,6 @@
 """The API's types for feedback plans (DESIGN §32): a PR's current plan on its threads, and the operator's approval.
 
-Built on `schema.Model`, as every API type is (schema.py).
+Built on `schema.Model`, as every API type is (schema/__init__.py).
 """
 
 from __future__ import annotations

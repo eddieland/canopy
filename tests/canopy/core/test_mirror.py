@@ -1,5 +1,7 @@
-"""Tracker comments in the journal (DESIGN §22, ROADMAP M19): `canopy mirror`, its bounds, refusals, and idempotence,
-and what a mirrored comment does not do."""
+"""Tracker comments in the journal (DESIGN §22, ROADMAP M19): `canopy mirror`, its bounds, refusals, and idempotence.
+
+Also, what a mirrored comment does not do.
+"""
 
 import io
 import sqlite3

@@ -1,5 +1,7 @@
-"""The derivation, in shadow (DESIGN §30): §7's table derived from journals written by hand, one case per row, against
-snapshots, and how a tick's derivation compares with what its overseer set and decided.
+"""The derivation, in shadow (DESIGN §30): §7's table derived from journals written by hand, one case per row.
+
+Each case is checked against snapshots; the tests also cover how a tick's derivation compares with what its overseer set
+and decided.
 
 The snapshots are syrupy's, in `__snapshots__/test_phases.ambr`; `make snapshots` records the ones that differ.
 """

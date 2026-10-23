@@ -1,5 +1,8 @@
-"""The web UI's chores (DESIGN §19, §22, ROADMAP M23): what `canopy status` and `canopy show chore:NAME` print, and a
-note the operator writes there, which the chore's next prompt carries as `canopy reply chore:NAME`'s does."""
+"""The web UI's chores (DESIGN §19, §22, ROADMAP M23).
+
+What `canopy status` and `canopy show chore:NAME` print, and a note the operator writes there, which the chore's next
+prompt carries as `canopy reply chore:NAME`'s does.
+"""
 
 import dataclasses
 import json

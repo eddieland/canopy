@@ -1,6 +1,6 @@
 """The mock server as a public demo, for a host that runs the ASGI app itself (Vercel; `vercel_app.py`).
 
-`create` seeds a journal from fixtures (mock.py) and serves the UI over it, as `python -m canopy.serve --mock` does
+`create` seeds a journal from fixtures (mock/) and serves the UI over it, as `python -m canopy.serve --mock` does
 without a secret: every visitor is signed in, and their writes change the fixtures, which a new instance seeds afresh.
 It serves mock data and nothing else (D122), so it needs neither the listener secret nor a loopback address.
 

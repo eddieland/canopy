@@ -1,6 +1,8 @@
-"""Fixtures for the tests of canopy: the workspace's journal and context, scenarios played in it, the web UI's mock
-backend, notification commands that record what they are sent, Markdown snapshots, workspaces of several repositories
-(DESIGN §18)."""
+"""Fixtures for the tests of canopy.
+
+The workspace's journal and context, scenarios played in it, the web UI's mock backend, notification commands that
+record what they are sent, Markdown snapshots, workspaces of several repositories (DESIGN §18).
+"""
 
 import contextlib
 import json
@@ -78,9 +80,10 @@ def scenario(
     conn: sqlite3.Connection,
     tmp_path: Path,
 ) -> Iterator[Scenario]:
-    """The workspace, with the fake treehouse and agents on PATH, where a test tells a ticket's story
-    (`scenario_helpers.py`). A test whose workers push asks for `git_pool` too. Its workers are titled, as the default
-    templates title them, so each knows the ticket it runs for.
+    """The workspace, with the fake treehouse and agents on PATH, where a test tells a ticket's story.
+
+    The story is told through `scenario_helpers.py`. A test whose workers push asks for `git_pool` too. Its workers are
+    titled, as the default templates title them, so each knows the ticket it runs for.
 
     Yields:
         The scenario, whose runs still held at work are stopped once the test ends.
@@ -101,9 +104,10 @@ def ws_scenario(
     agent_log: Path,
     tmp_path: Path,
 ) -> Iterator[Scenario]:
-    """The scenario told in `ws`, the workspace of two repositories, `api` and `web`, each pool a slot of its own
-    (`seed_pools`), for a story of a joint run, or a ticket in each repository. The test names the
-    repositories each dispatch works in.
+    """The scenario told in `ws`, the workspace of two repositories, `api` and `web`.
+
+    Each pool is a slot of its own (`seed_pools`), for a story of a joint run, or a ticket in each repository. The test
+    names the repositories each dispatch works in.
 
     Yields:
         The scenario, whose runs still held at work are stopped once the test ends.
@@ -122,11 +126,11 @@ def ws_scenario(
 def pytest_runtest_makereport(item: pytest.Item) -> Generator[None, pytest.TestReport, pytest.TestReport]:
     """A failed scenario test's report carries the story as it played, in a section of its own (`scenario_helpers.py`).
 
-    Yields:
-        Nothing: pytest makes the report meanwhile.
-
     Returns:
         The report pytest made.
+
+    Yields:
+        Nothing: pytest makes the report meanwhile.
     """
     report = yield
     funcargs: dict[str, object] = item.funcargs if isinstance(item, pytest.Function) else {}
@@ -146,8 +150,11 @@ def backend(tmp_path: Path) -> Backend:
 
 @pytest.fixture
 def sink_script(tmp_path: Path) -> Path:
-    """A sink command: `sink OUT [EXIT_FILE]` appends what it reads on stdin, then a separator, to OUT, and exits with
-    the number in EXIT_FILE if there is one. `messages(OUT)` reads back what it was sent."""
+    """A sink command, `sink OUT [EXIT_FILE]`, that records what it is sent.
+
+    It appends what it reads on stdin, then a separator, to OUT, and exits with the number in EXIT_FILE if there is
+    one. `messages(OUT)` reads back what it was sent.
+    """
     return executable(
         tmp_path / "sink",
         '#!/bin/sh\ncat >> "$1"\necho "--" >> "$1"\n'
@@ -157,8 +164,10 @@ def sink_script(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def notified(canopy_env: CanopyEnv, tmp_path: Path) -> Path:
-    """Set notify.cmd to a script that appends what it reads, then a separator, to the returned file; `messages` reads
-    it back. The script exits with $NOTIFY_EXIT, 0 if unset."""
+    """Set notify.cmd to a script that appends what it reads, then a separator, to the returned file.
+
+    `messages` reads it back. The script exits with $NOTIFY_EXIT, 0 if unset.
+    """
     out = tmp_path / "notified.txt"
     script = executable(tmp_path / "notify", '#!/bin/sh\ncat >> "$1"\necho "--" >> "$1"\nexit "${NOTIFY_EXIT:-0}"\n')
     canopy_env.append_user(f"\n[notify]\ncmd = '{script} {out}'\n")

@@ -55,8 +55,9 @@ HERMETIC_GIT = {
 
 @pytest.fixture(autouse=True)
 def hermetic_agent_env() -> Iterator[None]:
-    """Drop inherited CANOPY_* and OPENCODE_* variables, so a test's environment is only what it sets, and restore the
-    whole environment when the test ends.
+    """Drop inherited CANOPY_* and OPENCODE_* variables, so a test's environment is only what it sets.
+
+    The whole environment is restored when the test ends.
 
     Workers run this suite inside the agent runtime, which exports its own (OpenCode sets OPENCODE_PID). The fake
     agent records these prefixes and tests assert on them exactly, so an inherited one would fail them.
@@ -76,8 +77,10 @@ def hermetic_agent_env() -> Iterator[None]:
 
 @pytest.fixture
 def fakes_on_path() -> Iterator[Path]:
-    """Put tests/fakes first on PATH, so `treehouse`, `agent`, and `opencode` resolve to the fakes, and this
-    environment's `canopy` right after it."""
+    """Put tests/fakes first on PATH, so `treehouse`, `agent`, and `opencode` resolve to the fakes.
+
+    This environment's `canopy` comes right after it.
+    """
     path = os.pathsep.join([str(FAKES_DIR), str(SCRIPTS_DIR), os.environ.get("PATH", "")])
     with mock.patch.dict(os.environ, {"PATH": path}):
         yield FAKES_DIR
@@ -236,8 +239,10 @@ class CanopyEnv:
         self.private_file.write_text(text)
 
     def configure(self, file: Path, tables: Mapping[str, object]) -> list[str]:
-        """Merge `tables` into `file`, one of this workspace's config files: a key `tables` sets takes the place of the
-        one there, a key it sets to None is dropped, and a table it names keeps the keys it does not set.
+        """Merge `tables` into `file`, one of this workspace's config files.
+
+        A key `tables` sets takes the place of the one there, a key it sets to None is dropped, and a table it names
+        keeps the keys it does not set.
 
         The file is written whole again, so what it held stays, but not its comments or its quoting.
 
@@ -343,10 +348,11 @@ plan_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-p
 
 @pytest.fixture
 def canopy_env(tmp_path: Path, journals: Journals) -> Iterator[CanopyEnv]:
-    """A workspace of one repository with its workspace file, and a user config whose runtime commands run the fake
-    agent. HOME, XDG_CONFIG_HOME, and XDG_DATA_HOME point into tmp_path too, so nothing reads or writes the real
-    operator's files.
-    CANOPY_TICK_ID is cleared."""
+    """A workspace of one repository with its workspace file, and a user config that runs the fake agent.
+
+    The user config's runtime commands run the fake agent. HOME, XDG_CONFIG_HOME, and XDG_DATA_HOME point into tmp_path
+    too, so nothing reads or writes the real operator's files. CANOPY_TICK_ID is cleared.
+    """
     home = tmp_path / "home"
     root = tmp_path / "ws"
     repo = root / "repos" / REPO_NAME

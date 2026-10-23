@@ -1,6 +1,6 @@
 """The API's types for the worktrees page (DESIGN §22): each repository's pool, its slots, and what holds them.
 
-Built on `schema.Model`, as every API type is (schema.py).
+Built on `schema.Model`, as every API type is (schema/__init__.py).
 """
 
 from __future__ import annotations

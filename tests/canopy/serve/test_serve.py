@@ -1,5 +1,8 @@
-"""The web UI's server (canopy.serve): the guard, the SPA fallback and caching, base paths, signing in, the stream, and
-the mock journal. The API over a real journal, and the loop serving it, are in test_web.py."""
+"""The web UI's server (canopy.serve) and the mock journal.
+
+The guard, the SPA fallback and caching, base paths, signing in, and the stream. The API over a real journal, and the
+loop serving it, are in test_web.py.
+"""
 
 import asyncio
 import dataclasses
@@ -27,7 +30,7 @@ from starlette.types import Message, Receive, Scope, Send
 from canopy.core import conversation, db, review_runs, tasks
 from canopy.core.context import Context, db_path
 from canopy.infra import logs
-from canopy.serve import live, mock_reviews, secret, server, views
+from canopy.serve import live, secret, server, views
 from canopy.serve import mock as serve_mock
 from canopy.serve import options as serve_options
 from canopy.serve.__main__ import main
@@ -35,7 +38,11 @@ from canopy.serve.api import session
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
 from canopy.serve.backend import Backend
-from canopy.serve.event_schema import (
+from canopy.serve.guard import MAX_BODY_BYTES, host_name
+from canopy.serve.mock import reviews as mock_reviews
+from canopy.serve.options import ServeOptions
+from canopy.serve.schema import TicketSummary
+from canopy.serve.schema.event import (
     AttentionUpdated,
     ChoresUpdated,
     LoopUpdated,
@@ -51,9 +58,6 @@ from canopy.serve.event_schema import (
     TicketsUpdated,
     TickUpdated,
 )
-from canopy.serve.guard import MAX_BODY_BYTES, host_name
-from canopy.serve.options import ServeOptions
-from canopy.serve.schema import TicketSummary
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
 from tests.canopy.helpers import granted_meanwhile, present
@@ -800,8 +804,10 @@ def test_a_client_leaving_a_stream_mid_send_logs_no_error(ui: Path, backend: Bac
 
 
 def test_the_loop_stopping_its_server_with_a_stream_open_logs_the_cancel_as_info(ui: Path, backend: Backend) -> None:
-    """uvicorn cancels a request still open once the grace period ends, and logs its `CancelledError` as an exception:
-    in canopy.log, at ERROR with a traceback, for a tab left open when the loop stopped."""
+    """Uvicorn cancels a request still open once the grace period ends, and logs its `CancelledError` as an exception.
+
+    It would land in canopy.log, at ERROR with a traceback, for a tab left open when the loop stopped.
+    """
     options = ServeOptions(ui_dir=ui, mock=True, mock_event_seconds=0.05, port=free_port())
     sessions = Sessions(None, port=options.port, base_path="", hosts=options.hosts)
     web = server.WebServer(create_app(options, backend, sessions), options, logs.for_tick(None))

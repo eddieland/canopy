@@ -1,5 +1,7 @@
-"""Agent memory in the web API (DESIGN §28, ROADMAP M50 and M52): each tier's mode in words, what it holds, and the
-operator's verbs on it, which are `canopy memory`'s."""
+"""Agent memory in the web API (DESIGN §28, ROADMAP M50 and M52).
+
+Each tier's mode in words, what it holds, and the operator's verbs on it, which are `canopy memory`'s.
+"""
 
 from __future__ import annotations
 
@@ -196,7 +198,7 @@ def test_the_overview_lists_pinned_lessons_first_then_those_reported_wrong_then_
 
 # A write to the mock needs no session, but an Origin naming the server (guard.py).
 WRITE = {"origin": ORIGIN}
-#: The mock's pinned lessons (mock_memory.py), which lead its lessons, by key, before lesson 8.
+#: The mock's pinned lessons (mock/memory.py), which lead its lessons, by key, before lesson 8.
 PINNED = [10, 9]
 
 

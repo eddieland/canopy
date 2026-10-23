@@ -1,6 +1,8 @@
-"""A worker's or a planner's persona (DESIGN §31): `[personas]`'s for its agent, fixed when the run starts, recorded on
-it, and never fallen back from: a persona canopy cannot use refuses the run with an attention item, spending no attempt
-and leasing no slot."""
+"""A worker's or a planner's persona (DESIGN §31): `[personas]`'s for its agent.
+
+It is fixed when the run starts, recorded on it, and never fallen back from: a persona canopy cannot use refuses the run
+with an attention item, spending no attempt and leasing no slot.
+"""
 
 from pathlib import Path
 

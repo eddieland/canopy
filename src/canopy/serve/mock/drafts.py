@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, override
 
 from canopy.core import db, review_diff, sql
 from canopy.infra import procs
-from canopy.serve.mock_reviews import PR_88
+from canopy.serve.mock.reviews import PR_88
 
 if TYPE_CHECKING:
     import sqlite3

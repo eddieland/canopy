@@ -176,7 +176,7 @@ Leave `canopy loop` running (tmux works, or `canopy daemon start`) and work from
 with their findings on the diff, and your chores, with a search box (`/`) over the whole journal. Its guide, opened
 from the foot of the rail, says what each page holds and how to act on it. To look at it without a loop, run
 `uv run python -m canopy.serve --mock --port 8766` in a checkout, after `make ui-build`: it serves the same pages over
-the sample journal in `src/canopy/serve/mock.py`, with no sign-in and `mock` shown in the header.
+the sample journal in `src/canopy/serve/mock/`, with no sign-in and `mock` shown in the header.
 
 Your part is the one in [The loop](#the-loop): start or label tickets, shape and approve their plans, answer the
 agents' questions, and review their PRs. Humans approve and merge; the agent never does. Only reviewers in

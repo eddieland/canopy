@@ -54,8 +54,11 @@ PRINT_ARG = ["sh", "-c", 'printf %s "$1"', "sh"]
 
 @dataclass(frozen=True)
 class Sandbox:
-    """The fake srt's log, the templates the wrapper reads, the temp directory it makes its run directories in, and
-    the operator's XDG_CACHE_HOME."""
+    """What a test of the wrapper reads and writes.
+
+    The fake srt's log, the templates the wrapper reads, the temp directory it makes its run directories in, and the
+    operator's XDG_CACHE_HOME.
+    """
 
     log: Path
     templates: Path
@@ -77,10 +80,10 @@ class Sandbox:
 
 @pytest.fixture
 def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Iterator[Sandbox]:
-    """The shipped templates where the wrapper reads them, the fake srt on PATH, a temp directory of the test's, and
-    XDG_CACHE_HOME in the test's HOME.
+    """The shipped templates where the wrapper reads them, the fake srt on PATH, and a temp directory of the test's.
 
-    Under /tmp, not tmp_path, whose path is too long for the sockets srt would make in it, which the wrapper refuses.
+    XDG_CACHE_HOME is in the test's HOME. The temp directory is under /tmp, not tmp_path, whose path is too long for the
+    sockets srt would make in it, which the wrapper refuses.
     """
     templates = canopy_env.home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
@@ -124,7 +127,7 @@ def linked_worktree(tmp_path: Path, name: str) -> tuple[Path, Path]:
 
 
 def reading(objects: Path, primary: Path) -> dict[str, str]:
-    """git's variables that read a run's object directory as well as a slot's shared objects, as `_run` sets them."""
+    """The git variables that read a run's object directory as well as a slot's shared objects, as `_run` sets them."""
     return {"GIT_OBJECT_DIRECTORY": str(objects), "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(primary / ".git" / "objects")}
 
 
@@ -254,8 +257,11 @@ def test_a_repository_a_tool_keeps_outside_the_worktree_keeps_its_own_objects(
     tmp_path: Path,
     script: str,
 ) -> None:
-    """A cache a tool keeps as a git repository (DESIGN §24): with git's variables set for every process, its
-    objects went to the run's directory and were gone with it. The worker's own commit still lands only there."""
+    """A cache a tool keeps as a git repository, outside the worktree, keeps its own objects (DESIGN §24).
+
+    With git's variables set for every process, its objects went to the run's directory and were gone with it. The
+    worker's own commit still lands only there.
+    """
     primary, slot = linked_worktree(tmp_path, "repo")
     objects = objects_dir(tmp_path)
     cache = tmp_path / "cache"
@@ -341,8 +347,11 @@ def test_the_workspaces_state_is_denied_even_outside_home(sandbox: Sandbox, tmp_
 
 
 def test_each_role_caches_in_a_directory_of_its_own_and_setup_in_the_workers(sandbox: Sandbox, tmp_path: Path) -> None:
-    """Never in the operator's caches, whatever they set them to: OpenCode, the overseer's included, runs packages
-    and programs from its cache, outside any sandbox. Setup warms the worker's."""
+    """No role caches in the operator's caches, whatever they set them to.
+
+    OpenCode, the overseer's included, runs packages and programs from its cache, outside any sandbox. Setup warms the
+    worker's.
+    """
     _, slot = linked_worktree(tmp_path, "repo")
     write = ["sh", "-c", 'mkdir -p "$XDG_CACHE_HOME/tool" && echo "$1" > "$XDG_CACHE_HOME/tool/$1"', "sh"]
     operators = {"GOMODCACHE": str(tmp_path / "go-mod"), "npm_config_cache": str(tmp_path / "npm")}
@@ -422,8 +431,11 @@ def test_a_chore_reads_its_cwd_and_gets_no_git(sandbox: Sandbox, tmp_path: Path)
 
 
 def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp_path: Path) -> None:
-    """The reviewer reads the PR's checkout through its directory's link, and writes nothing there: not the worktree,
-    not its git directories, and no objects, so it gets neither an object directory nor the run's git."""
+    """The reviewer reads the PR's checkout through its directory's link, and writes nothing there.
+
+    Not the worktree, not its git directories, and no objects, so it gets neither an object directory nor the run's
+    git.
+    """
     primary, slot = linked_worktree(tmp_path, "repo")
     cwd = review_dir(tmp_path, slot)
 
@@ -499,7 +511,7 @@ def test_without_srt_nothing_runs(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(sys.platform != "linux", reason="srt bridges the network over Unix sockets on Linux")
 def test_a_temp_directory_too_deep_for_srts_sockets_runs_nothing(sandbox: Sandbox, tmp_path: Path) -> None:
-    """srt makes its sockets in the run's temp directory, and says only that it could not when the path is too long."""
+    """The run's temp directory holds srt's sockets; srt says only that it could not when the path is too long."""
     deep = sandbox.tmp / ("d" * 60)
     deep.mkdir()
 
@@ -625,8 +637,10 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
     treehouse_state: Path,
     sandbox: Sandbox,
 ) -> None:
-    """`_run` with the wrapper as `worker_cmd`'s prefix: the worker's commit lands in the run's object directory only,
-    `_run` pushes it from there, and the slot is tidied (DESIGN §8)."""
+    """`_run` with the wrapper as `worker_cmd`'s prefix pushes the worker's commit and tidies the slot (DESIGN §8).
+
+    The worker's commit lands in the run's object directory only, and `_run` pushes it from there.
+    """
     primary, _ = worktree_pool
     prefix = f"{WRAPPER} worker --read {{definitions_dir}} -- env"
     canopy_env.write_user(user_toml().replace("\nworker_cmd = 'env", f"\nworker_cmd = '{prefix}"))
@@ -691,8 +705,11 @@ def test_a_sandboxed_repositorys_worker_and_setup_run_in_the_wrapper_canopy_adds
     treehouse_state: Path,
     sandbox: Sandbox,
 ) -> None:
-    """With `runtime.sandbox_repos` naming the repository and no prefix, `_run` starts setup and the worker in the
-    wrapper itself, each with its role's policy, and pushes the commit the worker made in the run's object directory."""
+    """With `runtime.sandbox_repos` naming the repository and no prefix, `_run` starts the worker in the wrapper.
+
+    It starts setup and the worker in the wrapper itself, each with its role's policy, and pushes the commit the worker
+    made in the run's object directory.
+    """
     primary, _ = worktree_pool
     canopy_env.configure(canopy_env.user_file, {"runtime": {"sandbox_repos": ["repo"], "setup_cmd": "sh -c true"}})
     conn: sqlite3.Connection = canopy_env.journal()
@@ -745,8 +762,10 @@ def test_a_sandboxed_repositorys_review_runs_in_the_wrapper_canopy_adds(
     treehouse_state: Path,
     sandbox: Sandbox,
 ) -> None:
-    """`_review` of a PR in a repository `runtime.sandbox_repos` names starts its reviewer in the wrapper, as
-    `review`."""
+    """`_review` starts its reviewer in the wrapper, as `review`.
+
+    It does so for a PR in a repository `runtime.sandbox_repos` names.
+    """
     review_cmd = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
     canopy_env.configure(
         canopy_env.user_file,

@@ -1,6 +1,6 @@
 """The API's types for spend (DESIGN §13): what the last day, 30 days, and all time cost, and a window's breakdown.
 
-The breakdown is what `canopy spend` prints. Built on `schema.Model`, as every API type is (schema.py).
+The breakdown is what `canopy spend` prints. Built on `schema.Model`, as every API type is (schema/__init__.py).
 """
 
 from __future__ import annotations
