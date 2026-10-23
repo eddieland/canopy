@@ -228,6 +228,9 @@ in full leaves it new, which is the point of a list of things you haven't read.
 
 ## A review's page
 
+**on GitHub**, under the title, opens the PR itself in a new tab, for when the findings send you off to read the
+conversation around them.
+
 At the top, the reviewer's summary, since that's the answer you came for, then its verdict with how big the change is,
 the PR (with its other reviews, if any, on a line under it), the persona the reviewer wrote in, the commit it read and
 the base branch it was read against, and when its run ended, with a link to the run. The persona carries the start of

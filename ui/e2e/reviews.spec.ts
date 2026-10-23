@@ -25,6 +25,10 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await expect(page).toHaveURL(/\/reviews\/4$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4 acme/web#88 Debounce search input')
     await expect(nav.getByRole('link', { name: 'Reviews' })).toHaveAttribute('data-status', 'active')
+    // The PR on GitHub is under the title, as on the PR's own page.
+    const out = page.locator('main header').getByRole('navigation', { name: 'Links out' }).getByRole('link')
+    await expect(out).toHaveText('on GitHub')
+    await expect(out).toHaveAttribute('href', 'https://github.com/acme/web/pull/88')
     // Each fact once: the description is its status, and the panel leads with what the review found.
     const main = page.getByRole('main')
     await expect(main.getByText('done', { exact: true })).toHaveCount(1)
