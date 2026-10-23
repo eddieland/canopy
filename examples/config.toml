@@ -77,27 +77,29 @@ worker_timeout_minutes = 45
 # worker_cmd_suffix = "--log-level INFO"
 # Optional: commands an agent may run beyond its own bash rules, such as a tracker's CLI for the overseer while its MCP
 # server is down. An allow in your runtime's own config cannot beat canopy's deny; these can (DESIGN §13). The
-# overseer, planner, worker, and worker-private take them; the overseer runs only `canopy`, `treehouse status`, and
-# these, the planner only these, and a worker every command but those its rules deny, so for one an allow undoes a
-# deny, such as the private worker's of a tracker's CLI (TRUST_MODEL T6). canopy refuses a shell, an interpreter, a
-# wrapper such as env or xargs, git, gh, curl, and its own tools, and you answer for what an allowed command can do
-# (TRUST_MODEL T1). Tell the overseer when to use them in paths.overseer_instructions, and the planner and workers in
-# paths.worker_instructions. `canopy agents` lists them.
+# overseer, planner, worker, and worker-private take them; the overseer, which acts through canopy's tools and has no
+# shell otherwise, and the planner run only these, and a worker every command but those its rules deny, so for one an
+# allow undoes a deny, such as the private worker's of a tracker's CLI (TRUST_MODEL T6). canopy refuses a shell, an
+# interpreter, a wrapper such as env or xargs, git, gh, curl, and its own tools, and you answer for what an allowed
+# command can do (TRUST_MODEL T1). Tell the overseer when to use them in paths.overseer_instructions, and the planner
+# and workers in paths.worker_instructions. `canopy agents` lists them.
 # [runtime.allow_bash]
 # overseer = ["jira issue list *", "jira issue view *"]
 # planner = ["jira issue view *"]
 # worker-private = ["jira issue view *"]
-# Optional: each agent's model, `provider/model` as `opencode models` lists it (DESIGN §13). canopy writes it into the
-# agent's definition and records it on each worker run; an agent not named runs on OpenCode's default. A template,
-# prefix, or suffix that passes --model or -m is refused, since it would override this unseen. Before a worker run
-# starts, its model is looked up in `opencode models`: one not listed, or a list that cannot be read, refuses the run
-# with an attention item, never running it on another model. Private, as every runtime key is.
+# Optional: each agent's model, `provider/model` as `opencode models` lists it, or `provider/model@variant` to run it at
+# one of the variants `opencode models --verbose` lists for it, such as a reasoning effort (DESIGN §13). canopy writes
+# it into the agent's definition and records it on each worker run; an agent not named runs on OpenCode's default. A
+# template, prefix, or suffix that passes --model, -m, or --variant is refused, since it would override this unseen.
+# Before a worker run starts, its model and variant are looked up in `opencode models`: one not listed, or a list that
+# cannot be read, refuses the run with an attention item, never running it on another model. Private, as every
+# runtime key is.
 # [runtime.models]
 # worker = "provider/model"     # both workers, and your tasks' runs
 # planner = "provider/model"
-# reviewer = "provider/other-model"
+# reviewer = "provider/other-model@high"
 # overseer = "provider/model"
-# chore = "provider/model"
+# chore = "provider/model"      # every chore without a model of its own
 
 [loop]
 # `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
@@ -126,8 +128,9 @@ comment_prefix = "CANOPY:"
 comment_suffix = ""
 # The Co-authored-by trailer a worker adds to its commits when the agent runtime adds none of its own. Name an agent
 # here, such as your team's bot address, never a person: it is how a reader tells the work is an agent's. Left as the
-# default, the name credits the model [runtime.models] chooses for the worker, as "provider/model (canopy worker)"; a
-# name you set is used as you set it. Set commit_trailer = false to add none, keeping only the runtime's own
+# default, the name credits the model [runtime.models] chooses for the worker, as "provider/model (canopy worker)",
+# and a worker following an approved plan adds a second trailer for its planner's, "provider/model (canopy planner)";
+# a name you set is used as you set it, alone. Set commit_trailer = false to add none, keeping only the runtime's own
 # attribution, if it adds any.
 # commit_trailer = true
 # commit_trailer_name = "canopy worker"
@@ -234,6 +237,7 @@ cmd = ""
 # when = "Skip it when the last run found nothing."
 # timeout_minutes = 20
 # workspaces = ["acme"]   # default: every workspace
+# model = "provider/model@low"   # default runtime.models.chore; only for a chore that runs canopy-chore
 
 # Optional: adversarial reviews of PRs (DESIGN §21). A fresh reviewer reads each new commit and reports to canopy only:
 # it posts nothing on the PR and never approves (D114). Read reviews with `canopy review show`. Point review_cmd at a
@@ -254,7 +258,8 @@ cmd = ""
 
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
 # what each kind holds and what a pass would remove. A live tick removes the files and the journal's rows once a day,
-# and rotates canopy.log; `canopy gc --vacuum`, between ticks, gives the journal's free pages back to the disk.
+# and rotates canopy.log; `canopy gc --vacuum`, between ticks, gives the journal's free pages back to the disk, and
+# `canopy gc --git` packs the primary clones' loose objects.
 # [retention]
 # run_files_days = 30    # a run's, chore run's, or review's log, prompt, and diff, once it ended this long ago
 # tick_files_days = 7    # a tick's log and prompt; a tick not `ok` keeps them for run_files_days

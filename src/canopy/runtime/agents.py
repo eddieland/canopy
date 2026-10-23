@@ -20,6 +20,14 @@ PLANNER = "canopy-planner"
 REVIEWER = "canopy-reviewer"
 OVERSEER = "canopy-overseer"
 CHORE = "canopy-chore"
+#: What a chore's own copy of `CHORE` is named after: a chore with a model of its own runs `canopy-chore-<chore>`,
+#: rendered as `CHORE` is but for its model (DESIGN §19, §13). No other agent's name starts so.
+CHORE_COPY_PREFIX = f"{CHORE}-"
+
+
+def chore_agent(chore: str) -> str:
+    """Return the name of chore `chore`'s own copy of `CHORE`, which runs it on a model of its own."""
+    return f"{CHORE_COPY_PREFIX}{chore}"
 
 
 class DefinitionsError(Exception):
@@ -65,6 +73,21 @@ class Drafts:
 
 
 @dataclass(frozen=True)
+class Model:
+    """A model the operator chose for an agent (DESIGN §13): the model, and the variant of it to run at, if any."""
+
+    #: The model as the runtime names it, `provider/model`.
+    id: str
+    #: The variant, such as a reasoning effort, as the runtime names it; None for the model's default.
+    variant: str | None = None
+
+    @property
+    def name(self) -> str:
+        """The model as canopy's config and journal spell it: `provider/model`, then `@variant` when it has one."""
+        return self.id if self.variant is None else f"{self.id}@{self.variant}"
+
+
+@dataclass(frozen=True)
 class Rules:
     """What canopy decided from config that each agent may do, which the definitions are rendered with."""
 
@@ -86,9 +109,11 @@ class Rules:
     bash_allows: Mapping[str, Sequence[str]]
     #: The artifact store's server and who publishes to it; None when no store is configured, and no rule names one.
     artifacts: Publishing | None
-    #: Each agent's model by name, as the runtime names one, chosen by the operator alone (`runtime.models`, DESIGN
-    #: §13). An agent not named runs on the runtime's default.
-    models: Mapping[str, str]
+    #: Each agent's model by name, chosen by the operator alone (`runtime.models`, a chore's `model`, DESIGN §13). An
+    #: agent not named runs on the runtime's default.
+    models: Mapping[str, Model]
+    #: The chores' own copies of `CHORE` by name (`chore_agent`), each rendered as `CHORE` is, then with its own model.
+    chore_agents: Sequence[str]
 
 
 #: How much of an MCP server's tools an agent is offered: every one, only some, or none.

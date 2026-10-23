@@ -394,6 +394,29 @@ def test_the_default_trailer_names_the_chosen_model_and_a_set_name_stays_as_set(
 
 
 @pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_a_worker_following_a_plan_credits_its_planners_model_on_a_trailer_of_its_own(
+    canopy_env: CanopyEnv,
+    kind: str,
+) -> None:
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    text = prompts.render_worker(cfg, kind, PROMPT_VALUES, model="provider/model-a", planner_model="provider/model-b")
+    assert (
+        "add `Co-authored-by: provider/model-a (canopy worker) <noreply@canopy.invalid>` and "
+        "`Co-authored-by: provider/model-b (canopy planner) <noreply@canopy.invalid>`, each on a line of its own."
+    ) in text
+    # A worker on the runtime's default still credits its planner's model; a planner on it is not named.
+    text = prompts.render_worker(cfg, kind, PROMPT_VALUES, planner_model="provider/model-b")
+    assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>` and `Co-authored-by: provider/model-b" in text
+    assert "canopy planner" not in prompts.render_worker(cfg, kind, PROMPT_VALUES, model="provider/model-a")
+    # A name the operator set is theirs to keep whole.
+    with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    text = prompts.render_worker(cfg, kind, PROMPT_VALUES, planner_model="provider/model-b")
+    assert "add `Co-authored-by: Acme Agent <agent@acme.test>`." in text
+    assert "model-b" not in text
+
+
+@pytest.mark.parametrize("kind", prompts.COMMITS)
 def test_with_a_chosen_model_an_override_spelling_out_the_default_trailer_still_renders(
     canopy_env: CanopyEnv,
     kind: str,

@@ -377,9 +377,10 @@ Rules:
   route to it. A list of links named by its region (the guide's sidebar groups) is not a heading.
 - **A detail page leads with what it is about.** Its title is its subject's, after its reference in a muted
   monospace (`PageHeader`'s `subject`), as a ticket's page has always led: `run:39 Debounce search input`,
-  `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its ticket's title. With no subject (a
-  tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference alone is the title. Its
-  description is that subject's state, a line of facts (`src/lib/descriptions.ts`): `done · implement · ABC-099`,
+  `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its PR's title, its ticket's while the
+  PR has none. With no subject (a tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference
+  alone is the title. Its description is that subject's state, a line of facts (`src/lib/descriptions.ts`):
+  `done · implement · ABC-099`,
   `review:4 3 findings, 1 major · at its review limit`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`,
   so no two pages of a kind say the same thing there. What every page of its kind shows, the same each time, is its
   `help`, on the title's hover, as the nav's items say what their pages hold. A ticket is named one way in every
@@ -1388,6 +1389,18 @@ sliver beside four others; and its axis names short call numbers without measuri
   opened is listed first, so nothing moves under the pointer. It is kept in `?repo=` as names joined by commas
   (`src/lib/repo-filter.ts`), replacing the history entry as a filter field does, and a row shows when it is in any of
   them. In a form (`RepoSelect`) it takes one, and picking it closes the list.
+- **A config page** (`ConfigForm`, `/settings/limits`, which Settings links to from a one-line panel so Settings stays
+  short): the keys in panels by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), two to a row on a
+  wide window and Trust across the whole row, a key no panel names in an `Other` panel. A row is the key in words over
+  its name in the file in monospace, where its value comes from, and how far the page may take it, and its control at
+  the row's end: a numeric field in `readout` type, a checkbox for a switch, and a list's entries as checkboxes to
+  clear. A switch already on its stricter side is disabled, not hidden, so the page still says what it is.
+  `capacity.repo_slots` lists only the repositories with a count of their own, a field each, and under them a repository
+  picker (`RepoSelect`) to give another one a count, so a workspace of many repositories does not get a field per
+  repository. One save bar, sticky at the page's foot so a change far down the page is never left unseen, says how many
+  changes wait, with Discard and Save, each disabled until something changed; a field that is not a whole number is
+  named in its `Notice` and keeps Save disabled. A save reads the file again, and the `Notice` keeps what the save did
+  over the fresh form.
 - **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above), under a
   ticket's reply (The answer, above), or under its form, with one line under it (`Notice`): what the action did, in
   the CLI's words, or its refusal in
@@ -1491,8 +1504,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   `status-blocked`, else plain), so a review with a blocking finding never reads as calm as a clean one, and the worst
   in words, since color alone says nothing to some (`verdictText`: `3 findings, 1 major`, or `1 blocking finding` when
   every finding is that bad); the review's link; its ticket
-  (or `None`, its reason on hover), its impact, then in the free column the PR (`PullRequestLink`) and the commit's
-  first 7 characters, then cost and age. A review's page colors its verdict the same way.
+  (or `None`, its reason on hover), its impact, then in the free column the PR (`PullRequestLink`), its title
+  (`TicketTitle`: the PR's own, else as canopy's reader last read it, else its ticket's, and nothing without one) in
+  what room the rest leaves, left out below `@6xl`, where that room is a word at best, and the commit's first 7
+  characters, then cost and age. A review's page colors its verdict the same way.
 - **A review's draft** (`ReviewDraftPanel`, DESIGN §34), on a review of a PR the loop does not own, leads its page,
   which is the draft's one record: the title is `review:5 Your review of acme/api#14 by carol` (the PR alone while
   canopy has not read its author), and the description the draft's state (`ReviewDraftState`), its status chip

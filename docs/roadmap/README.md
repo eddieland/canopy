@@ -77,7 +77,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M38. The harness decides what needs no judgment](M38-the-harness-decides.md): in progress.
 - [M39. A tick without the overseer](M39-a-tick-without-the-overseer.md): not started.
 - [M40. The overseer per decision](M40-the-overseer-per-decision.md): not started.
-- [M41. Limits and trust settings from the web UI](M41-limits-and-trust-settings-from-the-web-ui.md): not started.
+- [M41. Limits and trust settings from the web UI](M41-limits-and-trust-settings-from-the-web-ui.md): done 2026-10-16.
 - [M42. Other people's PRs, reviewed on request](M42-other-peoples-prs-reviewed.md): done 2026-10-16.
 - [M43. Publishing a review on someone else's PR](M43-publishing-a-review.md): done 2026-10-22.
 - [M44. Plans before implementing](M44-plans-before-implementing.md): done 2026-10-17.

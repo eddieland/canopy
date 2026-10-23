@@ -35,8 +35,10 @@ any OpenCode upgrade, and before relying on a permission they check.
 - **S3. The private worker's wildcard deny** (M18). Confirmed in OpenCode's source (1.18.35), not in a run. Start a
   ticket privately and check that its worker can call the tracker's `tracker.read_tools` and is refused every other
   tool of the tracker's server, and the tracker CLIs in bash.
-- **S4. A heredoc `canopy` command** (M19). Confirmed in OpenCode's source (1.18.35), not in a run. Check that the
-  overseer's `canopy *` rule admits `canopy mirror` fed by a heredoc.
+- **S65. The overseer's tools** (M48). Run a tick on the pinned OpenCode. Expect its transcript to show `canopy_*`
+  tool calls and no `bash`, every duty met through them, and a worker it dispatches offered no `canopy_*` tool. After
+  an upgrade, check too that `OPENCODE_EXPERIMENTAL_CODE_MODE=false` still turns code mode off, and that a tool call
+  still waits as long as the entry's `timeout`.
 - **S44. The token split** (M33). Confirmed in OpenCode's source (1.19.3), not in a run. canopy's new tokens add a
   `step_finish`'s `output` and `reasoning` (`runtime/opencode/events.py`), which holds only while `output` leaves
   reasoning out. Check that OpenCode's `session.ts` still sets `output: outputTokens - reasoningTokens`; aide found the
@@ -96,6 +98,12 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
 - **S18. Untrusted and trusted reviewers** (M22). A review bot's comment on a loop PR waits as `untrusted_review` with
   no dispatch. A reply from the web UI resumes it, with the reply as the worker's instruction. A comment from someone in
   `trust.trusted_reviewers` resumes it without a reply.
+- **S65. Limits and trust from the web UI** (M41). While `canopy loop` runs, change `capacity.slots_per_repo` and remove
+  a trusted reviewer on the web UI's Settings, Limits and trust page. Expect the next tick to lease under the new size
+  and its overseer's state block to carry the shorter list, and the workspace's private file, `.canopy/config.toml`, to
+  keep its comments, with only those two values changed, and `~/.config/canopy/config.toml` untouched. Then try a
+  count past its ceiling and adding a reviewer back by hand-crafting the request: expect each refused, naming its
+  guard, and the files unchanged.
 
 ### Reviews
 
@@ -242,3 +250,8 @@ Moved 2026-10-22 to the file of their open milestone, keeping their numbers.
 
 - **S45 to S53. Worktree pools** (M45). Stage 3's and stage 4's checks on the toy workspace.
 - **S59, S60, S62. What canopy keeps, and a week of passes** (M47). Stages 1 to 3's checks.
+
+Retired 2026-10-23. The overseer has no shell; it mirrors through a tool (M48).
+
+- **S4. A heredoc `canopy` command** (M19). No heredoc is left to admit: a comment's body is a field of the `mirror`
+  tool.

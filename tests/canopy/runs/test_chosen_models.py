@@ -1,9 +1,11 @@
 """A worker's or a planner's model (DESIGN §13, Each agent's model): `runtime.models`' for its agent, written into the
 agent's definition, recorded on the run, and looked up in the runtime's list before the run starts, never fallen back
 from: a model the list lacks, or a list that cannot be read, refuses the run with an attention item, spending no attempt
-and leasing no slot. canopy's commit trailer names it, while the operator has not named the trailer themselves."""
+and leasing no slot; with a variant, the variant too. canopy's commit trailer names it, and a worker following an
+approved plan names its planner's on a trailer of its own, while the operator has not named the trailer themselves."""
 
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from canopy.core import definitions
@@ -79,6 +81,20 @@ def test_each_agents_model_reaches_its_runs_and_no_other(
     assert scenario.run(worker=pushes()).row["model"] is None
 
 
+def test_a_worker_following_an_approved_plan_credits_the_planners_model_and_its_own(
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    listed(opencode_state, MODEL, OTHER)
+    scenario.configures(runtime={"models": {"planner": OTHER, "worker": MODEL}})
+    scenario.run(PLAN, worker=planner_does(plan="# Plan for PROJ-1\n\nAdd the button.\n"))
+    scenario.operator("plan", KEY, "--approve")
+    prompt = scenario.run(worker=pushes()).prompt_file.read_text()
+    assert f"`Co-authored-by: {MODEL} (canopy worker) <noreply@canopy.invalid>`" in prompt
+    assert f"`Co-authored-by: {OTHER} (canopy planner) <noreply@canopy.invalid>`" in prompt
+
+
 def test_a_model_the_runtime_does_not_list_is_refused_with_an_attention_item(
     scenario: Scenario,
     opencode_state: Path,
@@ -105,6 +121,42 @@ def test_a_model_the_runtime_does_not_list_is_refused_with_an_attention_item(
     assert scenario.run(worker=pushes()).row["model"] == MODEL
 
 
+def test_a_run_at_a_variant_records_it_and_its_definition_names_it(
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    listed(opencode_state, MODEL, OTHER, variants={MODEL: ["low", "high"]})
+    scenario.configures(runtime={"models": {"worker": f"{MODEL}@high"}})
+    run = scenario.run(worker=pushes())
+    assert run.row["model"] == f"{MODEL}@high"
+    digest = definitions.digest(load(scenario.env.root, scenario.env.user_file))
+    worker = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest / "agents" / "canopy-worker.md"
+    assert f'\nmodel: "{MODEL}"\nvariant: "high"\n' in worker.read_text()
+    # The variants are read only when one is chosen: the runtime drops one its model lacks without a word.
+    assert calls(opencode_state) == [(["models", "--verbose"], str(scenario.env.root))]
+    assert f"`Co-authored-by: {MODEL}@high (canopy worker) <noreply@canopy.invalid>`" in run.prompt_file.read_text()
+
+
+def test_a_variant_its_model_does_not_list_is_refused_with_an_attention_item(
+    scenario: Scenario,
+    opencode_state: Path,
+    treehouse_state: Path,
+    git_pool: GitPool,
+) -> None:
+    listed(opencode_state, MODEL, variants={MODEL: ["low"]})
+    scenario.configures(runtime={"models": {"worker": f"{MODEL}@high"}})
+    reason = (
+        f"OpenCode lists the model {MODEL} chosen in runtime.models but not its variant high (it lists low), and would "
+        "run it at its default unseen; nothing ran. Choose a variant it lists"
+    )
+    refused = scenario.refuses(dispatches())
+    assert refused == [("refused:model_missing", reason), ("attention:model_missing", reason)]
+    assert scenario.attention() == [(KEY, "model_missing")]
+    assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+
+
 def test_a_list_that_cannot_be_read_refuses_the_run(scenario: Scenario, opencode_state: Path) -> None:
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
     scenario.configures(runtime={"models": {"worker": MODEL}})
@@ -118,9 +170,9 @@ def test_a_list_that_cannot_be_read_refuses_the_run(scenario: Scenario, opencode
     assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
-def listed(state: Path, *lines: str) -> None:
-    """Have the fake `opencode models` print `lines`."""
-    state.write_text(json.dumps({"models": list(lines)}))
+def listed(state: Path, *lines: str, variants: Mapping[str, Sequence[str]] | None = None) -> None:
+    """Have the fake `opencode models` print `lines`, and with `--verbose` each model's `variants`."""
+    state.write_text(json.dumps({"models": list(lines), "variants": dict(variants or {})}))
 
 
 def calls(state: Path) -> list[tuple[list[str], str]]:
@@ -129,4 +181,4 @@ def calls(state: Path) -> list[tuple[list[str], str]]:
     if not log.exists():
         return []
     entries = [json.loads(line) for line in log.read_text().splitlines()]
-    return [(e["argv"], e["cwd"]) for e in entries if e["argv"] == ["models"]]
+    return [(e["argv"], e["cwd"]) for e in entries if e["argv"][:1] == ["models"]]

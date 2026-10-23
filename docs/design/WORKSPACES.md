@@ -75,8 +75,10 @@ queue. A map committed to a shared repository is exposed as any file in it is (T
 the operator's workspace commands and for the web UI's branch links, which never carry a credential (D115). A tick
 never clones or changes a remote: a mapped repository with no clone is attention `repo_missing` and cannot be
 dispatched to. `canopy workspace sync` clones it, with credential prompts and git's `ext::` transport off, and never
-changes an `origin` that differs from the map. A state directory that is a symlink, someone else's, or open to others
-stops every command until removed (D053).
+changes an `origin` that differs from the map. It fetches each clone already there and fast-forwards its default branch
+when that is checked out, clean, and behind; the checkout is the operator's, since runs start in slots, so a clone on
+another branch or with work of its own is left as it is. A state directory that is a symlink, someone else's, or open
+to others stops every command until removed (D053).
 
 ### Declared repositories and slots
 
@@ -85,7 +87,8 @@ never recycles canopy's slots; no key puts them elsewhere (D033). The map declar
 private or user config each pool's size (D066), which a tick never grows. `canopy workspace sync` converges on both:
 it fills each pool, so setup hooks run then rather than in a run's lease; it trims idle slots, and removes a clone the
 map no longer lists, only when nothing would be lost; and it turns off git's automatic maintenance in each primary
-clone, which would prune the git directory every slot shares under other slots' runs.
+clone, which would prune the git directory every slot shares under other slots' runs. Each tick raises
+`auto_maintenance_on` for a clone whose own config does not turn it off, until a sync does.
 
 ### What a pool guarantees
 

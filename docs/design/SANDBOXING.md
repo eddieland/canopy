@@ -11,7 +11,8 @@ injected instructions some of the time (TRUST_MODEL §3); without a sandbox its 
 in depth (T4, D021). The sandbox is the boundary for each run it wraps; T4's and T6's residuals hold what it leaves
 open. Options weighed: [HOST_ISOLATION](../HOST_ISOLATION.md). Guide: [SANDBOX.md](../SANDBOX.md).
 
-It is a prefix on the command templates, nothing more (D118). The harness never learns whether a run is sandboxed: it
+It is a prefix on the command templates, nothing more (D118): the operator's own, or the one canopy adds for a run in a
+repository `runtime.sandbox_repos` names. Beyond adding it, the harness never learns whether a run is sandboxed: it
 passes every run `CANOPY_GIT_OBJECTS`, which an unsandboxed run ignores, and runs on the host only what reads nothing a
 sandboxed run can write. The sandbox is Anthropic's `sandbox-runtime` (`srt`): bubblewrap on Linux, `sandbox-exec` on
 macOS, and all network traffic through a local proxy that enforces a domain allowlist. It is a beta, so canopy pins the
@@ -35,6 +36,12 @@ The `worker` role wraps `worker_cmd`, `private_worker_cmd`, and `plan_cmd`; `set
 chore's `cmd` (§19); `review` wraps `review_cmd`, which reads the most hostile text the loop meets (T1). Unwrapped: the
 overseer, which acts through `canopy` and needs the journal, lock, and config the policy denies; and the harness's own
 `notify.cmd`, `git`, and `treehouse`.
+
+`runtime.sandbox_repos` sandboxes some repositories and not others: canopy starts a worker run, `setup_cmd`, and a
+review in one of them in the wrapper, with the role above, by its absolute path beside canopy's interpreter, so no
+branch's file stands in for it. It is private, as the prefix is, and refused beside a template that already starts in
+the wrapper. One run is one command, so a joint run whose repositories disagree is refused at dispatch; one the config
+changed under since is sandboxed. Chores name no repository, and keep their own prefix.
 
 ### Filesystem policy
 

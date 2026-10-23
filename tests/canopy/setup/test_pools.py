@@ -185,8 +185,8 @@ def test_sync_fills_each_pool_to_its_size_and_returns_every_lease_it_took(
 
     assert main(["workspace", "sync"]) == 0
     out = capsys.readouterr().out
-    assert "api: present\napi: slots: 3 of 3, made 2\n" in out
-    assert "web: present\nweb: slots: 1 of 1\n" in out
+    assert "api: slots: 3 of 3, made 2\n" in out
+    assert "web: slots: 1 of 1\n" in out
     api = slots_of(treehouse_state, ws, "api")
     assert [(s["name"], s["status"]) for s in api] == [("1", "available"), ("2", "available"), ("3", "available")]
     gets = [c for c in calls(treehouse_state) if c[0] == "get"]
