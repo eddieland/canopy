@@ -644,7 +644,7 @@ Add a declined card and an expired one to `PaymentSheet.test.tsx`.
 
 `checkout.3ds.e2e` times out on the emulator: the crash item 2468500207 fixes, behind it.
 """,
-    summary="Planned the round on PR 66: ten items, seven to change, two to decline, one to ask about.",
+    summary="Planned the round on PR 66: ten items, six to change, two to decline, one to ask about, one to leave.",
     failed="android-e2e",
 )
 _WAITING = _State(
