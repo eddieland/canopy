@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 from canopy.core import (
+    agent_models,
     conversation,
     db,
     definitions,
@@ -36,6 +37,7 @@ from canopy.core import (
     run_models,
     run_offers,
     sandboxing,
+    ticket_models,
 )
 from canopy.core import review_result as result
 from canopy.core.config import render_command
@@ -47,6 +49,7 @@ from canopy.runtime import project_config, stdout
 if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.context import Context
+    from canopy.runtime.agents import Model
 
 _GIT_TIMEOUT_SECONDS = 300
 
@@ -206,7 +209,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     if refused is not None:
         raise _SetupError(refused)
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
-    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config, _models(ctx, run))
     title = f"{'revise' if run.revises is not None else 'review'} {run.pr_url}"
     command = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
     argv = sandboxing.wrap(ctx.config.runtime, [run.repo], "review", command.argv, snapshot)
@@ -269,6 +272,20 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     if parsed is None:
         return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")
     return judged(ctx, parsed)
+
+
+def _models(ctx: Context, run: records.ReviewRun) -> dict[str, Model] | None:
+    """Each agent's model by its name for `run`, when its ticket's override chooses the reviewer's (DESIGN §13).
+
+    Returns:
+        `runtime.models`' with the reviewer's override in its place, or None for config's alone.
+    """
+    if run.ticket_key is None:
+        return None
+    chosen = ticket_models.override(ctx.conn, run.ticket_key, "reviewer")
+    if chosen is None:
+        return None
+    return agent_models.of_run(ctx.config, ctx.config.runtime.review_cmd, chosen)
 
 
 def _check_out(runner: procs.Runner, slot: Path, sha: str) -> None:

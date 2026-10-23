@@ -1,5 +1,6 @@
 import { ApiError } from '@/api/client'
 import type {
+    AgentModel,
     AgentPersona,
     ChoreTried,
     ConfigReload,
@@ -145,6 +146,24 @@ export const PERSONA_SOURCES: Record<AgentPersona['source'], string> = {
 export function personaText(ticketKey: string, now: AgentPersona): string {
     const source = PERSONA_SOURCES[now.source]
     return `${ticketKey}'s ${now.agent} runs write in ${now.persona} from their next run: ${source}.`
+}
+
+/** Where an agent's model comes from, in the words `canopy model KEY` uses. */
+export const MODEL_SOURCES: Record<AgentModel['source'], string> = {
+    ticket: "this ticket's override",
+    config: '[runtime.models]',
+    default: 'nothing sets one',
+}
+
+/** An agent's model as the page names it: its id, or the runtime's default when nothing sets one. */
+export function modelName(model: string | null): string {
+    return model ?? "the runtime's default"
+}
+
+/** What choosing or clearing a ticket's model did, as `canopy model` says it. */
+export function modelText(ticketKey: string, now: AgentModel): string {
+    const source = MODEL_SOURCES[now.source]
+    return `${ticketKey}'s ${now.agent} runs use ${modelName(now.model)} from their next run: ${source}.`
 }
 
 /**
