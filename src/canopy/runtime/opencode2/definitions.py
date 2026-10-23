@@ -25,6 +25,7 @@ import re
 from canopy.runtime.opencode.definitions import (
     AGENTS_SUBDIR,
     BASH_ALLOW_RE,
+    MODEL_RE,
     RUNTIME_COMMANDS,
     SKILLS_SUBDIR,
     TOOL_PART_RE,
@@ -37,6 +38,7 @@ __all__ = [
     "AGENTS_SUBDIR",
     "BASH_ALLOW_RE",
     "MAX_SKILL_NAME",
+    "MODEL_RE",
     "RUNTIME_COMMANDS",
     "SERVICE_FILE",
     "SKILLS_SUBDIR",

@@ -200,8 +200,9 @@ test('the runs page lists the reviews and chore runs beside the workers, and wha
 }) => {
     await page.goto('runs')
     await settled(page)
-    // Two workers run, and a chore: both limits are full, so the next dispatch of either waits for one to end.
-    await expect(page.getByTestId('capacity-workers')).toHaveText('workers 2 of 2 · full')
+    // Two workers run, a task's run, and a chore: both limits are full, so the next dispatch of either waits for one to
+    // end.
+    await expect(page.getByTestId('capacity-workers')).toHaveText('workers 3 of 3 · full')
     await expect(page.getByTestId('capacity-reviews')).toHaveText('reviews 0 of 1')
     await expect(page.getByTestId('capacity-chores')).toHaveText('chores 1 of 1 · full')
     // The running chore is among the running workers; a PR reviewed twice is one row, by its latest review.
