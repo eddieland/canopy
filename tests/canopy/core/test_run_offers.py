@@ -112,7 +112,14 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
             {
                 "config": {"mcp": {"github": {"type": "remote"}, "sentry": {"enabled": False}}},
                 "skills": ["pdf", "tracker-jira"],
-                "agents": {"canopy-overseer": [["skill", "pdf", "deny"], ["github_*", "*", "deny"]]},
+                "agents": {
+                    "canopy-overseer": [
+                        ["skill", "pdf", "deny"],
+                        ["github_*", "*", "deny"],
+                        ["canopy_*", "*", "deny"],
+                        ["canopy_dispatch", "*", "allow"],
+                    ],
+                },
                 "tools": {"canopy-worker": {"bash": True, "edit": True, "task": False}},
             },
         ),
@@ -120,8 +127,14 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
     scenario.configures(runtime={"overseer_cmd": command("canopy-overseer"), "worker_cmd": command("canopy-worker")})
     ticked = scenario.tick(dispatches(), worker=pushes())
     # The overseer's server denied whole, the one turned off for every agent, and the skill denied by name: none of
-    # them was offered to it. The worker's rules deny none.
-    assert offered(scenario.conn, "ticks", ticked.tick.id) == ("canopy-overseer", None, (), ("tracker-jira",))
+    # them was offered to it. canopy's own, which its run alone is given, it was offered in part, as its rules allow
+    # some of its tools. The worker's rules deny none, and its run is given no server of canopy's.
+    assert offered(scenario.conn, "ticks", ticked.tick.id) == (
+        "canopy-overseer",
+        None,
+        (("canopy", "some"),),
+        ("tracker-jira",),
+    )
     [run] = ticked.runs
     assert run.status == "done", Path(run.row["log_path"]).read_text()
     assert offered(scenario.conn, "runs", run.id) == (

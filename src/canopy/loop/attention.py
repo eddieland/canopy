@@ -92,6 +92,8 @@ UNAVAILABLE: str = TickStatus.CANOPY_UNAVAILABLE
 DISK_LOW: str = TickStatus.DISK_LOW
 #: The statuses of a tick that did not run the overseer for a cause of canopy's own, each raising an item of its name.
 HALTS = frozenset({UNAVAILABLE, DISK_LOW})
+#: A primary clone whose own config leaves git's automatic maintenance on, which sync turns off (DESIGN §18).
+MAINTENANCE_ON = "auto_maintenance_on"
 # What the harness records itself (`tick._record_harness_items`, and `HALTS`), so the overseer does not.
 HARNESS_REASONS = frozenset(
     {
@@ -99,6 +101,7 @@ HARNESS_REASONS = frozenset(
         "awaiting_reply",
         chore_view.FAILED_REASON,
         "repo_missing",
+        MAINTENANCE_ON,
         *HALTS,
         connector_runs.FAILED_REASON,
         archive.REASON,

@@ -71,7 +71,7 @@ fragment Contexts on StatusCheckRollupContextConnection {
 _PULL = (
     """
 fragment Pull on PullRequest {
-  id url number state isDraft headRefOid baseRefName mergeable mergeStateStatus
+  id url number title state isDraft headRefOid baseRefName mergeable mergeStateStatus
   author { login }
   labels(first: 100) { pageInfo { hasNextPage endCursor } nodes { name } }
   reviews(first: 100) { pageInfo { hasNextPage endCursor } nodes { ...Review } }
@@ -303,6 +303,8 @@ def _pr_line(ref: Ref, pr: Mapping[str, object], labels: Sequence[Mapping[str, o
         "mergeable": mergeable.lower() if mergeable else None,
         "mergeable_state": merge_state.lower() if merge_state else None,
         "author": _login(pr.get("author")),
+        # The author's text, which canopy cuts and marks; for display only.
+        "title": text(pr.get("title")),
         "labels": [name for label in labels if (name := text(label.get("name"))) is not None],
     }
 

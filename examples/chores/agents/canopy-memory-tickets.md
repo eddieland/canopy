@@ -49,13 +49,12 @@ permission:
   "*branch*": deny
   "*fork*": deny
   "*copilot*": deny
-  # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
-  # above reopens one.
-  "canopy_git_*": deny
+  # canopy's own tools, the overseer's, the reviewer's and planner's git tools, and the reports this agent does not
+  # read, are not its (DESIGN §27): denied by pattern, before its exceptions below.
+  "canopy_*": deny
   # Its tools of canopy's, each allowed by exact name: last, so no pattern above closes one. Its own chore's earlier
   # runs (DESIGN §19, History), which refuses any other chore's, and the three listings of agent memory its prompt names
-  # (DESIGN §27), which write nothing; the reports' server's other tools are denied.
-  "canopy_reports_*": deny
+  # (DESIGN §27), which write nothing.
   "canopy_chore_history": allow
   "canopy_reports_memory-lessons": allow
   "canopy_reports_memory-proposals": allow

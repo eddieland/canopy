@@ -172,7 +172,7 @@ label brings it in, and the label stays visible on the ticket.
 Built in M19, live acceptance pending. Every ticket's conversation, public or private, in one place canopy owns, so the
 web UI (N1) can show it as one inbox and later channels such as Slack join it rather than keeping their own (§22, D072).
 For a public ticket the tracker stays the authority and the journal holds the overseer's copy: each tick the overseer
-mirrors new tracker comments with `canopy mirror` (D081), and `canopy show` lists them with workers' reports and the
+mirrors new tracker comments with its `mirror` tool (§27), and `canopy show` lists them with workers' reports and the
 operator's replies. Gap: PR review comments, which would join with PR subjects (M14, closed unbuilt).
 
 ### R13. Trusted and untrusted reviewers
@@ -211,13 +211,13 @@ the web UI's settings page, §8) lapses, reaches all of them, and shows on every
 
 ### R16. Change limits and tighten trust settings from the web UI
 
-Gap (M41). Written down 2026-10-14. The operator changes some settings often enough that opening a config file is
+Built (M41). Written down 2026-10-14. The operator changes some settings often enough that opening a config file is
 friction: a pool's slots, how many workers run at once, an attempt limit, how often the loop ticks. They should be
-able to change those from the web UI's settings page and have the loop take them up, as a reload does today. Trust
+able to change those from the web UI's settings page and have the loop take them up, as a reload does. Trust
 settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
 turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
-chooses a prompt, or moves the listener, stays an edit to the file. Today the web channel writes no config at all
-(TRUST_MODEL T8).
+chooses a prompt, or moves the listener, stays an edit to the file. The Limits and trust page under Settings does
+this, writing the workspace's private file within ceilings in code (§12, TRUST_MODEL T8, D128).
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open
 

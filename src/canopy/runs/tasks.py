@@ -176,7 +176,12 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
     # The private worker's chosen model, which canopy writes into its definition, for the commit trailer to name.
     model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.private_worker_cmd)
     try:
-        prompt = prompts.render_task(ctx.config, values, notice=notice.for_prompt(ctx.conn), model=model)
+        prompt = prompts.render_task(
+            ctx.config,
+            values,
+            notice=notice.for_prompt(ctx.conn),
+            model=model.name if model is not None else None,
+        )
         logs.write_private(prompt_file(log_path), prompt)
         # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
         argv = [sys.executable, "-m", "canopy", "_task", str(run_id)]

@@ -581,7 +581,7 @@ class Decide(Request):
         if key is not None and action == "skip" and duties.tick_wide(rationale):
             raise ValueError(
                 f"{rationale.split(':', 1)[0].strip()!r} skips the whole tick, so it names no key: leave key out "
-                "(`canopy decide skip --rationale '...'`), only when the tick cannot go on; "
+                "(a decide of skip with only a rationale), only when the tick cannot go on; "
                 "otherwise decide each ticket under its own key",
             )
         return self

@@ -10,7 +10,8 @@ or a transport (`remote.<name>.uploadpack`) still runs; only a git directory the
 
 `argv` also turns off git's automatic maintenance, which a fetch or a commit otherwise starts in the background on that
 shared directory while other slots' runs use it. The flags cover only the harness's own git; `canopy workspace sync`
-sets the same in each primary clone's config, for the worker's git and treehouse's (`AUTO_MAINTENANCE_OFF`).
+sets the same in each primary clone's config, for the worker's git and treehouse's (`AUTO_MAINTENANCE_OFF`), and
+`maintenance_left_on` says where a clone's config does not.
 
 A worktree slot's `.git` is a file naming its git directory. A worker that rewrites it points host-side git at a
 directory of its own, whose hooks and config the flags above do not cover, so `_run` reads it before the run and puts
@@ -25,6 +26,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import shutil
 import stat
 from pathlib import Path
@@ -56,6 +58,7 @@ COMMONDIR = "commondir"
 COMMONDIR_CONTENT = b"../..\n"
 _LINK_PREFIX = b"gitdir:"
 _LS_FILES_TIMEOUT_SECONDS = 30
+_CONFIG_TIMEOUT_SECONDS = 30
 
 
 def argv(*args: str) -> list[str]:
@@ -82,6 +85,32 @@ def tracked(runner: procs.Runner, root: Path, path: str) -> list[str] | None:
     if not result.ok:
         return None
     return [name for name in result.stdout.split("\0") if name]
+
+
+def maintenance_left_on(runner: procs.Runner, clone: Path) -> list[str] | None:
+    """Return the keys of `AUTO_MAINTENANCE_OFF` that `clone`'s own config does not set as sync sets them.
+
+    Only the clone's own config counts, since the worker's git and treehouse's read it whatever HOME they run with.
+
+    Returns:
+        The keys, empty when every one is set; None when git could not read the config.
+    """
+    pattern = "^(" + "|".join(re.escape(key) for key, _ in AUTO_MAINTENANCE_OFF) + ")$"
+    try:
+        # Read as booleans, both keys say `false` when off: `maintenance.auto` false, and `gc.auto` 0.
+        result = runner.run(
+            argv("config", "--local", "--type=bool", "--get-regexp", pattern),
+            cwd=clone,
+            env=ENV,
+            timeout=_CONFIG_TIMEOUT_SECONDS,
+        )
+    except procs.ProcError:
+        return None
+    # 1 is git's answer when neither key is set.
+    if result.timed_out or result.returncode not in {0, 1}:
+        return None
+    found = dict(line.split(" ", 1) for line in result.stdout.splitlines() if " " in line)
+    return [key for key, _ in AUTO_MAINTENANCE_OFF if found.get(key) != "false"]
 
 
 def git_root(start: Path) -> Path | None:

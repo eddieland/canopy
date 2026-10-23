@@ -24,7 +24,14 @@ LAYERS: tuple[frozenset[str], ...] = (
     frozenset({"infra"}),
 )
 # Third-party packages only one canopy package may import.
-CONFINED = {"anyio": "serve", "click": "cli", "fastapi": "serve", "starlette": "serve", "uvicorn": "serve"}
+CONFINED = {
+    "anyio": "serve",
+    "click": "cli",
+    "fastapi": "serve",
+    "starlette": "serve",
+    "tomlkit": "serve",
+    "uvicorn": "serve",
+}
 # The programs canopy ships besides `canopy`, each a command line of its own and so free to import click: the desktop
 # sink and the development server.
 PROGRAMS = frozenset({"notify/desktop.py", "serve/__main__.py"})

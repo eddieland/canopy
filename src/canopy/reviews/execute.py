@@ -35,6 +35,7 @@ from canopy.core import (
     review_runs,
     run_models,
     run_offers,
+    sandboxing,
 )
 from canopy.core import review_result as result
 from canopy.core.config import render_command
@@ -208,7 +209,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     title = f"{'revise' if run.revises is not None else 'review'} {run.pr_url}"
     command = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
-    argv = command.argv
+    argv = sandboxing.wrap(ctx.config.runtime, [run.repo], "review", command.argv, snapshot)
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
         "running reviewer",
