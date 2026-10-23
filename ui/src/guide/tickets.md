@@ -134,8 +134,9 @@ pick another.
 
 ## Choosing a model
 
-Under the personas, a row for each of the same three agents names the model its next run goes to, with where that
-comes from beside it, as the persona rows do: **this ticket's override** or `[runtime.models]` in your config. When
+Beside the personas, or under them when the panel is narrow, a row for each of the same three agents names the model
+its next run goes to, then where that comes from, as the persona rows do: **this ticket's override** or
+`[runtime.models]` in your config. When
 nothing sets one, the button just says **runtime default**, which is honest but names nothing you could look up. So
 once canopy has read the session of that agent's latest run on this ticket, the row adds **last served** and the model
 that actually answered. It shows on any row whose last run went somewhere other than the button says, such as the run

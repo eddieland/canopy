@@ -1427,12 +1427,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   to the config: `Clear the override`, or `Use the default`.
 - **A choice of model** (`src/components/ticket-models.tsx`) is the same menu over the models the runtime lists, read
   when it opens, in a row per agent laid out as the persona rows are: `worker model`, then the button, then where it
-  comes from in muted `text-xs`. A model's id is monospace; the runtime's default names none, so its button reads
-  `runtime default` in muted sans, and a muted `last served` names the model that served the agent's latest read run
-  when it is not the button's. A choice saved is confirmed in its row, a `saved` in `status-done`, so nothing below
-  moves, until the ticket's models change after it. The menu offers only what the server would take: the model chosen
-  now, when it is not one, is a disabled item with why in muted text after it
-  (`no longer listed; its next run is refused`, `config's, with a variant`), and a model gone from the list marks its
+  comes from in muted `text-xs`, beside the persona rows once the Work panel is `@3xl`, so each agent's model is level
+  with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
+  is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
+  `last served` names the model that served the agent's latest read run when it is not the button's. A choice saved
+  is confirmed in its row, a `saved` in `status-done`, so nothing below moves, until the ticket's models change after
+  it. The menu offers only what the server would take: the model chosen now, when it is not one, is a disabled item
+  with why in muted text after it (`no longer listed; its next run is refused`, `config's, with a variant`), and a
+  model gone from the list marks its
   trigger in `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
   `Read again` item. While a choice saves, its trigger names it with a trailing `…` and is `aria-busy`; a refusal's
   `Notice` names the agent before its guard.

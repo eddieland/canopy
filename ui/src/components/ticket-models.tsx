@@ -165,7 +165,8 @@ function ModelMenu({
                     aria-label={`${current.agent} model: ${shown}${gone ? `, ${GONE}` : ''}`}
                     title={gone ? GONE : undefined}
                     className={cn(
-                        named ? 'font-mono' : 'text-muted-foreground',
+                        // The `xs` button is monospace of its own, as an id is.
+                        !named && 'font-sans text-muted-foreground',
                         gone && 'border-status-blocked/40 text-status-blocked',
                     )}
                 >
