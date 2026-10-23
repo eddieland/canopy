@@ -78,8 +78,8 @@ The bar across the top of every page. From the left:
   has been down a while. Before it, a `mock` pill when the server runs over a sample journal
   (`python -m canopy.serve --mock`) instead of your workspace's. No loop runs behind that one, and nothing you do there
   reaches a ticket.
-- **The ticker**, if you turned it on in [Settings](settings#fun). Joke headlines, and the odd real tip. It stops under
-  the pointer, for the ones worth reading twice.
+- **The ticker**, unless you turned it off in [Settings](settings#fun). Joke headlines, and the odd real tip. It stops
+  under the pointer, for the ones worth reading twice.
 - **Reload**, only when canopy now serves a newer build of the UI than the page you have open. Reloading loses what
   you've typed and not sent, so send it first.
 - **Pause**, then **Resume**, as `p` at the loop's terminal, or `canopy pause` and `canopy resume`. While paused, no
@@ -107,7 +107,10 @@ as `canopy notice` would, so a run already going keeps the words it started with
 The strip beside the nav, on every page. From the top: a search box over the whole journal (below), everything working
 right now, and what the last 24 hours and the last 30 days cost, each a link to the spend page. **Working** lists every
 agent on the clock: worker runs by their ticket, reviews by their PR, and chore runs by their chore, with the runs
-waiting on you after them. Each row opens its run's page. It shows four rows at most, then `+N more`, which opens the
+waiting on you after them. A worker run's row says what it's doing under its ticket's title: `planning`,
+`implementing`, `fixing CI`. While it works, that comes as a quip of the ticket's own, `appeasing CI`; hover it for the
+plain words, or turn the quips off in [Settings](settings#fun). Each row opens its run's page. It shows four rows at
+most, then `+N more`, which opens the
 page that lists the rest, and it dims while the loop isn't answering, since what it shows may have ended. The 24 hours
 open the spend page by the hour, and the 30 days by the day. A ticket you stopped drops out once its run ends; a
 question it left behind waits on nothing, so it is not listed either. Its foot names the version canopy is serving,
