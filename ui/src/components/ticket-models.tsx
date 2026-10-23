@@ -29,10 +29,11 @@ interface Choice {
 }
 
 /**
- * The model each of a ticket's agents runs on at its next run (DESIGN §13), and where that comes from: a row for its
- * workers, its planner, and its reviewer, side by side in one row, an override marked, each a menu that sets the ticket's override to one of the models the runtime
- * lists, read when the menu opens, or clears it, as `canopy model KEY MODEL --agent AGENT` and `--clear` do. A model
- * the runtime no longer lists refuses the agent's next run rather than run it on another.
+ * The model each of a ticket's agents runs on at its next run (DESIGN §13), and where that comes from: its workers,
+ * its planner, and its reviewer side by side in one row, an override marked, each a menu that sets the ticket's
+ * override to one of the models the runtime lists, read when the menu opens, or clears it, as
+ * `canopy model KEY MODEL --agent AGENT` and `--clear` do. A model the runtime no longer lists refuses the agent's next
+ * run rather than run it on another.
  */
 export function TicketModels({
     ticketKey,

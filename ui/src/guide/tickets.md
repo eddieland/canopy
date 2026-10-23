@@ -138,12 +138,12 @@ Under the personas, the **models** row names, for each of the same three agents,
 this ticket overrides is marked **override**; hover an agent to see where the others come from, `[runtime.models]` in
 your config or nothing, which leaves it to the runtime's own default.
 
-Open an agent's menu there to set this ticket's override, as `canopy model KEY MODEL --agent AGENT` does. The menu asks the
-runtime for its models each time it opens, the same list `canopy models` prints, so it may take a moment to fill. The
-override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
-**Clear the override**. That is the canary: one ticket on the new model, the rest on the one you trust, and
-[the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run's page names the model
-that served it, so you can check the canary actually sang.
+Open an agent's menu there to set this ticket's override, as `canopy model KEY MODEL --agent AGENT` does. The menu
+asks the runtime for its models each time it opens, the same list `canopy models` prints, so it may take a moment to
+fill. The override holds for every run of that agent on this ticket, a `resume` after review comments included,
+until you pick **Clear the override**. That is the canary: one ticket on the new model, the rest on the one you
+trust, and [the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run's page names
+the model that served it, so you can check the canary actually sang.
 
 The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
 override names drops off the runtime's list before the next run, that run is refused rather than sent to another
