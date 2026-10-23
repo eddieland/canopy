@@ -120,6 +120,14 @@ spending no attempt and leasing no slot, in a dry run too; and the run records t
 refuses as `model_list_failed`. Built (2026-10-22, issue #275): the commit trailer names the model chosen for a
 worker or a task's run, `provider/model (canopy worker)`, while `trust.commit_trailer_name` is the default; a name the
 operator set is used as set, with no placeholder for the model.
+Built (2026-10-22): the per-ticket override, a `ticket_overrides` row of kind `model` (no migration: M60's table
+allowed it), set and cleared by `canopy model KEY MODEL [--agent planner|reviewer]` and `--clear`, or the ticket page's
+Model rows in its Work panel, both through one function that refuses `inside_run`, `unknown_model` for a model the list
+lacks or one with a variant (an override names the model alone; the variant stays config's), and `model_list_failed`;
+`canopy model KEY` prints each agent's next model and where it comes from; a worker's or planner's dispatch takes it in
+config's place and records it, and the run renders the model it recorded, which its trailer names; a review of the
+ticket's PR renders the reviewer's; `canopy models` prints the list and which agents config gives each; and
+TRUST_MODEL T1 and T8.
 Built (2026-10-23, asked for by the operator): a chore's own model and each model's variant. Of the pinned OpenCode's
 source: an agent's `variant` is used only while the run's model is the agent's own and that model lists the variant,
 and is dropped without a word otherwise; `opencode run --variant` beats it; `opencode models --verbose` prints each
@@ -131,7 +139,6 @@ the last `@`, when it starts with a letter, since a dated id may hold an `@`), r
 `runtime.chore_cmd` or its own running that copy; a chore whose `cmd` runs another agent is refused a `model`, its
 model set in its own definition, and a `--model` or `--variant` in a chore's `cmd` is refused when it runs
 `canopy-chore`. Chore runs keep no model of their own in the journal; what served them is read from their sessions.
-Not built yet: the per-ticket override (`canopy model`, a `ticket_overrides` row of
-kind `model`) and the ticket page's Model panel; `canopy models`; the settings page's read-only `[runtime.models]`; the
-check before a review, a chore, a task's run, and a tick's overseer, with its tick status; `canopy status` naming the
-models that served a run; and TRUST_MODEL T8.
+Not built yet: the settings page's read-only `[runtime.models]`; the check before a review, a chore, a task's run,
+and a tick's overseer, with its tick status, so a reviewer override whose model has gone fails as the review starts;
+and `canopy status` naming the models that served a run.

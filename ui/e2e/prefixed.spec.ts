@@ -544,6 +544,31 @@ test("a ticket's worker persona is chosen from its page and cleared, as canopy p
     await expect(personas.getByRole('button', { name: 'worker persona: canopy' })).toBeVisible()
 })
 
+test("a ticket's worker model is chosen from its page, among those the runtime lists, and cleared", async ({
+    page,
+}) => {
+    await page.goto('tickets/ABC-104')
+    const models = page.getByTestId('ticket-models')
+    await expect(models).toContainText('nothing sets one')
+    await models.getByRole('button', { name: "worker model: the runtime's default" }).click()
+    // The mock's runtime lists the models its runs' sessions name.
+    const first = page.getByRole('menuitemradio').first()
+    const model = (await first.textContent()) ?? ''
+    expect(model).toMatch(/^[\w.-]+\/[\w.:@/+-]+$/u)
+    await first.click()
+    await expect(models.getByRole('status')).toHaveText(
+        `ABC-104's worker runs use ${model} from their next run: this ticket's override.`,
+    )
+    const chosen = models.getByRole('button', { name: `worker model: ${model}` })
+    await expect(chosen).toBeVisible()
+    await chosen.click()
+    await page.getByRole('menuitem', { name: 'Clear the override' }).click()
+    await expect(models.getByRole('status')).toHaveText(
+        "ABC-104's worker runs use the runtime's default from their next run: nothing sets one.",
+    )
+    await expect(models.getByRole('button', { name: "worker model: the runtime's default" })).toBeVisible()
+})
+
 test("a PR at its review limit is granted one more review from its ticket's attention item", async ({ page }) => {
     await page.goto('attention')
     await page.getByTestId('attention-list').getByText('acme/web#88 waits on a reviewer').click()
