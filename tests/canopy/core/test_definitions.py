@@ -156,8 +156,11 @@ def test_prune_without_a_runtime_directory(tmp_path: Path) -> None:
 
 
 def _rules(agent: str, section: str = "") -> list[tuple[str, str]]:
-    """The agent's quoted permission rules, in order: its top-level ones, OpenCode's patterns for MCP tool names, or
-    those under `section`, such as `bash`, whose patterns are command lines."""
+    """The agent's quoted permission rules, in order.
+
+    They are its top-level ones, OpenCode's patterns for MCP tool names, or those under `section`, such as `bash`, whose
+    patterns are command lines.
+    """
     return _rules_in((resources.agents_dir() / f"{agent}.md").read_text(), section)
 
 
@@ -364,8 +367,10 @@ def test_workers_keep_the_pr_tools_they_work_with(agent: str, tool: str) -> None
 
 @pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_workers_may_read_a_pr_and_its_ci_with_gh(agent: str) -> None:
-    """A resumed worker reads the review comments it was pointed at, and a fix-ci one the failing checks; the private
-    one still cannot reach the ticket."""
+    """A resumed worker reads the review comments it was pointed at, and a fix-ci one the failing checks.
+
+    The private one still cannot reach the ticket.
+    """
     rules = _rules(agent, "bash")
     for command in (
         "gh pr view",
@@ -383,8 +388,10 @@ def test_workers_may_read_a_pr_and_its_ci_with_gh(agent: str) -> None:
 
 @pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
 def test_workers_may_edit_their_pr_with_gh(agent: str) -> None:
-    """`gh pr edit` writes to a PR, as the PR update tool both keep does; the private one still cannot edit the
-    ticket."""
+    """`gh pr edit` writes to a PR, as the PR update tool both keep does.
+
+    The private one still cannot edit the ticket.
+    """
     rules = _rules(agent, "bash")
     for command in ("gh pr edit", "gh pr edit 12 --title 'PROJ-1: x'", "gh pr edit agent/PROJ-1-x --body-file body.md"):
         assert _allowed(rules, command), command
@@ -466,8 +473,10 @@ CHORE_AGENTS: Mapping[str, tuple[Sequence[str], Sequence[str]]] = {
 
 @pytest.mark.parametrize("agent", sorted(CHORE_AGENTS))
 def test_an_example_chores_agent_is_canopy_chore_with_its_prompts_commands_and_reports(agent: str) -> None:
-    """Everything but bash and its reports is `canopy-chore`'s (DESIGN §19), so it can write nothing `canopy-chore`
-    could not."""
+    """Everything but bash and its reports is `canopy-chore`'s (DESIGN §19).
+
+    So it can write nothing `canopy-chore` could not.
+    """
     definition = (resources.example_chores_dir() / "agents" / f"{agent}.md").read_text()
     commands, reads = CHORE_AGENTS[agent]
     allows = {f'  "{servers.tool_name(reports.SERVER, tool)}": allow' for tool in reads}
@@ -549,8 +558,10 @@ REPORTS = reports.tool_names()
 
 @pytest.mark.parametrize("provider", ["github", "jira"])
 def test_a_chore_may_call_its_history_tool_alone_and_has_no_shell(canopy_env: CanopyEnv, provider: str) -> None:
-    """The shipped chore reads its history through its tool alone: its shell is gone (ROADMAP M48, Stage 1b), and
-    canopy's reports are for an agent of the operator's that allows each by name."""
+    """The shipped chore reads its history through its tool alone: its shell is gone (ROADMAP M48, Stage 1b).
+
+    canopy's reports are for an agent of the operator's that allows each by name.
+    """
     _set_provider(canopy_env, provider)
     ruleset = _ruleset(canopy_env, agents.CHORE)
     assert _opencode_action(ruleset, CHORE_HISTORY, "*") == "allow"

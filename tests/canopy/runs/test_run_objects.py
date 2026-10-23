@@ -53,7 +53,7 @@ def objects_of(canopy_env: CanopyEnv, run_id: int) -> Path:
 
 
 def assert_healthy(slot: Path, primary: Path) -> None:
-    """git works in the slot and the primary clone, and names no missing object, now the run's objects are gone."""
+    """`git` works in the slot and the primary clone, and names no missing object, now the run's objects are gone."""
     for args, cwd in (
         (("status", "--porcelain"), slot),
         (("for-each-ref",), slot),

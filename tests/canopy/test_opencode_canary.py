@@ -1,4 +1,4 @@
-"""Canary for DESIGN §16 question 1: do OpenCode agent permissions hold under `opencode run`? (ROADMAP M1, D021)
+"""Canary for DESIGN §16 question 1 (ROADMAP M1, D021): do OpenCode agent permissions hold under `opencode run`?
 
 An agent definition allows one bash command, denies other bash commands and all edits, and marks one command `ask`.
 The agent is told to try all of them. Only the allowed command may leave a marker file; the run must end on its own

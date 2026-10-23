@@ -1,6 +1,8 @@
-"""Trusted and untrusted reviewers (DESIGN §7, D089): the trusted list reaches the overseer and resume workers, and the
-operator's reply on a public ticket is its go-ahead, carried in the state block and every public worker's prompt
-(D093)."""
+"""Trusted and untrusted reviewers (DESIGN §7, D089).
+
+The trusted list reaches the overseer and resume workers, and the operator's reply on a public ticket is its go-ahead,
+carried in the state block and every public worker's prompt (D093).
+"""
 
 import json
 from typing import cast
