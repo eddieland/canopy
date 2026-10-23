@@ -321,7 +321,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None, models
         kind=str(row["kind"]),
         reasons=list(db.reasons_in(row)),
         status=status,
-        state=_run_state(status),
+        state=run_state(status),
         private=bool(row["private"]),
         ticket_stopped=bool(row["ticket_stopped"]),
         branch=str(row["branch"]) or None,
@@ -385,7 +385,7 @@ def _activity(row: sqlite3.Row) -> RunActivity | None:
     )
 
 
-def _run_state(status: str) -> RunState:
+def run_state(status: str) -> RunState:
     """What the web UI colors a run that has `status` as (DESIGN §22).
 
     Returns:
@@ -653,6 +653,7 @@ def message(row: records.Message) -> Message:
         kind=_KINDS.get(row.kind, "comment"),
         channel=row.channel,
         run_id=row.run_id,
+        task_run_id=row.task_run_id,
         answers=row.answers,
         body=conversation.printable(row.body),
         comment=comment,
