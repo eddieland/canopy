@@ -6,7 +6,8 @@ agents --json` print them, and an agent reads them through tools of the same nam
 which `canopy _mcp --reports` serves (DESIGN §27), beside the read-back of the journal as text that `loop.readback`
 holds: a tick's decisions, a run, and a chore. The server is named for what it serves, not for whom: a chore's run is
 the one given it today. Both build a request here and call its function, in the style of the overseer's verbs
-(`loop.tools`), so a tool and its command take the same bounds and say the same text. None of them writes.
+(`loop.tools`), so a tool and its command take the same bounds and say the same text. None of them writes to the
+journal; `agents` writes the definitions snapshot a run would, for the runtime to read.
 
 What a worker wrote, a memory's text, is printed with every character that hides text named, as the listings print it.
 """

@@ -622,8 +622,11 @@ Controls:
   A chore's run is also given a server of canopy's read-only reports of the whole workspace, `canopy_reports`: health,
   spend, the three listings of agent memory, the config's settings, and what each agent is offered, as their commands
   print them with `--json`, and a tick's decisions and the page of a run or a chore as `canopy decisions` and `canopy
-  show` print them, never a ticket's page, which holds its conversation. The config's settings leave out every key
-  that holds text, a command, or a path. Asking what each agent is offered starts the agent runtime to read its config,
+  show` print them, never a ticket's page, which holds its conversation. Unlike the history tool, these read the
+  whole workspace on purpose, every run and every chore, as `canopy-introspect` must to find what keeps failing: any
+  run's page, a private ticket's included, with the messages it sent, and any chore's findings and the operator's notes
+  to it. An agent that allows one reads what the operator's `canopy show` would. The config's settings leave out every
+  key that holds text, a command, or a path. Asking what each agent is offered starts the agent runtime to read its config,
   without the servers the chore's run was given. The server is named in the same environment, lists nothing outside a
   chore's run, and writes nothing but the definitions snapshot a run would write; `canopy-chore` and every other
   definition deny it, so only an agent that allows a report by name reads it.
