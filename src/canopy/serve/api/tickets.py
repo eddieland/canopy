@@ -194,8 +194,9 @@ def model(key: TicketKey, body: ModelRequest, backend: BackendDep) -> AgentModel
             )
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        served = ticket_models.last_served(ctx.conn, ref.id)
     _log.info(
         "model chosen" if body.model is not None else "model cleared",
         extra={"ticket": ref.id, "agent": body.agent, "model": body.model, "channel": WEB},
     )
-    return views.agent_model(now)
+    return views.agent_model(now, served)

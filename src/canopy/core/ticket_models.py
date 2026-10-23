@@ -11,7 +11,7 @@ ticket stays on one model. The overseer and chores work on no one ticket, so onl
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, LiteralString
 
 from canopy.core import agent_models, conversation, db, records, sql
 from canopy.core.vocab import OverrideKind, RunKind
@@ -94,6 +94,40 @@ def next_for(conn: sqlite3.Connection, config: Config, ticket: str) -> list[Next
             found.append(Next(agent, configured, "config"))
         else:
             found.append(Next(agent, None, "default"))
+    return found
+
+
+def last_served(conn: sqlite3.Connection, ticket: str) -> dict[Agent, str]:
+    """Return the model that served each of `ticket`'s agents at its latest run whose session canopy has read.
+
+    A run's most costly model names it, as its page lists that first (`run_models.of_run`). A run not read yet, or whose
+    read found no model call, is passed over for the one before it.
+
+    Returns:
+        Each agent's model, as `provider/model`, by the agent; one none of whose runs has been read is not among them.
+    """
+    served: LiteralString = "run_models m ON m.run_table = ? AND m.run_id = r.id"
+    latest_first: LiteralString = "r.started_at DESC, r.id DESC, m.cost_usd DESC, m.model"
+    workers = (
+        sql.select("r.kind, m.model")
+        .from_("runs r")
+        .join(served, "runs")
+        .where("r.ticket_key = ?", ticket)
+        .order_by(latest_first)
+    )
+    found: dict[Agent, str] = {}
+    for row in sql.execute(conn, workers):
+        found.setdefault(agent_of(str(row[0])), str(row[1]))
+    reviews = (
+        sql.select("m.model")
+        .from_("review_runs r")
+        .join(served, "review_runs")
+        .where("r.ticket_key = ?", ticket)
+        .order_by(latest_first)
+        .limit(1)
+    )
+    for row in sql.execute(conn, reviews):
+        found["reviewer"] = str(row[0])
     return found
 
 

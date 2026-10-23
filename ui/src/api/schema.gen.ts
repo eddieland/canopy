@@ -2188,6 +2188,15 @@ export type components = {
             /** @description The agent: `worker` for its implement and resume runs, `planner`, or `reviewer`. */
             agent: components["schemas"]["ModelAgent"];
             /**
+             * Last Served
+             * @description The model that served the agent's latest run for the ticket whose session canopy has read, as `provider/model`,
+             *     the most costly when it called several; None when none of its runs has been read.
+             *
+             *     What served may differ from `model`: a run before the choice changed, or the runtime's default, which `model` cannot
+             *     name.
+             */
+            last_served: string | null;
+            /**
              * Model
              * @description The model, as `provider/model`; None for the runtime's default, when neither the ticket nor config sets one.
              */
