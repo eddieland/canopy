@@ -65,6 +65,13 @@ export const TIPS = {
         'Hot take: a draft PR is a PR that has not met a reviewer yet.',
         'Haiku: you asked one question / it came back with three tickets / such is delegation',
     ],
+    '/tasks/$id_/runs/$run': [
+        "It looks like you're reading what a task's worker did. Every keystroke. Very trusting of you.",
+        'Unhelpful tip: if a run took too many tool calls, count them again slower.',
+        'Dear diary, watched a worker measure something twice. I measure nothing, once.',
+        'Hot take: a transcript is a diary someone else wrote about your codebase.',
+        'Haiku: it read, then it cut / then it measured once again / the bundle got small',
+    ],
     '/tickets/$key': [
         "It looks like you're reading a ticket. Would you like me to read it louder?",
         'Unhelpful tip: Forget makes canopy forget a ticket. I forget tickets for free, all day.',

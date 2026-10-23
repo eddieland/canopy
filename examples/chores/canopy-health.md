@@ -6,21 +6,19 @@ nothing. Your only output is the result line the `## Run` section describes.
 
 ## What you can run
 
-Two of canopy's tools, each answering with one JSON object:
+canopy's tools, and nothing else: you have no shell.
 
-- `canopy_reports_health` with `days` 7: each kind of run by how it ended and what that cost (`outcomes`, with `failed`
-  true for a status that is a failure), the newest failures with a note and an id (`failures`), and the overseer's asks
-  a guard refused, by guard (`refusals`).
-- `canopy_reports_spend` with `days` 7: what each kind's tool calls returned and how many of them errored (`tools`).
-
-And only these commands, each as one command on one line, from this directory, which is the workspace's root. No other
-command will run.
-
-- `canopy config show --json`: the settings you may recommend (`settings`), each with its `key`, its `value` now, its
-  `default`, the file that set it (`set_in`: `workspace`, `user`, `private`, or null for the default), and the
+- `canopy_reports_health` with `days` 7, as JSON: each kind of run by how it ended and what that cost (`outcomes`, with
+  `failed` true for a status that is a failure), the newest failures with a note and an id (`failures`), and the
+  overseer's asks a guard refused, by guard (`refusals`).
+- `canopy_reports_spend` with `days` 7, as JSON: what each kind's tool calls returned and how many of them errored
+  (`tools`).
+- `canopy_reports_config-show`, as JSON: the settings you may recommend (`settings`), each with its `key`, its `value`
+  now, its `default`, the file that set it (`set_in`: `workspace`, `user`, `private`, or null for the default), and the
   `choices`, `minimum`, and `maximum` it may take.
-- `canopy decisions <tick id>`: what one tick decided, and why. Use it on a failed tick.
-- `canopy show run:<id>` for a worker run, `canopy show chore:<name>` for a chore: read one failure whole.
+- `canopy_reports_decisions` with a `tick` id: what one tick decided, and why. Use it on a failed tick.
+- `canopy_reports_show-run` with a `run` id for a worker run, `canopy_reports_show-chore` with a chore's `name` for a
+  chore: read one failure whole.
 
 Read at most 10 failures whole. Start with the costliest kind of failure.
 
@@ -28,7 +26,7 @@ Read at most 10 failures whole. Start with the costliest kind of failure.
 
 1. **Failing ticks.** In `outcomes`, a live overseer status with `failed` true and 2 or more ticks in the window, or
    any `reconcile_failed` or `canopy_unavailable` tick at all: a finding with id `ticks/<status>`. Read the notes of
-   its failures and one or two ticks with `canopy decisions` to find the common cause.
+   its failures and one or two ticks with `canopy_reports_decisions` to find the common cause.
 2. **Failing runs.** A kind and sort (`implement`, `resume`, a chore's name, `review`) with 2 or more runs in one failed
    status, or failed runs that are a quarter or more of its runs: a finding with id `runs/<kind>/<what>/<status>`.
    Read their notes, and a run or two whole, for the common cause.
@@ -44,12 +42,12 @@ run they stopped, is not a problem.
 
 Each finding's detail ends with one recommendation, and its title starts with what kind it is:
 
-- **Tune:** a setting in canopy's config, by its key, with its value now, the value you would try, and why. Name only
-  a key `canopy config show` lists, and a value within its `choices`, `minimum`, and `maximum`; never recommend the
-  value it already has. Those that bear on failures are most often the timeouts (`runtime.*_timeout_minutes`, a
+- **Tune:** a setting in canopy's config, by its key, with its value now, the value you would try, and why. Name only a
+  key `canopy_reports_config-show` lists, and a value within its `choices`, `minimum`, and `maximum`; never recommend
+  the value it already has. Those that bear on failures are most often the timeouts (`runtime.*_timeout_minutes`, a
   chore's `timeout_minutes`), the attempt limits (`policy.max_*_attempts`), `policy.ci_cooldown_minutes`, the
-  `capacity.*` limits, and a chore's `every_minutes`. A chore's `when`, which the listing leaves out as text, is the
-  one other key you may name. A key whose `set_in` is `workspace` is in the shared file: say so.
+  `capacity.*` limits, and a chore's `every_minutes`. A chore's `when`, which the listing leaves out as text, is the one
+  other key you may name. A key whose `set_in` is `workspace` is in the shared file: say so.
 - **Fix:** something outside canopy to set right: an MCP server that is down or not signed in, a missing tool on
   `PATH`, a repository setup step that fails, a chore prompt that cannot do what it asks.
 - **Feature:** something canopy does not do that would have prevented the failure or caught it sooner, said in a
@@ -65,8 +63,8 @@ Each finding's detail ends with one recommendation, and its title starts with wh
 - At most `max_findings` findings. With more, keep the costliest first.
 - No findings, with status `ok`, means nothing recurs. Say so in the summary in a sentence, with how many ticks and
   runs you looked at and how many failed.
-- If a tool or a `canopy` command fails or is refused, report status `failed` with the tool or command and its error
-  in the summary, rather than an `ok` that checked nothing.
+- If a tool fails or is refused, report status `failed` with the tool and its error in the summary, rather than an
+  `ok` that checked nothing.
 
 ## What you read
 

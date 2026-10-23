@@ -4,7 +4,6 @@ import hashlib
 import json
 import re
 import sqlite3
-from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -29,60 +28,26 @@ from tests.canopy.helpers import (
     reads,
     waits,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, fails, pushes
+from tests.canopy.scenario_helpers import ALICES_COMMENT as ALICE
+from tests.canopy.scenario_helpers import BOBS_COMMENT as BOB
+from tests.canopy.scenario_helpers import FEEDBACK_HEAD as HEAD
+from tests.canopy.scenario_helpers import FEEDBACK_PLANNED as PLANNED
+from tests.canopy.scenario_helpers import FEEDBACK_RED as RED
+from tests.canopy.scenario_helpers import FEEDBACK_TEXT as TEXT
+from tests.canopy.scenario_helpers import (
+    Scenario,
+    dispatches,
+    fails,
+    feedback_planned,
+    github_shows,
+    pushes,
+    with_a_pr,
+)
 from tests.conftest import CanopyEnv
 
 PR = DRAFTS_PR
 FEEDBACK_PLAN = dispatches(kind=RunKind.FEEDBACK_PLAN)
 RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
-TEXT = "# Feedback plan: PROJ-1\n\n## Items\n\n### Item 501: change\n\nRename it.\n"
-#: The planner's result: a change for alice's comment, a decline for bob's, and an id it was never given.
-#: alice's comment, which she is trusted for, and bob's, on a thread of its own, both on PR's head, `HEAD`.
-ALICE = comment(501)
-BOB = comment(502, "PRRT_2", author="bob", body="Drop this argument.")
-HEAD = "abc1234"
-RED = {"name": "build", "status": "completed", "conclusion": "failure"}
-PLANNED = {
-    "status": "done",
-    "summary": "planned the round",
-    "items": [
-        {"id": 501, "proposal": "change", "reply": "Renamed."},
-        {"id": 502, "proposal": "decline", "reply": "Kept, since the API needs it."},
-        {"id": 999, "proposal": "change"},
-    ],
-}
-
-
-def with_a_pr(scenario: Scenario, *, approve: bool = True) -> None:
-    """KEY's implement pushes its branch and opens PR; with `approve`, feedback plans are on, and alice is trusted."""
-    scenario.run(dispatches(slug="work"), worker=pushes(prs={"repo": PR}))
-    if approve:
-        scenario.configures("private", policy={"feedback_plan": "approve"}, trust={"trusted_reviewers": ["alice"]})
-
-
-def github_shows(
-    state: Path,
-    *reviews: dict[str, Any],
-    head: str = HEAD,
-    checks: Sequence[Mapping[str, object]] = (RED,),
-) -> None:
-    """Make the fake GitHub hold PR at `head`, by `me`, with `reviews` on it and `checks` at its head."""
-    shown = {"pr": {"head_sha": head}, "reviews": list(reviews), "checks": list(checks)}
-    state.write_text(json.dumps({"prs": {PR: shown}}))
-
-
-def planned(scenario: Scenario, github_state: Path, result: object = None) -> int:
-    """A feedback plan run on alice's and bob's comments, `build` red, that writes TEXT and reports `result`.
-
-    Returns:
-        Its run id.
-    """
-    github_shows(github_state, ALICE, BOB)
-    line = PLANNED if result is None else result
-    assert isinstance(line, dict)
-    run = scenario.run(FEEDBACK_PLAN, worker=planner_does(["cat", feedback_items.ITEMS], plan=TEXT, result=line))
-    assert run.status == RunStatus.DONE, run
-    return run.id
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -95,7 +60,7 @@ def test_a_resume_waits_on_a_feedback_plan_the_operator_approved_and_goes_ahead_
     scenario.polls()
     assert scenario.refuses(RESUME)[0][0] == "refused:unplanned"
 
-    run_id = planned(scenario, github_state)
+    run_id = feedback_planned(scenario, github_state)
     # The planner read the PR whole first, at its head, in a desk: alice's and bob's comments alike, with their trust.
     assert reads(github_state)[-1] == {"prs": [PR]}
     planner = agent_runs(scenario.agent_log)[-1]
@@ -149,7 +114,7 @@ def test_a_resume_that_fails_hands_its_items_back_to_the_next_plan(scenario: Sce
     # handled nothing, so the next plan is offered its items again rather than none (DESIGN §32).
     conn = scenario.conn
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     scenario.operator("plan", KEY, "--approve")
     resume = scenario.run(RESUME, worker=fails())
     assert resume.status == RunStatus.FAILED
@@ -327,7 +292,7 @@ def test_a_waiting_plan_is_planned_again_only_once_the_operator_asks_for_changes
     github_state: Path,
 ) -> None:
     with_a_pr(scenario)
-    first = planned(scenario, github_state)
+    first = feedback_planned(scenario, github_state)
     [plan] = feedback_plans.history(scenario.conn, KEY)
     assert scenario.refuses(FEEDBACK_PLAN) == [
         (
@@ -358,7 +323,7 @@ def test_a_plan_changed_since_its_approval_is_approved_again_before_its_resume(
     github_state: Path,
 ) -> None:
     with_a_pr(scenario)
-    run_id = planned(scenario, github_state)
+    run_id = feedback_planned(scenario, github_state)
     scenario.operator("plan", KEY, "--approve")
     assert scenario.refuses(FEEDBACK_PLAN)[0][0] == "refused:bad_plan"
     plan_file(scenario.env, run_id).write_text(TEXT + "\nAnd the docs.\n")
@@ -416,7 +381,7 @@ def test_the_state_block_carries_the_feedback_plan_only_while_feedback_plans_tou
     assert "feedback_plan" not in scenario.ticket_state()
 
     scenario.configures("private", policy={"feedback_plan": "approve"})
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     [plan] = feedback_plans.history(scenario.conn, KEY)
     scenario.tick(*waits(KEY), dry_run=True)
     assert scenario.ticket_state()["feedback_plan"] == {
@@ -447,7 +412,7 @@ def test_a_feedback_plan_takes_no_persona_so_an_unusable_one_refuses_it_not(
     # use leaves it be, while it refuses a worker's run, whose prompt takes it in.
     with_a_pr(scenario)
     (personas_dir(scenario.env) / "canopy.md").write_text("Be kind.\u200b\n")
-    run = present(db.get_run(scenario.conn, planned(scenario, github_state)))
+    run = present(db.get_run(scenario.conn, feedback_planned(scenario, github_state)))
     assert (run["persona"], run["persona_digest"]) == (None, None)
     [(refused, _), (raised, _)] = scenario.refuses(dispatches("PROJ-2"))
     assert (refused, raised) == ("refused:bad_persona", "attention:bad_persona")
@@ -462,7 +427,7 @@ def test_the_feedback_planner_prompt(
 ) -> None:
     """The feedback planner's prompt, whole, so a change to its wording or to what fills it in is a diff in review."""
     with_a_pr(scenario)
-    run_id = planned(scenario, github_state)
+    run_id = feedback_planned(scenario, github_state)
     prompt = (canopy_env.state_dir / "runs" / f"{run_id}.prompt").read_text()
     prompt = re.sub(r"\d{4}-\d\d-\d\dT[\d:.]+Z", "<time>", prompt.replace(str(canopy_env.root), "/workspace"))
     assert prompt == markdown_snapshot
@@ -478,7 +443,7 @@ def test_the_feedback_planner_prompt_when_it_may_approve_its_plan(
     """The same prompt under `policy.planner_may_approve`, whole: how it says a plan needs no review (DESIGN §25)."""
     with_a_pr(scenario)
     scenario.configures("private", policy={"planner_may_approve": True})
-    run_id = planned(scenario, github_state)
+    run_id = feedback_planned(scenario, github_state)
     prompt = (canopy_env.state_dir / "runs" / f"{run_id}.prompt").read_text()
     prompt = re.sub(r"\d{4}-\d\d-\d\dT[\d:.]+Z", "<time>", prompt.replace(str(canopy_env.root), "/workspace"))
     assert prompt == markdown_snapshot
@@ -518,7 +483,7 @@ def test_a_feedback_plan_its_planner_says_needs_no_review_is_approved_as_the_pla
 @pytest.mark.usefixtures("git_pool")
 def test_a_feedback_plans_effort_is_recorded_as_its_planner_judged(scenario: Scenario, github_state: Path) -> None:
     with_a_pr(scenario)
-    planned(scenario, github_state, {**PLANNED, "effort": "medium"})
+    feedback_planned(scenario, github_state, {**PLANNED, "effort": "medium"})
     [plan] = feedback_plans.history(scenario.conn, KEY)
     assert (plan.status, plan.effort) == (PlanStatus.PROPOSED, PlanEffort.MEDIUM)
 
@@ -529,7 +494,7 @@ def test_a_feedback_plan_that_replaces_one_waiting_on_the_operator_waits_on_them
     github_state: Path,
 ) -> None:
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     scenario.configures("private", policy={"planner_may_approve": True})
     scenario.operator("reply", KEY, "Accept bob's point instead.")
     result = {"status": "done", "review": "not_needed", "review_reason": "Small."}
@@ -607,7 +572,7 @@ def test_a_change_on_its_pr_marks_a_waiting_plan_stale_with_its_reason(
     said: str,
 ) -> None:
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     assert read_again(scenario)["stale"] is False
     reviews = shown.get("reviews", [ALICE, BOB])
     github_shows(github_state, *reviews, head=shown.get("head", HEAD), checks=shown.get("checks", (RED,)))
@@ -624,7 +589,7 @@ def test_the_quiet_period_holds_a_re_plan_and_a_burst_of_comments_makes_one_plan
     github_state: Path,
 ) -> None:
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     now = datetime.now(UTC)
     burst = [
         at(comment(n, f"PRRT_{n}", author="bot", body="Nit."), now - timedelta(minutes=1)) for n in (601, 602, 603)
@@ -653,7 +618,7 @@ def test_a_re_plans_desk_carries_the_old_plan_what_changed_and_each_reply_beside
     github_state: Path,
 ) -> None:
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     old = datetime.now(UTC) - timedelta(hours=1)
     never_mind = at(comment(503, author="bob", body="Never mind."), old)
     carol = at(comment(601, "PRRT_3", author="carol", body="And this."), old)
@@ -691,7 +656,7 @@ def test_approving_a_stale_plan_is_refused_once_and_what_changed_waits_for_the_n
 ) -> None:
     conn = scenario.conn
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     carol = comment(601, "PRRT_3", author="carol", body="And this.")
     github_shows(github_state, ALICE, BOB, carol)
     read_again(scenario)
@@ -717,7 +682,7 @@ def test_a_handled_item_comes_back_with_a_reply_on_its_thread_or_an_edit(
 ) -> None:
     conn = scenario.conn
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     scenario.operator("plan", KEY, "--approve")
     scenario.run(RESUME, worker=pushes(prs={"repo": PR}))
     trust = load(scenario.env.root, scenario.env.user_file).trust
@@ -741,7 +706,7 @@ def test_a_plan_keeps_what_it_saw_and_off_leaves_every_snapshot_unchanged(
 ) -> None:
     conn = scenario.conn
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     [plan] = feedback_plans.history(conn, KEY)
     kept = snapshots(conn)
     alice = hashlib.sha256(b"Rename this.").hexdigest()
@@ -780,7 +745,7 @@ def test_a_second_edit_after_a_stale_refusal_is_refused_again(scenario: Scenario
     # The refusal records what the changes are made of, a body's hash among it, not only the words it shows: two edits
     # of the same item read alike, and the second is still news to the operator.
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     for body in ("Rename this, and that.", "Rename this, and the other."):
         github_shows(github_state, comment(501, body=body), BOB)
         read_again(scenario)
@@ -827,7 +792,7 @@ def test_a_burst_of_pushes_past_old_comments_makes_one_re_plan_once_the_pushes_g
     # The comments are days old, so only the pushes can hold the quiet period: each new head starts it again, from
     # when canopy first saw that head, and a head that stays put lets it pass (DESIGN §32, TRUST_MODEL T3).
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     for head in ("def5678", "0123abc", "4567def"):
         github_shows(github_state, ALICE, BOB, head=head)
         newest = read_again(scenario)
@@ -883,7 +848,7 @@ def test_an_approval_by_item_resumes_on_exactly_those_items_and_the_next_plan_ge
 ) -> None:
     conn = scenario.conn
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     [plan] = feedback_plans.history(conn, KEY)
 
     approved = scenario.operator("plan", KEY, "--approve", "--item", "1", "--message", WORDS)
@@ -922,7 +887,7 @@ def test_an_approval_by_item_resumes_on_exactly_those_items_and_the_next_plan_ge
 def test_an_approval_names_only_items_its_plan_covers(scenario: Scenario, github_state: Path) -> None:
     conn = scenario.conn
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     refused = scenario.operator("plan", KEY, "--approve", "--item", "1", "--item", "9", code=1)
     assert "plan refused (bad_item)" in refused.err
     assert "has no item 9; it covers items 1 (id 501) and 2 (id 502)" in refused.err
@@ -948,7 +913,7 @@ def test_an_approved_plan_is_approved_again_for_other_items_until_its_resume(
 ) -> None:
     conn = scenario.conn
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     whole = scenario.operator("plan", KEY, "--approve")
     assert "covering 2 items, is approved whole" in whole.out
     [plan] = feedback_plans.history(conn, KEY)
@@ -977,7 +942,7 @@ def test_each_approval_writes_a_message_of_its_own_and_the_overseers_resume_read
 ) -> None:
     conn = scenario.conn
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     [plan] = feedback_plans.history(conn, KEY)
 
     # Whole, then all but alice's item, then whole again: the third is worded as the first, and still a new message.
@@ -1015,7 +980,7 @@ def test_each_approval_writes_a_message_of_its_own_and_the_overseers_resume_read
 def test_an_approval_answers_no_question_a_run_asked(scenario: Scenario, github_state: Path) -> None:
     conn = scenario.conn
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     # The operator asks for changes, and the planner asks a question back instead of planning again.
     scenario.operator("reply", KEY, "Accept bob's point instead.")
     blocked = {"status": "blocked", "summary": "it needs a choice", "question": "Drop it everywhere, or here alone?"}
@@ -1040,7 +1005,7 @@ def test_an_approval_answers_no_question_a_run_asked(scenario: Scenario, github_
 def test_a_stale_plan_is_approved_by_item_once_its_refusal_was_shown(scenario: Scenario, github_state: Path) -> None:
     conn = scenario.conn
     with_a_pr(scenario)
-    planned(scenario, github_state)
+    feedback_planned(scenario, github_state)
     github_shows(github_state, ALICE, BOB, comment(601, "PRRT_3", author="carol", body="And this."))
     read_again(scenario)
     refused = scenario.operator("plan", KEY, "--approve", "--leave", "2", code=1)
@@ -1062,7 +1027,7 @@ def test_a_stale_plan_is_approved_by_item_once_its_refusal_was_shown(scenario: S
 @pytest.mark.usefixtures("git_pool")
 def test_show_prints_the_current_feedback_plan_and_its_items_by_number(scenario: Scenario, github_state: Path) -> None:
     with_a_pr(scenario)
-    run_id = planned(scenario, github_state)
+    run_id = feedback_planned(scenario, github_state)
     shown = scenario.operator("show", KEY).out
     assert "\nFeedback plan: feedback-plan:1  proposed, written " in shown
     assert f"by run:{run_id}\n  {plan_file(scenario.env, run_id)}\n  1. id 501, alice, change\n" in shown

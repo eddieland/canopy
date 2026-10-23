@@ -36,6 +36,15 @@ describe('storedSetting', () => {
         expect(localStorage.getItem(KEY)).toBe('["a","b"]')
     })
 
+    it('reads what another tab stored while nothing listened, before the first listener subscribes', () => {
+        const setting = words()
+        expect(setting.get()).toEqual([])
+        // No listener, so the browser's `storage` event went unheard.
+        localStorage.setItem(KEY, '["from another tab"]')
+        expect(setting.get()).toEqual(['from another tab'])
+        expect(setting.get()).toBe(setting.get())
+    })
+
     it('re-renders on a change from this tab or another, and on storage cleared', () => {
         const setting = words()
         const { result } = renderHook(() => useStoredSetting(setting))

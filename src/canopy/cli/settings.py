@@ -41,12 +41,11 @@ def cmd_show(click_ctx: click.Context, *, as_json: bool) -> int:
     an agent may read what this prints. Bounds and choices are the schema's.
     """
     ctx = open_context(click_ctx)
+    if as_json:
+        click.echo(reports.read_config(ctx, reports.ConfigShow()))
+        return 0
     files = config.config_files(ctx.ws.root)
     found = settings.settings(ctx.config, config.origins(ctx.ws.root, runner=ctx.runner), files)
-    if as_json:
-        layers = {str(layer): str(path) for layer, path in zip(settings.Layer, files, strict=True)}
-        click.echo(reports.report_json({"files": layers, "settings": [dataclasses.asdict(s) for s in found]}))
-        return 0
     for line in render(found, files):
         click.echo(line)
     return 0

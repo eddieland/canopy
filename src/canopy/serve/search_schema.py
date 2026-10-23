@@ -13,7 +13,7 @@ from pydantic import Field
 from canopy.serve.schema import Model
 
 type SearchSource = Annotated[
-    Literal["ticket", "message", "chore_run", "decision", "tick"],
+    Literal["ticket", "task", "message", "chore_run", "decision", "tick"],
     Field(description="Where a search hit is (DESIGN §22, Search), in the order the search reads them."),
 ]
 
@@ -31,8 +31,12 @@ class SearchHit(Model):
     """The ticket a hit is, or whose message or decision it is."""
     chore: str | None = None
     """The chore a run, note, or decision is about."""
+    task_id: int | None = None
+    """The one-off task a hit is, or whose message it is (DESIGN §36)."""
+    task_title: str | None = None
+    """That task's first line that holds anything, on one line and cut short: the operator's text, still untrusted."""
     run_id: int | None = None
-    """The run that reported a message, or a chore run's own id."""
+    """The run that reported a message (a task's run, for a task's message), or a chore run's own id."""
     tick_id: int | None = None
     """A tick, or the tick that recorded a decision."""
     label: str | None = None
