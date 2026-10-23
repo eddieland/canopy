@@ -159,10 +159,11 @@ Rules:
   and each spend window what it covers, as a native `title`; a spend window opens the spend page over its week or
   month. Each block under the nav is a hairline and a `panel-label` over its content, but the spend's, where each
   window's name is the label. What is working is every agent run running,
-  worker runs, reviews of PRs, and chore runs alike, then the worker runs waiting on the operator's answer, each oldest
-  first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the PR, the
-  chore), how long it has run (or `waiting on you` in `status-blocked`), and under it the ticket's title, the review's
-  reference and ticket, or `chore run #N`, opening the run's page; at most four, then `+N more` to the page of
+  worker runs, reviews of PRs, chore runs, and task runs alike, then the worker runs waiting on the operator's answer,
+  each oldest first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the
+  PR, the chore, the task run's `task:N#M`), how long it has run (or `waiting on you` in `status-blocked`), and under it
+  the ticket's title, the review's reference and ticket, `chore run #N`, or the task's first line, opening the run's
+  page; at most four, then `+N more` to the page of
   the ones left out, or the runs page for a mix, so the sticky part fits an 800px window. The
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, on one line, each cost in a
   small readout after its window's name, so the block takes a line's height (a cost too long to share it puts the 30
