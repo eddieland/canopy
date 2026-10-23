@@ -1,6 +1,7 @@
 """The web UI's audit of write requests: what it records of a signed-in session's writes, and what it never keeps."""
 
 import sqlite3
+from dataclasses import asdict
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -89,7 +90,7 @@ def test_a_writes_body_query_and_long_path_are_never_kept(ctx: Context) -> None:
 
     replied, long = writes(ctx.conn)[2:]
     assert (replied.path, replied.code) == (f"/api/tickets/{KEY}/replies", 200)
-    kept = " ".join(str(v) for v in vars(replied).values())
+    kept = " ".join(str(v) for v in asdict(replied).values())
     assert said not in kept
     assert "hidden" not in kept
     assert len(long.path) == audit.MAX_PATH
