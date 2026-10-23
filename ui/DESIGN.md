@@ -900,7 +900,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
   `untrusted_review`, `plan_review`), then every other reason, then chores' findings; within each, the item open longest
   first. A row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`, semibold) when
-  it is about a ticket, as a message's subject, then its detail, muted, as the preview; the selected item's head puts
+  it is about a ticket, or its task's text's first line when it is about a task, as a message's subject, then its
+  detail, muted, as the preview; the selected item's head puts
   the title, semibold, after the key. A reason chip takes `status-failed` or `status-blocked` for the first two, plain
   otherwise. A finding's reason is its id, the agent's text, so its chip says `finding` and the id follows its chore in
   muted monospace. An item's detail is the harness's line, with its `code` spans set as code and nothing else read
@@ -928,7 +929,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
   where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,
   `bare`). A review's draft (`review_waiting`, `review_unsettled`): an outline `Read the draft of review:N` (`See`
-  for one unsettled), a router link to the review's page its detail names, in place of the PR's review limit. An item
+  for one unsettled), a router link to the review's page its detail names, in place of the PR's review limit. A task's
+  (`awaiting_reply`, `task_ticket_unrecorded`): named `task:N` (`TaskLink`) and its text's first line, as its row is,
+  a question's head as a ticket's, then an outline `Answer on task:N` (`Open` for the other), a router link to the
+  task's page, which holds its question and its answer, never the `canopy` commands its detail names. An item
   about nothing the page shows
   whose detail names a `canopy` command to run (`repo_missing`): the command,
   `Copyable`, and nothing to answer. A broken run's item shows any limit it is stuck at (below) under its run, as

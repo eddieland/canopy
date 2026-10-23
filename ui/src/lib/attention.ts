@@ -140,9 +140,9 @@ export function breakdownText(parts: readonly BreakdownPart[]): string {
  * What an item's reason asks of the operator, which picks the first block of its detail, under its head (ui/DESIGN.md,
  * "The attention detail"): the ticket's latest run, for a run that broke; the PR, for one waiting on someone else; the
  * reply, for an answer; the plan's card, for a plan; the proposals or lessons memory's items name; the PR's threads,
- * for the replies a run drafted; the review's page, for a review's draft; the command to run, for an item about
- * nothing canopy shows that names one. `ticket` is any other ticket's item, which leads with the ticket's own actions;
- * `none`, the rest.
+ * for the replies a run drafted; the review's page, for a review's draft; the task's page, for a one-off task's item;
+ * the command to run, for an item about nothing canopy shows that names one. `ticket` is any other ticket's item,
+ * which leads with the ticket's own actions; `none`, the rest.
  */
 export type Ask =
     | 'run'
@@ -152,6 +152,7 @@ export type Ask =
     | 'memory'
     | 'drafts'
     | 'review'
+    | 'task'
     | 'command'
     | 'ticket'
     | 'none'
@@ -163,6 +164,10 @@ export function ask(item: AttentionItem): Ask {
     }
     if (REVIEW_DRAFT_REASONS.has(item.reason) && !item.finding && reviewOf(item) !== null) {
         return 'review'
+    }
+    // A task's item names `canopy` commands in its detail, but its page is where it is read and answered.
+    if (item.task !== null) {
+        return 'task'
     }
     if (item.ticket_key === null) {
         return item.chore === null && item.pr === null && commandOf(item) !== null ? 'command' : 'none'

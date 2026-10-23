@@ -80,7 +80,7 @@ SPEND_DAY_HOURS = 24
 SPEND_MONTH_HOURS = 30 * 24
 _CHORE = "chore:"
 _PR = "pr:"
-# A one-off task's item (DESIGN §36): no ticket, chore, or PR, and no page of its own yet.
+# A one-off task's item (DESIGN §36): no ticket, chore, or PR, but the task's own page.
 _TASK = "task:"
 _SOURCES: dict[str, MessageSource] = {
     "worker": "worker",
@@ -103,16 +103,16 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
     """The attention list, as `canopy status` shows it.
 
     Returns:
-        One item per entry, its subject split into a ticket key or a chore name, with the ticket's title, and its
-        detail without control characters.
+        One item per entry, its subject split into a ticket key, a chore name, a PR, or a task's id, with the ticket's
+        title, and its detail without control characters.
     """
     found: list[AttentionItem] = []
     for item in backend.attention(ctx):
         key = item.ticket_key
         chore = key.removeprefix(_CHORE) if key is not None and key.startswith(_CHORE) else None
         pr = key.removeprefix(_PR) if key is not None and key.startswith(_PR) else None
-        task = key is not None and key.startswith(_TASK)
-        ticket = key if key is not None and chore is None and pr is None and not task else None
+        task = int(key.removeprefix(_TASK)) if key is not None and key.startswith(_TASK) else None
+        ticket = key if key is not None and chore is None and pr is None and task is None else None
         row = db.get_ticket(ctx.conn, ticket) if ticket is not None else None
         found.append(
             AttentionItem(
@@ -127,6 +127,7 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
                 since=db.parse_time(item.since),
                 finding=item.finding,
                 pr=pr,
+                task=task,
             ),
         )
     return found
