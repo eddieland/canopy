@@ -386,6 +386,11 @@ export async function publishReviewDraft(run: number, hash: string, submit: bool
     )
 }
 
+/** `canopy review discard RUN`: the operator has seen the draft and will not post it. It takes no edit after. */
+export async function discardReviewDraft(run: number): Promise<ReviewDraft> {
+    return unwrap(await api.POST('/api/reviews/{run_id}/draft/discard', { params: { path: { run_id: run } } }))
+}
+
 /** `canopy pause`: the loop starts no tick until it is resumed. A tick already running finishes. */
 export async function pauseLoop(): Promise<PauseChanged> {
     return unwrap(await api.POST('/api/loop/pause'))

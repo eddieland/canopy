@@ -101,9 +101,9 @@ publishing, T3 with revisions, and T8 with the review page.
   identity (D010), nothing on GitHub says a model wrote it but what the operator leaves in.
 - T6: the reviewer and the reviser still hold no write tool. Residual: a steered reviewer can put a link carrying data
   in a comment the operator publishes unread.
-- T8: the web channel gains editing a review's draft, asking for a revision, publishing, and staging. Its residual
-  widens to every PR canopy reviewed: a stolen session can post text of its choosing, as the operator, on a coworker's
-  PR.
+- T8: the web channel gains editing a review's draft, asking for a revision, publishing, staging, and discarding. Its
+  residual widens to every PR canopy reviewed: a stolen session can post text of its choosing, as the operator, on a
+  coworker's PR.
 
 ### Open
 
