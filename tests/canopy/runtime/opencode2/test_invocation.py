@@ -42,3 +42,30 @@ def test_with_config_dir_runs_the_command_with_the_directory_set() -> None:
 )
 def test_agent_of_names_only_an_agent_a_path_component_can_hold(command: str, agent: str | None) -> None:
     assert invocation.agent_of(command) == agent
+
+
+@pytest.mark.parametrize(
+    ("command", "run_args", "found"),
+    [
+        ("env X=1 opencode run --agent canopy-worker --model acme/x {prompt}", False, "--model"),
+        ("env X=1 opencode run --agent canopy-worker --model=acme/x {prompt}", False, "--model=acme/x"),
+        ("env X=1 /usr/bin/opencode run --agent canopy-worker -m acme/x", False, "-m"),
+        ("env X=1 opencode run --agent canopy-worker -m=acme/x", False, "-m=acme/x"),
+        ("env X=1 opencode run --agent canopy-worker -macme/x", False, "-macme/x"),
+        # A wrapper may hand `--model` on, but `-m` before the run is the wrapper's own.
+        ("wrap --model acme/x --", False, "--model"),
+        ("python -m wrap --", False, None),
+        ("env X=1 opencode run --agent canopy-worker --variant high {prompt}", False, None),
+        # A suffix's words are the run's own.
+        ("-m acme/x", True, "-m"),
+        ("-macme/x", True, "-macme/x"),
+        ("--log-level DEBUG", True, None),
+    ],
+)
+def test_model_option_finds_a_model_passed_on_the_command_line(
+    command: str,
+    found: str | None,
+    *,
+    run_args: bool,
+) -> None:
+    assert invocation.model_option(shlex.split(command), run_args=run_args) == found
