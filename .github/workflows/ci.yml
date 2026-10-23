@@ -18,11 +18,10 @@ permissions:
 env:
   UV_LOCKED: "1"
 
-# A pull request's runs and a manual run on its branch, such as the one the Screenshots workflow starts after pushing
-# baselines, share a group by branch name, so a newer one cancels the older and the branch holds runners for one run at
-# a time. A fork's pull request is grouped by its number instead, since two forks can both use `main`. Every other run
-# has a group of its own: GitHub cancels a run left pending in a shared group, so merges in quick succession left many
-# of main's commits untested, and without coverage on Codecov.
+# A pull request's runs and a manual run on its branch share a group by branch name, so a newer one cancels the older
+# and the branch holds runners for one run at a time. A fork's pull request is grouped by its number instead, since two
+# forks can both use `main`. Every other run has a group of its own: GitHub cancels a run left pending in a shared
+# group, so merges in quick succession left many of main's commits untested, and without coverage on Codecov.
 concurrency:
   group: >-
     ${{ github.workflow }}-${{
