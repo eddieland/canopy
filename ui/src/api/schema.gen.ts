@@ -6176,6 +6176,13 @@ export type components = {
              * @description Where its log is: from the workspace root when under it, as a worktree's path is.
              */
             log_path: string;
+            /**
+             * Model
+             * @description The model canopy asked the runtime for (DESIGN §13, Each agent's model), as `provider/model[@variant]`, known
+             *     from its start, before its session is read; None when it asked for none, so the runtime's default served it, and
+             *     for a run from before canopy chose one.
+             */
+            model: string | null;
             /** @description Which models served it, on its page and in the runs list; None where another page lists it. */
             models: components["schemas"]["ModelsServed"] | null;
             /**

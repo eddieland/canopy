@@ -244,6 +244,10 @@ class Run(Model):
     persona_digest: str | None = None
     """The sha256 of the persona's text as its prompt carried it, in hex: two runs with different digests had
     different texts under one name."""
+    model: str | None = None
+    """The model canopy asked the runtime for (DESIGN §13, Each agent's model), as `provider/model[@variant]`, known
+    from its start, before its session is read; None when it asked for none, so the runtime's default served it, and
+    for a run from before canopy chose one."""
     models: ModelsServed | None = None
     """Which models served it, on its page and in the runs list; None where another page lists it."""
 

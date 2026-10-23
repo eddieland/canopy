@@ -146,7 +146,8 @@ the runtime's list is read once more, so the button shows your pick with a trail
 override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
 **Clear the override**. That is the canary: one ticket on the new model, the rest on the one you trust, and
 [the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run's page names the model
-that served it, so you can check the canary actually sang.
+it asked for while it works, then the model that served it, and both when they differ, so you can check the canary
+actually sang.
 
 An override names the model alone. If your config runs an agent at a variant, such as `openai/gpt-5@high`, the menu
 shows it greyed out as **config's, with a variant**, and offers `openai/gpt-5` itself: the variant, a reasoning effort,

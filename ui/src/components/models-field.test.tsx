@@ -8,10 +8,10 @@ import { ModelsField } from './models-field'
 
 afterEach(cleanup)
 
-function renderModels(models: ModelsServed) {
+function renderModels(models: ModelsServed, asked: string | null = null) {
     return render(
         <Fields>
-            <ModelsField models={models} />
+            <ModelsField models={models} asked={asked} />
         </Fields>,
     )
 }
@@ -56,6 +56,46 @@ describe('ModelsField', () => {
     it('says a session that made no call served no model', () => {
         renderModels({ status: 'found', models: [], error: null })
         expect(screen.getByText('none: its session made no model call')).toBeTruthy()
+    })
+
+    it('names the model canopy asked for until its session is read, why none served yet on hover', () => {
+        renderModels({ status: 'running', models: [], error: null }, 'anthropic/claude-opus-4-1')
+        const asked = screen.getByText('asked anthropic/claude-opus-4-1')
+        expect(asked.getAttribute('title')).toBe('none served: read from its session once it ends')
+        cleanup()
+        renderModels({ status: 'failed', models: [], error: 'the runtime timed out' }, 'anthropic/claude-opus-4-1')
+        expect(screen.getByText('asked anthropic/claude-opus-4-1').getAttribute('title')).toBe(
+            'none served: its session could not be read, tried again later (the runtime timed out)',
+        )
+    })
+
+    it('names only what served once read, when it is what canopy asked for', () => {
+        renderModels(
+            {
+                status: 'found',
+                models: [{ model: 'anthropic/claude-opus-4-1@high', replies: 4, cost_usd: 0.5 }],
+                error: null,
+            },
+            'anthropic/claude-opus-4-1@high',
+        )
+        const served = screen.getByText('anthropic/claude-opus-4-1@high')
+        expect(served.closest('.text-status-blocked')).toBeNull()
+        expect(screen.queryByText(/asked/u)).toBeNull()
+    })
+
+    it('says what served and what canopy asked for, as needing a look, when they differ', () => {
+        renderModels(
+            {
+                status: 'found',
+                models: [{ model: 'anthropic/claude-sonnet-4-5', replies: 41, cost_usd: 0.66 }],
+                error: null,
+            },
+            'anthropic/claude-opus-4-1',
+        )
+        const said = screen.getByText(/^served/u)
+        expect(said.textContent).toBe('served anthropic/claude-sonnet-4-5, asked anthropic/claude-opus-4-1')
+        expect(said.className).toContain('text-status-blocked')
+        expect(screen.getByText('anthropic/claude-sonnet-4-5').getAttribute('title')).toBe('41 replies')
     })
 
     it('gives why a read failed on hover', () => {
