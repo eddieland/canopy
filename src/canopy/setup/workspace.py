@@ -6,11 +6,12 @@ it lacks.
 
 Sync makes the workspace match what is declared: the map's repositories, and the slots `capacity` declares for each
 pool. It clones each repository in the map that has no clone at `repos/<name>`, reports a clone whose `origin` is not
-the map's URL, and turns off git's automatic maintenance in each clone. It makes or removes slots until each pool has
-its declared size, and removes a clone under `repos/` the map no longer lists, with its slots. Nothing with work in it
-is removed: a slot only as treehouse's unforced `destroy` allows, a clone only when it is clean and every local commit
-is on a remote. Sync is the only code that reads the map's URLs, and an operator runs it; a tick never clones,
-removes, or changes a remote.
+the map's URL, turns off git's automatic maintenance in each clone, and fetches each clone already there,
+fast-forwarding its default branch when that is checked out with nothing to lose. It makes or removes slots until each
+pool has its declared size, and removes a clone under `repos/` the map no longer lists, with its slots. Nothing with
+work in it is removed: a slot only as treehouse's unforced `destroy` allows, a clone only when it is clean and every
+local commit is on a remote. Sync is the only code that reads the map's URLs, and an operator runs it; a tick never
+clones, removes, or changes a remote.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from __future__ import annotations
 import contextlib
 import json
 import shutil
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -37,6 +38,7 @@ IGNORED = tuple(
 )
 _CLONE_TIMEOUT_SECONDS = 1800
 _GIT_TIMEOUT_SECONDS = 30
+_FETCH_TIMEOUT_SECONDS = 900
 
 MAP_TEXT = """\
 # Workspace map
@@ -148,10 +150,12 @@ def protection_targets(ws: workspace.Workspace) -> str:
 class Checked:
     """What sync found or did for one repository, and what to tell the operator.
 
-    For a clone: `cloned`, `present`, `to clone` in a dry run, or `failed`. For a pool: `slots`, `failed`, or `kept`
-    when the pool keeps a surplus slot with work in it; after a switch of `pools.backend`, `moved` or `to move` for
-    treehouse's idle slots moved into canopy's pool, and `removed` or `to remove` for canopy's idle slots removed. For
-    a clone the map no longer lists: `removed`, `to remove` in a dry run, or `kept` when it has work to lose.
+    For a clone: `cloned`, `present`, `to clone` in a dry run, or `failed`; for one already there, then
+    `fast-forwarded`, `up to date`, `not fast-forwarded`, `to fetch` in a dry run, or `failed`. For a pool: `slots`,
+    `failed`, or `kept` when the pool keeps a surplus slot with work in it; after a switch of `pools.backend`, `moved`
+    or `to move` for treehouse's idle slots moved into canopy's pool, and `removed` or `to remove` for canopy's idle
+    slots removed. For a clone the map no longer lists: `removed`, `to remove` in a dry run, or `kept` when it has work
+    to lose.
     """
 
     repo: workspace.Repo
@@ -312,6 +316,38 @@ def turn_off_auto_maintenance(runner: procs.Runner, repo: workspace.Repo) -> Che
     return None
 
 
+def fast_forward(runner: procs.Runner, repo: workspace.Repo) -> Checked:
+    """Fetch the clone's `origin`, and fast-forward its default branch where that is checked out with nothing to lose.
+
+    The primary clone's checkout is the operator's, since a run starts from `origin/<base>` in a slot. So it moves only
+    when it is on the branch `origin/HEAD` names, has no uncommitted change to a tracked file and no commit that branch
+    lacks, and the move would overwrite no untracked file; otherwise it stays as it is, and the detail says why. The
+    fetch updates the remote-tracking refs every slot shares, as a lease's does.
+
+    Returns:
+        `fast-forwarded` with the commits it moved between, `up to date`, `not fast-forwarded` with why, or `failed`
+        when git could not fetch or read the clone.
+    """
+    git = _Git(runner, repo)
+    try:
+        git("fetch", "--quiet", "origin", timeout=_FETCH_TIMEOUT_SECONDS)
+        upstream = git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", ok_codes=(0, 1))
+        on = git("symbolic-ref", "--quiet", "--short", "HEAD", ok_codes=(0, 1))
+        why = _held_back(git, on, upstream)
+        if why is not None:
+            return Checked(repo, "not fast-forwarded", why)
+        before, after = (git("rev-parse", "--short", rev) for rev in ("HEAD", upstream))
+        if before == after:
+            return Checked(repo, "up to date", f"{on} at {after}")
+        # An untracked file the fast-forward would overwrite is the operator's, as a local change is.
+        refused = git.refusal("merge", "--quiet", "--ff-only", upstream)
+        if refused is not None:
+            return Checked(repo, "not fast-forwarded", refused)
+    except _GitFailedError as e:
+        return Checked(repo, "failed", str(e))
+    return Checked(repo, "fast-forwarded", f"{on} from {before} to {after}")
+
+
 def shown(url: str) -> str:
     """Return `url` fit to print: a credential in it (`https://user:token@host/...`) is replaced with `***`."""
     parts = urlsplit(url)
@@ -325,6 +361,89 @@ def _same_url(a: str, b: str) -> bool:
         return url.rstrip("/").removesuffix(".git")
 
     return norm(a) == norm(b)
+
+
+def _held_back(git: _Git, on: str, upstream: str) -> str | None:
+    """Why the branch `on` stays where it is rather than move to `upstream`, `origin/HEAD`'s branch, if it does.
+
+    Returns:
+        The reason, or None when it may be fast-forwarded: it is `upstream`'s branch, clean, and has no commit
+        `upstream` lacks.
+
+    Raises:
+        _GitFailedError: git could not read the clone.
+    """
+    if not upstream:
+        return "origin/HEAD is not set, so the default branch is unknown; `git remote set-head origin --auto` sets it"
+    if not on:
+        return "HEAD is detached"
+    if f"origin/{on}" != upstream:
+        return f"it is on {on}, not {upstream.removeprefix('origin/')}"
+    if git("status", "--porcelain", "--untracked-files=no"):
+        return "it has uncommitted changes"
+    if git.code("merge-base", "--is-ancestor", "HEAD", upstream) != 0:
+        return f"{on} has commits {upstream} does not"
+    return None
+
+
+class _GitFailedError(Exception):
+    """git could not run, timed out, or exited with a code its caller does not expect; the message says which."""
+
+
+@dataclass(frozen=True)
+class _Git:
+    """git in one repository's clone, run as the harness runs git."""
+
+    runner: procs.Runner
+    repo: workspace.Repo
+
+    def __call__(self, *args: str, timeout: int = _GIT_TIMEOUT_SECONDS, ok_codes: Collection[int] = (0,)) -> str:
+        """Run `git <args>`.
+
+        Returns:
+            What it printed, stripped.
+
+        Raises:
+            _GitFailedError: it exited with a code not in `ok_codes`.
+        """
+        return self._run(args, timeout, ok_codes).stdout.strip()
+
+    def code(self, *args: str) -> int:
+        """Run `git <args>`, which answers by exiting 0 or 1.
+
+        Returns:
+            The exit code.
+
+        Raises:
+            _GitFailedError: it exited with any other.
+        """
+        return self._run(args, _GIT_TIMEOUT_SECONDS, (0, 1)).returncode
+
+    def refusal(self, *args: str) -> str | None:
+        """Run `git <args>`, which exits 1 when it refuses and changes nothing, as `merge --ff-only` does.
+
+        Returns:
+            None when it did what it was asked, else why it refused, as git says it on one line.
+
+        Raises:
+            _GitFailedError: it exited with any code but 0 or 1.
+        """
+        result = self._run(args, _GIT_TIMEOUT_SECONDS, (0, 1))
+        if result.returncode == 0:
+            return None
+        said = " ".join((result.stderr.strip() or result.stdout.strip()).split()).removeprefix("error: ")
+        return f"git {args[0]} refused: {said[:500]}"
+
+    def _run(self, args: Sequence[str], timeout: int, ok_codes: Collection[int]) -> procs.Result:
+        try:
+            result = self.runner.run(hostgit.argv(*args), cwd=self.repo.path, env=hostgit.ENV, timeout=timeout)
+        except procs.ProcError as e:
+            raise _GitFailedError(str(e)) from e
+        if result.timed_out or result.returncode not in ok_codes:
+            status = "timed out" if result.timed_out else f"exited {result.returncode}"
+            output = (result.stderr.strip() or result.stdout.strip())[:500]
+            raise _GitFailedError(f"git {args[0]} {status}: {output}")
+        return result
 
 
 @dataclass(frozen=True)
