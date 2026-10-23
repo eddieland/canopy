@@ -70,7 +70,8 @@ underscore: OpenCode joins server and tool with one, so `canopy_ticket_set` coul
 
 Each input refuses an unknown field and is the tool's schema. The bounds §6 lists move into those inputs, and the
 commands validate through the same inputs, so a tool and its command cannot drift apart. A tool's result is the text its
-command prints.
+command prints, and what it did as structured content, such as the id of a run it started, held to the output schema
+it is listed with. A refusal carries the text alone.
 
 ### How the overseer gets them
 
