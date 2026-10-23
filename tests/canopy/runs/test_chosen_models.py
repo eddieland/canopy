@@ -12,7 +12,7 @@ from pathlib import Path
 from canopy.core import definitions
 from canopy.core.config import load
 from canopy.core.vocab import ResumeReason, RunKind
-from tests.canopy.helpers import KEY, agent_runs, planner_does, pool_statuses
+from tests.canopy.helpers import KEY, agent_runs, planner_does, pool_statuses, trailers_on
 from tests.canopy.review_helpers import CLEAN, feature_commit, head, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool
@@ -95,8 +95,12 @@ def test_a_worker_following_an_approved_plan_credits_the_planners_model_and_its_
     scenario.run(PLAN, worker=planner_does(plan="# Plan for PROJ-1\n\nAdd the button.\n"))
     scenario.operator("plan", KEY, "--approve")
     prompt = scenario.run(worker=pushes()).prompt_file.read_text()
-    assert f"`Co-authored-by: {MODEL} (canopy worker) <noreply@canopy.invalid>`" in prompt
-    assert f"`Co-authored-by: {OTHER} (canopy planner) <noreply@canopy.invalid>`" in prompt
+    worker = f"Co-authored-by: {MODEL} (canopy worker) <noreply@canopy.invalid>"
+    planner = f"Co-authored-by: {OTHER} (canopy planner) <noreply@canopy.invalid>"
+    assert f"`{worker}`" in prompt
+    assert f"`{planner}`" in prompt
+    # git adds both, as the prompt names them.
+    assert trailers_on(git_pool.origin, "agent/PROJ-1-work") == [[worker, planner]]
 
 
 def test_a_model_the_runtime_does_not_list_is_refused_with_an_attention_item(

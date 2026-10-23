@@ -159,8 +159,8 @@ Rules:
   operators who never set them (TRUST_MODEL §3). Scope and tighten checks run per file, so an error names its file.
 - Values that reach git's argv, a prompt, or the web UI's links (`trust.branch_prefix`, the comment marks, the commit
   trailer, `tracker.ticket_url`) are validated at load.
-- The commit trailer keys set the `Co-authored-by` trailer a worker adds when the runtime adds no attribution of its
-  own (§8, TRUST_MODEL T5). It names agent work, never a person: it is how a reader tells the work is an agent's.
+- The commit trailer keys set the `Co-authored-by` trailer git adds to a worker's commits, through canopy's hooks (§8,
+  TRUST_MODEL T5). It names agent work, never a person: it is how a reader tells the work is an agent's.
   Left as the default, its name credits the model canopy chose for the worker (§13, Each agent's model), and a
   second trailer that of the planner whose approved plan it follows (§25).
 - `trust.rebase` lets workers rebase and push with `--force-with-lease` instead of merging a base in, for hosts that

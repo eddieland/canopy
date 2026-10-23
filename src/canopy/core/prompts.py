@@ -534,7 +534,7 @@ def mark_comments(prefix: str, suffix: str, *, where: str = "on the ticket or a 
 
 
 def commit_trailer(config: Config, model: str | None = None) -> str:
-    """Return the trailer a worker adds to its commits when the agent runtime adds no attribution of its own.
+    """Return the trailer canopy's git hooks add to a worker's commits (`commit_hooks`).
 
     `model` is the one canopy chose for the worker (DESIGN §13), as the run records it, or None for the runtime's
     default. While `trust.commit_trailer_name` is the default, the name credits it, as `provider/model (canopy worker)`,
@@ -565,20 +565,20 @@ def planner_trailer(config: Config, model: str | None) -> str | None:
 
 
 def commit_attribution(config: Config, model: str | None = None, planner_model: str | None = None) -> str:
-    """Return the instruction for a worker's commits: keep the runtime's trailer, or add canopy's while it is on.
+    """Return the instruction for a worker's commits: keep the runtime's trailer, and canopy's while it is on.
 
-    `model` is the worker's chosen model, which canopy's trailer may name (`commit_trailer`), and `planner_model` that
-    of the planner whose approved plan it follows, which a second trailer names (`planner_trailer`).
+    canopy's git hooks add its trailers (`commit_hooks`), so the worker is told what to keep, not what to add. `model`
+    is the worker's chosen model, which canopy's trailer may name (`commit_trailer`), and `planner_model` that of the
+    planner whose approved plan it follows, which a second trailer names (`planner_trailer`).
     """
     if not config.trust.commit_trailer:
         return "Keep the agent runtime's attribution trailer on commits, if it adds one, and add no co-author trailer."
     planner = planner_trailer(config, planner_model)
     if planner is None:
-        return f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config, model)}`."
-    return (
-        f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config, model)}` and "
-        f"`{planner}`, each on a line of its own."
-    )
+        added = f"git adds `{commit_trailer(config, model)}` to each commit; keep it"
+    else:
+        added = f"git adds `{commit_trailer(config, model)}` and `{planner}` to each commit; keep them"
+    return f"{added}, and the agent runtime's attribution trailer if it adds one."
 
 
 def branch_update(config: Config, branch: str) -> str:

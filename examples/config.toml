@@ -128,7 +128,7 @@ trusted_reviewers = ["replace-with-your-github-login"]
 # set is never feedback or an instruction.
 comment_prefix = "CANOPY:"
 comment_suffix = ""
-# The Co-authored-by trailer a worker adds to its commits when the agent runtime adds none of its own. Name an agent
+# The Co-authored-by trailer git adds to every commit a worker makes, through canopy's hooks. Name an agent
 # here, such as your team's bot address, never a person: it is how a reader tells the work is an agent's. Left as the
 # default, the name credits the model [runtime.models] chooses for the worker, as "provider/model (canopy worker)",
 # and a worker following an approved plan adds a second trailer for its planner's, "provider/model (canopy planner)";

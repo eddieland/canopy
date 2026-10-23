@@ -1,0 +1,63 @@
+"""canopy's commit trailers (TRUST_MODEL T5): git adds them to every commit a worker makes, through canopy's hooks, and
+the repository's own hooks still run; a commit made around them is named in the run's harness note, never rewritten."""
+
+import json
+from pathlib import Path
+
+from tests.canopy.helpers import commit_and_push, trailers_on, worker_does
+from tests.canopy.scenario_helpers import Scenario, pushes
+from tests.conftest import GitPool, executable, git
+
+TRAILER = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
+BRANCH = "agent/PROJ-1-work"
+
+
+def test_git_adds_canopys_trailer_to_each_commit_a_worker_makes(scenario: Scenario, git_pool: GitPool) -> None:
+    run = scenario.run(
+        worker=worker_does(
+            ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: one"],
+            # Skipping the repository's checks skips none of canopy's.
+            ["git", "commit", "--quiet", "--allow-empty", "--no-verify", "-m", "PROJ-1: two", "-m", "Why."],
+            ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}"],
+        ),
+    )
+    assert run.status == "done"
+    assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER], [TRAILER]]
+    assert git("log", "-1", "--format=%B", BRANCH, cwd=git_pool.origin) == f"PROJ-1: two\n\nWhy.\n\n{TRAILER}"
+    assert "harness" not in json.loads(run.row["result_json"])
+
+
+def test_a_trailer_the_worker_wrote_itself_is_not_added_again(scenario: Scenario, git_pool: GitPool) -> None:
+    run = scenario.run(worker=pushes(message=f"PROJ-1: the change\n\n{TRAILER}"))
+    assert run.status == "done"
+    assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER]]
+
+
+def test_a_commit_made_around_the_hooks_is_named_and_left_as_it_is(scenario: Scenario, git_pool: GitPool) -> None:
+    around = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: around"]
+    run = scenario.run(worker=worker_does(around, *commit_and_push(BRANCH)))
+    assert run.status == "done"
+    assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER], []]
+    note = json.loads(run.row["result_json"])["harness"]
+    named = f"repo: 1 commit pushed to {BRANCH} lacks canopy's trailer: "
+    assert note.startswith(named)
+    assert git("rev-parse", f"{BRANCH}~1", cwd=git_pool.origin).startswith(note.removeprefix(named))
+
+
+def test_the_repositorys_own_hooks_still_run(scenario: Scenario, git_pool: GitPool, tmp_path: Path) -> None:
+    ran = tmp_path / "ran"
+    for slot in git_pool.slots:
+        for name in ("pre-commit", "prepare-commit-msg"):
+            executable(slot / ".git" / "hooks" / name, f'#!/bin/sh\necho {name} "$@" >>"{ran}"\n')
+    run = scenario.run(worker=pushes())
+    assert run.status == "done"
+    assert ran.read_text().splitlines() == ["pre-commit", "prepare-commit-msg .git/COMMIT_EDITMSG message"]
+    assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER]]
+
+
+def test_with_canopys_trailer_off_git_adds_none(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(trust={"commit_trailer": False})
+    run = scenario.run(worker=pushes())
+    assert run.status == "done"
+    assert trailers_on(git_pool.origin, BRANCH) == [[]]
+    assert "harness" not in json.loads(run.row["result_json"])

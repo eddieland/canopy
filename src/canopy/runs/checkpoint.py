@@ -14,11 +14,13 @@ from canopy.core import hostgit
 from canopy.infra import procs
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from canopy.infra import logs
 
 _GIT_TIMEOUT_SECONDS = 300
+# The most commits a note names that lack canopy's trailer; it counts the rest.
+_MAX_NAMED = 5
 
 
 class SetupError(Exception):
@@ -159,6 +161,43 @@ def remote_head(git: Git, branch: str) -> str:
     """
     listed = git.run("ls-remote", "origin", f"refs/heads/{branch}")
     return listed.split()[0] if listed else ""
+
+
+def unattributed(git: Git, branch: str, start: Start, base: str, trailers: Sequence[str]) -> str:
+    """Return a harness note naming the run's commits on origin's `branch` that lack one of `trailers`, else "".
+
+    The run's commits are those the branch holds that neither HEAD at the start nor origin's `base` does. canopy's
+    hooks add the trailers (`commit_hooks`, TRUST_MODEL T5); a commit made around them is reported, never rewritten.
+    Best effort: a git step that fails reports nothing.
+
+    Raises:
+        SetupError: git could not start, or timed out.
+    """
+    remote = remote_head(git, branch) if trailers else ""
+    if not remote:
+        return ""
+    # Unfolded and joined, each commit's trailers fit on its line.
+    listed = git.result(
+        "log",
+        "--format=%h %(trailers:only,unfold,separator=%x1f)",
+        remote,
+        f"^{start.commit}",
+        f"^refs/remotes/origin/{base}",
+        "--",
+    )
+    if not listed.ok:
+        return ""
+    lacking = []
+    for line in listed.stdout.splitlines():
+        commit, _, found = line.partition(" ")
+        if not set(trailers) <= set(found.split("\x1f")):
+            lacking.append(commit)
+    if not lacking:
+        return ""
+    shown = ", ".join(lacking[:_MAX_NAMED])
+    more = f" and {len(lacking) - _MAX_NAMED} more" if len(lacking) > _MAX_NAMED else ""
+    commits = "1 commit pushed to {} lacks" if len(lacking) == 1 else f"{len(lacking)} commits pushed to {{}} lack"
+    return f"{git.where}{commits.format(branch)} canopy's trailer: {shown}{more}"
 
 
 def ignore(git: Git, name: str) -> None:

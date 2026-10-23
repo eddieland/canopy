@@ -515,14 +515,17 @@ but must be distinguishable:
 
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>`, whose name and address the operator may
-  change in their own config (`trust.commit_trailer_*`, private), or the runtime's own attribution. The harness forms
-  it, never the agent: left as the default, the name credits the model canopy chose for the worker (DESIGN §13), as
-  `provider/model (canopy worker)`, and a worker following an approved plan adds a second, `provider/model (canopy
-  planner)`, for the model canopy chose for its planner; a name the operator set is used as set, alone. Never hidden: a
-  worker never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
-  private), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
-  that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
-  neither turn it off nor rename it.
+  change in their own config (`trust.commit_trailer_*`, private), beside the runtime's own attribution if it adds one.
+  The harness forms it, never the agent: left as the default, the name credits the model canopy chose for the worker
+  (DESIGN §13), as `provider/model (canopy worker)`, and a worker following an approved plan carries a second,
+  `provider/model (canopy planner)`, for the model canopy chose for its planner; a name the operator set is used as
+  set, alone. git adds them, through hooks in canopy's snapshot that a worker's environment points git at (DESIGN §8),
+  so a worker that forgets them still carries them. They are a mark, not a guard: a worker can commit around the hooks,
+  and canopy names such a commit in the run's report and does not rewrite it. Never hidden: a worker never strips the
+  runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also private), as when the
+  runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime that adds none, the
+  commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can neither turn it off nor
+  rename it.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
