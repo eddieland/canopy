@@ -241,7 +241,8 @@ Agent definitions ship in `agents/`:
 Every definition but the overseer's denies canopy's own tools, `canopy_*`; a chore's then allows its history, and the
 reviewer's and the planner's canopy's read-only git tools, each by exact name (§27).
 
-None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
+None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch`, and code mode's `execute`,
+whose code can fetch, so an MCP server an agent needs is set to `codemode: false` (TRUST_MODEL T1, D077).
 A tool an agent never calls is denied whole, since the runtime sends every schema it allows on every call and none it
 denies: GitHub's tools no prompt asks for, by name, as the server's own name is the operator's, and its issue tools,
 from both workers and the planner too, off a GitHub tracker. A pattern that would take one of the tracker's own tools
