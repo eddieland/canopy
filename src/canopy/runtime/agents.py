@@ -86,6 +86,9 @@ class Rules:
     bash_allows: Mapping[str, Sequence[str]]
     #: The artifact store's server and who publishes to it; None when no store is configured, and no rule names one.
     artifacts: Publishing | None
+    #: Each agent's model by name, as the runtime names one, chosen by the operator alone (`runtime.models`, DESIGN
+    #: §13). An agent not named runs on the runtime's default.
+    models: Mapping[str, str]
 
 
 #: How much of an MCP server's tools an agent is offered: every one, only some, or none.

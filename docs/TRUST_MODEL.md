@@ -242,6 +242,11 @@ Controls:
   characters that hide text from a person who reads it, as a lesson does. A run whose persona's file is gone or past
   its bounds is refused, never run in canopy's voice instead, and a prompt override without `{{PERSONA}}` serves only
   a run in canopy's own voice.
+- Each agent's model (DESIGN §13, M58) is the operator's choice alone: `runtime.models`, private (T7), which canopy
+  writes into the agent's definition. The overseer, a dispatch, ticket text, and labels choose none, and a `runtime`
+  template, prefix, or suffix that passes a model is a config error, so no agent's command line overrides it unseen.
+  A worker run whose model the runtime does not list, or whose list cannot be read, is refused with an attention item,
+  never run on the runtime's default instead.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -492,7 +497,8 @@ but must be distinguishable:
   loop did and why. Each decision records who made it: the overseer, through one of its verbs, or the harness on its
   own, its attention items and the decisions that need no judgment (DESIGN §37); `canopy decisions` marks the
   harness's. Each worker run and review records the persona it ran in (DESIGN §31), by name and a digest of its
-  text as the prompt carried it, so a persona edited between runs splits them.
+  text as the prompt carried it, so a persona edited between runs splits them. Each worker run records the model canopy
+  chose for its agent (DESIGN §13), the one its definition names, since no template may pass another.
 - canopy's reviews post nothing the operator has not published (D114). A review of a PR the loop does not own may
   be published by the operator (DESIGN §34): one version of its draft, word for word as they last saw it, named by its
   hash, unmarked, as one comment review on the commit the review read, which approves nothing and resolves no thread.
@@ -695,9 +701,9 @@ shares with a team, so anyone who can push there can change that file, and a che
 carries their version. Unlike build scripts a worker runs (T4), this file is read by the harness itself, outside any
 worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
 `notify.cmd`, chores, the review query, prompt paths, capacity, queue labels, authorized repliers, agent memory's
-tiers, the agents' personas, or which agents publish artifacts and whose comments on them count, one commit would be
-enough to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who
-steers their workers.
+tiers, the agents' personas or models, or which agents publish artifacts and whose comments on them count, one commit
+would be enough to run commands on operators' machines, raise their spend, send what workers read off the machine, or
+pick who steers their workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each
