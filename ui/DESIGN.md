@@ -1401,7 +1401,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   since it has no ticket.
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop does not
   own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page holds the
-  review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Each fact is said
+  review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Its header has
+  the PR's link out, as the PR's page does (`PullRequestLinksOut`), with or without a draft. Each fact is said
   once. The description is the run's status alone (`done`), and the Review panel's header has no dot. The panel leads
   with the reviewer's summary, the answer the operator came for, then the `harness` line when the harness decided the
   status, then the verdict, in its worst finding's color with its impact chip (its one home, since the description is
