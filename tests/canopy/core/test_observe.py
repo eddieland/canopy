@@ -111,6 +111,19 @@ def test_a_time_without_an_offset_is_the_sources_utc(ctx: Context, connector_sta
     assert seen.created_at == "2026-10-18T09:00:00.000Z"
 
 
+def test_a_review_keeps_the_commit_it_was_given_on_and_a_comment_none(ctx: Context, connector_state: Path) -> None:
+    pr = {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7}
+    review = {"kind": "review", "pr": PR, "item": "review", "id": 9, "state": "approved", "commit": "abc1234"}
+    thread = {"id": "PRRT_1", "path": "a.py", "line": 3, "side": "right", "outdated": False, "resolved": False}
+    comment = {"kind": "review", "pr": PR, "item": "comment", "id": 10, "commit": "abc1234", "thread": thread}
+    prints(connector_state, pr, review, comment, {**review, "id": 11, "commit": "not a sha"})
+    assert run(ctx).refused == {"review": 1}
+    prints(connector_state, pr, review, comment)
+    run(ctx)
+    seen = records.fetch_all(ctx.conn, records.ObservedReview, sql.frag("SELECT * FROM observed_reviews ORDER BY id"))
+    assert [(r.id, r.commit_sha) for r in seen] == [(9, "abc1234"), (10, None)]
+
+
 def test_a_prs_title_is_kept_to_one_line_cut_and_marked_and_none_when_not_printed(
     ctx: Context,
     connector_state: Path,

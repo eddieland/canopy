@@ -242,6 +242,13 @@
             ]),
             'verdicts': list([
               dict({
+                'at_head': False,
+                'author': 'hubot',
+                'state': 'approved',
+                'trusted': False,
+              }),
+              dict({
+                'at_head': True,
                 'author': 'octocat',
                 'state': 'changes_requested',
                 'trusted': True,

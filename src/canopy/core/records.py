@@ -918,6 +918,8 @@ class ObservedReview(Row):
     outdated: bool | None
     resolved: bool | None
     observed_at: str
+    #: The commit a review was given on: None on a review comment, and on a review read without one.
+    commit_sha: str | None
 
 
 @dataclass(frozen=True)

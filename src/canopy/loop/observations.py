@@ -196,6 +196,8 @@ class VerdictState(TypedDict):
     author: str
     state: str
     trusted: bool
+    #: Whether it was given on the PR's head: an approval of an earlier commit is not approval.
+    at_head: bool
 
 
 class ReviewItemState(TypedDict):
@@ -536,7 +538,7 @@ class Reader:
                 "author": pr.author,
             },
             "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], human),
-            "verdicts": _verdicts(self.reviews.get(url, []), trusted),
+            "verdicts": _verdicts(self.reviews.get(url, []), trusted, pr.head_sha),
             "reviews": [self._review(r, trusted) for r in new[:MAX_NEW_ITEMS]],
         }
         if len(new) > MAX_NEW_ITEMS:
@@ -672,16 +674,24 @@ def _checks(checks: Iterable[records.ObservedCheck], human: AbstractSet[str]) ->
     return found
 
 
-def _verdicts(reviews: Collection[records.ObservedReview], trusted: AbstractSet[str]) -> list[VerdictState]:
+def _verdicts(
+    reviews: Collection[records.ObservedReview],
+    trusted: AbstractSet[str],
+    head: str | None,
+) -> list[VerdictState]:
     """Each person's latest approval, change request, or dismissed review: what `approved` is read from (DESIGN §7).
 
     Returns:
-        One per author, by when their verdict came; a bot's is left out, since it never counts.
+        One per author, by when their verdict came, marked whether it was given on the head; a bot's is left out,
+        since it never counts.
     """
-    latest: dict[str, tuple[str, ReviewState]] = {}
+    latest: dict[str, tuple[str, ReviewState, str | None]] = {}
     kinds = {ReviewState.APPROVED, ReviewState.CHANGES_REQUESTED, ReviewState.DISMISSED}
     for r in reviews:
         if r.item is ReviewItem.REVIEW and not r.bot and r.author is not None and r.state in kinds:
             latest.pop(r.author.lower(), None)
-            latest[r.author.lower()] = (r.author, r.state)
-    return [{"author": a, "state": s, "trusted": a.lower() in trusted} for a, s in latest.values()]
+            latest[r.author.lower()] = (r.author, r.state, r.commit_sha)
+    return [
+        {"author": a, "state": s, "trusted": a.lower() in trusted, "at_head": head is not None and c == head}
+        for a, s, c in latest.values()
+    ]

@@ -107,6 +107,7 @@ def test_a_unit_shows_the_checks_at_its_head_and_new_review_items_by_who_wrote_t
     check(tracked, "legacy", "completed", "stale")
     review(tracked, 1, "octocat", "approved", "2026-10-20T09:00:00.000Z")
     review(tracked, 2, "octocat", "changes_requested", "2026-10-20T11:00:00.000Z", "Rename the helper.")
+    review(tracked, 7, "hubot", "approved", "2026-10-20T08:00:00.000Z", commit="0ld0ld0")
     review(tracked, 3, "octocat", None, "2026-10-20T11:00:00.000Z", "This name says too little.", item="comment")
     review(tracked, 4, "stranger", "commented", "2026-10-20T11:10:00.000Z", "Why not a map?")
     review(tracked, 5, "operator", None, "2026-10-20T11:20:00.000Z", "CANOPY: Renamed it.", item="comment")
@@ -115,6 +116,11 @@ def test_a_unit_shows_the_checks_at_its_head_and_new_review_items_by_who_wrote_t
     assert found == snapshot
     [unit] = found["tickets"][0].get("units", [])
     assert [r["id"] for r in unit.get("reviews", [])] == [2, 3, 4, 5, 6]
+    # A verdict is marked by whether it covers the head, so an approval of an earlier commit reads as none.
+    assert [(v["author"], v["state"], v["at_head"]) for v in unit.get("verdicts", [])] == [
+        ("hubot", "approved", False),
+        ("octocat", "changes_requested", True),
+    ]
     # Passing CI is only counted; a failure keeps what a `resume` for `ci` names; an older head's check is left out.
     assert unit.get("checks") == {
         "passed": 2,

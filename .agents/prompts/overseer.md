@@ -156,8 +156,9 @@ key and `why`, `not labeled` or `closed`: decide it from that, and do not read i
   at the head: how many `passed`, the names of those `pending`, each `failed` one with its `conclusion`, `run_id`, and
   `url`, `stale` naming any that ended neither way, and `human` the checks that wait on a person, which are not CI and
   never make a unit `ci_running` or `ci_red`; `verdicts`, each person's latest approval, change request, or dismissal,
-  whenever it came; and `reviews`, the reviews and review comments past the unit's `review` cursor, oldest first, each
-  marked `trusted` and `worker` by canopy. A unit without a PR has `branch`, the ticket's branch seen on origin, or null;
+  whenever it came, `at_head` when it was given on the head; and `reviews`, the reviews and review comments past the
+  unit's `review` cursor, oldest first, each marked `trusted` and `worker` by canopy. A unit without a PR has `branch`,
+  the ticket's branch seen on origin, or null;
 - `derived`, on the ticket and each fresh unit: the rows of the phase table canopy's own reading found holding. It is a
   reading, not a ruling: where the table, applied to the observations, says otherwise, follow the table.
 
@@ -264,12 +265,12 @@ action `wait` and a rationale, `dispatch implement` is `canopy_dispatch` with ki
 | `conflicted` | PR open, GitHub says it conflicts with its base | `dispatch resume`, reasons `conflict` (below) |
 | `ci_running` | PR open, checks pending | `wait` |
 | `ci_red` | PR open, checks failed, failure newer than `ci` cursor | `dispatch resume`, reasons `ci`, cursor `ci` the run, unless held (step 4, "Notices") |
-| `review_pending` | with `reviews.agent_prs`: checks pass, no human approval, head not reviewed | review (see "Reviews") |
+| `review_pending` | with `reviews.agent_prs`: checks pass, no human approval at the head, head not reviewed | review (see "Reviews") |
 | `review_findings` | with `reviews.agent_prs`: the head's review has findings newer than `review` cursor | classify |
 | `changes_requested` | a trusted reviewer's comments or requested changes newer than `review` cursor | classify |
 | `untrusted_review` | feedback newer than `review` cursor from an untrusted reviewer, no go-ahead | attention (see "Reviewers and the operator's go-ahead") |
-| `green_unreviewed` | checks pass, no human approval, no new comments | `attention needs_reviewer` |
-| `approved` | approved by a human, not merged; `[bot]` reviews do not count | `attention ready_to_merge` |
+| `green_unreviewed` | checks pass, no human approval at the head, no new comments | `attention needs_reviewer` |
+| `approved` | approved by a human at the head (`at_head`), not merged; `[bot]` reviews do not count | `attention ready_to_merge` |
 | `merged` | every unit's PR merged, no other repository to change | `canopy_ticket-set` with `done` true; `done` |
 | `needs_human` | `tracker.needs_human_label` present, no authorized reply newer than it | `wait` |
 | `human_replied` | authorized reply newer than the needs-human label, or an `operator` message | `dispatch resume`, reasons `reply` |
