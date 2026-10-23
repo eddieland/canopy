@@ -78,8 +78,8 @@ ticket's plan; a waiting plan makes the unit `plan_proposed`, and the state bloc
 period has passed; and a re-plan inside the quiet period is refused in code. No round is triaged: M55, whose feedback
 half that was, is deferred (2026-10-20). Open for the operator: whether a `resume` the operator's own
 message asks for waits on a plan; whether `ask` asks the reviewer or the operator; how the planner reads a failed
-check's log; whether a round's first plan waits out the quiet period; and whether the `resume` of a plan that changes
-nothing is held to pushing nothing in code. Built 2026-10-20, against the fakes, the foundation: the private
+check's log; and whether a round's first plan waits out the quiet period. Built 2026-10-20, against the fakes, the
+foundation: the private
 `policy.feedback_plan` and `policy.max_feedback_plan_attempts` (6, per unit, granted with `canopy grant KEY
 feedback-plan`, never reset); the `feedback-plan` run, the planner in a desk of the units' slots at the PR's head, with
 its PRs read whole first and their items, less the operator's sent replies, workers' comments, resolved threads, and
