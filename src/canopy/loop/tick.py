@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
     chore_view,
+    commit_hooks,
     connector_runs,
     conversation,
     db,
@@ -522,6 +523,11 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
     _record_connector_failed(ctx, tick_id)
     if archive_unpushed is not None:
         _harness_item(ctx, tick_id, None, archive.REASON, archive_unpushed)
+    _record_git_items(ctx, tick_id)
+
+
+def _record_git_items(ctx: Context, tick_id: int) -> None:
+    """Record the items git raises: a clone missing or left to prune slots (§18), and a git too old for the hooks."""
     for repo in ctx.workspace.repos:
         # A tick never clones: a repository in the map with no clone waits for the operator (DESIGN §18).
         if not repo.cloned:
@@ -533,6 +539,8 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
                 f"running slots use; run `canopy workspace sync` in {ctx.repo_root}"
             )
             _harness_item(ctx, tick_id, None, attention.MAINTENANCE_ON, detail, repo=repo.name)
+    if (old := commit_hooks.git_too_old(ctx.config, ctx.runner)) is not None:
+        _harness_item(ctx, tick_id, None, attention.GIT_TOO_OLD, old)
 
 
 def _record_drafts(ctx: Context, tick_id: int) -> None:

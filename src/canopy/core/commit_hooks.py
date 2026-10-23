@@ -11,18 +11,20 @@ operator's hooks run as before (docs/HOOKS.md).
 
 canopy's entry is the last of the `GIT_CONFIG_*` ones, after any the operator's environment holds, so a hook finds
 the repository's own hooks by asking git with one entry fewer, or more where a tool added its own after canopy's.
-`GIT_CONFIG_COUNT` needs git 2.31; an older git ignores it, adds no marks, and the run's note names the commits. The
-variables reach every git the worker's tools run, in any repository: what they add there is canopy's marks, and what
-they run, that repository's own hooks.
+`GIT_CONFIG_COUNT` needs git 2.31; an older git ignores it and adds no marks, so each tick checks the git on `PATH`
+(`git_too_old`), and the run's note names the commits. The variables reach every git the worker's tools run, in any
+repository: what they add there is canopy's marks, and what they run, that repository's own hooks.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import prompts
+from canopy.core import hostgit, prompts
+from canopy.infra import procs
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -36,6 +38,11 @@ HOOKS_DIR = "git-hooks"
 TRAILERS_ENV = "CANOPY_COMMIT_TRAILERS"
 #: The text the hooks put before a commit's subject.
 PREFIX_ENV = "CANOPY_COMMIT_PREFIX"
+#: The oldest git that reads `GIT_CONFIG_COUNT`, through which a worker's git finds the hooks.
+MIN_GIT = (2, 31)
+#: How `git --version` names its version, as Linux, macOS, and Windows builds print it.
+_GIT_VERSION_RE = re.compile(r"git version (\d+)\.(\d+)")
+_GIT_VERSION_TIMEOUT_SECONDS = 30
 #: The client-side hooks git runs from its hooks directory, each of which canopy's must hand on to the repository's.
 NAMES = (
     "applypatch-msg",
@@ -168,3 +175,28 @@ def env(snapshot: Path, added: Marks, inherited: Mapping[str, str]) -> dict[str,
         **({TRAILERS_ENV: "\n".join(added.trailers)} if added.trailers else {}),
         **({PREFIX_ENV: added.prefix} if added.prefix else {}),
     }
+
+
+def git_too_old(config: Config, runner: procs.Runner) -> str | None:
+    """Return why canopy's marks cannot reach a worker's commits, when the git on `PATH` is older than `MIN_GIT`.
+
+    Only while there are marks to add: canopy's trailer, or a prefix. A git that does not say its version, or cannot be
+    run, is no finding here: a run's own git steps fail on it, and say so.
+
+    Returns:
+        The attention item's detail, or None.
+    """
+    if not config.trust.commit_trailer and not config.trust.commit_prefix:
+        return None
+    try:
+        result = runner.run(hostgit.argv("--version"), env=hostgit.ENV, timeout=_GIT_VERSION_TIMEOUT_SECONDS)
+    except procs.ProcError:
+        return None
+    found = _GIT_VERSION_RE.search(result.stdout) if result.ok else None
+    if found is None or (int(found[1]), int(found[2])) >= MIN_GIT:
+        return None
+    least = ".".join(map(str, MIN_GIT))
+    return (
+        f"git {found[1]}.{found[2]} on PATH is older than {least}, which canopy's commit hooks need: workers' commits "
+        f"get no trailer or prefix, and each run's note names them; install git {least} or later"
+    )

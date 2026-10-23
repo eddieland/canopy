@@ -373,7 +373,8 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 `review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `flaky_rerun` (§23), `plan_review`,
 `plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28),
 `drafts_waiting` (§29), `connector_failed` (§30), `persona_missing` and `bad_persona` (§31), `model_missing` and
-`model_list_failed` (§13), `review_waiting` and `review_unsettled` (§34), and `task_ticket_unrecorded` (§36). An item
+`model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34), and
+`task_ticket_unrecorded` (§36). An item
 about one unit names its repository, shown as `KEY (repo)`.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
@@ -383,7 +384,8 @@ an authorized replier comments, or the operator sends a message, after the run e
 says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the operator stopped (§22). The harness also
 raises `awaiting_reply` for a started ticket's, a planner's, or a task's unanswered question (§22, §25, §36),
 `repo_missing` for a mapped repository with no clone and `auto_maintenance_on` for a clone whose config leaves git's
-automatic maintenance on (§18), `connector_failed` about the workspace, one item naming
+automatic maintenance on (§18), `git_too_old` while the git on `PATH` is too old for canopy's commit hooks (§8),
+`connector_failed` about the workspace, one item naming
 every source whose run that tick read less than it was asked (§30), and `canopy_unavailable` or `disk_low` for a tick
 whose check of the overseer's tools or free disk failed (§6 step 5). Follow-ups a run filed are an event, not an item:
 the sinks hear of them once, as `follow_ups.filed` (§20), since nothing canopy watches tells when the operator has
