@@ -75,8 +75,10 @@ queue. A map committed to a shared repository is exposed as any file in it is (T
 the operator's workspace commands and for the web UI's branch links, which never carry a credential (D115). A tick
 never clones or changes a remote: a mapped repository with no clone is attention `repo_missing` and cannot be
 dispatched to. `canopy workspace sync` clones it, with credential prompts and git's `ext::` transport off, and never
-changes an `origin` that differs from the map. A state directory that is a symlink, someone else's, or open to others
-stops every command until removed (D053).
+changes an `origin` that differs from the map. It fetches each clone already there and fast-forwards its default branch
+when that is checked out, clean, and behind; the checkout is the operator's, since runs start in slots, so a clone on
+another branch or with work of its own is left as it is. A state directory that is a symlink, someone else's, or open
+to others stops every command until removed (D053).
 
 ### Declared repositories and slots
 
