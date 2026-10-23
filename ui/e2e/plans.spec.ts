@@ -283,6 +283,7 @@ async function listPlanReview(page: Page) {
                     since: '2026-10-08T11:52:00Z',
                     chore: null,
                     pr: null,
+                    task: null,
                     repo: null,
                     finding: false,
                     subject: 'ABC-105',

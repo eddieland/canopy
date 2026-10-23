@@ -28,6 +28,7 @@ export const ROUTES = [
     'tasks',
     'tasks/1',
     'tasks/4',
+    'tasks/1/runs/1',
     'pull-requests',
     `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
     'reviews',

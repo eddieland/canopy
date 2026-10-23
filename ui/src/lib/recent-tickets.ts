@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
@@ -42,9 +42,17 @@ export function viewed(list: readonly RecentTicket[], key: string, title: string
     return [{ key, title, viewedAt: at }, ...list.filter((t) => t.key !== key)].slice(0, RECENT_MAX)
 }
 
-/** `list` without the tickets `keys` does not hold, such as one forgotten since it was viewed. */
-export function known(list: readonly RecentTicket[], keys: ReadonlySet<string>): RecentTicket[] {
-    return list.filter((t) => keys.has(t.key))
+/**
+ * `list` without the tickets a list of every ticket read at `asOf` (ms) does not hold, such as one forgotten since it
+ * was viewed. A ticket viewed after that list was read is kept: a list older than the view cannot say it is gone.
+ */
+export function known(list: readonly RecentTicket[], keys: ReadonlySet<string>, asOf: number): RecentTicket[] {
+    return list.filter((t) => isKnown(t, keys, asOf))
+}
+
+/** Whether a ticket viewed is one the journal holds, by a list of every ticket read at `asOf` (ms): see `known`. */
+export function isKnown(ticket: RecentTicket, keys: ReadonlySet<string>, asOf: number): boolean {
+    return keys.has(ticket.key) || Date.parse(ticket.viewedAt) > asOf
 }
 
 const setting = storedSetting({ key: STORAGE_KEY, parse: parseRecent, serialize: (value) => JSON.stringify(value) })
@@ -54,18 +62,21 @@ export function useRecentTickets(): RecentTicket[] {
     return useStoredSetting(setting)
 }
 
-/** Stores the list without the tickets `keys` does not hold. */
-export function keepKnown(keys: ReadonlySet<string>): void {
-    setting.set(known(setting.get(), keys))
+/** Stores the list without the tickets a list of every ticket, read at `asOf` (ms), does not hold: see `known`. */
+export function keepKnown(keys: ReadonlySet<string>, asOf: number): void {
+    setting.set(known(setting.get(), keys, asOf))
 }
 
 /**
  * Records that the operator is viewing ticket `key`, once its title has loaded (`undefined` until it has), and again
- * when it opens another ticket or the title changes.
+ * when it opens another ticket. A title changed while the page is open, as by the overseer, records nothing: the
+ * operator did not view the ticket again, and the palette shows the title as it is now anyway.
  */
 export function useViewedTicket(key: string, title: string | null | undefined): void {
+    const recorded = useRef<string | undefined>(undefined)
     useEffect(() => {
-        if (title !== undefined) {
+        if (title !== undefined && recorded.current !== key) {
+            recorded.current = key
             setting.set(viewed(setting.get(), key, title, new Date().toISOString()))
         }
     }, [key, title])

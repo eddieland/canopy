@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { mockAttention, mockTickets } from '@/api/mocks'
-import type { TicketSummary } from '@/api/types'
+import { mockAttention, mockTasks, mockTickets } from '@/api/mocks'
+import type { TaskSummary, TicketSummary } from '@/api/types'
 
 import { answered, awaitsTick } from './acknowledged'
 
@@ -49,5 +49,27 @@ describe('answered', () => {
 
     it('is never another reason', () => {
         expect(answered({ ...item, reason: 'worker_failed' }, listing({ awaiting: null }))).toBe(false)
+    })
+
+    describe("a task's question", () => {
+        const asks = { ...item, id: 't4', subject: 'task:4', ticket_key: null, ticket_title: null, task: 4 }
+        const waiting = mockTasks[2] as TaskSummary
+        const tasks = (changes: Partial<TaskSummary>) => [{ ...waiting, ...changes }]
+
+        it('is answered once the task waits on no reply: replied to, or stopped', () => {
+            expect(answered(asks, mockTickets, tasks({ standing: 'queued', question_id: null }))).toBe(true)
+            expect(answered(asks, mockTickets, tasks({ standing: 'stopped', question_id: null }))).toBe(true)
+        })
+
+        it('is not while the task still waits on you, or the tasks are not loaded', () => {
+            expect(answered(asks, mockTickets, tasks({}))).toBe(false)
+            expect(answered(asks, mockTickets, undefined)).toBe(false)
+            expect(answered(asks, mockTickets)).toBe(false)
+        })
+
+        it("is never a task's other reason, which the next tick clears", () => {
+            const unrecorded = { ...asks, reason: 'task_ticket_unrecorded' }
+            expect(answered(unrecorded, mockTickets, tasks({ standing: 'stopped' }))).toBe(false)
+        })
     })
 })

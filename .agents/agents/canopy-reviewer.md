@@ -11,6 +11,7 @@
 # request that sets one.
 description: canopy reviewer. Adversarial review of one PR at one commit; read-only; posts nothing, never approves.
 mode: primary
+# canopy: model
 # canopy: temperature
 permission:
   edit: deny
@@ -86,6 +87,8 @@ permission:
   "canopy_git_log": allow
   "canopy_git_show": allow
   "canopy_git_blame": allow
+  "canopy_git_grep": allow
+  "canopy_git_files": allow
   # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone, and canopy's read-only reports
   # (DESIGN §27) are for an agent of the operator's that allows each by name: last, so no rule above reopens one.
   "canopy_chore_history": deny

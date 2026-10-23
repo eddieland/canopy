@@ -42,9 +42,14 @@ def test_the_mock_holds_a_task_in_every_state_over_the_three_repositories(backen
 
 def test_attention_and_spend_show_the_tasks(backend: Backend) -> None:
     c = client(None, backend)
-    items = {(i["reason"], i["subject"]) for i in c.get("/api/attention").json()}
-    assert ("awaiting_reply", "task:4") in items
-    assert ("task_ticket_unrecorded", "task:5") in items
+    listed = c.get("/api/attention").json()
+    # A task's item names the task by its id, for its page, and no ticket, chore, or PR.
+    items = {(i["reason"], i["subject"], i["task"], i["ticket_key"], i["chore"], i["pr"]) for i in listed if i["task"]}
+    assert items == {
+        ("awaiting_reply", "task:4", 4, None, None, None),
+        ("task_ticket_unrecorded", "task:5", 5, None, None, None),
+    }
+    assert all(i["task"] is None for i in listed if not i["subject"].startswith("task:"))
     totals = c.get("/api/spend/breakdown", params={"days": 7}).json()["totals"]
     assert totals["tasks"] == pytest.approx(4.51)
     [mobile] = [p for p in c.get("/api/worktrees").json() if p["repo"] == "mobile"]
@@ -57,3 +62,12 @@ def test_a_stop_clears_a_task_s_items(backend: Backend) -> None:
         tasks.stop(ctx.conn, 4)
         tasks.stop(ctx.conn, 5)
         assert mock_tasks.attention(ctx.conn) == []
+
+
+def test_task_1_s_run_left_its_session_s_events_for_its_transcript(backend: Backend) -> None:
+    found = client(None, backend).get("/api/tasks/1/runs/1/transcript").json()
+    assert (found["status"], found["session_id"]) == ("read", "ses_task1")
+    steps = [e for e in found["entries"] if e["kind"] == "step"]
+    # Its three model calls cost what its row says.
+    assert sum(s["cost_usd"] for s in steps) == pytest.approx(2.12)
+    assert len(steps) == 3

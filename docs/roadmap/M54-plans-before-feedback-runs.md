@@ -116,15 +116,19 @@ named by its number on input, and by number and id wherever canopy mentions it; 
 run asked, which still waits on a reply. Settled for it, open to the operator: an approved plan not yet spent may be
 approved again for other items or with a message, which writes a new message; whole approval writes a message too; and
 an item left out is not marked handled, so its next plan offers it whatever changed. Built 2026-10-22, against the
-fakes, drafts starting from the plan: under `trust.review_replies = "approve"`, the `resume`'s `{{PLAN}}` gives each
-approved item's proposed reply, fenced as data, to start its thread's draft from, kept unless the work departed;
-migration 0081's `drafts.plan_item` records the item of the run's feedback plan a thread's draft answers, matched by
-thread, by `_run` or, for a comment only the checking read places, by that read; and whether a draft departs is
-computed in code, never claimed: `canopy draft show`, the threads route's `from_plan`, and the PR page's draft card,
-`as planned` or `changed from the plan` with the proposed reply shown on demand as plain text. Settled for it, open to
-the operator: under `post` the prompt gives no proposed reply; only a thread's draft starts from the plan, not a PR's
-comment; a draft departs when the run's own first text differs from the proposed reply past whitespace at either end,
-when its `did` is not the plan's change or decline, when the plan proposed no reply (`ask`, `leave`), or when the
-approval left the item out; the operator's edits are not compared; and the card marks a departure and shows the
-proposal, with no word diff. Left: the PR page's threads view and T8's web approval, the plan that changes nothing,
-and failed checks and conflicts as items with ids of their own.
+fakes, the plan on the PR's page: its threads carry the ticket's current feedback plan, where it stands (waiting, stale
+with each change in the harness's words, approved, or spent), its file as text, and each item's proposal and reply on
+its thread's card, an item on no thread listed with its reply; and the page approves it whole or by item, with the
+operator's words, through `canopy plan --approve`'s function in channel `web`, refused as the CLI is, a write T8 now
+names with its residual. Built 2026-10-22, against the fakes, drafts starting from the plan: under
+`trust.review_replies = "approve"`, the `resume`'s `{{PLAN}}` gives each approved item's proposed reply, fenced as data,
+to start its thread's draft from, kept unless the work departed; migration 0082's `drafts.plan_item` records the item of
+the run's feedback plan a thread's draft answers, matched by thread, by `_run` or, for a comment only the checking read
+places, by that read; and whether a draft departs is computed in code, never claimed: `canopy draft show`, the threads
+route's `from_plan`, and the PR page's draft card, `as planned` or `changed from the plan` with the proposed reply shown
+on demand as plain text. Settled for it, open to the operator: under `post` the prompt gives no proposed reply; only a
+thread's draft starts from the plan, not a PR's comment; a draft departs when the run's own first text differs from the
+proposed reply past whitespace at either end, when its `did` is not the plan's change or decline, when the plan proposed
+no reply (`ask`, `leave`), or when the approval left the item out; the operator's edits are not compared; and the card
+marks a departure and shows the proposal, with no word diff. Left: the plan that changes nothing, and failed checks and
+conflicts as items with ids of their own.

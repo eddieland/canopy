@@ -34,11 +34,11 @@ The items come in four groups, in this order, and within a group the one open lo
    [How the loop works](how-the-loop-works#public-and-private-tickets) says why.
 4. **Findings**: what your chores found.
 
-The counters above the list say how many runs are going, how many tickets wait on you and how long the oldest question
-has waited, and how many items the list holds. How those items break down is the nav's badge, on every page, so the
-counters don't say it again; one page saying a number five times doesn't make it truer. The browser tab's title counts
-the items that block work, so a glance at the tab says whether to look. Findings, `needs reviewer`, and
-`ready to merge` don't count there: they're news, not blockers.
+The counters above the list say how many runs are going, a task's among them, how many tickets and tasks wait on you
+and how long the oldest question has waited, and how many items the list holds. How those items break down is the
+nav's badge, on every page, so the counters don't say it again; one page saying a number five times doesn't make it
+truer. The browser tab's title counts the items that block work, so a glance at the tab says whether to look.
+Findings, `needs reviewer`, and `ready to merge` don't count there: they're news, not blockers.
 
 The tab's icon says it too, for when you've pinned the tab and its title is gone: a dot on its corner while anything
 blocks, red for something broken, amber for something waiting on your answer, grey for the rest. No dot, no reason to
@@ -83,6 +83,10 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   or you dismiss and delete everything the draft would post, which is how you say "thanks, no". A staged one waits
   until you submit or delete it on GitHub and the next read notices. A review canopy found on its own waits on
   nobody: read it or don't.
+- **A task** (`awaiting reply`, `task ticket unrecorded`): named by the first line of what you asked it, with a button
+  to its page, where its question waits, marked, and where you answer it
+  ([Replying and stopping](tasks#replying-and-stopping)). The other item, tickets its run reported that canopy
+  couldn't record, opens the task too: a reply or a stop clears it.
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
   There's nothing to answer here; the item leaves once the command has fixed its cause.
 

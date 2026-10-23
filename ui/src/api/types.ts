@@ -161,10 +161,18 @@ export type TaskStanding = TaskSummary['standing']
 export type TaskRun = Schemas['TaskRun']
 /** One task, as `canopy show task:N` prints it: the task, every run, its conversation, and its tickets. */
 export type TaskDetail = Schemas['TaskDetail']
+/** One run of a task, with the whole of what it said, as its page shows it. */
+export type TaskRunDetail = Schemas['TaskRunDetail']
 /** A ticket a task's run reported filing, unlabeled, so worked only once the operator says so. */
 export type TaskTicket = Schemas['TaskTicket']
 /** The report a task run left, as its file stands now, or why it is no report any more (DESIGN §36). */
 export type TaskReport = Schemas['TaskReport']
+/** What a task's submission recorded: its id, where it runs, and whether any tick may start it (DESIGN §36). */
+export type TaskSubmitted = Schemas['TaskSubmitted']
+/** What a reply to a task recorded, and the run of it still working, which the next run waits on. */
+export type TaskReplied = Schemas['TaskReplied']
+/** What a stop of a task did: already stopped, or dropped while queued, and the run still working it. */
+export type TaskStopped = Schemas['TaskStopped']
 /** What a run's or chore run's log, or a tick's output, holds of its session, read from its events (DESIGN §22). */
 export type Transcript = Schemas['Transcript']
 /** One entry of a transcript, told apart by its `kind`: text, a tool call, a model call's end, or an error. */
@@ -237,6 +245,14 @@ export type DraftStatus = Schemas['DraftStatusName']
 export type Reaction = Schemas['ReactionName']
 /** What a send did: the drafts posted, sent before, not sent and why, and those it cannot say of. */
 export type DraftsSent = Schemas['DraftsSent']
+/** A ticket's current feedback plan, as its PR's page shows it beside the threads (DESIGN §32). */
+export type FeedbackPlan = Schemas['FeedbackPlan']
+/** Where a feedback plan stands: waiting, stale, approved, or spent by the resume that went ahead on it. */
+export type FeedbackPlanStatus = Schemas['FeedbackPlanStatusName']
+/** An item a feedback plan covers, and what it proposes for it. */
+export type FeedbackPlanItem = Schemas['FeedbackPlanItem']
+/** What an approval of a feedback plan did: the items it addresses, those it leaves out, and its message. */
+export type FeedbackPlanApproved = Schemas['FeedbackPlanApproved']
 
 /** Every run state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss. */
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]

@@ -11,6 +11,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
+from canopy.serve.feedback_plan_schema import FeedbackPlan
 from canopy.serve.review_schema import ReviewDiff
 from canopy.serve.schema import Model
 
@@ -165,6 +166,9 @@ class PullRequestThreads(Model):
     """The drafts for the PR's own comment, which goes in the review's body."""
     unplaced: list[Draft]
     """Drafts no read has placed on a thread yet: unchecked, or refused for naming one the PR does not have."""
+    feedback_plan: FeedbackPlan | None = None
+    """The current feedback plan of the PR's ticket, when it covers the PR's repository (DESIGN §32): each item names
+    the thread it is."""
 
 
 class DraftEditRequest(Model):

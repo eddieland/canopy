@@ -9,8 +9,9 @@ runtime installs a package for its plugins into each config directory it can wri
 before a session starts (DESIGN §33). Nothing is installed into one it cannot write.
 
 Some definitions are rendered from config: what canopy decides here, from config, that each agent may do
-(`canopy.runtime.agents.Rules`), the runtime package writes in its own format. The digest covers the rendered text, so a
-config or override change makes a new snapshot rather than changing one a run may be loading.
+(`canopy.runtime.agents.Rules`), each agent's model among it, the runtime package writes in its own format. The digest
+covers the rendered text, so a config or override change makes a new snapshot rather than changing one a run may be
+loading, and each set of models gets a snapshot of its own.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import bash_allows, prompts, replies
+from canopy.core import agent_models, bash_allows, prompts, replies
 from canopy.core.config import NO_TEMPERATURE
 from canopy.core.vocab import ReplyMode, RunKind
 from canopy.infra import logs
@@ -85,6 +86,7 @@ def rules(config: Config) -> agents.Rules:
         tracker_provider=config.tracker.provider,
         bash_allows=bash_allows.by_agent(runtime.allow_bash),
         artifacts=config.artifacts.publishing(),
+        models=agent_models.by_agent(runtime.models),
     )
 
 

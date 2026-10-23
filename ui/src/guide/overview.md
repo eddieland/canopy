@@ -78,8 +78,8 @@ The bar across the top of every page. From the left:
   has been down a while. Before it, a `mock` pill when the server runs over a sample journal
   (`python -m canopy.serve --mock`) instead of your workspace's. No loop runs behind that one, and nothing you do there
   reaches a ticket.
-- **The ticker**, if you turned it on in [Settings](settings#fun). Joke headlines, and the odd real tip. It stops under
-  the pointer, for the ones worth reading twice.
+- **The ticker**, unless you turned it off in [Settings](settings#fun). Joke headlines, and the odd real tip. It stops
+  under the pointer, for the ones worth reading twice.
 - **Reload**, only when canopy now serves a newer build of the UI than the page you have open. Reloading loses what
   you've typed and not sent, so send it first.
 - **Pause**, then **Resume**, as `p` at the loop's terminal, or `canopy pause` and `canopy resume`. While paused, no
@@ -106,13 +106,16 @@ as `canopy notice` would, so a run already going keeps the words it started with
 
 The strip beside the nav, on every page. From the top: a search box over the whole journal (below), everything working
 right now, and what the last 24 hours and the last 30 days cost, each a link to the spend page. **Working** lists every
-agent on the clock: worker runs by their ticket, reviews by their PR, and chore runs by their chore, with the runs
-waiting on you after them. Each row opens its run's page. It shows four rows at most, then `+N more`, which opens the
-page that lists the rest, and it dims while the loop isn't answering, since what it shows may have ended. The 24 hours
-open the spend page by the hour, and the 30 days by the day. A ticket you stopped drops out once its run ends; a
-question it left behind waits on nothing, so it is not listed either. Its foot names the version canopy is serving,
-which links to canopy's releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and
-**Settings**. On a narrow window the rail folds to icons; **Open the rail** brings it back.
+agent on the clock: worker runs by their ticket, reviews by their PR, chore runs by their chore, and task runs as
+`task:N#M` over your text's first line, with the runs waiting on you after them. A worker run's row says what it's
+doing under its ticket's title: `planning`, `implementing`, `fixing CI`. While it works, that comes as a quip of the
+ticket's own, `appeasing CI`; hover it for the plain words, or turn the quips off in [Settings](settings#fun). Each
+row opens its run's page. It shows four rows at most, then `+N more`, which opens the page that lists the rest, and
+it dims while the loop isn't answering, since what it shows may have ended. The 24 hours open the spend page by the
+hour, and the 30 days by the day. A ticket you stopped drops out once its run ends; a question it left behind waits
+on nothing, so it is not listed either. Its foot names the version canopy is serving, which links to canopy's
+releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a narrow
+window the rail folds to icons; **Open the rail** brings it back.
 
 From the keyboard, the first Tab on any page lands on **Skip to content**, which hides until then. Press Enter and the
 next Tab is the page's own, not the rail's dozen or so stops. Your Tab key has better things to do.
@@ -123,10 +126,14 @@ Press `/` from anywhere but a text field to jump to the search box, and type. Th
 or at once on Enter, and Escape leaves the box. A search wants 2 to 200 characters and at most eight words, and finds
 what holds every word, in any case, newest first.
 
-It searches tickets by key, title, and branch, every conversation, chore runs, the overseer's decisions, and ticks, each
-in its own panel, at most 20 of each; a panel that found more says `newest 20`. It doesn't search transcripts, reviews,
-or agent memory. While the next search loads, the last one's results stay, dimmed, so the page never blanks between
-keystrokes. The box's clear button starts over.
+It searches tickets by key, title, and branch, tasks by their reference, text, and branch, every conversation, chore
+runs, the overseer's decisions, and ticks, each in its own panel, at most 20 of each; a panel that found more says
+`newest 20`. A task's hit is `task:N` over the first line you wrote it with, and one of its run's messages opens that
+run. It doesn't search transcripts, reviews, a task's report, or agent memory. While the next search loads, the last
+one's results stay, dimmed, so the page never blanks between keystrokes. The box's clear button starts over.
+
+A task's reference alone, `task:4`, opens that task on Enter instead of searching for it: faster than remembering
+which page it was on.
 
 To get back to a ticket, press `⌘K` (`Ctrl+K` off a Mac) from anywhere, even mid-reply. It lists the tickets you've
 opened lately in this browser, newest first, each with where it stands now; Enter opens the top one, which is the

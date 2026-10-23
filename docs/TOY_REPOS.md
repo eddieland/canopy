@@ -164,7 +164,7 @@ Issue numbers never repeat, so a reset pairs with a fresh toy workspace (remove 
   Actions or Administration. Its MCP server cannot reach a real repository, and a real loop never sees a toy label.
   git in a slot still pushes with the operator's own git credentials, which the token does not narrow.
 - **The toy user config:** `max_workers = 1`, `max_chores = 0`, `loop.interval_minutes = 30`; a cheaper model,
-  `github-copilot/claude-haiku-5.5`, on `worker_cmd` with `--model` (the overseer keeps the real one,
+  `github-copilot/claude-haiku-5.5`, as `runtime.models.worker` (the overseer keeps the real one,
   since its judgment is what the scenarios test); `[review]` off except in the review scenarios.
 - **Ticks on demand.** Prefer `canopy tick` or `canopy loop --ticks N` to a loop left running. An idle toy loop
   overnight is where money goes; S27 is the only scenario that needs one.

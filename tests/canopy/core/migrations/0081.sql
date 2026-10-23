@@ -1,3 +1,3 @@
--- sha256 of 0081_draft_plan_items.sql: 07e198f4a19cff80ef042e1d8af271cbd2ff928371cc4d4c4156fc6c6fafe3c2
+-- sha256 of 0081_run_model.sql: 66979886f79043c93a6b6a3a95bc5f6b89bd0ba257bf45a1c117a3ca5d11f7a7
 
--- Creates no table, so seeds no row.
+UPDATE runs SET model = 'acme/fake-model' WHERE id = (SELECT min(id) FROM runs);

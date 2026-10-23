@@ -1,4 +1,7 @@
-"""How `canopy status`, `canopy show`, and the other read-back commands name tickets, runs, costs, and chores."""
+"""How the read-back commands and reports name tickets, runs, costs, and chores.
+
+`canopy status` and `canopy show` print them so, and so does what a chore reads through its reports (`loop.readback`).
+"""
 
 from __future__ import annotations
 
@@ -87,6 +90,17 @@ def persona_of(row: sqlite3.Row) -> str:
     if row["persona"] is None:
         return ""
     return f"  persona {row['persona']} {str(row['persona_digest'])[:DIGEST_WIDTH]}"
+
+
+def model_of(row: sqlite3.Row) -> str:
+    """The model canopy chose for a worker run's agent (DESIGN §13), as `  model provider/model`.
+
+    Returns:
+        The model with two leading spaces, to append to a line, or "" for a run on the runtime's default.
+    """
+    if row["model"] is None:
+        return ""
+    return f"  model {row['model']}"
 
 
 def chore_line(state: chore_view.ChoreState, now: datetime) -> str:

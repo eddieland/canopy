@@ -44,6 +44,26 @@ def archived(scenario: Scenario, upstream: Path) -> list[str]:
     return git("ls-tree", "-r", "--name-only", "main", cwd=upstream).splitlines()
 
 
+def pushed_from_another_clone(upstream: Path, tmp_path: Path, path: str, text: str) -> str:
+    """Commit `text` at `path` in a second clone of `upstream` and push it, as another machine would.
+
+    Returns:
+        The commit pushed.
+    """
+    other = tmp_path / "other-clone"
+    if not other.exists():
+        git("clone", "--quiet", str(upstream), str(other), cwd=tmp_path)
+        git("config", "user.email", "operator@example.com", cwd=other)
+        git("config", "user.name", "Operator", cwd=other)
+    git("pull", "--quiet", cwd=other)
+    (other / path).parent.mkdir(parents=True, exist_ok=True)
+    (other / path).write_text(text)
+    git("add", "--all", cwd=other)
+    git("commit", "--quiet", "-m", f"Write {path}", cwd=other)
+    git("push", "--quiet", cwd=other)
+    return git("rev-parse", "HEAD", cwd=other)
+
+
 def test_a_live_tick_pushes_every_plan_and_only_what_changed(scenario: Scenario, clone: Path, upstream: Path) -> None:
     run_id = proposed(scenario.conn, scenario.env.state_dir)
     name = workspace.find(scenario.env.root).name
@@ -269,6 +289,80 @@ def test_a_failed_push_stays_an_item_until_a_tick_pushes(scenario: Scenario, clo
     scenario.tick(*waits(KEY))
     assert unpushed(scenario) is None
     assert git("rev-parse", "main", cwd=upstream) == head
+
+
+def test_a_push_the_upstream_refuses_for_its_own_commits_goes_on_top_of_them(
+    scenario: Scenario,
+    clone: Path,
+    upstream: Path,
+    tmp_path: Path,
+) -> None:
+    proposed(scenario.conn, scenario.env.state_dir)
+    scenario.tick(*waits(KEY))
+    theirs = pushed_from_another_clone(upstream, tmp_path, "other/README.md", "Another workspace's plans.\n")
+    second = proposed(scenario.conn, scenario.env.state_dir, key="PROJ-2")
+    name = workspace.find(scenario.env.root).name
+
+    scenario.tick(*waits(KEY, "PROJ-2"))
+
+    assert unpushed(scenario) is None
+    assert f"{name}/PROJ-2/{second}-PROPOSED.md" in archived(scenario, upstream)
+    assert "other/README.md" in archived(scenario, upstream)
+    # A fast-forward of what the other clone pushed: its commit is the new one's parent, and nothing is merged.
+    assert git("rev-parse", "main^", cwd=upstream) == theirs
+    assert git("rev-list", "--merges", "main", cwd=upstream) == ""
+    assert git("rev-parse", "HEAD", cwd=clone) == git("rev-parse", "main", cwd=upstream)
+
+
+def test_a_rebase_that_conflicts_is_aborted_and_stays_an_item(
+    scenario: Scenario,
+    clone: Path,
+    upstream: Path,
+    tmp_path: Path,
+) -> None:
+    proposed(scenario.conn, scenario.env.state_dir)
+    scenario.tick(*waits(KEY))
+    name = workspace.find(scenario.env.root).name
+    # As the same workspace archived from another machine would.
+    theirs = pushed_from_another_clone(upstream, tmp_path, f"{name}/README.md", "Another machine's index.\n")
+    proposed(scenario.conn, scenario.env.state_dir, key="PROJ-2")
+    head = git("rev-parse", "HEAD", cwd=clone)
+
+    scenario.tick(*waits(KEY, "PROJ-2"))
+
+    detail = unpushed(scenario)
+    assert detail is not None
+    assert detail.startswith(f"its upstream has commits the clone lacks, and git rebase in {clone} failed: ")
+    assert git("rev-parse", "main", cwd=upstream) == theirs
+    # Aborted: the clone holds its own commit, and no rebase waits there.
+    assert git("rev-parse", "HEAD^", cwd=clone) == head
+    assert git("status", "--porcelain", cwd=clone) == ""
+    assert not any((clone / ".git" / d).exists() for d in ("rebase-merge", "rebase-apply"))
+
+
+def test_the_operators_changes_in_the_clone_refuse_the_rebase(
+    scenario: Scenario,
+    clone: Path,
+    upstream: Path,
+    tmp_path: Path,
+) -> None:
+    proposed(scenario.conn, scenario.env.state_dir)
+    scenario.tick(*waits(KEY))
+    theirs = pushed_from_another_clone(upstream, tmp_path, "other/README.md", "Another workspace's plans.\n")
+    # Even with the operator's autostash on, their staged file is never set aside.
+    git("config", "rebase.autoStash", "true", cwd=clone)
+    (clone / "notes.md").write_text("The operator's own.\n")
+    git("add", "notes.md", cwd=clone)
+    proposed(scenario.conn, scenario.env.state_dir, key="PROJ-2")
+
+    scenario.tick(*waits(KEY, "PROJ-2"))
+
+    detail = unpushed(scenario)
+    assert detail is not None
+    assert detail.startswith(f"its upstream has commits the clone lacks, and git rebase in {clone} failed: ")
+    assert git("rev-parse", "main", cwd=upstream) == theirs
+    assert git("diff", "--cached", "--name-only", cwd=clone) == "notes.md"
+    assert git("stash", "list", cwd=clone) == ""
 
 
 def test_only_the_archive_is_committed(scenario: Scenario, clone: Path, upstream: Path) -> None:

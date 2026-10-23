@@ -1,4 +1,4 @@
-import type { Capacity, ChoreRun, ChoreSummary, ReviewSummary, Run, RunState } from '@/api/types'
+import type { Capacity, ChoreRun, ChoreSummary, ReviewSummary, Run, RunState, TaskRun, TaskSummary } from '@/api/types'
 
 // Full class names, written out, so Tailwind finds them. One entry per state; the types make a missing one an error.
 
@@ -90,6 +90,8 @@ export interface EveryRun {
     reviews?: ReviewSummary[] | undefined
     /** The chores, each with its running run and its latest that ended; undefined until they are read. */
     chores?: ChoreSummary[] | undefined
+    /** The tasks, each with its newest run; undefined until they are read. */
+    tasks?: TaskSummary[] | undefined
 }
 
 /**
@@ -130,13 +132,13 @@ export function runsListed(groups: readonly SubjectRuns[]): number {
 
 /**
  * What is running now against each limit of `[capacity]`, counted as the harness counts it when it refuses a start:
- * `workers` counts the worker runs and the review runs, as `max_workers` does, `reviews` the review runs alone, and
- * `chores` the chore runs, which `max_chores` counts apart.
+ * `workers` counts the worker runs, the review runs, and the task runs, as `max_workers` does, `reviews` the review
+ * runs alone, and `chores` the chore runs, which `max_chores` counts apart.
  */
-export function busy({ runs, reviews = [], chores = [] }: EveryRun): Capacity {
+export function busy({ runs, reviews = [], chores = [], tasks = [] }: EveryRun): Capacity {
     const reviewing = reviews.filter((r) => r.state === 'running').length
     return {
-        workers: runs.filter((r) => r.state === 'running').length + reviewing,
+        workers: runs.filter((r) => r.state === 'running').length + reviewing + runningTasks(tasks).length,
         reviews: reviewing,
         chores: chores.filter((c) => c.running !== null).length,
     }
@@ -167,11 +169,17 @@ export function workingOn(runs: Run[], ticketKey: string): Run[] {
         .toSorted((a, b) => a.started_at.localeCompare(b.started_at))
 }
 
-/** One thing the rail lists as working: a worker run, a review of a PR, or a chore's run. */
+/** The tasks whose newest run is running, each with that run. A task runs one run at a time, so it has at most one. */
+export function runningTasks(tasks: readonly TaskSummary[]): { task: TaskSummary; run: TaskRun }[] {
+    return tasks.flatMap((task) => (task.latest?.state === 'running' ? [{ task, run: task.latest }] : []))
+}
+
+/** One thing the rail lists as working: a worker run, a review of a PR, a chore's run, or a task's run. */
 export type RailItem =
     | { kind: 'run'; run: Run }
     | { kind: 'review'; review: ReviewSummary }
     | { kind: 'chore'; chore: string; run: ChoreRun }
+    | { kind: 'task'; task: TaskSummary; run: TaskRun }
 
 /** What the rail lists as working: the rows it shows, how many it leaves out, and the page that lists those. */
 export interface RailWork {
@@ -180,25 +188,23 @@ export interface RailWork {
     /** How many it leaves out. */
     more: number
     /** The page listing the ones left out: their kind's, or the runs page when they are of more than one kind. */
-    moreAt: '/runs' | '/reviews' | '/chores'
+    moreAt: '/runs' | '/reviews' | '/chores' | '/tasks'
 }
 
 /**
- * What the rail lists as working, at most `limit`: the worker runs, review runs, and chore runs running, then the
- * worker runs waiting on the operator's answer, each oldest first, so the work in progress leads and holds the slots.
- * Only each ticket's latest worker run counts: a blocked run a later one followed waits on nothing, and neither does
- * one whose ticket the operator stopped, as the attention list sets it aside.
+ * What the rail lists as working, at most `limit`: the worker runs, review runs, chore runs, and task runs running,
+ * then the worker runs waiting on the operator's answer, each oldest first, so the work in progress leads and holds the
+ * slots. Only each ticket's latest worker run counts: a blocked run a later one followed waits on nothing, and neither
+ * does one whose ticket the operator stopped, as the attention list sets it aside.
  */
-export function railWork(
-    { runs, reviews = [], chores = [] }: { runs: Run[]; reviews?: ReviewSummary[]; chores?: ChoreSummary[] },
-    limit: number,
-): RailWork {
+export function railWork({ runs, reviews = [], chores = [], tasks = [] }: EveryRun, limit: number): RailWork {
     const working: RailItem[] = [
         ...latestRuns(runs)
             .filter((r) => r.state === 'running' || (r.state === 'blocked' && !r.ticket_stopped))
             .map((run) => ({ kind: 'run', run }) as const),
         ...reviews.filter((r) => r.state === 'running').map((review) => ({ kind: 'review', review }) as const),
         ...chores.flatMap((c) => (c.running ? [{ kind: 'chore', chore: c.name, run: c.running } as const] : [])),
+        ...runningTasks(tasks).map(({ task, run }) => ({ kind: 'task', task, run }) as const),
     ]
     const sorted = working.toSorted((a, b) => {
         const order = rank(a) - rank(b)
@@ -210,7 +216,7 @@ export function railWork(
     return {
         shown: sorted.slice(0, limit),
         more: left.length,
-        moreAt: only === 'review' ? '/reviews' : only === 'chore' ? '/chores' : '/runs',
+        moreAt: only === 'review' ? '/reviews' : only === 'chore' ? '/chores' : only === 'task' ? '/tasks' : '/runs',
     }
 }
 

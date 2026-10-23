@@ -12,7 +12,7 @@ workspace's policy allows one resume and two reviews, so ABC-100 is at its resum
 running, is a resume for a failed check and review feedback together. The running runs 41 and 43 have the latest tool
 call on each one's row (§8).
 Each feature's fixtures are in a module of their own beside this one, `mock_<feature>.py`, which `seed` calls: plans,
-memory, chore runs, review runs, review replies, personas, one-off tasks, and the runs' transcripts.
+memory, chore runs, review runs, review replies, a feedback plan, personas, one-off tasks, and the runs' transcripts.
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -32,6 +32,7 @@ from canopy.infra import resources
 from canopy.serve import (
     mock_chores,
     mock_drafts,
+    mock_feedback_plans,
     mock_memory,
     mock_personas,
     mock_plans,
@@ -84,6 +85,8 @@ labels = ["agent-ready-mock"]
 
 [capacity]
 slots_per_repo = 2
+# Runs 41 and 43, and task 6's run, which counts against max_workers too: the limit is full, never past it.
+max_workers = 3
 
 [capacity.repo_slots]
 web = 4
@@ -285,6 +288,7 @@ def seed(directory: Path) -> Backend:
             mock_memory.seed(ctx.conn, at)
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
             mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
+            mock_feedback_plans.seed(ctx.conn, ws.state_dir, at, ctx.config.trust, slot_path(root, "web", 3))
             mock_personas.seed(ctx.conn, ctx.config, at)
             mock_tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
         mock_reviews.drafts(ctx.conn, at)
@@ -338,7 +342,8 @@ def _limits(ctx: Context, key: str) -> list[Limit]:
         .from_("runs r")
         .join("run_slots s ON s.run_id = r.id")
         .where("r.ticket_key = ?", key)
-        .where("r.kind NOT IN ('split', 'plan')")
+        # Counted apart, as `runs.policy` counts them, and shown with no unit's limits.
+        .where("r.kind NOT IN ('split', 'plan', 'feedback-plan')")
         .where("s.repo IS NOT NULL")
         .group_by("s.repo, r.kind")
     )

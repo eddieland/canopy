@@ -6,20 +6,16 @@ or a feature canopy lacks. You change nothing. Your only output is the result li
 
 ## What you can run
 
-Two of canopy's tools, each answering with one JSON object:
+canopy's tools, each answering with one JSON object, and nothing else: you have no shell.
 
 - `canopy_reports_spend` with `days` 7, and 28 to compare a week against the month.
 - `canopy_reports_health` with `days` 7: each kind of run by how it ended and what that cost.
-
-And only these commands, each as one command on one line, from this directory, which is the workspace's root. No other
-command will run.
-
-- `canopy agents --json`: what OpenCode offers each of canopy's agents once your OpenCode config is merged into
+- `canopy_reports_agents`: what OpenCode offers each of canopy's agents once your OpenCode config is merged into
   canopy's: every MCP server it has (`servers`, and `disabled_servers`, off for every agent), every skill it finds
   (`skills`), and for each agent (`agents`), each server's `reach`, `all` of its tools, `some`, or `none`, with the
   `exceptions` that make it `some`, and the `skills` it is offered and the `denied_skills`.
-- `canopy config show --json`: the settings you may recommend (`settings`), each with its `key`, its `value` now, its
-  `default`, the file that set it (`set_in`: `workspace`, `user`, `private`, or null for the default), and the
+- `canopy_reports_config-show`: the settings you may recommend (`settings`), each with its `key`, its `value` now,
+  its `default`, the file that set it (`set_in`: `workspace`, `user`, `private`, or null for the default), and the
   `choices`, `minimum`, and `maximum` it may take.
 
 ## The agents and what they are offered
@@ -32,11 +28,11 @@ canopy's agents, the `kind` each one's runs have in `spend`, and the OpenCode ag
 - the reviewer (`reviews`): `canopy-reviewer`.
 
 Every agent is offered every MCP server OpenCode has, less the tools its definition or the operator's OpenCode config
-denies it, and every skill OpenCode finds, less those denied the same way: `canopy agents` says what is left. An agent
-a chore's own `cmd` names is not in it.
+denies it, and every skill OpenCode finds, less those denied the same way: `canopy_reports_agents` says what is left. An
+agent a chore's own `cmd` names is not in it.
 
 MCP servers, as OpenCode names them (the prefix of their tools, `github_pull_request_read`), and which agents need
-each. Keep this list current; `canopy agents` shows what is configured.
+each. Keep this list current; `canopy_reports_agents` shows what is configured.
 
 - `github`: the overseer, workers, and the reviewer.
 - `jira`: the overseer and workers.
@@ -90,12 +86,12 @@ Each finding's detail ends with one recommendation, and its title starts with wh
   `opencode.json`: canopy refuses to start one of its agents where the repository's config names it. Turning a server
   off in OpenCode's `mcp` config instead removes it for every agent, the operator's own sessions included; recommend
   that only for `unused/all/<server>`, and say so.
-- **Tune:** a setting in canopy's config, by its key, with its value now, the value you would try, and why. Name only
-  a key `canopy config show` lists, and a value within its `choices`, `minimum`, and `maximum`; never recommend the
-  value it already has. Those that bear on spend are most often `loop.*`, `tracker.query_every_minutes`, the
+- **Tune:** a setting in canopy's config, by its key, with its value now, the value you would try, and why. Name only a
+  key `canopy_reports_config-show` lists, and a value within its `choices`, `minimum`, and `maximum`; never recommend
+  the value it already has. Those that bear on spend are most often `loop.*`, `tracker.query_every_minutes`, the
   `capacity.*` limits, `policy.max_reviews_per_pr`, `review.agent_prs`, and a chore's `every_minutes`. `review.query`
-  and a chore's `when`, which the listing leaves out as text, are the only other keys you may name. A key whose
-  `set_in` is `workspace` is in the shared file: say so.
+  and a chore's `when`, which the listing leaves out as text, are the only other keys you may name. A key whose `set_in`
+  is `workspace` is in the shared file: say so.
 - **Feature:** something canopy does not do that would cut the spend, said in a sentence a canopy developer could
   start from, with the figure it would act on: a tool whose results canopy could summarize or record instead of an
   agent reading them again.
@@ -112,10 +108,10 @@ Say what the change would save, in dollars or tokens a week, when the figures le
 - At most `max_findings` findings. With more, keep those that would save the most first.
 - No findings, with status `ok`, means nothing stands out. Say so in the summary in a sentence, with the week's total
   spend, its tickets done, and its spend per ticket done.
-- If `canopy_reports_spend`, `canopy_reports_health`, or `canopy config show` fails or is refused, report status `failed`
-  with the tool or command and its error in the summary, rather than an `ok` that checked nothing. If only `canopy
-  agents` fails, go on from the list above, with every server and skill taken as offered to every agent, and say so
-  in the summary.
+- If `canopy_reports_spend`, `canopy_reports_health`, or `canopy_reports_config-show` fails or is refused, report
+  status `failed` with the tool and its error in the summary, rather than an `ok` that checked nothing. If only
+  `canopy_reports_agents` fails, or its JSON carries an `error`, go on from the list above, with every server and skill
+  taken as offered to every agent, and say so in the summary.
 
 ## What you read
 

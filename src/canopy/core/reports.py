@@ -1,10 +1,13 @@
-"""canopy's read-only reports as an agent reads them, one JSON object each: health, spend, and agent memory.
+"""canopy's read-only reports as an agent reads them, one JSON object each.
 
-`canopy health --json`, `canopy spend --json`, and `canopy memory lessons`, `proposals`, and `list` with `--json` print
-them, and an agent reads them through tools of the same names, `canopy_reports_health` and so on, which `canopy _mcp
---reports` serves (DESIGN §27). The server is named for what it serves, not for whom: a chore's run is the one given it
-today. Both build a request here and call its function, in the style of the overseer's verbs
-(`loop.tools`), so a tool and its command take the same bounds and say the same text. None of them writes.
+Health, spend, agent memory, the config's settings, and what each agent is offered: `canopy health --json`, `canopy
+spend --json`, `canopy memory lessons`, `proposals`, and `list` with `--json`, `canopy config show --json`, and `canopy
+agents --json` print them, and an agent reads them through tools of the same names, `canopy_reports_health` and so on,
+which `canopy _mcp --reports` serves (DESIGN §27), beside the read-back of the journal as text that `loop.readback`
+holds: a tick's decisions, a run, and a chore. The server is named for what it serves, not for whom: a chore's run is
+the one given it today. Both build a request here and call its function, in the style of the overseer's verbs
+(`loop.tools`), so a tool and its command take the same bounds and say the same text. None of them writes to the
+journal; `agents` writes the definitions snapshot a run would, for the runtime to read.
 
 What a worker wrote, a memory's text, is printed with every character that hides text named, as the listings print it.
 """
@@ -19,15 +22,28 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 
-from canopy.core import config, conversation, db, health, memory, memory_manage, spend
+from canopy.core import (
+    bash_allows,
+    config,
+    conversation,
+    db,
+    definitions,
+    health,
+    memory,
+    memory_manage,
+    settings,
+    spend,
+)
 from canopy.core.memory_text import quoted
-from canopy.runtime import servers
+from canopy.runtime import definitions as runtime_definitions
+from canopy.runtime import offerings, servers
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from canopy.core import records
     from canopy.core.context import Context
+    from canopy.runtime.agents import Offerings
 
 #: The MCP server of these reports, as a run's inline config names it. The runtime joins it to each tool's name,
 #: `canopy_reports_health`; no tool's own name holds an underscore, as none of canopy's tools do (DESIGN §27).
@@ -41,7 +57,27 @@ SPEND = "spend"
 MEMORY_LESSONS = "memory-lessons"
 MEMORY_PROPOSALS = "memory-proposals"
 MEMORY_LIST = "memory-list"
-TOOLS = (HEALTH, SPEND, MEMORY_LESSONS, MEMORY_PROPOSALS, MEMORY_LIST)
+DECISIONS = "decisions"
+SHOW_RUN = "show-run"
+SHOW_CHORE = "show-chore"
+CONFIG_SHOW = "config-show"
+AGENTS = "agents"
+TOOLS = (
+    HEALTH,
+    SPEND,
+    MEMORY_LESSONS,
+    MEMORY_PROPOSALS,
+    MEMORY_LIST,
+    DECISIONS,
+    SHOW_RUN,
+    SHOW_CHORE,
+    CONFIG_SHOW,
+    AGENTS,
+)
+
+
+class Refused(Exception):  # noqa: N818  (an outcome the caller is told about, not an error)
+    """A report cannot say what was asked, such as a tick the journal does not hold. Its text is what both say."""
 
 
 def _repo(value: str) -> str:
@@ -50,7 +86,15 @@ def _repo(value: str) -> str:
     return value
 
 
-def _key(value: str) -> str:
+def ticket_key(value: str) -> str:
+    """Check a ticket key a request names.
+
+    Returns:
+        The key.
+
+    Raises:
+        ValueError: It is not one.
+    """
     if not conversation.KEY_RE.fullmatch(value):
         raise ValueError(f"invalid ticket key {value!r}: must match {conversation.KEY_RE.pattern}")
     return value
@@ -105,11 +149,19 @@ class MemoryList(Request):
 
     #: Only this ticket's notes.
     key: Annotated[
-        Annotated[StrictStr, AfterValidator(_key)] | None,
+        Annotated[StrictStr, AfterValidator(ticket_key)] | None,
         Field(max_length=100, description="Only this ticket's notes, by its key."),
     ] = None
     #: Superseded and invalid notes, and tombstones, too.
     all: Annotated[StrictBool, Field(description="Also list superseded and invalid notes, and tombstones.")] = False
+
+
+class ConfigShow(Request):
+    """`config-show`: each number, switch, and choice in the config, with its default and the file that set it."""
+
+
+class Agents(Request):
+    """`agents`: the MCP servers, skills, and tools each of canopy's agents is offered, after the operator's config."""
 
 
 def read_health(ctx: Context, request: Health) -> str:
@@ -160,6 +212,65 @@ def read_notes(ctx: Context, request: MemoryList) -> str:
     found = memory.notes(ctx.conn, request.key, every=request.all)
     seen = memory.reads(ctx.conn, [n.id for n in found])
     return report_json({"modes": _modes(ctx), "notes": [_note_json(n, read_of(seen, n)) for n in found]})
+
+
+def read_config(ctx: Context, request: ConfigShow) -> str:  # noqa: ARG001  (a listing takes no field)
+    """List the config's settings, as `canopy config show --json` prints them.
+
+    A key that holds text, a command, a path, or a table of those is left out (`core.settings`): it may name a host or
+    carry a token.
+
+    Returns:
+        The config's files by layer, and its settings, as JSON.
+    """
+    files = config.config_files(ctx.ws.root)
+    found = settings.settings(ctx.config, config.origins(ctx.ws.root, runner=ctx.runner), files)
+    layers = {str(layer): str(path) for layer, path in zip(settings.Layer, files, strict=True)}
+    return report_json({"files": layers, "settings": [dataclasses.asdict(s) for s in found]})
+
+
+def read_agents(ctx: Context, request: Agents) -> str:  # noqa: ARG001  (a listing takes no field)
+    """Say what each of canopy's agents is offered, as `canopy agents --json` prints it.
+
+    Returns:
+        What the runtime offers each agent, and the commands `runtime.allow_bash` gives each, as JSON; the runtime's
+        error in it when it could not say.
+
+    Raises:
+        Refused: canopy's definitions could not be written for the runtime to read.
+    """
+    return agents_json(*offered(ctx))
+
+
+def offered(ctx: Context) -> tuple[Offerings, dict[str, tuple[str, ...]]]:
+    """Ask the runtime what each of canopy's agents is offered, started as a run starts it, with canopy's definitions.
+
+    Returns:
+        What it offers, and the commands `runtime.allow_bash` gives each agent, by its name.
+
+    Raises:
+        Refused: canopy's definitions could not be written for the runtime to read.
+    """
+    try:
+        snapshot = definitions.ensure(ctx.ws.state_dir, ctx.config)
+    except definitions.DefinitionsError as e:
+        raise Refused(f"agents: {e}") from None
+    found = offerings.offerings(
+        ctx.runner,
+        cwd=ctx.ws.root,
+        definitions_dir=snapshot,
+        agents=runtime_definitions.agent_names(),
+    )
+    return found, bash_allows.by_agent(ctx.config.runtime.allow_bash)
+
+
+def agents_json(found: Offerings, allows: Mapping[str, Sequence[str]]) -> str:
+    """What `offered` found, as `canopy agents --json` prints it.
+
+    Returns:
+        The JSON text.
+    """
+    return report_json({**dataclasses.asdict(found), "allow_bash": {a: list(p) for a, p in allows.items()}})
 
 
 def tool_names() -> list[str]:

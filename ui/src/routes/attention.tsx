@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ChevronLeft, FileText, GitPullRequest, MessageSquareReply } from 'lucide-react'
+import { ChevronLeft, FileText, GitPullRequest, MessageSquareReply, Sprout } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -9,6 +9,8 @@ import {
     attentionQuery,
     choreQuery,
     pullRequestQuery,
+    taskQuery,
+    tasksQuery,
     ticketPlansQuery,
     ticketQuery,
     ticketsQuery,
@@ -32,6 +34,7 @@ import { LessonsDue, LessonsWrong, ProposalsWaiting } from '@/components/memory-
 import { InlineCode } from '@/components/rich-text'
 import { RunsTable } from '@/components/runs-table'
 import { Chip } from '@/components/status'
+import { TaskLink } from '@/components/task-link'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLink } from '@/components/ticket-link'
@@ -55,7 +58,8 @@ import type { Ask, Severity } from '@/lib/attention'
 import { settled, withLeaving } from '@/lib/leaving'
 import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
-import { reviewRef } from '@/lib/refs'
+import { reviewRef, taskRef } from '@/lib/refs'
+import { taskTitle } from '@/lib/tasks'
 import { cn } from '@/lib/utils'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import type { Tone } from '@/lib/tone'
@@ -100,6 +104,7 @@ function AttentionPage() {
     const toast = useToast()
     const { data } = useQuery(attentionQuery)
     const tickets = useQuery(ticketsQuery).data
+    const tasks = useQuery(tasksQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
     const rows = useLeavingRows(data, items)
     // The item asked for while it is listed; else the most severe one about a ticket, which has a thread to show.
@@ -127,7 +132,7 @@ function AttentionPage() {
     }
 
     function isDone(item: AttentionItem): boolean {
-        return answered(item, tickets)
+        return answered(item, tickets, tasks)
     }
 
     // A reply that answers its item moves on to the next that waits on the operator, its row chosen and focused, the
@@ -174,13 +179,17 @@ function AttentionPage() {
                                     <ul className="stagger flex flex-col gap-0.5 p-1.5">
                                         {rows.map(({ item, leaving }) =>
                                             leaving ? (
-                                                <Leaving key={item.id} item={item} done={answered(item, tickets)} />
+                                                <Leaving
+                                                    key={item.id}
+                                                    item={item}
+                                                    done={answered(item, tickets, tasks)}
+                                                />
                                             ) : (
                                                 <Row
                                                     key={item.id}
                                                     item={item}
                                                     selected={item.id === selected?.id}
-                                                    done={answered(item, tickets)}
+                                                    done={answered(item, tickets, tasks)}
                                                     onChoose={choose}
                                                 />
                                             ),
@@ -207,7 +216,7 @@ function AttentionPage() {
                                 <Detail
                                     key={selected.id}
                                     item={selected}
-                                    done={answered(selected, tickets)}
+                                    done={answered(selected, tickets, tasks)}
                                     onReplied={(said) => moveOn(selected, said)}
                                 />
                             )}
@@ -336,7 +345,7 @@ function Row({
     )
 }
 
-/** What a row of the list says: the item's reason, its subject and age, its ticket's title, and its detail. */
+/** What a row of the list says: the item's reason, its subject and age, its ticket's or task's title, its detail. */
 function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
         <>
@@ -352,6 +361,7 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
             </span>
             {/* The title is the row's name and the detail its preview, as an inbox's subject over its first line. */}
             {item.ticket_key !== null && <TicketTitle title={item.ticket_title} className="font-semibold" />}
+            {item.task !== null && <TaskTitle id={item.task} />}
             <span className="line-clamp-2 text-sm break-words text-muted-foreground">
                 <InlineCode text={shownDetail(item)} links={false} />
             </span>
@@ -378,9 +388,9 @@ function Answered() {
  * items name, or the command to run. A ticket's item then shows its answer: its conversation and the reply form, with
  * the ticket's own actions and grants under them, or ahead of them when the reason asks for nothing else; a chore's
  * item its notes and the form for another, and for a finding the button to dismiss it; a review's draft's item the
- * review's page, where the draft is read and published; a PR's other item its review limit and its grant, for a PR no
- * ticket owns; an item about none of them, what it says. `onReplied` hears each reply sent from it, with what the
- * form said of it.
+ * review's page, where the draft is read and published; a task's item the task's page, where it is read and answered;
+ * a PR's other item its review limit and its grant, for a PR no ticket owns; an item about none of them, what it says.
+ * `onReplied` hears each reply sent from it, with what the form said of it.
  */
 function Detail({ item, done, onReplied }: { item: AttentionItem; done: boolean; onReplied: (said: string) => void }) {
     const asks = ask(item)
@@ -399,6 +409,7 @@ function Detail({ item, done, onReplied }: { item: AttentionItem; done: boolean;
             )}
             {item.chore !== null && <ChoreThread name={item.chore} />}
             {asks === 'review' && <ReviewAction item={item} />}
+            {item.task !== null && <TaskAction item={item} task={item.task} />}
             {item.pr !== null && asks !== 'review' && <PullRequestLimits url={item.pr} />}
             {command !== null && <RunCommand command={command} />}
             {asks === 'none' && item.ticket_key === null && item.chore === null && item.pr === null && (
@@ -419,6 +430,9 @@ function ItemHead({ item, asks, done }: { item: AttentionItem; asks: Ask; done: 
     }
     if (item.reason === 'awaiting_reply' && item.ticket_key !== null) {
         return <AwaitingHead item={item} ticketKey={item.ticket_key} done={done} />
+    }
+    if (item.reason === 'awaiting_reply' && item.task !== null) {
+        return <TaskAwaitingHead item={item} task={item.task} done={done} />
     }
     return <Head item={item} done={done} links={asks !== 'pull-request'} />
 }
@@ -524,6 +538,27 @@ function AwaitingHead({ item, ticketKey, done }: { item: AttentionItem; ticketKe
     return <Head item={item} done={done} body={body} />
 }
 
+/**
+ * A task's question's head: as a ticket's, naming the question by its message and when it was asked, since the task's
+ * page holds it. Until the task is read the line is reserved; once nothing waits on it, the item's detail stands in.
+ */
+function TaskAwaitingHead({ item, task, done }: { item: AttentionItem; task: number; done: boolean }) {
+    const { data } = useQuery(taskQuery(task))
+    if (data === undefined) {
+        return <Head item={item} done={done} body={<Skeleton className="h-5 w-72 max-w-full" />} />
+    }
+    const waiting = data.messages.find((message) => message.id === data.task.question_id)
+    if (waiting === undefined) {
+        return <Head item={item} done={done} />
+    }
+    const body = (
+        <p className="text-sm" data-testid="awaiting-line">
+            Waits on your answer to message {waiting.id}, asked <Age at={waiting.at} variant="ago" />.
+        </p>
+    )
+    return <Head item={item} done={done} body={body} />
+}
+
 function Subject({ item }: { item: AttentionItem }) {
     if (item.ticket_key !== null) {
         return (
@@ -543,6 +578,14 @@ function Subject({ item }: { item: AttentionItem }) {
     }
     if (item.pr !== null) {
         return <PullRequestLink url={item.pr} />
+    }
+    if (item.task !== null) {
+        return (
+            <>
+                <TaskLink id={item.task} className="shrink-0" />
+                <TaskTitle id={item.task} />
+            </>
+        )
     }
     return <span className="font-mono text-xs">{item.subject}</span>
 }
@@ -713,6 +756,38 @@ function ReviewAction({ item }: { item: AttentionItem }) {
                 <Link to="/reviews/$id" params={{ id: String(id) }}>
                     <FileText />
                     {item.reason === 'review_waiting' ? 'Read the draft of' : 'See the draft of'} {reviewRef(id)}
+                </Link>
+            </Button>
+        </div>
+    )
+}
+
+/**
+ * A task's title, the first line of the operator's text, as the tasks list names it: the item's name beside `task:N`,
+ * as a ticket's title is. Its line is reserved until the list is read.
+ */
+function TaskTitle({ id }: { id: number }) {
+    const { data } = useQuery(tasksQuery)
+    if (data === undefined) {
+        return <Skeleton className="h-5 w-48 max-w-full" />
+    }
+    const task = data.find((t) => t.id === id)
+    return <TicketTitle title={task === undefined ? null : taskTitle(task.text)} className="font-semibold" />
+}
+
+/**
+ * A one-off task's item (DESIGN §36): its page, where its conversation and report are read and it is answered. A
+ * question's is the way to answer it; any other's, such as tickets its run reported that canopy did not record, opens
+ * the task, which a reply or a stop clears.
+ */
+function TaskAction({ item, task }: { item: AttentionItem; task: number }) {
+    const answer = item.reason === 'awaiting_reply'
+    return (
+        <div className="flex flex-wrap items-center gap-2 border-b p-3" data-testid="attention-task">
+            <Button asChild variant="outline">
+                <Link to="/tasks/$id" params={{ id: String(task) }}>
+                    {answer ? <MessageSquareReply /> : <Sprout />}
+                    {answer ? 'Answer on' : 'Open'} {taskRef(task)}
                 </Link>
             </Button>
         </div>
