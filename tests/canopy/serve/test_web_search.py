@@ -5,11 +5,11 @@ import json
 
 import pytest
 
-from canopy.core import chore_runs, conversation, db, search
+from canopy.core import chore_runs, conversation, db, pools, search, tasks
 from canopy.core.context import Context
-from canopy.core.vocab import ChoreRunStatus, RunStatus, TickStatus
+from canopy.core.vocab import ChoreRunStatus, PoolKind, RunStatus, TickStatus
 from canopy.serve.backend import Backend
-from tests.canopy.helpers import running_run
+from tests.canopy.helpers import present, running_run
 from tests.canopy.web_helpers import SECRET, client
 
 
@@ -108,6 +108,70 @@ def test_a_decisions_rationale_and_a_ticks_summary_are_found_with_their_tick(ctx
     assert found.hits[0].tick_id == tick
 
 
+def test_a_task_is_found_by_its_reference_its_text_and_its_branch_named_by_its_first_line(ctx: Context) -> None:
+    text = "\n  Find out why the nightly\x07 export   takes an hour.\nSay what would halve it."
+    task = tasks.submit(ctx.conn, ctx.workspace, text, repo=None, project=None, channel="cli")
+    other = tasks.submit(ctx.conn, ctx.workspace, "Tidy the README.", repo=None, project=None, channel="web")
+    _task_run(ctx, other.id)
+    tasks.stop(ctx.conn, other.id)
+
+    found = search.search(ctx.conn, "halve nightly")
+    assert [(h.source, h.task_id, h.label) for h in found.hits] == [("task", task.id, None)]
+    [hit] = found.hits
+    # The first line that holds anything, with its control characters dropped: the snippet is the text the words are in.
+    assert hit.task_title == "Find out why the nightly export takes an hour."
+    assert hit.snippet == f"task:{task.id} Find out why the nightly export takes an hour. Say what would halve it."
+    assert hit.ticket_key is None
+    assert hit.run_id is None
+    assert [h.task_id for h in search.search(ctx.conn, f"task:{task.id}").hits] == [task.id]
+    # A stopped task says so, and is found by the branch its run pushes to as well.
+    assert [(h.task_id, h.label) for h in search.search(ctx.conn, f"task/{other.id}").hits] == [(other.id, "stopped")]
+
+
+def test_a_tasks_conversation_is_found_with_the_task_run_that_reported_it(ctx: Context) -> None:
+    task = tasks.submit(ctx.conn, ctx.workspace, "Profile the export.", repo=None, project=None, channel="cli")
+    run = _task_run(ctx, task.id)
+    result = {"status": "blocked", "summary": "The export sorts twice.", "question": "Drop the second sort?"}
+    assert tasks.close_run(ctx.conn, ctx.config, run, RunStatus.BLOCKED, json.dumps(result), head=None, tickets=[])
+    conversation.reply(ctx.conn, conversation.parse_ref(f"task:{task.id}"), "Yes, drop the sort.", channel="cli")
+
+    found = search.search(ctx.conn, "sort")
+    assert [(h.source, h.task_id, h.run_id, h.label) for h in found.hits] == [
+        ("message", task.id, None, "reply"),
+        ("message", task.id, run, "question"),
+        ("message", task.id, run, "report"),
+    ]
+    assert {h.task_title for h in found.hits} == {"Profile the export."}
+    assert {h.ticket_key for h in found.hits} == {None}
+
+
+def test_a_tasks_title_is_cut_to_a_snippet() -> None:
+    assert search.title("\n\n" + "x" * 300) == "x" * (search.SNIPPET - 1) + "…"
+    assert search.title("one\ttwo\nthree") == "one two"
+    assert not search.title("")
+
+
+def _task_run(ctx: Context, task_id: int) -> int:
+    task = present(tasks.get(ctx.conn, task_id))
+    lease = pools.Lease(
+        path=ctx.workspace.root / f"slot-{task_id}",
+        lease_id=f"lease-{task_id}",
+        lease_holder=tasks.holder(task_id),
+        leased_at=db.now(),
+        base_branch="main",
+    )
+    run = tasks.insert_run(
+        ctx.conn,
+        task=task,
+        tick_id=db.start_tick(ctx.conn, dry_run=False),
+        branch_name=tasks.branch(ctx.config.trust.branch_prefix, task_id),
+        lease=lease,
+        pool=PoolKind.TREEHOUSE,
+        logs_dir=ctx.state_dir / "task-runs",
+    )
+    return present(run)
+
+
 def test_every_word_must_be_in_one_field_and_wildcards_are_literal(ctx: Context) -> None:
     tick = db.start_tick(ctx.conn, dry_run=False)
     db.record_decision(ctx.conn, tick, None, "wait", "coverage at 50% in some_module")
@@ -161,6 +225,9 @@ def test_the_route_searches_the_mock_journal_and_refuses_a_bad_query(backend: Ba
     ]
     assert body["hits"][1]["run_id"] == 39
     assert body["more"] == []
+    hits = c.get("/api/search", params={"q": "billing_legacy"}).json()["hits"]
+    assert [(h["source"], h["task_id"], h["run_id"], h["label"]) for h in hits] == [("task", 4, None, None)]
+    assert hits[0]["task_title"].startswith("Rename the `billing_v1` feature flag")
 
     for q in ("a", "x" * 201, "a b c d e f g h i"):
         answer = c.get("/api/search", params={"q": q})

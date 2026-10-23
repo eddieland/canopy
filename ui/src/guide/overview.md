@@ -123,10 +123,14 @@ Press `/` from anywhere but a text field to jump to the search box, and type. Th
 or at once on Enter, and Escape leaves the box. A search wants 2 to 200 characters and at most eight words, and finds
 what holds every word, in any case, newest first.
 
-It searches tickets by key, title, and branch, every conversation, chore runs, the overseer's decisions, and ticks, each
-in its own panel, at most 20 of each; a panel that found more says `newest 20`. It doesn't search transcripts, reviews,
-or agent memory. While the next search loads, the last one's results stay, dimmed, so the page never blanks between
-keystrokes. The box's clear button starts over.
+It searches tickets by key, title, and branch, tasks by their reference, text, and branch, every conversation, chore
+runs, the overseer's decisions, and ticks, each in its own panel, at most 20 of each; a panel that found more says
+`newest 20`. A task's hit is `task:N` over the first line you wrote it with, and one of its run's messages opens that
+run. It doesn't search transcripts, reviews, a task's report, or agent memory. While the next search loads, the last
+one's results stay, dimmed, so the page never blanks between keystrokes. The box's clear button starts over.
+
+A task's reference alone, `task:4`, opens that task on Enter instead of searching for it: faster than remembering
+which page it was on.
 
 To get back to a ticket, press `⌘K` (`Ctrl+K` off a Mac) from anywhere, even mid-reply. It lists the tickets you've
 opened lately in this browser, newest first, each with where it stands now; Enter opens the top one, which is the

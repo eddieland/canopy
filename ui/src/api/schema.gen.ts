@@ -5740,7 +5740,7 @@ export type components = {
             label: string | null;
             /**
              * Run Id
-             * @description The run that reported a message, or a chore run's own id.
+             * @description The run that reported a message (a task's run, for a task's message), or a chore run's own id.
              */
             run_id: number | null;
             /**
@@ -5750,6 +5750,16 @@ export type components = {
             snippet: string;
             /** @description What the row is. */
             source: components["schemas"]["SearchSource"];
+            /**
+             * Task Id
+             * @description The one-off task a hit is, or whose message it is (DESIGN §36).
+             */
+            task_id: number | null;
+            /**
+             * Task Title
+             * @description That task's first line that holds anything, on one line and cut short: the operator's text, still untrusted.
+             */
+            task_title: string | null;
             /**
              * Tick Id
              * @description A tick, or the tick that recorded a decision.
@@ -5786,7 +5796,7 @@ export type components = {
          * @description Where a search hit is (DESIGN §22, Search), in the order the search reads them.
          * @enum {string}
          */
-        SearchSource: "ticket" | "message" | "chore_run" | "decision" | "tick";
+        SearchSource: "ticket" | "task" | "message" | "chore_run" | "decision" | "tick";
         /**
          * SeenMarked
          * @description What a mark of subjects seen recorded: every subject named, and the ones not seen before.
