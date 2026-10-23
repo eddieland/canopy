@@ -33,9 +33,12 @@ export const keys = {
     ticketPlan: (key: string, id: number) => ['ticket', key, 'plans', id] as const,
     chores: ['chores'] as const,
     tasks: ['tasks'] as const,
-    // A task's page, and its runs' reports under it, so the stream's `task.changed` marks both stale.
+    // A task's page, and its runs' reports, pages, and transcripts under it, so the stream's `task.changed` marks
+    // them all stale: a run that started, called a model, or ended moves its task's summary.
     task: (id: number) => ['task', id] as const,
     taskReport: (id: number, run: number) => ['task', id, 'report', run] as const,
+    taskRun: (id: number, run: number) => ['task', id, 'runs', run] as const,
+    taskRunTranscript: (id: number, run: number) => ['task', id, 'runs', run, 'transcript'] as const,
     chore: (name: string) => ['chore', name] as const,
     // A chore run, and its transcript: read again only when the stream says the run's status changed.
     choreRun: (name: string, id: number) => ['chore-run', name, id] as const,
@@ -281,6 +284,36 @@ export function taskReportQuery(id: number, run: number) {
         queryFn: async ({ signal }) =>
             unwrap(
                 await api.GET('/api/tasks/{task_id}/runs/{run_id}/report', {
+                    params: { path: { task_id: id, run_id: run } },
+                    signal,
+                }),
+            ),
+        placeholderData: undefined,
+    })
+}
+
+/** One run of a task, with the whole of what it said. The stream marks it stale with its task. */
+export function taskRunQuery(id: number, run: number) {
+    return queryOptions({
+        queryKey: keys.taskRun(id, run),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/tasks/{task_id}/runs/{run_id}', {
+                    params: { path: { task_id: id, run_id: run } },
+                    signal,
+                }),
+            ),
+        placeholderData: undefined,
+    })
+}
+
+/** A task run's session, read back from its log by the server on every fetch, as a run's is (DESIGN §22). */
+export function taskRunTranscriptQuery(id: number, run: number) {
+    return queryOptions({
+        queryKey: keys.taskRunTranscript(id, run),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/tasks/{task_id}/runs/{run_id}/transcript', {
                     params: { path: { task_id: id, run_id: run } },
                     signal,
                 }),

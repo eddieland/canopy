@@ -60,8 +60,10 @@ describe('TaskStory', () => {
         expect(instruction.textContent).toContain('task:4')
         expect(instruction.textContent).toContain('instruction via cli')
         expect(instruction.textContent).toContain('Rename the `billing_v1` feature flag')
-        // Each message names the run that wrote it within its task, as text.
-        expect(screen.getByTestId('message-12').textContent).toContain('report (task:4#5)')
+        // Each message names the run that wrote it within its task, opening the run's page.
+        const report = screen.getByTestId('message-12')
+        expect(report.textContent).toContain('report (task:4#5)')
+        expect(within(report).getByRole('link', { name: 'task:4#5' }).getAttribute('href')).toBe('/tasks/4/runs/5')
     })
 
     it('puts the instruction at the far end when the conversation is flipped newest first', async () => {
@@ -94,6 +96,6 @@ describe('TaskStory', () => {
         await story({ ...detail, runs: [mockTaskRun({ id: 8, status: 'running', state: 'running', ended_at: null })] })
         const now = screen.getByTestId('working-now')
         expect(now.textContent).toContain('working now')
-        expect(now.textContent).toContain('task:4#8')
+        expect(within(now).getByRole('link', { name: 'task:4#8' }).getAttribute('href')).toBe('/tasks/4/runs/8')
     })
 })

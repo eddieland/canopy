@@ -1,8 +1,8 @@
 """The mock journal's run transcripts (DESIGN §22), for `python -m canopy.serve --mock`.
 
-Runs 39 and 40, tick 2, chore run 2, and reviews 3 and 4 left their sessions' events in their logs, as `--format json`
-prints them, for their transcripts, and the running runs 41 and 43 the events their workers printed so far (§8). Beside
-each of runs 39's, tick 2's, chore run 2's, and review 4's logs is what canopy gave its runtime.
+Runs 39 and 40, tick 2, chore run 2, reviews 3 and 4, and task run 1 left their sessions' events in their logs, as
+`--format json` prints them, for their transcripts, and the running runs 41 and 43 the events their workers printed so
+far (§8). Beside each of runs 39's, tick 2's, chore run 2's, and review 4's logs is what canopy gave its runtime.
 """
 
 from __future__ import annotations
@@ -133,7 +133,7 @@ class _Session(NamedTuple):
 
 
 def write(state_dir: Path, t0: datetime) -> None:
-    """Write the events of runs 39 to 43's, tick 2's, chore run 2's, and reviews 3 and 4's sessions where they go."""
+    """Write the events of runs 39 to 43's, tick 2's, chore run 2's, reviews 3 and 4's, and task run 1's sessions."""
     # The worktree run 39 worked in, as the operator's machine names it: the same on every start, for screenshots.
     web = "/home/op/acme/.treehouse/web-3f9c2a1b/3/web"
     s39, s40, s41, s43 = (_Session(s, t0) for s in ("ses_mock39", "ses_mock40", "ses_mock41", "ses_mock43"))
@@ -383,6 +383,7 @@ def write(state_dir: Path, t0: datetime) -> None:
         ("chore-runs/build-health", "4", none),
         ("reviews", "3", review_3),
         ("reviews", "4", review_4),
+        ("task-runs", "1", _task_run_1(t0)),
     )
     for directory, name, lines in written:
         (state_dir / directory).mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -396,7 +397,7 @@ def write(state_dir: Path, t0: datetime) -> None:
             # What only its output shows: its setup command's, and the runtime's own lines on stderr.
             worker = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n{_RUN_STDERR_40}--- worker exit 1 ---\n"
             text = _SETUP_40 + worker
-        elif directory == "runs":
+        elif directory in {"runs", "task-runs"}:
             text = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n\n--- worker exit 0 ---\n"
         elif directory == "reviews":
             text = f"--- reviewer stdout ---\n{stdout}\n--- reviewer stderr ---\n\n--- reviewer exit 0 ---\n"
@@ -415,6 +416,75 @@ def write(state_dir: Path, t0: datetime) -> None:
     )
     for directory, name, text in prompts:
         logs.write_private(state_dir / directory / f"{name}.prompt", text)
+
+
+def _task_run_1(t0: datetime) -> list[str]:
+    """Task 1's run (mock_tasks): it measured the checkout bundle, cut it over three model calls, and pushed.
+
+    Its calls cost what its row says, $2.12, and the last sent its peak context, as the run's page shows them.
+
+    Returns:
+        The session's events, as its log holds them.
+    """
+    t1 = _Session("ses_task1", t0)
+    web = "/home/op/acme/.treehouse/web-3f9c2a1b/4/web"
+    build = f"cd {web} && npx vite build --mode production 2>&1 | grep checkout"
+    return [
+        _start(t1, -418),
+        _text(t1, -417.9, "I'll measure the checkout bundle first, so each cut has a number against it."),
+        _done(
+            t1,
+            -416,
+            "Measure the checkout bundle",
+            build,
+            "dist/assets/checkout-4f1c9a.js  934.12 kB │ gzip: 291.40 kB\n",
+            seconds=74,
+        ),
+        _done(
+            t1,
+            -414,
+            "Find what the bundle pulls in",
+            "npx source-map-explorer dist/assets/checkout-*.js --json | jq -r '.results[0].files | keys[]'",
+            "node_modules/moment/locale\nnode_modules/@acme/pay-sdk\nnode_modules/lodash\nsrc/checkout\n",
+            seconds=9,
+        ),
+        _step(t1, -413.9, 0.52, sent=41_000),
+        _start(t1, -413.8),
+        _text(t1, -413.5, "moment's locales, the payment SDK, and lodash whole: the three the task names."),
+        _edit(t1, -400, f"{web}/src/checkout/DatePicker.tsx"),
+        _edit(t1, -396, f"{web}/src/checkout/AddressStep.tsx"),
+        _done(t1, -390, "Run the checkout tests", "npm test -- src/checkout", "Tests: 48 passed\n", seconds=41),
+        _step(t1, -389.9, 0.71, sent=78_000),
+        _start(t1, -389.8),
+        _done(
+            t1,
+            -386,
+            "Measure the checkout bundle again",
+            build,
+            "dist/assets/checkout-a07e3d.js  612.48 kB │ gzip: 190.02 kB\n",
+            seconds=71,
+        ),
+        _done(
+            t1,
+            -383,
+            "Push the branch",
+            "git push origin HEAD:agent/task/1",
+            "To github.com:acme/web.git\n * [new branch]      HEAD -> agent/task/1\n",
+            seconds=3,
+        ),
+        _text(t1, -380.2, "Cut the checkout bundle from 934 kB to 612 kB; filed two tickets for what is left."),
+        _step(t1, -380.1, 0.89, reason="stop", sent=127_200),
+    ]
+
+
+def _edit(session: _Session, minutes: float, path: str) -> str:
+    """An edit call that applied.
+
+    Returns:
+        The `tool_use` event as one line of JSON.
+    """
+    state = {"status": "completed", "input": {"filePath": path}, "output": "Edit applied successfully.", "title": path}
+    return _tool(session, minutes, "edit", state)
 
 
 def _start(session: _Session, minutes: float) -> str:

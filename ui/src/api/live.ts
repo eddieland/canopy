@@ -78,7 +78,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             break
         }
         case 'task.changed': {
-            // Its page, and the reports under it: a run that ended may have left one.
+            // Its page, and its runs' reports, pages, and transcripts under it: a run that ended may have left a
+            // report.
             void client.invalidateQueries({ queryKey: keys.task(event.id), refetchType: 'active' })
             break
         }
