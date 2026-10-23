@@ -22,17 +22,22 @@ function overdue() {
     process.env.CANOPY_DEADLINE = String(Math.floor(Date.now() / 1000) - 1);
 }
 
-/** Run OpenCode 2's entry point as 2 does, and return the hooks it registered, by domain and name. */
+/** Run OpenCode 2's entry point as 2 does, and return the tool hooks it registered, by name. */
 async function setUp() {
     /** @type {Record<string, (event: object) => Promise<void>>} */
     const tool = {};
+    const registered = async () => ({ dispose: async () => {} });
     const ctx = {
         tool: {
             hook: async (name, callback) => {
                 tool[name] = callback;
                 return { dispose: async () => {} };
             },
+            list: async () => [],
         },
+        // The job of 2's own, whose tests are in `mcp-tools.test.mjs`.
+        session: { hook: registered },
+        mcp: { list: async () => ({ data: [] }) },
     };
     await canopy.setup(ctx);
     return tool;
@@ -62,7 +67,7 @@ test("a job whose hook throws does not fail the call it runs after", async () =>
     await assert.doesNotReject(hooks["tool.execute.after"]({ tool: "bash", sessionID: "ses_1" }, output));
 });
 
-test("a run with no job to do gets no hooks", async () => {
+test("a run with no deadline gets no tool hooks", async () => {
     assert.deepEqual(await canopy.server({}), {});
     assert.deepEqual(await setUp(), {});
 });
