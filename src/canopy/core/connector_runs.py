@@ -118,12 +118,15 @@ class SourceStatus:
     #: How many subjects the latest run asked about have never been observed.
     never: int
     stale: bool
+    #: For an `artifacts` source, the feed's cursor: the change it has read through. None for the others.
+    through: int | None = None
 
 
 def statuses(conn: sqlite3.Connection, config: Config, now: datetime) -> list[SourceStatus]:
     """Each source that reads, in the order a tick runs them, with its latest run and the age of its observations.
 
-    An observation is stale once it is older than `connect.max_age_minutes`, and so is a subject never observed.
+    An observation is stale once it is older than `connect.max_age_minutes`, and so is a subject never observed. An
+    `artifacts` source's one subject is its feed, observed when a run last read it to its end with nothing refused.
 
     Returns:
         One status per source.
@@ -136,10 +139,22 @@ def statuses(conn: sqlite3.Connection, config: Config, now: datetime) -> list[So
             records.ConnectorRun,
             sql.select("*").from_("connector_runs").where("source = ?", name).order_by("id DESC").limit(1),
         )
-        times, never = _ages(conn, None if latest is None else latest.request)
+        kind = SourceKind(source.kind)
+        through = None
+        if kind is SourceKind.ARTIFACTS:
+            feed = records.fetch_one(
+                conn,
+                records.ObservedFeed,
+                sql.select("*").from_("observed_feeds").where("source = ?", name),
+            )
+            through = 0 if feed is None else feed.through
+            times: list[str] = [] if feed is None or feed.read_at is None else [feed.read_at]
+            never = 0 if times else 1
+        else:
+            times, never = _ages(conn, None if latest is None else latest.request)
         oldest = min(times) if times else None
         stale = never > 0 or (oldest is not None and db.parse_time(oldest) < cutoff)
-        found.append(SourceStatus(name, SourceKind(source.kind), latest, oldest, never, stale))
+        found.append(SourceStatus(name, kind, latest, oldest, never, stale, through))
     return found
 
 
