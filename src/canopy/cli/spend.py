@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -128,9 +129,10 @@ def budget_text(month: Month) -> str:
     """
     pace = f", on pace for {cost_text(month.projected_usd)}" if month.projected_usd is not None else ""
     over = " Over budget." if month.over else ""
+    # Floored, so a month short of its budget never reads 100%.
     return (
         f"This month, {month.month}: {cost_text(month.spent_usd or 0.0)} of a ${month.budget_usd} budget "
-        f"({month.share:.0%}){pace}.{over}"
+        f"({math.floor(month.share * 100)}%){pace}.{over}"
     )
 
 

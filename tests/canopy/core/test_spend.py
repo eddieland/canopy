@@ -831,8 +831,15 @@ def test_canopy_spend_says_when_the_month_is_over_its_budget(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    tick(canopy_env.journal(), db.format_time(datetime.now(UTC)), 6.0)
+    conn = canopy_env.journal()
+    tick(conn, db.format_time(datetime.now(UTC)), 4.99)
     canopy_env.append_user("[spend]\nmonthly_budget_usd = 5\n")
+    assert main(["spend", "--days", "1"]) == 0
+    short = capsys.readouterr().out.splitlines()[1]
+    # Floored: a month a cent short of its budget is not all of it.
+    assert "(99%)" in short
+    assert not short.endswith("Over budget.")
+    tick(conn, db.format_time(datetime.now(UTC)), 1.0)
     assert main(["spend", "--days", "1"]) == 0
     assert capsys.readouterr().out.splitlines()[1].endswith(". Over budget.")
 

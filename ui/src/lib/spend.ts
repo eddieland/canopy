@@ -307,9 +307,12 @@ export function budgetState(month: SpendMonth): BudgetState {
     return month.projected_usd !== null && month.projected_usd > month.budget_usd ? 'headed' : 'under'
 }
 
-/** The month's spend over its budget, from 0, as a whole percentage: past 100 once it is over. */
+/**
+ * The month's spend over its budget, from 0, as a whole percentage: past 100 once it is over. Floored, so a month short
+ * of its budget never reads 100%.
+ */
 export function budgetPercent(month: SpendMonth): number {
-    return Math.round(((month.spent_usd ?? 0) / month.budget_usd) * 100)
+    return Math.floor(((month.spent_usd ?? 0) / month.budget_usd) * 100)
 }
 
 /** The month in words, `October 2026`, from its `YYYY-MM`, as the operator's calendar names it. */

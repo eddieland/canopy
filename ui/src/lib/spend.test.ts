@@ -216,6 +216,8 @@ describe('monthly budget', () => {
         expect(budgetText(month(15.76, 65.14))).toBe('$15.76 of $40 (39%), on pace for $65.14.')
         expect(budgetText(month(null, null))).toBe('$0.00 of $40 (0%).')
         expect(budgetPercent(month(50, null))).toBe(125)
+        // Short of the budget never reads as all of it.
+        expect(budgetPercent(month(39.84, null))).toBe(99)
     })
 
     it('names the month as a calendar does', () => {
