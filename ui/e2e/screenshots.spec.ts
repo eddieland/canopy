@@ -132,6 +132,34 @@ for (const theme of THEMES) {
     }
 }
 
+// A PR's feedback plan in each state it has, each on a PR of its own (canopy/serve/mock/feedback_plans.py): the panel
+// alone, so a change to it rewrites these small images rather than a PR's whole page.
+const FEEDBACK_PLANS = [
+    { name: 'stale', status: 'stale', pr: 'https://github.com/acme/web/pull/88' },
+    { name: 'waiting', status: 'waiting', pr: 'https://github.com/acme/mobile/pull/67' },
+    { name: 'approved', status: 'approved', pr: 'https://github.com/acme/mobile/pull/63' },
+    { name: 'approved-by-planner', status: 'approved', pr: 'https://github.com/acme/mobile/pull/62' },
+    { name: 'spent', status: 'spent', pr: 'https://github.com/acme/mobile/pull/61' },
+    { name: 'no-items', status: 'waiting', pr: 'https://github.com/acme/mobile/pull/65' },
+    { name: 'missing', status: 'waiting', pr: 'https://github.com/acme/mobile/pull/64' },
+    { name: 'many-items', status: 'waiting', pr: 'https://github.com/acme/mobile/pull/66' },
+] as const
+
+for (const theme of THEMES) {
+    for (const { name, status, pr } of FEEDBACK_PLANS) {
+        test(`the ${name} feedback plan in ${theme}`, async ({ page }) => {
+            await page.clock.setFixedTime(NOW)
+            await storeTheme(page, theme)
+            await signIn(page)
+            await page.goto(`pull-requests/pr?url=${encodeURIComponent(pr)}`)
+            await settled(page)
+            const plan = page.getByTestId('feedback-plan')
+            await expect(plan).toHaveAttribute('data-status', status)
+            await expect(plan).toHaveScreenshot(`feedback-plan-${name}-${theme}.png`)
+        })
+    }
+}
+
 // A tick's output as plain text: no color of its own, so dark alone.
 test("a tick's output shown in dark", async ({ page }) => {
     await page.clock.setFixedTime(NOW)
