@@ -277,10 +277,11 @@ operator's own copy (§19), so runs the PR's code (§7).
 The prompt carries the notice to workers (§8) and asks only for what the diff itself gets wrong, so a `resume` is never
 sent to fix code its PR did not touch. Rejected: a second agent verifying each finding, doubling a review's spend.
 
-It also carries the PR's latest `done` review, its summary and the findings the operator did not dismiss, as data to
-check at the new commit: what still holds is reported again, since each review's result stands alone, and the review
-still reads the whole change. Rejected: notes reviewers write for later reviews, which would tell the next one what to
-skip.
+It also carries the PR's latest `done` review, its summary and the findings the operator did not dismiss, each with
+the resumed worker's answer, as data to check at the new commit: what still holds and was not declined is reported
+again, since each review's result stands alone, and the review still reads the whole change. It asks for a class of
+bug once with every instance, and on the PR's last round for a different approach over more line-level findings.
+Rejected: notes reviewers write for later reviews, which would tell the next one what to skip.
 
 Result contract, the last line of the reviewer's text (§13), validated (D026); anything else is `unknown`:
 
@@ -288,12 +289,24 @@ Result contract, the last line of the reviewer's text (§13), validated (D026); 
 {"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high",
  "summary":"a paragraph, line breaks sparingly","body":"what to tell the PR's author beyond the findings, or nothing",
  "pr_title":"the PR's title as it stands",
- "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what and why"}]}
+ "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what and why",
+               "rebuts":null}]}
 ```
 
 `verdict` is `findings` exactly when there are findings, and `low` without `review.low_impact` is recorded as `normal`.
 `pr_title` is the PR author's text, for display only (§8). `summary` is for the operator; `body` is for the PR's author,
-and only a draft (§34) uses it.
+and only a draft (§34) uses it. `rebuts` is set only on a rebuttal (Answers and rebuttals).
+
+### Answers and rebuttals
+
+A `resume` handed findings answers each in its result's `review_answers`: `fixed`, or `declined` with its reason, by
+review run and number. `_run` keeps an answer only to a finding of a `done` review of the run's own ticket, from a run
+that ended `done` or `blocked`. The next review reads them, so a declined finding comes back only as a rebuttal, which
+names the declined finding in `rebuts`. The harness holds a rebuttal for the operator when the decline is in the
+journal: it reaches no worker and starts no `resume`, `review_rebuttal` raises attention about the ticket, and the
+operator settles it by sending it, which releases it, or dismissing it. So an author and a reviewer that disagree
+reach a person instead of the per-PR limit. Rejected: following findings across commits to refuse repeats in code
+(Open); a later finding on code unchanged since the first review is not yet held, and waits on that.
 
 ### The overseer's part
 
@@ -303,12 +316,12 @@ the head, under the per-PR limit, where the overseer starts a review; and `revie
 `resume` with that review's undismissed findings or records `needs_author`. Findings are `review_findings` only when
 `trust.trusted_reviewers` lists `canopy:review`; otherwise they are `untrusted_review` and wait for the operator (§7,
 D089). A clean review, or a PR at its limit, moves on to `green_unreviewed`; a review never counts toward
-`changes_requested`. A `resume` carries only undismissed findings of its ticket's own `done` review, and a prompt
-override that drops them fails to render. For other PRs, the overseer reviews each whose head has no `done` review or
-records why it waits, and decides nothing else about them. `review_failed` and `review_limit` are attention items;
-findings are not. Under `[personas] reviewers` (§31) a head is reviewed once each persona has a `done` review of it:
-until then the state block names the personas it is owed, and after, it shows the head's reviews as one, and a
-`resume` for one of them carries the undismissed findings of each.
+`changes_requested`. A `resume` carries only findings of its ticket's own `done` review neither dismissed nor held,
+and a prompt override that drops them fails to render. For other PRs, the overseer reviews each whose head has no
+`done` review or records why it waits, and decides nothing else about them. `review_failed` and `review_limit` are
+attention items; findings are not. Under `[personas] reviewers` (§31) a head is reviewed once each persona has a `done`
+review of it: until then the state block names the personas it is owed, and after, it shows the head's reviews as one,
+and a `resume` for one of them carries the findings of each.
 
 ### Review requests
 

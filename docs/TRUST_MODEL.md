@@ -314,7 +314,11 @@ Controls:
   classifies review comments, and a resumed worker reads them in its prompt as it reads any review comment. The next
   review of the same PR reads the latest `done` one's summary and undismissed findings as data, so a steered review can
   reach only a later reviewer of the PR whose text steered it, which reads that text anyway; the worst it does is lead
-  that review to miss a defect, as a steered reviewer already could by reporting clean.
+  that review to miss a defect, as a steered reviewer already could by reporting clean. It reads too what the resumed
+  worker answered of each finding, `fixed` or `declined` with a reason in the worker's words, as data. A steered worker
+  can decline a real finding; the next review then reports it again only as a rebuttal, which the harness holds for
+  the operator, never for another `resume`, and holds only a finding that names a decline the journal recorded. So an
+  answer moves a finding from the worker to the operator, never out of sight, and authorizes nothing.
   A revision of a review's draft (DESIGN §34) runs as the reviewer does and reads the same PR, its draft, and its
   review, all data; the operator's notes since the draft's newest version are its only instructions. Its version is
   untrusted like the reviewer's until the operator publishes it, and the state block names the draft, never its text

@@ -47,6 +47,7 @@ REVIEWER_VALUES = {
     "LOW_IMPACT": "None: never report `low`.",
     "ATTEMPT": "1",
     "MAX_ATTEMPTS": "3",
+    "LAST_ROUND": None,
     "CONTEXT": "None.",
     "TIMEOUT_MINUTES": "30",
     "CONTRACT": "<the result contract>",

@@ -368,7 +368,7 @@ def _reviews_now(conn: sqlite3.Connection, items: Iterable[Item]) -> list[Item]:
     Returns:
         The items in order, each review's with what it says now, or left out once its cause is gone.
     """
-    now = {(f"{PR_PREFIX}{i.pr}", i.reason): i.detail for i in review_waiting.items(conn)}
+    now = {(i.ticket or f"{PR_PREFIX}{i.pr}", i.reason): i.detail for i in review_waiting.items(conn)}
     found: list[Item] = []
     for item in items:
         if item.reason not in review_waiting.REASONS:

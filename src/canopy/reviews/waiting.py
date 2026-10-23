@@ -1,10 +1,12 @@
-"""The reviews' drafts that wait on the operator (DESIGN §14, §34), as the attention items the harness raises.
+"""The reviews that wait on the operator (DESIGN §14, §21, §34), as the attention items the harness raises.
 
 A review the operator asked for that landed with its draft unpublished is `review_waiting`, an item about its PR until
 the operator publishes, stages, or discards a draft of the PR's newest reviewed commit, empties it of all it would post,
 or the PR is seen merged or closed. A review of a later commit replaces it. A draft staged on GitHub, or whose post
-ended without saying whether it submitted, is `review_unsettled` until a whole read of the PR settles it. Both are the
-operator's alone: the overseer never records them.
+ended without saying whether it submitted, is `review_unsettled` until a whole read of the PR settles it. A finding of
+one of the loop's own PRs' reviews that canopy holds, a rebuttal of a worker's decline, is `review_rebuttal`, about its
+ticket, until the operator sends it to a worker or dismisses it, or the PR is no longer the ticket's or is seen merged
+or closed. All three are the operator's alone: the overseer never records them.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from canopy.core import records, review_drafts, review_requests, sql
-from canopy.core.vocab import PrState, ReviewDraftStatus
+from canopy.core.vocab import HoldKind, PrState, ReviewDraftStatus, ReviewRunStatus
 
 if TYPE_CHECKING:
     import sqlite3
@@ -24,8 +26,10 @@ if TYPE_CHECKING:
 WAITING_REASON = "review_waiting"
 #: A review's draft staged on GitHub, or of unknown outcome, until a read settles it.
 UNSETTLED_REASON = "review_unsettled"
-#: Both, which the harness records and the overseer does not.
-REASONS = frozenset({WAITING_REASON, UNSETTLED_REASON})
+#: A finding canopy holds for the operator: a later review's rebuttal of a finding the worker declined.
+REBUTTAL_REASON = "review_rebuttal"
+#: All three, which the harness records and the overseer does not.
+REASONS = frozenset({WAITING_REASON, UNSETTLED_REASON, REBUTTAL_REASON})
 
 
 @dataclass(frozen=True)
@@ -35,15 +39,17 @@ class Item:
     pr: str
     reason: str
     detail: str
+    #: The ticket whose PR it is, for an item about one of the loop's own PRs; None for another PR.
+    ticket: str | None = None
 
 
 def items(conn: sqlite3.Connection) -> list[Item]:
-    """Return the items the reviews' drafts raise now: `review_waiting`, then `review_unsettled`, each by PR.
+    """Return the items the reviews raise now: `review_waiting`, `review_unsettled`, then `review_rebuttal`.
 
     Returns:
         At most one item of each reason per PR.
     """
-    return [*_waiting(conn), *_unsettled(conn)]
+    return [*_waiting(conn), *_unsettled(conn), *_rebutted(conn)]
 
 
 def unread_prs(conn: sqlite3.Connection) -> list[str]:
@@ -177,3 +183,49 @@ def _unsettled_detail(draft: records.ReviewDraft) -> str:
         f"{ref}'s draft may have been posted on {draft.pr_url}: the next whole read of the PR says whether, and "
         "nothing posts for it until then"
     )
+
+
+def _rebutted(conn: sqlite3.Connection) -> list[Item]:
+    """A `review_rebuttal` item for each ticket whose open PR has a finding canopy holds for the operator.
+
+    Returns:
+        The items, by ticket, each naming every finding held.
+    """
+    rows = sql.execute(
+        conn,
+        sql.select("h.review_run_id, h.finding, h.rebuts_run_id, h.rebuts_finding, r.pr_url, r.ticket_key")
+        .from_("review_holds h")
+        .join("review_runs r ON r.id = h.review_run_id")
+        .where("h.released_at IS NULL AND h.kind = ?", HoldKind.REBUTTAL)
+        .where("r.status = ? AND r.ticket_key IS NOT NULL", ReviewRunStatus.DONE)
+        .where(
+            "NOT EXISTS (SELECT 1 FROM review_dismissals d WHERE d.review_run_id = h.review_run_id "
+            "AND d.finding = h.finding)",
+        )
+        .where("EXISTS (SELECT 1 FROM ticket_units u WHERE u.ticket_key = r.ticket_key AND u.pr_url = r.pr_url)")
+        .where("NOT EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = r.pr_url AND p.state != ?)", PrState.OPEN)
+        .order_by("r.pr_url, h.review_run_id, h.finding"),
+    ).fetchall()
+    # One item a ticket, as the attention list keys it, naming the PR of its first held finding: a joint run's PRs
+    # share their ticket's.
+    by_ticket: dict[str, list[str]] = defaultdict(list)
+    prs: dict[str, str] = {}
+    for r in rows:
+        held, rebuts = f"review:{r['review_run_id']} finding {r['finding']}", f"review:{r['rebuts_run_id']}"
+        prs.setdefault(str(r["ticket_key"]), str(r["pr_url"]))
+        by_ticket[str(r["ticket_key"])].append(
+            f"{held} rebuts the worker's decline of {rebuts} finding {r['rebuts_finding']}",
+        )
+    return [
+        Item(
+            prs[ticket],
+            REBUTTAL_REASON,
+            (
+                f"{'; '.join(held)}. canopy holds it for you, never for another resume: send it to a worker "
+                "(`canopy send review:ID N`), or dismiss it if the worker was right "
+                "(`canopy dismiss review:ID N --reason R`)"
+            ),
+            ticket=ticket,
+        )
+        for ticket, held in sorted(by_ticket.items())
+    ]
