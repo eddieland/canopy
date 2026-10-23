@@ -1366,7 +1366,14 @@ export type paths = {
          */
         get: operations["listTasks"];
         put?: never;
-        post?: never;
+        /**
+         * Submit a task
+         * @description `canopy task submit`: queue the operator's text as a task; the next tick starts it, as capacity allows.
+         *
+         *     Refused `bad_body` for an empty text or one too long, `unknown_repo` for a repository the workspace has not, or
+         *     none named in a workspace of several, and `bad_project` for a project no tracker could name.
+         */
+        post: operations["submitTask"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1387,6 +1394,28 @@ export type paths = {
         get: operations["getTask"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{task_id}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reply to a task
+         * @description `canopy reply task:N`: the operator's next instruction, answering its run's question if one asked.
+         *
+         *     It queues the task's next run, on its branch, once no run of it is working. Idempotent on the submission id.
+         */
+        post: operations["replyTask"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1451,6 +1480,26 @@ export type paths = {
         get: operations["getTaskRunTranscript"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{task_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop a task
+         * @description `canopy stop task:N`: no tick starts it again; a running run finishes unless `now` ends it, as `--now` does.
+         */
+        post: operations["stopTask"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6315,6 +6364,32 @@ export type components = {
             tickets: components["schemas"]["TaskTicket"][];
         };
         /**
+         * TaskReplied
+         * @description What a reply recorded, as `canopy reply task:N` says: the message, what it answers, and what starts next.
+         */
+        TaskReplied: {
+            /**
+             * Answers
+             * @description The question it answers, if it answers one.
+             */
+            answers: number | null;
+            /**
+             * Message Id
+             * @description The message the reply is.
+             */
+            message_id: number;
+            /**
+             * New
+             * @description Whether it was recorded now, rather than by an earlier submission with the same id.
+             */
+            new: boolean;
+            /**
+             * Running Run
+             * @description A run of the task still working: the first tick after it ends starts the next. None: the next tick does.
+             */
+            running_run: number | null;
+        };
+        /**
          * TaskReport
          * @description The report a task run left, as its file in the state directory stands now (DESIGN §36), as a plan is read.
          */
@@ -6477,6 +6552,80 @@ export type components = {
          * @enum {string}
          */
         TaskStanding: "queued" | "running" | "awaiting_reply" | "blocked" | "done" | "failed" | "unknown" | "unpushed" | "crashed" | "timeout" | "stopped";
+        /**
+         * TaskStopped
+         * @description What a stop did, as `canopy stop task:N` says: no tick starts the task again.
+         */
+        TaskStopped: {
+            /**
+             * Already
+             * @description Whether the task was already stopped.
+             */
+            already: boolean;
+            /**
+             * Dropped
+             * @description Whether it was still queued, its first run or one a reply asked for, which nothing starts now.
+             */
+            dropped: boolean;
+            /**
+             * Ended
+             * @description Whether `now` ended that run and returned its slot.
+             * @default false
+             */
+            ended: boolean;
+            /**
+             * Running Run
+             * @description A run of it still working, if one is: it finishes unless `now` ended it.
+             */
+            running_run: number | null;
+        };
+        /**
+         * TaskSubmitRequest
+         * @description A task's text, in the operator's words, and where it runs, as `canopy task submit` takes them.
+         */
+        TaskSubmitRequest: {
+            /**
+             * Project
+             * @description The tracker project its tickets may go in, as `--project` names it. None: it files no tickets.
+             */
+            project?: string | null;
+            /**
+             * Repo
+             * @description The repository it runs in, as `--repo` names it. Required when the workspace has several.
+             */
+            repo?: string | null;
+            /**
+             * Text
+             * @description The task's text. Bounded again in code at 4000 characters, after stripping (DESIGN §36).
+             */
+            text: string;
+        };
+        /**
+         * TaskSubmitted
+         * @description What a submission recorded: the task, queued for the next tick, and where it will run.
+         */
+        TaskSubmitted: {
+            /**
+             * Branch
+             * @description The branch every run of it works on, `<branch_prefix>task/N`.
+             */
+            branch: string;
+            /**
+             * Id
+             * @description The task's id, as `task:N` names it.
+             */
+            id: number;
+            /**
+             * No Capacity
+             * @description Whether `capacity.max_tasks` is 0, so no tick starts it until the operator raises it.
+             */
+            no_capacity: boolean;
+            /**
+             * Repo
+             * @description The repository it runs in.
+             */
+            repo: string;
+        };
         /**
          * TaskSummary
          * @description A task as `canopy task list` lists it: its text, where it runs, and where it stands.
@@ -12709,6 +12858,93 @@ export interface operations {
             };
         };
     };
+    submitTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSubmitted"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getTask: {
         parameters: {
             query?: never;
@@ -12755,6 +12991,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    replyTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task's id, as `task:N` names it. */
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskReplied"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
             /** @description Refused before the route ran: a chunked body, with no Content-Length. */
@@ -13019,6 +13345,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stopTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task's id, as `task:N` names it. */
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StopRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskStopped"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
             /** @description Refused before the route ran: a chunked body, with no Content-Length. */
