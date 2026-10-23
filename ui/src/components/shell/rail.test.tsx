@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockChores, mockReviews, mockRuns } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { ChoreSummary, Meta, ReviewSummary, Run, Spend } from '@/api/types'
+import { QUIPS, setQuips } from '@/lib/run-phase'
 import { renderRouted } from '@/test-utils'
 
 import { RailFooter, RailSpend, RailWorking } from './rail'
@@ -113,6 +114,22 @@ describe('RailWorking', () => {
         expect(router.state.location.pathname).toBe('/reviews/5')
         await follow(first)
         expect(router.state.location.pathname).toBe('/chores/deps/runs/3')
+    })
+
+    it("says what a worker run is doing as its phase's quip, the plain words on hover", async () => {
+        await renderRouted(<RailWorking />, { client: rail([RUNNING]) })
+        const phase = screen.getByTestId('rail-phase-41')
+        expect(QUIPS.implement).toContain(phase.textContent)
+        expect(phase.title).toBe('implementing')
+    })
+
+    it('says the plain words for a run waiting on the operator, and for any run with the quips off', async () => {
+        await renderRouted(<RailWorking />, { client: rail([BLOCKED, RUNNING]) })
+        expect(screen.getByTestId('rail-phase-42').textContent).toBe('implementing')
+
+        act(() => setQuips('off'))
+        expect(screen.getByTestId('rail-phase-41').textContent).toBe('implementing')
+        act(() => setQuips('on'))
     })
 
     it('lists four, then how many more, which opens the runs page; the count is of them all', async () => {
