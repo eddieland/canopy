@@ -690,14 +690,15 @@ def ticket_set(ctx: Context, request: TicketSet) -> str:
 
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
     phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in. It runs
-    outside a tick too.
+    outside a tick too, where the operator runs it and its cursors are not checked.
 
     Returns:
         What the command prints, naming what a dry run did not do.
 
     Raises:
         Refused: CANOPY_TICK_ID names no running tick, `repo` is not a repository in this workspace, or inside a tick
-            the harness decided the ticket in, which is recorded.
+            the harness decided the ticket in, or a cursor names no item observed or passes one the state block left
+            out, each of which is recorded.
     """
     key, phase, done = request.key, request.phase, request.done
     cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
@@ -707,6 +708,8 @@ def ticket_set(ctx: Context, request: TicketSet) -> str:
     current = current_tick(ctx)
     if current is not None:
         _refuse_decided(ctx, current.id, key, "ticket set")
+        if cursor_pairs:
+            _check_cursors(ctx, current.id, key, unit, dict(cursor_pairs))
     # A dry run must not advance cursors or mark a ticket done: the first live tick would then miss everything the dry
     # runs saw, or never see the ticket at all.
     dry_run = current is not None and current.dry_run
@@ -732,6 +735,23 @@ def ticket_set(ctx: Context, request: TicketSet) -> str:
         db.set_unit(ctx.conn, key, ctx.repo, unit, phase=unit_phase, cursors=unit_cursors)
     note = f"; dry run, {' and '.join(ignored)}" if ignored else ""
     return f"updated {key if request.repo is None else attention.subject(key, unit)}{note}"
+
+
+def _check_cursors(ctx: Context, tick_id: int, key: str, repo: str | None, cursors: Mapping[str, str]) -> None:
+    """Check a `ticket set`'s cursors against what the connectors observed, as a dispatch's are (DESIGN §35).
+
+    A dry run checks them too, so its plan holds the refusals a live tick would get (D036).
+
+    Raises:
+        Refused: A cursor names no item observed, or passes one the state block left out; the refusal is recorded.
+    """
+    db.touch_ticket(ctx.conn, key, ctx.repo)
+    try:
+        claims.check_cursors(ctx, tick_id, datetime.now(UTC), key=key, repo=repo, cursors=cursors)
+    except dispatch.Refusal as r:
+        db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
+        logs.for_tick(tick_id).info("ticket set refused", extra={"ticket": key, "guard": r.guard, "reason": r.reason})
+        raise Refused(f"ticket set refused ({r.guard}): {r.reason}; the refusal was recorded") from None
 
 
 class Mirror(Request):
