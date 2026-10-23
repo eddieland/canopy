@@ -111,6 +111,29 @@ def test_a_time_without_an_offset_is_the_sources_utc(ctx: Context, connector_sta
     assert seen.created_at == "2026-10-18T09:00:00.000Z"
 
 
+def test_a_held_checks_re_run_is_observed_at_the_same_head_and_the_run_it_repeats_kept(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    pr = {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7}
+    build = {"kind": "check", "pr": PR, "head_sha": "abc1234", "name": "build", "status": "completed"}
+    prints(connector_state, pr, {**build, "conclusion": "failure", "run_id": 11})
+    run(ctx)
+    status = {**build, "name": "deploy", "conclusion": "failure", "run_id": None}
+    rerun = {**build, "status": "in_progress", "run_id": 12}
+    prints(connector_state, pr, rerun, status)
+    run(ctx)
+    prints(connector_state, pr, {**rerun, "status": "completed", "conclusion": "failure"}, status)
+    run(ctx)
+    checks = records.fetch_all(ctx.conn, records.ObservedCheck, sql.frag("SELECT * FROM observed_checks ORDER BY name"))
+    assert [(c.name, c.head_sha, c.run_id) for c in checks] == [("build", "abc1234", 12), ("deploy", "abc1234", None)]
+    kept = records.fetch_all(ctx.conn, records.ObservedCheckRun, sql.frag("SELECT * FROM observed_check_runs"))
+    assert sorted((r.run_id, r.name, r.head_sha, r.conclusion) for r in kept) == [
+        (11, "build", "abc1234", "failure"),
+        (12, "build", "abc1234", "failure"),
+    ], "a commit status has no run to keep"
+
+
 def test_a_prs_title_is_kept_to_one_line_cut_and_marked_and_none_when_not_printed(
     ctx: Context,
     connector_state: Path,

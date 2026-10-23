@@ -18,6 +18,7 @@ from canopy.core import conversation, db
 from canopy.loop import observations
 from tests.canopy.helpers import KEY, LABEL, decisions, in_tick, mcp_session, operator, present, tool_call
 from tests.canopy.observation_helpers import (
+    HEAD,
     PR,
     TRACKER,
     TRUST,
@@ -223,11 +224,73 @@ def test_a_cursor_past_what_the_block_left_out_is_unobserved(observed: sqlite3.C
     assert "passes comments on PROJ-1 the state block left out" in reason
 
 
+@pytest.mark.parametrize(
+    ("before", "newest", "action"),
+    [
+        pytest.param([("build", HEAD)], 12, "refused:handled", id="red-to-red-at-the-same-head"),
+        pytest.param([], 11, "refused:handled", id="the-same-run-still-red"),
+        pytest.param([("lint", HEAD)], 12, "dispatch:resume", id="another-context-failed-before"),
+        pytest.param([("build", "def5678")], 12, "dispatch:resume", id="it-failed-at-an-earlier-head"),
+    ],
+)
+def test_a_resume_for_ci_alone_needs_a_failure_no_worker_had(
+    observed: sqlite3.Connection,
+    before: Sequence[tuple[str, str]],
+    newest: int,
+    action: str,
+) -> None:
+    # The unit's ci cursor is at run 11, which failed as `before` says; the build's newest run at the head is `newest`.
+    for name, head in before:
+        check(observed, name, "completed", "failure", run_id=11, head=head)
+    check(observed, "build", "completed", "failure", run_id=newest)
+    observed.execute("UPDATE ticket_units SET last_ci_run_id = '11'")
+    found = dispatched(observed, kind="resume", label=LABEL, reasons=["ci"], cursors={"ci": str(newest)})
+    assert found[0] == action
+    if action == "refused:handled":
+        assert found[1].startswith(f"every failed check at the head of {PR} (build) failed at that head at or behind")
+
+
+@pytest.mark.parametrize(
+    ("reasons", "cursor"),
+    [
+        pytest.param(["ci", "conflict"], "11", id="not-for-ci-alone"),
+        pytest.param(["ci"], None, id="with-the-ci-cursor-empty"),
+        pytest.param(["ci"], "run-11", id="with-a-ci-cursor-not-a-number"),
+    ],
+)
+def test_a_re_run_red_again_is_not_handled(
+    observed: sqlite3.Connection,
+    reasons: Sequence[str],
+    cursor: str | None,
+) -> None:
+    check(observed, "build", "completed", "failure", run_id=11)
+    check(observed, "build", "completed", "failure", run_id=12)
+    observed.execute("UPDATE ticket_units SET last_ci_run_id = ?", (cursor,))
+    found = dispatched(observed, kind="resume", label=LABEL, reasons=reasons, cursors={"ci": "12"})
+    assert found[0] == "dispatch:resume"
+
+
 def test_a_private_ticket_is_not_refused(observed: sqlite3.Connection) -> None:
     # Its start record authorizes it, whatever was observed of it, stale included (DESIGN §22).
     assert operator("start", KEY) == 0
     observed.execute("UPDATE observed_tickets SET observed_at = ?, labels = '[]'", (ago(hours=1),))
     assert dispatched(observed, kind="resume", reasons=["reply"])[0] == "dispatch:resume"
+
+
+def test_a_private_tickets_re_run_red_again_is_not_handled(observed: sqlite3.Connection) -> None:
+    assert operator("start", KEY) == 0
+    check(observed, "build", "completed", "failure", run_id=11)
+    check(observed, "build", "completed", "failure", run_id=12)
+    observed.execute("UPDATE ticket_units SET last_ci_run_id = '11'")
+    assert dispatched(observed, kind="resume", reasons=["ci"], cursors={"ci": "12"})[0] == "dispatch:resume"
+
+
+def test_an_unobserved_pr_keeps_its_ci_claim(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    # No source reads a PR of another host: what failed there, and whether a worker had it, stays the overseer's word.
+    held(canopy_env, conn, KEY, at=ago(hours=1))
+    with_unit(canopy_env, conn, KEY, pr="https://git.example.com/acme/repo/-/merge_requests/7")
+    conn.execute("UPDATE ticket_units SET last_ci_run_id = '11'")
+    assert dispatched(conn, kind="resume", label=LABEL, reasons=["ci"], cursors={"ci": "12"})[0] == "dispatch:resume"
 
 
 def test_an_unobserved_ticket_keeps_its_claims(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:

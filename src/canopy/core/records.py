@@ -125,6 +125,9 @@ class Tick(Row):
     definitions_digest: str | None
     # The version of canopy that ran the tick; None on a tick from before that was recorded.
     canopy_version: str | None
+    #: Whether it ran its overseer: False when halted or when nothing was left to it (DESIGN §39); None on a tick from
+    #: before that was recorded, or one that ended before it got that far.
+    overseer_ran: bool | None
 
 
 @dataclass(frozen=True)
@@ -964,6 +967,22 @@ class ObservedCheck(Row):
     conclusion: CheckConclusion | None
     run_id: int | None
     url: str | None
+    observed_at: str
+
+
+@dataclass(frozen=True)
+class ObservedCheckRun(Row):
+    """A completed check run a `vcs` source observed, kept across later reads of its PR (DESIGN §35)."""
+
+    TABLE: ClassVar[str] = "observed_check_runs"
+
+    pr_url: str
+    run_id: int
+    #: Its context's name, as `observed_checks.name`.
+    name: str
+    head_sha: str
+    conclusion: CheckConclusion
+    #: When a source first observed it completed.
     observed_at: str
 
 
