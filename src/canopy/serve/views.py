@@ -24,10 +24,12 @@ from canopy.core import (
     plans,
     records,
     run_models,
+    ticket_models,
 )
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunStatus
 from canopy.serve import draft_views, memory_views
+from canopy.serve.model_schema import AgentModel
 from canopy.serve.persona_schema import AgentPersona, PersonaChoice
 from canopy.serve.schema import (
     AttentionItem,
@@ -550,6 +552,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         drafts=draft_views.of_ticket(ctx.conn, key),
         personas=[agent_persona(n) for n in personas.next_for(ctx.conn, ctx.config, key)],
         persona_names=[p.name for p in personas.listed(ctx.config)],
+        models=[agent_model(n) for n in ticket_models.next_for(ctx.conn, ctx.config, key)],
     )
 
 
@@ -568,6 +571,15 @@ def agent_persona(found: personas.Next) -> AgentPersona:
         once=found.once,
         several=list(found.several),
     )
+
+
+def agent_model(found: ticket_models.Next) -> AgentModel:
+    """The model one of a ticket's agents runs on at its next run, as the API sends it.
+
+    Returns:
+        The agent, its model, or None for the runtime's default, and where that comes from.
+    """
+    return AgentModel(agent=found.agent, model=found.model, source=found.source)
 
 
 def persona_choice(found: personas.Listed) -> PersonaChoice:
