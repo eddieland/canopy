@@ -375,6 +375,12 @@ def _distinct_personas(value: tuple[str, ...]) -> tuple[str, ...]:
     return value
 
 
+#: The highest the `policy.max_attachment*` keys go, whatever a file says: attachments are copied into every run of
+#: their subject, and the web UI uploads one in a single request, which its server bounds (DESIGN §22).
+ATTACHMENTS_CEILING = 20
+ATTACHMENT_KIB_CEILING = 1024
+ATTACHMENTS_TOTAL_KIB_CEILING = 4096
+
 # bool is an int subclass; Strict* types reject `max_workers = true` and quoted numbers.
 NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
@@ -576,6 +582,17 @@ class Policy(Section):
     feedback_quiet_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 10
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
+    #: The most files the operator may have attached to one ticket or task at once (DESIGN §22); 0 turns attaching off.
+    max_attachments: Annotated[StrictInt, Scope.SHARED, Tighten.LOWER, Field(ge=0, le=ATTACHMENTS_CEILING)] = 5
+    #: The most KiB one attachment's text may hold.
+    max_attachment_kib: Annotated[StrictInt, Scope.SHARED, Tighten.LOWER, Field(ge=1, le=ATTACHMENT_KIB_CEILING)] = 512
+    #: The most KiB the attachments of one ticket or task may hold together.
+    max_attachments_total_kib: Annotated[
+        StrictInt,
+        Scope.SHARED,
+        Tighten.LOWER,
+        Field(ge=1, le=ATTACHMENTS_TOTAL_KIB_CEILING),
+    ] = 1024
 
 
 class Trust(Section):

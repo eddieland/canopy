@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import click
 
+from canopy.cli import attachments as attachments_cli
 from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.params import REPO
 from canopy.core import conversation, plans, task_tickets, tasks
@@ -121,6 +122,7 @@ def show(ctx: Context, task_id: int) -> None:
     if not runs:
         click.echo("  none yet: the next tick starts it" if task.stopped_at is None else "  none")
     _show_tickets(ctx, task)
+    attachments_cli.listed(ctx, conversation.Ref(conversation.TASK, str(task_id)))
     messages = tasks.messages_of(ctx.conn, task_id)
     if messages:
         click.echo(f"\nConversation ({len(messages)}):")

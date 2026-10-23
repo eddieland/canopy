@@ -91,6 +91,20 @@ conversation in one place, through a tool only a tick's overseer has (D020, §27
 can break out of (TRUST_MODEL T1). A comment bearing a worker's marks (D069) is recorded as a worker's. Either
 way it authorizes nothing: phases, `awaiting_reply`, and the loop's wake read operator messages only.
 
+### Attachments
+
+The operator may attach text files to a ticket, public or private, or to a task (§36): what someone sent them, such as
+a design doc, for its runs to check against the code. Only the operator's channels attach or remove one, refused inside
+a tick or any run (TRUST_MODEL T1), on a ticket canopy knows or a task not stopped. Its text is data, never an
+instruction: what to do with it is the operator's reply, or the task's text. Guards in code take only UTF-8 text and
+hold each subject to `policy`'s limits on how many files it holds, how large each is, and how large all are together,
+each under a ceiling no file raises, since every later run carries all of them. Rejected: canopy reading PDFs or
+documents, which would put a parser of untrusted files in the harness; the operator exports one as Markdown.
+
+An attachment is kept as a plan is (§25), an operator-only file in the state directory, and each run of its subject
+gets a copy in its worktree, excluded from git, which its prompt names as data. Removing one deletes its file and keeps
+its record, so the journal still says what the subject held.
+
 ### The web UI
 
 The operator's view of the journal in a browser, with the CLI's verbs. Its pages are `ui/DESIGN.md`'s and the guide's,

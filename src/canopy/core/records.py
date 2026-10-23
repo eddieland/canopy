@@ -339,6 +339,29 @@ class TaskRun(Row):
 
 
 @dataclass(frozen=True)
+class Attachment(Row):
+    """A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22)."""
+
+    TABLE: ClassVar[str] = "attachments"
+
+    id: int
+    #: `ticket` and the ticket's key, or `task` and its id.
+    subject_kind: str
+    subject_id: str
+    #: What runs see it as: a plain file name, unique among the subject's attachments not removed.
+    name: str
+    #: The bytes of its text as kept, and their SHA-256, hex.
+    size: int
+    sha256: str
+    #: `cli` or `web`: where the operator attached it.
+    channel: str
+    added_at: str
+    #: When the operator removed it, and through which channel; both None while it is attached.
+    removed_at: str | None
+    removed_channel: str | None
+
+
+@dataclass(frozen=True)
 class TaskTicket(Row):
     """A ticket a task's run reported filing in the task's project, checked on its text alone (DESIGN §36, D003)."""
 
