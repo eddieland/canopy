@@ -311,11 +311,11 @@ def _setup_command(value: str) -> str:
 
 
 def _no_model(*roles: str, run_args: bool = False) -> AfterValidator:
-    """Refuse a template, prefix, or suffix that passes the runtime a model (DESIGN §13).
+    """Refuse a template, prefix, or suffix that passes the runtime a model or a variant of one (DESIGN §13).
 
-    canopy writes each agent's model into its definition, from `runtime.models`, and a model on the command line would
-    beat it unseen, so a run would record one model and run on another. `roles` are the keys of `runtime.models` to set
-    instead. With `run_args`, every word is an argument of the agent's run, as a suffix's are.
+    canopy writes each agent's model, and its variant, into its definition, from `runtime.models`, and either on the
+    command line would beat it unseen, so a run would record one model and run on another. `roles` are the keys of
+    `runtime.models` to set instead. With `run_args`, every word is an argument of the agent's run, as a suffix's are.
 
     Returns:
         The validator.
@@ -323,15 +323,24 @@ def _no_model(*roles: str, run_args: bool = False) -> AfterValidator:
     keys = " or ".join(f"runtime.models.{role}" for role in roles)
 
     def check(value: str) -> str:
-        found = invocation.model_option(shlex.split(value), run_args=run_args)
-        if found is not None:
-            raise ValueError(
-                f"must not pass a model ({found!r}): canopy writes the model into the agent's definition, and one "
-                f"passed here would override it unseen. Set {keys} instead",
-            )
+        _refuse_model_option(value, f"Set {keys} instead", run_args=run_args)
         return value
 
     return AfterValidator(check)
+
+
+def _refuse_model_option(template: str, instead: str, *, run_args: bool = False) -> None:
+    """Refuse `template` if it passes the runtime a model or a variant, saying what to set `instead`.
+
+    Raises:
+        ValueError: it passes one.
+    """
+    found = invocation.model_option(shlex.split(template), run_args=run_args)
+    if found is not None:
+        raise ValueError(
+            f"must not pass a model or a variant ({found!r}): canopy writes the model into the agent's definition, "
+            f"and one passed here would override it unseen. {instead}",
+        )
 
 
 def _wrapper(value: str) -> str:
@@ -704,10 +713,11 @@ class Runtime(Section):
     #: Commands an agent may run beyond its own bash rules, by its role: the overseer's, the planner's, and the workers'
     #: (DESIGN §13). Private: it widens what an agent's shell reaches (TRUST_MODEL T1, T7).
     allow_bash: Annotated[dict[BashRole, BashAllows], Scope.PRIVATE] = {}
-    #: Each agent's model, `provider/model`, by its role: `worker` (both workers, and a task's runs), `planner`,
-    #: `reviewer`, `overseer`, and `chore`. canopy writes it into the agent's definition; an agent not named runs on the
-    #: runtime's default. Private: it chooses what the operator's spend buys, and which provider is sent the ticket and
-    #: the code (DESIGN §13, TRUST_MODEL T7).
+    #: Each agent's model, `provider/model`, or `provider/model@variant` at one of its variants, by its role: `worker`
+    #: (both workers, and a task's runs), `planner`, `reviewer`, `overseer`, and `chore` (every chore without a `model`
+    #: of its own). canopy writes it into the agent's definition; an agent not named runs on the runtime's default.
+    #: Private: it chooses what the operator's spend buys, and which provider is sent the ticket and the code (DESIGN
+    #: §13, TRUST_MODEL T7).
     models: Annotated[dict[ModelRole, ModelId], Scope.PRIVATE] = {}
     #: The repositories, by name, whose runs canopy starts in the sandbox wrapper itself: each worker run's commands,
     #: `setup_cmd`, and a review's, with the role each takes (DESIGN §24). Names need not be in this workspace's map,
@@ -1252,6 +1262,11 @@ class Chore(Section):
     prompt: UserPath
     # Its own template need not name canopy's definitions: a chore that runs the operator's tools has its own agent.
     cmd: CommandTemplate | None = None
+    #: Its own model, spelled as a `runtime.models` value, in place of `runtime.models.chore`: canopy runs it on a copy
+    #: of the chore's agent made for it, `canopy-chore-<name>`, with this model (DESIGN §13, §19). Its command, its
+    #: `cmd` or `runtime.chore_cmd`, must run the chore's agent; one of the operator's own takes its model in its own
+    #: definition.
+    model: ModelId | None = None
     every_minutes: Annotated[StrictInt, Field(ge=MIN_CHORE_EVERY_MINUTES)]
     when: StrictStr = ""
     # When a run may start, checked in code: the days of the week, empty for every day; the hours of each, as
@@ -1265,6 +1280,31 @@ class Chore(Section):
     cwd: UserPath | None = None
     # The workspaces it runs in, by name; empty means every workspace whose loop reads this file.
     workspaces: tuple[NonBlank, ...] = ()
+
+    @model_validator(mode="after")
+    def _model_and_cmd(self) -> Chore:
+        # A model on the command line would beat the one canopy writes, so it is refused wherever canopy chooses one:
+        # with `model`, or on the chore's agent, whose model is `runtime.models.chore`. An agent of the operator's own
+        # is the operator's to run on any model, as before.
+        if self.cmd is None:
+            return self
+        runs_chore = invocation.agent_of(self.cmd) == agents.CHORE
+        if self.model is not None and not runs_chore:
+            raise ValueError(
+                f"model needs cmd to run canopy's chore agent, {agents.CHORE}, which canopy copies for this chore "
+                "with its model; an agent of your own takes its model in its own definition. Drop model, or run "
+                f"--agent {agents.CHORE}",
+            )
+        if self.model is not None and DEFINITIONS_DIR not in self.cmd:
+            raise ValueError(
+                f"with model, cmd must contain {DEFINITIONS_DIR}, where the chore's copy of {agents.CHORE} is (D040)",
+            )
+        if self.model is not None or runs_chore:
+            try:
+                _refuse_model_option(self.cmd, "Set model in this table instead")
+            except ValueError as e:
+                raise ValueError(f"cmd {e}") from None
+        return self
 
 
 ChoreName = Annotated[str, AfterValidator(_chore_name)]
@@ -1291,6 +1331,19 @@ class Config(Section):
     artifacts: Artifacts
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
+
+    @model_validator(mode="after")
+    def _chore_models_run_the_chore_agent(self) -> Config:
+        # A chore with a model and no `cmd` runs `runtime.chore_cmd` on its own copy of the chore's agent.
+        if invocation.agent_of(self.runtime.chore_cmd) == agents.CHORE:
+            return self
+        for name, chore in self.chores.items():
+            if chore.model is not None and chore.cmd is None:
+                raise ValueError(
+                    f"chores.{name}.model needs runtime.chore_cmd to run canopy's chore agent, {agents.CHORE}, which "
+                    "canopy copies for the chore with its model, or a cmd of the chore's own that does",
+                )
+        return self
 
     @property
     def reviews_on(self) -> bool:
@@ -1625,6 +1678,10 @@ def _describe(error: ValidationError, origin: Mapping[str, Path], files: tuple[P
     lines: list[str] = []
     for e in error.errors():
         loc = [str(p) for p in e["loc"] if p != "[key]"]
+        if not loc:
+            # A check across sections, whose message names its keys.
+            lines.append(e["msg"])
+            continue
         if loc[0] in TABLE_SECTIONS:
             # A named table's errors are about one of its keys: `chores.build-health.every_minutes`.
             source = origin.get(loc[0])

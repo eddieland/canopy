@@ -694,11 +694,12 @@ def _check_model(ctx: Context, kind: str, *, private: bool) -> str | None:
     only the operator can fix it.
 
     Returns:
-        The model, or None when config chooses none for the agent, which runs on the runtime's default.
+        The model as the run records it, `provider/model` or `provider/model@variant`, or None when config chooses none
+        for the agent, which runs on the runtime's default.
 
     Raises:
-        Refusal: `model_missing`, when the runtime does not list the model, or `model_list_failed`, when its list could
-            not be read.
+        Refusal: `model_missing`, when the runtime does not list the model or its variant, or `model_list_failed`, when
+            its list could not be read.
     """
     runtime = ctx.config.runtime
     if kind in (policy.PLAN, policy.FEEDBACK_PLAN):
@@ -712,7 +713,7 @@ def _check_model(ctx: Context, kind: str, *, private: bool) -> str | None:
         agent_models.check(ctx.runner, ctx.workspace.root, model)
     except agent_models.ModelError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
-    return model
+    return model.name
 
 
 def _check_notice(ctx: Context, tick_id: int, kind: str, reasons: Collection[str]) -> None:

@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from canopy.runtime.agents import CHORE_COPY_PREFIX
 from canopy.runtime.opencode2 import definitions
 
 if TYPE_CHECKING:
@@ -47,7 +48,8 @@ def shadowing(root: Path, names: Collection[str] | None = None) -> list[Path]:
         for path in _agent_files(config_dir):
             # OpenCode names an agent by its path below `agent/`, without `.md`.
             name = path.relative_to(config_dir).with_suffix("").as_posix().split("/", 1)[1]
-            if name in names:
+            # A chore's own copy of canopy's chore agent is named for the chore: every name a copy may take is canopy's.
+            if name in names or name.startswith(CHORE_COPY_PREFIX):
                 found.append(path)
         found.extend(p for p in _config_files(directory) if _mentions(p, names) or _names_canopy(p))
     return found

@@ -127,26 +127,26 @@ def test_a_worker_template_that_places_no_prompt_gets_it_on_stdin(scenario: Scen
     scenario.configures(
         runtime={
             "worker_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker",
-            "worker_cmd_suffix": "--variant high",
+            "worker_cmd_suffix": "--log-level INFO",
         },
     )
     run = scenario.run(worker=pushes())
     assert run.status == "done"
     [w] = agent_runs(scenario.agent_log)
-    assert w["argv"] == ["run", "--agent", "canopy-worker", "--variant", "high"]
+    assert w["argv"] == ["run", "--agent", "canopy-worker", "--log-level", "INFO"]
     assert w["stdin"] == run.prompt
 
 
 def test_the_worker_runs_between_the_prefix_and_the_suffix(scenario: Scenario, git_pool: GitPool) -> None:
     """One prefix and suffix wrap every command a worker run starts, such as a sandbox wrapper (DESIGN §12)."""
     scenario.configures(
-        runtime={"worker_cmd_prefix": "env CANOPY_WRAPPED={title}", "worker_cmd_suffix": "--variant high"},
+        runtime={"worker_cmd_prefix": "env CANOPY_WRAPPED={title}", "worker_cmd_suffix": "--log-level INFO"},
     )
     run = scenario.run(worker=pushes())
     assert run.status == "done"
     [w] = agent_runs(scenario.agent_log)
     assert w["env"]["CANOPY_WRAPPED"] == "PROJ-1 implement"
-    assert w["argv"][-2:] == ["--variant", "high"]
+    assert w["argv"][-2:] == ["--log-level", "INFO"]
 
 
 def test_a_run_makes_no_local_branch(scenario: Scenario, git_pool: GitPool) -> None:
