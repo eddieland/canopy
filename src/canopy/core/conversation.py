@@ -102,7 +102,7 @@ TASK = "task"
 # `persona` (a review request and its persona, `core/review_requests.py`), and `show`; working one is PR-scoped work
 # (ROADMAP M14). `mirror` is the overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
-    TICKET: ("start", "stop", "reply", "forget", "grant", "show", "plan", "persona", MIRROR_ACTION),
+    TICKET: ("start", "stop", "reply", "forget", "grant", "show", "plan", "persona", "model", MIRROR_ACTION),
     PR: ("grant", "start", "stop", "show", "persona"),
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
@@ -210,9 +210,9 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, grants attempts, plans, submits tasks, chooses personas, dismisses or sends "
-                "findings, marks reviews seen, edits or sends drafts, pauses, resumes, collects garbage, or reads the "
-                "commands agents start with",
+                "stops, replies, forgets, grants attempts, plans, submits tasks, chooses personas or models, "
+                "dismisses or sends findings, marks reviews seen, edits or sends drafts, pauses, resumes, collects "
+                "garbage, or reads the commands agents start with",
             )
 
 

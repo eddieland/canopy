@@ -24,6 +24,7 @@ import { Chip, Word } from '@/components/status'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
+import { TicketModels } from '@/components/ticket-models'
 import { TicketPersonas } from '@/components/ticket-personas'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
@@ -174,6 +175,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         names={detail.persona_names}
                         className="border-t"
                     />
+                    {/* What its runs run on, from the next: yours to choose, here or with `canopy model`. */}
+                    <TicketModels ticketKey={ticket.key} models={detail.models} className="border-t" />
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}

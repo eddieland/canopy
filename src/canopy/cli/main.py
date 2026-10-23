@@ -35,6 +35,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "agents": ("agents", "cmd_agents"),
     "personas": ("personas", "cmd_personas"),
     "persona": ("personas", "cmd_persona"),
+    "models": ("models", "cmd_models"),
+    "model": ("models", "cmd_model"),
     "health": ("health", "cmd_health"),
     "gc": ("gc", "cmd_gc"),
     "pause": ("conversation", "cmd_pause"),

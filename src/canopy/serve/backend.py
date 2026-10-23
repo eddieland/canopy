@@ -6,7 +6,8 @@
 (`loop.tick_now`, as `t` does), the attempt
 and review limits `canopy grant` raises (`runs.policy`, `reviews.grants`), and trying a chore (`chores.trial`) are
 theirs, so `canopy loop` passes them in, and `python -m canopy.serve --mock` passes stand-ins over its seeded journal.
-Reading a pool is the pool's own `status` unless told otherwise: the mock has no pool to ask.
+Reading a pool is the pool's own `status` unless told otherwise, and the models the runtime lists its own list: the mock
+has no pool or runtime to ask.
 
 The loop's config and workspace map are read by each request as it opens, and replaced when the loop reads them again
 (`use`), so a request runs on one config throughout, the one the loop runs on.
@@ -27,6 +28,7 @@ from canopy.core import chore_view, config, db, pools, tasks
 from canopy.core.context import Context, db_path
 from canopy.core.vocab import RunStatus
 from canopy.infra import procs
+from canopy.runtime import models as runtime_models
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -34,10 +36,16 @@ if TYPE_CHECKING:
     from canopy.core.conversation import Ref
     from canopy.core.items import Item
     from canopy.core.workspace import Workspace
+    from canopy.runtime.report import ModelList
 
 
 def _status(ctx: Context, repo: str) -> Sequence[pools.Slot]:
     return ctx.pool(repo).status()
+
+
+def _models(ctx: Context) -> ModelList:
+    # Read in the workspace root, as a run's model is looked up (DESIGN §13).
+    return runtime_models.listed(ctx.runner, cwd=ctx.workspace.root)
 
 
 def _close_task_run(ctx: Context, run: records.TaskRun) -> bool:
@@ -115,6 +123,9 @@ class Backend:
     # A repository's pool's slots, for the worktrees page: its `status`. Called on a thread per pool, each with a
     # Context of its own from `open`.
     slots: Callable[[Context, str], Sequence[pools.Slot]] = field(default=_status)
+    # The models the runtime lists to run an agent on, for the ticket page's Model panel to choose from and for a
+    # choice of one to be looked up in: what `canopy models` prints.
+    models: Callable[[Context], ModelList] = field(default=_models)
     # Now, for windows such as the spend figure's: the mock's is fixed, as its journal's times are.
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
     # Rewrite `attention.md` after a write that changes the list without a tick, such as a dismissal. The mock's

@@ -667,6 +667,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the models
+         * @description Every model the runtime lists, read from it now in the workspace root, or why the list could not be read.
+         *
+         *     Read when the operator opens a ticket's Model panel, not on the stream: each read starts the runtime, for up to 30
+         *     seconds. A model on the list can still fail when called, since the runtime reads it from its cache or its catalog.
+         */
+        get: operations["listModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/personas": {
         parameters: {
             query?: never;
@@ -1718,6 +1741,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/tickets/{key}/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose a model for one of a ticket's agents
+         * @description `canopy model KEY MODEL --agent AGENT`, or with no `model` `--clear` (DESIGN §13).
+         *
+         *     It covers every run of that agent for the ticket, from its next, until cleared. A model the runtime does not list is
+         *     refused `unknown_model`, and a list that cannot be read `model_list_failed`.
+         */
+        post: operations["chooseTicketModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tickets/{key}/personas": {
         parameters: {
             query?: never;
@@ -2058,6 +2104,25 @@ export type paths = {
 export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
+        /**
+         * AgentModel
+         * @description The model one of a ticket's agents runs on at its next run, and where that choice comes from (DESIGN §13).
+         */
+        AgentModel: {
+            /** @description The agent: `worker` for its implement and resume runs, `planner`, or `reviewer`. */
+            agent: components["schemas"]["ModelAgent"];
+            /**
+             * Model
+             * @description The model, as `provider/model`; None for the runtime's default, when neither the ticket nor config sets one.
+             */
+            model: string | null;
+            /**
+             * Source
+             * @description Where it comes from: the ticket's override, `[runtime.models]` in config, or neither, the runtime's default.
+             * @enum {string}
+             */
+            source: "ticket" | "config" | "default";
+        };
         /**
          * AgentPersona
          * @description The persona one of a ticket's agents writes in at its next run, and where that choice comes from (DESIGN §31).
@@ -4166,6 +4231,44 @@ export type components = {
              * @description The workspace's root, absolute: a path a page shows from it is joined to it to copy it whole.
              */
             workspace_root: string;
+        };
+        /**
+         * @description One of a ticket's agents (DESIGN §13): `worker` for its implement and resume runs.
+         * @enum {string}
+         */
+        ModelAgent: "worker" | "planner" | "reviewer";
+        /**
+         * ModelList
+         * @description The models the runtime lists to run an agent on, as `canopy models` prints them: what the operator may choose.
+         */
+        ModelList: {
+            /**
+             * Error
+             * @description Why the list could not be read, in canopy's words; None when it was.
+             */
+            error: string | null;
+            /**
+             * Models
+             * @description Each model, as `provider/model`, in order; none when the list could not be read.
+             * @default []
+             */
+            models: string[];
+        };
+        /**
+         * ModelRequest
+         * @description A choice of model for one of a ticket's agents, as `canopy model KEY MODEL [--agent AGENT]` makes it.
+         */
+        ModelRequest: {
+            /**
+             * @description The agent to choose for.
+             * @default worker
+             */
+            agent: components["schemas"]["ModelAgent"];
+            /**
+             * Model
+             * @description The model, as `provider/model`, one `GET /models` lists; None clears the override, as `--clear` does.
+             */
+            model?: string | null;
         };
         /**
          * ModelsServed
@@ -7515,6 +7618,13 @@ export type components = {
              */
             messages: components["schemas"]["Message"][];
             /**
+             * Models
+             * @description The model each of its agents runs on at its next run (DESIGN §13): its workers', its planner's, and its
+             *     reviewer's, in that order. What the operator may choose from is `GET /models`', read when they ask.
+             * @default []
+             */
+            models: components["schemas"]["AgentModel"][];
+            /**
              * Persona Names
              * @description Every persona a run could get, by name, as `canopy personas` lists them: what the operator may choose from.
              * @default []
@@ -10623,6 +10733,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Meta"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelList"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */
@@ -14789,6 +14964,96 @@ export interface operations {
             };
             /** @description No such ticket. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    chooseTicketModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentModel"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -11,6 +11,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from canopy.serve.draft_schema import Draft
+from canopy.serve.model_schema import AgentModel
 from canopy.serve.persona_schema import AgentPersona
 from canopy.serve.schema import CostTotal, Decision, Limit, Message, Model, Run, TicketSummary
 
@@ -77,6 +78,9 @@ class TicketDetail(Model):
     reviewer's, in that order."""
     persona_names: list[str] = []
     """Every persona a run could get, by name, as `canopy personas` lists them: what the operator may choose from."""
+    models: list[AgentModel] = []
+    """The model each of its agents runs on at its next run (DESIGN §13): its workers', its planner's, and its
+    reviewer's, in that order. What the operator may choose from is `GET /models`', read when they ask."""
 
 
 class Started(Model):

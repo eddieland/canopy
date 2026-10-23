@@ -36,6 +36,7 @@ from canopy.core import (
     prompts,
     replies,
     sandboxing,
+    ticket_models,
 )
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import PoolKind, ResumeReason, RunKind, RunStatus, StartStatus
@@ -194,7 +195,7 @@ def start(
         # Fixed now, before a slot is leased: a persona that cannot be used refuses the run whole (DESIGN §31).
         persona = _check_persona(ctx, key, kind)
         # And its model, looked up in the runtime's list now: one it lacks refuses the run whole (DESIGN §13).
-        model = _check_model(ctx, kind, private=plan.private)
+        model = _check_model(ctx, key, kind, private=plan.private)
         leases = _lease_all(ctx, key, plan.repos)
         try:
             return _spawn(
@@ -265,7 +266,7 @@ def check(
         )
         _guard(ctx, key, kind, plan.repos, planned=planned, reasons=reasons)
         _check_persona(ctx, key, kind)
-        _check_model(ctx, kind, private=plan.private)
+        _check_model(ctx, key, kind, private=plan.private)
     return plan
 
 
@@ -684,36 +685,44 @@ def _check_persona(ctx: Context, key: str, kind: str) -> personas.Persona | None
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
 
 
-def _check_model(ctx: Context, kind: str, *, private: bool) -> str | None:
+def _check_model(ctx: Context, key: str, kind: str, *, private: bool) -> str | None:
     """Return the model a `kind` run asks for, looked up now in the list the runtime would look it up in (DESIGN §13).
 
-    The model is the one `runtime.models` chooses for the agent the run's template runs, which canopy writes into that
-    agent's definition. The list is read in the workspace root, not a repository's clone or slot, whose own runtime
-    config could change it. It is never fallen back from: a canary's run on a model nobody chose would read as the
-    canary's. A refusal spends no attempt and leases no slot, and raises an attention item of its guard's name, since
-    only the operator can fix it.
+    The model is the one ticket `key`'s override chooses for the run's agent, else the one `runtime.models` chooses for
+    the agent the run's template runs, which canopy writes into that agent's definition. The list is read in the
+    workspace root, not a repository's clone or slot, whose own runtime config could change it. It is never fallen back
+    from: a canary's run on a model nobody chose would read as the canary's. A refusal spends no attempt and leases no
+    slot, and raises an attention item of its guard's name, since only the operator can fix it.
 
     Returns:
-        The model as the run records it, `provider/model` or `provider/model@variant`, or None when config chooses none
-        for the agent, which runs on the runtime's default.
+        The model as the run records it, `provider/model` or `provider/model@variant`, or None when neither the
+        ticket nor config chooses one for the agent, which runs on the runtime's default.
 
     Raises:
         Refusal: `model_missing`, when the runtime does not list the model or its variant, or `model_list_failed`, when
             its list could not be read.
     """
     runtime = ctx.config.runtime
-    if kind in (policy.PLAN, policy.FEEDBACK_PLAN):
-        template = runtime.plan_cmd
-    else:
-        template = runtime.private_worker_cmd if private else runtime.worker_cmd
-    model = agent_models.of_template(runtime.models, template)
+    agent = ticket_models.agent_of(kind)
+    worker = runtime.private_worker_cmd if private else runtime.worker_cmd
+    template = runtime.plan_cmd if agent == "planner" else worker
+    model = agent_models.of_template(ticket_models.models_for(ctx.conn, ctx.config, key, agent), template)
     if model is None:
         return None
+    if ticket_models.override(ctx.conn, key, agent) == model.name:
+        chosen = f"for {key}'s {agent} runs (canopy model {key}{_agent_flag(agent)})"
+    else:
+        chosen = "in runtime.models"
     try:
-        agent_models.check(ctx.runner, ctx.workspace.root, model)
+        agent_models.check(ctx.runner, ctx.workspace.root, model, chosen=chosen)
     except agent_models.ModelError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
     return model.name
+
+
+def _agent_flag(agent: ticket_models.Agent) -> str:
+    # The `--agent` `canopy model` names `agent` with: none for the workers, whose override `canopy model KEY` sets.
+    return "" if agent == "worker" else f" --agent {agent}"
 
 
 def _check_notice(ctx: Context, tick_id: int, kind: str, reasons: Collection[str]) -> None:

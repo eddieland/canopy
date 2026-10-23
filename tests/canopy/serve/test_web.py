@@ -3,9 +3,11 @@ its pages read what `canopy show` and `canopy status` print, and `canopy loop` s
 
 import dataclasses
 import json
+import os
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import httpx2
 import pytest
@@ -372,6 +374,50 @@ def test_a_persona_chosen_from_the_web_is_the_tickets_override_as_canopy_persona
     # No persona clears it, as `--clear` does.
     assert choose({"agent": "reviewer"}).json()["source"] == "default"
     assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
+
+
+def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_makes_it(
+    ctx: Context,
+    opencode_state: Path,
+) -> None:
+    opencode_state.write_text(json.dumps({"models": ["acme/fake-model-2", "a plugin says hello", "acme/fake-model-1"]}))
+    c, headers = signed_in_client(ctx)
+
+    def choose(body: dict[str, str | None]) -> httpx2.Response:
+        return c.post(f"/api/tickets/{KEY}/models", json=body, headers=headers)
+
+    # The Model panel's choices, read from the runtime when it opens, in the workspace root.
+    assert c.get("/api/models").json() == {"models": ["acme/fake-model-1", "acme/fake-model-2"], "error": None}
+    # The CLI's guards hold, and a ticket canopy has not seen may have one.
+    assert refused(choose({"model": "acme/nope"})) == (
+        "unknown_model: OpenCode does not list the model acme/nope: name one `canopy models` lists, or set up its "
+        "provider"
+    )
+    assert choose({"agent": "overseer", "model": "acme/fake-model-1"}).status_code == 422
+    assert choose({"model": "acme/" + "x" * 200}).status_code == 422
+    assert c.post(f"/api/tickets/{KEY}/models", json={}, headers={"origin": ORIGIN}).status_code == 403
+    with mock.patch.dict(os.environ, {conversation.TICK_ID_ENV: "7"}):
+        assert refused(choose({"model": "acme/fake-model-1"})).startswith("inside_run: ")
+    assert choose({"agent": "planner", "model": "acme/fake-model-2"}).json() == {
+        "agent": "planner",
+        "model": "acme/fake-model-2",
+        "source": "ticket",
+    }
+    ended_run(ctx, KEY, "implement")
+    got = c.get(f"/api/tickets/{KEY}").json()
+    assert [(m["agent"], m["model"], m["source"]) for m in got["models"]] == [
+        ("worker", None, "default"),
+        ("planner", "acme/fake-model-2", "ticket"),
+        ("reviewer", None, "default"),
+    ]
+    assert [tuple(r) for r in ctx.conn.execute("SELECT kind, channel FROM ticket_overrides")] == [("model", "web")]
+    # No model clears it, as `--clear` does.
+    assert choose({"agent": "planner"}).json() == {"agent": "planner", "model": None, "source": "default"}
+    assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
+    # A list that cannot be read says why, and refuses a choice as the CLI does.
+    opencode_state.write_text(json.dumps({"exit": 1}))
+    assert c.get("/api/models").json() == {"models": [], "error": "`opencode models` exited 1"}
+    assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")
 
 
 def test_the_web_lists_the_personas_canopy_personas_lists(ctx: Context) -> None:

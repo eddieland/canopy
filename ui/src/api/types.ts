@@ -63,6 +63,10 @@ export type Limit = Schemas['Limit']
 export type Granted = Schemas['Granted']
 /** The persona one of a ticket's agents writes in at its next run, and where that comes from (DESIGN §31). */
 export type AgentPersona = Schemas['AgentPersona']
+/** The model one of a ticket's agents runs on at its next run, and where that comes from (DESIGN §13). */
+export type AgentModel = Schemas['AgentModel']
+/** The models the runtime lists, as `canopy models` prints them (DESIGN §13): what the operator may choose from. */
+export type ModelList = Schemas['ModelList']
 /** A persona a run could get, as `canopy personas` lists it (DESIGN §31): what the operator may choose from. */
 export type PersonaChoice = Schemas['PersonaChoice']
 /** Every persona a run could get, and the one a review request that chooses none is reviewed in (DESIGN §31). */

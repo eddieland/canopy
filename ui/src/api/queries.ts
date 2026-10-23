@@ -76,6 +76,7 @@ export const keys = {
     runMemory: (id: number) => ['run-memory', id] as const,
     personas: ['personas'] as const,
     config: ['config'] as const,
+    models: ['models'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -443,6 +444,16 @@ export const reviewRequestsQuery = queryOptions({
 export const personasQuery = queryOptions({
     queryKey: keys.personas,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/personas', { signal })),
+})
+
+/**
+ * The models the runtime lists, as `canopy models` prints them: what a ticket's agent's model may be chosen from. Not
+ * on the stream, since each read starts the runtime: read when a Model menu opens, and again when one opens later.
+ */
+export const modelsQuery = queryOptions({
+    queryKey: keys.models,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/models', { signal })),
+    staleTime: 0,
 })
 
 /** The PRs the journal knows, most recent activity first. Marked stale on every tick and every ticket change. */

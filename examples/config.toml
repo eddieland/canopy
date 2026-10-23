@@ -94,6 +94,8 @@ worker_timeout_minutes = 45
 # Before a worker run starts, its model and variant are looked up in `opencode models`: one not listed, or a list that
 # cannot be read, refuses the run with an attention item, never running it on another model. Private, as every
 # runtime key is.
+# One ticket's worker, planner, or reviewer can take another model, to canary it: `canopy model KEY MODEL`, or the
+# ticket's page.
 # [runtime.models]
 # worker = "provider/model"     # both workers, and your tasks' runs
 # planner = "provider/model"
