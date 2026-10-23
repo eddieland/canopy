@@ -198,6 +198,19 @@ class Proposal(StrEnum):
     LEAVE = "leave"
 
 
+class PlanItem(StrEnum):
+    """What a feedback plan's item is, `feedback_plan_items.item` (DESIGN §32, What a plan covers)."""
+
+    #: A review, by the id the `vcs` source observed.
+    REVIEW = "review"
+    #: A thread of review comments, by its item comment's observed id.
+    COMMENT = "comment"
+    #: A failed check at the PR's head, by an id canopy gives it (`feedback_items.check_id`).
+    CHECK = "check"
+    #: The PR's conflict with its base, by an id canopy gives it (`feedback_items.conflict_id`).
+    CONFLICT = "conflict"
+
+
 class MoveKind(StrEnum):
     """What moved on a waiting feedback plan's PR, `feedback_plan_moves.kind` (DESIGN §32, Planning again)."""
 

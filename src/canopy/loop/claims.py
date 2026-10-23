@@ -14,6 +14,9 @@ a decision, as every guard's is:
   the plan is the gate instead (§32), so the review check is not made; nor is it on a joint `resume`, which carries
   no unit's `review` cursor, so its review claim stays a claim.
 - `unobserved`: a cursor names no item observed for its subject, or passes one the block left out for its bound.
+- `handled`: a `resume` for `ci` alone has no failure at its PR's head that a worker has not had: each is at or behind
+  the unit's `ci` cursor, or repeats, at the same head and context, one that is, so a re-run that went red to red
+  starts nothing (PRIOR_ART, CI newness).
 
 `canopy ticket set` moves cursors too, so its cursors are checked the same way in a tick (`check_cursors`), refused
 `unobserved` alone: it starts nothing, so a stale subject is not refused, but the block shows none of a stale subject's
@@ -34,7 +37,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, records, review_runs, sql
 from canopy.core.config import CANOPY_REVIEWER
-from canopy.core.vocab import ResumeReason, RunKind
+from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
 from canopy.loop import observations, phases
 from canopy.runs.dispatch import Refusal
 
@@ -64,7 +67,7 @@ def check(
     A label left out, a reason on another kind, and a cursor without its reason are left to §8's guards.
 
     Raises:
-        Refusal: `stale`, `unauthorized`, or `unobserved`, as the module says.
+        Refusal: `stale`, `unauthorized`, `unobserved`, or `handled`, as the module says.
     """
     if conversation.start_of(ctx.conn, key) is not None:
         # Private, or stopped, which the dispatch guard refuses: its start record, not an observation, authorizes it.
@@ -86,6 +89,8 @@ def check(
     review.check_named()
     if kind != RunKind.RESUME:
         return
+    if set(reasons) == {ResumeReason.CI} and pr is not None and unit is not None:
+        _check_handled(ctx, reader, pr, unit)
     if tracked and ResumeReason.REPLY in reasons:
         _check_reply(ctx, reader, record, cursors)
     gated = ResumeReason.REVIEW in reasons and ctx.config.policy.feedback_plan != "approve"
@@ -268,6 +273,54 @@ def _check_ci(reader: observations.Reader, pr: observations.PrObservation, curso
     runs = {str(c.run_id) for c in reader.checks.get(pr["url"], []) if c.head_sha == pr["head"] and c.run_id}
     if cursor not in runs:
         raise Refusal("unobserved", f"ci cursor {cursor} names no check run observed at the head of {pr['url']}")
+
+
+def _check_handled(
+    ctx: Context,
+    reader: observations.Reader,
+    pr: observations.PrObservation,
+    unit: records.TicketUnit,
+) -> None:
+    """Refuse a `resume` for CI alone when every failure at the PR's head is one a worker already had (DESIGN §35).
+
+    A failure was had when its run is at or behind the unit's `ci` cursor, or when a failure of the same context at the
+    same head is, as `observed_check_runs` keeps them: a re-run that went red again. Every failure is new while the
+    cursor is empty or not a number, as the derivation reads them. One with no run, a commit status, is new here too,
+    though the derivation shows it only while the cursor is empty: with no run id to compare, the guard lets it through
+    rather than refuse what it cannot tell had. A check the repository's `human_checks` names is not CI, and a head with
+    no failure is not refused here.
+
+    Raises:
+        Refusal: `handled`.
+    """
+    cursor = phases.ci_cursor(unit.last_ci_run_id)
+    if cursor is None:
+        return
+    found = ctx.workspace.repo(unit.repo)
+    human = found.human_checks if found is not None else frozenset[str]()
+    failed = [
+        c
+        for c in reader.checks.get(pr["url"], [])
+        if c.head_sha == pr["head"]
+        and c.name not in human
+        and c.status is CheckStatus.COMPLETED
+        and c.conclusion in phases.FAILED
+    ]
+    query = (
+        sql.select("*")
+        .from_("observed_check_runs")
+        .where("pr_url = ? AND head_sha = ? AND run_id <= ?", pr["url"], pr["head"], cursor)
+    )
+    runs = records.fetch_all(ctx.conn, records.ObservedCheckRun, query)
+    behind = {r.name for r in runs if r.conclusion in phases.FAILED}
+    if not failed or any(c.run_id is None or (c.run_id > cursor and c.name not in behind) for c in failed):
+        return
+    names = ", ".join(sorted({c.name for c in failed}))
+    raise Refusal(
+        "handled",
+        f"every failed check at the head of {pr['url']} ({names}) failed at that head at or behind the ci cursor "
+        f"{cursor}, so a worker already had it: a re-run that went red again starts no resume for ci alone",
+    )
 
 
 def _check_reply(ctx: Context, reader: observations.Reader, record: records.Ticket, cursors: Mapping[str, str]) -> None:

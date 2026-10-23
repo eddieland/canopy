@@ -49,6 +49,7 @@ from canopy.core.vocab import (
     OverrideKind,
     Phase,
     PlanEffort,
+    PlanItem,
     PlanSetting,
     PlanStatus,
     PoolKind,
@@ -124,6 +125,9 @@ class Tick(Row):
     definitions_digest: str | None
     # The version of canopy that ran the tick; None on a tick from before that was recorded.
     canopy_version: str | None
+    #: Whether it ran its overseer: False when halted or when nothing was left to it (DESIGN §39); None on a tick from
+    #: before that was recorded, or one that ended before it got that far.
+    overseer_ran: bool | None
 
 
 @dataclass(frozen=True)
@@ -474,6 +478,9 @@ class FeedbackPlanPr(Row):
     plan_id: int
     pr_url: str
     head_sha: str | None
+    #: Whether it conflicted with its base then, as its host said; None while it had not said, or for a plan recorded
+    #: before this was.
+    conflicted: bool | None
 
 
 @dataclass(frozen=True)
@@ -525,7 +532,7 @@ class FeedbackPlanSeen(Row):
 
 @dataclass(frozen=True)
 class FeedbackPlanItem(Row):
-    """An item a feedback plan covers: a review or review comment by its observed id, and what the plan proposes."""
+    """An item a feedback plan covers, by its id, and what the plan proposes for it (DESIGN §32)."""
 
     TABLE: ClassVar[str] = "feedback_plan_items"
 
@@ -533,10 +540,12 @@ class FeedbackPlanItem(Row):
     #: Its place in the planner's result line, from 1: what an approval names it by.
     number: int
     pr_url: str
-    item: ReviewItem
+    item: PlanItem
+    #: A review's or comment's id as the `vcs` source observed it; a failed check's or a conflict's, below zero, as
+    #: canopy gave it (`feedback_items.check_id`).
     item_id: int
     proposal: Proposal
-    #: The reply the plan would draft, for a change or a decline: model text, never an instruction.
+    #: The reply the plan would draft, for a review item's change or decline: model text, never an instruction.
     reply: str | None
     #: Whether the operator's approval left it out: its `resume` does not act on it, and the next plan gets it.
     left_out: bool
@@ -958,6 +967,22 @@ class ObservedCheck(Row):
     conclusion: CheckConclusion | None
     run_id: int | None
     url: str | None
+    observed_at: str
+
+
+@dataclass(frozen=True)
+class ObservedCheckRun(Row):
+    """A completed check run a `vcs` source observed, kept across later reads of its PR (DESIGN §35)."""
+
+    TABLE: ClassVar[str] = "observed_check_runs"
+
+    pr_url: str
+    run_id: int
+    #: Its context's name, as `observed_checks.name`.
+    name: str
+    head_sha: str
+    conclusion: CheckConclusion
+    #: When a source first observed it completed.
     observed_at: str
 
 

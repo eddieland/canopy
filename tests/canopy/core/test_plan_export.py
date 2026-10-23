@@ -41,7 +41,7 @@ def feedback_plan(conn: sqlite3.Connection, state_dir: Path, text: str) -> int:
     """Write and record a feedback plan for `KEY`, covering no items. Returns its run's id."""
     run_id = plan_run(conn, state_dir)
     written = plans.write(state_dir, KEY, run_id, text)
-    snapshot = feedback_items.Snapshot(heads={}, checks={}, given=())
+    snapshot = feedback_items.Snapshot(heads={}, checks={}, given=(), conflicts={})
     feedback_plans.record(conn, KEY, run_id, written, [], snapshot=snapshot)
     return run_id
 

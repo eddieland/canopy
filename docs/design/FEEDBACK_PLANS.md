@@ -7,8 +7,8 @@ map. Previous: [Personas](PERSONAS.md). Next: [A clock for running agents](CLOCK
 ## 32. Plans before feedback runs
 
 Built in part (REQUIREMENTS R21, ROADMAP M54): the setting, the planner, approval whole or by item from the CLI and
-the PR's page and its message, the guards, planning again, the plan on the PR's threads, and drafts starting from the
-plan.
+the PR's page and its message, the guards, planning again, the plan on the PR's threads, failed checks and conflicts
+as items, and drafts starting from the plan.
 
 §7, §8, §21, and §29 describe what comes back to a PR without feedback plans; this section says what they change. A
 **feedback plan** is §25's plan written for one unit's PR rather than a ticket's first work, so a `resume` starts from
@@ -31,9 +31,10 @@ canopy's review findings (§21), a failed check, a conflict with the base, a blo
 authorized reply on the ticket. Fixing CI is part of `resume` (§8), so one plan, and one run, covers a round's
 comments and its red CI together, and a round of red CI alone waits on its plan too. A worker's comments and the
 replies the operator sent through canopy (§29) are not items. A review item's id is the one the `vcs` source observed
-(§29, §30), so a plan's item, a draft's thread, and an observed comment share it. A review thread is one item, its
-other comments replies given beside it, so an answer such as the PR author's "won't do" informs the item's proposal
-rather than becoming work of its own.
+(§29, §30), so a plan's item, a draft's thread, and an observed comment share it; a failed check and a conflict, which
+the source gives no id, have one canopy gives them from the head they are at, apart from any observed id. A review
+thread is one item, its other comments replies given beside it, so an answer such as the PR author's "won't do" informs
+the item's proposal rather than becoming work of its own.
 
 Feedback no longer splits by reviewer: the plan shows each item's author and whether `trust.trusted_reviewers` lists
 them, so the operator weighs it, and `untrusted_review` is not raised for an item a feedback plan covers.

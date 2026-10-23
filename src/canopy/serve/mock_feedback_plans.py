@@ -12,7 +12,7 @@ import json
 from typing import TYPE_CHECKING
 
 from canopy.core import feedback_items, plans, sql
-from canopy.core.vocab import PlanStatus, Proposal, ReviewItem, RunKind, RunStatus
+from canopy.core.vocab import PlanItem, PlanStatus, Proposal, RunKind, RunStatus
 from canopy.serve.mock_reviews import PR_88
 
 if TYPE_CHECKING:
@@ -56,10 +56,10 @@ No check has run at the head yet.
 """
 _ITEMS = (
     # item, id, proposal, reply
-    (ReviewItem.REVIEW, _REVIEW, Proposal.LEAVE, None),
-    (ReviewItem.COMMENT, _ALICE, Proposal.LEAVE, None),
+    (PlanItem.REVIEW, _REVIEW, Proposal.LEAVE, None),
+    (PlanItem.COMMENT, _ALICE, Proposal.LEAVE, None),
     (
-        ReviewItem.COMMENT,
+        PlanItem.COMMENT,
         _BOB,
         Proposal.CHANGE,
         "Kept 250 ms, which ABC-099 asks for, and moved it into `SEARCH_DEBOUNCE_MS` so the inputs stop drifting.",

@@ -450,6 +450,7 @@ export function feedbackPlanItem(fields: Partial<FeedbackPlanItem> = {}): Feedba
         author: 'alice',
         trusted: true,
         thread_id: 'PRRT_1',
+        check: null,
         ...fields,
     }
 }

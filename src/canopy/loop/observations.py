@@ -659,9 +659,9 @@ def _checks(checks: Iterable[records.ObservedCheck], human: AbstractSet[str]) ->
             people.append({"name": c.name, "status": c.status, "conclusion": c.conclusion})
         elif c.status is not CheckStatus.COMPLETED:
             found["pending"].append(c.name)
-        elif c.conclusion in phases.PASSED:
+        elif c.conclusion in observe.PASSED:
             found["passed"] += 1
-        elif c.conclusion is not None and c.conclusion in phases.FAILED:
+        elif c.conclusion is not None and c.conclusion in observe.FAILED:
             found["failed"].append({"name": c.name, "conclusion": c.conclusion, "run_id": c.run_id, "url": c.url})
         else:
             stale.append(c.name)

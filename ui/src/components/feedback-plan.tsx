@@ -313,7 +313,9 @@ function ItemRows({
                             {item.number}. id {item.item_id}
                         </span>
                         <Chip word={item.proposal} />
-                        <span className="font-medium">{item.author ?? 'no author recorded'}</span>
+                        {raisedByCanopy(item) || (
+                            <span className="font-medium">{item.author ?? 'no author recorded'}</span>
+                        )}
                         {item.trusted && <Chip>trusted</Chip>}
                         {item.left_out && <Chip>left out</Chip>}
                         <span
@@ -337,5 +339,23 @@ function where(item: FeedbackPlanItem): string {
     if (item.thread_id !== null) {
         return 'on its thread'
     }
-    return item.item === 'review' ? `the review ${item.item_id}` : `on ${item.pr_url}`
+    switch (item.item) {
+        case 'review': {
+            return `the review ${item.item_id}`
+        }
+        case 'check': {
+            return `the failed check ${item.check ?? 'of no recorded name'} on ${item.pr_url}`
+        }
+        case 'conflict': {
+            return `the conflict with its base on ${item.pr_url}`
+        }
+        case 'comment': {
+            return `on ${item.pr_url}`
+        }
+    }
+}
+
+// Whether canopy raised the item from the PR's state, a failed check or a conflict, so it has no author.
+function raisedByCanopy(item: FeedbackPlanItem): boolean {
+    return item.item === 'check' || item.item === 'conflict'
 }

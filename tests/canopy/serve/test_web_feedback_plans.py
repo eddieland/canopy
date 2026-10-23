@@ -8,12 +8,13 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import db, feedback_plans
+from canopy.core import db, feedback_items, feedback_plans
 from canopy.core.vocab import PlanStatus
 from tests.canopy.helpers import DRAFTS_PR, KEY, comment, context, present, waits
 from tests.canopy.scenario_helpers import (
     ALICES_COMMENT,
     BOBS_COMMENT,
+    FEEDBACK_PLANNED,
     FEEDBACK_TEXT,
     feedback_planned,
     github_shows,
@@ -64,6 +65,22 @@ def test_a_prs_threads_carry_its_waiting_feedback_plan_each_item_on_its_thread(
         (2, 502, "PRRT_2", "bob", False, "decline", "Kept, since the API needs it."),
     ]
     assert not any(i["left_out"] for i in plan["items"])
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_failed_check_and_a_conflict_are_items_on_no_thread_the_check_by_its_name(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    with_a_pr(scenario)
+    build = feedback_items.check_id(PR, "abc1234", "build")
+    conflict = feedback_items.conflict_id(PR, "abc1234", "main")
+    items = [{"id": build, "proposal": "change", "reply": "Fixed the build."}, {"id": conflict, "proposal": "change"}]
+    feedback_planned(scenario, github_state, {**FEEDBACK_PLANNED, "items": items}, mergeable="conflicting")
+    c, _ = signed_in_client(context(scenario.env))
+    assert [
+        (i["item"], i["item_id"], i["check"], i["thread_id"], i["author"], i["trusted"]) for i in plan_of(c)["items"]
+    ] == [("check", build, "build", None, None, False), ("conflict", conflict, None, None, None, False)]
 
 
 @pytest.mark.usefixtures("git_pool")
