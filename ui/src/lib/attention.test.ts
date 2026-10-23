@@ -29,6 +29,7 @@ const item = (id: string, reason: string, since: string, finding = false): Atten
     since,
     finding,
     pr: null,
+    task: null,
 })
 
 describe('blocking', () => {
@@ -163,6 +164,17 @@ describe('ask', () => {
         expect(commandOf({ ...missing, detail: 'run `git fetch`' })).toBeNull()
         // A chore's item has its notes to show, whatever its detail names.
         expect(ask({ ...missing, chore: 'deps', detail: 'run `canopy show chore:deps`' })).toBe('none')
+    })
+
+    it("leads a task's item to the task's page, not to the commands its detail names", () => {
+        const task = {
+            ...item('task:4', 'awaiting_reply', at),
+            ticket_key: null,
+            task: 4,
+            detail: "task:4's run 12 asked you a question, message 7: read it with `canopy show task:4`",
+        }
+        expect(ask(task)).toBe('task')
+        expect(ask({ ...task, reason: 'task_ticket_unrecorded' })).toBe('task')
     })
 })
 
