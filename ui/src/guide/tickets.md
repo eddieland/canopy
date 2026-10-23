@@ -158,9 +158,9 @@ stays your config's to choose.
 
 The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
 override names drops off the runtime's list before the next run, that run is refused rather than sent to another
-model, and the ticket lands on your attention list as `model_missing`. The menu sees it first: once it has read the
-list, the agent's button turns amber and the model shows greyed out as **no longer listed**. Pick another, or set its
-provider up again.
+model, and the ticket lands on your attention list as `model_missing`, broken, with these same menus under it. The
+menu sees it first: once it has read the list, the agent's button turns amber and the model shows greyed out as **no
+longer listed**. Pick another, or set its provider up again.
 
 ## Attaching files
 

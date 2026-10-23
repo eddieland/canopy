@@ -13,6 +13,7 @@ from canopy.core.vocab import TickStatus
 from canopy.infra import procs
 from canopy.serve import pull_requests
 from canopy.serve.backend import Backend
+from canopy.serve.mock import feedback_plans as mock_feedback_plans
 from canopy.serve.mock import reviews as mock_reviews
 from tests.canopy.web_helpers import SECRET, client, signed_in
 
@@ -25,6 +26,8 @@ def test_the_list_has_each_pr_once_with_its_ticket_branch_and_latest_review(back
         mock_reviews.PR_12,
         mock_reviews.PR_14,
         mock_reviews.PR_95,
+        # Each feedback plan state's but the stale one, PR 88's.
+        *(state.url for state in mock_feedback_plans.STATES.values()),
     }
     ours = by_url[mock_reviews.PR_88]
     assert (ours["ticket_key"], ours["ticket_title"], ours["branch"], ours["phase"], ours["reviews"]) == (

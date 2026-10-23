@@ -401,8 +401,8 @@ def test_a_worker_following_a_plan_credits_its_planners_model_on_a_trailer_of_it
     cfg = load(canopy_env.root, canopy_env.user_file)
     text = prompts.render_worker(cfg, kind, PROMPT_VALUES, model="provider/model-a", planner_model="provider/model-b")
     assert (
-        "add `Co-authored-by: provider/model-a (canopy worker) <noreply@canopy.invalid>` and "
-        "`Co-authored-by: provider/model-b (canopy planner) <noreply@canopy.invalid>`, each on a line of its own."
+        "git adds `Co-authored-by: provider/model-a (canopy worker) <noreply@canopy.invalid>` and "
+        "`Co-authored-by: provider/model-b (canopy planner) <noreply@canopy.invalid>` to each commit; keep them"
     ) in text
     # A worker on the runtime's default still credits its planner's model; a planner on it is not named.
     text = prompts.render_worker(cfg, kind, PROMPT_VALUES, planner_model="provider/model-b")
@@ -412,7 +412,7 @@ def test_a_worker_following_a_plan_credits_its_planners_model_on_a_trailer_of_it
     with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
     cfg = load(canopy_env.root, canopy_env.user_file)
     text = prompts.render_worker(cfg, kind, PROMPT_VALUES, planner_model="provider/model-b")
-    assert "add `Co-authored-by: Acme Agent <agent@acme.test>`." in text
+    assert "git adds `Co-authored-by: Acme Agent <agent@acme.test>` to each commit; keep it," in text
     assert "model-b" not in text
 
 

@@ -24,7 +24,8 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(page).toHaveURL(/\/pull-requests$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pull requests')
     const rows = page.getByTestId('pull-requests').getByTestId('pull-request')
-    await expect(rows).toHaveCount(5)
+    // Five, and the seven mobile PRs whose pages show the feedback plan's states (canopy/serve/mock/feedback_plans.py).
+    await expect(rows).toHaveCount(12)
     const ours = rows.filter({ hasText: 'acme/web#88' })
     // The PR's own title, as its worker reported it, rather than its ticket's.
     await expect(ours).toContainText('ABC-099: debounce the search box by 250 ms')
