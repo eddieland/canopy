@@ -30,8 +30,9 @@ MAX_RETRY_SECONDS = 60.0
 HEALTHY_SECONDS = 60.0
 GRACEFUL_SECONDS = 2
 _UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
-#: What uvicorn cancels a request still open with, once `GRACEFUL_SECONDS` pass. A `CancelledError` without it, such as
-#: one the app raises itself, is logged as uvicorn logs it; so is this one, if uvicorn ever words it otherwise.
+#: What uvicorn cancels a request still open with, once `GRACEFUL_SECONDS` pass. A `CancelledError` without it, in
+#: itself or in the cancels it was raised while handling, such as one the app raises itself, is logged as uvicorn logs
+#: it; so is this one, if uvicorn ever words it otherwise.
 _SHUTDOWN_CANCEL = "Task cancelled, timeout graceful shutdown exceeded"
 
 
@@ -41,7 +42,7 @@ class _ToCanopyLog(logging.Handler):
     @override
     def emit(self, record: logging.LogRecord) -> None:
         error = record.exc_info[1] if record.exc_info is not None else None
-        if isinstance(error, asyncio.CancelledError) and error.args == (_SHUTDOWN_CANCEL,):
+        if _is_shutdown_cancel(error):
             record = _cancelled(record)
         logging.getLogger("canopy").handle(record)
 
@@ -120,6 +121,18 @@ class WebServer:
             self._log.info("web UI server restarting", extra={"after_seconds": delay})
             self._stopping.wait(delay)
             delay = min(delay * 2, MAX_RETRY_SECONDS)
+
+
+def _is_shutdown_cancel(error: BaseException | None) -> bool:
+    # uvicorn's cancel can land while the anyio task group in FastAPI's event stream waits on its children, and the
+    # group then raises a bare `CancelledError` of its own, with uvicorn's only as its context (#1347).
+    seen: set[int] = set()
+    while isinstance(error, asyncio.CancelledError) and id(error) not in seen:
+        if error.args == (_SHUTDOWN_CANCEL,):
+            return True
+        seen.add(id(error))
+        error = error.__context__
+    return False
 
 
 def _cancelled(record: logging.LogRecord) -> logging.LogRecord:
