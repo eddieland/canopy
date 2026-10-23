@@ -10,7 +10,8 @@
     font-size: var(--text-2xs);
 }
 
-/* The private config's path is under the mock's temporary directory, so it changes with every run, not the page. */
-[data-testid='config-private-file'] {
+/* The config files' paths are under the mock's temporary directory, so they change with every run, not the page. */
+[data-testid='config-private-file'],
+[data-testid='config-models-file'] {
     visibility: hidden;
 }

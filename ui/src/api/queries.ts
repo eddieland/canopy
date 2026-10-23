@@ -76,6 +76,8 @@ export const keys = {
     runMemory: (id: number) => ['run-memory', id] as const,
     personas: ['personas'] as const,
     config: ['config'] as const,
+    // Under the config's key, so what marks the config stale, a save that reloads the loop, marks it stale too.
+    configModels: ['config', 'models'] as const,
     models: ['models'] as const,
 }
 
@@ -224,6 +226,15 @@ export const loopQuery = queryOptions({
 export const configQuery = queryOptions({
     queryKey: keys.config,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/config', { signal })),
+})
+
+/**
+ * The model config chooses for each of canopy's agents and each chore, as the loop runs on it, and the files that set
+ * them: read only. Not on the stream: read when the settings page opens, and again after a reload.
+ */
+export const configModelsQuery = queryOptions({
+    queryKey: keys.configModels,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/config/models', { signal })),
 })
 
 /** Every ticket canopy has worked or been asked to. The stream sends the list again whenever it changes. */

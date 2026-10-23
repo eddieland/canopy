@@ -7,7 +7,8 @@ there is no treehouse or runtime to ask (backend.py): the models are those its r
 run and starts nothing, so the run stays running.
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19), `deps` and
-`build-health`. Two ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). The
+`build-health`, `deps` on a model of its own (§13). Two ticks recorded decisions about tickets, a unit, a repository,
+a chore, and a PR (§6). The
 workspace's policy allows one resume and two reviews, so ABC-100 is at its resume limit in web, where its run 40, a
 `fix-ci` from before a resume fixed CI, counts as one (§8), and PR 88 at its review limit (§22's grants). Run 43,
 running, is a resume for a failed check and review feedback together. The running runs 41 and 43 have the latest tool
@@ -107,8 +108,15 @@ authorized_repliers = ["mock-operator"]
 # Whose review feedback a worker addresses unasked; the settings page may only remove one.
 trusted_reviewers = ["canopy:review", "lint-bot"]
 
+[runtime.models]
+# Only the agents no ticket's page shows, so the settings page has models to name and each ticket keeps the default.
+overseer = "anthropic/claude-sonnet-4-5"
+chore = "anthropic/claude-haiku-4-5"
+
 [chores.deps]
 prompt = "{chores}/deps.md"
+# Its own: the advisories it reads are long, so it thinks harder than `build-health`, which takes `runtime.models`'.
+model = "anthropic/claude-haiku-4-5@high"
 every_minutes = 360
 days = ["mon", "tue", "wed", "thu", "fri"]
 hours = "08:00-18:00"

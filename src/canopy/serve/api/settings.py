@@ -2,19 +2,28 @@
 
 Only the keys `GET /config` lists, within their bounds, and trust settings only toward stricter (TRUST_MODEL T8). A
 save writes the private file alone, keeping its comments, and then asks the loop to read its config again, as Reload
-does.
+does. Each agent's and chore's model the page shows and never changes: the operator chooses them in the file alone.
 """
 
 from __future__ import annotations
 
+import contextlib
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter
 
-from canopy.core import config, conversation
+from canopy.core import agent_models, chore_view, config, conversation
 from canopy.infra import logs
 from canopy.serve import config_edit
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError
 from canopy.serve.schema import ConfigChange, ConfigKey, ConfigPatch, ConfigReload, ConfigSaved, ConfigSettings
+from canopy.serve.schema.model import ChoreModel, ConfigModels, ConfiguredModel
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from canopy.runtime.agents import Model
 
 TAG = "config"
 router = APIRouter(tags=[TAG])
@@ -95,6 +104,59 @@ def save_config(body: ConfigPatch, backend: BackendDep) -> ConfigSaved:
         reload_refused=refused,
         every=backend.every,
     )
+
+
+@router.get("/config/models", operation_id="getConfigModels", summary="Get each agent's and chore's model")
+def read_models(backend: BackendDep) -> ConfigModels:
+    """The model config chooses for each of canopy's agents and each chore, as the loop runs on it, read only.
+
+    Each file named is the one its tables come from as the files say now, so the page can say where to edit them.
+    """
+    with backend.open() as ctx:
+        cfg, ws, root = ctx.config, ctx.ws, ctx.repo_root
+    origin: dict[str, Path] = {}
+    # A file that cannot be read now names none; the models are still those the loop runs on.
+    with contextlib.suppress(config.ConfigError):
+        origin = config.origins(root, backend.user_file)
+    agents = [
+        ConfiguredModel(
+            agent=role,
+            model=_id(chosen.model),
+            variant=_variant(chosen.model),
+            source="config" if chosen.model is not None else "default",
+        )
+        for role, chosen in agent_models.configured(cfg).items()
+    ]
+    chores = [
+        ChoreModel(
+            chore=name,
+            model=_id(chosen.model),
+            variant=_variant(chosen.model),
+            source=chosen.source,
+            agent=chosen.agent,
+        )
+        for name, chosen in ((n, agent_models.of_chore(cfg, c)) for n, c in chore_view.defined(cfg, ws).items())
+    ]
+    return ConfigModels(
+        agents=agents,
+        chores=chores,
+        models_file=_named(origin.get("runtime.models")),
+        chores_file=_named(origin.get("chores")),
+        user_file=str(backend.user_file),
+        private_file=str(config.private_config_path(root)),
+    )
+
+
+def _id(model: Model | None) -> str | None:
+    return model.id if model is not None else None
+
+
+def _variant(model: Model | None) -> str | None:
+    return model.variant if model is not None else None
+
+
+def _named(path: Path | None) -> str | None:
+    return str(path) if path is not None else None
 
 
 def _shown(value: config_edit.Value) -> int | bool | str | list[str] | list[int] | dict[str, int] | None:

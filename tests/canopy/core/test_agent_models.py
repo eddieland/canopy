@@ -264,3 +264,47 @@ def test_a_chore_model_with_a_chore_cmd_that_runs_another_agent_is_refused(canop
     )
     with pytest.raises(ConfigError, match=re.escape("chores.triage.model needs runtime.chore_cmd to run canopy's")):
         config.load(canopy_env.root, canopy_env.user_file)
+
+
+def test_config_names_each_roles_model_and_each_chores_and_where_it_comes_from(canopy_env: CanopyEnv) -> None:
+    """What the settings page shows, read only: a chore running an agent of the operator's own takes no model."""
+    canopy_env.configure(
+        canopy_env.user_file,
+        {
+            "runtime": {"models": {"reviewer": f"{OTHER}@high", "chore": MODEL}},
+            "chores": {
+                **chore(model=f"{OTHER}@low"),
+                "deps": {"prompt": "~/deps.md", "every_minutes": 60},
+                "sentry": {"prompt": "~/sentry.md", "every_minutes": 60, "cmd": OWN_CMD},
+            },
+        },
+    )
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    assert agent_models.configured(cfg) == {
+        "worker": agent_models.Chosen(None, "default"),
+        "planner": agent_models.Chosen(None, "default"),
+        "reviewer": agent_models.Chosen(Model(OTHER, "high"), "config"),
+        "overseer": agent_models.Chosen(None, "default"),
+        "chore": agent_models.Chosen(Model(MODEL), "config"),
+    }
+    assert {name: agent_models.of_chore(cfg, c) for name, c in cfg.chores.items()} == {
+        "triage": agent_models.Chosen(Model(OTHER, "low"), "chore"),
+        "deps": agent_models.Chosen(Model(MODEL), "config"),
+        # Its agent's own definition chooses, which canopy does not write: `runtime.models.chore` does not reach it.
+        "sentry": agent_models.Chosen(None, "agent", "sentry-triage"),
+    }
+
+
+def test_every_chore_runs_an_agent_of_the_operators_own_when_the_chore_command_does(canopy_env: CanopyEnv) -> None:
+    canopy_env.configure(
+        canopy_env.user_file,
+        {
+            "runtime": {
+                "chore_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent my-chore {prompt}",
+                "models": {"chore": MODEL},
+            },
+            "chores": chore(),
+        },
+    )
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    assert agent_models.of_chore(cfg, cfg.chores["triage"]) == agent_models.Chosen(None, "agent", "my-chore")

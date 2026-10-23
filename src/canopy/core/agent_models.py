@@ -22,7 +22,8 @@ default instead, since a canary's run on a model nobody chose would read as the 
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
 
 from canopy.runtime import agents, invocation
 from canopy.runtime import models as runtime_models
@@ -33,12 +34,14 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from canopy.core.config import Config
+    from canopy.core.config import Chore, Config
     from canopy.infra import procs
 
+#: A key of `[runtime.models]`: the role of canopy's it chooses a model for.
+type Role = Literal["worker", "planner", "reviewer", "overseer", "chore"]
 #: Each key of `[runtime.models]`, the role it chooses a model for, and the agents that role is, by the names the
 #: runtime runs them by: a worker is the public or the private one, and a task's run is the private one.
-AGENTS: Mapping[str, tuple[str, ...]] = {
+AGENTS: Mapping[Role, tuple[str, ...]] = {
     "worker": (agents.WORKER, agents.PRIVATE_WORKER),
     "planner": (agents.PLANNER,),
     "reviewer": (agents.REVIEWER,),
@@ -49,8 +52,24 @@ AGENTS: Mapping[str, tuple[str, ...]] = {
 MISSING = "model_missing"
 #: The guard and attention reason of a run whose model could not be looked up, the list not read.
 LIST_FAILED = "model_list_failed"
+#: Where config's choice of an agent's model comes from: `[runtime.models]` (`config`), a chore's own `model`
+#: (`chore`), the definition of an agent of the operator's own that a chore runs, which canopy does not write
+#: (`agent`), or nothing, the runtime's default (`default`).
+type Source = Literal["config", "chore", "agent", "default"]
 # The most variants a refusal names of those the model lists.
 _MAX_NAMED = 8
+
+
+@dataclass(frozen=True)
+class Chosen:
+    """The model config chooses for one of canopy's agents, or for one chore, and where that choice comes from."""
+
+    #: The model and its variant; None when config chooses none, for the runtime's default or the agent's own.
+    model: Model | None
+    source: Source
+    #: The agent a chore runs when it is one of the operator's own (`agent`); None otherwise, or when its command
+    #: names none.
+    agent: str | None = None
 
 
 class ModelError(Exception):
@@ -83,7 +102,7 @@ def by_agent(models: Mapping[str, str], chores: Mapping[str, str] | None = None)
     Returns:
         Each agent with a model, by its name: both workers for `worker`, and each chore's copy for its chore.
     """
-    found = {agent: parse(model) for role, model in models.items() for agent in AGENTS.get(role, ())}
+    found = {agent: parse(models[role]) for role, names in AGENTS.items() if role in models for agent in names}
     found.update({agents.chore_agent(chore): parse(model) for chore, model in (chores or {}).items()})
     return found
 
@@ -118,6 +137,37 @@ def chores(config: Config) -> dict[str, str]:
         The models, as config spells them.
     """
     return {name: chore.model for name, chore in config.chores.items() if chore.model is not None}
+
+
+def configured(config: Config) -> dict[Role, Chosen]:
+    """Return the model `[runtime.models]` chooses for each role it may name, as a run takes it but a ticket's override.
+
+    Returns:
+        Each role in `AGENTS`' order, with its model and `config`, or with none and `default`.
+    """
+    return {role: _chosen(config.runtime.models.get(role)) for role in AGENTS}
+
+
+def of_chore(config: Config, chore: Chore) -> Chosen:
+    """Return the model `chore` runs on as `config` chooses it.
+
+    Its own `model` on its own copy of the chore's agent, else `runtime.models.chore` on that agent. A chore whose
+    command, its `cmd` or `runtime.chore_cmd`, runs an agent of the operator's own takes neither, as config refuses a
+    `model` for it: that agent's definition chooses, which canopy does not write.
+
+    Returns:
+        The model and where it comes from, naming the operator's agent for `agent`.
+    """
+    agent = invocation.agent_of(chore.cmd if chore.cmd is not None else config.runtime.chore_cmd)
+    if agent != agents.CHORE:
+        return Chosen(None, "agent", agent)
+    if chore.model is not None:
+        return Chosen(parse(chore.model), "chore")
+    return _chosen(config.runtime.models.get("chore"))
+
+
+def _chosen(value: str | None) -> Chosen:
+    return Chosen(parse(value), "config") if value is not None else Chosen(None, "default")
 
 
 def of_run(config: Config, template: str, model: str | None) -> dict[str, Model]:
