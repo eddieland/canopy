@@ -1,5 +1,8 @@
-"""Attachments through the web UI (DESIGN §22, TRUST_MODEL T8): an upload and a removal write through the functions
-`canopy attach` and `canopy detach` call, with channel `web`, and their guards refuse them as they refuse the CLI's."""
+"""Attachments through the web UI (DESIGN §22, TRUST_MODEL T8), held to the CLI's functions and guards.
+
+An upload and a removal write through the functions `canopy attach` and `canopy detach` call, with channel `web`, and
+their guards refuse them as they refuse the CLI's.
+"""
 
 from canopy.core import attachments, conversation, db
 from canopy.core.context import Context
