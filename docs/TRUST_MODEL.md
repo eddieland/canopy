@@ -191,15 +191,15 @@ Controls:
   operator's word about the world, to hold a failed check the notice explains: that changes when a `resume` for CI runs,
   never what a worker may do.
 - A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `core/tasks.py` by a
-  channel that authenticated the operator: `canopy task submit` in the operator's shell, refused as `inside_run` when
-  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is, and so are `canopy reply task:N`, which queues its next run,
-  and `canopy stop task:N`. Its text, and the replies a later run takes, are the operator's instructions; what a run
-  reports, its summary, question, and report file, is data, and a later run's prompt says so. The report is kept as a
-  plan is (T2): copied out of the slot before it is returned, bounded and never through a link, into the
-  operator-only state directory, and only its copy in the task's next slot reaches an agent. A task never reaches the
-  overseer: a
-  tick starts a queued one in code, before the overseer runs, which sees only the capacity its run holds, so no tracker
-  or PR text can start, steer, or stop one. Its worker reads everything else as data, as a private ticket's does. Its
+  channel that authenticated the operator: `canopy task submit` in the operator's shell, or the web UI behind the
+  listener secret (T8), each refused as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is,
+  and so are `canopy reply task:N`, which queues its next run, and `canopy stop task:N`, from either. Its text, and
+  the replies a later run takes, are the operator's instructions; what a run reports, its summary, question, and
+  report file, is data, and a later run's prompt says so. The report is kept as a plan is (T2): copied out of the
+  slot before it is returned, bounded and never through a link, into the operator-only state directory, and only its
+  copy in the task's next slot reaches an agent. A task never reaches the overseer: a tick starts a queued one in
+  code, before the overseer runs, which sees only the capacity its run holds, so no tracker or PR text can start,
+  steer, or stop one. Its worker reads everything else as data, as a private ticket's does. Its
   branch, `<branch_prefix>task/N`, is a shape no ticket's branch takes, and nothing that reads canopy's branches counts
   it, or a PR from it, as a ticket's work. It is never pushed with force, whatever `trust.rebase` says: `_task`'s own
   push only adds commits, so a branch the worker rewrote and did not push is `unpushed`, and its prompt forbids a
