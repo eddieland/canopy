@@ -135,6 +135,8 @@ dev = [
     "hypothesis>=6.170.0",
     # Holds what an MCP tool returns to the schema it lists, as a client would check it (tests/canopy/loop/test_mcp.py).
     "jsonschema>=4.26.0",
+    # Git hooks (prek.toml) that run the formatters and linters on a commit: `make hooks` installs them.
+    "prek>=0.5.7",
     "pyrefly>=1.4.0",
     "pytest>=9.1",
     # Line and branch coverage: `make coverage`, and `make check COVERAGE=1`, whose coverage.xml CI sends to Codecov.
