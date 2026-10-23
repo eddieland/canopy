@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mockRuns } from '@/api/mocks'
 import type { Run } from '@/api/types'
 
-import { modelNames, runModelIds, unservedReason } from './models'
+import { modelNames, ranOn, runModelIds, unservedReason } from './models'
 
 const [RUNNING, BLOCKED] = mockRuns as [Run, Run]
 
@@ -43,5 +43,14 @@ describe('unservedReason', () => {
             'its session could not be read, tried again later (timed out)',
         )
         expect(unservedReason(BLOCKED.models ?? { status: 'unread', models: [], error: null })).toBeNull()
+    })
+})
+
+describe('ranOn', () => {
+    it('keeps a run a model served, or, until its session names one, the model canopy asked for', () => {
+        expect(ranOn(BLOCKED, 'anthropic/claude-sonnet-4-5')).toBe(true)
+        expect(ranOn({ ...BLOCKED, model: 'anthropic/claude-opus-4-1' }, 'anthropic/claude-opus-4-1')).toBe(false)
+        expect(ranOn({ ...RUNNING, model: 'anthropic/claude-opus-4-1' }, 'anthropic/claude-opus-4-1')).toBe(true)
+        expect(ranOn(RUNNING, 'anthropic/claude-opus-4-1')).toBe(false)
     })
 })

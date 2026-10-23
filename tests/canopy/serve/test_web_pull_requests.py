@@ -75,7 +75,7 @@ def test_a_prs_cost_is_every_run_that_pushed_to_it_and_every_review_of_it(backen
         ):
             ctx.conn.execute(f"UPDATE {table} SET cost_usd = ? WHERE id = ?", (cost, row_id))  # noqa: S608
     page = client(None, backend).get("/api/pull-request", params={"url": mock_reviews.PR_88}).json()
-    assert page["cost"] == {"runs": 2, "reviews": 2, "priced": 3, "cost_usd": pytest.approx(2.25)}
+    assert page["cost"] == {"runs": 2, "reviews": 2, "priced": 3, "cost_usd": pytest.approx(2.25), "models": []}
 
 
 def test_a_prs_cost_counts_its_runs_past_the_20_its_page_lists(backend: Backend) -> None:
@@ -129,7 +129,7 @@ def test_a_pr_only_decisions_name_has_a_page_and_anything_else_is_refused(backen
     page = c.get("/api/pull-request", params={"url": pr}).json()
     assert (page["runs"], page["reviews"], [d["action"] for d in page["decisions"]]) == ([], [], ["wait"])
     assert not page["threads"]
-    assert page["cost"] == {"runs": 0, "reviews": 0, "priced": 0, "cost_usd": None}
+    assert page["cost"] == {"runs": 0, "reviews": 0, "priced": 0, "cost_usd": None, "models": []}
     assert c.get("/api/pull-request", params={"url": "https://github.com/acme/web/pull/404"}).status_code == 404
     for bad in ("javascript:alert(1)", "https://example.test/a b", "https://" + "a" * 300):
         assert c.get("/api/pull-request", params={"url": bad}).status_code == 422

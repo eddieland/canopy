@@ -37,7 +37,9 @@ Below:
 
 - **Work**: the ticket's phase, its branch, each PR with its own phase (a ticket that spans repositories has one per
   repository), what the ticket has cost so far, and the persona each of its agents writes in next and the model it
-  runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model).
+  runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model). Once more than
+  one model has served the ticket, a line under its total cost splits it by model, with `none` for runs whose
+  sessions canopy hasn't read: the canary's bill, itemized.
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
