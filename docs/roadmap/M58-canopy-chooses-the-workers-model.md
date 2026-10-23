@@ -108,5 +108,15 @@ their parent's export. Built (2026-10-20): the read, from `opencode export --san
 runs a tick at most, a failed read tried again a day later up to three reads, and `canopy spend`'s split by model.
 Built (2026-10-21): the web UI's run, tick, chore run, and review run pages, and the runs list, name each run's models,
 each with its share of the cost when there are several, or why none is named yet; and the spend page splits each
-kind's cost by model, as `canopy spend` does. Not built yet: the model shown in
-`canopy status`, and the choosing itself.
+kind's cost by model, as `canopy spend` does. Built (2026-10-22): the choosing from config. `[runtime.models]`, one
+private `provider/model` per agent (`worker` covering both workers and a task's runs), is rendered as `model:` into
+each agent's definition, so each set of models gets its own snapshot; a `--model`, or a `-m` among `opencode run`'s
+own arguments, in any `runtime` template, prefix, or suffix is a config error naming the key to set instead; each
+dispatch whose agent has a model reads `opencode models` in the workspace root (30 seconds, stdout through a file,
+lines that are no model passed over) and refuses `model_missing` or `model_list_failed`, each with its attention item,
+spending no attempt and leasing no slot, in a dry run too; and the run records the model asked for, `runs.model`, which
+`canopy status` shows on running and recent runs. OpenCode 2's list is not read yet, so under it a chosen model
+refuses as `model_list_failed`. Not built yet: the per-ticket override (`canopy model`, a `ticket_overrides` row of
+kind `model`) and the ticket page's Model panel; `canopy models`; the settings page's read-only `[runtime.models]`; the
+check before a review, a chore, a task's run, and a tick's overseer, with its tick status; `canopy status` naming the
+models that served a run; and TRUST_MODEL T8.

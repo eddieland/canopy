@@ -8,6 +8,7 @@
 # such as OpenAI's reasoning models, refuse a request that sets one.
 description: canopy overseer. Reads tracker and GitHub state, records decisions, dispatches workers through the canopy CLI. Read-only otherwise.
 mode: primary
+# canopy: model
 # canopy: temperature
 permission:
   edit: deny
