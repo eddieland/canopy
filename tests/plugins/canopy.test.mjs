@@ -1,6 +1,7 @@
 // The plugin canopy ships for its agent runs as a whole, its jobs joined, under Node's own test runner:
-// `make test-plugin`. Each job has its own tests beside this one, as the clock's are in `clock.test.mjs`, driven
-// through OpenCode 1's entry point; this one drives them through OpenCode 2's as well.
+// `make test-plugin`. Each job has its own tests beside this one, as the clock's are in `clock.test.mjs` and the
+// split's in `split.test.mjs`, driven through OpenCode 1's entry point; this one drives them through OpenCode 2's as
+// well.
 
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
@@ -67,8 +68,8 @@ test("a job whose hook throws does not fail the call it runs after", async () =>
     await assert.doesNotReject(hooks["tool.execute.after"]({ tool: "bash", sessionID: "ses_1" }, output));
 });
 
-test("a run with no deadline gets no tool hooks", async () => {
-    assert.deepEqual(await canopy.server({}), {});
+test("a run with no deadline gets no hook on its tool calls, and OpenCode 2 none at all", async () => {
+    assert.deepEqual(Object.keys(await canopy.server({})), ["experimental.chat.system.transform"]);
     assert.deepEqual(await setUp(), {});
 });
 

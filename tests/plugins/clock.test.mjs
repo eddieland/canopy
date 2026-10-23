@@ -140,6 +140,6 @@ test("nothing without the variable, or with one that is not a time", async () =>
         } else {
             process.env.CANOPY_DEADLINE = value;
         }
-        assert.deepEqual(await Canopy({}), {}, `CANOPY_DEADLINE=${value}`);
+        assert.equal("tool.execute.after" in (await Canopy({})), false, `CANOPY_DEADLINE=${value}`);
     }
 });
