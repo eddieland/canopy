@@ -245,6 +245,11 @@ github.com.
 - **`... has too long a path for srt's sockets`**, or `srt`'s own **`Failed to create bridge sockets`**: on Linux,
   `srt` makes the sockets that carry the sandbox's network in the run's temp directory, under the system one, and a
   socket's path holds at most 107 bytes. Run canopy with `TMPDIR` set to a shorter directory, such as `/tmp`.
+- **Every request from the sandbox fails with `Failed to connect to localhost port 3128`**, allowed hosts included:
+  on Linux, `srt` carries the sandbox's network to its proxy through socat, which listens on IPv6 unless told
+  otherwise, and on a kernel without IPv6 exits unreported. On such a host the wrapper sets `SOCAT_DEFAULT_LISTEN_IP=4`
+  for `srt`, unless you set it yourself, and `canopy sandbox setup` prints a `Note:` saying so. If you still see this,
+  check that the command starts with `canopy-sandbox`, and that you have not set that variable to `6`.
 - **bubblewrap fails with a permission error setting up the user namespace:** the Ubuntu restriction in step 1, or
   canopy running as root.
 - **The worker cannot push:** an SSH remote (step 4), or a credential helper whose files are not in `allowRead`
