@@ -47,6 +47,16 @@ What lets it run inside every agent process (TRUST_MODEL T4):
 
 An agent thinking without calling a tool hears nothing until its next call; its prompt's time limit covers that.
 
+### MCP tools on the first call
+
+Under OpenCode 2 the plugin has one job more, of 2's alone. 2 registers an MCP server's tools only once the server has
+connected, as the session starts, and sends each model call the tools registered when it is made: without a wait, a
+session's first call gets none of them, and the overseer, which acts only through canopy's tools (§27), has nothing to
+call. So the plugin holds a session's first prompt while a server is still connecting, at most 30 seconds, then while
+a connected server has no tool registered, at most 2 seconds more, since one may have none; then the prompt goes on as
+it would have. It reads the servers' names and states and the tools' names, changes none of them, and catches every
+error, as the clock does.
+
 These rest on OpenCode's source at 1.19.3, read 2026-10-19 and read again on an upgrade: OpenCode loads plugins from
 every config directory, the snapshot's last, so a repository's own plugins already run in the agent's process (T7);
 a hook that throws fails the call; and an MCP result is truncated after the hook. OpenCode 2's, at 2.1.2, read

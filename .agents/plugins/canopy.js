@@ -8,6 +8,9 @@
 // writes nothing, refuses no call, and grants no tool. Each job's hooks run in its own try, in the order of `JOBS`, so
 // a job that throws neither fails a call that has already run nor keeps the jobs after it from theirs.
 //
+// Under OpenCode 2 it has one job more, its own: a session's first prompt waits until the tools of its MCP servers are
+// registered, which 2 does only after the server connects, so that the first model call is sent them (`mcpTools`).
+//
 // Both of OpenCode's major versions load it, so its one export, the default, holds an entry point for each, and each
 // version reads only its own: OpenCode 1 calls `server` for the jobs' hooks, and OpenCode 2 calls `setup`, which
 // registers the same hooks under 2's names. Each needs the `id`. Neither calls any other export, so it has none.
@@ -30,6 +33,7 @@
 /** @typedef {import("@opencode/plugin").Plugin.Context} Context2 */
 /** @typedef {Parameters<Parameters<Context2["tool"]["hook"]>[1]>[0]} ToolEvent2 */
 /** @typedef {Extract<ToolEvent2, { status: "completed" }>["result"]} Result2 */
+/** @typedef {{ name: string, status: { status: string } }} McpServer2 */
 /** @typedef {Exclude<Result2["content"], string | undefined>[number]} Content2 */
 
 /** The share of the time the run had when the clock loaded that it warns in: its last fifth. */
@@ -38,6 +42,12 @@ const SHARE = 5;
 const MOST_SECONDS = 600;
 /** What every line of canopy's starts with, as the prompts name it. */
 const MARK = "[canopy]";
+/** The longest a session's first prompt waits on MCP servers still connecting, in milliseconds. */
+const MCP_WAIT_MS = 30_000;
+/** The longest it waits, once none is connecting, for a connected server's tools to be registered. */
+const MCP_SETTLE_MS = 2_000;
+/** How often it asks the runtime again while it waits. */
+const MCP_POLL_MS = 50;
 
 /**
  * Each job the plugin does, in the order its hooks run: a function that returns its hooks, by the runtime's names.
@@ -86,6 +96,7 @@ function hooksOfJobs() {
  * @returns {Promise<void>}
  */
 async function setup(ctx) {
+    await ctx.session.hook("prompt", mcpTools(ctx));
     const after = hooksOfJobs()["tool.execute.after"];
     if (after === undefined) {
         return;
@@ -106,6 +117,70 @@ async function setup(ctx) {
             // A hook that throws fails the call it runs after.
         }
     });
+}
+
+/**
+ * OpenCode 2's job of its own: the hook that holds a session's first prompt until its MCP servers' tools register.
+ *
+ * 2 connects a session's MCP servers as it starts, and registers a server's tools only after the server connects; the
+ * first model call is sent the tools registered when it is made, so without the wait it is sent none of them, and the
+ * overseer, which acts only through canopy's MCP tools (DESIGN §27), would have nothing to call. The prompt hook runs
+ * before that call, and 2 waits on it. It waits while a server is still connecting, at most `MCP_WAIT_MS`, then while
+ * a connected server has no tool registered, at most `MCP_SETTLE_MS` more, since a server may have none; then the
+ * prompt goes on, as it would have. It reads the servers' names and states and the tools' names, and changes nothing.
+ * Later prompts wait for nothing.
+ *
+ * @param {Context2} ctx
+ * @returns {() => Promise<void>}
+ */
+function mcpTools(ctx) {
+    let waited = false;
+    return async () => {
+        if (waited) {
+            return;
+        }
+        waited = true;
+        try {
+            await untilRegistered(ctx);
+        } catch {
+            // A hook that throws fails the prompt; without the wait, it goes on as it would have.
+        }
+    };
+}
+
+/**
+ * Wait until no MCP server is connecting and each connected one has a tool registered, or the time is up.
+ *
+ * A server's tools are registered under its name, each character but a letter, a digit, `_`, and `-` made `_`, then
+ * `_` and the tool's name, as OpenCode 2 names them.
+ *
+ * @param {Context2} ctx
+ * @returns {Promise<void>}
+ */
+async function untilRegistered(ctx) {
+    const start = Date.now();
+    let settling = null;
+    while (Date.now() - start < MCP_WAIT_MS) {
+        /** @type {readonly McpServer2[]} */
+        const servers = (await ctx.mcp.list()).data;
+        const ids = (await ctx.tool.list()).map((tool) => tool.id);
+        const connecting = servers.some((server) => server.status.status === "pending");
+        const unregistered = servers.some(
+            (server) =>
+                server.status.status === "connected" &&
+                !ids.some((id) => id.startsWith(`${server.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_`)),
+        );
+        if (!connecting && !unregistered) {
+            return;
+        }
+        if (!connecting) {
+            settling ??= Date.now();
+            if (Date.now() - settling >= MCP_SETTLE_MS) {
+                return;
+            }
+        }
+        await new Promise((resolve) => setTimeout(resolve, MCP_POLL_MS));
+    }
 }
 
 /**
