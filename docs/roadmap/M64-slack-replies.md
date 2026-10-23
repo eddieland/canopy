@@ -9,14 +9,16 @@ stages, in order, each in its own PRs.
 
 - **Stage 1, reading threads.** `canopy-connect-slack`, a second command in the `canopy-notify-slack` member,
   importing nothing from canopy, on click (D025). It reads the sink's bot token file, held to the sink's checks, and
-  its threads file, and calls `conversations.replies` for each ticket's threads of the last `--days` (3). It prints a
-  `reply` line for each message a person wrote: the thread's ticket key, the Slack user id, the message's `ts`, and
-  its text with Slack's escaping undone, cut to canopy's bound and marked; then §30's `end` line. It skips a thread's
-  first post and any message with a `bot_id` or a `subtype`: its own posts, a bot posting under a person's name,
-  edits, and joins. Review threads and the channel itself are not read.
-- The sink keeps each ticket's threads of the last `--days`, not only today's, so a reply in yesterday's thread still
-  reaches its ticket: the threads file's version 2, which reads version 1. Losing the file still costs nothing worse
-  than replies no longer read.
+  its threads file, and calls `conversations.replies` for each ticket's threads of the last `--days` (3, at most 7).
+  It prints a `reply` line for each message a person wrote, whoever they are: the thread's ticket key, the Slack user
+  id, the message's `ts`, and its text with Slack's escaping undone, whole, since canopy refuses an overlong reply
+  (4000 characters, `conversation.MAX_OPERATOR`) rather than cut it; then §30's `end` line, naming the tickets whose
+  threads were each read whole. It skips a thread's first post and any message with no user, a `bot_id`, or a
+  `subtype`: its own posts, a bot posting under a person's name, and joins. An edited message is printed as it reads
+  now. Review threads and the channel itself are not read.
+- The sink keeps each ticket's threads for a week, not only today's, so a reply in yesterday's thread still reaches
+  its ticket: the threads file's version 2, which reads version 1. Losing the file still costs nothing worse than
+  replies no longer read.
 - Stage 1 checks Slack's current limits on `conversations.replies` for an app installed in one workspace before it
   settles how many threads one run reads; the number goes in `docs/MEASUREMENTS.md` if a limit bounds it.
 - **Stage 2, replies in the conversation.** A `slack` source kind, at most one, with `operators`, the Slack user ids
@@ -35,10 +37,11 @@ stages, in order, each in its own PRs.
   replies from people not listed, as data; a reply edited after it was recorded; Socket Mode; the overseer reading
   Slack through MCP.
 - Tests with the fakes: a fake Web API whose threads hold the operator's reply, a coworker's, a bot's under the
-  operator's name, and an edit, and only the first is printed; a cut reply is marked; yesterday's thread is read and
-  the fourth day's is not; a version 1 threads file is read; a listed id's reply resumes a blocked ticket with the
-  reply as its instruction, and the same line on the next poll records nothing; an unlisted id's line, and one for a
-  ticket canopy does not know, record nothing and are counted; a reply recorded by a poll ends the loop's wait.
+  operator's name, a join, and an edit, and the bot's and the join are not printed; yesterday's thread is read and
+  the fourth day's is not; a thread Slack refuses leaves its ticket out of the `end` line; a version 1 threads file
+  is read; a listed id's reply resumes a blocked ticket with the reply as its instruction, and the same line on the
+  next poll records nothing; an unlisted id's line, and one for a ticket canopy does not know, record nothing and are
+  counted; a reply recorded by a poll ends the loop's wait.
 
 ## Config
 
@@ -54,4 +57,5 @@ ticket's thread; the operator's reply there resumes the worker within `connect.e
 the reply as its instruction, recorded in the journal with the channel `slack`; a coworker's reply in the thread
 records nothing; a reply in the previous day's thread reaches its ticket.
 
-Status: not started.
+Status: in progress. Stage 1 is built (2026-10-23): `canopy-connect-slack` prints the replies people wrote in the
+sink's ticket threads, and the sink keeps a week of each ticket's threads. Nothing runs it yet; stage 2 is next.

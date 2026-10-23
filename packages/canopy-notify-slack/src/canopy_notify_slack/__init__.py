@@ -13,7 +13,7 @@ gives an item or event, while the loop serves one, is linked after it under the 
 
 With `--channel` and `--threads`, what is about one ticket or review goes in its own thread, a new one each day,
 recorded in the sink's own state file, `$XDG_STATE_HOME/canopy/slack-threads.json`; the rest, a chore's results among
-it, goes in the channel.
+it, goes in the channel. The file keeps each thread for a week, so `canopy-connect-slack` can read the replies in it.
 Each thread starts with a post of the same shape, naming what it is about, and everything about it is a reply.
 A reply stays in its thread, unless `--broadcast` names what it holds, such as `--broadcast blocked` for a worker's
 question: then it is shown in the channel too.
@@ -43,7 +43,7 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
@@ -842,6 +842,10 @@ BROADCASTS: Mapping[str, str] = {
 
 #: What a chore's findings' attention items name as their ticket, before the chore's name.
 _CHORE = "chore:"
+#: How many days, today's among them, the threads file keeps a thread: as far back as `canopy-connect-slack` reads.
+KEEP_DAYS = 7
+#: The threads file's format: 2 added each subject's earlier threads, which a sink that writes 1 drops.
+_VERSION = 2
 # A message's `ts`, which names it to reply in its thread.
 _TS = re.compile(r"\d{1,20}\.\d{1,20}")
 
@@ -877,23 +881,29 @@ class Send(Protocol):
 
 @dataclass
 class Threads:
-    """For one channel and repository: each thread the sink posts in today, and what a failed delivery posted.
+    """For one channel and repository: each thread the sink posts in, its earlier ones, and what a delivery posted.
 
     The file holds a scope for each channel and repository, so sinks and workspaces sharing it keep their own, and a
-    save replaces only its own scope. Losing the file costs nothing worse than new threads.
+    save replaces only its own scope. Losing the file costs nothing worse than new threads, and replies in the old ones
+    no longer read.
     """
 
     path: Path
-    # The channel and repository, as a JSON list: the key of this record's part of the file.
+    #: The channel and repository, as a JSON list: the key of this record's part of the file.
     scope: str
-    # What a thread is about, such as a ticket key, to the day it was started and its first message's `ts`.
+    #: What a thread is about, such as a ticket key, to the day its latest thread was started and its first `ts`.
     threads: dict[str, tuple[str, str]]
-    # Fingerprints of the items posted by a delivery that has not yet posted whole, so canopy's retry skips them.
+    #: Fingerprints of the items posted by a delivery that has not yet posted whole, so canopy's retry skips them.
     posted: set[str]
+    #: What a thread is about to its threads before the latest, each its day and first `ts`, oldest first, for
+    #: `KEEP_DAYS`.
+    earlier: dict[str, list[tuple[str, str]]] = field(default_factory=dict[str, list[tuple[str, str]]])
 
     @classmethod
     def load(cls, path: Path, channel: str, repo: str) -> Threads:
         """Read the scope of `channel` and `repo` from `path`: empty if missing or not what this sink wrote.
+
+        A version 1 file, which has no earlier threads, reads as one whose earlier threads are none.
 
         Returns:
             The threads and fingerprints the scope holds.
@@ -904,15 +914,42 @@ class Threads:
         scope = json.dumps([channel, repo])
         given = _scopes(path).get(scope)
         mine: dict[str, object] = {str(k): v for k, v in given.items()} if isinstance(given, dict) else {}
-        threads: dict[str, tuple[str, str]] = {}
         recorded = mine.get("threads")
-        for key, thread in recorded.items() if isinstance(recorded, dict) else ():
-            day, ts = (thread.get("day"), thread.get("ts")) if isinstance(thread, dict) else (None, None)
-            if isinstance(day, str) and isinstance(ts, str) and _TS.fullmatch(ts):
-                threads[str(key)] = (day, ts)
+        threads = {
+            str(key): started
+            for key, thread in (recorded.items() if isinstance(recorded, dict) else ())
+            if (started := _started(thread)) is not None
+        }
+        before = mine.get("earlier")
+        earlier = {
+            str(key): kept
+            for key, listed in (before.items() if isinstance(before, dict) else ())
+            if (kept := [s for t in (listed if isinstance(listed, list) else ()) if (s := _started(t)) is not None])
+        }
         fingerprints = mine.get("posted")
         posted = {f for f in fingerprints if isinstance(f, str)} if isinstance(fingerprints, list) else set()
-        return cls(path, scope, threads, posted)
+        return cls(path, scope, threads, posted, earlier)
+
+    def start(self, key: str, day: str, ts: str) -> None:
+        """Record the thread started for `key` on `day`, keeping the one it replaces among the earlier."""
+        replaced = self.threads.get(key)
+        if replaced is not None and replaced != (day, ts):
+            self.earlier.setdefault(key, []).append(replaced)
+        self.threads[key] = (day, ts)
+
+    def recent(self, today: str, days: int) -> dict[str, list[tuple[str, str]]]:
+        """Each subject's threads started in the `days` up to `today`, today's among them.
+
+        Returns:
+            Each subject's threads, each its day and first `ts`, oldest first; a subject with none is left out.
+        """
+        since = _days_before(today, days - 1)
+        found: dict[str, list[tuple[str, str]]] = {}
+        for key in sorted({*self.threads, *self.earlier}):
+            listed = [*self.earlier.get(key, ()), *([self.threads[key]] if key in self.threads else [])]
+            if kept := [thread for thread in listed if since <= thread[0] <= today]:
+                found[key] = kept
+        return found
 
     def save(self) -> None:
         """Replace this scope in the file, leaving the others as another sink last wrote them.
@@ -926,6 +963,9 @@ class Threads:
         mine = {
             "threads": {key: {"day": day, "ts": ts} for key, (day, ts) in sorted(self.threads.items())},
             "posted": sorted(self.posted),
+            "earlier": {
+                key: [{"day": day, "ts": ts} for day, ts in listed] for key, listed in sorted(self.earlier.items())
+            },
         }
         tmp: Path | None = None
         try:
@@ -943,7 +983,7 @@ class Threads:
                     delete=False,
                 ) as f:
                     tmp = Path(f.name)
-                    json.dump({"version": 1, "scopes": dict(sorted(scopes.items()))}, f)
+                    json.dump({"version": _VERSION, "scopes": dict(sorted(scopes.items()))}, f)
                     f.write("\n")
                 tmp.replace(self.path)
             finally:
@@ -954,15 +994,45 @@ class Threads:
             raise SinkError(f"cannot write the threads file {self.path}: {e.strerror or e}") from e
 
     def finish(self, day: str) -> None:
-        """A delivery has posted whole: forget what it posted, and every thread started before `day`.
+        """A delivery has posted whole: forget what it posted, and keep each thread started before `day` as an earlier.
+
+        An earlier thread started before the `KEEP_DAYS` up to `day` is forgotten.
 
         Raises:
             SinkError: The file cannot be written.
         """
         self.posted.clear()
         # ISO dates order as strings. A later day's thread stays, should a delivery carry an earlier clock.
-        self.threads = {key: thread for key, thread in self.threads.items() if thread[0] >= day}
+        for key, thread in sorted(self.threads.items()):
+            if thread[0] < day:
+                del self.threads[key]
+                if thread not in self.earlier.get(key, ()):
+                    self.earlier.setdefault(key, []).append(thread)
+        since = _days_before(day, KEEP_DAYS - 1)
+        self.earlier = {
+            key: kept for key, listed in self.earlier.items() if (kept := [t for t in listed if t[0] >= since])
+        }
         self.save()
+
+
+def _started(thread: object) -> tuple[str, str] | None:
+    """A thread as the file records it, `{"day": ..., "ts": ...}`: its day and first `ts`, if both are what they seem.
+
+    Returns:
+        The day and `ts`, or None.
+    """
+    day, ts = (thread.get("day"), thread.get("ts")) if isinstance(thread, dict) else (None, None)
+    if not isinstance(day, str) or not isinstance(ts, str) or not _TS.fullmatch(ts):
+        return None
+    try:
+        date.fromisoformat(day)
+    except ValueError:
+        return None
+    return day, ts
+
+
+def _days_before(day: str, days: int) -> str:
+    return (date.fromisoformat(day) - timedelta(days=days)).isoformat()
 
 
 def _scopes(path: Path) -> dict[str, object]:
@@ -1074,7 +1144,7 @@ def post_threaded(
                 return ok, reply
             # Recorded at once, so a retry after a refused reply posts in this thread rather than starting another.
             if (ts := _ts(reply)) is not None:
-                threads.threads[part.thread] = (day, ts)
+                threads.start(part.thread, day, ts)
                 threads.save()
         cut = part.message(message)
         ok, reply = send(
