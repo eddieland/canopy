@@ -3,7 +3,8 @@
 canopy's templates are the operator's to change, so this holds only what canopy writes into one: the default for each
 agent, and how a template points the runtime at canopy's definitions rather than the repository's (D040). Without
 that, the runtime looks for canopy's agent in the repository and, not finding it, runs an agent that allows everything.
-It also says whether a template chooses a model of its own, which config refuses (DESIGN §13).
+It also says whether a template chooses a model of its own, which config refuses, and runs a template on another of
+canopy's agents, as a chore with a model of its own is run (DESIGN §13).
 """
 
 from __future__ import annotations
@@ -43,10 +44,20 @@ def agent_of(command: str) -> str | None:
     return invocation.agent_of(command)
 
 
-def model_option(words: Sequence[str], *, run_args: bool = False) -> str | None:
-    """Return the first of `words`, a command's, that passes the runtime a model, or None when none does.
+def with_agent(command: str, agent: str) -> str:
+    """Return `command` running `agent` in place of the one it names, as a chore with a model of its own runs its copy.
 
-    canopy writes each agent's model into its definition, and a model passed on the command line would beat it unseen
-    (DESIGN §13). With `run_args`, every word is read as an argument of the agent's run, as a suffix's are.
+    Returns:
+        `command` with the agent replaced, or as it is when it names none.
+    """
+    return invocation.with_agent(command, agent)
+
+
+def model_option(words: Sequence[str], *, run_args: bool = False) -> str | None:
+    """Return the first of `words`, a command's, that passes the runtime a model or a variant, or None when none does.
+
+    canopy writes each agent's model, and its variant, into its definition, and either passed on the command line would
+    beat it unseen (DESIGN §13). With `run_args`, every word is read as an argument of the agent's run, as a suffix's
+    are.
     """
     return invocation.model_option(words, run_args=run_args)

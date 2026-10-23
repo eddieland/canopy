@@ -314,6 +314,15 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         ("[runtime]\nreview_temperature = true\n", r"runtime\.review_temperature: Input should be a valid number"),
         ("[runtime]\nreview_temperature = '0.1'\n", r"runtime\.review_temperature: Input should be a valid number"),
         ("[runtime]\noverseer_temperature = -0.5\n", "must be from 0 to 2, or -1 to set none"),
+        ("[runtime]\nsandbox_repos = ['API']\n", "repository name 'API' must match"),
+        (
+            "[runtime]\nsandbox_repos = ['api']\nworker_cmd_prefix = 'canopy-sandbox worker --'\n",
+            r"runtime\.worker_cmd_prefix starts with canopy-sandbox, and runtime\.sandbox_repos has canopy add it",
+        ),
+        (
+            "[runtime]\nsandbox_repos = ['api']\nsetup_cmd = '/opt/bin/canopy-sandbox setup -- make'\n",
+            r"runtime\.setup_cmd starts with canopy-sandbox",
+        ),
     ],
 )
 def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) -> None:
@@ -412,9 +421,12 @@ def test_render_command_fills_in_the_title_and_nothing_inside_the_prompt() -> No
 
 
 def test_a_worker_template_runs_between_the_prefix_and_the_suffix() -> None:
-    runtime = config.Runtime(worker_cmd_prefix="wrap --read {definitions_dir} --", worker_cmd_suffix="--variant 'a b'")
+    runtime = config.Runtime(
+        worker_cmd_prefix="wrap --read {definitions_dir} --",
+        worker_cmd_suffix="--log-level 'a b'",
+    )
     argv = render_command(runtime.worker_template("agent {prompt}"), "do it", Path("/defs"), "PROJ-1 implement").argv
-    assert argv == ["wrap", "--read", "/defs", "--", "agent", "do it", "--variant", "a b"]
+    assert argv == ["wrap", "--read", "/defs", "--", "agent", "do it", "--log-level", "a b"]
     assert config.Runtime().worker_template("agent {prompt}") == "agent {prompt}"
 
 

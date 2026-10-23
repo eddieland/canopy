@@ -15,7 +15,9 @@ files mark for it:
 - the artifact store's MCP server, denied whole to every agent, then for each agent config lets publish its tools
   allowed by name, and the store's skill, which every definition denies as shipped (DESIGN §38);
 - the reviewer's and overseer's temperature, unless it sets none;
-- each agent's model, from `runtime.models`, unless it sets none (DESIGN §13, Each agent's model);
+- each agent's model, from `runtime.models`, and the variant it runs at, unless it sets none (DESIGN §13, Each
+  agent's model); and for each chore with a model of its own, a copy of the chore's definition, rendered as it is but
+  for its model (DESIGN §19);
 - the commands the operator allows an agent beyond its own bash rules (`runtime.allow_bash`, DESIGN §13), last of
   them;
 - the overseer's prompt, then the tracker's skill if canopy ships one, as the overseer's body: the body is the agent's
@@ -44,7 +46,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from pathlib import Path
 
-    from canopy.runtime.agents import McpTools, Publishing, Rules
+    from canopy.runtime.agents import McpTools, Model, Publishing, Rules
 
 #: The directories of a config directory OpenCode reads agents, skills, and plugins from.
 AGENTS_SUBDIR = "agents"
@@ -68,6 +70,10 @@ RUNTIME_COMMANDS = ("opencode",)
 #: model's, which may hold a `/` of its own (`openrouter/vendor/model`). At most 200 characters, none of which ends a
 #: YAML string in double quotes, so it is rendered into a definition as it is.
 MODEL_RE = re.compile(r"(?=.{3,200}\Z)[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._:@/+-]*")
+#: A variant of a model canopy renders, as OpenCode names one, such as a reasoning effort (`high`, `max`): a letter,
+#: then at most 63 letters, digits, `_`, and `-`, none of which ends a YAML string in double quotes. OpenCode's own are
+#: lowercase words; a provider's config may name more.
+VARIANT_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}")
 
 
 def _file(agent: str) -> str:
@@ -218,11 +224,27 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
     if _CHORE_FILE in found:
         text = found[_CHORE_FILE].decode()
         found[_CHORE_FILE] = render_chore_reads(text, rules.tracker_tools, rules.tracker_provider).encode()
+    _render_models(found, rules)
     return found
 
 
+def _render_models(found: dict[str, bytes], rules: Rules) -> None:
+    """Render into `found`, in place, each chore's own copy of the chore's definition, then each agent's model.
+
+    A copy is the chore's definition as rendered so far, so only its model differs: models come last, so that a copy
+    gets its own rather than the chore's.
+    """
+    if _CHORE_FILE in found:
+        for agent in rules.chore_agents:
+            found[_file(agent)] = found[_CHORE_FILE]
+    for agent, model in rules.models.items():
+        rel = _file(agent)
+        if rel in found:
+            found[rel] = render_model(found[rel].decode(), rel, model).encode()
+
+
 def _render_by_agent(found: dict[str, bytes], rules: Rules) -> None:
-    """Render into `found`, in place, what `rules` gives agents by name: the store, bash allows, temperature, model."""
+    """Render into `found`, in place, what `rules` gives agents by name: the store, bash allows, temperature."""
     for agent in _AGENTS:
         rel = _file(agent)
         if rel in found:
@@ -235,10 +257,6 @@ def _render_by_agent(found: dict[str, bytes], rules: Rules) -> None:
         rel = _file(agent)
         if rel in found:
             found[rel] = render_temperature(found[rel].decode(), rel, temperature).encode()
-    for agent, model in rules.models.items():
-        rel = _file(agent)
-        if rel in found:
-            found[rel] = render_model(found[rel].decode(), rel, model).encode()
 
 
 def render_private(text: str, tools: McpTools | None, name: str = _PRIVATE_FILE) -> str:
@@ -366,19 +384,26 @@ def render_temperature(text: str, name: str, temperature: float | None) -> str:
     return text.replace(_TEMPERATURE_MARKER, f"{_TEMPERATURE_MARKER}temperature: {temperature}\n", 1)
 
 
-def render_model(text: str, name: str, model: str) -> str:
+def render_model(text: str, name: str, model: Model) -> str:
     """Return definition `name` with `model` at its marked line: the model `opencode run --agent` runs it on.
 
-    A `--model` on the command line would beat it, which config refuses in every template (DESIGN §13).
+    A variant goes beside it, which OpenCode 1.19.3 uses only while the run's model is the agent's own and the model
+    lists the variant, and otherwise drops without a word: canopy checks the list before a worker run (DESIGN §13). A
+    `--model` or `--variant` on the command line would beat either, which config refuses in every template.
 
     Raises:
         DefinitionsError: `text` has no marked line to render the model at, or `model` is not a model canopy renders.
     """
     if _MODEL_MARKER not in text:
         raise DefinitionsError(f"{name} has no line {_MODEL_MARKER.strip()!r} to render the model at")
-    if not MODEL_RE.fullmatch(model):
-        raise DefinitionsError(f"{name}: {model!r} is not a model canopy renders")
-    return text.replace(_MODEL_MARKER, f'{_MODEL_MARKER}model: "{model}"\n', 1)
+    if not MODEL_RE.fullmatch(model.id):
+        raise DefinitionsError(f"{name}: {model.id!r} is not a model canopy renders")
+    lines = f'model: "{model.id}"\n'
+    if model.variant is not None:
+        if not VARIANT_RE.fullmatch(model.variant):
+            raise DefinitionsError(f"{name}: {model.variant!r} is not a variant canopy renders")
+        lines += f'variant: "{model.variant}"\n'
+    return text.replace(_MODEL_MARKER, f"{_MODEL_MARKER}{lines}", 1)
 
 
 def render_bash_allows(text: str, name: str, allows: Sequence[str]) -> str:

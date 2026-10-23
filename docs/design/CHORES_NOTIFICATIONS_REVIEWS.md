@@ -28,6 +28,9 @@ prompt file, and these keys turn behavior on:
 - `max_findings` caps the findings a run lists, so the few that matter most reach the operator; the rest are counted.
 - `cwd` defaults to a private directory per chore; the shadowing check (§13) covers it and every directory above it.
   `workspaces` (§18) limits where a chore runs.
+- `model` runs the chore on a model of its own rather than `runtime.models.chore` (§13, Each agent's model), through
+  a copy of `canopy-chore` made for it, `canopy-chore-<name>`, since one definition holds one model. Its command must
+  run `canopy-chore`; a chore with an agent of the operator's own sets the model in that agent's definition.
 
 `capacity.max_chores` caps chore runs at once, apart from `max_workers`.
 

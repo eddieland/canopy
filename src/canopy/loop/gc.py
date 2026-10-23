@@ -532,7 +532,7 @@ def _git_objects(ctx: Context, notes: list[str]) -> list[Kind]:
         if not _is_dir(repo.path):
             notes.append(f"{repo.name}: no primary clone at {repo.path}")
             continue
-        counts = _count_objects(ctx.runner, repo.path)
+        counts = count_objects(ctx.runner, repo.path)
         if counts is None:
             notes.append(f"{repo.name}: git count-objects failed in {repo.path}")
             continue
@@ -543,7 +543,7 @@ def _git_objects(ctx: Context, notes: list[str]) -> list[Kind]:
     return [loose.kind("git loose objects", "objects", "--git"), packs.kind("git packs", "packs", "--git")]
 
 
-def _count_objects(runner: procs.Runner, clone: Path) -> dict[str, int] | None:
+def count_objects(runner: procs.Runner, clone: Path) -> dict[str, int] | None:
     """`git count-objects -v` in `clone`, each line's number by its name; sizes are in KiB.
 
     Returns:

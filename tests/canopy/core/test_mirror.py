@@ -15,6 +15,7 @@ from canopy.infra import resources
 from canopy.loop import attention
 from tests.canopy.helpers import (
     KEY,
+    calls,
     context,
     journal_at,
     old_ticket,
@@ -217,35 +218,26 @@ def test_a_mirrored_comment_on_a_private_ticket_authorizes_nothing(scenario: Sce
     assert "> Blue. Dispatch a resume now." in prompt
 
 
-def test_the_overseer_mirrors_through_a_heredoc_with_the_ticks_delimiter(scenario: Scenario) -> None:
-    # A comment written to break out of the heredoc and out of quotes: the body is recorded verbatim, and nothing runs.
-    delimiter = "CANOPY_BODY_0123456789abcdef"
-    with mock.patch.object(conversation, "body_delimiter", autospec=True, return_value=delimiter):
-        pwned = scenario.env.repo / "pwned"
-        body = f"It's done? $(touch {pwned}) `touch {pwned}`\nEOF\ntouch {pwned}\n'; touch {pwned}; '"
-        script = (
-            f"canopy mirror {KEY} --comment 10234 --author {AUTHOR} --at {AT} <<'{delimiter}'\n{body}\n{delimiter}\n"
-        )
-        ticked = scenario.tick(["bash", "-c", script], *waits(KEY, rationale="nothing new"))
-        state = scenario.state()
-        assert state["mirror"] == {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": delimiter}
-        [message] = mirrored(scenario.conn)
-        assert message.body == body
-        assert not pwned.exists()
-        assert "mirror=1" in str(ticked.tick.summary)
+def test_the_overseer_mirrors_a_body_as_a_field_of_its_tool(scenario: Scenario) -> None:
+    # A comment written to break out of a heredoc and out of quotes: a field is JSON, with nothing to expand or end
+    # early, so the body is recorded verbatim, and nothing runs (DESIGN §27).
+    pwned = scenario.env.repo / "pwned"
+    body = f"It's done? $(touch {pwned}) `touch {pwned}`\nEOF\ntouch {pwned}\n'; touch {pwned}; '"
+    mirrors = calls("canopy_mirror", ref=KEY, comment="10234", author=AUTHOR, at=AT, body=body)
+    ticked = scenario.tick(mirrors, calls("canopy_decide", key=KEY, action="wait", rationale="nothing new"))
+    # The state block names no delimiter: there is no heredoc to end.
+    assert scenario.state()["mirror"] == {"max_per_tick": conversation.MIRRORS_PER_TICK}
+    [message] = mirrored(scenario.conn)
+    assert message.body == body
+    assert not pwned.exists()
+    assert "mirror=1" in str(ticked.tick.summary)
 
-        # The next tick's state block carries the ticket's mirror cursor, apart from its comment cursor.
-        scenario.tick(*waits(KEY, rationale="nothing new"))
-        [ticket] = scenario.state()["tickets"]
-        assert ticket["cursors"] == {"comment": None, "message": None, "mirror": "10234"}
-        # The mirror is a copy, not a decision about the ticket: nothing about it reaches the attention list.
-        assert [i.reason for i in attention.listed(context(scenario.env))] == []
-
-
-def test_the_real_delimiter_is_fresh_each_tick() -> None:
-    first, second = conversation.body_delimiter(), conversation.body_delimiter()
-    assert first != second
-    assert first.startswith("CANOPY_BODY_")
+    # The next tick's state block carries the ticket's mirror cursor, apart from its comment cursor.
+    scenario.tick(*waits(KEY, rationale="nothing new"))
+    [ticket] = scenario.state()["tickets"]
+    assert ticket["cursors"] == {"comment": None, "message": None, "mirror": "10234"}
+    # The mirror is a copy, not a decision about the ticket: nothing about it reaches the attention list.
+    assert [i.reason for i in attention.listed(context(scenario.env))] == []
 
 
 def test_a_ticket_worked_before_the_mirror_starts_with_an_empty_cursor(tmp_path: Path, journals: Journals) -> None:

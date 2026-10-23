@@ -7,6 +7,7 @@ import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
 import { requestGroups, shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { reviewRef } from '@/lib/refs'
@@ -20,7 +21,7 @@ const NONE_REQUESTED: RequestedReview[] = []
 
 /**
  * Review runs, one row each, opening the review's page with its findings on its diff: its verdict, its id, its ticket,
- * its impact, its PR, the commit it read and the persona it wrote in, cost, and when. On a PR's own page
+ * its impact, its PR and its title, the commit it read and the persona it wrote in, cost, and when. On a PR's own page
  * (`pr={false}`) the ticket and the PR are left out, as `RunsTable` leaves out a ticket on the ticket's page. The
  * reviews page passes the PRs the operator asked to have reviewed that no review of has started yet as `requested`, a
  * row each, before the runs, or after them with `requestedLast`: what comes next is the newest end of the list. A
@@ -130,12 +131,20 @@ function ReviewRow({
             </span>
         </Tip>
     )
+    // What the change is, the PR's own title or its ticket's. The PR's name, commit, and persona say which review it
+    // is, so the title takes only the room they leave, up to its own width: a high shrink alone would still take a
+    // sliver off the PR's name, and cut it. On a list narrower than `@6xl` that room is an ellipsis or a word at best,
+    // so it is left out there.
+    const title = pr && review.title !== null && (
+        <TicketTitle title={review.title} className="hidden max-w-max grow basis-0 @6xl:block" />
+    )
     // The rest of a request's group: its PR and commit are the lead's, so its persona alone tells it apart, shown at
     // any width since nothing else does.
     const named =
         lead === undefined ? (
             <>
                 {pr && <PullRequestLink url={review.pr_url} />}
+                {title}
                 {sha}
                 {persona}
             </>

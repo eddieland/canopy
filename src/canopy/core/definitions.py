@@ -9,9 +9,10 @@ runtime installs a package for its plugins into each config directory it can wri
 before a session starts (DESIGN §33). Nothing is installed into one it cannot write.
 
 Some definitions are rendered from config: what canopy decides here, from config, that each agent may do
-(`canopy.runtime.agents.Rules`), each agent's model among it, the runtime package writes in its own format. The digest
-covers the rendered text, so a config or override change makes a new snapshot rather than changing one a run may be
-loading, and each set of models gets a snapshot of its own.
+(`canopy.runtime.agents.Rules`), each agent's model among it, the runtime package writes in its own format, with a
+copy of the chore's definition for each chore with a model of its own. The digest covers the rendered text, so a
+config or override change makes a new snapshot rather than changing one a run may be loading, and each set of models
+gets a snapshot of its own.
 """
 
 from __future__ import annotations
@@ -72,6 +73,8 @@ def rules(config: Config) -> agents.Rules:
     except prompts.PromptError as e:
         raise DefinitionsError(str(e)) from e
     runtime = config.runtime
+    # A chore with a model of its own runs a copy of the chore's agent made for it (DESIGN §19).
+    chore_models = {name: chore.model for name, chore in config.chores.items() if chore.model is not None}
     temperatures = {
         agents.REVIEWER: runtime.review_temperature,
         agents.OVERSEER: runtime.overseer_temperature,
@@ -86,7 +89,8 @@ def rules(config: Config) -> agents.Rules:
         tracker_provider=config.tracker.provider,
         bash_allows=bash_allows.by_agent(runtime.allow_bash),
         artifacts=config.artifacts.publishing(),
-        models=agent_models.by_agent(runtime.models),
+        models=agent_models.by_agent(runtime.models, chore_models),
+        chore_agents=[agents.chore_agent(name) for name in sorted(chore_models)],
     )
 
 

@@ -10,9 +10,9 @@ which models it lists to run an agent on.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated, Literal
 
 from pydantic import Field, StrictInt
@@ -171,6 +171,8 @@ class ModelList:
 
     #: Each model, as `provider/model`; empty when the list could not be read, and when the runtime lists none.
     models: AbstractSet[str] = frozenset()
+    #: The variants each model lists, by model, when they were asked for; a model with none maps to an empty set.
+    variants: Mapping[str, AbstractSet[str]] = field(default_factory=dict)
     #: Why the list could not be read, in canopy's words, never what the runtime printed; None when it was read.
     error: str | None = None
 

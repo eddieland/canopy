@@ -32,7 +32,6 @@ if TYPE_CHECKING:
 
 DAY = "2026-10-16"
 NOW = datetime(2026, 10, 16, 10, 0, tzinfo=UTC)
-DELIMITER = "CANOPY_BODY_0123456789abcdef"
 # What a snapshot shows in place of the workspace root, which is in a temporary directory.
 WORKSPACE = "/workspace"
 PR = "https://example.test/acme/repo/pull/7"
@@ -290,15 +289,14 @@ def rendered(
 ) -> str:
     """The tick's state block, with its JSON indented so a change to it is a readable diff, and the root replaced."""
     capacity = reconcile.Capacity(max_workers=ctx.config.capacity.max_workers, running=running)
-    with mock.patch.object(conversation, "body_delimiter", autospec=True, return_value=DELIMITER):
-        block = tick.state_block(
-            ctx,
-            tick_id=tick_id,
-            dry_run=dry_run,
-            now=NOW,
-            reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
-            query_due=query_due,
-        )
+    block = tick.state_block(
+        ctx,
+        tick_id=tick_id,
+        dry_run=dry_run,
+        now=NOW,
+        reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
+        query_due=query_due,
+    )
     head, rest = block.split("```json\n", 1)
     compact, tail = rest.split("\n```", 1)
     state = json.dumps(json.loads(compact), indent=2, ensure_ascii=False)

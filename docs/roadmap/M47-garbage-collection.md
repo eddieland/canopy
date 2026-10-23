@@ -72,6 +72,11 @@ remote branch is deleted; and no flag shortens retention, which only the user fi
   runs, and derivations equal to the dry run's `removable`. Then, between ticks, run `canopy gc --vacuum` and expect
   the journal to shrink by about the dry run's free pages plus the rows' pages the pass freed, and the next tick to run
   normally. Record the sizes and counts in `MEASUREMENTS.md`.
+- **S65. Git in the primary clones** (M47, stage 4's check). Between ticks, with an idle slot holding a commit no
+  remote has, run `canopy gc --dry-run`, then `canopy gc --git`. Expect each clone `packed`, its loose objects gone
+  from the next dry run and its packs fewer or the same; the slot's commit still there (`git cat-file -t`); and the
+  next run on that repository leasing, committing, and pushing as before. With a run live, expect its repository
+  `skipped` and the others `packed`. Run it again after a git upgrade.
 
 Status: in progress. Stage 1 is built (2026-10-18): `canopy gc --dry-run [--json]` and `[retention]`, validated in full.
 The operator closed its check on real use (2026-10-21: the dry run works well on their workspace) with no
@@ -82,4 +87,7 @@ days". Its check, a week of the operator's loop with the pass on (S60), is the o
 fakes ahead of that check, at the operator's word (2026-10-21): the pass also deletes the harness's attention rows,
 connector runs, and derivations outside the window and `journal_days`, recorded as rows in `gc_passes.removed`, and
 checkpoints the journal; `canopy gc --vacuum` runs between ticks while no run is live. Its check, the journal across a
-pass and a vacuum (S62), is the operator's too, after S60.
+pass and a vacuum (S62), is the operator's too, after S60. Stage 4 is started at the operator's word (2026-10-23):
+`canopy gc --git` is built against real git behind the fakes, run by hand only. git's run of both tasks at once
+refuses a clone with no pack, so each is its own run, and git skips a run whose lock another holds saying nothing, so
+canopy looks for the lock. Its check is S65; `--caches` and the dry run's remote branches are still to build.

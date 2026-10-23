@@ -232,6 +232,10 @@ How the overseer works a ticket across repositories:
 To drop a repository, remove its table from the map and run `canopy workspace sync`. It removes the clone and its slots
 only when nothing in them would be lost, and reports what it kept. DESIGN §18 has the details.
 
+Sync also fetches each clone and fast-forwards its default branch when that is checked out, clean, and behind, so the
+clones under `repos/` stay current when you read them. One on another branch, or with changes or commits of your own,
+is left as it is, and sync says why.
+
 ## 5. A Bazel repository with several slots
 
 A large Bazel repository makes a cold slot expensive: a full build, every external repository downloaded again.

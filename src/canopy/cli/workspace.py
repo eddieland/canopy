@@ -39,10 +39,12 @@ def workspace_group() -> None:
 def cmd_sync(click_ctx: click.Context, *, dry_run: bool) -> int:
     """Make the workspace match the map and the slots declared for its pools.
 
-    Clones the map's repositories that have no clone, and reports an origin that differs from the map. With
+    Clones the map's repositories that have no clone, and reports an origin that differs from the map. Fetches each
+    clone already there, and fast-forwards its default branch when that is checked out, clean, and behind. With
     capacity.slots_per_repo or capacity.repo_slots set, makes or removes idle slots until each pool has its declared
     size. Removes a clone under repos/ that the map no longer lists, with its slots, when nothing in either would be
-    lost. Prints each clone before it runs. Never changes an existing clone's remotes. Waits for a running tick to end.
+    lost. Prints each clone before it runs. Never changes an existing clone's remotes, and never moves a branch with
+    local changes or commits. Waits for a running tick to end.
     """
     _require_workspace()
     check_synced(sync(click_ctx, dry_run=dry_run))
@@ -169,9 +171,12 @@ def _sync(ctx: Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
     if not ws.repos:
         click.echo(f"The map lists no repositories; add them under [repos.<name>] in {ws.map_file}.")
     for repo in ws.repos:
-        results.append(_report(_clone_or_check(ctx, ws, repo, dry_run=dry_run)))
+        checked = _report(_clone_or_check(ctx, ws, repo, dry_run=dry_run))
+        results.append(checked)
         if repo.cloned and not dry_run and (failed := setup_workspace.turn_off_auto_maintenance(ctx.runner, repo)):
             results.append(_report(failed))
+        if checked.outcome == "present":
+            results.append(_report(_fast_forward(ctx, repo, dry_run=dry_run)))
         # What git pushes to, after the operator's `insteadOf` and `pushInsteadOf` rewrites, not the map's URL. Only a
         # warning, refusing nothing: HTTPS is recommended because a sandboxed worker cannot reach the SSH agent socket.
         if repo.cloned and (urls := init.ssh_push_urls(ctx.runner, repo.path)):
@@ -198,6 +203,19 @@ def _sync(ctx: Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
         for r in setup_workspace.undeclared(ws)
     ]
     return results
+
+
+def _fast_forward(ctx: Context, repo: workspace.Repo, *, dry_run: bool) -> setup_workspace.Checked:
+    """Fetch `repo`'s clone and fast-forward its default branch, under the dispatch lock a lease's fetch takes.
+
+    Returns:
+        What it came to, or what it would do in a dry run, which fetches nothing.
+    """
+    if dry_run:
+        detail = "would fetch origin, and fast-forward the default branch if it is checked out and clean"
+        return setup_workspace.Checked(repo, "to fetch", detail)
+    with lock.hold(ctx.dispatch_lock_path, wait=True):
+        return setup_workspace.fast_forward(ctx.runner, repo)
 
 
 def _switch(ctx: Context, repo: workspace.Repo, *, dry_run: bool) -> setup_workspace.Checked | None:

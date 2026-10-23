@@ -96,8 +96,11 @@ permission:
   # The artifact store's MCP server, `artifacts.mcp_server`, is for the agents `artifacts.publish_roles` names
   # (DESIGN §38): canopy renders it denied whole at the marked line.
   # canopy: artifact tools
+  # canopy's own tools, the overseer's, a chore's history, and the reports, are not this agent's (DESIGN §19, §27):
+  # denied by pattern, before the exceptions below.
+  "canopy_*": deny
   # canopy's read-only git tools, over this run's own checkouts alone (DESIGN §27), allowed by exact name: after every
-  # pattern, so none above, such as `*merge*`, closes one.
+  # pattern, so none above, such as `*merge*` or `canopy_*`, closes one.
   "canopy_git_merge-base": allow
   "canopy_git_diff": allow
   "canopy_git_log": allow
@@ -105,10 +108,6 @@ permission:
   "canopy_git_blame": allow
   "canopy_git_grep": allow
   "canopy_git_files": allow
-  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone, and canopy's read-only reports
-  # (DESIGN §27) are for an agent of the operator's that allows each by name: last, so no rule above reopens one.
-  "canopy_chore_history": deny
-  "canopy_reports_*": deny
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy reviewer" or "# canopy reviser" prompt,
