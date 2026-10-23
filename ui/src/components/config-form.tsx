@@ -25,6 +25,8 @@ import type { ConfigDrafts } from '@/lib/config-settings'
 // The trust switches, and the side the page may move each to: the stricter one (TRUST_MODEL T8).
 const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.commit_trailer': true }
 const STACKING = 'policy.stacking'
+// What an unset count's field says it is: an unmanaged pool for the pools' counts, no budget for the budget.
+const UNSET: Record<string, string> = { 'spend.monthly_budget_usd': 'none' }
 
 /**
  * The limits and trust settings the loop reads from the user config, edited in place (DESIGN §22, M41): counts and
@@ -332,7 +334,7 @@ function Control({
         <Count
             name={name}
             text={typeof draft === 'string' ? draft : typeof value === 'number' ? String(value) : ''}
-            placeholder={value === null ? 'unmanaged' : ''}
+            placeholder={value === null ? (UNSET[name] ?? 'unmanaged') : ''}
             onText={onDraft}
         />
     )

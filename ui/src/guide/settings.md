@@ -59,15 +59,16 @@ for up to a week, for outages with ambitions.
 ## Limits and trust
 
 **Open** takes you to a page of its own for the numbers you change most: how many workers, chores, and reviews run at
-once, each pool's slots, how many tries a ticket gets, how much you may attach to one, and how often the loop ticks. It
-also holds the trust settings, which from here only get stricter: you can drop a trusted reviewer or an authorized
-replier, never add one, and turn `trust.rebase` off but not on. A stolen session that could add a replier would keep
-steering your workers after you changed the secret, so adding one stays an edit to the file.
+once, each pool's slots, how many tries a ticket gets, how much you may attach to one, how often the loop ticks, and
+the monthly budget the [spend page](ticks#the-spend-page) tracks. It also holds the trust settings, which from here
+only get stricter: you can drop a trusted reviewer or an authorized replier, never add one, and turn `trust.rebase` off
+but not on. A stolen session that could add a replier would keep steering your workers after you changed the secret,
+so adding one stays an edit to the file.
 
 Each row says where its value comes from and how far the page will take it. Counts stop at a ceiling (32 workers, 10
-attempts) and paces at a floor (a tick every 2 minutes); the file can still set anything, so the page is for the
-changes you actually make, not for setting a record. Repositories get a count of their own only when you pick one, so a
-workspace of fifty repositories shows the two that differ.
+attempts, a $10,000 budget) and paces at a floor (a tick every 2 minutes); the file can still set anything, so the page
+is for the changes you actually make, not for setting a record. Repositories get a count of their own only when you
+pick one, so a workspace of fifty repositories shows the two that differ.
 
 **Save** writes `.canopy/config.toml`, this workspace's own file, editing it in place so your comments and layout stay,
 then reloads the loop as **Reload** below does. It never touches `canopy-workspace.toml` or

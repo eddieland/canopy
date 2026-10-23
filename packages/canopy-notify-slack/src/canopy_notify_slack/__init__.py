@@ -584,6 +584,14 @@ def _sink_failing(e: Mapping[str, object]) -> list[str]:
     ]
 
 
+def _over_budget(e: Mapping[str, object]) -> list[str]:
+    spent, projected = e.get("spent"), e.get("projected")
+    so_far = _usd(spent) if isinstance(spent, int | float) else "-"
+    pace = f"; on pace for {_usd(projected)}" if isinstance(projected, int | float) else ""
+    month, budget = escape(e.get("month")), escape(e.get("budget"))
+    return [f":moneybag: *Spend for {month} reached its budget:* {so_far} of ${budget}{pace}"]
+
+
 def _test(e: Mapping[str, object]) -> list[str]:
     return [f":test_tube: {_linked(e.get('text'))}"]
 
@@ -601,6 +609,7 @@ _EVENTS: dict[str, Callable[[Mapping[str, object]], list[str]]] = {
     "loop.failing": _loop_failing,
     "loop.recovered": _loop_recovered,
     "loop.sink_failing": _sink_failing,
+    "loop.over_budget": _over_budget,
     "test": _test,
 }
 

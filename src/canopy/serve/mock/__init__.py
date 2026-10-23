@@ -92,6 +92,10 @@ max_workers = 3
 [capacity.repo_slots]
 web = 4
 
+[spend]
+# What the spend page tracks October's runs against; the settings page may raise it to its ceiling.
+monthly_budget_usd = 40
+
 [memory]
 ticket_notes = "use"
 proposals = "record"

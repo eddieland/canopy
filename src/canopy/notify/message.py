@@ -106,6 +106,11 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
         return f"! loop recovered after {f.get('failed')} failed ticks"
     if kind == "loop.sink_failing":
         return _line(f"! sink {f.get('sink')} has failed 3 deliveries in a row: {f.get('error')}")
+    if kind == "loop.over_budget":
+        spent, projected = f.get("spent"), f.get("projected")
+        so_far = _usd(spent) if isinstance(spent, int | float) else "-"
+        pace = f", on pace for {_usd(projected)}" if isinstance(projected, int | float) else ""
+        return _line(f"! spend for {f.get('month')} reached its budget: {so_far} of ${f.get('budget')}{pace}")
     if kind == "test":
         return _line(f"* {f.get('text')}")
     return _line(f"{kind} {json.dumps(f)}")
@@ -126,8 +131,8 @@ def item_page(ui: str | None, ticket_key: str | None) -> str | None:
     return page(ui, "tickets", ticket_key)
 
 
-def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str | None:
-    """The web UI's page for what an event is about: a run, a plan, a chore run, a review run, or a failed tick.
+def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str | None:  # noqa: PLR0911  (a page per kind)
+    """The web UI's page for what an event is about: a run, a plan, a chore run, a review run, a failed tick, or spend.
 
     Returns:
         The page's URL under `ui`, or None when `ui` is None or the event is about nothing with a page of its own.
@@ -145,6 +150,8 @@ def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str |
             return page(ui, "reviews", f["run"])
         case "loop.failing" if f.get("tick"):
             return page(ui, "ticks", f["tick"])
+        case "loop.over_budget":
+            return page(ui, "spend")
         case _:
             return None
 

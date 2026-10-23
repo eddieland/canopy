@@ -15,7 +15,7 @@ from canopy.core import contract, review_result
 from canopy.core.db import Event
 
 if TYPE_CHECKING:
-    from canopy.core import records
+    from canopy.core import records, spend
     from canopy.core.config import Config
     from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus
 
@@ -155,6 +155,19 @@ class SinkFailing(TypedDict):
 
     sink: str
     error: str
+
+
+class OverBudget(TypedDict):
+    """A `loop.over_budget` event's fields: the local month's spend reached `spend.monthly_budget_usd`."""
+
+    #: The month, `YYYY-MM`, in local time.
+    month: str
+    #: The budget, in whole US dollars.
+    budget: int
+    #: What the month's runs cost so far, in US dollars, rounded to the cent.
+    spent: float
+    #: What the month will cost at this pace, in US dollars, rounded to the cent; None in its first day.
+    projected: float | None
 
 
 def cut(text: object, limit: int) -> str:
@@ -410,3 +423,18 @@ def sink_failing(sink: str, error: str) -> Event:
     """
     fields: SinkFailing = {"sink": sink, "error": cut(error, DETAIL_LIMIT)}
     return Event(LOOP, "loop.sink_failing", fields)
+
+
+def over_budget(month: spend.Month) -> Event:
+    """The local month's spend reached the operator's monthly budget.
+
+    Returns:
+        The `loop.over_budget` event, naming the month, the budget, what it spent, and where it is headed.
+    """
+    fields: OverBudget = {
+        "month": month.month,
+        "budget": month.budget_usd,
+        "spent": round(month.spent_usd or 0.0, 2),
+        "projected": round(month.projected_usd, 2) if month.projected_usd is not None else None,
+    }
+    return Event(LOOP, "loop.over_budget", fields)

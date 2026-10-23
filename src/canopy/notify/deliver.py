@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, outbox, sql
+from canopy.core import contract, db, outbox, spend, sql
 from canopy.core.config import Sink, notify_words
 from canopy.infra import procs
 from canopy.notify import journal, message
@@ -71,6 +71,7 @@ def publish(
     now = datetime.now(UTC)
     if ctx.config.notify.takes(outbox.LOOP):
         _record_loop_events(ctx)
+        _record_budget_event(ctx, now)
     deliveries = [
         _deliver(ctx, name, sink, items, path=path, now=now, log=log, dismissed=dismissed, ui=ui)
         for name, sink in sinks.items()
@@ -177,6 +178,29 @@ def _record_loop_events(ctx: Context) -> None:
     if streak >= FAILING_AFTER and not failing:
         log_path = ctx.state_dir / "ticks" / f"{tick_id}.log"
         db.record_event(ctx.conn, outbox.loop_failing(streak, status, tick_id, str(log_path)))
+
+
+def _record_budget_event(ctx: Context, now: datetime) -> None:
+    """Record `loop.over_budget` once a month, when the local month's spend reaches `spend.monthly_budget_usd`.
+
+    Once per budget too: a budget raised past the month's spend is heard of again when the spend reaches it.
+    """
+    budget = ctx.config.spend.monthly_budget_usd
+    if budget is None:
+        return
+    found = spend.month(ctx.conn, now, budget)
+    if not found.over:
+        return
+    # Pruning always keeps the newest of these (journal.prune_events), so a month's is never taken for none.
+    last = sql.execute(
+        ctx.conn,
+        sql.select("fields").from_("notify_events").where("kind = 'loop.over_budget'").order_by("id DESC").limit(1),
+    ).fetchone()
+    told = contract.stored_object(str(last[0])) if last is not None else {}
+    heard = told.get("budget")
+    if told.get("month") == found.month and isinstance(heard, int) and heard >= budget:
+        return
+    db.record_event(ctx.conn, outbox.over_budget(found))
 
 
 def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:

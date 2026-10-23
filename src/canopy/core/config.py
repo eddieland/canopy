@@ -843,6 +843,14 @@ class Loop(Section):
         return self
 
 
+class Spend(Section):
+    """The `[spend]` table: what the operator means to spend on agent runs (DESIGN §11). Read, never enforced."""
+
+    #: In whole US dollars: what the local calendar month's runs may cost, as `canopy spend` and the spend page track
+    #: it. A sink that takes `loop` hears once when the month's spend reaches it. None tracks no budget.
+    monthly_budget_usd: Annotated[Annotated[StrictInt, Field(ge=1)] | None, Scope.PRIVATE] = None
+
+
 # Host names that mean loopback. The web UI's Host and Origin checks accept these and the bind address (DESIGN §22).
 LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1"})
 # A path prefix the web UI is served under through a proxy: `/canopy`, `/a/b`. Restricted to characters that need no
@@ -1351,6 +1359,7 @@ class Config(Section):
     connect: Connect
     personas: Personas
     artifacts: Artifacts
+    spend: Spend
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
 
@@ -1390,6 +1399,7 @@ SECTIONS: dict[str, type[Section]] = {
     "connect": Connect,
     "personas": Personas,
     "artifacts": Artifacts,
+    "spend": Spend,
 }
 
 

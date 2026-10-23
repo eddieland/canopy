@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import type { SpendCosts, SpendDay, SpendModel, SpendTool } from '@/api/types'
+import type { SpendCosts, SpendDay, SpendModel, SpendMonth, SpendTool } from '@/api/types'
 import type { Clock } from '@/lib/clock'
 
 import {
+    budgetPercent,
+    budgetState,
+    budgetText,
     chartTop,
     dayHint,
     dayLabel,
@@ -12,6 +15,7 @@ import {
     doneText,
     kindsOffered,
     modelRows,
+    monthName,
     seriesCost,
     SERIES,
     shareText,
@@ -184,5 +188,37 @@ describe('spend', () => {
         const rows = [{ kind: 'reviews' as const }, { kind: 'overseer' as const }, { kind: 'reviews' as const }]
         expect(kindsOffered(rows, undefined)).toEqual(['overseer', 'reviews'])
         expect(kindsOffered(rows, 'plans')).toEqual(['overseer', 'plans', 'reviews'])
+    })
+})
+
+// October 2026 a quarter gone, with a $40 budget, and what it spent and where that pace takes it.
+function month(spent: number | null, projected: number | null): SpendMonth {
+    return {
+        month: '2026-10',
+        since: '2026-10-01T00:00:00Z',
+        until: '2026-11-01T00:00:00Z',
+        budget_usd: 40,
+        spent_usd: spent,
+        elapsed: 0.25,
+        projected_usd: projected,
+    }
+}
+
+describe('monthly budget', () => {
+    it('is under while its pace stays within it, headed over when the pace passes it, and over once spent', () => {
+        expect(budgetState(month(5, 20))).toBe('under')
+        expect(budgetState(month(null, null))).toBe('under')
+        expect(budgetState(month(15.76, 65.14))).toBe('headed')
+        expect(budgetState(month(40, 160))).toBe('over')
+    })
+
+    it('says what it spent of the budget, and where its pace takes it', () => {
+        expect(budgetText(month(15.76, 65.14))).toBe('$15.76 of $40 (39%), on pace for $65.14.')
+        expect(budgetText(month(null, null))).toBe('$0.00 of $40 (0%).')
+        expect(budgetPercent(month(50, null))).toBe(125)
+    })
+
+    it('names the month as a calendar does', () => {
+        expect(monthName(month(1, null))).toBe('October 2026')
     })
 })

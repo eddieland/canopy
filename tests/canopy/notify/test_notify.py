@@ -243,6 +243,44 @@ def test_a_long_failing_streak_is_one_streak(scenario: Scenario, sink_script: Pa
     assert "! loop recovered after 1105 failed ticks\n" in messages(out)[1]
 
 
+def test_the_month_reaching_its_budget_is_sent_once_per_budget(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 3})
+    conn = scenario.conn
+
+    def chore_costs(usd: float) -> None:
+        conn.execute(
+            "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path, cost_usd) "
+            "VALUES (NULL, 'deps', ?, 'ok', 'l', ?)",
+            (db.now(), usd),
+        )
+
+    chore_costs(2.0)
+    scenario.tick()
+    assert messages(out) == []  # $2 of $3
+    chore_costs(2.0)
+    scenario.tick()
+    month = f"{datetime.now().astimezone():%Y-%m}"
+    [over] = messages(out)
+    assert over.startswith(f"canopy: 1 event\n! spend for {month} reached its budget: $4.00 of $3")
+    # Told once, even after pruning would have taken the event that says so.
+    conn.execute("UPDATE notify_events SET at = ?", (db.format_time(datetime.now(UTC) - timedelta(days=8)),))
+    scenario.tick()
+    assert len(messages(out)) == 1
+    # A budget raised past the month's spend is heard of again once the month reaches it.
+    scenario.configures(spend={"monthly_budget_usd": 5})
+    scenario.tick()
+    assert len(messages(out)) == 1
+    chore_costs(2.0)
+    scenario.tick()
+    assert f"! spend for {month} reached its budget: $6.00 of $5" in messages(out)[1]
+
+
 def test_a_digest_arrives_on_its_interval_even_when_quiet(
     scenario: Scenario,
     sink_script: Path,
@@ -553,6 +591,7 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         message.Event(5, "review.ended", since, {"pr": pr, "run": 6}),
         message.Event(6, "loop.failing", since, {"tick": 9}),
         message.Event(7, "loop.recovered", since, {"failed": 3}),
+        message.Event(8, "loop.over_budget", since, {"month": "2026-10", "budget": 30, "spent": 31.0}),
     ]
     change = notify_journal.Diff(added, [], [], [])
     sent = message.Message("slack", "/r", Path("/r/attention.md"), change, 4, events, ui=UI)
@@ -574,6 +613,7 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         f"{UI}reviews/6",
         f"{UI}ticks/9",
         None,
+        f"{UI}spend",
     ]
     # The text format links nothing, so `notify.cmd` sees no change.
     assert sent.text() == dataclasses.replace(sent, ui=None).text()

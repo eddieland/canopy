@@ -104,7 +104,8 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 ## Deferred, with the trigger that would unblock each
 
 - Spend-paced loop (left out of M13): when, with M39 built, overseer spend per day still runs past what the operator
-  will pay (`canopy spend` shows it). M13's cost recording is in; a spend budget and a pacing rule are what remain.
+  will pay (`canopy spend` shows it). M13's cost recording is in, and a monthly budget the spend page tracks and a
+  sink hears of (`spend.monthly_budget_usd`); a pacing rule that acts on it is what remains.
 - PR-scoped work (M14): when the operator keeps fixing CI or answering review on their own hand-written PRs by hand,
   often enough to want canopy to do it.
 - Webhooks: when tick latency is measured as a real cost.

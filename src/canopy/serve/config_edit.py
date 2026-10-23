@@ -94,6 +94,8 @@ EDITABLE: tuple[Editable, ...] = (
     _pace("policy.ci_cooldown_minutes", 5),
     _pace("loop.interval_minutes", 2),
     _pace("loop.idle_max_minutes", 2),
+    # Spends nothing itself, but a raised budget keeps a sink from hearing the month reached it: bounded the same way.
+    _count("spend.monthly_budget_usd", 10000),
     Editable("policy.stacking", "stricter"),
     Editable("trust.authorized_repliers", "stricter"),
     Editable("trust.trusted_reviewers", "stricter"),

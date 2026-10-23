@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { spendBreakdownQuery } from '@/api/queries'
 import type { SpendBreakdownRange } from '@/api/queries'
 import { SPEND_KINDS } from '@/api/types'
-import type { SpendBreakdown, SpendDay, SpendKind, SpendPullRequest, SpendTicket } from '@/api/types'
+import type { SpendBreakdown, SpendDay, SpendKind, SpendMonth, SpendPullRequest, SpendTicket } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { None } from '@/components/none'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
@@ -23,6 +23,9 @@ import { useClock } from '@/lib/clock'
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import {
+    budgetPercent,
+    budgetState,
+    budgetText,
     chartTop,
     dayHint,
     dayLabel,
@@ -34,6 +37,7 @@ import {
     GROUP_LABEL,
     kindsOffered,
     modelRows,
+    monthName,
     SERIES,
     seriesCost,
     shareText,
@@ -44,7 +48,7 @@ import {
     windowId,
     windowName,
 } from '@/lib/spend'
-import type { ModelRow, ToolRow } from '@/lib/spend'
+import type { BudgetState, ModelRow, ToolRow } from '@/lib/spend'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 import { NO_TICKET } from '@/lib/words'
@@ -97,6 +101,20 @@ const KIND_LABEL = {
     tasks: 'task runs',
 } as const
 
+// Where the month stands against its budget, as a word, its color, and the budget bar's fill: a state's, never a
+// spend series'.
+const BUDGET_WORD: Record<BudgetState, string> = { under: 'On budget', headed: 'Headed over', over: 'Over budget' }
+const BUDGET_TEXT: Record<BudgetState, string> = {
+    under: 'text-status-done',
+    headed: 'text-status-blocked',
+    over: 'text-status-failed',
+}
+const BUDGET_FILL: Record<BudgetState, string> = {
+    under: 'bg-status-done',
+    headed: 'bg-status-blocked',
+    over: 'bg-status-failed',
+}
+
 // The order the totals name the series in: the overseer's whole, then idle ticks' part of it, as `canopy spend`'s
 // columns read.
 const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'plans', 'chores', 'reviews', 'tasks', 'dry_run'] as const
@@ -145,6 +163,8 @@ function SpendPage() {
     // What the empty panels say they looked over: `these 24 hours`, `these 7 days`.
     const span = windowName(shown)
     const { data } = query
+    // The month against its budget, whatever the window; null with no budget set, and while nothing is read.
+    const month = data?.month ?? null
     // A read that failed with nothing on screen says so once, in Totals, with Read again, rather than leave every panel
     // under it shimmering as if it were still coming.
     const failed = data === undefined && query.error !== null
@@ -153,6 +173,16 @@ function SpendPage() {
             <PageHeader title="Spend" help={HELP}>
                 {data === undefined ? (query.isPending ? 'reading the spend' : null) : spendLine(data)}
             </PageHeader>
+            {!failed && (
+                <Panel data-testid="spend-budget">
+                    <PanelHeader label="This month">
+                        <span className="readout text-xs text-muted-foreground">
+                            {month === null ? '' : monthName(month)}
+                        </span>
+                    </PanelHeader>
+                    {data === undefined ? <PanelSkeleton rows={1} className="min-h-16" /> : <Budget month={month} />}
+                </Panel>
+            )}
             <Panel data-testid="spend-totals">
                 <PanelHeader label="Totals">
                     <ToggleGroup
@@ -316,6 +346,48 @@ function rangeOf(search: SpendSearch): SpendBreakdownRange {
         return { hours: search.hours }
     }
     return search.days === undefined ? DEFAULT_WINDOW : { days: search.days }
+}
+
+/**
+ * The local month so far against the monthly budget, whatever the window: a sentence with the numbers, and a bar of
+ * the budget spent, its fill the state's, beside a mark at how much of the month has gone by. The bar is for the eye,
+ * so it is hidden from a screen reader, which reads the sentence. With no budget set, where to set one.
+ */
+function Budget({ month }: { month: SpendMonth | null }) {
+    if (month === null) {
+        return (
+            <p className="p-3 text-sm text-muted-foreground" data-testid="spend-budget-none">
+                No monthly budget set. Set one under{' '}
+                <Link to="/settings/limits" className="text-accent hover:underline">
+                    Limits and trust
+                </Link>{' '}
+                to track the month against it here, and to have a sink that takes loop events hear once the month
+                reaches it.
+            </p>
+        )
+    }
+    const state = budgetState(month)
+    return (
+        <div className="flex flex-col gap-2 p-3">
+            <p className="text-sm text-foreground" data-testid="spend-budget-text">
+                <span className={cn('font-medium', BUDGET_TEXT[state])}>{BUDGET_WORD[state]}</span>:{' '}
+                <span className="readout">{budgetText(month)}</span>
+            </p>
+            <div aria-hidden className="relative h-2 rounded-full bg-surface-raised" data-testid="spend-budget-meter">
+                <div
+                    className={cn('h-full rounded-full', BUDGET_FILL[state])}
+                    style={{ width: `${Math.min(100, budgetPercent(month))}%` }}
+                />
+                <div
+                    className="absolute -inset-y-1 w-0.5 rounded-full bg-foreground"
+                    style={{ left: `${Math.round(month.elapsed * 1000) / 10}%` }}
+                />
+            </div>
+            <p className="text-xs text-muted-foreground">
+                The mark is how much of the month has gone by: a bar past it is spending faster than the budget allows.
+            </p>
+        </div>
+    )
 }
 
 /**

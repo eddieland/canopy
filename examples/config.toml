@@ -115,6 +115,11 @@ interval_minutes = 15
 # this, in MiB; you are told through the attention list. 0 turns the check off.
 # min_free_disk_mib = 2048
 
+[spend]
+# What a calendar month of agent runs should cost, in whole US dollars. Nothing stops at it: `canopy spend` and the web
+# UI's spend page track the month against it, and a sink that takes `loop` events hears once when the month reaches it.
+# monthly_budget_usd = 300
+
 [trust]
 # Tracker account ids whose ticket comments may resume your blocked work. Use the
 # tracker's stable id, not a display name: Jira accountId, GitHub login.

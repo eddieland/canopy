@@ -415,3 +415,15 @@ test('a window where nothing reported a cost says so once in By day, and claims 
 function nothing(costs: Costs): Costs {
     return Object.fromEntries(Object.keys(costs).map((key) => [key, null]))
 }
+
+test('this month reads against the budget whatever the window, and is headed over at its pace', async ({ page }) => {
+    await page.goto('spend?hours=24')
+    await settled(page)
+    // The mock's budget is $40, and every run in its journal started in October.
+    const budget = page.getByTestId('spend-budget')
+    await expect(budget).toContainText('October 2026')
+    await expect(page.getByTestId('spend-budget-text')).toContainText('Headed over')
+    await expect(page.getByTestId('spend-budget-text')).toContainText('$15.76 of $40 (39%), on pace for')
+    await page.getByTestId('spend-window-30').click()
+    await expect(page.getByTestId('spend-budget-text')).toContainText('$15.76 of $40 (39%)')
+})

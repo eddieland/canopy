@@ -6588,6 +6588,11 @@ export type components = {
              */
             models: components["schemas"]["SpendModel"][];
             /**
+             * @description The local calendar month so far against the operator's monthly budget, whatever the window; None when no budget
+             *     is set.
+             */
+            month: components["schemas"]["SpendMonth"] | null;
+            /**
              * Per Day
              * @description Every day in it, or every hour, oldest first, those with nothing spent included.
              */
@@ -6756,6 +6761,51 @@ export type components = {
              * @description How many of those runs it wrote a reply of: a run on two models counts under each.
              */
             runs: number;
+        };
+        /**
+         * SpendMonth
+         * @description The local calendar month so far against the operator's monthly budget (`spend.monthly_budget_usd`).
+         */
+        SpendMonth: {
+            /**
+             * Budget Usd
+             * @description The budget, in whole US dollars. Nothing enforces it.
+             */
+            budget_usd: number;
+            /**
+             * Elapsed
+             * @description How much of the month has gone by, from 0 to 1.
+             */
+            elapsed: number;
+            /**
+             * Month
+             * @description The month, `YYYY-MM`, in the local time of the machine canopy runs on.
+             */
+            month: string;
+            /**
+             * Projected Usd
+             * @description What the month will cost if the rest of it spends as it has so far, in US dollars; None in its first day, or
+             *     when nothing reported a cost.
+             */
+            projected_usd: number | null;
+            /**
+             * Since
+             * Format: date-time
+             * @description When it starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Spent Usd
+             * @description What every run that started in the month so far cost, dry runs included, in US dollars; None when none reported
+             *     a cost.
+             */
+            spent_usd: number | null;
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: local midnight on the next month's first day.
+             */
+            until: string;
         };
         /**
          * SpendPullRequest

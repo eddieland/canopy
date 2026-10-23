@@ -200,6 +200,13 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
         ],
     },
     {
+        title: 'Budget',
+        blurb:
+            'What a month of agent runs should cost. Nothing stops at it: the spend page tracks it, and a sink ' +
+            'that takes loop events hears once the month reaches it.',
+        keys: [{ name: 'spend.monthly_budget_usd', label: 'Monthly budget, in US dollars' }],
+    },
+    {
         title: 'Trust',
         blurb: 'Only stricter from here: loosening one, or adding a name, is an edit to the file.',
         keys: [

@@ -246,6 +246,7 @@ def test_each_refusal_leaves_the_files_as_they_were(ctx: Context, canopy_env: Ca
         ({"capacity.slots_per_repo": 40}, "past_bound"),
         ({"loop.interval_minutes": 1}, "past_bound"),
         ({"policy.ci_cooldown_minutes": 0}, "past_bound"),
+        ({"spend.monthly_budget_usd": 10001}, "past_bound"),
         ({"trust.rebase": True}, "not_stricter"),
         ({"trust.commit_trailer": False}, "not_stricter"),
         ({"trust.trusted_reviewers": ["alice", "lint-bot", "mallory"]}, "not_stricter"),
@@ -255,6 +256,8 @@ def test_each_refusal_leaves_the_files_as_they_were(ctx: Context, canopy_env: Ca
         ({"capacity.max_workers": True}, "config_invalid"),
         ({"policy.stacking": "always"}, "config_invalid"),
         ({"capacity.slots_per_repo": None}, "config_invalid"),
+        ({"spend.monthly_budget_usd": 0}, "config_invalid"),
+        ({"spend.monthly_budget_usd": None}, "config_invalid"),
     )
     for changes, guard in cases:
         assert refused(save(c, headers, changes)).startswith(f"{guard}: "), changes
@@ -308,6 +311,26 @@ def test_a_limit_the_file_set_past_its_bound_may_still_be_lowered(ctx: Context, 
     assert save(c, headers, {"capacity.max_workers": 35}).status_code == 200
     assert "max_workers = 35" in canopy_env.private_file.read_text()
     assert refused(save(c, headers, {"capacity.max_workers": 36})).startswith("past_bound: ")
+
+
+def test_a_monthly_budget_may_be_set_raised_to_its_ceiling_and_lowered(ctx: Context, canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private(COMMENTED)
+    c, headers = signed_in_client(ctx)
+    assert key(settings(c), "spend.monthly_budget_usd") == {
+        "name": "spend.monthly_budget_usd",
+        "value": None,
+        "source": "default",
+        "kind": "limit",
+        "bound": 10000,
+        "looser": "higher",
+    }
+
+    assert save(c, headers, {"spend.monthly_budget_usd": 300}).status_code == 200
+    assert canopy_env.private_file.read_text().endswith("\n[spend]\nmonthly_budget_usd = 300\n")
+    assert save(c, headers, {"spend.monthly_budget_usd": 10000}).status_code == 200
+    assert save(c, headers, {"spend.monthly_budget_usd": 50}).status_code == 200
+    assert key(settings(c), "spend.monthly_budget_usd")["value"] == 50
+    assert canopy_env.private_file.read_text().startswith(COMMENTED)
 
 
 def test_a_save_on_a_stale_hash_is_refused(ctx: Context, canopy_env: CanopyEnv) -> None:

@@ -8,7 +8,8 @@ Beside what the window
 cost, what it got done: the tickets marked done in it, and what each ticket and PR's own runs cost.
 And what each kind of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and
 how often it started cold. And what each kind's tool calls put into its context, by tool: the reads that each later
-model call reads again. And what each kind spent on each model, as the runs' own sessions say (§13).
+model call reads again. And what each kind spent on each model, as the runs' own sessions say (§13). And the local
+calendar month so far against the operator's monthly budget, which nothing enforces.
 """
 
 from __future__ import annotations
@@ -260,6 +261,62 @@ class Breakdown:
     tools: Sequence[ToolSpend] = ()
     hours: int | None = None
     models: Sequence[ModelSpend] = ()
+
+
+@dataclass(frozen=True)
+class Month:
+    """The local calendar month so far, against the operator's monthly budget (`spend.monthly_budget_usd`)."""
+
+    #: The month, `YYYY-MM`, in this machine's local time.
+    month: str
+    #: When it starts and ends, each a journal time: local midnight on its first day, and on the next month's.
+    since: str
+    until: str
+    #: The budget, in whole US dollars.
+    budget_usd: int
+    #: What every run that started in it so far cost, dry runs included, as `Costs.total` counts it; None when none
+    #: reported a cost.
+    spent_usd: float | None
+    #: How much of the month has gone by, from 0 to 1.
+    elapsed: float
+    #: What the month will cost if the rest of it spends as it has so far; None in its first day, when a few runs would
+    #: read as a month's worth, or when nothing reported a cost.
+    projected_usd: float | None
+
+    @property
+    def share(self) -> float:
+        """What the month has spent so far over its budget: 1 or more once it reached the budget."""
+        return (self.spent_usd or 0.0) / self.budget_usd
+
+    @property
+    def over(self) -> bool:
+        """Whether the month has spent its budget."""
+        return self.share >= 1
+
+
+def month(conn: sqlite3.Connection, now: datetime, budget_usd: int) -> Month:
+    """What the local calendar month holding `now` has cost so far, against `budget_usd`.
+
+    Returns:
+        The month, its spend so far, and where that spend is headed.
+    """
+    today = now.astimezone().date()
+    first = today.replace(day=1)
+    following = (first + timedelta(days=32)).replace(day=1)
+    start, end = _midnight(first), _midnight(following)
+    spent = costs(conn, db.format_time(start), db.format_time(end)).total
+    gone = now - start
+    elapsed = min(1.0, max(0.0, gone / (end - start)))
+    projected = spent / elapsed if spent is not None and gone >= timedelta(days=1) else None
+    return Month(
+        month=first.strftime("%Y-%m"),
+        since=db.format_time(start),
+        until=db.format_time(end),
+        budget_usd=budget_usd,
+        spent_usd=spent,
+        elapsed=elapsed,
+        projected_usd=projected,
+    )
 
 
 def window(now: datetime, days: int) -> tuple[datetime, datetime]:

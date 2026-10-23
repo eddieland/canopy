@@ -312,6 +312,7 @@ def test_slack_blocks_for_each_event_kind() -> None:
         {"kind": "loop.failing", "count": 3, "status": "error", "tick": 9, "log": "/w/.canopy/canopy.log"},
         {"kind": "loop.recovered", "failed": 3},
         {"kind": "loop.sink_failing", "sink": "phone", "error": "exit 7"},
+        {"kind": "loop.over_budget", "month": "2026-10", "budget": 300, "spent": 301.5, "projected": 410.25},
         {"kind": "test", "text": "canopy test message"},
         {"kind": "kind.from.a.newer.canopy", "line": "x <y>"},
     ]
@@ -326,6 +327,7 @@ def test_slack_blocks_for_each_event_kind() -> None:
         ),
         ":white_check_mark: *The loop recovered* after 3 failed ticks",
         ":warning: *Sink phone is failing:* 3 deliveries in a row\n`exit 7`",
+        ":moneybag: *Spend for 2026-10 reached its budget:* $301.50 of $300; on pace for $410.25",
         ":test_tube: canopy test message",
         "x &lt;y&gt;",
     ]
