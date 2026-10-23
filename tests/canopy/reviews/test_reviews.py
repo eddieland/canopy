@@ -701,7 +701,17 @@ def test_a_running_review_shows_its_session_and_spend_so_far(
     """What the reviewer reports is on its row as it prints it, so its page shows it mid-review."""
     with_events(reviewing, "canopy-reviewer")
     journal = reviewing.state_dir / db.DB_FILE_NAME
-    read_row = "import sqlite3, sys; print(sqlite3.connect(sys.argv[1]).execute(sys.argv[2]).fetchall())"
+    # canopy records each event as it reads it, a moment after the reviewer printed it: wait for the cost to land.
+    read_row = (
+        "import sqlite3, sys, time\n"
+        "deadline = time.monotonic() + 10\n"
+        "while True:\n"
+        "    rows = sqlite3.connect(sys.argv[1]).execute(sys.argv[2]).fetchall()\n"
+        "    if (rows and rows[0][1] is not None) or time.monotonic() > deadline:\n"
+        "        break\n"
+        "    time.sleep(0.05)\n"
+        "print(rows)"
+    )
     row_now = [sys.executable, "-c", read_row, str(journal), "SELECT session_id, cost_usd FROM review_runs"]
     reviewer = reviewer_reports(FINDINGS, row_now, session="ses_review")
     reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer)
