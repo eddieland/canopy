@@ -74,8 +74,7 @@ first call can read them from the cache, if another run of the agent wrote them 
 parts joined by a newline are the block as it was, and a prompt whose environment it cannot find is left as it is.
 OpenCode 2 builds its request otherwise, unmeasured, and gets no split. A sandboxed run gains nothing yet: the shell
 tool's description names the run's own `TMPDIR` (§24), and the tools come before the body, so no two sandboxed runs
-share a prefix. Open: a stable temporary path in the shell tool's description, through the plugin's `tool.definition`
-hook, if the agent and OpenCode's external-directory rule still work with it.
+share a prefix.
 
 ### The snapshot, unwritable
 
@@ -123,5 +122,7 @@ ask for it. The overseer is warned as every agent is, in its last 3 minutes by d
 ### Open
 
 - Whether the overseer's last 3 minutes are enough to record what it owes.
+- A stable temporary path in the shell tool's description, through the plugin's `tool.definition` hook, so sandboxed
+  runs share the split's prefix, if the agent and OpenCode's external-directory rule still work with it.
 - How long a run waits on a repository's `.opencode/` install when the registry is refused, as under the sandbox: the
   source does not say, and the live check times one.
