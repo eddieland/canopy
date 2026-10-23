@@ -178,12 +178,6 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     />
                     {/* What its runs run on, from the next: yours to choose, here or with `canopy model`. */}
                     <TicketModels ticketKey={ticket.key} models={detail.models} className="border-t" />
-                    {/* What you attached for its runs to read, such as a design doc someone sent you (DESIGN §22). */}
-                    <Attachments
-                        subject={{ kind: 'ticket', key: ticket.key }}
-                        attachments={detail.attachments}
-                        className="border-t"
-                    />
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}
@@ -193,7 +187,19 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 >
                     <TicketAnswer
                         detail={detail}
-                        after={<TicketVerbs ticket={ticket} limits={limits} place="after" testId="ticket-actions" />}
+                        after={
+                            <>
+                                <TicketVerbs ticket={ticket} limits={limits} place="after" testId="ticket-actions" />
+                                {/* What you attached for its runs to read, such as a design doc someone sent
+                                    you (DESIGN §22): beside the reply that says what to do with it, as on a task's
+                                    page. */}
+                                <Attachments
+                                    subject={{ kind: 'ticket', key: ticket.key }}
+                                    attachments={detail.attachments}
+                                    className="border-t"
+                                />
+                            </>
+                        }
                     />
                 </Panel>
                 {/* Each list is its header alone while it holds nothing (ListPanel): the count says so. */}

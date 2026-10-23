@@ -152,7 +152,7 @@ model, and the ticket lands on your attention list as `model_missing`. Pick anot
 ## Attaching files
 
 Someone sends you a design doc and asks whether the code agrees with it. Attach it to the ticket and say what you want
-in a reply: **Attach a file**, at the foot of **Work** under the models, uploads one file, the same as `canopy attach
+in a reply: **Attach a file**, under Stop at the foot of the conversation, uploads one file, the same as `canopy attach
 KEY FILE`. Every run of the ticket from then on, its planner's included, gets a copy beside its worktree, outside git,
 and its prompt names each copy. The ✕ beside a file removes it, as `canopy detach KEY NAME` does, and later runs no
 longer get it; a run already working keeps the copy it started with.
