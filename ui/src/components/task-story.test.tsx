@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { cleanup, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { mockTaskRun, mockTasks } from '@/api/mocks'
+import { mockNoAttachments, mockTaskRun, mockTasks } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { Message, TaskDetail, TaskSummary } from '@/api/types'
 import { setListOrder } from '@/lib/list-order'
@@ -38,6 +38,7 @@ function waiting(fields: Partial<TaskSummary> = {}): TaskDetail {
     }
     return {
         task: { ...task, question_id: 13, ...fields },
+        attachments: mockNoAttachments,
         runs: [mockTaskRun({ id: 5, status: 'blocked', state: 'blocked', head: null, reported: false })],
         messages: [message({ id: 12 }), message({ id: 13, kind: 'question', body: 'Rename it in api too?' })],
         tickets: [],
