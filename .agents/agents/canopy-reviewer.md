@@ -11,6 +11,7 @@
 # request that sets one.
 description: canopy reviewer. Adversarial review of one PR at one commit; read-only; posts nothing, never approves.
 mode: primary
+# canopy: model
 # canopy: temperature
 permission:
   edit: deny
