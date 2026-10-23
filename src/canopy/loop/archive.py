@@ -2,9 +2,11 @@
 
 With `paths.plan_archive` set, a live tick exports every plan of the workspace into `<clone>/<workspace>/`, or the
 clone's top level with `paths.plan_archive_workspace_dir` off (`plan_export`), each with its planner's prompt unless
-`paths.plan_archive_prompts` is off, each planned ticket's conversation with `paths.plan_archive_conversations`, and a
-README.md indexing each ticket's plans and every ticket, commits what changed there and nothing else, under a message
-naming each file it adds or changes, and pushes the clone's branch to its upstream. At the top level, "there" is what
+`paths.plan_archive_prompts` is off and its original when the operator edited it, the operator's comments on each
+ticket's plans unless `paths.plan_archive_comments` is off, each planned ticket's conversation with
+`paths.plan_archive_conversations`, and a README.md indexing each ticket's plans and work and every ticket, commits what
+changed there and nothing else, under a message naming each file it adds or changes, and pushes the clone's branch to
+its upstream. At the top level, "there" is what
 the export wrote (`plan_export.owned`): each planned ticket's directory, and the index of every ticket while it is
 canopy's, so the operator's own files beside them are never committed. When the upstream refuses the push for commits
 the clone lacks, as another clone pushed, they are fetched, this clone's commits rebased onto them, and the push made
@@ -84,6 +86,7 @@ def _archive(ctx: Context, git: _Git, place: _Place, log: logs.TickAdapter) -> s
             limit=PER_TICK,
             prompts=ctx.config.paths.plan_archive_prompts,
             conversations=ctx.config.paths.plan_archive_conversations,
+            comments=ctx.config.paths.plan_archive_comments,
             indexes=True,
         )
     except plan_export.ExportError as e:
@@ -100,7 +103,9 @@ def _archive(ctx: Context, git: _Git, place: _Place, log: logs.TickAdapter) -> s
     failure = _commit_and_push(git, place, place.paths(ctx.conn, git.clone), log, exported.removed)
     if failure is None and exported.left:
         waiting = (
-            "plans, conversations, or READMEs wait" if exported.left != 1 else "plan, conversation, or README waits"
+            "plans, conversations, comments files, or READMEs wait"
+            if exported.left != 1
+            else "plan, conversation, comments file, or README waits"
         )
         return f"{exported.left} {waiting} for the next tick's archive: a tick archives at most {PER_TICK} files"
     return failure
@@ -206,8 +211,9 @@ def _message(git: _Git, place: _Place, paths: Sequence[str]) -> str:
     """A commit message for what is staged in `paths`: how many files of each sort, of which tickets, then each.
 
     A plan's file is named for its run, status, and title (`plan_export.name`), so the file's name says what each plan
-    is, and a plan whose status changed shows as its rename. A prompt is named for its run alone, a conversation for
-    nothing but its ticket, and an index for nothing at all, the one of every ticket outside any ticket's directory.
+    is, and a plan whose status changed shows as its rename. A prompt or an original is named for its run alone, a
+    conversation or comments for nothing but its ticket, and an index for nothing at all, the one of every ticket
+    outside any ticket's directory.
 
     Returns:
         The message; a subject alone when git cannot say what is staged.
@@ -222,19 +228,8 @@ def _message(git: _Git, place: _Place, paths: Sequence[str]) -> str:
     named = ", ".join(keys[:_SUBJECT_KEYS])
     if len(keys) > _SUBJECT_KEYS:
         named += f" and {len(keys) - _SUBJECT_KEYS} more"
-    file_names = [path.rpartition("/")[2] for _, path, _ in changes]
-    prompts = sum(map(plan_export.is_prompt, file_names))
-    conversations = sum(map(plan_export.is_conversation, file_names))
-    readmes = sum(map(plan_export.is_index, file_names))
-    counts = [
-        (len(changes) - prompts - conversations - readmes, "plan"),
-        (prompts, "prompt"),
-        (conversations, "conversation"),
-        (readmes, "README"),
-    ]
     # Never empty: every change is counted as one sort or another.
-    *rest, last = [f"{n} {noun}{'s' if n != 1 else ''}" for n, noun in counts if n]
-    counted = f"{', '.join(rest)} and {last}" if rest else last
+    counted = plan_export.counted(path.rpartition("/")[2] for _, path, _ in changes)
     lines = [f"Archive {counted} of {name}: {named}" if named else f"Archive {counted} of {name}"]
     headings = list(dict.fromkeys(_CHANGES.values()))
     by_heading = sorted(changes, key=lambda change: headings.index(change[0]))
