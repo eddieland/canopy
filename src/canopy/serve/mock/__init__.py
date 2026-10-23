@@ -14,7 +14,8 @@ workspace's policy allows one resume and two reviews, so ABC-100 is at its resum
 running, is a resume for a failed check and review feedback together. The running runs 41 and 43 have the latest tool
 call on each one's row (§8).
 Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
-memory, chore runs, review runs, review replies, a feedback plan, personas, one-off tasks, and the runs' transcripts.
+memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, and the runs'
+transcripts.
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -314,6 +315,15 @@ def seed(directory: Path) -> Backend:
             personas.seed(ctx.conn, ctx.config, at)
             tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
             _attachments(ctx.conn)
+            # Last, so the messages their approvals wrote take ids after every other fixture's.
+            feedback_plans.seed_states(
+                ctx.conn,
+                ws.state_dir,
+                at,
+                ctx.config.trust,
+                repo=str(root),
+                slot=slot_path(root, "mobile", 1),
+            )
         reviews.drafts(ctx.conn, at)
     transcripts.write(ws.state_dir, T0)
     return backend
