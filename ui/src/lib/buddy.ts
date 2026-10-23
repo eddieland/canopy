@@ -216,6 +216,14 @@ export const TIPS = {
         'Fun fact: dark mode makes me 40% more mysterious.',
         'Hot take: the best setting is whichever one keeps me on.',
     ],
+    '/settings_/limits': [
+        "It looks like you're setting limits. I have none. Ask anyone.",
+        'Unhelpful tip: the ceiling is 32 workers. I asked for 33 hats. Denied.',
+        'Dear diary, they dropped a trusted reviewer today. I checked. I am still trusted.',
+        'Fun fact: trust only gets stricter here. So does my bedtime.',
+        'Hot take: comments in a config file are love letters. This page keeps every one.',
+        'Did you know? A change here is for this workspace only. I am for every workspace.',
+    ],
     '/search': [
         "It looks like you're searching. I lost a leaf in 2024. Let me know if it turns up.",
         'Unhelpful tip: to find something, search for it. You are welcome.',

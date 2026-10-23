@@ -106,4 +106,23 @@ describe('RepoSelect', () => {
         expect(onValue).toHaveBeenCalledWith(null)
         expect(screen.queryByRole('listbox')).toBeNull()
     })
+
+    it('says what none chosen means, when every repository is not among the choices', () => {
+        const onValue = vi.fn<(repo: string | null) => void>()
+        render(
+            <RepoSelect
+                choices={['web', 'api']}
+                value={null}
+                none="pick a repository"
+                onValue={onValue}
+                label="Give its own count"
+            />,
+        )
+        const list = open('Give its own count: pick a repository')
+        expect(names(list)).toEqual(['web', 'api'])
+        expect(checked(list)).toEqual([])
+
+        fireEvent.click(within(list).getByRole('option', { name: 'api' }))
+        expect(onValue).toHaveBeenCalledWith('api')
+    })
 })

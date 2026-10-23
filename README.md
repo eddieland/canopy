@@ -194,6 +194,7 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | Tick now, or pause and resume the loop | `t` or `p` in its terminal, or the web UI's header; `canopy pause`, `canopy resume` |
 | Tell every run about a CI outage until it is over | `canopy notice 'TEXT' --for 4h`, or the web UI's settings |
 | Read your config again after editing it | Reload in the web UI's settings, or `kill -HUP` the loop |
+| Change a limit, or tighten a trust setting, without opening the file | Settings, then Limits and trust, in the web UI |
 | Read the attention list | `canopy status`, or `.canopy/attention.md` |
 | Read a ticket's conversation, or answer canopy there | `canopy show KEY`, `canopy reply KEY 'text'` |
 | Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` |

@@ -1,8 +1,9 @@
 # Settings
 
-A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, reloading your
-config, and the fun. It opens from the rail's foot, beside the guide. The theme, the clock, the send key, your review
-personas, and the fun are kept in this browser; everything else canopy reads from its config files, as it always did.
+A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your limits and
+trust settings, reloading your config, and the fun. It opens from the rail's foot, beside the guide. The theme, the
+clock, the send key, your review personas, and the fun are kept in this browser; everything else canopy reads from its
+config files, as it always did.
 
 ## Theme
 
@@ -54,6 +55,25 @@ setting another replaces it. While it's in force, a banner above every page show
 **Clear**: see [the banner](overview#the-header) for what each does.
 A run already going keeps the prompt it started with, so a notice reaches only the runs after it. The CLI can set one
 for up to a week, for outages with ambitions.
+
+## Limits and trust
+
+**Open** takes you to a page of its own for the numbers you change most: how many workers, chores, and reviews run at
+once, each pool's slots, how many tries a ticket gets, and how often the loop ticks. It also holds the trust settings,
+which from here only get stricter: you can drop a trusted reviewer or an authorized replier, never add one, and turn
+`trust.rebase` off but not on. A stolen session that could add a replier would keep steering your workers after you
+changed the secret, so adding one stays an edit to the file.
+
+Each row says where its value comes from and how far the page will take it. Counts stop at a ceiling (32 workers, 10
+attempts) and paces at a floor (a tick every 2 minutes); the file can still set anything, so the page is for the
+changes you actually make, not for setting a record. Repositories get a count of their own only when you pick one, so a
+workspace of fifty repositories shows the two that differ.
+
+**Save** writes `.canopy/config.toml`, this workspace's own file, editing it in place so your comments and layout stay,
+then reloads the loop as **Reload** below does. It never touches `canopy-workspace.toml` or
+`~/.config/canopy/config.toml`; a value that came from the latter is copied into the workspace's file, where it wins for
+this workspace alone. The file as it was is kept beside it as `config.toml.bak`, so undoing a save is a `mv` and a
+Reload. If the file changed since the page read it, the save is refused rather than guessing which of you meant it.
 
 ## Config
 

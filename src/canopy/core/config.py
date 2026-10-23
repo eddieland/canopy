@@ -1366,11 +1366,19 @@ def private_config_path(root: Path) -> Path:
     return root.absolute() / WORKSPACE_STATE_DIR / CONFIG_FILE_NAME
 
 
-def load(root: Path, user_file: Path | None = None, runner: procs.Runner | None = None) -> Config:
+def load(
+    root: Path,
+    user_file: Path | None = None,
+    runner: procs.Runner | None = None,
+    *,
+    private_file: Path | None = None,
+) -> Config:
     """Read and validate the layered config for the workspace at `root`: workspace file, user file, private file.
 
     No code repository's file is read (D016). The workspace file's map tables are `canopy.core.workspace`'s to read.
     `runner` runs the git that checks the state directory came from no checkout; None means the real one.
+    `private_file` stands in for the private file, as the settings page's edited copy beside it does; None means the
+    workspace's own.
 
     Returns:
         The validated config, each key from the last file that sets it.
@@ -1383,6 +1391,8 @@ def load(root: Path, user_file: Path | None = None, runner: procs.Runner | None 
     """
     files = config_files(root, user_file)
     shared_file, user_file, _ = files
+    if private_file is not None:
+        files = (shared_file, user_file, private_file)
     layers = _layers(root, files, runner)
     merged, origin = _merge(layers, shared_file)
     # Unset or empty: `prompts/` in the user config directory.
