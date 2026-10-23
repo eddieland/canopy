@@ -321,8 +321,9 @@ When the operator asks what workers remember, why a worker believed something, o
 3. To explain a run's behavior, start from `canopy memory list --run ID`: only what it lists under Read was in that
    run's prompt. A worker may also have run `canopy memory search`, which reaches its ticket's older notes and the
    lessons; `runs/<id>.log` shows whether it did.
-4. A proposal from a private ticket's run may hold what the operator kept off the tracker; `canopy memory proposals`
-   warns of one. Say so before suggesting it be promoted in its own words.
+4. A proposal from a private ticket's run comes from a conversation the operator kept off the tracker, and a lesson
+   would carry it into public tickets' runs; `canopy memory proposals` warns of one. Say so before suggesting it be
+   promoted in its own words.
 5. Then suggest the next step: `promote` (a note too, with `--repo R` for one repository) or `reject` a proposal;
    `renew`, `edit`, or graduate a lesson into a repository's AGENTS.md through a ticket and a PR; `forget` or `purge`
    text that is wrong or leaked. An edit keeps the old version's words, so a leaked secret also needs `forget` of each

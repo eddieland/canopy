@@ -123,6 +123,16 @@ def test_the_spend_breakdown_reads_the_last_24_hours_by_the_hour(backend: Backen
     assert c.get("/api/spend/breakdown", params={"hours": spending.MAX_HOURS + 1}).status_code == 422
 
 
+def test_the_spend_breakdown_carries_the_month_against_its_budget_whatever_the_window(backend: Backend) -> None:
+    c = client(None, backend)
+    found = c.get("/api/spend/breakdown", params={"hours": 24}).json()["month"]
+    # The mock's budget is $40, and every run in its journal started in October, so the month holds them all.
+    assert (found["month"], found["budget_usd"], found["since"]) == ("2026-10", 40, "2026-10-01T00:00:00Z")
+    assert found["spent_usd"] == pytest.approx(c.get("/api/spend").json()["day"]["cost_usd"])
+    assert found["projected_usd"] == pytest.approx(found["spent_usd"] / found["elapsed"])
+    assert c.get("/api/spend/breakdown", params={"days": 30}).json()["month"] == found
+
+
 def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(backend: Backend) -> None:
     c = client(None, backend)
     found = c.get("/api/spend/breakdown", params={"days": 2}).json()

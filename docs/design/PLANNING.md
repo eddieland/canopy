@@ -71,7 +71,7 @@ The `implement` and `resume` prompts name the worker's copy of the plan and its 
 as long as it needs; with an approved plan, an override that leaves it out is refused (D093). Each run gets a fresh copy
 of the approved plan, checked against its hash first: a plan changed, superseded, or approved again since dispatch fails
 the run. The copy is excluded from git and removed before the slot is returned. A worker can still commit it by force,
-publishing a private ticket's plan; the prompt forbids it and push verification (§8) notes it.
+putting the plan in its PR; the prompt forbids it and push verification (§8) notes it.
 
 ### Where plans live
 
@@ -82,16 +82,18 @@ record or through a link, and shows a missing file as missing, never as an empty
 (§24); a plan's event to sinks (§20) carries none of its text.
 
 `canopy archive DIR`, the operator's alone, copies every plan, superseded and feedback plans included, into a directory
-of theirs, each under a front matter of its row and its planner's persona, since status, approval, and voice live only
-in the journal, and named for its run, status, and title, so a listing reads without opening a plan. Beside each goes
-the prompt its planner was given, named for its run, so a plan can be read with what it was written from; a plan run
-keeps its prompt as long as its plan (§26). It rewrites a file only when its plan or row changed, and removes only a
-plan's own earlier name when its status or title moved it, so the directory can be a repository the operator pushes
-and git sees a rename. Asked to, it also writes each planned ticket's conversation (§22) beside its plans, every message
-oldest first, each body quoted under a heading canopy writes, so no body can pass for another message. A `README.md` in
-each ticket's directory lists its plans, and one in the directory every ticket, so a forge shows the listing; an index
-is canopy's only while its first line says so, so the operator's own is never touched, and a title in one is escaped
-text, never inside a link (T1).
+of theirs, each under a front matter of its row and its planner's persona, models, and cost, since status, approval,
+voice, model, and spend live only in the journal; the cost is its own run's and, summed, every plan run of its kind on
+the ticket since the last plan approved, so a plan that took several tries shows what all of them cost. Each is named
+for its run, status, and title, so a listing reads without opening a plan.
+Beside each goes the prompt its planner was given, named for its run, so a plan can be read with what it was written
+from; a plan run keeps its prompt as long as its plan (§26). It rewrites a file only when its plan or row changed, and
+removes only a plan's own earlier name when its status or title moved it, so the directory can be a repository the
+operator pushes and git sees a rename. Asked to, it also writes each planned ticket's conversation (§22) beside its
+plans, every message oldest first, each body quoted under a heading canopy writes, so no body can pass for another
+message. A `README.md` in each ticket's directory lists its plans, and one in the directory every ticket, so a forge
+shows the listing; an index is canopy's only while its first line says so, so the operator's own is never touched, and a
+title in one is escaped text, never inside a link (T1).
 With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, or into the top
 level itself with `paths.plan_archive_workspace_dir` off, prompts too unless `paths.plan_archive_prompts` is off,
 conversations only with `paths.plan_archive_conversations`, commits what it wrote there alone (at the top level, each

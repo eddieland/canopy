@@ -1,9 +1,11 @@
 """Notification sinks (DESIGN §20, ROADMAP M10): per-sink delivery of the attention diff, events, and digests."""
 
 import dataclasses
+import functools
 import json
 import os
 import re
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -241,6 +243,91 @@ def test_a_long_failing_streak_is_one_streak(scenario: Scenario, sink_script: Pa
     assert len(messages(out)) == 1
     scenario.tick()
     assert "! loop recovered after 1105 failed ticks\n" in messages(out)[1]
+
+
+def test_the_month_reaching_its_budget_is_sent_once_per_budget(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 3})
+    conn = scenario.conn
+    chore_costs = functools.partial(chore_cost, conn)
+    chore_costs(2.0)
+    scenario.tick()
+    assert messages(out) == []  # $2 of $3
+    chore_costs(2.0)
+    scenario.tick()
+    month = f"{datetime.now().astimezone():%Y-%m}"
+    [over] = messages(out)
+    assert over.startswith(f"canopy: 1 event\n! spend for {month} reached its budget: $4.00 of $3")
+    # Told once, even after pruning would have taken the event that says so.
+    conn.execute("UPDATE notify_events SET at = ?", (db.format_time(datetime.now(UTC) - timedelta(days=8)),))
+    scenario.tick()
+    assert len(messages(out)) == 1
+    # A budget raised past the month's spend is heard of again once the month reaches it.
+    scenario.configures(spend={"monthly_budget_usd": 5})
+    scenario.tick()
+    assert len(messages(out)) == 1
+    chore_costs(2.0)
+    scenario.tick()
+    assert f"! spend for {month} reached its budget: $6.00 of $5" in messages(out)[1]
+
+
+def test_each_budget_alert_is_sent_once_as_the_month_reaches_it(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 10, "budget_alerts": [150, 50, 80]})
+    month = f"{datetime.now().astimezone():%Y-%m}"
+    scenario.tick()  # a new sink hears nothing from before it
+    for usd, told in (
+        (6.0, "50% of its budget: $6.00"),
+        (3.0, "80% of its budget: $9.00"),
+        (2.0, "its budget: $11.00"),
+    ):
+        chore_cost(scenario.conn, usd)
+        scenario.tick()
+        assert f"! spend for {month} reached {told} of $10" in messages(out)[-1]
+    scenario.tick()
+    assert len(messages(out)) == 3
+    chore_cost(scenario.conn, 6.0)
+    scenario.tick()
+    assert f"! spend for {month} reached 150% of its budget: $17.00 of $10" in messages(out)[-1]
+
+
+def test_a_month_past_several_alerts_at_once_hears_only_the_highest(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 10, "budget_alerts": [50, 80]})
+    scenario.tick()  # a new sink hears nothing from before it
+    chore_cost(scenario.conn, 12.0)
+    scenario.tick()
+    [told] = messages(out)
+    assert "! spend for " in told
+    assert " reached its budget: $12.00 of $10" in told
+    # An alert added below what the sink already heard of is not news.
+    scenario.configures(spend={"budget_alerts": [30, 50, 80]})
+    scenario.tick()
+    assert len(messages(out)) == 1
+
+
+def chore_cost(conn: sqlite3.Connection, usd: float) -> None:
+    """A chore run that started now and cost `usd`, as the month's spend counts it."""
+    conn.execute(
+        "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path, cost_usd) "
+        "VALUES (NULL, 'deps', ?, 'ok', 'l', ?)",
+        (db.now(), usd),
+    )
 
 
 def test_a_digest_arrives_on_its_interval_even_when_quiet(
@@ -553,6 +640,7 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         message.Event(5, "review.ended", since, {"pr": pr, "run": 6}),
         message.Event(6, "loop.failing", since, {"tick": 9}),
         message.Event(7, "loop.recovered", since, {"failed": 3}),
+        message.Event(8, "loop.budget_reached", since, {"month": "2026-10", "budget": 30, "percent": 100}),
     ]
     change = notify_journal.Diff(added, [], [], [])
     sent = message.Message("slack", "/r", Path("/r/attention.md"), change, 4, events, ui=UI)
@@ -574,6 +662,7 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         f"{UI}reviews/6",
         f"{UI}ticks/9",
         None,
+        f"{UI}spend",
     ]
     # The text format links nothing, so `notify.cmd` sees no change.
     assert sent.text() == dataclasses.replace(sent, ui=None).text()
