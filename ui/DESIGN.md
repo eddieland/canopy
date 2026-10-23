@@ -1603,8 +1603,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   PR's files on GitHub to finish it. Then, while its ticket has a current feedback plan (docs/design §32), a `Feedback
   plan` panel (`FeedbackPlanPanel`): `feedback-plan:N` and its status as a chip in its header (waiting and stale in
   `status-blocked`, approved as running, spent plain), a muted line of who planned it and what its status means, a
-  stale plan's changes in `status-blocked`, a row per item (a `Checkbox` until a resume spends it, its number and id,
-  its proposal as a chip, its author, `trusted`, where it is, and a reply no thread card shows, as `MemoryText`), and
+  stale plan's changes in `status-blocked`, a row per item (a `Checkbox` until a resume spends it, its number, the
+  first line of what was said as `MemoryText`, and where it is: `on its thread`, a router `Link` to the thread's card
+  by its `threadAnchor`, `the review`, a link out to it on its host, or the other PR it is on; under that, muted, its
+  proposal as a chip, its author, `trusted`, the plan's first line on it as `MemoryText`, and its id; and a reply no
+  thread card shows, under `Proposed reply`, as `MemoryText`), and
   in its foot the operator's words and `Approve whole` or `Approve N of M`, its command on hover, then a `Disclosure`
   of the plan's file as `MemoryText`. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a

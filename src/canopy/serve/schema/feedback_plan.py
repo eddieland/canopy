@@ -49,6 +49,14 @@ class FeedbackPlanItem(Model):
     """Whether `trust.trusted_reviewers` names its author: shown to weigh it, never a gate (DESIGN §32)."""
     thread_id: str | None = None
     """The thread on this PR's page it is, when it is one; None for a review, or an item of another PR or no thread."""
+    excerpt: str | None = None
+    """The first line of what was said, cut short, as the `vcs` source last read it: plain text here, whoever wrote
+    it. None once no read holds it, or for a review that said nothing."""
+    rationale: str | None = None
+    """The plan's first line on it, under its `### Item <id>` heading, cut short: the planner's words, plain text here.
+    None when the plan's file has no such heading, or nothing under it."""
+    url: str | None = None
+    """Where it is on its host, a review's page or a comment's, as the read observed it; None when none was read."""
 
 
 class FeedbackPlan(Model):
