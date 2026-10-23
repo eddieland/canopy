@@ -866,3 +866,15 @@ def test_a_month_s_alerts_are_100_and_the_operator_s_and_it_names_the_highest_re
     assert spend.month(conn, NOW, 10).reached is None
     assert spend.month(conn, NOW, 5, (50,)).reached == 100
     assert spend.month(conn, NOW, 100, (50,)).reached is None
+
+
+def test_a_month_s_percent_is_floored_in_whole_cents(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, "2026-10-02T09:00:00.000Z", 0.1)
+    tick(conn, "2026-10-02T10:00:00.000Z", 0.19)
+    # 0.1 + 0.19 is 0.29000000000000004, and 0.29 * 100 a hair under 29: in cents it is 29, of a $1 budget.
+    assert spend.month(conn, NOW, 1).percent == 29
+    tick(conn, "2026-10-02T11:00:00.000Z", 0.7)
+    assert (spend.month(conn, NOW, 1).percent, spend.month(conn, NOW, 1).over) == (99, False)
+    tick(conn, "2026-10-02T12:00:00.000Z", 0.01)
+    assert (spend.month(conn, NOW, 1).percent, spend.month(conn, NOW, 1).over) == (100, True)

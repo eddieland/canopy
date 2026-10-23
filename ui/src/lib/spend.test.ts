@@ -219,8 +219,10 @@ describe('monthly budget', () => {
         expect(budgetText(month(15.76, 65.14))).toBe('$15.76 of $40 (39%), on pace for $65.14.')
         expect(budgetText(month(null, null))).toBe('$0.00 of $40 (0%).')
         expect(budgetPercent(month(50, null))).toBe(125)
-        // Short of the budget never reads as all of it.
+        // Short of the budget never reads as all of it, and a float a hair under a whole point is still that point.
         expect(budgetPercent(month(39.84, null))).toBe(99)
+        expect(budgetPercent({ ...month(29, null), budget_usd: 100 })).toBe(29)
+        expect(budgetPercent({ ...month(0.29, null), budget_usd: 1 })).toBe(29)
     })
 
     it('names each alert, and marks those short of the budget on the bar', () => {

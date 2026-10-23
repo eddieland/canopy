@@ -295,14 +295,32 @@ class Month:
         return (self.spent_usd or 0.0) / self.budget_usd
 
     @property
+    def percent(self) -> int:
+        """What the month has spent of its budget, as a whole percentage, floored: 99 until it reaches the budget."""
+        # In whole cents, so a float a hair under a cent's worth, `0.29 * 100`, never floors a point away.
+        return self._cents // self.budget_usd
+
+    @property
     def over(self) -> bool:
         """Whether the month has spent its budget."""
-        return self.share >= 1
+        return self.reached_percent(FULL)
 
     @property
     def reached(self) -> int | None:
         """The highest of `alerts` the month's spend has reached; None before it reaches the lowest."""
-        return max((p for p in self.alerts if (self.spent_usd or 0.0) * 100 >= self.budget_usd * p), default=None)
+        return max((p for p in self.alerts if self.reached_percent(p)), default=None)
+
+    def reached_percent(self, percent: int) -> bool:
+        """Whether the month's spend has reached `percent` of its budget, to the cent.
+
+        Returns:
+            True once it spent that much or more.
+        """
+        return self._cents * 100 >= self.budget_usd * percent * 100
+
+    @property
+    def _cents(self) -> int:
+        return round((self.spent_usd or 0.0) * 100)
 
 
 def budget_month(conn: sqlite3.Connection, now: datetime, budget: config.Spend) -> Month | None:

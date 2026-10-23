@@ -307,7 +307,9 @@ def spend_dict(found: spend.Breakdown, month: spend.Month | None = None) -> dict
     for day, row in zip(data["per_day"], found.per_day, strict=True):
         day["costs"]["total"] = row.costs.total
     data["totals"]["total"] = found.totals.total
-    data["month"] = dataclasses.asdict(month) | {"share": month.share} if month is not None else None
+    data["month"] = (
+        dataclasses.asdict(month) | {"share": month.share, "percent": month.percent} if month is not None else None
+    )
     return data
 
 

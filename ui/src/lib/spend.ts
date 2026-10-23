@@ -301,7 +301,7 @@ export type BudgetState = 'under' | 'headed' | 'over'
 
 /** Where the month stands against its budget. */
 export function budgetState(month: SpendMonth): BudgetState {
-    if ((month.spent_usd ?? 0) >= month.budget_usd) {
+    if (budgetPercent(month) >= 100) {
         return 'over'
     }
     return month.projected_usd !== null && month.projected_usd > month.budget_usd ? 'headed' : 'under'
@@ -309,10 +309,10 @@ export function budgetState(month: SpendMonth): BudgetState {
 
 /**
  * The month's spend over its budget, from 0, as a whole percentage: past 100 once it is over. Floored, so a month short
- * of its budget never reads 100%.
+ * of its budget never reads 100%, and counted in whole cents, so `0.29 * 100` never floors a point away.
  */
 export function budgetPercent(month: SpendMonth): number {
-    return Math.floor(((month.spent_usd ?? 0) / month.budget_usd) * 100)
+    return Math.floor(Math.round((month.spent_usd ?? 0) * 100) / month.budget_usd)
 }
 
 /** The alerts a sink hears the month reach, in words: `A sink that takes loop events hears at 50%, 80%, and 100%.` */
