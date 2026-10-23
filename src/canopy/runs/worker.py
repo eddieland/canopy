@@ -32,6 +32,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, S
 
 from canopy.core import (
     agent_models,
+    attachments,
     contract,
     conversation,
     db,
@@ -456,6 +457,8 @@ def _run_agent(
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), trees)
         for name, text in (desk_files or {}).items():
             try:
+                # The attachments' copies are in a directory of their own (`_place_attachments`).
+                (cwd / name).parent.mkdir(mode=0o700, exist_ok=True)
                 logs.write_private(cwd / name, text)
             except OSError as e:
                 raise SetupError(f"could not write {name} in the desk {cwd}: {e}") from e
@@ -553,6 +556,7 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     replaced = plans.current(ctx.conn, key)
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
     desk_files = {plans.REPLACED: copy} if copy is not None else {}
+    desk_files |= _place_attachments(run, slots, _attachment_copies(ctx, run))
     template = ctx.config.runtime.plan_cmd
     result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
@@ -637,7 +641,7 @@ def _feedback_plan(
         raise SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
     offered = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
     snapshot = feedback_items.take(ctx.conn, prs, offered)
-    desk_files = _feedback_desk(ctx, key, offered)
+    desk_files = _feedback_desk(ctx, key, offered) | _place_attachments(run, slots, _attachment_copies(ctx, run))
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.plan_cmd, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(FeedbackPlanResult, text)
@@ -731,7 +735,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     for slot in slots:
         _run_setup(ctx, run, slot, out, log)
     copy = _plan_copy(ctx, run)
-    desk_files = _place_copy(run, slots, copy)
+    attached = _attachment_copies(ctx, run)
+    desk_files = _place_copy(run, slots, copy) | _place_attachments(run, slots, attached)
     runtime = ctx.config.runtime
     template = runtime.private_worker_cmd if run["private"] else runtime.worker_cmd
     result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files)
@@ -777,6 +782,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     if unpushed:
         status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
     committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
+    committed += [found for slot in slots if attached and (found := _committed_attachments(slot, branch))]
     _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
     notes = "; ".join(n for n in [note, *committed, filed_note] if n)
@@ -944,6 +950,61 @@ def _committed_copy(slot: _Slot, branch: str) -> str:
     if not (found.ok and found.stdout.strip()):
         return ""
     return f"{slot.git.where}the pushed {branch} holds {plans.COPY}, the plan's copy, committed by the worker"
+
+
+def _attachment_copies(ctx: Context, run: sqlite3.Row) -> list[attachments.Copy]:
+    """Return the ticket's attachments the run's prompt names and the ticket still holds, read again (DESIGN §22).
+
+    Returns:
+        Their copies, in the order they were attached.
+
+    Raises:
+        SetupError: an attachment's file is gone or changed since it was attached, so the worker gets none of them.
+    """
+    ref = conversation.Ref(conversation.TICKET, str(run["ticket_key"]))
+    try:
+        return attachments.copies(ctx.conn, ctx.state_dir, ref, str(run["started_at"]))
+    except attachments.AttachmentFileError as e:
+        raise SetupError(f"{e}; the worker did not start") from e
+
+
+def _place_attachments(run: sqlite3.Row, slots: Sequence[_Slot], found: Sequence[attachments.Copy]) -> dict[str, str]:
+    """Put the run's copies of its ticket's attachments where it starts: in its desk, or in its one worktree (§22).
+
+    In a worktree they are in a directory at its root that git ignores, made afresh.
+
+    Returns:
+        The files `_run_agent` writes into the desk: the copies, for a run in a desk, else none.
+
+    Raises:
+        SetupError: git could not name the repository's git directory, or the exclude file or a copy could not be
+            written.
+    """
+    if not found:
+        return {}
+    if dispatch.in_desk(str(run["kind"]), slots):
+        return {f"{attachments.RUN_DIR}/{c.name}": c.text for c in found}
+    slot = slots[0]
+    checkpoint.ignore(slot.git, attachments.RUN_DIR)
+    try:
+        attachments.place(slot.path / attachments.RUN_DIR, found)
+    except OSError as e:
+        raise SetupError(f"{slot.git.where}could not write the attachments' copies: {e}") from e
+    return {}
+
+
+def _committed_attachments(slot: _Slot, branch: str) -> str:
+    """Return a harness note when the branch pushed from `slot` holds the attachments' copies, else "" (§22).
+
+    As with the plan's copy, canopy reports it and does not rewrite the branch (`_committed_copy`).
+    """
+    remote = checkpoint.remote_head(slot.git, branch)
+    if not remote:
+        return ""
+    found = slot.git.result("ls-tree", "--name-only", remote, "--", attachments.RUN_DIR)
+    if not (found.ok and found.stdout.strip()):
+        return ""
+    return f"{slot.git.where}the pushed {branch} holds {attachments.RUN_DIR}, the attachments' copies"
 
 
 def _stopped(ctx: Context, run: sqlite3.Row) -> str:

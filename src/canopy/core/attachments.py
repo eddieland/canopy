@@ -16,8 +16,11 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import os
 import re
+import shutil
 import sqlite3
+import stat
 from dataclasses import dataclass
 from pathlib import PurePath
 from typing import TYPE_CHECKING
@@ -40,11 +43,26 @@ NAME_RE = re.compile(r"(?=[A-Za-z0-9._-]{1,100}\Z)[A-Za-z0-9][A-Za-z0-9._-]*")
 DIR_NAME = "attachments"
 #: The subjects that take attachments: a ticket, by its key, and a task, by its id.
 KINDS = (conversation.TICKET, conversation.TASK)
+#: Where a run's copies of its subject's attachments go, at the root of its worktree, which git there ignores, or in its
+#: desk: written for that run alone, and removed before its slot is returned (DESIGN §22).
+RUN_DIR = ".canopy-attachments"
 KIB = 1024
 # What runs of any other character become in a name made from a file's, and the `-` such a run leaves before a `.` or at
 # the end, which is dropped.
 _UNNAMED_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _LEFT_OVER_RE = re.compile(r"-+(?=\.)|-+\Z")
+
+
+class AttachmentFileError(Exception):
+    """An attachment's file is gone, or is no longer the text the operator attached."""
+
+
+@dataclass(frozen=True)
+class Copy:
+    """An attachment's text, read again for a run, under the name the run sees it as."""
+
+    name: str
+    text: str
 
 
 @dataclass(frozen=True)
@@ -209,6 +227,103 @@ def name_from(file_name: str) -> str | None:
     return made if NAME_RE.fullmatch(made) else None
 
 
+def held_at(conn: sqlite3.Connection, ref: Ref, at: str) -> list[records.Attachment]:
+    """Return the attachments `ref` holds now that it already held at `at`: what a run dispatched then was told of.
+
+    Returns:
+        The attachments, in the order they were attached.
+    """
+    return [a for a in of(conn, ref) if a.added_at <= at]
+
+
+def copies(conn: sqlite3.Connection, state_dir: Path, ref: Ref, at: str) -> list[Copy]:
+    """Read again the text of each attachment a run of `ref` dispatched at `at` was told of, and `ref` still holds.
+
+    One the operator removed since is left out: the run's prompt names it, but nothing is copied for it.
+
+    Returns:
+        The copies, in the order they were attached.
+
+    Raises:
+        AttachmentFileError: an attachment's file is gone or changed since it was attached; the run gets none.
+    """
+    found: list[Copy] = []
+    for attachment in held_at(conn, ref, at):
+        text = read(state_dir, attachment)
+        if text is None:
+            where = path(state_dir, attachment)
+            raise AttachmentFileError(f"attachment {attachment.name}'s file {where} is not the text attached")
+        found.append(Copy(attachment.name, text))
+    return found
+
+
+def read(state_dir: Path, attachment: records.Attachment) -> str | None:
+    """Read an attachment's text, bounded by its recorded size, without following a link at its file.
+
+    Returns:
+        The text, when the file is a regular file of exactly the bytes recorded; else None.
+    """
+    try:
+        # Non-blocking, so a FIFO in the file's place cannot hold the read open; it is refused below.
+        fd = os.open(path(state_dir, attachment), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+            return None
+        data = f.read(attachment.size + 1)
+    if len(data) != attachment.size or hashlib.sha256(data).hexdigest() != attachment.sha256:
+        return None
+    return data.decode("utf-8")
+
+
+def place(directory: Path, found: Sequence[Copy]) -> None:
+    """Write `found` into `directory`, made afresh and readable only by the operator, for one run (DESIGN §22).
+
+    Whatever was at `directory` is removed first (`clear`), so a run never reads an earlier run's copies.
+
+    Raises:
+        OSError: the directory or a copy could not be written.
+    """
+    clear(directory)
+    directory.mkdir(mode=0o700)
+    for copy in found:
+        logs.write_private(directory / copy.name, copy.text)
+
+
+def clear(directory: Path) -> None:
+    """Remove a run's copies at `directory`, never following a link: a link, or anything else, in its place goes too.
+
+    Raises:
+        OSError: something at `directory` could not be removed.
+    """
+    if directory.is_dir() and not directory.is_symlink():
+        # rmtree removes a link inside the directory, never what it names.
+        shutil.rmtree(directory)
+    elif directory.is_symlink() or directory.exists():
+        directory.unlink()
+
+
+def sizes(found: Sequence[records.Attachment]) -> list[tuple[str, str]]:
+    """Name each attachment with its size, as a prompt lists them (`prompts.attachments_note`).
+
+    Returns:
+        Each one's name and `size_text`.
+    """
+    return [(a.name, size_text(a.size)) for a in found]
+
+
+def size_text(size: int) -> str:
+    """Say how large `size` bytes are, in KiB from one KiB up.
+
+    Returns:
+        `12 KiB`, `12.5 KiB`, or `300 bytes`.
+    """
+    if size % KIB == 0:
+        return f"{size // KIB} KiB"
+    return f"{size / KIB:.1f} KiB" if size > KIB else f"{size} bytes"
+
+
 def _text(name: str, data: bytes, limits: Limits) -> str:
     """Check what the operator would attach as `name`, alone: its name, its size, and that it is plain text.
 
@@ -224,7 +339,7 @@ def _text(name: str, data: bytes, limits: Limits) -> str:
     if limits.files == 0:
         raise Refused("too_many", "attaching is off: policy.max_attachments is 0")
     if len(data) > limits.file_bytes:
-        raise Refused("too_large", f"{name} is over the {_kib(limits.file_bytes)} one attachment may hold")
+        raise Refused("too_large", f"{name} is over the {size_text(limits.file_bytes)} one attachment may hold")
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
@@ -250,7 +365,8 @@ def _check_room(held: Sequence[records.Attachment], ref: Ref, name: str, size: i
     if total > limits.total_bytes:
         raise Refused(
             "too_large",
-            f"{ref}'s attachments would hold {_kib(total)}, over the {_kib(limits.total_bytes)} they may together",
+            f"{ref}'s attachments would hold {size_text(total)}, over the {size_text(limits.total_bytes)} they may "
+            "together",
         )
 
 
@@ -274,9 +390,3 @@ def _dir_name(ref: Ref) -> str:
 
 def _file_name(attachment_id: int) -> str:
     return f"{attachment_id}.txt"
-
-
-def _kib(size: int) -> str:
-    if size % KIB == 0:
-        return f"{size // KIB} KiB"
-    return f"{size / KIB:.1f} KiB" if size > KIB else f"{size} bytes"

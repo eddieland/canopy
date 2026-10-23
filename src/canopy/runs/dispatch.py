@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import (
     agent_models,
+    attachments,
     conversation,
     db,
     drafts,
@@ -1005,6 +1006,12 @@ def _spawn(
     if followed is not None:
         values["PLAN"] = followed.note
         required = (*required, *prompts.REQUIRED_PLAN_COPY)
+    # `_run` copies them where the worker starts, as it does the plan (DESIGN §22).
+    attached = attachments.of(ctx.conn, conversation.Ref(conversation.TICKET, key))
+    where = (desk or first.slot_path) / attachments.RUN_DIR
+    values["ATTACHMENTS"] = prompts.attachments_note(where, attachments.sizes(attached))
+    if attached:
+        required = (*required, *prompts.REQUIRED_ATTACHMENTS)
     if kind == RunKind.RESUME:
         _check_retired_overrides(ctx, plan.repos)
     prompt, remembered, replied = _render(
