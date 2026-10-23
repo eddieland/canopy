@@ -60,7 +60,7 @@ three minutes, and no action missed, checked against the derivation as in M36. O
 few polls: `connector_failed` raised within a poll, the loop on its timer while it is down, and early ticks again
 within a poll of its recovery.
 
-Status: not started. Designed 2026-10-22 (DESIGN §39); the build waits on M38, and on S27's overnight run and its
+Status: in progress. Designed 2026-10-22 (DESIGN §39); the build waits on M38, and on S27's overnight run and its
 re-measurement. The design settles what the sketch left open: a tick with nothing left still runs steps 1 to 3 and the
 disk check, owes no duties, and skips the `canopy` check; the poll's comparison counts anything newly listed to the
 overseer, not only a new decision, so a reply on a ticket it waited on is seen within a poll; a stale or unobserved
@@ -68,6 +68,22 @@ subject is the harness's `wait`; the overseer's tick-wide skip goes with its ser
 by the tick it wakes, as a tick's own read raises it (M36's question about one failed run stays M36's). Chosen
 conservatively, for the operator to change: every early tick is held by `loop.min_gap_minutes`, as every wake is; a tick
 that runs no overseer leaves idle pacing's count as it was; the operator's tick-now runs no overseer with nothing
-listed; and the fallback gate keeps `loop.idle_max_minutes` as its backstop. Open for the operator: whether a `tracker`
-source is required, M37's question, which this needs settled (recommended: required, before the build), and whether
-`runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes, and that entry with it).
+listed; and the fallback gate keeps `loop.idle_max_minutes` as its backstop. Started 2026-10-23 at the operator's word,
+ahead of S27's overnight run, on M38's hold of the overseer's attention items (M38, 2026-10-23). Built (2026-10-23): the
+first bullet. After the harness's decisions and the state block, a tick whose block leaves the overseer nothing (no
+ticket listed or found by a query the harness recorded, no due chore with a `when`, no query owed, and no review to
+start: the review query, an operator's request, or a revision) runs no overseer: it still runs steps 1 to 3 and the disk
+check, skips the `canopy` check, owes no duty, makes the harness's dispatches, and closes `ok` with a summary saying so
+and the attention list as it stands, the overseer's items held through it (`loop/tick.py`). `ticks.overseer_ran`
+(migration 0083) records whether it ran, 0 too for a tick halted before it; `canopy spend`, its `--json`, and the spend
+page count a tick without it at nothing, never among the runs that reported no cost, and split each group and each cause
+in `woken_by` by how many ran none; `canopy health` names such a tick `no overseer`. Held to the conservative choices
+above: every early tick by `loop.min_gap_minutes`; an `ok` tick that ran no overseer leaves idle pacing's count as it
+was (`pacing.count`), a halted one resetting it as before; and the operator's tick-now runs no overseer with nothing
+listed. Chosen conservatively, for the operator to change: a query due that no source read fresh, and every review the
+overseer starts, still leave it something, so a workspace with no `tracker` source and the query due every tick, or with
+`review.query` set, ticks with the overseer as before. Left: the second to fifth bullets, the poll's comparison among
+them, and the design folded into the sections it names. Still open for the operator: whether a `tracker` source is
+required (recommended: required), which the first bullet did not need settled, since a query no source read keeps the
+overseer running; and whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes, and
+that entry with it), the fifth bullet's.
