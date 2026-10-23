@@ -200,8 +200,9 @@ test('the runs page lists the reviews and chore runs beside the workers, and wha
 }) => {
     await page.goto('runs')
     await settled(page)
-    // Two workers run, and a chore: both limits are full, so the next dispatch of either waits for one to end.
-    await expect(page.getByTestId('capacity-workers')).toHaveText('workers 2 of 2 · full')
+    // Two workers run, a task's run, and a chore: both limits are full, so the next dispatch of either waits for one to
+    // end.
+    await expect(page.getByTestId('capacity-workers')).toHaveText('workers 3 of 3 · full')
     await expect(page.getByTestId('capacity-reviews')).toHaveText('reviews 0 of 1')
     await expect(page.getByTestId('capacity-chores')).toHaveText('chores 1 of 1 · full')
     // The running chore is among the running workers; a PR reviewed twice is one row, by its latest review.
@@ -481,6 +482,23 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     const reads = page.waitForResponse((r) => r.url().endsWith('/api/worktrees'))
     await page.getByTestId('worktrees-refresh').click()
     expect((await reads).status()).toBe(200)
+})
+
+test("a slot a task's run holds names the task and the run, each opening its page", async ({ page }) => {
+    await page.goto('worktrees')
+    await settled(page)
+    // Task 6's run 6 holds mobile's second slot, as run 43 holds its first.
+    const slot = page.getByTestId('pool-mobile').getByTestId('worktree-2')
+    await expect(slot).toHaveAttribute('data-state', 'working')
+    await expect(slot).toContainText('agent/task/6')
+    await expect(page.getByTestId('pool-counters')).toContainText('runs and tasks, in 2 pools')
+
+    await slot.getByRole('link', { name: 'task:6', exact: true }).click()
+    await expect(page).toHaveURL(/\/tasks\/6$/u)
+    await page.goBack()
+    await settled(page)
+    await slot.getByRole('link', { name: 'task:6#6', exact: true }).click()
+    await expect(page).toHaveURL(/\/tasks\/6\/runs\/6$/u)
 })
 
 test('a slot with long text keeps it inside its row', async ({ page }) => {

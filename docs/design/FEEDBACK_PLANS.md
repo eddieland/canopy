@@ -7,7 +7,8 @@ map. Previous: [Personas](PERSONAS.md). Next: [A clock for running agents](CLOCK
 ## 32. Plans before feedback runs
 
 Built in part (REQUIREMENTS R21, ROADMAP M54): the setting, the planner, approval whole or by item from the CLI and
-its message, the guards, planning again, and drafts starting from the plan.
+the PR's page and its message, the guards, planning again, the plan on the PR's threads, and drafts starting from the
+plan.
 
 §7, §8, §21, and §29 describe what comes back to a PR without feedback plans; this section says what they change. A
 **feedback plan** is §25's plan written for one unit's PR rather than a ticket's first work, so a `resume` starts from

@@ -1070,7 +1070,7 @@ class Draft(Row):
     #: The reaction a send added on GitHub, which stays there even when the send's review then failed.
     reacted: Reaction | None
     reacted_at: str | None
-    #: The number of the item of its run's feedback plan whose proposed reply it started from, or None (0081).
+    #: The number of the item of its run's feedback plan whose proposed reply it started from, or None (0082).
     plan_item: int | None
 
 
@@ -1222,6 +1222,9 @@ class Run(Row):
     #: run from before canopy recorded it.
     persona: str | None
     persona_digest: str | None
+    #: The model canopy chose for its agent, from `runtime.models` (DESIGN §13), as it asked the runtime for it; None
+    #: when it chose none, so the run went to the runtime's default, and for a run from before canopy chose one.
+    model: str | None
 
 
 @dataclass(frozen=True)

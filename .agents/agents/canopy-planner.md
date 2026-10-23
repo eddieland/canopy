@@ -10,6 +10,7 @@
 # dispatch refuses a plan then (`no_read_tools`).
 description: canopy planner. Writes a plan for one ticket before it is implemented; reads, and writes only its plan.
 mode: primary
+# canopy: model
 permission:
   bash:
     "*": deny
@@ -98,6 +99,8 @@ permission:
   "canopy_git_log": allow
   "canopy_git_show": allow
   "canopy_git_blame": allow
+  "canopy_git_grep": allow
+  "canopy_git_files": allow
   # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone, and canopy's read-only reports
   # (DESIGN §27) are for an agent of the operator's that allows each by name: last, so no rule above reopens one.
   "canopy_chore_history": deny

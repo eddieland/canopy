@@ -3,8 +3,8 @@ import type { Locator, Page } from '@playwright/test'
 
 import { NOW, screenshotWhole, settled, signIn, spentInAll, storeTheme, THEMES } from './helpers.ts'
 
-// Tall enough that the rail has room for Sprig and its bubble under the mock's four working rows.
-test.use({ viewport: { width: 1280, height: 1200 } })
+// Tall enough that the rail has room for Sprig and its bubble under the mock's four working rows and `+1 more`.
+test.use({ viewport: { width: 1280, height: 1260 } })
 
 /** The longest Sprig waits before offering a tip unasked, in seconds (`WAIT_SECONDS` in buddy.tsx). */
 const LONGEST_WAIT = 360
@@ -228,7 +228,7 @@ test.describe('turned on', () => {
         await expect(buddy).toBeHidden()
         await expect(page.getByTestId('buddy-sprig')).toBeHidden()
 
-        await page.setViewportSize({ width: 1280, height: 1200 })
+        await page.setViewportSize({ width: 1280, height: 1260 })
         await expect(buddy).toHaveAttribute('data-room', 'roomy')
         await askSprig(page)
         const sprig = await buddy.boundingBox()
@@ -242,7 +242,8 @@ test.describe('turned on', () => {
     test("Sprig stands over the spend a little in a laptop's window, and tips there only when asked", async ({
         page,
     }) => {
-        await page.setViewportSize({ width: 1280, height: 902 })
+        // Tall enough for the figure alone over the mock's rail, whose four working rows end in `+1 more`.
+        await page.setViewportSize({ width: 1280, height: 980 })
         await page.goto('attention')
         await settled(page)
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
@@ -266,7 +267,7 @@ test.describe('turned on', () => {
 
     test('a tight rail lets the tips Sprig would offer unasked pass, and a roomy one shows them', async ({ page }) => {
         await page.clock.install()
-        await page.setViewportSize({ width: 1280, height: 902 })
+        await page.setViewportSize({ width: 1280, height: 980 })
         await page.goto('attention')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')
@@ -274,7 +275,7 @@ test.describe('turned on', () => {
         await page.clock.runFor(LONGEST_WAIT * 2 * 1000)
         await expect(tip).toBeHidden()
 
-        await page.setViewportSize({ width: 1280, height: 1200 })
+        await page.setViewportSize({ width: 1280, height: 1260 })
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'roomy')
         await waitForTip(page, tip)
         await page.clock.runFor(21_000)

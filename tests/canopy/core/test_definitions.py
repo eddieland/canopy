@@ -448,15 +448,16 @@ def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
 #: commands their prompts run, and canopy's reports they read through tools (DESIGN §27).
 CHORE_AGENTS: Mapping[str, tuple[Sequence[str], Sequence[str]]] = {
     "canopy-introspect": (
+        (),
         (
-            "canopy decisions 12",
-            "canopy show run:4",
-            "canopy show chore:canopy-health",
-            "canopy config show --json",
-            "canopy agents --json",
-            "canopy chore history canopy-health",
+            reports.HEALTH,
+            reports.SPEND,
+            reports.DECISIONS,
+            reports.SHOW_RUN,
+            reports.SHOW_CHORE,
+            reports.CONFIG_SHOW,
+            reports.AGENTS,
         ),
-        (reports.HEALTH, reports.SPEND),
     ),
     "canopy-memory-tickets": ((), (reports.MEMORY_LESSONS, reports.MEMORY_PROPOSALS, reports.MEMORY_LIST)),
 }
@@ -1319,3 +1320,54 @@ def test_under_approve_workers_lose_the_tools_that_comment(
     assert _allowed(tools, "github_create_pull_request")
     assert _allowed(tools, "github_update_pull_request")
     assert _allowed(bash, "git push origin HEAD:refs/heads/agent/PROJ-1-x")
+
+
+#: Each key of `runtime.models`, and the agents it chooses for.
+MODEL_ROLES = [
+    ("worker", (agents.WORKER, agents.PRIVATE_WORKER)),
+    ("planner", (agents.PLANNER,)),
+    ("reviewer", (agents.REVIEWER,)),
+    ("overseer", (agents.OVERSEER,)),
+    ("chore", (agents.CHORE,)),
+]
+
+
+@pytest.mark.parametrize(("role", "chosen"), MODEL_ROLES)
+def test_each_agents_model_is_rendered_into_its_definitions_and_no_others(
+    canopy_env: CanopyEnv,
+    role: str,
+    chosen: tuple[str, ...],
+) -> None:
+    before = config.load(canopy_env.root, canopy_env.user_file)
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {role: "acme/fake-model-1"}}})
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    rendered = definitions.sources(cfg)
+    for agent in runtime_definitions.agent_names():
+        frontmatter = rendered[f"agents/{agent}.md"].decode().split("---")[1]
+        assert ('\nmodel: "acme/fake-model-1"\n' in frontmatter) == (agent in chosen), agent
+    # Only those definitions change, so each set of models gets a snapshot of its own (D040).
+    shipped = definitions.sources(before)
+    assert sorted(rel for rel in rendered if rendered[rel] != shipped[rel]) == sorted(f"agents/{a}.md" for a in chosen)
+    assert definitions.digest(cfg) != definitions.digest(before)
+
+
+def test_no_model_chosen_renders_none_and_the_runtimes_default_stands(canopy_env: CanopyEnv) -> None:
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))
+    assert not [rel for rel in rendered if rel.startswith("agents/") and b"\nmodel:" in rendered[rel]]
+
+
+def test_each_set_of_models_gets_a_digest_of_its_own(canopy_env: CanopyEnv) -> None:
+    digests = set()
+    for model in ("acme/fake-model-1", "acme/fake-model-2"):
+        canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"worker": model}}})
+        digests.add(definitions.digest(config.load(canopy_env.root, canopy_env.user_file)))
+    assert len(digests) == 2
+
+
+def test_the_worker_definition_as_rendered_with_a_model(
+    canopy_env: CanopyEnv,
+    markdown_snapshot: SnapshotAssertion,
+) -> None:
+    canopy_env.write_private('[runtime.models]\nworker = "acme/fake-model-1"\n')
+    files = definitions.sources(config.load(canopy_env.root))
+    assert files[f"agents/{agents.WORKER}.md"].decode() == markdown_snapshot

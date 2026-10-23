@@ -121,6 +121,34 @@ whether it worked reads `unconfirmed` until canopy's next read of the PR settles
 
 The [attention list](attention) holds a `drafts waiting` item while any draft for the PR waits on you.
 
+## The feedback plan
+
+With `policy.feedback_plan = "approve"` in your own config, a round of review on one of the loop's PRs is planned
+before any worker touches it: a planner reads every new item (a review, a thread, whoever wrote it) and proposes what
+to do with each, and the resume waits for you. The PR's page shows that plan under **Feedback plan**, after the
+threads' panel.
+
+The panel says which run wrote it, when, and where it stands: `waiting` on you, `stale`, `approved`, or `spent` once a
+resume has gone ahead on it. Under that, a row for each item: its number, its id on GitHub, what the plan proposes
+(`change`, `decline`, `ask`, or `leave`), who wrote it, `trusted` if `trust.trusted_reviewers` names them, and where
+it is. On a thread, the thread's card carries the proposal too, as **Plan item N** above the drafts, with the reply
+the planner would draft. A review, or an item with no thread on this page, shows its proposed reply in its row
+instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it stands, as plain text, so an
+enthusiastic `<img>` in a coworker's comment stays a string of characters.
+
+A plan goes `stale` when the PR moves after it was written: a new comment or reply, an edit, a resolved thread, a new
+head, or a check that changed its mind. The panel lists each change, in the same words `canopy show` uses. The loop
+plans again once the PR has been quiet for `policy.feedback_quiet_minutes`, so a reviewer typing ten comments in five
+minutes gets one new plan, not ten.
+
+To approve, tick the items the resume should address and press the button: **Approve whole** with every box ticked,
+**Approve 2 of 3** otherwise. Hover it for the command it is, `canopy plan KEY --approve`, with `--item` or `--leave`
+for the ones you picked. Anything you write in **Your words, for its resume** goes after the message the approval
+writes on the ticket, which names the items to address and to leave by number, never by quoting them. Approving a
+stale plan is refused once, naming what changed, so you approve it knowing; press again and it's approved as it is,
+and the new feedback waits for the next plan. An approved plan can be approved again, with other boxes or other
+words, until its resume starts. To send the planner back instead, reply on the ticket.
+
 ## When canopy reviews
 
 A review is a fresh agent's adversarial read of one PR at one commit: it's told to assume the change is wrong and go
@@ -147,8 +175,9 @@ and every finding you didn't dismiss, and checks whether each still holds. A fin
 and one it didn't is reported again. It still reads the whole change, though. Being told where the last reviewer
 looked is useful; being told where not to look is how a bug lives through three reviews.
 
-The reviewer runs its own command, `runtime.review_cmd`, so point it at another model than your workers': a second
-model misses different things than the first, which is the point of asking it. canopy sends the reviewer no temperature
+The reviewer is its own agent, so give it another model than your workers', `runtime.models.reviewer` in your config
+(not a `--model` in its command, which canopy refuses, since it would override the choice unseen): a second model
+misses different things than the first, which is the point of asking it. canopy sends the reviewer no temperature
 (`runtime.review_temperature = -1`, the default), because OpenAI's reasoning models refuse a request that sets one, and
 a review that never starts finds nothing. If your reviewer's model takes one, set it low, such as `0.1`. Each new commit
 is reviewed again, and a reviewer sampling hot finds something fresh every time in code nobody touched; with the

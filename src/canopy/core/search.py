@@ -1,4 +1,4 @@
-"""The web UI's search over the journal (DESIGN §22): tickets, messages, chore runs, decisions, and ticks.
+"""The web UI's search over the journal (DESIGN §22): tickets, tasks, messages, chore runs, decisions, and ticks.
 
 Reads only. Each source is a plain scan with `LIKE`, newest first, that stops at its limit: no index, for the reasons
 §22 gives. Every text a hit carries is untrusted, cut to one line around its first match with control characters
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Callable, Collection, Iterable, Sequence
 
-type Source = Literal["ticket", "message", "chore_run", "decision", "tick"]
+type Source = Literal["ticket", "task", "message", "chore_run", "decision", "tick"]
 
 MIN_QUERY = 2
 MAX_QUERY = 200
@@ -44,7 +44,12 @@ class Hit:
     snippet: str
     ticket_key: str | None = None
     chore: str | None = None
-    # The run that reported a message, or the tick that recorded a decision or is the hit itself.
+    #: The task a hit is, or whose message it is (DESIGN §36).
+    task_id: int | None = None
+    #: The first line of that task's text that holds anything, cut to a snippet: the operator's, so still untrusted.
+    task_title: str | None = None
+    # The run that reported a message (a task's run, for a task's message), or the tick that recorded a decision or is
+    # the hit itself.
     run_id: int | None = None
     tick_id: int | None = None
     # A fixed word for the row: a message's kind, a decision's action, a run's or tick's status, a ticket's phase.
@@ -114,6 +119,17 @@ def snippet(text: str, terms: Iterable[str]) -> str:
     return head + line[start + len(head) : end - len(tail)] + tail
 
 
+def title(text: str) -> str:
+    """A task's name in a list: the first line of `text` that holds anything, as the web UI's tasks list names it.
+
+    Returns:
+        That line, whitespace collapsed and control characters dropped, cut to SNIPPET characters with "…" at its end.
+    """
+    lines = (" ".join(conversation.printable(line).split()) for line in text.splitlines())
+    line = next((line for line in lines if line), "")
+    return line if len(line) <= SNIPPET else line[: SNIPPET - len(_CUT)] + _CUT
+
+
 def like(term: str) -> str:
     """A `LIKE` pattern matching `term` anywhere, its wildcards and the escape character taken literally.
 
@@ -143,11 +159,23 @@ _TICKETS = sql.select(
     "  ) WHERE v IS NOT NULL AND v != ''), '') AS text,"
     "  t.last_seen_at AS id",
 ).from_("tickets t")
-# A ticket's or a chore's: a one-off task's conversation has no page to find it on yet (DESIGN §36).
+# A task's text: its reference, the operator's words, and the branch its runs push, each once (DESIGN §36). A task
+# is never edited, so its id orders it as when it was submitted.
+_TASKS = sql.select(
+    "t.id, t.stopped_at, t.submitted_at AS at, t.text AS task_text,"
+    "  'task:' || t.id || ' ' || t.text || coalesce(' ' || (SELECT group_concat(DISTINCT r.branch)"
+    "    FROM task_runs r WHERE r.task_id = t.id), '') AS text",
+).from_("tasks t")
+# A ticket's, a chore's, or a task's, with the task's text for its first line. A review's are left out, as reviews
+# are.
 _MESSAGES = (
-    sql.select("id, subject_kind, subject_id, at, kind, run_id, body AS text")
+    sql.select(
+        "id, subject_kind, subject_id, at, kind, run_id, task_run_id, body AS text,"
+        "  (SELECT t.text FROM tasks t WHERE subject_kind = 'task' AND t.id = CAST(subject_id AS INTEGER))"
+        " AS task_text",
+    )
     .from_("messages")
-    .where("subject_kind IN ('ticket', 'chore')")
+    .where("subject_kind IN ('ticket', 'chore', 'task')")
 )
 # A chore run's text: the harness's note, its summary, and each finding's title and detail. Only a run whose result
 # is valid JSON has one, and only an object is a finding: the JSON functions fail on anything else.
@@ -178,8 +206,31 @@ def _ticket(row: sqlite3.Row, text: str) -> Hit:
     return Hit("ticket", str(row["at"]), text, ticket_key=str(row["key"]), label=str(phase) if phase else None)
 
 
+def _task(row: sqlite3.Row, text: str) -> Hit:
+    return Hit(
+        "task",
+        str(row["at"]),
+        text,
+        task_id=int(row["id"]),
+        task_title=title(str(row["task_text"])),
+        label="stopped" if row["stopped_at"] is not None else None,
+    )
+
+
 def _message(row: sqlite3.Row, text: str) -> Hit:
     subject = str(row["subject_id"])
+    if row["subject_kind"] == conversation.TASK:
+        task_run = row["task_run_id"]
+        task_text = row["task_text"]
+        return Hit(
+            "message",
+            str(row["at"]),
+            text,
+            task_id=int(subject),
+            task_title=title(str(task_text)) if task_text is not None else None,
+            run_id=int(task_run) if task_run is not None else None,
+            label=str(row["kind"]),
+        )
     chore = row["subject_kind"] == conversation.CHORE
     run = row["run_id"]
     return Hit(
@@ -224,6 +275,7 @@ def _tick(row: sqlite3.Row, text: str) -> Hit:
 
 _SOURCES: tuple[tuple[Source, sql.Select, Callable[[sqlite3.Row, str], Hit]], ...] = (
     ("ticket", _TICKETS, _ticket),
+    ("task", _TASKS, _task),
     ("message", _MESSAGES, _message),
     ("chore_run", _CHORE_RUNS, _chore_run),
     ("decision", _DECISIONS, _decision),

@@ -12,6 +12,7 @@ from canopy.cli.params import CheckoutType
 from canopy.core import git_tools
 from canopy.infra import procs
 from canopy.loop import mcp
+from canopy.runtime import servers
 
 
 @click.command("_mcp", hidden=True)
@@ -40,8 +41,9 @@ def cmd_mcp(
     """Serve the overseer's verbs as MCP tools over stdio, until stdin closes. Started by the runtime; not for people.
 
     With --chore, serve a chore's run the one tool that reads its own chore's history (DESIGN §19), and nothing else.
-    With --reports, serve a chore's run canopy's read-only reports, what `canopy health`, `spend`, and the memory
-    listings print with `--json`, and nothing else.
+    With --reports, serve a chore's run canopy's read-only reports, what `canopy health`, `spend`, the memory listings,
+    `config show`, and `agents` print with `--json`, and `canopy decisions` and `show` of a run or a chore print, and
+    nothing else.
     With --git, serve a review's or a plan's run read-only git in the checkouts it names, and nothing else.
 
     A run a tool starts is spawned through an intermediate, so it is never the server's descendant: the runtime stops
@@ -58,6 +60,10 @@ def cmd_mcp(
                 procs.SubprocessRunner(unset={*runner.unset, *git_tools.inherited(os.environ)}),
                 checkouts=dict(checkouts),
             )
+        if serve_reports:
+            # The runtime `agents` starts to ask what it offers is asked as a run would be, without the servers this
+            # process's run was given in its inline config.
+            return mcp.run_stdio(procs.SubprocessRunner(unset={*runner.unset, *servers.VARIABLES}), serve_reports=True)
         # Every run a tool starts is spawned by this runner, not the one `canopy dispatch` uses: what stage 2 removes
         # from those runs' environment, the server's own entry in the inline config (ROADMAP M48), goes in its
         # `unset` here too.

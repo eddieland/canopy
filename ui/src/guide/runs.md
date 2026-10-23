@@ -35,7 +35,7 @@ then `failed` is every PR whose latest review failed. A cost of `–` means the 
 same as free.
 
 Under the page's description, one line says how full each limit is, counted the way canopy counts it before it starts
-anything: `workers 2 of 2` is `capacity.max_workers`, which reviews count toward, `reviews 0 of 1` is
+anything: `workers 2 of 2` is `capacity.max_workers`, which reviews and task runs count toward, `reviews 0 of 1` is
 `capacity.max_reviews` within it, and `chores 1 of 1` is `capacity.max_chores`, which stands apart. A full one turns
 amber and says `full`: the next dispatch of its kind waits for a run to end, however urgent the overseer thinks it
 is. When a ticket sits in the queue looking neglected, this line usually explains why. A limit of 0 reads `off`.
@@ -159,7 +159,8 @@ folds into one line, **Show 6 slots, #3 to #8**, so the slots with work in them 
 
 A slot is:
 
-- `working`: a run or review holds it.
+- `working`: a run, a review, or a task's run holds it. A ticket's run names the ticket and `run:N`; a task's names
+  `task:N` and its run, `task:N#M`, each opening its page.
 - `held`: something else holds it, such as your own shell or a pool sync.
 - `dirty`: nobody holds it, but it has changes nobody committed.
 - `idle`: free for the next run.

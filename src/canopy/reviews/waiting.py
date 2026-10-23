@@ -46,6 +46,29 @@ def items(conn: sqlite3.Connection) -> list[Item]:
     return [*_waiting(conn), *_unsettled(conn)]
 
 
+def unread_prs(conn: sqlite3.Connection) -> list[str]:
+    """Return the PRs a requested review's draft waits on that no read has seen merged or closed.
+
+    Each tick's `vcs` read takes them, so a PR merged or closed since its review clears its `review_waiting` item, one
+    whose request ended before the PR was ever read among them.
+
+    Returns:
+        The PRs' URLs, in order.
+    """
+    rows = sql.execute(
+        conn,
+        sql.select("d.pr_url")
+        .unique()
+        .from_("review_drafts d")
+        .join("review_runs r ON r.id = d.review_run_id")
+        .where("d.status = ?", ReviewDraftStatus.WAITING)
+        .where("r.purpose = ?", review_requests.PURPOSE)
+        .where("NOT EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = d.pr_url AND p.state != ?)", PrState.OPEN)
+        .order_by("d.pr_url"),
+    )
+    return [str(r["pr_url"]) for r in rows]
+
+
 def _waiting(conn: sqlite3.Connection) -> list[Item]:
     """A `review_waiting` item for each open PR whose newest reviewed commit has a requested review's draft to publish.
 

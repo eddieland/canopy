@@ -98,8 +98,8 @@ Cadence is a suggested `every_minutes` plus a `days`/`hours` window; `when` is t
 
 | Chore | What it reports | Finding id | Cadence | Runs under |
 | --- | --- | --- | --- | --- |
-| `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Its own agent, `canopy-introspect`, canopy's health and spend tools and its other read-only commands allowed |
-| `canopy-efficiency` | Where the week's spend went: MCP servers and skills an agent never uses, tools that fill context, idle ticks, cold starts, cost per ticket done ([canopy-efficiency.md](canopy-efficiency.md)) | `unused/<kind>/<server>`, `heavy/<kind>/<tool>`, `idle` | Weekly, Mondays | Its own agent, `canopy-introspect`, as `canopy-health`, with `canopy agents` |
+| `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Its own agent, `canopy-introspect`, canopy's health, spend, decisions, run and chore pages, and config reports, no shell |
+| `canopy-efficiency` | Where the week's spend went: MCP servers and skills an agent never uses, tools that fill context, idle ticks, cold starts, cost per ticket done ([canopy-efficiency.md](canopy-efficiency.md)) | `unused/<kind>/<server>`, `heavy/<kind>/<tool>`, `idle` | Weekly, Mondays | Its own agent, `canopy-introspect`, as `canopy-health`, with its agents report |
 | `memory-tickets` | Workers' notes, proposals, and lessons that should become a ticket: a workaround a fix would make needless, a lesson ready for a repository's `AGENTS.md`, each checked against open tickets and issues ([memory-tickets.md](memory-tickets.md)) | `fix/<repo>/<key>`, `graduate/<repo>/<key>` | Weekly, Mondays | Its own agent, `canopy-memory-tickets`, canopy's three memory listing tools, tracker and GitHub MCP read tools, no shell |
 
 ## Writing a good chore
@@ -200,8 +200,7 @@ timeout_minutes = 15
 
 `canopy-health` and `canopy-efficiency` look at canopy itself, from the journal of the workspace they run in, and
 recommend what to change: a setting to tune, an MCP server or skill to turn off, a fix outside canopy, or a feature
-canopy lacks. They read health and spend through two of canopy's tools, and the rest through its read-only commands
-(`canopy decisions`, `canopy show`), so their `cwd` is the workspace root.
+canopy lacks. They read the journal and config through canopy's reports, as tools, and have no shell.
 
 ```toml
 [chores.canopy-health]
@@ -223,24 +222,25 @@ hours = "08:00-12:00"
 timeout_minutes = 15
 ```
 
-- **Its agent comes with it.** [`canopy-introspect`](agents/canopy-introspect.md) is `canopy-chore` with two more of
-  canopy's tools, `canopy_reports_health` and `canopy_reports_spend`, and bash allowed for exactly the commands the
-  prompts use. `canopy chore install` copies it into the workspace's
-  `.canopy/chore-agents/<name>/`, and starts the table's `cmd` with `env OPENCODE_CONFIG_DIR=` that directory, so the
-  chore runs the copy, which stays as installed when canopy is upgraded until you install the chore again. Each
-  command only reads; `canopy show` is allowed for runs and chores only, since a ticket's page holds its
+- **Its agent comes with it.** [`canopy-introspect`](agents/canopy-introspect.md) is `canopy-chore` with the reports
+  its prompts read allowed as canopy's tools, each by name, and no shell. `canopy chore install` copies it into the
+  workspace's `.canopy/chore-agents/<name>/`, and starts the table's `cmd` with `env OPENCODE_CONFIG_DIR=` that
+  directory, so the chore runs the copy, which stays as installed when canopy is upgraded until you install the chore
+  again. Each report only reads; there is a page of a run and of a chore, and none of a ticket, which holds its
   conversation. If you made a copy of your own in `~/.config/opencode/agent/` before, delete it: OpenCode would merge
   it in.
 
   ```yaml
-  bash:
-    "*": deny
-    "canopy chore history *": allow
-    "canopy decisions*": allow
-    "canopy show run:*": allow
-    "canopy show chore:*": allow
-    "canopy config show --json": allow
-    "canopy agents --json": allow
+  bash: deny
+  "canopy_reports_*": deny
+  "canopy_chore_history": allow
+  "canopy_reports_health": allow
+  "canopy_reports_spend": allow
+  "canopy_reports_decisions": allow
+  "canopy_reports_show-run": allow
+  "canopy_reports_show-chore": allow
+  "canopy_reports_config-show": allow
+  "canopy_reports_agents": allow
   ```
 
 - **No MCP servers needed.** Neither prompt calls one. Deny your servers' tools for the agent by name in
