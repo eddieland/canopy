@@ -38,6 +38,7 @@ from tests.canopy.helpers import (
     overseer_does,
     present,
     running_run,
+    with_events,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, client, free_port, refused, signed_in_client
@@ -151,6 +152,26 @@ def test_a_runs_page_names_the_model_canopy_asked_for_while_it_runs_before_its_s
     scenario.configures(runtime={"models": {"worker": None}})
     ran = scenario.run(dispatches("PROJ-2"), worker=pushes())
     assert c.get(f"/api/runs/{ran.id}").json()["model"] is None
+
+
+def test_a_transcript_names_each_calls_model_once_canopy_reads_a_session_two_models_served(
+    scenario: Scenario,
+    opencode_state: Path,
+    ctx: Context,
+) -> None:
+    with_events(scenario.env, "canopy-overseer")
+    # The fake overseer's two calls write replies `msg_1` and `msg_2`, which the session's record names the models of.
+    served = [["anthropic", "claude-x", 0.25], ["openai", "gpt-y", 0.5]]
+    opencode_state.write_text(json.dumps({"sessions": {"ses_fake": served}}))
+    tick_id = scenario.tick().tick.id
+    c, _ = signed_in_client(ctx)
+    steps = [e for e in c.get(f"/api/ticks/{tick_id}/transcript").json()["entries"] if e["kind"] == "step"]
+    assert [s["model"] for s in steps] == ["anthropic/claude-x", "openai/gpt-y"]
+    # One model's session names none: the tick's models name it.
+    opencode_state.write_text(json.dumps({"sessions": {"ses_fake": [served[0], served[0]]}}))
+    tick_id = scenario.tick().tick.id
+    steps = [e for e in c.get(f"/api/ticks/{tick_id}/transcript").json()["entries"] if e["kind"] == "step"]
+    assert [s["model"] for s in steps] == [None, None]
 
 
 def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context) -> None:

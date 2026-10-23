@@ -335,10 +335,12 @@ promises:
 - **What is recorded is what served.** No event names the model a call went to, so canopy reads each run's session
   from the runtime's own record once the run ends: the process that ran it reads it as it closes the run, and the wait
   after a live tick reads the rest, one at a time, never-read runs the newest first, past ones among them. A read
-  records each model that wrote a run's replies, a variant other than its default named with it, and what they cost.
-  `canopy spend` breaks each kind's cost down by model, and the web UI names each run's models on its page. A read
-  never fails a run or a tick; a session the runtime no longer keeps leaves its run unattributed, or as a read before
-  found it, and a failed read is tried again later, a few times at most.
+  records each model that wrote a run's replies, a variant other than its default named with it, and what they cost;
+  for a run more than one model served, also which wrote each reply, keyed as the log's events key each call.
+  `canopy spend` breaks each kind's cost down by model, and the web UI names each run's models on its page, and a
+  split run's on its transcript, at each call where the model changed. A read never fails a run or a tick; a session
+  the runtime no longer keeps leaves its run unattributed, or as a read before found it, and a failed read is tried
+  again later, a few times at most.
 - **canopy's choice is the one made.** canopy writes the model, and its variant, into the agent's rendered
   definition, so each set of models gets its own snapshot (D040); a chore with a model of its own runs a copy of the
   chore's definition made for it. A template's model or variant option would override it unseen, so any `runtime`

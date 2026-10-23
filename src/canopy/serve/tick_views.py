@@ -9,7 +9,7 @@ from __future__ import annotations
 from itertools import starmap
 from typing import TYPE_CHECKING
 
-from canopy.core import db
+from canopy.core import db, run_models
 from canopy.core.vocab import TickStatus
 from canopy.serve.schema import LastTick, Tick, TickDetail
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
@@ -122,7 +122,8 @@ def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
     if row is None:
         return None
     output = tick_output(ctx, tick_id)
-    return session_transcript(output, row.session_id, removed_after(ctx.conn, output, row.ended_at, _tick_rule(row)))
+    removed = removed_after(ctx.conn, output, row.ended_at, _tick_rule(row))
+    return session_transcript(output, row.session_id, removed, run_models.replies_of(ctx.conn, "ticks", tick_id))
 
 
 def tick_raw_output(ctx: Context, tick_id: int) -> RawOutput | None:
