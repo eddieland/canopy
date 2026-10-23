@@ -67,6 +67,12 @@ export type AgentPersona = Schemas['AgentPersona']
 export type AgentModel = Schemas['AgentModel']
 /** The models the runtime lists, as `canopy models` prints them (DESIGN §13): what the operator may choose from. */
 export type ModelList = Schemas['ModelList']
+/** The model config chooses for each of canopy's agents and each chore, and the files that set them (DESIGN §13). */
+export type ConfigModels = Schemas['ConfigModels']
+/** The model `[runtime.models]` chooses for one of canopy's agents, or none: the runtime's default. */
+export type ConfiguredModel = Schemas['ConfiguredModel']
+/** The model one chore runs on as config chooses it, and where that choice comes from (DESIGN §13, §19). */
+export type ChoreModel = Schemas['ChoreModel']
 /** A persona a run could get, as `canopy personas` lists it (DESIGN §31): what the operator may choose from. */
 export type PersonaChoice = Schemas['PersonaChoice']
 /** Every persona a run could get, and the one a review request that chooses none is reviewed in (DESIGN §31). */

@@ -25,6 +25,7 @@ from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.runtime.report import ModelUse, Usage
 from canopy.serve import live, secret, spend_views
+from canopy.serve.backend import Backend
 from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
     KEY,
@@ -39,7 +40,7 @@ from tests.canopy.helpers import (
     running_run,
 )
 from tests.canopy.scenario_helpers import raises
-from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, free_port, refused, signed_in_client
+from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, client, free_port, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
 
 
@@ -421,6 +422,65 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
     opencode_state.write_text(json.dumps({"exit": 1}))
     assert c.get("/api/models").json() == {"models": [], "error": "`opencode models` exited 1"}
     assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")
+
+
+def test_the_settings_page_reads_each_agents_and_chores_model_as_the_loop_runs_on_it(
+    ctx: Context,
+    canopy_env: CanopyEnv,
+) -> None:
+    canopy_env.configure(
+        canopy_env.user_file,
+        {
+            "runtime": {"models": {"worker": "acme/fake-model-1", "chore": "acme/fake-model-2@low"}},
+            "chores": {
+                "deps": {"prompt": "~/deps.md", "every_minutes": 60, "model": "acme/fake-model-1@high"},
+                "lint": {"prompt": "~/lint.md", "every_minutes": 60},
+                "sentry": {"prompt": "~/sentry.md", "every_minutes": 60, "cmd": "agent run --agent triage {prompt}"},
+                "elsewhere": {"prompt": "~/elsewhere.md", "every_minutes": 60, "workspaces": ["another"]},
+            },
+        },
+    )
+    c, _ = signed_in_client(dataclasses.replace(ctx, config=config.load(canopy_env.root, canopy_env.user_file)))
+
+    got = c.get("/api/config/models").json()
+
+    assert got["agents"] == [
+        {"agent": "worker", "model": "acme/fake-model-1", "variant": None, "source": "config"},
+        {"agent": "planner", "model": None, "variant": None, "source": "default"},
+        {"agent": "reviewer", "model": None, "variant": None, "source": "default"},
+        {"agent": "overseer", "model": None, "variant": None, "source": "default"},
+        {"agent": "chore", "model": "acme/fake-model-2", "variant": "low", "source": "config"},
+    ]
+    # This workspace's chores only, by name; one running an agent of the operator's own takes its model there.
+    assert got["chores"] == [
+        {"chore": "deps", "model": "acme/fake-model-1", "variant": "high", "source": "chore", "agent": None},
+        {"chore": "lint", "model": "acme/fake-model-2", "variant": "low", "source": "config", "agent": None},
+        {"chore": "sentry", "model": None, "variant": None, "source": "agent", "agent": "triage"},
+    ]
+    user, private = str(canopy_env.user_file), str(canopy_env.private_file)
+    files = (got["models_file"], got["chores_file"], got["user_file"], got["private_file"])
+    assert files == (user, user, user, private)
+    # A file that cannot be read names no file, and the page still shows what the loop runs on.
+    canopy_env.append_user("\n[capacity\n")
+    broken = c.get("/api/config/models").json()
+    assert (broken["models_file"], broken["chores_file"], broken["agents"]) == (None, None, got["agents"])
+
+
+def test_the_mocks_settings_page_names_a_model_for_the_overseer_and_the_chores(backend: Backend) -> None:
+    c = client(None, backend)
+    got = c.get("/api/config/models").json()
+    assert [(a["agent"], a["model"], a["source"]) for a in got["agents"]] == [
+        ("worker", None, "default"),
+        ("planner", None, "default"),
+        ("reviewer", None, "default"),
+        ("overseer", "anthropic/claude-sonnet-4-5", "config"),
+        ("chore", "anthropic/claude-haiku-4-5", "config"),
+    ]
+    assert [(ch["chore"], ch["model"], ch["variant"], ch["source"]) for ch in got["chores"]] == [
+        ("build-health", "anthropic/claude-haiku-4-5", None, "config"),
+        ("deps", "anthropic/claude-haiku-4-5", "high", "chore"),
+    ]
+    assert got["models_file"] == got["chores_file"] == str(backend.user_file)
 
 
 def test_the_web_lists_the_personas_canopy_personas_lists(ctx: Context) -> None:
