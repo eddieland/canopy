@@ -173,6 +173,43 @@ def test_blame_names_the_commit_that_last_changed_each_line(repo: Repo) -> None:
     assert one.count("\n") == 2
 
 
+def test_blame_can_look_past_a_move_and_a_reindent(repo: Repo) -> None:
+    path = repo.path
+    body = "def retry_with_backoff(attempts):\n    return attempts * 2 + 1\n"
+    (path / "backoff.py").write_text(body)
+    git("add", ".", cwd=path)
+    git("commit", "--quiet", "-m", "write it", cwd=path)
+    wrote = git("rev-parse", "HEAD", cwd=path)
+    (path / "backoff.py").unlink()
+    (path / "notes.md").write_text(f"hello\n{body}")
+    git("add", "-A", cwd=path)
+    git("commit", "--quiet", "-m", "move it", cwd=path)
+    moved = git("rev-parse", "HEAD", cwd=path)
+    (path / "notes.md").write_text(f"hello\n{body.replace('    return', '        return')}")
+    git("commit", "--quiet", "-am", "reindent it", cwd=path)
+    reindented = git("rev-parse", "HEAD", cwd=path)
+    at = repo.checkouts
+
+    def blamed(*, moves: bool = False, ignore_whitespace: bool = False) -> list[str]:
+        asked = git_tools.Blame(
+            rev="HEAD",
+            path="notes.md",
+            start=2,
+            end=3,
+            moves=moves,
+            ignore_whitespace=ignore_whitespace,
+        )
+        found = git_tools.blame(RUNNER, at, asked)
+        return [line.split()[0] for line in found.removeprefix(f"{git_tools.DATA_NOTE}\n\n").splitlines()]
+
+    assert blamed() == [moved, reindented]
+    assert blamed(ignore_whitespace=True) == [moved, moved]
+    # Past the move too, to the commit that wrote the lines, in the file it wrote them in.
+    assert blamed(moves=True, ignore_whitespace=True) == [wrote, wrote]
+    whole = git_tools.Blame(rev="HEAD", path="notes.md", start=2, end=3, moves=True, ignore_whitespace=True)
+    assert all(" backoff.py " in line for line in git_tools.blame(RUNNER, at, whole).splitlines()[2:])
+
+
 def test_what_a_tool_returns_is_bounded(repo: Repo) -> None:
     big = repo.path / "big.txt"
     big.write_text("".join(f"line {n}\n" for n in range(1000)))
@@ -247,6 +284,8 @@ def test_a_file_that_is_not_text_is_refused_and_a_hidden_character_is_named(repo
         (git_tools.Files, {"rev": "main", "name": "a\tb"}, "printable"),
         (git_tools.Files, {"rev": "main", "paths": ["/etc"]}, "never starts with"),
         (git_tools.Diff, {"base": "main", "head": "feature", "stat": "yes"}, "valid boolean"),
+        (git_tools.Blame, {"rev": "main", "path": "retry.py", "start": 1, "end": 1, "moves": 1}, "valid boolean"),
+        (git_tools.Blame, {"rev": "main", "path": "retry.py", "start": 1, "end": 1, "copies": True}, "Extra inputs"),
     ],
 )
 def test_an_argument_that_is_an_option_leaves_the_checkout_or_is_no_revision_is_refused(
@@ -349,6 +388,8 @@ def test_nothing_the_repository_names_runs(repo: Repo, tmp_path: Path) -> None:
     assert git_tools.grep(RUNNER, at, git_tools.Grep(rev=signed, text="hello")).endswith("notes.md:1:hello")
     assert git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head=signed, stat=True)).endswith("retry.py")
     assert git_tools.files(RUNNER, at, git_tools.Files(rev=signed)).endswith("retry.py")
+    past = git_tools.Blame(rev=signed, path="notes.md", start=1, end=1, moves=True, ignore_whitespace=True)
+    assert git_tools.blame(RUNNER, at, past).endswith("hello")
     assert not marker.exists(), marker.read_text()
 
     # The same reads by plain git run what the repository names: the test above would have seen them.

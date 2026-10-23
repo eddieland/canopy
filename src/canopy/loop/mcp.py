@@ -407,7 +407,8 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         _git_tool(
             git_tools.BLAME,
             "Name the commit that last changed each of some lines of a file as it is at a commit, with its author and "
-            "date: which lines a branch wrote, and what commit to read for why the rest are so.",
+            "date: which lines a branch wrote, and what commit to read for why the rest are so. moves and "
+            "ignore_whitespace look past a refactor that moved or reindented them.",
             git_tools.Blame,
             git_tools.blame,
             runner=runner,

@@ -309,6 +309,19 @@ class Blame(Request):
         StrictInt,
         Field(ge=1, description=f"The last line to read: at most {MAX_BLAME_LINES} lines from start."),
     ]
+    #: Whether a line moved or copied names the commit that first wrote it.
+    moves: Annotated[
+        StrictBool,
+        Field(
+            description="Name the commit that first wrote a line moved or copied, within the file or from another "
+            "file the same commit changed, not the commit that moved it: past a refactor. Slower on a large file.",
+        ),
+    ] = False
+    #: Whether a change of whitespace alone is passed over.
+    ignore_whitespace: Annotated[
+        StrictBool,
+        Field(description="Pass over a commit that changed only a line's whitespace, such as a reindent."),
+    ] = False
 
     @model_validator(mode="after")
     def _some_lines(self) -> Self:
@@ -472,6 +485,9 @@ def show(runner: procs.Runner, checkouts: Mapping[str, Path], request: Show) -> 
 def blame(runner: procs.Runner, checkouts: Mapping[str, Path], request: Blame) -> str:
     """Name the commit that last changed each line from `request.start` to `request.end` of a file at `request.rev`.
 
+    With `request.moves`, a line moved or copied names the commit that first wrote it; with `request.ignore_whitespace`,
+    a change of whitespace alone is passed over.
+
     Returns:
         Each line after its commit's full id, the path the file had there if it was renamed since, its author,
         date, and line number.
@@ -489,7 +505,10 @@ def blame(runner: procs.Runner, checkouts: Mapping[str, Path], request: Blame) -
     # display keys are overridden, so every call prints the same columns. git 2.43's blame takes no
     # `--end-of-options`; the commit is a full id, never an option.
     args = ("--no-textconv", "--no-ignore-revs-file", "--no-show-email", "--root", "-l", "--date=short")
-    done = _git(runner, where, "blame", *args, f"-L{request.start},{request.end}", commit, "--", path)
+    # `-C` once looks for a line's origin in the files its commit changed, not every file in the repository, which
+    # `-C -C` would: bounded by the change, not the tree.
+    attribution = (*(("-M", "-C") if request.moves else ()), *(("-w",) if request.ignore_whitespace else ()))
+    done = _git(runner, where, "blame", *args, *attribution, f"-L{request.start},{request.end}", commit, "--", path)
     return _said(_out(done, "blame"))
 
 
