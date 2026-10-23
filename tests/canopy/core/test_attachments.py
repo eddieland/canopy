@@ -224,3 +224,16 @@ def test_a_limit_past_its_ceiling_is_refused(canopy_env: CanopyEnv, key: str, va
     canopy_env.configure(canopy_env.user_file, {"policy": {key: value}})
     with pytest.raises(config.ConfigError, match=rf"policy\.{key}"):
         config.load(canopy_env.root, canopy_env.user_file)
+
+
+def test_a_file_a_rolled_back_attach_left_does_not_block_the_next(scenario: Scenario, doc: Path) -> None:
+    scenario.operator("task", "submit", "look")
+    # What an attach that wrote its file and then rolled back leaves: a file at the id the next attach takes.
+    left = scenario.env.state_dir / attachments.DIR_NAME / "task.1" / "1.txt"
+    left.parent.mkdir(parents=True, mode=0o700)
+    left.parent.parent.chmod(0o700)
+    left.write_text("half of something else")
+    scenario.operator("attach", "task:1", str(doc), "--name", "design.md")
+    [attached] = attachments.of(scenario.conn, TASK)
+    assert attached.id == 1
+    assert attachments.path(scenario.env.state_dir, attached).read_text() == DOC
