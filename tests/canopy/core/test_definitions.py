@@ -16,6 +16,7 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.chores import history
 from canopy.core import config, definitions, git_tools, plans, prompts, reports
 from canopy.infra import resources
+from canopy.loop import mcp
 from canopy.runtime import agents, servers
 from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime.opencode import definitions as opencode_definitions
@@ -654,6 +655,8 @@ def test_an_example_chores_agent_may_call_its_history_tool_too(agent: str) -> No
     """Copied at install, it keeps its shell for its prompts' commands, and gets the tool every chore's prompt names."""
     definition = (resources.example_chores_dir() / "agents" / f"{agent}.md").read_text()
     assert _allowed(_rules_in(definition), CHORE_HISTORY)
+    # `canopy_*`, which also matches that tool, is denied before it: none of the overseer's tools is reopened.
+    assert not [tool for tool in CANOPY_TOOLS if _allowed(_rules_in(definition), tool)]
 
 
 def test_the_planner_has_no_shell_or_subagent_tools() -> None:
@@ -797,10 +800,12 @@ def test_the_overseer_may_run_the_commands_config_allows_it_and_its_snapshot_say
     rendered = definitions.sources(cfg)
     rules = _rules_in(rendered["agents/canopy-overseer.md"].decode(), "bash")
     assert rules[-2:] == [(pattern, "allow") for pattern in JIRA_CLI_READS]
-    for allowed in ("jira issue list -q 'project = PROJ'", "jira issue view PROJ-1 --plain", "canopy decisions"):
+    for allowed in ("jira issue list -q 'project = PROJ'", "jira issue view PROJ-1 --plain"):
         assert _allowed(rules, allowed), allowed
-    for refused in ("jira issue create", "sh -c 'jira issue list'", "treehouse get", "rm -rf /"):
-        assert not _allowed(rules, refused), refused
+    # The overseer acts through canopy's tools, never its commands, so an allow does not bring back `canopy *`.
+    refused = ("jira issue create", "sh -c 'jira issue list'", "canopy decisions", "treehouse status", "rm -rf /")
+    for command in refused:
+        assert not _allowed(rules, command), command
     # Only the overseer's definition changes, and so the snapshot's digest: a run loading the old one keeps it (D040).
     shipped = definitions.sources(before)
     assert [rel for rel in rendered if rendered[rel] != shipped[rel]] == ["agents/canopy-overseer.md"]
@@ -956,6 +961,32 @@ GITHUB_ISSUE_READS = {"github_issue_read", "github_list_issues", "github_search_
 def _ruleset(canopy_env: CanopyEnv, agent: str) -> list[tuple[str, str, str]]:
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"]
     return _opencode_ruleset(rendered.decode())
+
+
+#: The overseer's tools, as the runtime names them to it: `canopy_dispatch`, ... (DESIGN §27).
+CANOPY_TOOLS = [servers.tool_name(mcp.SERVER, tool.name) for tool in mcp.TOOLS]
+
+
+@pytest.mark.parametrize("provider", ["jira", "github"])
+def test_the_overseer_may_call_each_of_canopys_tools_by_name_and_has_no_shell(
+    canopy_env: CanopyEnv,
+    provider: str,
+) -> None:
+    _set_provider(canopy_env, provider)
+    ruleset = _ruleset(canopy_env, agents.OVERSEER)
+    assert [_opencode_action(ruleset, tool, "*") for tool in CANOPY_TOOLS] == ["allow"] * len(CANOPY_TOOLS)
+    # Each by its exact name: a pattern would also allow another server's tools, one named `canopy_x` say.
+    assert sorted(p for p, _, action in ruleset if p.startswith("canopy") and action == "allow") == sorted(CANOPY_TOOLS)
+    # No command, `canopy`'s and `treehouse status` included: the state block holds the pool.
+    for command in ("canopy decide PROJ-1 wait --rationale x", "treehouse status --json", "ls"):
+        assert _opencode_action(ruleset, "bash", command) == "deny", command
+
+
+@pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - {agents.OVERSEER}))
+def test_no_other_agent_may_call_canopys_tools(canopy_env: CanopyEnv, agent: str) -> None:
+    ruleset = _ruleset(canopy_env, agent)
+    for tool in [*CANOPY_TOOLS, "canopy_anything"]:
+        assert _opencode_disabled(ruleset, tool), tool
 
 
 @pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - {agents.CHORE}))
@@ -1371,3 +1402,28 @@ def test_the_worker_definition_as_rendered_with_a_model(
     canopy_env.write_private('[runtime.models]\nworker = "acme/fake-model-1"\n')
     files = definitions.sources(config.load(canopy_env.root))
     assert files[f"agents/{agents.WORKER}.md"].decode() == markdown_snapshot
+
+
+def test_each_set_of_variants_gets_a_digest_of_its_own(canopy_env: CanopyEnv) -> None:
+    digests = set()
+    for model in ("acme/fake-model-1", "acme/fake-model-1@high", "acme/fake-model-1@low"):
+        canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"worker": model}}})
+        digests.add(definitions.digest(config.load(canopy_env.root, canopy_env.user_file)))
+    assert len(digests) == 3
+
+
+def test_a_chores_own_copy_as_rendered_with_its_model_and_variant(
+    canopy_env: CanopyEnv,
+    markdown_snapshot: SnapshotAssertion,
+) -> None:
+    """A chore with a model of its own gets a copy of the chore's definition, `canopy-chore-<name>` (DESIGN §19)."""
+    canopy_env.write_private(
+        '[runtime.models]\nchore = "acme/fake-model-1"\n\n'
+        '[chores.triage]\nprompt = "~/triage.md"\nevery_minutes = 60\nmodel = "acme/fake-model-2@high"\n',
+    )
+    files = definitions.sources(config.load(canopy_env.root))
+    copy = files[f"agents/{agents.chore_agent('triage')}.md"].decode()
+    assert copy == markdown_snapshot
+    # Nothing else of it differs from the chore's definition, which keeps `runtime.models.chore`.
+    chore = files[f"agents/{agents.CHORE}.md"].decode()
+    assert copy.replace('"acme/fake-model-2"\nvariant: "high"', '"acme/fake-model-1"') == chore

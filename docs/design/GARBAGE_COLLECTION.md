@@ -7,8 +7,8 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 ## 26. Garbage collection
 
 Built: `canopy gc --dry-run`, `[retention]`, the loop's pass over files and the journal, with `canopy.log`'s rotation,
-and `canopy gc --vacuum`. Until the rest lands, canopy removes only what the table's third column says, and §6, §11,
-§12, §18, and §22 describe canopy as it is; this section says what changes.
+`canopy gc --vacuum`, and `canopy gc --git`. Until the rest lands, canopy removes only what the table's third column
+says, and §6, §11, §12, §18, and §22 describe canopy as it is; this section says what changes.
 
 ### What grows
 
@@ -69,9 +69,10 @@ copy first.
 
 ### Git in the primary clones
 
-`canopy gc --git` runs only git's `loose-objects` and `incremental-repack` maintenance, which prune no unreachable
-object or worktree, what made automatic maintenance unsafe for slots in use (§18). It holds each repository's dispatch
-lock, skips one with a leased slot, and runs git as the harness always does (D107). `canopy gc --caches` empties a
+`canopy gc --git` runs only git's `loose-objects` and `incremental-repack` maintenance, then `prune-packed`, none of
+which deletes an object no pack holds or prunes a worktree, what made automatic maintenance unsafe for slots in use
+(§18). It holds the dispatch lock for each repository in turn, skips one with a leased slot or with git's own
+maintenance under way, and runs git as the harness always does (D107). `canopy gc --caches` empties a
 role's sandbox cache (§24) while no run of that role is live.
 
 ### Configuration

@@ -111,7 +111,7 @@ def test_grant_refusals(scenario: Scenario, git_pool: GitPool) -> None:
     assert f"grant refused (unknown): canopy has no record of {KEY}" in refused.err
     db.touch_ticket(scenario.conn, KEY, "repo")
     refused = scenario.operator("grant", KEY, "resume", code=1)
-    assert "grant refused (unknown_repo): name the repository with --repo: it has had no runs" in refused.err
+    assert "grant refused (unknown_repo): name the repository with repo (--repo): it has had no runs" in refused.err
 
     fail_twice(scenario)
     refused = scenario.operator("grant", KEY, "resume", "--repo", "other", code=1)

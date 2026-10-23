@@ -342,6 +342,12 @@ timeout_minutes = 20
   to 20) and only counts the rest, so the prompt says which to keep when there are more.
 - **Mind the spend.** Every run is an agent session. A daily chore over 5 repositories is cheap; a 15-minute one over
   40 is not.
+- **Pick a model for the job.** Every chore runs on `[runtime.models] chore` unless its table sets a `model` of its
+  own, such as a cheap one for a list to sort and a stronger one, at a variant, for a judgment:
+  `model = "provider/model@high"`. canopy runs such a chore on a copy of `canopy-chore` made for it,
+  `canopy-chore-<name>`, so its command must run `canopy-chore`. A chore with its own agent, such as the ones
+  `canopy chore install` copies, sets `model:` (and `variant:`) in that agent's definition instead; installing again
+  replaces the copy, so set it again after.
 - **Own tools: allow exactly one command shape.** Copy `canopy-chore` into `~/.config/opencode/agent/`, keep every
   deny, and add only `"buildq status *": allow` under `bash`. Never put it in a repository's `.opencode/`.
 

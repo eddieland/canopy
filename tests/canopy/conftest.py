@@ -15,7 +15,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 
-from canopy.core import config, db
+from canopy.core import config, db, hostgit
 from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.serve import mock as serve_mock
@@ -231,9 +231,16 @@ def ws(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path) -> Iterator
         origins = {name: bare_origin(tmp_path / "origins" / f"{name}.git", tmp_path) for name in ("api", "web")}
         for name, origin in origins.items():
             git("clone", "--quiet", str(origin), str(root / "repos" / name), cwd=tmp_path)
+            turn_off_auto_maintenance(root / "repos" / name)
         (root / config.WORKSPACE_FILE_NAME).write_text(map_text(*((n, str(o)) for n, o in origins.items())))
         with contextlib.chdir(root):
             yield Ws(root, origins, root / ".canopy", canopy_env.journals)
+
+
+def turn_off_auto_maintenance(clone: Path) -> None:
+    """Set in `clone`'s config what `canopy workspace sync` sets in a primary clone's, so a tick raises nothing."""
+    for key, value in hostgit.AUTO_MAINTENANCE_OFF:
+        git("config", "--local", key, value, cwd=clone)
 
 
 def seed_pools(ws: Ws, treehouse_state: Path) -> None:

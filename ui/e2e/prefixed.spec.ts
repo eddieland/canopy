@@ -174,6 +174,55 @@ test('the settings page asks the loop to read its config again and says what it 
     )
 })
 
+test('the settings page saves a limit and drops a trusted reviewer, but raises nothing past its ceiling', async ({
+    page,
+}) => {
+    await page.goto('settings')
+    await page.getByTestId('limits-open').click()
+    await expect(page).toHaveURL(/\/canopy\/settings\/limits$/u)
+    const form = page.getByTestId('config-form')
+    await expect(form.getByTestId('config-pending')).toHaveText('No unsaved changes')
+    const workers = form.getByTestId('capacity.max_workers')
+    // The count the mock's fixtures set, whatever it is: the test raises it by one, so it holds when they change.
+    await expect(workers).toHaveValue(/^\d+$/u)
+    const before = await workers.inputValue()
+    const after = String(Number(before) + 1)
+    await expect(form.getByTestId('config-save')).toBeDisabled()
+
+    await workers.fill(after)
+    await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
+    await form.getByTestId('config-discard').click()
+    await expect(workers).toHaveValue(before)
+    await workers.fill('many')
+    await expect(form.getByRole('alert')).toHaveText('capacity.max_workers: a whole number')
+    await expect(form.getByTestId('config-save')).toBeDisabled()
+    await workers.fill('33')
+    await form.getByTestId('config-save').click()
+    await expect(form.getByRole('alert')).toContainText('refused (past_bound): capacity.max_workers may be at most 32')
+
+    await workers.fill(after)
+    await form.getByTestId('trust.trusted_reviewers-lint-bot').click()
+    // Only web has a count of its own; api gets one through the repository picker, not a field per repository.
+    const slots = form.getByTestId('repo-slots')
+    await expect(slots.getByRole('textbox', { name: /^capacity\.repo_slots\./u })).toHaveCount(1)
+    const repos = await openRepoPicker(
+        slots.getByRole('button', { name: 'Repository to give its own count: pick a repository' }),
+    )
+    await repos.getByRole('option', { name: 'api' }).click()
+    await slots.getByTestId('capacity.repo_slots.api').fill('3')
+    await form.getByTestId('config-save').click()
+    await expect(form.getByRole('status')).toContainText(
+        "Saved capacity.max_workers, capacity.repo_slots, trust.trusted_reviewers to this workspace's config.",
+    )
+    await expect(slots.getByTestId('capacity.repo_slots.api')).toHaveValue('3')
+    // Read again from the file: the reviewer is gone, and only the stricter side of a trust switch is offered.
+    await expect(workers).toHaveValue(after)
+    await expect(form.getByTestId('trust.trusted_reviewers-lint-bot')).toHaveCount(0)
+    await expect(form.getByTestId('trust.trusted_reviewers-canopy:review')).toBeChecked()
+    await expect(form.getByTestId('trust.rebase')).toBeDisabled()
+    await expect(form.getByTestId('trust.commit_trailer')).toBeDisabled()
+})
+
 test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ page }) => {
     await page.goto('settings')
     await page.getByTestId('send-key-mod-enter').click()

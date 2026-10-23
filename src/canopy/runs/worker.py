@@ -50,6 +50,7 @@ from canopy.core import (
     review_diff,
     run_models,
     run_offers,
+    sandboxing,
 )
 from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
@@ -416,7 +417,8 @@ def _run_agent(
 ) -> tuple[procs.Result, str]:
     """Check the places the agent reads config from, make the run's desk if it has one, and run `template` in it.
 
-    `template` runs between `runtime.worker_cmd_prefix` and `worker_cmd_suffix` (DESIGN §12), for the worker's timeout.
+    `template` runs between `runtime.worker_cmd_prefix` and `worker_cmd_suffix` (DESIGN §12), for the worker's timeout,
+    behind the sandbox wrapper when a slot's repository is one `runtime.sandbox_repos` names (DESIGN §24).
     A private run's places and a plan's must also name none of the tracker server's tools (DESIGN §22, §25).
     `desk_files` are written into the desk, by name, readable only by the operator, before the agent starts.
 
@@ -446,7 +448,7 @@ def _run_agent(
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     command = ctx.config.runtime.worker_template(template)
     rendered = render_command(command, prompt, snapshot, title)
-    argv = rendered.argv
+    argv = sandboxing.wrap(ctx.config.runtime, [s.repo for s in slots], "worker", rendered.argv, snapshot)
     if desked:
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), trees)
         for name, text in (desk_files or {}).items():
@@ -967,6 +969,7 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
     argv = setup_words(ctx.config.runtime.setup_cmd)
     if not argv:
         return
+    argv = sandboxing.wrap(ctx.config.runtime, [slot.repo], "setup", argv)
     run_id = int(run["id"])
     timeout_minutes = ctx.config.runtime.setup_timeout_minutes
     log.info("running setup", extra={"run_id": run_id, "cmd": argv[0], "cwd": str(slot.path), "repo": slot.repo})

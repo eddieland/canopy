@@ -164,8 +164,10 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
         A summary of each, in their order.
     """
     seen = db.seen_among(conn, SeenKind.REVIEW, [str(row.id) for row in rows])
-    # A PR's title as its pages give it: its own, else its ticket's.
+    # A PR's title as its pages give it: its own, as a worker or a review reported it, else as canopy's reader last
+    # read it, which is all a coworker's PR may have, else its ticket's.
     own = db.pr_titles(conn, {row.pr_url for row in rows})
+    read = {url: pr.title for url, pr in review_draft_views.observed_prs(conn, {row.pr_url for row in rows}).items()}
     tickets = db.ticket_titles(conn, {row.ticket_key for row in rows if row.ticket_key})
     drafts = review_drafts.of_reviews(conn, [row.id for row in rows])
     asked = review_requests.answered_by(conn, rows)
@@ -173,7 +175,9 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
         summary(
             row,
             seen=str(row.id) in seen,
-            title=ticket_title(own.get(row.pr_url)) or ticket_title(tickets.get(row.ticket_key or "")),
+            title=ticket_title(own.get(row.pr_url))
+            or ticket_title(read.get(row.pr_url))
+            or ticket_title(tickets.get(row.ticket_key or "")),
             draft=drafts.get(row.id),
             request=asked.get(row.id),
         )

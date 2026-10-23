@@ -6,6 +6,8 @@ import type {
     AgentPersona,
     ChoreTried,
     ConfigReload,
+    ConfigSaved,
+    ConfigValue,
     Dismissed,
     Draft,
     DraftsSent,
@@ -530,6 +532,15 @@ export function refreshMemory(client: QueryClient): Promise<void> {
         predicate: ({ queryKey }) =>
             queryKey[0] === keys.memory[0] || (queryKey[0] === ticket[0] && queryKey[2] === ticket[2]),
     })
+}
+
+/**
+ * Writes the changed limits and trust settings to the user config, then asks the loop to read it again. Refused,
+ * writing nothing, past a limit's bound (`past_bound`), for a trust setting loosened (`not_stricter`), or when the
+ * file changed since `hash` was read (`stale`).
+ */
+export async function saveConfig(hash: string, changes: Record<string, ConfigValue>): Promise<ConfigSaved> {
+    return unwrap(await api.PATCH('/api/config', { body: { hash, changes } }))
 }
 
 /** After a pause, a resume, or a notice set or cleared: show the state it left now, rather than wait for the stream. */

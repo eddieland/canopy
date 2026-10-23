@@ -1,4 +1,3 @@
--- sha256 of 0082_observed_check_runs.sql: 7fee17ebd4afb195c7d2d0cb6c2363858b3fa8f0142bb50197dec3030468d425
+-- sha256 of 0082_observed_pr_title.sql: 60077f3b14db74bf3f96e928820bca53188d76c07094256a7bebe7bc845dbc42
 
-INSERT INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at)
-VALUES ('https://e.test/pr/7', 10, 'build', 'abc1234', 'failure', 'x');
+UPDATE observed_prs SET title = 'Retry the upstream on a 503' WHERE url = (SELECT min(url) FROM observed_prs);

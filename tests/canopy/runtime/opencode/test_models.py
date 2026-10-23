@@ -58,6 +58,56 @@ def test_each_model_listed_is_read_and_any_other_line_passed_over() -> None:
     assert runner.ran == [(("opencode", "models"), Path("/ws"), models.TIMEOUT_SECONDS, True)]
 
 
+#: What `opencode models --verbose` prints: each model's line, then its JSON over several lines, indented by two.
+VERBOSE = """[corp-plugin] loaded
+anthropic/claude-x
+{
+  "id": "claude-x",
+  "name": "Claude X",
+  "options": {
+    "note": "acme/not-a-model-line"
+  },
+  "variants": {
+    "high": {
+      "thinking": {
+        "budgetTokens": 16000
+      }
+    },
+    "max": {}
+  }
+}
+local/qwen@2b
+{
+  "id": "qwen@2b",
+  "variants": {}
+}
+openai/gpt-y
+{
+  "id": "gpt-y"
+}
+broken/model
+{ "id": "not json
+"""
+
+
+def test_with_variants_each_models_json_is_read_for_them() -> None:
+    runner = printing(VERBOSE)
+    assert models.listed(runner, cwd=Path("/ws"), variants=True) == ModelList(
+        frozenset({"anthropic/claude-x", "local/qwen@2b", "openai/gpt-y", "broken/model"}),
+        {
+            "anthropic/claude-x": frozenset({"high", "max"}),
+            "local/qwen@2b": frozenset(),
+            "openai/gpt-y": frozenset(),
+            # JSON canopy cannot read lists none, and is no model's line.
+            "broken/model": frozenset(),
+        },
+    )
+    assert runner.ran == [(("opencode", "models", "--verbose"), Path("/ws"), models.TIMEOUT_SECONDS, True)]
+    assert models.listed(printing(code=1), cwd=Path("/ws"), variants=True) == ModelList(
+        error="`opencode models --verbose` exited 1",
+    )
+
+
 def test_an_opencode_with_no_provider_lists_no_model() -> None:
     assert models.listed(printing(""), cwd=Path("/ws")) == ModelList()
 
