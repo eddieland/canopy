@@ -49,7 +49,7 @@ describe('TaskReportPanel', () => {
             mockTaskRun({ id: 3, status: 'running', state: 'running', reported: false }),
         ]
         const shown = await panel(runs)
-        expect(within(shown).getByText('from task:1#2')).toBeTruthy()
+        expect(within(shown).getByRole('link', { name: 'task:1#2' }).getAttribute('href')).toBe('/tasks/1/runs/2')
         expect(within(shown).getByRole('heading', { name: 'Checkout bundle' })).toBeTruthy()
         // An image stays its characters, and a link is no link.
         expect(shown.querySelector('img')).toBeNull()

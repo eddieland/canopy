@@ -3,8 +3,9 @@ import type { Page } from '@playwright/test'
 
 import { settled, signIn } from './helpers.ts'
 
-// A run's, a tick's, and a chore run's pages share one skeleton (ui/DESIGN.md, "A detail page has one skeleton"): the
-// header says what it is and its state, the identity panel leads with its summary, and each fact is said once.
+// A run's, a tick's, a chore run's, and a task run's pages share one skeleton (ui/DESIGN.md, "A detail page has one
+// skeleton"): the header says what it is and its state, the identity panel leads with its summary, and each fact is
+// said once.
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -60,6 +61,7 @@ test('each page leads with its summary, says how long it ran, and names its sess
         ['runs/39', 'ses_mock39'],
         ['ticks/2', 'ses_tick2'],
         ['chores/deps/runs/2', 'ses_chore2'],
+        ['tasks/1/runs/1', 'ses_task1'],
     ]
     for (const [path, session] of pages) {
         await page.goto(path)

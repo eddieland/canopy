@@ -123,6 +123,7 @@ export const PAGE_GUIDES = {
     '/plan-editor': 'plans',
     '/tasks/': 'tasks',
     '/tasks/$id': 'tasks#a-tasks-page',
+    '/tasks/$id_/runs/$run': 'tasks#a-tasks-run',
     '/pull-requests/': 'pull-requests',
     '/pull-requests/pr': 'pull-requests#the-pull-requests-page',
     '/reviews/': 'pull-requests#the-reviews-page',

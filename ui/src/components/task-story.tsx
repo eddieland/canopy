@@ -6,8 +6,9 @@ import { Cost } from '@/components/cost'
 import { OrderToggle } from '@/components/order-toggle'
 import { PanelHeader, ThreadScroll } from '@/components/panel'
 import { RunDot } from '@/components/status'
+import { TaskRunLink } from '@/components/task-link'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { messageRef, taskRef, taskRunRef } from '@/lib/refs'
+import { messageRef, taskRef } from '@/lib/refs'
 import { replyCommand, waits } from '@/lib/tasks'
 import { cn } from '@/lib/utils'
 
@@ -61,7 +62,7 @@ function WorkingNow({ task, run }: { task: number; run: TaskRun }) {
         >
             <RunDot state="running" />
             <span className="text-status-running">working now</span>
-            <span className="readout">{taskRunRef(task, run.id)}</span>
+            <TaskRunLink task={task} run={run.id} />
             <span className="ml-auto flex shrink-0 items-center gap-3">
                 <Cost usd={run.cost_usd} />
                 <Age variant="span" started={run.started_at} ended={null} />

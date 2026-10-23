@@ -7,6 +7,7 @@ import { CopyablePath } from '@/components/copy-button'
 import { Empty, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PlanDocument } from '@/components/plan-editor'
 import { Chip } from '@/components/status'
+import { TaskRunLink } from '@/components/task-link'
 import { taskRunRef } from '@/lib/refs'
 import { noReport, reportRun } from '@/lib/tasks'
 
@@ -38,7 +39,7 @@ export function TaskReportPanel({
     return (
         <Panel className={className} data-testid="task-report">
             <PanelHeader label="Report">
-                {ref !== undefined && (
+                {run !== undefined && (
                     <span className="flex items-center gap-2">
                         {/* A file no longer a report reads as edited too: its problem says it, not this chip. */}
                         {data?.edited === true && data.text !== null && (
@@ -47,7 +48,9 @@ export function TaskReportPanel({
                                 <span className="sr-only">{EDITED}</span>
                             </span>
                         )}
-                        <span className="readout text-xs text-muted-foreground">from {ref}</span>
+                        <span className="readout text-xs text-muted-foreground">
+                            from <TaskRunLink task={task.id} run={run.id} />
+                        </span>
                     </span>
                 )}
             </PanelHeader>
