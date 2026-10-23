@@ -71,7 +71,7 @@ The `implement` and `resume` prompts name the worker's copy of the plan and its 
 as long as it needs; with an approved plan, an override that leaves it out is refused (D093). Each run gets a fresh copy
 of the approved plan, checked against its hash first: a plan changed, superseded, or approved again since dispatch fails
 the run. The copy is excluded from git and removed before the slot is returned. A worker can still commit it by force,
-publishing a private ticket's plan; the prompt forbids it and push verification (§8) notes it.
+putting the plan in its PR; the prompt forbids it and push verification (§8) notes it.
 
 ### Where plans live
 

@@ -167,8 +167,9 @@ lessons off, the page shows only Ticket notes, and each note still has Forget.
 
 What it did shows at the top of its panel, in the CLI's words, including that a lesson promoted while recording is
 recorded and read by no run. Promoting a private ticket's run's words as they stand warns you, before you save and
-after: its text may hold what you kept off the tracker. At most 20 proposals wait at once, and one nobody reviews
-expires after 14 days, so the queue can't bury you.
+after: they come from a conversation you kept off the tracker, and a lesson hands them to every worker, public
+tickets' included. At most 20 proposals wait at once, and one nobody reviews expires after 14 days, so the queue
+can't bury you.
 
 In your shell, `canopy memory promote ID` takes `--text` for your words and `--repo` for the repository, and
 `canopy memory reject ID` rejects.
