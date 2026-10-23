@@ -132,15 +132,16 @@ def record(conn: sqlite3.Connection, run_id: int, checked: Checked | None) -> No
 
 
 def latest(conn: sqlite3.Connection, review_run_id: int) -> dict[int, records.ReviewAnswer]:
-    """Return what the latest run to answer review run `review_run_id`'s findings said of each.
+    """Return what the latest run to answer each of review run `review_run_id`'s findings said of it.
+
+    Each finding by its own latest answer: two resumes may answer different findings of one review, as when the
+    operator sends one finding after a worker declined another, and the later run must not hide the earlier's decline.
 
     Returns:
         Each answered finding's answer, by its number; empty when no run answered any.
     """
-    newest = sql.select("max(run_id)").from_("review_answers").where("review_run_id = ?", review_run_id)
-    query = (
-        sql.select("*").from_("review_answers").where("review_run_id = ?", review_run_id).where("run_id = ({})", newest)
-    )
+    query = sql.select("*").from_("review_answers").where("review_run_id = ?", review_run_id).order_by("run_id")
+    # Read oldest first, so each finding keeps its newest answer.
     return {a.finding: a for a in records.fetch_all(conn, records.ReviewAnswer, query)}
 
 

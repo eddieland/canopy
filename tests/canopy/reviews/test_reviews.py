@@ -1291,6 +1291,27 @@ def test_a_declined_finding_reaches_the_next_review_and_its_rebuttal_waits_on_th
     assert "1. **minor** `src/retry.py:7`: log line is noisy" in scenario.run(resume(second.id), worker=pushes()).prompt
 
 
+@pytest.mark.usefixtures("reviewing")
+def test_a_later_resume_answering_one_finding_keeps_an_earlier_resumes_answer_to_another(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """Each finding keeps its own latest answer, so a later resume of one finding hides no earlier decline (§21)."""
+    conn = scenario.conn
+    first = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS)).id
+    scenario.run(worker=pushes())
+    scenario.run(resume(first), worker=pushes(review_answers=answers_to(first)))
+    # A second resume of the same review answers finding 1 alone, as when the operator sent it after the first.
+    later = [{"review": first, "finding": 1, "answer": "declined", "reason": "The loop is bounded upstream."}]
+    scenario.run(resume(first), worker=pushes(review_answers=later))
+
+    answered = review_answers.latest(conn, first)
+    assert [(n, a.answer, a.reason) for n, a in sorted(answered.items())] == [
+        (1, FindingAnswer.DECLINED, "The loop is bounded upstream."),
+        (2, FindingAnswer.DECLINED, DECLINED),
+    ]
+
+
 def test_a_rebuttal_the_operator_dismisses_waits_on_nobody(
     reviewing: CanopyEnv,
     scenario: Scenario,
