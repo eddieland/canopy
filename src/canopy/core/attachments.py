@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, plans, records, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
+from canopy.infra import logs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -116,6 +117,10 @@ def attach(
             added_at=db.now(),
         )
         attachment_id = int(sql.execute(conn, insert).lastrowid or 0)
+        # No row is ever deleted, so an id is taken again only after a transaction that took it rolled back: a file
+        # already at it is one that transaction wrote, never an attachment's.
+        with contextlib.suppress(FileNotFoundError):
+            (state_dir / DIR_NAME / _dir_name(ref) / _file_name(attachment_id)).unlink()
         # Written inside the transaction, so a file that cannot be written records nothing.
         plans.write_new(state_dir / DIR_NAME, _dir_name(ref), _file_name(attachment_id), text, what="attachment")
         found = get(conn, attachment_id)
@@ -127,7 +132,8 @@ def attach(
 def remove(conn: sqlite3.Connection, state_dir: Path, ref: Ref, name: str, *, channel: str) -> records.Attachment:
     """Remove the attachment `name` from `ref`: its file is deleted, and its row kept, marked removed (DESIGN §22).
 
-    A run already started keeps the copy it was given.
+    A run already started keeps the copy it was given. The file is deleted once the removal is recorded, so a file
+    that cannot be deleted is left behind, logged, rather than an attachment whose file is gone.
 
     Returns:
         The attachment, as removed.
@@ -135,7 +141,6 @@ def remove(conn: sqlite3.Connection, state_dir: Path, ref: Ref, name: str, *, ch
     Raises:
         Refused: `inside_run` inside a tick or a run; `unsupported` for a subject that is not a ticket or a task;
             `unknown` for a subject with no attachment of that name.
-        OSError: the file could not be deleted; the attachment stays.
         DatabaseError: the row went missing, which nothing but a broken journal does.
     """
     conversation.check_operator()
@@ -146,12 +151,14 @@ def remove(conn: sqlite3.Connection, state_dir: Path, ref: Ref, name: str, *, ch
             raise Refused("unknown", f"{ref} has no attachment named {name[:100]!r}")
         update = sql.update("attachments").set(removed_at=db.now(), removed_channel=channel).where("id = ?", found.id)
         sql.execute(conn, update)
-        # Deleted inside the transaction, so a file that cannot be deleted leaves the attachment as it was.
-        with contextlib.suppress(FileNotFoundError):
-            path(state_dir, found).unlink()
         removed = get(conn, found.id)
     if removed is None:
         raise sqlite3.DatabaseError("the attachment's row went missing")
+    try:
+        path(state_dir, removed).unlink(missing_ok=True)
+    except OSError as e:
+        fields = {"subject": str(ref), "attachment": removed.id, "error": str(e)}
+        logs.for_tick(None).warning("removed attachment's file not deleted", extra=fields)
     return removed
 
 
