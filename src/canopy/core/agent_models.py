@@ -15,9 +15,10 @@ model, since one definition holds one model; every other chore runs the chore's 
 
 Before a worker run on a chosen model starts, the model is looked up in the list the runtime would look it up in,
 read in the workspace root, since a repository's own runtime config could change the list; with a variant, the
-model's variants too, since the runtime drops a variant the model lacks without a word. A model or variant the list
-lacks refuses the run as `model_missing`, and a list that cannot be read as `model_list_failed`: never the runtime's
-default instead, since a canary's run on a model nobody chose would read as the canary's.
+model's variants too, since a runtime may drop a variant the model lacks without a word, or fail the run on it. A
+model or variant the list lacks refuses the run as `model_missing`, and a list that cannot be read as
+`model_list_failed`: never the runtime's default instead, since a canary's run on a model nobody chose would read as
+the canary's.
 """
 
 from __future__ import annotations
@@ -167,7 +168,7 @@ def check(runner: procs.Runner, root: Path, model: Model, *, chosen: str = "in r
         raise ModelError(
             MISSING,
             f"{invocation.NAME} lists the model {model.id} chosen {chosen} but not its variant "
-            f"{model.variant} ({has}), and would run it at its default unseen; nothing ran. Choose a variant it lists",
+            f"{model.variant} ({has}); nothing ran. Choose a variant it lists",
         )
 
 

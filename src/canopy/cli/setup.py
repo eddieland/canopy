@@ -151,7 +151,9 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
         click.echo()
         click.echo(sandbox, nl=False)
     # A repository can carry copies of canopy's agents that an earlier single-repository init committed there.
-    report.shadowing += [path for repo in ws.repos if repo.cloned for path in project_config.shadowing(repo.path)]
+    # Once each: the runtime may read a repository's parents too, the workspace among them.
+    found = [path for repo in ws.repos if repo.cloned for path in project_config.shadowing(repo.path)]
+    report.shadowing = list(dict.fromkeys([*report.shadowing, *found]))
     _print_shadowing(report)
     cli_workspace.check_synced(synced)
     return 0

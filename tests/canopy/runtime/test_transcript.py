@@ -22,11 +22,11 @@ def tool(name: str, state: dict[str, object], session: str = SESSION) -> str:
     return event("tool_use", {"type": "tool", "callID": "call_1", "tool": name, "state": state}, session)
 
 
-BASH: dict[str, object] = {
+SHELL: dict[str, object] = {
     "status": "completed",
     "input": {"command": "uv run pytest -q", "description": "Run the tests"},
     "output": "3 passed\n",
-    "title": "Run the tests",
+    "title": "shell",
     "metadata": {"exit": 0},
     "time": {"start": T, "end": T + 2500},
 }
@@ -46,7 +46,7 @@ def test_a_session_reads_as_its_text_tool_calls_steps_and_errors_in_order(tmp_pa
         event("step_start", {"type": "step-start"}),
         event("reasoning", {"type": "reasoning", "text": "The tests first."}),
         event("text", {"type": "text", "text": "Running the tests."}),
-        tool("bash", BASH),
+        tool("shell", SHELL),
         tool("read", {"status": "error", "input": {"filePath": "/x"}, "error": "no such file", "time": {}}),
         event(
             "step_finish",
@@ -57,18 +57,19 @@ def test_a_session_reads_as_its_text_tool_calls_steps_and_errors_in_order(tmp_pa
                 "tokens": {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}},
             },
         ),
-        json.dumps({"type": "error", "timestamp": T, "sessionID": SESSION, "error": {"name": "APIError"}}),
+        json.dumps({"type": "error", "timestamp": T, "sessionID": SESSION, "error": {"type": "provider.auth"}}),
     )
     found = transcript.read(path, SESSION)
     assert found is not None
     assert found.entries == [
         Text(AT, "The tests first.", reasoning=True, call=1),
         Text(AT, "Running the tests.", call=1),
+        # Titled by its input, since OpenCode titles a call by its tool.
         ToolCall(
             AT,
-            "bash",
+            "shell",
             "completed",
-            "Run the tests",
+            "uv run pytest -q",
             '{\n  "command": "uv run pytest -q",\n  "description": "Run the tests"\n}',
             "3 passed\n",
             2500,
@@ -76,7 +77,7 @@ def test_a_session_reads_as_its_text_tool_calls_steps_and_errors_in_order(tmp_pa
         ),
         ToolCall(AT, "read", "error", None, '{\n  "filePath": "/x"\n}', "no such file", None, call=1),
         Step(AT, "tool-calls", 0.25, Tokens(100, 20, 3, 400, 50), call=1),
-        Error(AT, "APIError", "", call=1),
+        Error(AT, "provider.auth", "", call=1),
     ]
     assert (found.truncated, found.unreadable) == (False, 0)
 
@@ -85,7 +86,7 @@ def test_each_entry_is_numbered_by_the_model_call_the_runtime_started_it_in(tmp_
     # Another session's calls do not count, and an entry before the first call has no number.
     path = log(
         tmp_path,
-        json.dumps({"type": "error", "timestamp": T, "sessionID": SESSION, "error": {"name": "early"}}),
+        json.dumps({"type": "error", "timestamp": T, "sessionID": SESSION, "error": {"type": "early"}}),
         event("step_start", {"type": "step-start"}),
         event("text", {"type": "text", "text": "one"}),
         event("step_start", {"type": "step-start"}, session="ses_other"),
@@ -130,7 +131,7 @@ def test_an_event_that_does_not_validate_is_counted_and_left_out(tmp_path: Path)
     path = log(
         tmp_path,
         event("text", {"type": "text", "text": 7}),
-        tool("bash", {**BASH, "status": "running"}),
+        tool("shell", {**SHELL, "status": "running"}),
         event("step_finish", {"cost": -1}),
         event("text", {"type": "text", "text": "fine"}),
     )
@@ -145,7 +146,7 @@ def test_text_is_shown_without_control_characters_and_cut(tmp_path: Path) -> Non
     path = log(
         tmp_path,
         event("text", {"type": "text", "text": "a\x1b[31mred\x07\r\nline"}),
-        tool("bash", {**BASH, "output": long, "title": "two\nlines"}),
+        tool("shell", {**SHELL, "output": long, "input": {"command": "two\nlines"}}),
     )
     found = transcript.read(path, SESSION)
     assert found is not None

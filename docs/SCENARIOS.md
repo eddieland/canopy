@@ -37,8 +37,8 @@ any OpenCode upgrade, and before relying on a permission they check.
   tool of the tracker's server, and the tracker CLIs in bash.
 - **S65. The overseer's tools** (M48). Run a tick on the pinned OpenCode. Expect its transcript to show `canopy_*`
   tool calls and no `bash`, every duty met through them, and a worker it dispatches offered no `canopy_*` tool. After
-  an upgrade, check too that `OPENCODE_EXPERIMENTAL_CODE_MODE=false` still turns code mode off, and that a tool call
-  still waits as long as the entry's `timeout`.
+  an upgrade, check too that the entry's `codemode: false` still offers the tools by name, that the overseer's first
+  model call is sent them, and how long a tool call waits.
 - **S44. The token split** (M33). Confirmed in OpenCode's source (1.19.3), not in a run. canopy's new tokens add a
   `step_finish`'s `output` and `reasoning` (`runtime/opencode/events.py`), which holds only while `output` leaves
   reasoning out. Check that OpenCode's `session.ts` still sets `output: outputTokens - reasoningTokens`; aide found the
@@ -46,9 +46,9 @@ any OpenCode upgrade, and before relying on a permission they check.
 - **S38. A session's transcript, live and after** (M15, M27, taken on request 2026-10-15). While a worker runs under the
   pinned OpenCode, open its row on the runs page and its run's page. Expect its latest tool call on the row within
   seconds of the call ending, its cost moving at each model call, and its transcript growing as it goes, matching
-  `opencode export <id>` for what it has done so far; and `canopy status` naming the same call. A row that shows
+  `opencode session export <id>` for what it has done so far; and `canopy status` naming the same call. A row that shows
   nothing until the run ends means OpenCode is buffering its events, not printing them as they happen. Once it ends,
-  and on a tick's page, expect the tool calls `opencode export <id>` shows for the same session id, and, for a failed
+  and on a tick's page, expect the tool calls `opencode session export <id>` shows for the same session id, and, for a failed
   run, its runtime error.
 - **S61. The clock** (M57). Give a worker a 5-minute `runtime.worker_timeout_minutes` and a toy ticket it cannot finish
   in that time, once unsandboxed and once under `canopy-sandbox`. Expect canopy's `[canopy]` line in its transcript in

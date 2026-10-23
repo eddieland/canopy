@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Fake `opencode` for tests: plays `opencode export ID --sanitize`, `opencode debug`, and `opencode models` from a
-state file, and hands `opencode run` to the fake agent beside it.
+"""Fake `opencode` for tests: plays OpenCode 2's `serve`, `api`, `session export`, and `run` from a state file, handing
+`opencode run` to the fake agent beside it.
 
 On PATH ahead of any real one, so no test reaches the operator's OpenCode or its sessions. Configured through the
 environment:
@@ -12,24 +12,26 @@ environment:
 
 Keys of the state besides `sessions`, each optional:
 
-    exit    the exit code of every export, debug, and models command, with `stderr`, for an OpenCode that fails.
+    exit    the exit code of every serve, api, and export command, with `stderr`, for an OpenCode that fails.
             Default none.
     stderr  text printed on stderr with `exit`.
-    config  what `debug config` prints, as JSON. Default `{"mcp": {}}`. The servers of an inline config in
-            `OPENCODE_CONFIG_CONTENT`, as canopy gives a run its own, are merged over its `mcp`, as OpenCode does.
-    skills  the names `debug skill` lists. Default none.
-    agents  each agent's permission rules by name, `[permission, pattern, action]` each, that `debug agent NAME` prints
-            after an allow of everything. Default none.
-    tools   each agent's built-in tools by name, each to whether it keeps it, as `debug agent NAME` prints them.
-            Default none.
-    models  the lines `models` prints, each a `provider/model` as OpenCode lists them, or any other line. Default
-            none.
-    variants  each model's variants by its line, which `models --verbose` prints in the model's JSON after its line,
-            indented as OpenCode indents it, `{"id": ..., "variants": {NAME: {...}}}`; a line not named gets no
-            `variants`. Default none.
+    config  the MCP servers of the config `config.get` answers with, as `{"mcp": {NAME: {...}}}` in OpenCode 1's
+            shape or `{"mcp": {"servers": {NAME: {...}}}}` in 2's; 1's `"enabled": false` is 2's `"disabled": true`.
+            Default none. The servers of an inline config in `OPENCODE_CONFIG_CONTENT`, as canopy gives a run its own,
+            follow as a document of their own, as OpenCode merges it last.
+    skills  the ids `skill.list` answers with. Default none.
+    agents  each agent's permission rules by name, `[permission, pattern, action]` each, that `agent.list` answers
+            with, beside every agent a definition in `OPENCODE_CONFIG_DIR` defines, after OpenCode 2's defaults, the
+            permissions renamed as 2 reads 1's (`bash` is `shell`, `task` is `subagent`, `write` and `patch` are
+            `edit`). Default none.
+    models  the models `model.list` answers with, each a `provider/model`; any other line is passed over, as a
+            line no list holds. Default none.
+    variants  each model's variants by its line, which `model.list` lists with it. Default none.
 
-It writes the export as OpenCode does, so a pipe gets at most what fits in its buffer. `run` runs `agent` with the same
-arguments, so a template that runs `opencode run` plays the fake agent. Any other command exits 2.
+`serve` says where it listens, then waits to be stopped; `api --server URL` answers `agent.list`, `skill.list`, and
+`config.get` from the state, and `api --standalone model.list` the models. It writes what it prints as OpenCode does,
+so a pipe gets at most what fits in its buffer. `run` runs `agent` with the same arguments, so a template that runs
+`opencode run` plays the fake agent. Any other command exits 2.
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
 
@@ -37,8 +39,16 @@ import contextlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
+
+# The rules OpenCode 2 starts every agent from, before its own.
+DEFAULTS = [["*", "*", "allow"], ["read", "*.env", "ask"], ["read", "*.env.*", "ask"]]
+# What OpenCode 2 reads each of OpenCode 1's permissions as.
+RENAMED = {"bash": "shell", "task": "subagent", "write": "edit", "patch": "edit"}
+# Where `serve` says it listens.
+URL = "http://127.0.0.1:41234"
 
 
 def main() -> int:
@@ -48,72 +58,103 @@ def main() -> int:
             env = sorted(name for name in os.environ if name.startswith("OPENCODE_"))
             f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "env": env}) + "\n")
     match sys.argv[1:]:
-        case ["export", session_id, "--sanitize"]:
+        case ["session", "export", "--standalone", "--sanitize", session_id]:
             return export(session_id)
-        case ["debug", *command]:
-            return debug(command)
-        case ["models"]:
-            return models(verbose=False)
-        case ["models", "--verbose"]:
-            return models(verbose=True)
+        case ["serve", "--hostname", "127.0.0.1", "--port", "0"]:
+            return serve()
+        case ["api", "--server", _, operation]:
+            return api(operation)
+        case ["api", "--standalone", "model.list"]:
+            return api("model.list")
         case ["run", *_]:
             agent = Path(__file__).with_name("agent")
             os.execv(agent, [str(agent), *sys.argv[1:]])  # noqa: S606  (stands in for OpenCode running an agent)
             return 1  # not reached: `execv` returns only by raising
         case _:
             sys.stderr.write(
-                f"fake opencode plays only `export ID --sanitize`, `debug`, `models`, and `run`, not {sys.argv[1:]}\n",
+                f"fake opencode plays only `serve`, `api`, `session export`, and `run`, not {sys.argv[1:]}\n",
             )
             return 2
 
 
-def debug(command: list[str]) -> int:
+def serve() -> int:
     state = read_state()
     if "exit" in state:
         sys.stderr.write(str(state.get("stderr", "")))
         return int(state["exit"])
-    match command:
-        case ["config"]:
-            printed: Any = state.get("config", {"mcp": {}})
-            inline = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
-            printed = {**printed, "mcp": {**printed.get("mcp", {}), **inline}}
-        case ["skill"]:
-            printed = [
-                {"name": name, "description": "d", "location": "x", "content": "x"} for name in state.get("skills", [])
-            ]
-        case ["agent", name]:
-            rules = [["*", "*", "allow"], *state.get("agents", {}).get(name, [])]
+    print(f"opencode server listening on {URL}", flush=True)
+    # Stopped by whoever started it, once its questions are answered.
+    time.sleep(600)
+    return 0
+
+
+def api(operation: str) -> int:
+    state = read_state()
+    if "exit" in state:
+        sys.stderr.write(str(state.get("stderr", "")))
+        return int(state["exit"])
+    match operation:
+        case "agent.list":
+            printed: Any = {
+                "data": [
+                    {
+                        "id": name,
+                        "permissions": [
+                            {"action": RENAMED.get(p, p), "resource": t, "effect": a} for p, t, a in [*DEFAULTS, *rules]
+                        ],
+                    }
+                    for name, rules in agents(state).items()
+                ],
+            }
+        case "skill.list":
+            printed = {"data": [{"id": name, "name": name, "description": "d"} for name in state.get("skills", [])]}
+        case "config.get":
+            printed = [{"type": "directory", "path": "/defs"}]
+            for config in (state.get("config", {}), json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}")):
+                if config.get("mcp"):
+                    printed.append({"type": "document", "info": {"mcp": {"servers": servers(config["mcp"])}}})
+        case "model.list":
+            variants = state.get("variants", {})
             printed = {
-                "name": name,
-                "permission": [{"permission": p, "pattern": t, "action": a} for p, t, a in rules],
-                "tools": state.get("tools", {}).get(name, {}),
+                "data": [
+                    {
+                        "providerID": line.partition("/")[0],
+                        "id": line.partition("/")[2],
+                        "variants": [{"id": name} for name in variants.get(line, [])],
+                    }
+                    for line in state.get("models", [])
+                    if "/" in line and " " not in line
+                ],
             }
         case _:
-            sys.stderr.write(f"fake opencode does not play `debug {' '.join(command)}`\n")
+            sys.stderr.write(f"fake opencode does not answer `api {operation}`\n")
             return 2
-    print(json.dumps(printed, indent=2))
+    write(json.dumps(printed, indent=2) + "\n")
     return 0
 
 
-def models(*, verbose: bool) -> int:
-    state = read_state()
-    if "exit" in state:
-        sys.stderr.write(str(state.get("stderr", "")))
-        return int(state["exit"])
-    variants = state.get("variants", {})
-    for line in state.get("models", []):
-        print(line)
-        if verbose:
-            model: dict[str, Any] = {"id": line.partition("/")[2], "name": line}
-            if line in variants:
-                model["variants"] = {name: {"reasoningEffort": name} for name in variants[line]}
-            print(json.dumps(model, indent=2))
-    return 0
+def agents(state: dict[str, Any]) -> dict[str, list[list[str]]]:
+    """Each agent a definition in the config directory defines, as OpenCode loads them, with its rules in the state."""
+    config_dir = os.environ.get("OPENCODE_CONFIG_DIR")
+    defined = sorted(p.stem for p in Path(config_dir, "agents").glob("*.md")) if config_dir else []
+    found: dict[str, list[list[str]]] = {name: [] for name in defined}
+    return {**found, **state.get("agents", {})}
+
+
+def servers(mcp: dict[str, Any]) -> dict[str, Any]:
+    """The servers of `mcp`, either shape, in OpenCode 2's: `disabled` for 1's `enabled: false`."""
+    named = mcp["servers"] if isinstance(mcp.get("servers"), dict) else mcp
+    found = {}
+    for name, server in named.items():
+        entry = {k: v for k, v in server.items() if k != "enabled"}
+        if server.get("enabled") is False:
+            entry["disabled"] = True
+        found[name] = entry
+    return found
 
 
 def export(session_id: str) -> int:
     state = read_state()
-    sys.stderr.write(f"Exporting session: {session_id}\n")
     if "exit" in state:
         sys.stderr.write(str(state.get("stderr", "")))
         return int(state["exit"])
@@ -121,17 +162,20 @@ def export(session_id: str) -> int:
     if calls is None:
         sys.stderr.write(f"Error: Session not found: {session_id}\n")
         return 1
-    messages: list[dict[str, Any]] = [{"info": {"id": "msg_0", "role": "user"}, "parts": []}]
+    messages: list[dict[str, Any]] = [{"id": "msg_0", "type": "user", "text": "[redacted:text]", "files": []}]
     for i, (provider, model, cost) in enumerate(calls, start=1):
-        info = {"id": f"msg_{i}", "role": "assistant", "providerID": provider, "modelID": model, "cost": cost}
-        messages.append({"info": info, "parts": [{"type": "text", "text": f"[redacted:text:prt_{i}]"}]})
-    printed = json.dumps({"info": {"id": session_id}, "messages": messages}, indent=2) + "\n"
-    # As OpenCode does with stderr a pipe: one write that does not wait for a full pipe to drain, and what did not
-    # fit lost when it exits. A file takes it all.
+        ref = {"id": model, "providerID": provider}
+        messages.append({"id": f"msg_{i}", "type": "assistant", "model": ref, "content": [], "cost": cost})
+    write(json.dumps({"info": {"id": session_id}, "messages": messages}, indent=2) + "\n")
+    return 0
+
+
+def write(printed: str) -> None:
+    """Print `printed` as OpenCode does with stderr a pipe: one write that does not wait for a full pipe to drain, and
+    what did not fit lost when it exits. A file takes it all."""
     os.set_blocking(sys.stdout.fileno(), False)
     with contextlib.suppress(BlockingIOError):
         os.write(sys.stdout.fileno(), printed.encode())
-    return 0
 
 
 def read_state() -> dict[str, Any]:

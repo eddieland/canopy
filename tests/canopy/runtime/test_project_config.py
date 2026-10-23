@@ -46,3 +46,18 @@ def test_shadowing_is_what_a_refusal_names_first(tmp_path: Path) -> None:
     assert refused is not None
     assert str(shadowed) in refused
     assert str(named) not in refused
+
+
+def test_a_file_two_places_share_is_named_once(tmp_path: Path) -> None:
+    # The runtime reads a place's parents too, so a repository in the workspace finds the workspace's config.
+    found = shadow(tmp_path)
+    named = name_tool(tmp_path, "atlassian")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    refused = project_config.refusal([tmp_path, repo])
+    assert refused is not None
+    assert refused.count(str(found)) == 1
+    found.unlink()
+    refused = project_config.refusal([tmp_path, repo], tracker_server="atlassian")
+    assert refused is not None
+    assert refused.count(str(named)) == 1

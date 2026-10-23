@@ -93,7 +93,8 @@ entry, drawn or not, so a search beats clicking the fold nineteen times; to star
 to newest first. All open opens only the rows drawn, and following an addition in the chart, or the error a run
 ended on, draws down to its row first.
 
-The session id in the transcript's header opens the same session in the runtime's own tools: `opencode export ID`. A
+The session id in the transcript's header opens the same session in the runtime's own tools:
+`opencode session export ID`. A
 transcript with nothing to show is its header alone, saying why in a word or two (`log gone`, `no session`,
 `no events yet`); hover it for the whole reason.
 

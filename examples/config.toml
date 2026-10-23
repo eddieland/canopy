@@ -88,10 +88,10 @@ worker_timeout_minutes = 45
 # planner = ["jira issue view *"]
 # worker-private = ["jira issue view *"]
 # Optional: each agent's model, `provider/model` as `opencode models` lists it, or `provider/model@variant` to run it at
-# one of the variants `opencode models --verbose` lists for it, such as a reasoning effort (DESIGN §13). canopy writes
+# one of the variants OpenCode lists for it, such as a reasoning effort (DESIGN §13). canopy writes
 # it into the agent's definition and records it on each worker run; an agent not named runs on OpenCode's default. A
 # template, prefix, or suffix that passes --model, -m, or --variant is refused, since it would override this unseen.
-# Before a worker run starts, its model and variant are looked up in `opencode models`: one not listed, or a list that
+# Before a worker run starts, its model and variant are looked up in OpenCode's list: one not listed, or a list that
 # cannot be read, refuses the run with an attention item, never running it on another model. Private, as every
 # runtime key is.
 # One ticket's worker, planner, or reviewer can take another model, to canary it: `canopy model KEY MODEL`, or the

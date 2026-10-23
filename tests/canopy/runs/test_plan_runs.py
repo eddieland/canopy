@@ -104,7 +104,7 @@ def test_a_planner_reads_its_worktrees_history_through_canopys_git_tools(
     assert run.status == RunStatus.DONE, run.printed.out
 
     [planner] = agent_runs(scenario.agent_log)
-    entry = json.loads(planner["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["canopy_git"]
+    entry = json.loads(planner["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["servers"]["canopy_git"]
     assert entry["command"][-3:-1] == ["_mcp", "--git"]
     assert entry["command"][-1] in {f"repo={s}" for s in git_pool.slots}
     log, fork, other = planner["tools"]

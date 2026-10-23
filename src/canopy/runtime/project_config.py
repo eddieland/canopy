@@ -27,12 +27,15 @@ def refusal(places: Iterable[Path], *, tracker_server: str | None = None) -> str
         A message for the operator naming every file that refuses the run, or None.
     """
     places = list(places)
-    shadowing = [found for place in places for found in project_config.shadowing(place)]
+    # Once each: the runtime may read a place's parents too, which the places can share.
+    shadowing = list(dict.fromkeys(found for place in places for found in project_config.shadowing(place)))
     if shadowing:
         return project_config.shadowing_message(shadowing)
     if tracker_server is None:
         return None
-    naming = [found for place in places for found in project_config.naming_tools(place, tracker_server)]
+    naming = list(
+        dict.fromkeys(found for place in places for found in project_config.naming_tools(place, tracker_server)),
+    )
     return project_config.naming_tools_message(tracker_server, naming) if naming else None
 
 

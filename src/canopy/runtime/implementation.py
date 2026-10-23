@@ -6,7 +6,7 @@ There is one binding, chosen here and not in config: canopy runs one runtime at 
 between them (AGENTS.md, Do not build).
 """
 
-from canopy.runtime.opencode import (
+from canopy.runtime.opencode2 import (
     definitions,
     events,
     invocation,

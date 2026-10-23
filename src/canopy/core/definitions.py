@@ -110,15 +110,18 @@ def _drafts(config: Config, *, private: bool) -> agents.Drafts:
 
 
 def digest(config: Config | None = None, models: Mapping[str, Model] | None = None) -> str:
-    """Return a digest of the snapshot's files: their relative paths and contents."""
-    return _digest(sources(config, models))
+    """Return a digest of the snapshot's files, their relative paths and contents, and of the links it holds."""
+    return _digest(sources(config, models), runtime_definitions.links())
 
 
-def _digest(files: Mapping[str, bytes]) -> str:
+def _digest(files: Mapping[str, bytes], links: Mapping[str, Path]) -> str:
     h = hashlib.sha256()
     for rel, data in sorted(files.items()):
         h.update(f"{rel}\0{len(data)}\0".encode())
         h.update(data)
+    # A link is its target's path, not the operator's file: their config changes no snapshot.
+    for rel, target in sorted(links.items()):
+        h.update(f"{rel}\0->{target}\0".encode())
     return h.hexdigest()[:16]
 
 
@@ -138,8 +141,9 @@ def ensure(state_dir: Path, config: Config | None = None, models: Mapping[str, M
         OSError: the snapshot could not be written, and no other process put one in its place.
     """
     files = sources(config, models)
+    links = runtime_definitions.links()
     runtime = state_dir / RUNTIME_DIR
-    final = runtime / _digest(files)
+    final = runtime / _digest(files, links)
     if final.is_dir() or final.is_symlink():
         return _checked(final)
     runtime.mkdir(parents=True, exist_ok=True)
@@ -149,6 +153,9 @@ def ensure(state_dir: Path, config: Config | None = None, models: Mapping[str, M
             path = tmp / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
+        # Links to the operator's own config, which the runtime reads through them; left as they are below.
+        for rel, target in links.items():
+            (tmp / rel).symlink_to(target)
         # Before the rename, so no run ever loads it writable. Renamed within its parent, it needs no write of its own.
         _set_writable(tmp, writable=False)
         os.rename(tmp, final)  # noqa: PTH104  (os.rename, unlike Path.replace, never replaces a non-empty directory)
@@ -206,7 +213,8 @@ def _remove(snapshot: Path) -> None:
 def _set_writable(root: Path, *, writable: bool) -> None:
     """Give `root` and every directory and file under it the owner's write permission, or take everyone's away.
 
-    Symlinks are neither followed nor changed, `root` among them: canopy writes none into a snapshot.
+    Symlinks are neither followed nor changed, `root` among them: those canopy writes into a snapshot lead to the
+    operator's own config, which stays theirs to change.
 
     Raises:
         OSError: a permission could not be changed.

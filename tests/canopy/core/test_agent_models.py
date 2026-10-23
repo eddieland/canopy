@@ -165,7 +165,7 @@ def test_a_listed_model_passes_the_check(opencode_state: Path, tmp_path: Path) -
 
 
 def test_a_variant_is_looked_up_among_its_models_variants(opencode_state: Path, tmp_path: Path) -> None:
-    """The runtime drops a variant its model lacks without a word, so canopy looks it up first (DESIGN §13)."""
+    """A variant its model lacks would fail the run, or run at the default, so canopy looks it up first (§13)."""
     opencode_state.write_text(
         json.dumps({"models": ["a plugin says hello", MODEL, OTHER], "variants": {MODEL: ["low", "high"]}}),
     )
@@ -188,10 +188,10 @@ def test_a_model_not_listed_or_a_list_not_read_is_refused(opencode_state: Path, 
     with pytest.raises(agent_models.ModelError) as failed:
         agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL))
     assert failed.value.guard == agent_models.LIST_FAILED
-    assert "`opencode models` exited 1" in failed.value.reason
+    assert "`opencode api model.list` exited 1" in failed.value.reason
     with pytest.raises(agent_models.ModelError) as failed:
         agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL, "high"))
-    assert "`opencode models --verbose` exited 1" in failed.value.reason
+    assert "`opencode api model.list` exited 1" in failed.value.reason
 
 
 CHORE_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json {prompt}"

@@ -212,12 +212,12 @@ an exposure stated in TRUST_MODEL T7's residual.
 
 ## 13. Agent runtime
 
-OpenCode. The harness depends on one capability: run a named agent non-interactively in a given cwd with a prompt and
-read its stdout. MCP connectivity, OAuth, and tool permissions are the runtime's job. The runtime is swappable by
-editing the command templates (§12) and the `runtime` package (§5). Its surface, which the rest of canopy calls, names
-no runtime, and holds what any runtime's output is bounded by; its implementation alone knows OpenCode: its events, the
-format of canopy's definitions, and the config files the shadowing check reads (D009). A new runtime is a new
-implementation bound in its place. No interface: one runtime at a time.
+OpenCode 2, 2.1.4 or later. The harness depends on one capability: run a named agent non-interactively in a given cwd
+with a prompt and read its stdout. MCP connectivity, OAuth, and tool permissions are the runtime's job. The runtime is
+swappable by editing the command templates (§12) and the `runtime` package (§5). Its surface, which the rest of canopy
+calls, names no runtime, and holds what any runtime's output is bounded by; its implementation alone knows OpenCode: its
+events, the format of canopy's definitions, and the config files the shadowing check reads (D009). A new runtime is a
+new implementation bound in its place. No interface: one runtime at a time.
 
 Agent definitions ship in `agents/`:
 
@@ -263,9 +263,9 @@ validate make the run report no cost rather than too little, and a template that
 
 What the run was offered is recorded beside them: MCP servers, with the rules that leave it only some of one's tools,
 skills, and the runtime's own tools. The runtime is asked as `canopy agents` asks it, while the agent starts, by the
-run's own command with its agent's run swapped for the runtime's debug commands, so it is asked where the agent starts
-and inside any sandbox that wraps it. A run whose command canopy cannot read so, or that the runtime could not answer
-for, records why instead, and the run goes on either way.
+run's own command with its agent's run swapped for a server of the runtime's own that canopy questions, so it is asked
+where the agent starts and inside any sandbox that wraps it. A run whose command canopy cannot read so, or that the
+runtime could not answer for, records why instead, and the run goes on either way.
 
 The default templates title each session as canopy names it: a worker run by ticket, kind, and title; a tick by its id,
 what woke it, and what it faces; a chore or review by its name or PR. A title never starts like an option.
@@ -276,7 +276,9 @@ canopy snapshots its bundled agents, skills, and plugin into the state directory
 and the templates point the runtime at it (§12). The snapshot is written whole, never changed, unwritable once written
 (§33), and readable only by the operator, so overlapping runs never load a partial set; one that is a symlink, someone
 else's, or open to others is refused, failing the tick or making the run `crashed` (D040). Definitions are rendered
-from config, so a change to their inputs makes a new snapshot. Among them:
+from config, so a change to their inputs makes a new snapshot. The runtime reads the snapshot in place of the
+operator's own config directory, so the snapshot links to each config file of theirs, which stays theirs: their MCP
+servers, providers, and rules reach every run, as they would their own sessions. Among them:
 
 - `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
 - `canopy-overseer` gets the tracker's MCP server and only its read tools, and the overseer's prompt, or the
@@ -288,26 +290,25 @@ from config, so a change to their inputs makes a new snapshot. Among them:
   tools by exact name and its skill (§38).
 
 Nothing is installed into repositories. OpenCode merges canopy's definitions after the repository's config, so a
-repository's definition of a canopy agent could loosen its rules (D044). The harness refuses to start an agent where
-the config in its start directory defines one of canopy's agents: the overseer's refusal fails the tick, and a
-worker's is a `crashed` run whose slot is returned. A private run (§22) is also refused where that config names any
-tool of the tracker's MCP server, since a rule merged after canopy's could reopen a write tool.
+repository's definition of a canopy agent could loosen its rules (D044). The harness refuses to start an agent where the
+config in its start directory, or any directory above it, defines one of canopy's agents: the overseer's refusal fails
+the tick, and a worker's is a `crashed` run whose slot is returned. A private run (§22) is also refused where that
+config names any tool of the tracker's MCP server, since a rule merged after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
 turns none off, but for the overseer whose body holds the tracker's skill, and the operator's skill below. A
 repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
-canopy ships one plugin, `canopy.js`, whose first job is a clock that tells a running agent the minutes left; it, and
-what OpenCode does with a plugin, are §33.
+canopy ships one plugin, `canopy.js`, whose jobs are a clock that tells a running agent the minutes left, and holding
+a session's first prompt until its MCP tools are registered; it, and what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 
 Built as far as each agent's default in `[runtime.models]`, a chore's own model, variants, the ticket's override
 from `canopy model` or the ticket's page, the check of a model and its variant before a worker or plan run, and
 recording what served (REQUIREMENTS R23). The check before a review, a chore, or a tick's overseer is still to come;
-until then such a run on an unlisted model fails as it starts, and one at an unlisted variant runs at the model's
-default.
+until then such a run on an unlisted model or variant fails as it starts.
 
 The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design

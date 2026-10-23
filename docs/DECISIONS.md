@@ -88,8 +88,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D009. The runtime is a command template, and only its implementation in `canopy.runtime` knows it
 
 - `runtime.*_cmd` are templates, rendered per D023: how a run starts is config, not code.
-- What canopy reads and writes of OpenCode, its events, definitions' format, config files, and variables, is in
-  `runtime/opencode/` alone, which only `runtime/implementation.py` imports; the rest of canopy calls the `runtime`
+- What canopy reads and writes of OpenCode, its events, definitions' format, config files, and variables, is in its
+  implementations alone, `runtime/opencode2/` (bound) and `runtime/opencode/` (OpenCode 1's), which only
+  `runtime/implementation.py` imports; the rest of canopy calls the `runtime`
   package's surface. `test_layers.py` fails on a string naming OpenCode, or an import of it, anywhere else. A new
   runtime, or a new major version such as OpenCode 2, is a sibling implementation bound in its place, with its own
   definitions and default templates.
