@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import config
+from canopy.core import config, sandboxing
 from canopy.core.vocab import RunKind
 
 if TYPE_CHECKING:
@@ -26,6 +26,15 @@ PROMPT = "<prompt>"
 EXAMPLE_KEY = "PROJ-1"
 #: The PR an example reviewer's title names.
 EXAMPLE_PR = "https://github.com/owner/repo/pull/1"
+
+#: The wrapper's role for each command a run in a sandboxed repository starts in it (DESIGN §24).
+_SANDBOX_ROLES: dict[str, sandboxing.Role] = {
+    "worker": "worker",
+    "private worker": "worker",
+    "planner": "worker",
+    "reviewer": "review",
+    "setup": "setup",
+}
 
 
 @dataclass(frozen=True)
@@ -58,7 +67,8 @@ def commands(cfg: Config, layer_of: Mapping[str, Layer], definitions_dir: Path) 
     `layer_of` names the file that set each key some file sets, by `section.key`, as `config.origins` finds them.
 
     Returns:
-        The overseer's, each worker run's, the reviewer's, and the chores' commands, then `runtime.setup_cmd` when set.
+        The overseer's, each worker run's, the reviewer's, and the chores' commands, then `runtime.setup_cmd` when set,
+        then, when `runtime.sandbox_repos` names any, each command a run in those repositories starts in the sandbox.
     """
     runtime = cfg.runtime
 
@@ -101,8 +111,29 @@ def commands(cfg: Config, layer_of: Mapping[str, Layer], definitions_dir: Path) 
     )
     if runtime.setup_cmd:
         found.append(Command("setup", keys("runtime.setup_cmd"), config.setup_words(runtime.setup_cmd)))
+    if runtime.sandbox_repos:
+        sandbox_key = Key("runtime.sandbox_repos", layer_of.get("runtime.sandbox_repos"))
+        found.extend(_sandboxed(found, runtime, sandbox_key, definitions_dir))
     return found
 
 
 def _title(kind: RunKind) -> str:
     return f"{EXAMPLE_KEY} {kind}: Example ticket"
+
+
+def _sandboxed(found: Sequence[Command], runtime: config.Runtime, key: Key, definitions_dir: Path) -> list[Command]:
+    """Return each command of `found` the sandbox wraps, as a run in a repository `sandbox_repos` names starts it.
+
+    Returns:
+        Each wrapped command, its role naming those repositories, `key` first among its keys.
+    """
+    repos = runtime.sandbox_repos
+    named = ", ".join(repos)
+    wrapped: list[Command] = []
+    for command in found:
+        role = _SANDBOX_ROLES.get(command.role)
+        if role is None:
+            continue
+        argv = sandboxing.wrap(runtime, repos, role, command.argv, None if role == "setup" else definitions_dir)
+        wrapped.append(Command(f"{command.role} in {named}", [key, *command.keys], argv, command.stdin))
+    return wrapped

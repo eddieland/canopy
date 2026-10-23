@@ -161,7 +161,7 @@ def test_a_follow_up_authorizes_nothing_and_canopy_tells_the_operator_once(
     assert len(told(scenario)) == 1
     # Nothing dispatches it without a label: it is a request.
     assert scenario.refuses(dispatches(FOLLOW_UP, label=None)) == [
-        ("refused:unauthorized", f"--label is required: name the queue label you read on {FOLLOW_UP}"),
+        ("refused:unauthorized", f"label is required (--label): name the queue label you read on {FOLLOW_UP}"),
     ]
 
 

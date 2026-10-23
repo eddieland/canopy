@@ -37,3 +37,9 @@ def test_several_servers_are_given_in_one_inline_config() -> None:
         "canopy_chore": ["canopy", "_mcp", "--chore"],
         "canopy_reports": ["x"],
     }
+
+
+def test_a_timeout_is_taken_and_not_written_since_its_key_is_unread() -> None:
+    """Where OpenCode 2 reads a local server's request timeout is unread from its source, so its own default applies."""
+    with_timeout = servers.env({"canopy": ["canopy", "_mcp"]}, cwd=Path("/ws"), timeout_seconds=900)
+    assert with_timeout == servers.env({"canopy": ["canopy", "_mcp"]}, cwd=Path("/ws"))

@@ -1,10 +1,10 @@
 """How the runtime is told of one of canopy's own MCP servers, for one agent's run (DESIGN §27).
 
-A chore's run is given two, the one that serves it its own history (§19) and the one of canopy's read-only reports, and
-a review's or a plan's run one of read-only git: its process's environment names them, and turns off whatever in the
-runtime would hide MCP tools. That environment would pass to every process the
-run's tree starts, so a run canopy starts removes `VARIABLES` first. Which variables those are, and the form of the
-entry, are the implementation's.
+The overseer's run is given the server of its tools; a chore's run two, the one that serves it its own history (§19)
+and the one of canopy's read-only reports; and a review's or a plan's run one of read-only git: its process's
+environment names them, and turns off whatever in the runtime would hide MCP tools. That environment would pass to
+every process the run's tree starts, so a run canopy starts removes `VARIABLES` first. Which variables those are, and
+the form of the entry, are the implementation's.
 """
 
 from __future__ import annotations
@@ -21,13 +21,16 @@ if TYPE_CHECKING:
 VARIABLES = servers.VARIABLES
 
 
-def env(commands: Mapping[str, Sequence[str]], *, cwd: Path) -> dict[str, str]:
+def env(commands: Mapping[str, Sequence[str]], *, cwd: Path, timeout_seconds: int | None = None) -> dict[str, str]:
     """The environment that gives a run each of canopy's servers `commands` names, each run as its command in `cwd`.
+
+    `timeout_seconds`, when given, bounds each request the runtime makes of it, a tool call included; else the
+    runtime's default does.
 
     Returns:
         The variables to set on the run's process.
     """
-    return servers.env(commands, cwd=cwd)
+    return servers.env(commands, cwd=cwd, timeout_seconds=timeout_seconds)
 
 
 def tool_name(server: str, tool: str) -> str:

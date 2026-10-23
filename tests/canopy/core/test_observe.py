@@ -134,6 +134,23 @@ def test_a_held_checks_re_run_is_observed_at_the_same_head_and_the_run_it_repeat
     ], "a commit status has no run to keep"
 
 
+def test_a_prs_title_is_kept_to_one_line_cut_and_marked_and_none_when_not_printed(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    pr = {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7}
+    prints(connector_state, {**pr, "title": "Retry the upstream\non a 503 " + "x" * 300})
+    assert run(ctx).refused == {}
+    [seen] = records.fetch_all(ctx.conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs"))
+    assert (seen.title or "").startswith("Retry the upstream on a 503 x")
+    assert (len(seen.title or ""), (seen.title or "").endswith("...")) == (observe.MAX_TITLE, True)
+
+    prints(connector_state, pr)
+    run(ctx)
+    [seen] = records.fetch_all(ctx.conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs"))
+    assert seen.title is None, "a reader that prints no title leaves none, rather than the last one read"
+
+
 def test_the_request_holds_only_what_is_asked() -> None:
     assert observe.Request(prs=[]).to_json() == {"prs": []}
     tickets = [observe.AskedTicket("PROJ-1", "2026-10-18T09:00:00.000Z"), observe.AskedTicket("PROJ-2")]

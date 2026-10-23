@@ -400,6 +400,7 @@ class _Pr(_Line):
     mergeable_state: MergeState | None = None
     author: _Login | None = None
     labels: Annotated[list[_Name], Field(max_length=MAX_LIST)] = []
+    title: _Title | None = None
 
     @property
     def of(self) -> str:
@@ -643,6 +644,7 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
                     observed_at=now,
                     labels=json.dumps(line.labels),
                     mergeable_state=line.mergeable_state,
+                    title=line.title,
                 ).or_replace(),
             )
         case _Review():

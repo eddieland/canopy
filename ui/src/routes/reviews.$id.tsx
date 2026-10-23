@@ -100,7 +100,7 @@ function Loaded({ id }: { id: number }) {
             {draft === null ? (
                 <PageHeader
                     title={`${reviewRef(data.review.id)} ${pullRequestLabel(data.review.pr_url)}`}
-                    subject={data.ticket_title}
+                    subject={data.review.title}
                     help={HELP}
                     links={links}
                 >

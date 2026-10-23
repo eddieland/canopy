@@ -73,6 +73,7 @@ class Pull:
     contexts: list[dict[str, Any]] | None = None
     state: str = "OPEN"
     merge_state: str = "CLEAN"
+    title: str = "Retry the upstream on a 503"
 
 
 def run(name: str, status: str = "COMPLETED", conclusion: str | None = "SUCCESS", id_: int = 1) -> dict[str, Any]:
@@ -284,6 +285,7 @@ class Fake:
             "id": pull.node,
             "url": PR,
             "number": 7,
+            "title": pull.title,
             "state": pull.state,
             "isDraft": False,
             "headRefOid": HEAD,
@@ -494,6 +496,7 @@ def test_the_reader_prints_a_prs_reviews_and_threads_then_its_end(github: tuple[
         "mergeable": "mergeable",
         "mergeable_state": "clean",
         "author": "me",
+        "title": "Retry the upstream on a 503",
         "labels": [],
     }
     assert review["state"] == "commented"
@@ -802,7 +805,7 @@ def test_the_reader_refuses_what_it_cannot_use(github: tuple[Fake, str], request
 def test_canopy_records_every_line_it_prints(github: tuple[Fake, str], canopy_env: CanopyEnv) -> None:
     fake, url = github
     pull = fake.pulls["acme", "api", 7]
-    pull.labels, pull.merge_state = ["agent"], "BLOCKED"
+    pull.labels, pull.merge_state, pull.title = ["agent"], "BLOCKED", "Retry the upstream\non a 503"
     pull.contexts = [run("build", id_=11), status("deploy/approval", "PENDING"), run("lint", id_=12)]
     fake.branches["acme", "api"] = {"agent/PROJ-1": "bbbbbbb", "agent/PROJ-2": "ccccccc", "main": "aaaaaaa"}
     fake.searches["is:pr"] = [PR]
@@ -828,6 +831,7 @@ def test_canopy_records_every_line_it_prints(github: tuple[Fake, str], canopy_en
     assert found.review_query_result == [PR]
     [pr] = records.fetch_all(conn, records.ObservedPr, sql.select("*").from_("observed_prs"))
     assert (json.loads(pr.labels), pr.mergeable_state, pr.head_sha) == (["agent"], MergeState.BLOCKED, HEAD)
+    assert pr.title == "Retry the upstream on a 503", "the author's text, on one line"
     checks = records.fetch_all(conn, records.ObservedCheck, sql.select("*").from_("observed_checks").order_by("name"))
     assert [(c.name, c.status, c.run_id) for c in checks] == [
         ("build", CheckStatus.COMPLETED, 11),

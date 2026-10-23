@@ -196,6 +196,27 @@ setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
 - If your `PATH` has a relative entry, such as `.`, name the wrapper by its absolute path: canopy runs the template
   in the slot, where a relative entry finds what the branch committed.
 
+### Or sandbox some repositories only
+
+To sandbox the runs of some repositories and leave the rest as they are, name them instead of writing the prefixes,
+also in `~/.config/canopy/config.toml` or the workspace's private file:
+
+```toml
+[runtime]
+sandbox_repos = ["api", "billing"]
+```
+
+canopy then starts each worker run, `setup_cmd`, and review in those repositories in `canopy-sandbox` itself, with the
+role above, by its absolute path beside canopy's own Python, so a relative `PATH` entry cannot find a branch's file in
+its place. Runs in any other repository start as their templates have them. `canopy config commands` prints the
+wrapped commands too.
+
+- Leave the prefixes out: canopy refuses `sandbox_repos` beside a worker, setup, or review template that already starts
+  in `canopy-sandbox`, which would sandbox those runs twice.
+- A joint run, over several repositories, is one command, so it runs in one sandbox or none: canopy refuses a dispatch
+  over repositories that disagree, as `mixed_sandbox`. Sandbox all of them or none.
+- Chores name no repository; a chore's command is sandboxed only by its own prefix.
+
 A sandboxed worker's new commits go to a per-run object directory, which canopy reads to push and then deletes, after
 putting each slot back on the commit the run started from (DESIGN §8). An unsandboxed run leaves that directory
 empty.
@@ -245,6 +266,11 @@ github.com.
 - **`... has too long a path for srt's sockets`**, or `srt`'s own **`Failed to create bridge sockets`**: on Linux,
   `srt` makes the sockets that carry the sandbox's network in the run's temp directory, under the system one, and a
   socket's path holds at most 107 bytes. Run canopy with `TMPDIR` set to a shorter directory, such as `/tmp`.
+- **Every request from the sandbox fails with `Failed to connect to localhost port 3128`**, allowed hosts included:
+  on Linux, `srt` carries the sandbox's network to its proxy through socat, which listens on IPv6 unless told
+  otherwise, and on a kernel without IPv6 exits unreported. On such a host the wrapper sets `SOCAT_DEFAULT_LISTEN_IP=4`
+  for `srt`, unless you set it yourself, and `canopy sandbox setup` prints a `Note:` saying so. If you still see this,
+  check that the command starts with `canopy-sandbox`, and that you have not set that variable to `6`.
 - **bubblewrap fails with a permission error setting up the user namespace:** the Ubuntu restriction in step 1, or
   canopy running as root.
 - **The worker cannot push:** an SSH remote (step 4), or a credential helper whose files are not in `allowRead`

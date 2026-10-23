@@ -30,7 +30,9 @@ from tests.canopy.helpers import (
     LIST_TOOLS,
     MCP_OPENING,
     InlineRunner,
+    agent_runs,
     ancestors,
+    calls,
     chore_reports,
     chore_toml,
     in_run,
@@ -42,6 +44,7 @@ from tests.canopy.helpers import (
     worker_does,
 )
 from tests.canopy.review_helpers import feature_commit
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, executable, git
 
 #: One of the loop's own PRs, PROJ-1's in `repo`, which reviews are on for.
@@ -499,7 +502,7 @@ REFUSALS = [
             ["dispatch", "PROJ-1", "--kind", "implement", "--label", LABEL],
             dry_run=True,
         ),
-        "dispatch refused (unknown_repo): --repo is required",
+        "dispatch refused (unknown_repo): repos is required (--repo)",
         1,
         id="dispatch-in-no-repository",
     ),
@@ -520,7 +523,7 @@ REFUSALS = [
                 "Hi.",
             ],
         ),
-        "mirror refused (bad_comment): 'a b' is not a comment id",
+        "mirror refused (bad_comment): comment (--comment) 'a b' must match",
         1,
         id="mirror",
     ),
@@ -531,7 +534,7 @@ REFUSALS = [
             ["review", "run", "--pr", PR, "--sha", "abc", "--ticket", "PROJ-1", "--repo", "repo"],
             dry_run=True,
         ),
-        "review refused (bad_pr): --sha must be the full head commit",
+        "review refused (bad_pr): sha (--sha) must be the full head commit",
         1,
         id="review-run",
     ),
@@ -1147,6 +1150,24 @@ def test_a_worker_a_tool_dispatches_is_recorded_and_not_the_servers_descendant(o
         assert os.getpid() not in ancestors(pid)
 
 
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize("door", ["tool", "command"])
+def test_a_worker_starts_without_the_overseers_server(scenario: Scenario, door: str) -> None:
+    # The overseer's environment names the server, and a spawn passes its environment on: no run it starts may inherit
+    # it (DESIGN §27), whether a tool dispatched it or the command did.
+    dispatched = (
+        calls("canopy_dispatch", key="PROJ-1", kind="implement", label=LABEL, repos=["repo"])
+        if door == "tool"
+        else dispatches("PROJ-1")
+    )
+    ticked = scenario.tick(dispatched, worker=pushes())
+    assert [run.status for run in ticked.runs] == ["done"]
+    overseer, worker = agent_runs(scenario.agent_log)
+    assert overseer["env"].keys() >= servers.VARIABLES
+    assert servers.VARIABLES.isdisjoint(worker["env"])
+    assert "CANOPY_TICK_ID" not in worker["env"]
+
+
 def test_canopy_mcp_spawns_through_an_intermediate() -> None:
     with mock.patch.object(mcp, "run_stdio", autospec=True, return_value=0) as served:
         assert main(["_mcp"]) == 0
@@ -1155,10 +1176,11 @@ def test_canopy_mcp_spawns_through_an_intermediate() -> None:
         assert main(["_mcp"], runner=inline) == 0
     [(default,), _], [(given,), _], [(fake,), _] = served.call_args_list
     assert isinstance(default, procs.SubprocessRunner)
-    assert default.reparent
+    # No run a tool starts inherits what names the server to the overseer (DESIGN §27).
+    assert (default.reparent, default.unset) == (True, servers.VARIABLES)
     # The runner `main` is given is kept: what it removes from a child's environment, it still removes.
     assert isinstance(given, procs.SubprocessRunner)
-    assert (given.reparent, given.unset) == (True, {"SECRET"})
+    assert (given.reparent, given.unset) == (True, {"SECRET", *servers.VARIABLES})
     assert fake is inline
     assert mcp_cli.cmd_mcp.hidden
 

@@ -141,6 +141,7 @@ export const PAGE_GUIDES = {
     '/memory': 'memory',
     '/search': 'overview#search',
     '/settings': 'settings',
+    '/settings_/limits': 'settings#limits-and-trust',
 } as const satisfies Record<Exclude<keyof FileRoutesById, '__root__' | '/' | '/guide/' | '/guide/$page'>, string>
 
 /**

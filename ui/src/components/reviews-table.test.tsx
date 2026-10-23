@@ -130,6 +130,30 @@ describe('ReviewsTable', () => {
         expect(tipOf(screen.getByText('3f9c2a1'))).toBe('3f9c2a1b7d0e')
     })
 
+    it('names the PR’s title after the PR, and nothing for a PR without one', async () => {
+        await renderReviews([
+            { ...REVIEW, title: 'Debounce search input' },
+            { ...REVIEW, id: 5, ticket_key: null },
+        ])
+        expect(within(screen.getByTestId('review-4')).getByText('Debounce search input')).toBeDefined()
+        const untitled = within(screen.getByTestId('review-5'))
+        expect(untitled.queryByText('untitled')).toBeNull()
+        expect(untitled.queryByText('Debounce search input')).toBeNull()
+    })
+
+    it('leaves the title to the lead of a request’s group, and off the PR’s own page', async () => {
+        const asked = { ...REVIEW, title: 'Debounce search input', request_id: 3 }
+        await renderReviews([
+            { ...asked, id: 9 },
+            { ...asked, id: 7, persona: 'canopy' },
+        ])
+        expect(within(screen.getByTestId('review-9')).getByText('Debounce search input')).toBeDefined()
+        expect(within(screen.getByTestId('review-7')).queryByText('Debounce search input')).toBeNull()
+        cleanup()
+        await renderReviews([asked], false)
+        expect(screen.queryByText('Debounce search input')).toBeNull()
+    })
+
     it('names the persona each review wrote in, and nothing for one from before canopy recorded it', async () => {
         await renderReviews([REVIEW, { ...REVIEW, id: 5, persona: null }])
         const named = within(screen.getByTestId('review-4')).getByText('as skeptic')
