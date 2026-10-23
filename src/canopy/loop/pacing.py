@@ -94,6 +94,23 @@ def idle(ctx: Context, outcome: tick.Outcome) -> bool:
     ) and _nothing_since(ctx, previous.read_at, previous.message_id)
 
 
+def count(ctx: Context, outcome: tick.Outcome, idle_count: int, *, idle: bool, on: bool) -> int:
+    """The idle ticks in a row after the tick that ended with `outcome`, `idle` or not, from `idle_count` before it.
+
+    Idle pacing paces only the overseer's runs (DESIGN §39): an `ok` tick that ran none cost nothing and leaves the
+    count as it was. Any other tick adds one when it was idle with pacing `on`, and starts the count again otherwise, a
+    tick halted before its overseer among them, as one that failed does.
+
+    Returns:
+        The count.
+    """
+    if outcome.status == TickStatus.OK and outcome.tick_id is not None:
+        row = db.get_tick(ctx.conn, outcome.tick_id)
+        if row is not None and row.overseer_ran is False:
+            return idle_count
+    return idle_count + 1 if on and idle else 0
+
+
 def churn(ctx: Context, outcome: tick.Outcome, seen: Before) -> list[str]:
     """What the tick changed with nothing new in the journal to change it for (DESIGN §6, Idle pacing; ROADMAP M28).
 

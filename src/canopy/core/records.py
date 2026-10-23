@@ -124,6 +124,9 @@ class Tick(Row):
     definitions_digest: str | None
     # The version of canopy that ran the tick; None on a tick from before that was recorded.
     canopy_version: str | None
+    #: Whether it ran its overseer: False when halted or when nothing was left to it (DESIGN §39); None on a tick from
+    #: before that was recorded, or one that ended before it got that far.
+    overseer_ran: bool | None
 
 
 @dataclass(frozen=True)

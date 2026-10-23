@@ -118,6 +118,8 @@ class TickGroup:
     group: Group
     ticks: int
     cost_usd: float | None
+    #: How many of them ran no overseer, left nothing to judge or halted before it (§39): each counted at nothing.
+    without_overseer: int = 0
 
 
 @dataclass(frozen=True)
@@ -127,6 +129,8 @@ class Woken:
     by: str
     ticks: int
     cost_usd: float | None
+    #: How many of them ran no overseer, left nothing to judge or halted before it (§39): each counted at nothing.
+    without_overseer: int = 0
 
 
 @dataclass(frozen=True)
@@ -466,6 +470,8 @@ class _TickRow:
     dry: bool
     group: Group | None
     woken_by: str | None
+    #: Whether they ran their overseer: False for ticks the harness left it nothing (§39), whose cost is nothing.
+    ran: bool
     ticks: int
     cost_usd: float | None
     unpriced: int
@@ -477,14 +483,17 @@ class _TickRow:
 
 
 def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: sql.Fragment) -> list[_TickRow]:
+    # A tick from before `overseer_ran` was recorded ran its overseer if it got that far. One that ran none spent
+    # nothing, so it counts at nothing, and never among the runs that reported no cost (§39).
     grouped = (
         sql.select(
-            "{} AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), count(*) - count(cost_usd)",
+            "{} AS day, dry_run, status, idle, woken_by, overseer_ran IS NOT 0 AS ran, count(*), SUM(cost_usd), "
+            "count(*) - count(cost_usd)",
             bucket,
         )
         .from_("ticks")
         .where("started_at >= ? AND started_at < ?", since, until)
-        .group_by("day, dry_run, status, idle, woken_by")
+        .group_by("day, dry_run, status, idle, woken_by, ran")
     )
     rows = sql.execute(conn, grouped).fetchall()
     return [
@@ -493,11 +502,12 @@ def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: sql.Fra
             dry=bool(dry),
             group=_group(str(status), idle, dry=bool(dry)),
             woken_by=None if woken is None else str(woken),
+            ran=bool(ran),
             ticks=int(count),
-            cost_usd=cost,
-            unpriced=int(unpriced),
+            cost_usd=cost if ran else (cost or 0.0),
+            unpriced=int(unpriced) if ran else 0,
         )
-        for day, dry, status, idle, woken, count, cost, unpriced in rows
+        for day, dry, status, idle, woken, ran, count, cost, unpriced in rows
     ]
 
 
@@ -530,6 +540,7 @@ def _groups(rows: Collection[_TickRow]) -> list[TickGroup]:
             group=g,
             ticks=sum(r.ticks for r in rows if r.group == g),
             cost_usd=_sum([r.cost_usd for r in rows if r.group == g]),
+            without_overseer=sum(r.ticks for r in rows if r.group == g and not r.ran),
         )
         for g in GROUPS
     ]
@@ -542,7 +553,12 @@ def _woken(rows: Iterable[_TickRow]) -> list[Woken]:
         if row.live_loop and row.woken_by is not None:
             by_cause.setdefault(row.woken_by, []).append(row)
     found = [
-        Woken(by=cause, ticks=sum(r.ticks for r in caused), cost_usd=_sum([r.cost_usd for r in caused]))
+        Woken(
+            by=cause,
+            ticks=sum(r.ticks for r in caused),
+            cost_usd=_sum([r.cost_usd for r in caused]),
+            without_overseer=sum(r.ticks for r in caused if not r.ran),
+        )
         for cause, caused in sorted(by_cause.items())
     ]
     return sorted(found, key=lambda w: -w.ticks)

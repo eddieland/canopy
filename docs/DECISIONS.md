@@ -149,7 +149,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Its verbs are MCP tools canopy serves its run alone (D124, DESIGN §27); it has no shell but the commands the
   operator names in `runtime.allow_bash`, never canopy's own. They, and the commands that share their functions until
   those go, refuse without a running tick, so the journal holds only what the loop did.
-- Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's. No own table.
+- Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's, with the
+  overseer's items held through a tick that did not give it their subject (DESIGN §14). No own table.
 
 ## D021. How OpenCode enforces permissions under `opencode run`
 
