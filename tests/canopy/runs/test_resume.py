@@ -388,8 +388,11 @@ def test_grant_of_fix_ci_is_refused_naming_resume(scenario: Scenario) -> None:
 
 
 def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(scenario: Scenario, git_pool: GitPool) -> None:
-    """M3 acceptance, against the fakes, as M56 left it. An overseer that asks for a resume for CI every tick, as a PR
-    whose checks keep failing would make it, gets one run per cooldown window and none past `max_resume_attempts`."""
+    """M3 acceptance, against the fakes, as M56 left it.
+
+    An overseer that asks for a resume for CI every tick, as a PR whose checks keep failing would make it, gets one run
+    per cooldown window and none past `max_resume_attempts`.
+    """
     scenario.configures(policy={"max_resume_attempts": 2})
     scenario.tick(dispatches(), worker=pushes())
 

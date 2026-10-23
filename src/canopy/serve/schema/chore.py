@@ -1,6 +1,6 @@
 """The API's types for chores (DESIGN §19): the chores list, a chore's and a chore run's pages, tries, and dismissals.
 
-Built on `schema.Model`, as every API type is (schema.py).
+Built on `schema.Model`, as every API type is (schema/__init__.py).
 """
 
 from __future__ import annotations

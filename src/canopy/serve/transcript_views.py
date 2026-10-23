@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import gc_passes
 from canopy.runtime import entries, transcript
-from canopy.serve.transcript_schema import (
+from canopy.serve.schema.transcript import (
     RawOutput,
     Transcript,
     TranscriptEntry,

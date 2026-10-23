@@ -1,5 +1,8 @@
-"""Private tickets (DESIGN §22, ROADMAP M18): `canopy start`, `stop`, `reply`, and `show`, the private worker, and the
-journal's conversation, against the fake treehouse, a fake overseer, and a fake worker."""
+"""Private tickets (DESIGN §22, ROADMAP M18): `canopy start`, `stop`, `reply`, and `show`.
+
+The commands, the private worker, and the journal's conversation are tested against the fake treehouse, a fake overseer,
+and a fake worker.
+"""
 
 import contextlib
 import io

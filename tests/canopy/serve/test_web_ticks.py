@@ -1,5 +1,7 @@
-"""The web UI's ticks (DESIGN §6, §22, ROADMAP M24): what `canopy decisions` prints, a tick's page, and each ticket's
-decisions across ticks. Reads only."""
+"""The web UI's ticks (DESIGN §6, §22, ROADMAP M24). Reads only.
+
+What `canopy decisions` prints, a tick's page, and each ticket's decisions across ticks.
+"""
 
 import re
 

@@ -199,7 +199,7 @@ ignore = [
 convention = "google"
 
 # pydantic resolves a model's annotations when its class is made, so what they name is imported for real (TC001): the
-# API's models in serve are built on schema.Model, and each feature's *_schema.py imports the shared ones it names.
+# API's models in serve are built on schema.Model, and each feature's module in schema/ imports the shared ones.
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = ["canopy.serve.schema.Model"]
 
@@ -238,7 +238,7 @@ banned-from = ["unittest.mock"]
 "src/canopy/infra/procs.py" = ["TID251", "S603"]
 "tests/**" = [
     "ARG001",  # Fixtures requested only for their side effects (fakes on PATH, state files set).
-    "D",       # Docstrings are optional in tests and unchecked when present; test names are the documentation.
+    "D1",      # Docstrings are optional in tests; test names are the documentation. One that is there is checked.
     "DOC",     # Same as D: a test's docstring, when it has one, needs no sections.
     "PLR0917", # pytest passes fixtures as positional arguments; a test's signature is its fixture list.
     "PLR2004", # Expected exit codes and counts are clearer inline than as named constants.
@@ -271,7 +271,7 @@ banned-from = ["unittest.mock"]
 "src/canopy/serve/api/*" = ["DOC201", "DOC402", "DOC501", "TC001"]
 # The API's models are pydantic's, built on schema.Model, which ruff cannot see is pydantic's from another module:
 # pydantic copies a field's mutable default for each instance (RUF012).
-"src/canopy/serve/*_schema.py" = ["RUF012"]
+"src/canopy/serve/schema/*.py" = ["RUF012"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

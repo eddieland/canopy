@@ -316,9 +316,9 @@ jobs:
           uv sync --locked
           npm --prefix ui ci --no-audit --no-fund
 
+      # `./`, not the `$/` zizmor asks for: actionlint does not parse `$/` yet.
       - name: Install Playwright's Chromium
-        working-directory: ui
-        run: npx playwright install --with-deps chromium
+        uses: ./.github/actions/playwright-chromium # zizmor: ignore[self-repository]
 
       - name: Playwright
         env:

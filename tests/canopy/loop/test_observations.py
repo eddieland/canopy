@@ -208,8 +208,10 @@ def test_comments_past_the_earlier_cursor(
 
 
 def observed(env: CanopyEnv, conn: sqlite3.Connection) -> dict[str, Any]:
-    """The block's observations of `env`'s journal at NOW, as the overseer reads them: the tick derived first, as a
-    tick derives it, and the section as JSON."""
+    """The block's observations of `env`'s journal at NOW, as the overseer reads them.
+
+    The tick is derived first, as a tick derives it, and the section is returned as JSON.
+    """
     conn.commit()
     ctx = context(env)
     with clock(FRESH):

@@ -1,5 +1,4 @@
-"""Each bundled prompt, persona, agent definition, and skill, checked against the size `.agents/sizes.toml` records
-for it.
+"""Each bundled prompt, persona, agent definition, and skill, checked against its size in `.agents/sizes.toml`.
 
 An agent run reads these files whole, and the overseer's prompt goes out on every tick, so a change to one's size
 changes what every run after it costs. The recorded size is a record, not a limit: a prompt grows or shrinks as the
@@ -74,8 +73,10 @@ def recorded() -> dict[str, int]:
 
 
 def problems(measured: Mapping[str, int], record: Mapping[str, int]) -> list[str]:
-    """Where `record` no longer matches `measured`, each with the change to the record that brings it up to date: a
-    file grown past its number or shrunk well under it, a file with no number, and a number for a file that is gone."""
+    """Where `record` no longer matches `measured`, each with the change to the record that brings it up to date.
+
+    A file grown past its number or shrunk well under it, a file with no number, and a number for a file that is gone.
+    """
     found: list[str] = []
     for path in sorted(measured.keys() | record.keys()):
         new, old = measured.get(path), record.get(path)

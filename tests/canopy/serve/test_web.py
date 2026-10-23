@@ -1,5 +1,8 @@
-"""The web UI over the operator's own journal (DESIGN §22, ROADMAP M20): its channel writes through the CLI's guards,
-its pages read what `canopy show` and `canopy status` print, and `canopy loop` serves it from a thread."""
+"""The web UI over the operator's own journal (DESIGN §22, ROADMAP M20).
+
+Its channel writes through the CLI's guards, its pages read what `canopy show` and `canopy status` print, and
+`canopy loop` serves it from a thread.
+"""
 
 import dataclasses
 import json
@@ -22,7 +25,7 @@ from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.runtime.report import ModelUse, Usage
 from canopy.serve import live, secret, spend_views
-from canopy.serve.event_schema import LoopUpdated
+from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
     KEY,
     FakeTime,

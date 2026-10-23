@@ -12,9 +12,9 @@ from unittest import mock
 
 from canopy.core import db, gc_passes, review_diff, review_runs
 from canopy.core.vocab import ReviewRunStatus
-from canopy.serve import mock_reviews
 from canopy.serve.api import reviews as reviews_api
 from canopy.serve.backend import Backend
+from canopy.serve.mock import reviews as mock_reviews
 from tests.canopy.helpers import present
 from tests.canopy.web_helpers import SECRET, client, signed_in
 

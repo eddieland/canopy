@@ -1,6 +1,6 @@
 """The API's types for search (DESIGN §22, Search): a search's hits and where each opens.
 
-Built on `schema.Model`, as every API type is (schema.py).
+Built on `schema.Model`, as every API type is (schema/__init__.py).
 """
 
 from __future__ import annotations

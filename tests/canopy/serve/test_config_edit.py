@@ -1,5 +1,8 @@
-"""The settings page's config writes (DESIGN §12, §22, ROADMAP M41): only the keys it lists, within their bounds, trust
-settings only toward stricter, the workspace's private file alone, its comments kept, and a reload asked for after."""
+"""The settings page's config writes (DESIGN §12, §22, ROADMAP M41).
+
+Only the keys it lists, within their bounds, trust settings only toward stricter, the workspace's private file alone,
+its comments kept, and a reload asked for after.
+"""
 
 import json
 import os

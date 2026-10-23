@@ -393,8 +393,10 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(scenario: Scenario, la
 
 
 def test_a_running_tick_shows_its_overseer_session_spend_and_output_so_far(scenario: Scenario) -> None:
-    """What the overseer has printed is on the tick and in its log as it prints it, so a page or `canopy decisions`
-    shows it mid-tick: its session, what its finished model calls cost, and its output (DESIGN §6, §22)."""
+    """What the overseer has printed is on the tick and in its log as it prints it (DESIGN §6, §22).
+
+    So a page or `canopy decisions` shows it mid-tick: its session, what its finished model calls cost, and its output.
+    """
     with_events(scenario.env, "canopy-overseer")
     scenario.tick(canopy("decisions"), session="ses_o1", dry_run=True)
 
