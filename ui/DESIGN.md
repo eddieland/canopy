@@ -910,7 +910,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   view, and a toast says what the reply did, since the form that said it goes with its item; the row it left keeps
   its `answered` chip. With nothing else waiting the item stays, its form's line saying what the reply did. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
-  `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
+  `attempt_limit`, `chore_failed`, the review reasons, and a run refused its model, `model_missing` and
+  `model_list_failed`, which only the operator clears), then what waits on the operator's answer (`awaiting_reply`,
   `untrusted_review`, `plan_review`), then every other reason, then chores' findings; within each, the item open longest
   first. A row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`, semibold) when
   it is about a ticket, or its task's text's first line when it is about a task, as a message's subject, then its
@@ -945,10 +946,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   for one unsettled), a router link to the review's page its detail names, in place of the PR's review limit. A task's
   (`awaiting_reply`, `task_ticket_unrecorded`): named `task:N` (`TaskLink`) and its text's first line, as its row is,
   a question's head as a ticket's, then an outline `Answer on task:N` (`Open` for the other), a router link to the
-  task's page, which holds its question and its answer, never the `canopy` commands its detail names. An item
-  about nothing the page shows
-  whose detail names a `canopy` command to run (`repo_missing`): the command,
-  `Copyable`, and nothing to answer. A broken run's item shows any limit it is stuck at (below) under its run, as
+  task's page, which holds its question and its answer, never the `canopy` commands its detail names. A ticket's run
+  refused its model (`model_missing`, `model_list_failed`): the ticket's models (`TicketModels`), as its page shows
+  them, the runtime's list read as the item opens rather than when a menu does, so the model it no longer lists is
+  marked already. An item about nothing the page shows whose detail names a `canopy` command to run (`repo_missing`),
+  or the overseer's or a chore's run refused its model, `canopy models`: the command, `Copyable`, and nothing to
+  answer. A broken run's item shows any limit it is stuck at (below) under its run, as
   what it asks for. A ticket's item then shows its answer (below): its conversation, the reply form, and on the
   reasons above the ticket's own verbs (Start or Stop, Forget) and any other limit as a quiet row under the reply,
   Start and Stop as ghost buttons; on any other reason the verbs and the limit lead, under the head, as what it asks.

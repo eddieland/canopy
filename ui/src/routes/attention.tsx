@@ -31,6 +31,7 @@ import { PlanCard } from '@/components/plan-card'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { LessonsDue, LessonsWrong, ProposalsWaiting } from '@/components/memory-attention'
+import { ModelAttention } from '@/components/model-attention'
 import { InlineCode } from '@/components/rich-text'
 import { RunsTable } from '@/components/runs-table'
 import { Chip } from '@/components/status'
@@ -48,6 +49,7 @@ import {
     ask,
     bySeverity,
     commandOf,
+    modelRefused,
     nextWaiting,
     pullRequestOf,
     reviewOf,
@@ -97,6 +99,11 @@ const TURNS_REM = 48
 // The ids the page moves the focus to: the button back to the list, and an item's row.
 const BACK = 'attention-back'
 const rowId = (item: string): string => `attention-row-${item}`
+
+// What `canopy models` is for, on an item refused its model about no ticket: it fixes nothing itself, but says what to.
+const MODELS_NOTE =
+    "Nothing to answer here: it lists the runtime's models and names any in [runtime.models] it lacks. " +
+    'Choose one it lists, or set its provider up, and the item leaves when its cause is gone.'
 
 function AttentionPage() {
     const { item: wanted } = Route.useSearch()
@@ -385,12 +392,13 @@ function Answered() {
 /**
  * The selected item. Its reason picks the first block under its head, what it asks of the operator (`ask`, ui/DESIGN.md
  * "The attention detail"): a broken run's row, the PR's link out, the plan's card, the proposals or lessons memory's
- * items name, or the command to run. A ticket's item then shows its answer: its conversation and the reply form, with
- * the ticket's own actions and grants under them, or ahead of them when the reason asks for nothing else; a chore's
- * item its notes and the form for another, and for a finding the button to dismiss it; a review's draft's item the
- * review's page, where the draft is read and published; a task's item the task's page, where it is read and answered;
- * a PR's other item its review limit and its grant, for a PR no ticket owns; an item about none of them, what it says.
- * `onReplied` hears each reply sent from it, with what the form said of it.
+ * items name, the ticket's models for a run refused its own, or the command to run. A ticket's item then shows its
+ * answer: its conversation and the reply form, with the ticket's own actions and grants under them, or ahead of them
+ * when the reason asks for nothing else; a chore's item its notes and the form for another, and for a finding the
+ * button to dismiss it; a review's draft's item the review's page, where the draft is read and published; a task's
+ * item the task's page, where it is read and answered; a PR's other item its review limit and its grant, for a PR no
+ * ticket owns; an item about none of them, what it says. `onReplied` hears each reply sent from it, with what the form
+ * said of it.
  */
 function Detail({ item, done, onReplied }: { item: AttentionItem; done: boolean; onReplied: (said: string) => void }) {
     const asks = ask(item)
@@ -398,6 +406,14 @@ function Detail({ item, done, onReplied }: { item: AttentionItem; done: boolean;
     return (
         <Panel data-testid="attention-detail">
             <ItemHead item={item} asks={asks} done={done} />
+            {/* First, as what the item asks: a chore's item refused its model shows its notes after it. */}
+            {command !== null && (
+                <RunCommand
+                    command={command}
+                    note={modelRefused(item) ? MODELS_NOTE : undefined}
+                    className={cn((item.chore !== null || item.pr !== null) && 'border-b')}
+                />
+            )}
             {asks === 'plan' && item.ticket_key !== null && <PlanReview ticketKey={item.ticket_key} />}
             {item.reason === 'memory_proposal' && item.ticket_key !== null && (
                 <ProposalsWaiting ticketKey={item.ticket_key} />
@@ -411,7 +427,6 @@ function Detail({ item, done, onReplied }: { item: AttentionItem; done: boolean;
             {asks === 'review' && <ReviewAction item={item} />}
             {item.task !== null && <TaskAction item={item} task={item.task} />}
             {item.pr !== null && asks !== 'review' && <PullRequestLimits url={item.pr} />}
-            {command !== null && <RunCommand command={command} />}
             {asks === 'none' && item.ticket_key === null && item.chore === null && item.pr === null && (
                 <NothingToAnswer />
             )}
@@ -594,10 +609,13 @@ function NothingToAnswer() {
     return <Empty>nothing to answer here: it leaves when its cause is gone</Empty>
 }
 
-/** An item whose fix is a command for the operator to run, such as `repo_missing`'s: the command, to copy. */
-function RunCommand({ command }: { command: string }) {
+/**
+ * An item whose fix is a command for the operator to run, such as `repo_missing`'s: the command, to copy, and `note`,
+ * what running it does, for a command that does not fix the item itself.
+ */
+function RunCommand({ command, note, className }: { command: string; note?: string; className?: string }) {
     return (
-        <div className="flex flex-col items-start gap-2 p-3" data-testid="attention-command">
+        <div className={cn('flex flex-col items-start gap-2 p-3', className)} data-testid="attention-command">
             <Copyable
                 text={command}
                 label="command"
@@ -606,7 +624,7 @@ function RunCommand({ command }: { command: string }) {
                 {command}
             </Copyable>
             <p className="text-xs text-muted-foreground">
-                Nothing to answer here: run it, and the item leaves when its cause is gone.
+                {note ?? 'Nothing to answer here: run it, and the item leaves when its cause is gone.'}
             </p>
         </div>
     )
@@ -642,10 +660,10 @@ function ChoreThread({ name }: { name: string }) {
 }
 
 /**
- * A ticket's item under its head: what its reason asks first (a broken run's row and any grant it is stuck at, or the
- * PR's link out), then the ticket's answer (`TicketAnswer`): its conversation, the reply form (`ReplyForm`), and the
- * ticket's verbs and any other grant as a quiet row under them. On a reason that asks for nothing else, the verbs lead
- * instead, as what the item asks for.
+ * A ticket's item under its head: what its reason asks first (a broken run's row and any grant it is stuck at, the
+ * PR's link out, or the ticket's models for a run refused its own), then the ticket's answer (`TicketAnswer`): its
+ * conversation, the reply form (`ReplyForm`), and the ticket's verbs and any other grant as a quiet row under them. On
+ * a reason that asks for nothing else, the verbs lead instead, as what the item asks for.
  */
 function Thread({
     item,
@@ -681,6 +699,7 @@ function Thread({
             )}
             {asks === 'pull-request' && <PullRequestAction item={item} units={data.units} />}
             {asks === 'drafts' && <DraftsAction item={item} ticketKey={ticket.key} drafts={data.drafts} />}
+            {asks === 'model' && <ModelAttention ticketKey={ticket.key} models={data.models} />}
             {leads && <TicketVerbs ticket={ticket} limits={data.limits} place="lead" testId="attention-actions" />}
             <TicketAnswer
                 detail={data}

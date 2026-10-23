@@ -277,8 +277,8 @@ def test_an_override_whose_model_was_dropped_refuses_the_tickets_next_dispatch(
     assert scenario.run(worker=pushes()).row["model"] == OTHER
     listed(opencode_state, MODEL)
     reason = (
-        f"OpenCode does not list the model {OTHER} chosen for {KEY}'s worker runs (canopy model {KEY}), so a run on "
-        "it would fail before its first call; nothing ran on another model. Choose a model it lists, or set up its "
+        f"OpenCode does not list the model {OTHER} chosen for {KEY}'s worker runs (`canopy model {KEY}`), so a run "
+        "on it would fail before its first call; nothing ran on another model. Choose a model it lists, or set up its "
         "provider"
     )
     # Never config's model or the runtime's default instead: the operator chose this one for this ticket.
