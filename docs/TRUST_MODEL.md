@@ -179,7 +179,8 @@ Controls:
   unread. A draft is the reviewer's text, written from the PR's, and untrusted until the operator publishes a version
   of it, which they name by its hash. So do `canopy reply review:ID`, the operator's note on a draft, which asks the
   next tick for a revision, and `canopy grant review:ID revision`: a note is the reviser's only instruction, so an
-  agent that could write one could choose what the operator is offered to publish.
+  agent that could write one could choose what the operator is offered to publish. So does `canopy review discard`:
+  an agent that could discard a draft could hide from the operator a review they asked for.
   So does `gc` (DESIGN §26): an agent that could remove history early
   could remove the transcript that shows what it did, and no flag of it shortens retention, which only the
   operator's private config sets. So does `notice`, when it sets or clears the operator's notice to workers

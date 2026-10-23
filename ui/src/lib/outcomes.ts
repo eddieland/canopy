@@ -223,7 +223,8 @@ export function reviewDraftPublishedText(run: number, published: ReviewDraftPubl
             )
         }
         case 'waiting':
-        case 'publishing': {
+        case 'publishing':
+        case 'discarded': {
             return `${version} was not published: ${published.failed ?? draft.why ?? 'nothing was posted'}`
         }
     }
@@ -248,7 +249,8 @@ export function reviewDraftPublishedToast(run: number, prUrl: string, published:
             return { title: `${capitalized(version)} may have been posted`, tone: 'failed' }
         }
         case 'waiting':
-        case 'publishing': {
+        case 'publishing':
+        case 'discarded': {
             return { title: `${capitalized(version)} was not published`, tone: 'failed' }
         }
     }

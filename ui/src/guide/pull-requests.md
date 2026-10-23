@@ -17,9 +17,10 @@ the title keeps the room.
 
 On a PR the loop doesn't own, a chip after the verdict says where your own review of it stands: `draft` while it waits
 on you, `staged` once it's a pending review on GitHub for you to submit, `unconfirmed` while canopy doesn't know whether
-a publish posted, and `published` once it did ([Publishing your review](#publishing-your-review)). `staged` and
-`unconfirmed` are amber, since each waits on you or on GitHub; the rest stay grey. Scan the column for amber and you
-know which coworkers are still waiting on a review you think you sent.
+a publish posted, `published` once it did ([Publishing your review](#publishing-your-review)), and `discarded` once you
+said it won't go out, with `canopy review discard RUN`. `staged` and `unconfirmed` are amber, since each waits on you
+or on GitHub; the rest stay grey. Scan the column for amber and you know which coworkers are still waiting on a review
+you think you sent.
 
 The field over the list keeps the PRs whose name, ticket, or title holds every word you type, in any case, so `web#88`
 or `debounce` finds the one you mean without scrolling. With PRs in more than one repository, a repository picker
@@ -291,9 +292,9 @@ belong to one review, so a new commit's review starts fresh.
 A finished review of a PR the loop doesn't own, a coworker's you asked for or one `review.query` matched, is also the
 first draft of a review you could leave on it, and its page is about that draft. The title says so, **Your review of
 acme/api#14 by carol**, and the line under it says where the draft stands: waiting on you, staged on GitHub, published,
-or unconfirmed while canopy finds out whether a publish landed. **Draft review** comes first and shows exactly what
-canopy would post in your name: the body, which the reviewer leaves empty unless it has something to tell your
-coworker that no finding says, each finding on a line of the diff as a comment on that line, and a finding the diff
+discarded, or unconfirmed while canopy finds out whether a publish landed. **Draft review** comes first and shows
+exactly what canopy would post in your name: the body, which the reviewer leaves empty unless it has something to tell
+your coworker that no finding says, each finding on a line of the diff as a comment on that line, and a finding the diff
 doesn't show in the body under its location. The reviewer's summary is written for you, not your coworker, so it stays
 out of the draft. On the diff, each finding is
 one card: its severity and title from the reviewer, then the comment as it will post, marked **in your review** or

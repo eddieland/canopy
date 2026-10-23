@@ -5043,10 +5043,10 @@ export type components = {
             status: string;
         };
         /**
-         * @description Where a review's draft stands (DESIGN §34): the operator's to edit and publish while `waiting`; `staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted.
+         * @description Where a review's draft stands (DESIGN §34): the operator's to edit and publish while `waiting`; `staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted; `discarded` once they said it will not post.
          * @enum {string}
          */
-        ReviewDraftStatusName: "waiting" | "publishing" | "unconfirmed" | "staged" | "published";
+        ReviewDraftStatusName: "waiting" | "publishing" | "unconfirmed" | "staged" | "published" | "discarded";
         /**
          * ReviewDraftVersion
          * @description One version of a review's draft, as its history lists it.
