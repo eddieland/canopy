@@ -99,6 +99,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M60. Personas](M60-personas.md): in progress.
 - [M61. One-off tasks](M61-one-off-tasks.md): in progress.
 - [M62. Artifacts, and comments on them back to the ticket](M62-artifacts.md): in progress.
+- [M63. Attachments on tickets and tasks](M63-attachments.md): in progress.
 
 ## Deferred, with the trigger that would unblock each
 

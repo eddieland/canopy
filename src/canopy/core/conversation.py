@@ -102,7 +102,20 @@ TASK = "task"
 # `persona` (a review request and its persona, `core/review_requests.py`), and `show`; working one is PR-scoped work
 # (ROADMAP M14). `mirror` is the overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
-    TICKET: ("start", "stop", "reply", "forget", "grant", "show", "plan", "persona", "model", MIRROR_ACTION),
+    TICKET: (
+        "start",
+        "stop",
+        "reply",
+        "forget",
+        "grant",
+        "show",
+        "plan",
+        "persona",
+        "model",
+        "attach",
+        "detach",
+        MIRROR_ACTION,
+    ),
     PR: ("grant", "start", "stop", "show", "persona"),
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
@@ -111,8 +124,8 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     # change, or grant its draft more revisions (§34).
     REVIEW: ("dismiss", "send", "seen", "reply", "grant"),
     # Submitted with `canopy task submit`; a reply queues its next run, and stopping one ends it, and drops it while it
-    # waits (DESIGN §36).
-    TASK: ("stop", "reply", "show"),
+    # waits (DESIGN §36). A ticket's or a task's attachments are text its runs read (§22, `core/attachments.py`).
+    TASK: ("stop", "reply", "show", "attach", "detach"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
 _PR_WORK = (
@@ -210,9 +223,9 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, grants attempts, plans, submits tasks, chooses personas or models, "
-                "dismisses or sends findings, marks reviews seen, edits or sends drafts, pauses, resumes, collects "
-                "garbage, or reads the commands agents start with",
+                "stops, replies, forgets, grants attempts, plans, submits tasks, attaches files, chooses personas or "
+                "models, dismisses or sends findings, marks reviews seen, edits or sends drafts, pauses, resumes, "
+                "collects garbage, or reads the commands agents start with",
             )
 
 
@@ -391,7 +404,7 @@ def reply(
     if ref.kind == CHORE and ref.id not in chores:
         raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
     with db.transaction(conn):
-        _check_subject(conn, ref)
+        check_subject(conn, ref)
         return write_reply(conn, ref, text, channel=channel, submission=submission)
 
 
@@ -441,8 +454,8 @@ def write_reply(
     return Replied(message_id=message_id, answers=answered, new=new)
 
 
-def _check_subject(conn: sqlite3.Connection, ref: Ref) -> None:
-    """Check that a reply's subject can take one: a ticket canopy knows, a task not stopped, or a chore.
+def check_subject(conn: sqlite3.Connection, ref: Ref) -> None:
+    """Check that a subject can take a reply or an attachment: a ticket canopy knows, a task not stopped, or a chore.
 
     Raises:
         Refused: (`unknown`) a ticket that was neither started nor seen by a tick, or a task canopy has no record of;

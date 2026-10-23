@@ -212,6 +212,12 @@ Controls:
   forced push. Under `trust.rebase` the private worker's definition still allows its one leased push, so a steered task
   worker can replace its own branch's history; the run's note then says the branch no longer holds the head it started
   from, and each earlier run's head stays in the journal.
+- Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `core/attachments.py` by a channel that
+  authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
+  listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's
+  text is what someone sent the operator, so it is data, never an instruction: what to do with it is the operator's
+  reply or the task's text. It is kept as a plan is (T2), in the operator-only state directory, and only a run's copy
+  of it, which the run's prompt names as data, reaches an agent.
 - Ticket notes (DESIGN §28, ROADMAP M50), with `memory.ticket_notes` at `use`: a worker may write notes its own
   ticket's later `implement` and `resume` runs read as data, the same exposure as its reports in
   `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that steered it, bounded by the
@@ -333,14 +339,14 @@ still sees only what the branch now holds. A worker's bash still reaches the net
 installs and builds, so a worker steered into fetching a page with `curl` reads it anyway: denying the web tools
 removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
 worker's bash runs as the operator and can run `canopy reply`, `canopy start`, or `canopy forget` with the variables
-unset, or `canopy task submit` or `canopy reply task:N` to hand canopy a task, or its next run, in the operator's
-name, or write the journal file directly: the refusal stops a worker that follows injected text naively, not one
-that works around it. The operator accepted this (D076); a forged `canopy reply` on a public ticket, a go-ahead on
-untrusted review feedback, is the same exposure. A steered overseer can dispatch a `resume` for an untrusted
-reviewer's comments without a go-ahead; the worker's own check and human review of the PR remain, and those comments
-were never instructions to it. A steered overseer can mirror text that was never on the ticket, or
-name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the tracker
-stays its source.
+unset, or `canopy task submit` or `canopy reply task:N` to hand canopy a task, or its next run, or `canopy attach` to
+give a ticket's runs a file, in the operator's name, or write the journal file directly: the refusal stops a worker that
+follows injected text naively, not one that works around it. The operator accepted this (D076); a forged `canopy reply`
+on a public ticket, a go-ahead on untrusted review feedback, is the same exposure. A steered overseer can dispatch a
+`resume` for an untrusted reviewer's comments without a go-ahead; the worker's own check and human review of the PR
+remain, and those comments were never instructions to it. A steered overseer can mirror text that was never on the
+ticket, or name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the
+tracker stays its source.
 
 ### T2. Credential misuse or leakage
 
@@ -395,6 +401,10 @@ Controls in code, not prompts:
   task runs at once (1 by default, and the workspace file may only lower it), within `capacity.max_workers`, which
   counts task runs with workers' and reviews'; each with the worker's timeout. A task the guards hold waits for a
   later tick. Each run follows an operator's word, so a run that fails is never retried: the task stays as it ended.
+- Attachments (DESIGN §22): only UTF-8 text with no NUL, at most `policy.max_attachments` files on one ticket or task
+  (5 by default), each at most `policy.max_attachment_kib` (512) and all together at most
+  `policy.max_attachments_total_kib` (1024), each under a ceiling in code (20 files, 1024 and 4096 KiB), and the
+  workspace file may only lower them. A file over its bound is refused without being read whole.
 - Plans: a plan run holds a slot within `capacity.max_workers`, has the worker's timeout, and counts toward
   `policy.max_plan_attempts` per ticket, never reset, raised only by the operator, in config or per ticket with
   `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
