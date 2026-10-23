@@ -43,6 +43,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "start": ("conversation", "cmd_start"),
     "stop": ("conversation", "cmd_stop"),
     "reply": ("conversation", "cmd_reply"),
+    "attach": ("attachments", "cmd_attach"),
+    "detach": ("attachments", "cmd_detach"),
     "forget": ("conversation", "cmd_forget"),
     "grant": ("conversation", "cmd_grant"),
     "dismiss": ("conversation", "cmd_dismiss"),

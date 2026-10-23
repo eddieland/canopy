@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 import click
 
+from canopy.cli import attachments as attachments_cli
 from canopy.cli import tasks as tasks_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
@@ -733,6 +734,7 @@ def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
         _show_plans(ctx, ticket, every=every_plan)
         _show_feedback_plan(ctx, key)
     _show_runs(ctx, key)
+    attachments_cli.listed(ctx, conversation.Ref(conversation.TICKET, key))
     _show_conversation(ctx, key, record)
 
 
