@@ -25,6 +25,7 @@ function said(id: number, body: string): Message {
         channel: 'run',
         answers: null,
         run_id: null,
+        task_run_id: null,
         comment: null,
     }
 }

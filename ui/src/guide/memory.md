@@ -67,8 +67,9 @@ memory in use never share a label, so you never mistake one for the other.
   a run until you promote it. The nav counts them beside **Memory** on every page, and so does the panel, so a proposal
   doesn't quietly expire at 14 days because you never came looking. A long queue scrolls in its panel, so your lessons
   stay in reach under it. Clear the lot and the panel says so.
-- **Lessons** are the ones you promoted, each with Renew, Pin, Edit, and Forget, the ones a run reported wrong first,
-  then by review date, so what needs you heads the list. Under them, folded until you open it, is the exact text every
+- **Lessons** are the ones you promoted, each with Renew, Pin, Edit, and Forget. Pinned ones come first, under their
+  own heading, in the order runs read them; the rest follow under **Up for review**, the ones a run reported wrong
+  first, then by review date. Under them, folded until you open it, is the exact text every
   run is served from your lessons, or would be served at use while recording.
 - **Ticket notes** lists the tickets with notes in force, one row each with its title, how many notes it has, and how
   many a run cited as relied on. Open a row for its notes, each with Promote and Forget. A busy workspace has thousands,
@@ -183,11 +184,11 @@ reported wrong. A lesson that needs nothing shows its buttons only when you poin
 wall of buttons.
 
 Some lessons you'll never want to revisit: the one that says the staging database is shared, say. **Pin** it, or
-`canopy memory pin ID`, and it never comes up for review again, so on the memory page it sits below the lessons that
-will. For runs it's the other way round: when there are more lessons than fit in a prompt, the cap drops unpinned ones
-before it touches a pinned one, and a pinned one leads the list a run reads. The pin stays through your edits, and
-through a promote under the same key, until you **Unpin** it (`canopy memory unpin ID`), which puts it back on the
-90-day clock from today. A pin doesn't silence workers: a run that finds a pinned lesson wrong still raises
+`canopy memory pin ID`, and it never comes up for review again. It heads the memory page under **Pinned**, as it heads
+the list a run reads: when there are more lessons than fit in a prompt, the cap drops unpinned ones before it touches a
+pinned one. The `due` and `wrong` filters skip past them when it's review you're after. The pin stays through your
+edits, and through a promote under the same key, until you **Unpin** it (`canopy memory unpin ID`), which puts it back
+on the 90-day clock from today. A pin doesn't silence workers: a run that finds a pinned lesson wrong still raises
 `lesson wrong`, and **Renew** clears that as usual. Pin sparingly. A prompt where everything is first has no first.
 
 Three attention items keep you honest, all yours and never the overseer's, and none while lessons are off:

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -16,6 +16,8 @@ from tests.canopy.helpers import BRANCH, KEY, context, in_run, in_tick, with_mem
 from tests.canopy.web_helpers import ORIGIN, at, client, refused, signed_in_client
 
 if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
+
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
     from tests.conftest import CanopyEnv
@@ -102,13 +104,15 @@ def test_the_overview_counts_the_notes_in_force_by_ticket_and_holds_the_proposal
     for p in overview["proposals"]:
         lapses = datetime.fromisoformat(p["expires_at"]) - datetime.fromisoformat(p["entry"]["created_at"])
         assert lapses == timedelta(days=14)
-    [lesson] = overview["lessons"]
+    # The mock's two pinned lessons first, by key, as runs are served them.
+    *pinned, lesson = overview["lessons"]
+    assert [m["id"] for m in pinned] == PINNED
     assert (lesson["id"], lesson["scope"], lesson["repo"], lesson["promoted_from"]) == (8, "lesson", "web", 7)
     # A lesson names its source as the CLI does; a proposal names none.
     assert lesson["origin"] == {"id": 7, "scope": "proposal", "ticket_key": "ABC-103", "run_id": 38}
     assert overview["proposals"][0]["entry"]["origin"] is None
     digest = overview["lessons_digest"]
-    assert (digest["ids"], digest["served"], digest["left_out"]) == ([8], False, 0)
+    assert (digest["ids"], digest["served"], digest["left_out"]) == ([*PINNED, 8], False, 0)
     assert digest["text"].startswith("## Lessons from the operator")
 
 
@@ -158,7 +162,9 @@ def test_a_runs_memory_is_what_it_wrote_read_and_had_refused(backend: Backend) -
     assert c.get("/api/runs/999/memory").status_code == 404
 
 
-def test_the_overview_lists_lessons_reported_wrong_first_then_by_review_date(canopy_env: CanopyEnv) -> None:
+def test_the_overview_lists_pinned_lessons_first_then_those_reported_wrong_then_by_review_date(
+    canopy_env: CanopyEnv,
+) -> None:
     with_memory(canopy_env, proposals="use")
     ctx = migrated(canopy_env)
     with in_tick(ctx.conn) as tick_id:
@@ -179,17 +185,24 @@ def test_the_overview_lists_lessons_reported_wrong_first_then_by_review_date(can
             (1, "a-due-last", "2027-03-01T00:00:00.000Z", None, None, None),
             (2, "b-due-first", "2027-01-01T00:00:00.000Z", None, None, None),
             (3, "c-reported-wrong", "2027-06-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z", run_id, None),
-            # Never due, so after every lesson that will be; reported wrong, with the lessons reported wrong.
+            # First, as runs are served them; among them, reported wrong first.
             (4, "0-pinned", None, None, None, "2026-10-01T00:00:00.000Z"),
             (5, "d-pinned-wrong", None, "2026-10-02T00:00:00.000Z", run_id, "2026-10-01T00:00:00.000Z"),
         ],
     )
     c, _ = signed_in_client(ctx)
-    assert [lesson["id"] for lesson in c.get("/api/memory").json()["lessons"]] == [3, 5, 2, 1, 4]
+    assert [lesson["id"] for lesson in c.get("/api/memory").json()["lessons"]] == [5, 4, 3, 2, 1]
 
 
 # A write to the mock needs no session, but an Origin naming the server (guard.py).
 WRITE = {"origin": ORIGIN}
+#: The mock's pinned lessons (mock_memory.py), which lead its lessons, by key, before lesson 8.
+PINNED = [10, 9]
+
+
+def lesson_of(c: TestClient, lesson_id: int) -> dict[str, Any]:
+    """The lesson in force with `lesson_id`, as the memory page reads it."""
+    return {m["id"]: m for m in c.get("/api/memory").json()["lessons"]}[lesson_id]
 
 
 def test_promote_makes_a_proposal_a_lesson_recorded_and_served_to_no_run(backend: Backend) -> None:
@@ -245,7 +258,7 @@ def test_promote_is_refused_as_the_cli_refuses_it(
 ) -> None:
     c = client(None, backend)
     assert refused(c.post(f"/api/memory/{memory_id}/promote", json=body, headers=WRITE)).startswith(guard)
-    assert len(c.get("/api/memory").json()["lessons"]) == 1
+    assert len(c.get("/api/memory").json()["lessons"]) == len([*PINNED, 8])
 
 
 def test_reject_ends_a_proposal_once(backend: Backend) -> None:
@@ -271,7 +284,7 @@ def test_pin_keeps_a_lesson_from_review_and_unpin_brings_it_back(backend: Backen
     pinned = c.post("/api/memory/8/pin", headers=WRITE).json()
     assert pinned["id"] == 8
     assert abs(datetime.fromisoformat(pinned["pinned_at"]) - datetime.now(UTC)) < timedelta(minutes=5)
-    [lesson] = c.get("/api/memory").json()["lessons"]
+    lesson = lesson_of(c, 8)
     assert (lesson["pinned_at"], lesson["review_at"]) == (pinned["pinned_at"], None)
     assert refused(c.post("/api/memory/8/pin", headers=WRITE)).startswith("pinned: lesson 8 is pinned already")
     # A pinned lesson is never due: renewing it clears a report, and sets no review date.
@@ -279,7 +292,7 @@ def test_pin_keeps_a_lesson_from_review_and_unpin_brings_it_back(backend: Backen
     unpinned = c.post("/api/memory/8/unpin", headers=WRITE).json()
     due = datetime.fromisoformat(unpinned["review_at"])
     assert abs(due - (datetime.now(UTC) + timedelta(days=90))) < timedelta(minutes=5)
-    assert c.get("/api/memory").json()["lessons"][0]["pinned_at"] is None
+    assert lesson_of(c, 8)["pinned_at"] is None
     assert refused(c.post("/api/memory/8/unpin", headers=WRITE)) == "not_pinned: lesson 8 is not pinned"
     assert refused(c.post("/api/memory/5/pin", headers=WRITE)) == "unknown: no lesson in force has id 5"
 
@@ -304,7 +317,7 @@ def test_edit_makes_a_lessons_next_version_and_its_history_lists_both(backend: B
         f"edited into lesson {lesson['id']}",
     )
     assert (replaced["version"], replaced["edited"], edited["served"]) == (1, False, False)
-    assert [m["id"] for m in c.get("/api/memory").json()["lessons"]] == [lesson["id"]]
+    assert [m["id"] for m in c.get("/api/memory").json()["lessons"]] == [*PINNED, lesson["id"]]
     for memory_id in (8, lesson["id"]):
         versions = c.get(f"/api/memory/{memory_id}/history").json()["versions"]
         assert [(m["id"], m["version"]) for m in versions] == [(lesson["id"], 2), (8, 1)]
@@ -348,7 +361,7 @@ def test_edit_is_refused_as_the_cli_refuses_it(
 ) -> None:
     c = client(None, backend)
     assert refused(c.post(f"/api/memory/{memory_id}/edit", json=body, headers=WRITE)).startswith(guard)
-    assert [m["id"] for m in c.get("/api/memory").json()["lessons"]] == [8]
+    assert [m["id"] for m in c.get("/api/memory").json()["lessons"]] == [*PINNED, 8]
 
 
 def test_forget_needs_the_ref_typed_and_then_deletes_the_text(backend: Backend) -> None:
@@ -375,7 +388,7 @@ def test_forget_needs_the_ref_typed_and_then_deletes_the_text(backend: Backend) 
     )
     # Forgetting a lesson retires it.
     assert c.post("/api/memory/8/forget", json={"confirm": "memory:8"}, headers=WRITE).json()["scope"] == "lesson"
-    assert c.get("/api/memory").json()["lessons"] == []
+    assert [m["id"] for m in c.get("/api/memory").json()["lessons"]] == PINNED
 
 
 @pytest.mark.parametrize(

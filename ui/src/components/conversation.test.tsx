@@ -20,6 +20,7 @@ function message(fields: Partial<Message> & Pick<Message, 'id'>): Message {
         comment: null,
         kind: 'report',
         run_id: null,
+        task_run_id: null,
         source: 'worker',
         answers: null,
         ...fields,
