@@ -35,8 +35,9 @@ DECISION_COLUMNS = "id, tick_id, ticket_key, action, rationale, created_at, repo
 
 
 def row_types() -> list[type[records.Row]]:
-    # A row type a test module defines for itself is not a journal table's.
-    return [t for t in records.Row.__subclasses__() if t.__module__ == records.__name__]
+    # A row type a test module defines for itself is not a journal table's, nor is the class `slots=True` replaced,
+    # which lingers among the subclasses until it is collected.
+    return [t for t in records.Row.__subclasses__() if getattr(records, t.__name__, None) is t]
 
 
 @pytest.fixture
@@ -63,6 +64,12 @@ def test_every_row_type_names_a_table_of_its_own(conn: sqlite3.Connection) -> No
     assert row_types()
     assert [t.TABLE for t in row_types() if t.TABLE not in tables] == []
     assert len({t.TABLE for t in row_types()}) == len(row_types())
+
+
+def test_every_row_type_is_slotted_and_built_by_keyword() -> None:
+    # A base without `__slots__` gives a slotted row a `__dict__` again, so this holds `Row` as well as each row type.
+    assert [t.__name__ for t in row_types() if "__dict__" in dir(t)] == []
+    assert [t.__name__ for t in row_types() if not all(f.kw_only for f in fields(t))] == []
 
 
 @pytest.mark.parametrize("row_type", row_types(), ids=lambda t: t.TABLE)

@@ -81,6 +81,9 @@ _EXACT: dict[object, type] = {int: int, str: str, bytes: bytes}
 class Row:
     """A row of one journal table: each subclass is a frozen dataclass whose fields are its columns, in order."""
 
+    # Empty, so a subclass's slots leave its rows without a `__dict__`; a base without `__slots__` would give them one.
+    __slots__ = ()
+
     TABLE: ClassVar[str]
     # Set by @dataclass on each subclass; declared so `dataclasses.fields` accepts any row type.
     __dataclass_fields__: ClassVar[dict[str, Field[Any]]]
@@ -90,7 +93,7 @@ class RowError(Exception):
     """A query's columns, or a value in one, do not fit the row type it was read as."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Tick(Row):
     """A tick (DESIGN §6): how it ended, what its overseer cost, what it read, and what the loop knew when it ran it."""
 
@@ -126,7 +129,7 @@ class Tick(Row):
     canopy_version: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Ticket(Row):
     """A ticket canopy has seen (DESIGN §6): its own phase, branch, and cursors, and where any forget left it."""
 
@@ -157,7 +160,7 @@ class Ticket(Row):
     changed_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Forget(Row):
     """One time the operator forgot a ticket's work (DESIGN §22), and what it dropped; its row holds the latest."""
 
@@ -176,7 +179,7 @@ class Forget(Row):
     prs: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Decision(Row):
     """A decision a tick recorded (DESIGN §6): the overseer's, a guard's refusal, or the harness's own (§37)."""
 
@@ -195,7 +198,7 @@ class Decision(Row):
     decider: Decider | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ChoreRun(Row):
     """A run of a chore (DESIGN §19): the overseer's, or the operator's `canopy chore try`, and how it ended."""
 
@@ -225,7 +228,7 @@ class ChoreRun(Row):
     definitions_digest: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReviewRun(Row):
     """A run of a reviewer on one PR at one commit (DESIGN §21): the slot it leased, and how it ended."""
 
@@ -270,7 +273,7 @@ class ReviewRun(Row):
     revises_version: int | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Task(Row):
     """A one-off task the operator submitted (DESIGN §36): their text, where it runs, and whether they stopped it."""
 
@@ -290,7 +293,7 @@ class Task(Row):
     stopped_at: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TaskRun(Row):
     """A run of a task's worker (DESIGN §36): the slot it leased, its branch, how it ended, and the head it pushed."""
 
@@ -338,7 +341,7 @@ class TaskRun(Row):
     report_sha256: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Attachment(Row):
     """A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22)."""
 
@@ -361,7 +364,7 @@ class Attachment(Row):
     removed_channel: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TaskTicket(Row):
     """A ticket a task's run reported filing in the task's project, checked on its text alone (DESIGN §36, D003)."""
 
@@ -376,7 +379,7 @@ class TaskTicket(Row):
     at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Start(Row):
     """The operator's start of a subject worked privately (DESIGN §22): the authorization, written only by them."""
 
@@ -392,7 +395,7 @@ class Start(Row):
     channel: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReviewRequest(Row):
     """The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended."""
 
@@ -407,7 +410,7 @@ class ReviewRequest(Row):
     notes: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReviewRequestPersona(Row):
     """A persona the operator chose for a review request (DESIGN §31), in place of `[personas] reviewer`."""
 
@@ -418,7 +421,7 @@ class ReviewRequestPersona(Row):
     persona: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PoolSlot(Row):
     """A slot of one of canopy's own pools (DESIGN §18): where it is, and its lease while it has one."""
 
@@ -434,7 +437,7 @@ class PoolSlot(Row):
     seeded: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Plan(Row):
     """A plan a plan run wrote (DESIGN §25): its status, its file's hash as written, and its approval. No text."""
 
@@ -458,7 +461,7 @@ class Plan(Row):
     effort: PlanEffort | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FeedbackPlan(Row):
     """A plan a feedback plan run wrote for a ticket's PRs (DESIGN §32): its status, hashes, and approval. No text."""
 
@@ -488,7 +491,7 @@ class FeedbackPlan(Row):
     approved_message_id: int | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FeedbackPlanPr(Row):
     """A PR a feedback plan read, and its head then (DESIGN §32, Planning again)."""
 
@@ -499,7 +502,7 @@ class FeedbackPlanPr(Row):
     head_sha: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FeedbackPlanCheck(Row):
     """A named check at the head a feedback plan read, and its conclusion then, None while it had none."""
 
@@ -511,7 +514,7 @@ class FeedbackPlanCheck(Row):
     conclusion: CheckConclusion | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FeedbackPlanMove(Row):
     """A waiting feedback plan's PR's head or check: its value now, and when canopy saw it take that value (§32)."""
 
@@ -528,7 +531,7 @@ class FeedbackPlanMove(Row):
     seen_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FeedbackPlanSeen(Row):
     """A review or review comment a feedback plan was given, by id and its body's hash, never its text."""
 
@@ -546,7 +549,7 @@ class FeedbackPlanSeen(Row):
     answers: int | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FeedbackPlanItem(Row):
     """An item a feedback plan covers: a review or review comment by its observed id, and what the plan proposes."""
 
@@ -565,7 +568,7 @@ class FeedbackPlanItem(Row):
     left_out: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TicketGrant(Row):
     """Runs the operator granted a ticket past its limit for a kind counted per ticket (DESIGN §22, §25)."""
 
@@ -578,7 +581,7 @@ class TicketGrant(Row):
     granted_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TicketOverride(Row):
     """The operator's choice for one of a ticket's agents, in force until cleared (DESIGN §31, §13)."""
 
@@ -595,7 +598,7 @@ class TicketOverride(Row):
     set_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class NextRunPersona(Row):
     """The persona the operator chose for the next run alone of one of a ticket's agents (DESIGN §31)."""
 
@@ -611,7 +614,7 @@ class NextRunPersona(Row):
     set_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PersonaText(Row):
     """The text of a persona a run or a review was given, once per digest (DESIGN §31)."""
 
@@ -624,7 +627,7 @@ class PersonaText(Row):
     recorded_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PlanThread(Row):
     """One of the operator's comments on a ticket's plan, anchored by its passage's words (DESIGN §25)."""
 
@@ -642,7 +645,7 @@ class PlanThread(Row):
     resolved_at: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PlanReply(Row):
     """A reply in a plan's comment thread (DESIGN §25)."""
 
@@ -654,7 +657,7 @@ class PlanReply(Row):
     created_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Memory(Row):
     """A ticket's note, a worker's proposal, or the operator's lesson (DESIGN §28). `body` is None once forgotten."""
 
@@ -686,7 +689,7 @@ class Memory(Row):
     pinned_at: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunMemory(Row):
     """What a run's prompt was rendered under, each memory tier's mode, and what `_run` refused of it (DESIGN §28)."""
 
@@ -699,7 +702,7 @@ class RunMemory(Row):
     refused: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MemoryRead(Row):
     """A memory rendered into a run's prompt (DESIGN §28)."""
 
@@ -711,7 +714,7 @@ class MemoryRead(Row):
     cited: MemoryCited | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunReason(Row):
     """One reason a `resume` runs, as its dispatch named it (DESIGN §8)."""
 
@@ -721,7 +724,7 @@ class RunReason(Row):
     reason: ResumeReason
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunRead(Row):
     """A repository an old triage run read without a slot, by name (M55). Kept as history; nothing reads it now."""
 
@@ -731,7 +734,7 @@ class RunRead(Row):
     repo: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PlanWaiver(Row):
     """A plan an old triage run waived (M55). Kept as history: nothing reads it, so no waiver holds (DESIGN §25)."""
 
@@ -746,7 +749,7 @@ class PlanWaiver(Row):
     at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FollowUp(Row):
     """A follow-up ticket a public worker filed and its validated result reported, worked under its parent (§18)."""
 
@@ -763,7 +766,7 @@ class FollowUp(Row):
     at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunTool(Row):
     """What one tool's calls in an agent run put into its context (DESIGN §13): the run, by its table and id."""
 
@@ -777,7 +780,7 @@ class RunTool(Row):
     result_chars: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunModelRead(Row):
     """How canopy's last read of an agent run's session for its models ended (DESIGN §13): the run, by table and id."""
 
@@ -793,7 +796,7 @@ class RunModelRead(Row):
     read_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunModel(Row):
     """One model an agent run's session names as having written its replies (DESIGN §13), and what they cost."""
 
@@ -807,7 +810,7 @@ class RunModel(Row):
     cost_usd: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunOffer(Row):
     """canopy's ask of the runtime, as an agent run started, of what it offered the run (DESIGN §13)."""
 
@@ -822,7 +825,7 @@ class RunOffer(Row):
     asked_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunOfferedServer(Row):
     """One MCP server the runtime offered an agent run (DESIGN §13)."""
 
@@ -835,7 +838,7 @@ class RunOfferedServer(Row):
     reach: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunOfferedSkill(Row):
     """One skill the runtime offered an agent run (DESIGN §13)."""
 
@@ -846,7 +849,7 @@ class RunOfferedSkill(Row):
     skill: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunOfferedTool(Row):
     """One of the runtime's built-in tools it offered an agent run (DESIGN §13)."""
 
@@ -857,7 +860,7 @@ class RunOfferedTool(Row):
     tool: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunOfferedServerRule(Row):
     """One rule that leaves an agent run only some of an MCP server's tools (DESIGN §13)."""
 
@@ -872,7 +875,7 @@ class RunOfferedServerRule(Row):
     rule: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ObservedPr(Row):
     """A PR as canopy's GitHub reader last read it whole (DESIGN §29)."""
 
@@ -895,7 +898,7 @@ class ObservedPr(Row):
     title: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ObservedReview(Row):
     """A review or a review comment of a PR, as the reader last read it whole (DESIGN §29). Text, never authority."""
 
@@ -920,7 +923,7 @@ class ObservedReview(Row):
     observed_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ObservedTicket(Row):
     """A ticket as the tracker connector last read it whole (DESIGN §30). Text, never authority."""
 
@@ -938,7 +941,7 @@ class ObservedTicket(Row):
     observed_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ObservedComment(Row):
     """A tracker comment as the tracker connector first read it (DESIGN §30). Text, never authority."""
 
@@ -956,7 +959,7 @@ class ObservedComment(Row):
     observed_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ObservedBranch(Row):
     """A branch under the branch prefix, as the `vcs` connector last read its repository whole (DESIGN §30)."""
 
@@ -968,7 +971,7 @@ class ObservedBranch(Row):
     observed_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ObservedCheck(Row):
     """A named CI context at a PR's head, as the `vcs` connector last read the PR whole (DESIGN §30)."""
 
@@ -984,7 +987,7 @@ class ObservedCheck(Row):
     observed_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ConnectorRun(Row):
     """One run of a source (DESIGN §30): what it was asked, how it ended, and what it read."""
 
@@ -1014,7 +1017,7 @@ class ConnectorRun(Row):
     review_query_result: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ObservedFeed(Row):
     """How far an `artifacts` source has read its store's comment feed (DESIGN §30, §38)."""
 
@@ -1027,7 +1030,7 @@ class ObservedFeed(Row):
     read_at: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ObservedArtifactThread(Row):
     """A thread on an artifact, as the newest change the `artifacts` source read of it left it. Never authority."""
 
@@ -1052,7 +1055,7 @@ class ObservedArtifactThread(Row):
     observed_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ObservedArtifactComment(Row):
     """A comment on an artifact, as the newest change the `artifacts` source read of it left it. Never authority."""
 
@@ -1080,7 +1083,7 @@ class ObservedArtifactComment(Row):
     observed_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Derivation(Row):
     """One subject a tick derived in code, in shadow (DESIGN §30): a ticket's own phases, or a unit's."""
 
@@ -1103,7 +1106,7 @@ class Derivation(Row):
     overseer_phase: Phase | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class GcPass(Row):
     """One pass of garbage collection (DESIGN §26): the retention it ran with, and what it removed."""
 
@@ -1129,7 +1132,7 @@ class GcPass(Row):
     error: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Draft(Row):
     """A comment a run would have posted, waiting on the operator to send, edit, or drop it (DESIGN §29)."""
 
@@ -1166,7 +1169,7 @@ class Draft(Row):
     reacted_at: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DraftVersion(Row):
     """One version of a draft's text: the run's own, or one of the operator's edits (DESIGN §29)."""
 
@@ -1183,7 +1186,7 @@ class DraftVersion(Row):
     reaction: Reaction | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReviewDraft(Row):
     """A review's draft (DESIGN §34): a review of a PR the loop does not own, as the comment review it would post."""
 
@@ -1211,7 +1214,7 @@ class ReviewDraft(Row):
     published_comments: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReviewDraftVersion(Row):
     """One version of a review's draft, exactly what would post: its body and its comments (DESIGN §34)."""
 
@@ -1231,7 +1234,7 @@ class ReviewDraftVersion(Row):
     created_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReviewDraftNote(Row):
     """The operator's note on a review's draft, which asks for a revision while it is newer than the newest version."""
 
@@ -1246,7 +1249,7 @@ class ReviewDraftNote(Row):
     created_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReviewDraftGrant(Row):
     """Revisions the operator granted a review's draft past `policy.max_revisions_per_draft` (DESIGN §34)."""
 
@@ -1258,7 +1261,7 @@ class ReviewDraftGrant(Row):
     granted_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunReplies(Row):
     """The `trust.review_replies` a run was rendered under, and the drafts `_run` refused of it (DESIGN §29)."""
 
@@ -1272,7 +1275,7 @@ class RunReplies(Row):
     refused: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Run(Row):
     """A worker's run on a ticket (DESIGN §8): what it was asked, how it ended, and what it cost."""
 
@@ -1319,7 +1322,7 @@ class Run(Row):
     model: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class RunSlot(Row):
     """A pool slot a run leased (DESIGN §8), one per repository it works in."""
 
@@ -1335,7 +1338,7 @@ class RunSlot(Row):
     pool: PoolKind
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TicketUnit(Row):
     """A ticket's work in one repository (D058): its branch, PR, and phase."""
 
@@ -1350,7 +1353,7 @@ class TicketUnit(Row):
     last_ci_run_id: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Message(Row):
     """A message in a subject's conversation (DESIGN §22): a worker's report or question, or a reply to one."""
 
@@ -1380,7 +1383,7 @@ class Message(Row):
     task_run_id: int | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Notice(Row):
     """A notice the operator set for the overseer, until it lapses or is ended."""
 
@@ -1395,7 +1398,7 @@ class Notice(Row):
     ended_channel: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Notification(Row):
     """A notification a sink was sent (DESIGN §20), kept so the same one is not sent twice."""
 
@@ -1409,7 +1412,7 @@ class Notification(Row):
     sent_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class NotifyEvent(Row):
     """An event in the outbox the notification sinks read (DESIGN §20)."""
 
@@ -1423,7 +1426,7 @@ class NotifyEvent(Row):
     fields: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class NotifySink(Row):
     """A notification sink's place in the outbox (DESIGN §20), and how its deliveries have gone."""
 
@@ -1439,7 +1442,7 @@ class NotifySink(Row):
     last_error: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Pause(Row):
     """The loop's pause, while the operator has it paused."""
 
@@ -1450,7 +1453,7 @@ class Pause(Row):
     channel: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PrTitle(Row):
     """A PR's title, as canopy last read it."""
 
@@ -1461,7 +1464,7 @@ class PrTitle(Row):
     updated_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReviewDismissal(Row):
     """A review's finding the operator dismissed (DESIGN §21)."""
 
@@ -1473,7 +1476,7 @@ class ReviewDismissal(Row):
     channel: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FindingDismissal(Row):
     """A chore's finding the operator dismissed (DESIGN §19)."""
 
@@ -1485,7 +1488,7 @@ class FindingDismissal(Row):
     channel: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Seen(Row):
     """A subject whose result the operator has seen (DESIGN §22), named as its reference names it."""
 
@@ -1501,7 +1504,7 @@ class Seen(Row):
     channel: str | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ReviewGrant(Row):
     """Review runs the operator granted a PR past its limit (DESIGN §21)."""
 
@@ -1513,7 +1516,7 @@ class ReviewGrant(Row):
     granted_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class AttemptGrant(Row):
     """Attempts the operator granted a ticket's runs of one kind past its limit."""
 
@@ -1527,7 +1530,7 @@ class AttemptGrant(Row):
     granted_at: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SplitChild(Row):
     """A ticket a split run filed, and the ticket it was split from."""
 
@@ -1539,7 +1542,7 @@ class SplitChild(Row):
     run_id: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class WebWrite(Row):
     """A write request the web UI's server let through, or a sign-in, as it answered it (TRUST_MODEL T8)."""
 

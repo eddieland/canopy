@@ -535,7 +535,7 @@ def test_the_reviews_that_had_ended_are_taken_as_seen(tmp_path: Path, journals: 
     )
     assert db.migrate(conn, resources.migrations_dir()) == versions_after(54)
     seen = records.fetch_all(conn, records.Seen, sql.select("*").from_("seen"))
-    assert seen == [records.Seen(SeenKind.REVIEW, "1", "2026-10-01T00:00:00Z", None)]
+    assert seen == [records.Seen(kind=SeenKind.REVIEW, subject="1", at="2026-10-01T00:00:00Z", channel=None)]
     assert db.seen_among(conn, SeenKind.REVIEW, ["1", "2"]) == {"1"}
 
 
