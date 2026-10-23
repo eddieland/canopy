@@ -3695,6 +3695,29 @@ export type components = {
          */
         FeedbackPlanStatusName: "waiting" | "stale" | "approved" | "spent";
         /**
+         * FeedbackPlanWritten
+         * @description The feedback plan a `feedback-plan` run wrote (DESIGN §32), as the run's page names it.
+         */
+        FeedbackPlanWritten: {
+            /**
+             * Id
+             * @description The plan's id, as `feedback-plan:N` names it.
+             */
+            id: number;
+            /**
+             * Pr Urls
+             * @description The PRs of the units it covers, by repository: each PR's page shows the plan, where it is approved.
+             */
+            pr_urls: string[];
+            /**
+             * Status
+             * @description Where it stands: waiting on the operator, approved with no resume gone ahead on it, spent by the resume that
+             *     did, or superseded by a later plan or a request for one.
+             * @enum {string}
+             */
+            status: "waiting" | "approved" | "spent" | "superseded";
+        };
+        /**
          * @description How much a review finding matters (DESIGN §21).
          * @enum {string}
          */
@@ -6294,6 +6317,11 @@ export type components = {
              * @description When it ended; None while it runs.
              */
             ended_at: string | null;
+            /**
+             * @description For a `feedback-plan` run, the plan it wrote, on its page alone; None for a run of another kind, one whose plan
+             *     was never recorded, and in the lists.
+             */
+            feedback_plan: components["schemas"]["FeedbackPlanWritten"] | null;
             /**
              * Id
              * @description The run's id.

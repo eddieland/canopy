@@ -164,3 +164,20 @@ def test_a_tickets_summary_names_its_feedback_plan_while_it_waits(scenario: Scen
     refused(c.post(APPROVE, json={}, headers=write))
     assert c.post(APPROVE, json={}, headers=write).status_code == 200
     assert waiting_of(c) is None
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_feedback_plan_runs_page_names_the_plan_it_wrote_and_where_it_stands(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    """The run's page points to the PR's page, where the plan is approved; a run of another kind names none."""
+    c, write, run_id = planned_client(scenario, github_state)
+    plan_id = present(feedback_plans.current(scenario.conn, KEY)).id
+    page = c.get(f"/api/runs/{run_id}")
+    assert page.status_code == 200, page.text
+    assert page.json()["feedback_plan"] == {"id": plan_id, "pr_urls": [PR], "status": "waiting"}
+    assert c.post(APPROVE, json={}, headers=write).status_code == 200
+    assert c.get(f"/api/runs/{run_id}").json()["feedback_plan"]["status"] == "approved"
+    other = next(r["id"] for r in c.get("/api/runs").json() if r["id"] != run_id and r["ticket_key"] == KEY)
+    assert c.get(f"/api/runs/{other}").json()["feedback_plan"] is None

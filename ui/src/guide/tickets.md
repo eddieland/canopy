@@ -56,6 +56,10 @@ Below:
 - **Plan**, when the ticket has or needs one: a card saying where the plan stands, with **Approve** while it can be
   approved and **Open plan**, which opens the plan on its own page. When a plan waits on your approval, the card leads
   the page. See [Plans](plans).
+- **Feedback plan**, while one waits on your approval: a card leading the page that names the plan, how many items it
+  covers, and whether its PR has moved on since it was written, with **Approve it on acme/web#88**, which opens the
+  PR's page at the plan. Once you've approved it, the card stays put and says so, rather than move the page under
+  you. See [The feedback plan](pull-requests#the-feedback-plan).
 
 A list with nothing in it is its header alone, counting `0`: a ticket no tick has decided anything about yet doesn't
 spend a panel telling you so. On a wide screen the conversation moves to the right, beside Work, Runs, Decisions, and
