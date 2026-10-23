@@ -116,8 +116,8 @@ own arguments, in any `runtime` template, prefix, or suffix is a config error na
 dispatch whose agent has a model reads `opencode models` in the workspace root (30 seconds, stdout through a file,
 lines that are no model passed over) and refuses `model_missing` or `model_list_failed`, each with its attention item,
 spending no attempt and leasing no slot, in a dry run too; and the run records the model asked for, `runs.model`, which
-`canopy status` shows on running and recent runs. OpenCode 2's list is not read yet, so under it a chosen model
-refuses as `model_list_failed`. Built (2026-10-22, issue #275): the commit trailer names the model chosen for a
+`canopy status` shows on running and recent runs. OpenCode 2's list was not read yet, so under it a chosen model
+refused as `model_list_failed`. Built (2026-10-22, issue #275): the commit trailer names the model chosen for a
 worker or a task's run, `provider/model (canopy worker)`, while `trust.commit_trailer_name` is the default; a name the
 operator set is used as set, with no placeholder for the model.
 Built (2026-10-22): the per-ticket override, a `ticket_overrides` row of kind `model` (no migration: M60's table
@@ -139,6 +139,10 @@ the last `@`, when it starts with a letter, since a dated id may hold an `@`), r
 `runtime.chore_cmd` or its own running that copy; a chore whose `cmd` runs another agent is refused a `model`, its
 model set in its own definition, and a `--model` or `--variant` in a chore's `cmd` is refused when it runs
 `canopy-chore`. Chore runs keep no model of their own in the journal; what served them is read from their sessions.
+Built (2026-10-23): OpenCode 2's list, read from `opencode api --standalone model.list`, each model's variants among
+it. Of its binaries: 2.1.2 runs a primary agent on the default model whatever its definition names, and 2.1.4 on the
+definition's model and variant; 2.1.4 refuses a variant the model lacks before its first call, but tries a model its
+list lacks on the provider, so the lookup still guards the run.
 Not built yet: the settings page's read-only `[runtime.models]`; the check before a review, a chore, a task's run,
 and a tick's overseer, with its tick status, so a reviewer override whose model has gone fails as the review starts;
 and `canopy status` naming the models that served a run.

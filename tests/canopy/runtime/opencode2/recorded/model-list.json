@@ -1,0 +1,197 @@
+{
+  "location": {
+    "directory": "/ws"
+  },
+  "data": [
+    {
+      "id": "mimo-v2.6-flash-free",
+      "modelID": "mimo-v2.6-flash-free",
+      "providerID": "opencode",
+      "family": "mimo",
+      "name": "MiMo-V2.6-Flash Free",
+      "compatibility": {
+        "reasoningField": "reasoning_content"
+      },
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "apiKey": "public",
+        "baseURL": "https://opencode.ai/inference/openai/v1",
+        "provider": "opencode"
+      },
+      "capabilities": {
+        "tools": true,
+        "input": [
+          "text",
+          "image",
+          "audio",
+          "video"
+        ],
+        "output": [
+          "text"
+        ],
+        "temperature": true
+      },
+      "variants": [],
+      "time": {
+        "released": 1790035200000
+      },
+      "cost": [
+        {
+          "input": 0,
+          "output": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        }
+      ],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 200000,
+        "output": 32000
+      }
+    },
+    {
+      "id": "claude-opus-4.8-fast",
+      "modelID": "claude-opus-4.8",
+      "providerID": "github-copilot",
+      "family": "claude-opus",
+      "name": "Claude Opus 4.8 Fast",
+      "package": "@opencode/ai/providers/anthropic",
+      "settings": {
+        "baseURL": "https://api.githubcopilot.com/v1"
+      },
+      "headers": {
+        "anthropic-beta": "fast-mode-2026-02-01"
+      },
+      "body": {
+        "speed": "fast"
+      },
+      "capabilities": {
+        "tools": true,
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ],
+        "temperature": false
+      },
+      "variants": [
+        {
+          "id": "low",
+          "settings": {
+            "thinking": {
+              "type": "adaptive",
+              "display": "summarized"
+            },
+            "effort": "low"
+          }
+        },
+        {
+          "id": "medium",
+          "settings": {
+            "thinking": {
+              "type": "adaptive",
+              "display": "summarized"
+            },
+            "effort": "medium"
+          }
+        },
+        {
+          "id": "high",
+          "settings": {
+            "thinking": {
+              "type": "adaptive",
+              "display": "summarized"
+            },
+            "effort": "high"
+          }
+        },
+        {
+          "id": "xhigh",
+          "settings": {
+            "thinking": {
+              "type": "adaptive",
+              "display": "summarized"
+            },
+            "effort": "xhigh"
+          }
+        },
+        {
+          "id": "max",
+          "settings": {
+            "thinking": {
+              "type": "adaptive",
+              "display": "summarized"
+            },
+            "effort": "max"
+          }
+        }
+      ],
+      "time": {
+        "released": 1779926400000
+      },
+      "cost": [
+        {
+          "input": 10,
+          "output": 50,
+          "cache": {
+            "read": 1,
+            "write": 12.5
+          }
+        }
+      ],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 200000,
+        "input": 168000,
+        "output": 64000
+      }
+    },
+    {
+      "id": "stub-1",
+      "modelID": "stub-1",
+      "providerID": "stub",
+      "name": "Stub One",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "apiKey": "sk-stub",
+        "baseURL": "http://127.0.0.1:18765/v1",
+        "provider": "stub"
+      },
+      "capabilities": {
+        "tools": true,
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "variants": [
+        {
+          "id": "deep",
+          "settings": {
+            "reasoningEffort": "high"
+          }
+        }
+      ],
+      "time": {
+        "released": 0
+      },
+      "cost": [],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 200000,
+        "output": 32000
+      }
+    }
+  ]
+}
