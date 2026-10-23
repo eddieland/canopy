@@ -102,13 +102,13 @@ Controls:
 - The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
   `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
   each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
-  these, none stale and no item the overseer holds open on it. Such a ticket's text reaches no overseer that tick, and
-  whatever the overseer records about it, a decision, dispatch, attention item, or `ticket set`, is refused `decided`,
-  through a tool and its command alike, so a steered overseer cannot overrule the harness. Residual: the harness
-  reads the absence of every other row from the derivation, so a row it misses waits until the overseer is given the
-  ticket again. Its dispatches carry no model-written context: today it starts only a due chore with no `when`, whose
-  `chore run` and `chore wait` the overseer is refused `decided`, and no ticket's run, since each rests on an
-  observation.
+  these, none stale. Such a ticket's text reaches no overseer that tick, and whatever the overseer records about it, a
+  decision, dispatch, attention item, or `ticket set`, is refused `decided`, through a tool and its command alike, so
+  a steered overseer cannot overrule the harness; an item the overseer raised on it stands until the overseer is given
+  the ticket again, or it is done or stopped. Residual: the harness reads the absence of every other row from the
+  derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
+  model-written context: today it starts only a due chore with no `when`, whose `chore run` and `chore wait` the
+  overseer is refused `decided`, and no ticket's run, since each rests on an observation.
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal

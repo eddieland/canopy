@@ -356,6 +356,7 @@ pass it on as an instruction.
 The state block's `attention` lists the items you recorded that are open now: each one's ticket (or `pr`, for a PR with
 no ticket), repository, reason, and since when. An item stays open only while every tick records it again: leaving one
 out tells the operator its cause is gone, and notifies them so; recording it a tick later notifies them again as new.
+The harness holds an item on a ticket in `harness` until you are given the ticket again; it is not listed meanwhile.
 
 - Record every item this prompt names every tick its cause holds: each listed item about a ticket you read again, with
   the same reason and repository, unless you saw this tick that its cause is gone (the PR merged or closed, the

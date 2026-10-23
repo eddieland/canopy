@@ -245,7 +245,7 @@ def _render(
         planned=planned,
         feedback_planned=_feedback_plans(ctx, tickets, now),
         mirror_delimiter=conversation.body_delimiter(),
-        attention=attention.for_overseer(ctx.conn),
+        attention=attention.for_overseer(ctx.conn, decided=decided),
         query_due=query_due,
         operator_sent=drafts.sent_by_pr(ctx.conn),
         observations=observations.section(ctx, tick_id, now, tickets, decided=decided),

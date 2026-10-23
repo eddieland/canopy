@@ -308,7 +308,10 @@ the ticket is done or forgotten (§18).
 tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention
 decisions of the latest `ok` tick, so an item disappears the first tick that does not record it, and a failed or
 `skipped` tick leaves the previous list standing; `canopy_unavailable` or `disk_low` is added to it while it is the
-latest tick's. The state block lists the overseer's open items (§6 step 4), so it records each again until it sees the
+latest tick's. The harness holds the overseer's item through a tick that did not give the overseer its subject, such as
+a ticket the harness decided (§37), since the overseer cannot record again what it was not shown; the item goes the
+first tick that gives the overseer its subject and leaves it out, or once its ticket is done or stopped. The state
+block lists the overseer's open items on what it is given (§6 step 4), so it records each again until it sees the
 cause gone. An item's age runs from the first tick of its unbroken run. `attempt_limit` is recorded by the overseer when
 the state block shows a ticket at its limit, and by `canopy dispatch` with an `attempt_limit` refusal, and lasts while
 the overseer keeps asking.

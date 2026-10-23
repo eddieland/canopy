@@ -147,7 +147,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D020. The overseer reaches the journal through the CLI, keyed by `CANOPY_TICK_ID`
 
 - `dispatch`, `decide`, and `attention` refuse without a running tick, so the journal holds only what the loop did.
-- Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's. No own table.
+- Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's, with the
+  overseer's items held through a tick that did not give it their subject (DESIGN §14). No own table.
 
 ## D021. How OpenCode enforces permissions under `opencode run`
 
