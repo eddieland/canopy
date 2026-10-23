@@ -168,8 +168,9 @@ and every finding you didn't dismiss, and checks whether each still holds. A fin
 and one it didn't is reported again. It still reads the whole change, though. Being told where the last reviewer
 looked is useful; being told where not to look is how a bug lives through three reviews.
 
-The reviewer runs its own command, `runtime.review_cmd`, so point it at another model than your workers': a second
-model misses different things than the first, which is the point of asking it. canopy sends the reviewer no temperature
+The reviewer is its own agent, so give it another model than your workers', `runtime.models.reviewer` in your config
+(not a `--model` in its command, which canopy refuses, since it would override the choice unseen): a second model
+misses different things than the first, which is the point of asking it. canopy sends the reviewer no temperature
 (`runtime.review_temperature = -1`, the default), because OpenAI's reasoning models refuse a request that sets one, and
 a review that never starts finds nothing. If your reviewer's model takes one, set it low, such as `0.1`. Each new commit
 is reviewed again, and a reviewer sampling hot finds something fresh every time in code nobody touched; with the

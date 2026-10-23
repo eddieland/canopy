@@ -7,6 +7,7 @@
 # exactly those tools, never in a repository's `.opencode/`.
 description: canopy chore. Recurring read-only check the operator defines; reports findings, changes nothing.
 mode: primary
+# canopy: model
 permission:
   edit: deny
   # It reads its history through its tool, below, not a shell.

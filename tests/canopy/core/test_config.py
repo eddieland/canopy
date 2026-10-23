@@ -412,9 +412,9 @@ def test_render_command_fills_in_the_title_and_nothing_inside_the_prompt() -> No
 
 
 def test_a_worker_template_runs_between_the_prefix_and_the_suffix() -> None:
-    runtime = config.Runtime(worker_cmd_prefix="wrap --read {definitions_dir} --", worker_cmd_suffix="--model 'a b'")
+    runtime = config.Runtime(worker_cmd_prefix="wrap --read {definitions_dir} --", worker_cmd_suffix="--variant 'a b'")
     argv = render_command(runtime.worker_template("agent {prompt}"), "do it", Path("/defs"), "PROJ-1 implement").argv
-    assert argv == ["wrap", "--read", "/defs", "--", "agent", "do it", "--model", "a b"]
+    assert argv == ["wrap", "--read", "/defs", "--", "agent", "do it", "--variant", "a b"]
     assert config.Runtime().worker_template("agent {prompt}") == "agent {prompt}"
 
 
