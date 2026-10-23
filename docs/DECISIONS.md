@@ -144,9 +144,11 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Without the root `tests/__init__.py`, pytest names `tests/canopy/` `canopy` and shadows `src/canopy`.
 - Rejected: `--import-mode=importlib` (changes how `conftest.py` imports, for no gain).
 
-## D020. The overseer reaches the journal through the CLI, keyed by `CANOPY_TICK_ID`
+## D020. The overseer reaches the journal through canopy's tools, keyed by `CANOPY_TICK_ID`
 
-- `dispatch`, `decide`, and `attention` refuse without a running tick, so the journal holds only what the loop did.
+- Its verbs are MCP tools canopy serves its run alone (D124, DESIGN §27); it has no shell but the commands the
+  operator names in `runtime.allow_bash`, never canopy's own. They, and the commands that share their functions until
+  those go, refuse without a running tick, so the journal holds only what the loop did.
 - Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's. No own table.
 
 ## D021. How OpenCode enforces permissions under `opencode run`
@@ -335,11 +337,6 @@ such as a shipped migration, may still cite one, and git history has its text.
   a wheel without the UI.
 - Revisit: if the UI shrinks to pages a template would serve.
 
-## D081. The overseer mirrors comments through a quoted heredoc with a per-tick random delimiter
-
-- No comment can end the heredoc. Workers' marks are read in code; at most 100 mirrors per tick.
-- Rejected: the body as a quoted argument (one missed escape runs it); a fixed delimiter.
-
 ## D084. Workers set labels through the tracker's MCP edit tool and deny dangerous MCP tools by name
 
 - Merge, review, close, transition, delete, fork, and workflow tools are denied. Both workers create follow-ups
@@ -436,8 +433,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D118. The sandbox is an opt-in prefix on the command templates, and the boundary for the runs it wraps
 
-- The harness never learns whether a run is sandboxed; it passes only `CANOPY_GIT_OBJECTS`, which an unsandboxed run
-  ignores. Every agent command but the overseer's can be wrapped: the overseer needs the journal and config it denies.
+- The harness never learns whether a run is sandboxed, beyond adding the prefix itself for a repository the private
+  `runtime.sandbox_repos` names (the operator's ask, 2026-10-23); it passes only `CANOPY_GIT_OBJECTS`, which an
+  unsandboxed run ignores. Every agent command but the overseer's can be wrapped: the overseer needs what it denies.
 - What the harness runs on the host after a run (git, treehouse) reads nothing a sandboxed run can write (TRUST_MODEL
   T4): a new step in a slot keeps D107's flags and runs after `_run`'s link and `commondir` check.
 - Revisit: making it the default, once the canary passes on the operator's machines and a day of sandboxed runs.
@@ -498,6 +496,7 @@ such as a shipped migration, may still cite one, and git history has its text.
   no tool and refuses every call under `CANOPY_RUN_ID` or outside a running tick (D020). A tool and its command share
   one request and one function (`loop/tools.py` and its siblings, `loop/*_tools.py`), so they cannot drift apart.
 - With `--chore` it serves a chore's run one tool, its own chore's history, and nothing of the overseer's (DESIGN §27).
+- With `--reports` it serves a chore's run canopy's read-only reports, and nothing of the overseer's (DESIGN §27).
 - With `--git NAME=PATH` it serves a review's or a plan's run read-only git in the checkouts the harness names, alone.
 - Rejected: the `mcp` SDK (a runtime dependency with its own async stack and HTTP transports, for five methods); any
   transport but stdio; tools for workers, whose results are read after they exit (DESIGN §27).
@@ -529,3 +528,19 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Why: the operator (2026-10-20) found a verb nobody would type, `canopy seen`, to be surface kept for a rule's sake.
 - Rejected: a CLI verb for every web write (`canopy seen`, built and removed).
 - Revisit: before a page-only write that authorizes work, which T8 would then have to guard as the CLI's verbs are.
+
+## D128. The web channel writes only named config keys: limits within ceilings, trust only stricter
+
+- An allowlist by key name in `serve/config_edit.py`, never a section; a new key is not writable until named. Only the
+  workspace's private file (M49), never the workspace file or the user file. Settled by the operator (ROADMAP M41).
+- Why: a config write outlives the listener secret. A raised limit is spend, bounded by a ceiling; an added replier or
+  reviewer would steer workers after a new secret, so trust settings only tighten.
+- Nothing that runs a command, picks a prompt, is read as words, or moves the listener. No CLI verb: it would be in
+  reach of the overseer's `canopy *` rule.
+
+## D129. tomlkit edits the private config in place
+
+- `tomllib` only reads. tomlkit keeps the operator's comments and layout through a write; only `canopy.serve` imports
+  it (`tests/canopy/test_layers.py`).
+- Rejected: writing the file anew with the stdlib (comments lost); a file of canopy's own layered after the private
+  file (a hand edit to the private file would be silently overridden).

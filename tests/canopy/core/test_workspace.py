@@ -11,7 +11,7 @@ from canopy.core import config, db, definitions, workspace
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
-from tests.canopy.conftest import Ws, bare_origin, map_text, th
+from tests.canopy.conftest import Ws, bare_origin, map_text, th, turn_off_auto_maintenance
 from tests.canopy.helpers import (
     LABEL,
     InlineRunner,
@@ -216,7 +216,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
         ("dispatch:implement", f"dry run: not dispatched; would work on agent/PROJ-1-work in api; label {LABEL}"),
         (
             "refused:unknown_repo",
-            "--repo is required: name the repositories for PROJ-2 (api, docs, web)",
+            "repos is required (--repo): name the repositories for PROJ-2 (api, docs, web)",
         ),
     ]
     [item] = attention.current(conn)
@@ -236,6 +236,7 @@ def test_items_about_two_repositories_are_two_items(ws_scenario: Scenario, ws: W
     assert notified.read_text().startswith("canopy attention: 2 new, 0 resolved\n+ a repo_missing: ")
 
     git("clone", "--quiet", str(ws.origins["api"]), str(ws.root / "repos" / "a"), cwd=ws.root)
+    turn_off_auto_maintenance(ws.root / "repos" / "a")
     ws_scenario.tick(dry_run=True)
     assert "canopy attention: 0 new, 1 resolved\n- a repo_missing\n" in notified.read_text()
 
@@ -251,7 +252,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
     with_docs(ws)
     conn = ws_scenario.conn
     assert ws_scenario.refuses(canopy(*dispatch("PROJ-1"))) == [
-        ("refused:unknown_repo", "--repo is required: name the repositories for PROJ-1 (api, docs, web)"),
+        ("refused:unknown_repo", "repos is required (--repo): name the repositories for PROJ-1 (api, docs, web)"),
     ]
     assert ws_scenario.refuses(dispatches(repo="nope")) == [
         ("refused:unknown_repo", "'nope' is not a repository in this workspace (api, docs, web)"),
@@ -288,7 +289,10 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
         return dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI], repo=repo)
 
     assert ws_scenario.refuses(resume("web")) == [
-        ("refused:no_branch", "PROJ-1 has no branch in web for resume to continue; dispatch implement with --repo web"),
+        (
+            "refused:no_branch",
+            "PROJ-1 has no branch in web for resume to continue; dispatch implement with repos web (--repo web)",
+        ),
     ]
     assert ws_scenario.run(resume("api"), worker=pushes("agent/PROJ-1-login")).status == "done"
 
@@ -409,6 +413,7 @@ def test_sync_turns_off_gits_automatic_maintenance_in_every_clone_but_not_in_a_d
     extra = bare_origin(tmp_path / "origins" / "docs.git", tmp_path)
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("api", str(ws.origins["api"])), ("docs", str(extra))))
     off = {"maintenance.auto=false", "gc.auto=0"}
+    unset_auto_maintenance(ws.clone("api"))
 
     def local_config(name: str) -> set[str]:
         return set(git("config", "--local", "--list", cwd=ws.clone(name)).splitlines())
@@ -418,6 +423,42 @@ def test_sync_turns_off_gits_automatic_maintenance_in_every_clone_but_not_in_a_d
     assert main(["workspace", "sync"]) == 0
     assert off <= local_config("api")  # a clone from before
     assert off <= local_config("docs")  # and one sync made
+
+
+def test_a_tick_says_where_a_clone_leaves_gits_automatic_maintenance_on_until_sync_turns_it_off(
+    ws_scenario: Scenario,
+    ws: Ws,
+) -> None:
+    unset_auto_maintenance(ws.clone("api"))
+    git("config", "--local", "--unset", "gc.auto", cwd=ws.clone("web"))
+    ticked = ws_scenario.tick(dry_run=True)
+
+    found = [d for d in decisions(ws_scenario.conn, ticked.tick.id) if d[0] == f"attention:{attention.MAINTENANCE_ON}"]
+    fix = f"and can prune what running slots use; run `canopy workspace sync` in {ws.root}"
+    assert found == [
+        (
+            f"attention:{attention.MAINTENANCE_ON}",
+            f"git's automatic maintenance is on in {ws.clone('api')} (maintenance.auto, gc.auto not set), {fix}",
+        ),
+        (
+            f"attention:{attention.MAINTENANCE_ON}",
+            f"git's automatic maintenance is on in {ws.clone('web')} (gc.auto not set), {fix}",
+        ),
+    ]
+    assert [i.subject for i in attention.current(ws_scenario.conn) if i.reason == attention.MAINTENANCE_ON] == [
+        "api",
+        "web",
+    ]
+
+    assert main(["workspace", "sync"]) == 0
+    ws_scenario.tick(dry_run=True)
+    assert not [i for i in attention.current(ws_scenario.conn) if i.reason == attention.MAINTENANCE_ON]
+
+
+def unset_auto_maintenance(clone: Path) -> None:
+    """Take out of `clone`'s config what sync sets there, as in a clone from before sync set it."""
+    for key in ("maintenance.auto", "gc.auto"):
+        git("config", "--local", "--unset", key, cwd=clone)
 
 
 def test_sync_refuses_a_path_that_is_not_a_clone_and_never_prints_a_credential(

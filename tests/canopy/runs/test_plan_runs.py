@@ -205,11 +205,11 @@ def test_a_name_already_taken_is_never_overwritten(scenario: Scenario, git_pool:
 @pytest.mark.parametrize(
     ("args", "guard", "reason"),
     [
-        (["--slug", "work"], "bad_slug", "a plan writes down the work and names no branch; leave out --slug"),
+        (["--slug", "work"], "bad_slug", "a plan writes down the work and names no branch; leave out slug (--slug)"),
         (
             ["--base", "agent/PROJ-2-work"],
             "bad_base",
-            "a plan writes down the work and starts from no branch; leave out --base",
+            "a plan writes down the work and starts from no branch; leave out base (--base)",
         ),
     ],
 )

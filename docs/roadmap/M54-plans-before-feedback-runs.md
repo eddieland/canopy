@@ -122,7 +122,7 @@ its thread's card, an item on no thread listed with its reply; and the page appr
 operator's words, through `canopy plan --approve`'s function in channel `web`, refused as the CLI is, a write T8 now
 names with its residual. Built 2026-10-22, against the fakes, drafts starting from the plan: under
 `trust.review_replies = "approve"`, the `resume`'s `{{PLAN}}` gives each approved item's proposed reply, fenced as data,
-to start its thread's draft from, kept unless the work departed; migration 0082's `drafts.plan_item` records the item of
+to start its thread's draft from, kept unless the work departed; migration 0083's `drafts.plan_item` records the item of
 the run's feedback plan a thread's draft answers, matched by thread, by `_run` or, for a comment only the checking read
 places, by that read; and whether a draft departs is computed in code, never claimed: `canopy draft show`, the threads
 route's `from_plan`, and the PR page's draft card, `as planned` or `changed from the plan` with the proposed reply shown

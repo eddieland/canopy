@@ -202,6 +202,8 @@ REQUIRED_PREVIOUS_REVIEW = ("PREVIOUS_REVIEW",)
 # or `trust.commit_trailer_email` is changed, a prompt needs one of the two, so it cannot name the old trailer; and once
 # `trust.commit_trailer` is off, it needs `{{COMMIT_ATTRIBUTION}}`, so it cannot keep adding one.
 COMMITS = (RunKind.IMPLEMENT, RunKind.RESUME)
+# The role a second trailer names when a worker follows an approved plan: its planner, beside `DEFAULT_TRAILER_NAME`.
+PLANNER_TRAILER_NAME = "canopy planner"
 REQUIRED_TRAILER = ("COMMIT_ATTRIBUTION", "COMMIT_TRAILER")
 REQUIRED_NO_TRAILER = ("COMMIT_ATTRIBUTION",)
 # How the workers that commit bring a base branch in: merge it, or with `trust.rebase`, rebase and push with a lease
@@ -556,26 +558,49 @@ def mark_comments(prefix: str, suffix: str, *, where: str = "on the ticket or a 
 def commit_trailer(config: Config, model: str | None = None) -> str:
     """Return the trailer a worker adds to its commits when the agent runtime adds no attribution of its own.
 
-    `model` is the one canopy chose for the worker (DESIGN §13), or None for the runtime's default. While
-    `trust.commit_trailer_name` is the default, the name credits it, as `provider/model (canopy worker)`; a name the
-    operator set is used as it is (TRUST_MODEL T5).
+    `model` is the one canopy chose for the worker (DESIGN §13), as the run records it, or None for the runtime's
+    default. While `trust.commit_trailer_name` is the default, the name credits it, as `provider/model (canopy worker)`,
+    its variant included (`provider/model@high`); a name the operator set is used as it is (TRUST_MODEL T5).
     """
     name = config.trust.commit_trailer_name
     if model is not None and name == DEFAULT_TRAILER_NAME:
-        # A `runtime.models` value is `provider/model`, with no space, backtick, or angle bracket (`agent_models`), so
-        # it ends neither the name nor the backticks the prompts quote the trailer in.
+        # A `runtime.models` value is `provider/model`, maybe with `@variant`, with no space, backtick, or angle bracket
+        # (`agent_models`), so it ends neither the name nor the backticks the prompts quote the trailer in.
         name = f"{model} ({DEFAULT_TRAILER_NAME})"
     return f"Co-authored-by: {name} <{config.trust.commit_trailer_email}>"
 
 
-def commit_attribution(config: Config, model: str | None = None) -> str:
+def planner_trailer(config: Config, model: str | None) -> str | None:
+    """Return the trailer that credits the planner of the plan a worker follows, beside the worker's own.
+
+    `model` is the one canopy chose for the planner's run (DESIGN §13, §25). Only while `trust.commit_trailer_name` is
+    the default, which names the role, and only with a model to name: the worker's trailer already says canopy's agents
+    did the work, and a name the operator set is theirs to keep whole (TRUST_MODEL T5).
+
+    Returns:
+        The trailer, as `provider/model (canopy planner)`, or None.
+    """
+    if model is None or config.trust.commit_trailer_name != DEFAULT_TRAILER_NAME:
+        return None
+    # A `runtime.models` value has no space, backtick, or angle bracket, as `commit_trailer` says.
+    return f"Co-authored-by: {model} ({PLANNER_TRAILER_NAME}) <{config.trust.commit_trailer_email}>"
+
+
+def commit_attribution(config: Config, model: str | None = None, planner_model: str | None = None) -> str:
     """Return the instruction for a worker's commits: keep the runtime's trailer, or add canopy's while it is on.
 
-    `model` is the worker's chosen model, which canopy's trailer may name (`commit_trailer`).
+    `model` is the worker's chosen model, which canopy's trailer may name (`commit_trailer`), and `planner_model` that
+    of the planner whose approved plan it follows, which a second trailer names (`planner_trailer`).
     """
     if not config.trust.commit_trailer:
         return "Keep the agent runtime's attribution trailer on commits, if it adds one, and add no co-author trailer."
-    return f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config, model)}`."
+    planner = planner_trailer(config, planner_model)
+    if planner is None:
+        return f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config, model)}`."
+    return (
+        f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config, model)}` and "
+        f"`{planner}`, each on a line of its own."
+    )
 
 
 def branch_update(config: Config, branch: str) -> str:
@@ -730,6 +755,7 @@ def render_worker(
     notice: str | None = None,
     persona: personas.Persona | None = None,
     model: str | None = None,
+    planner_model: str | None = None,
 ) -> str:
     """Return the worker prompt for `kind` with every `{{NAME}}` replaced from `values`.
 
@@ -745,8 +771,10 @@ def render_worker(
     unless that is the persona (DESIGN §31).
     `{{COMMIT_ATTRIBUTION}}` and `{{COMMIT_TRAILER}}` come
     from the config too, the trailer naming `model`, the worker's chosen model, while its name is the default
-    (`commit_trailer`): with `trust.commit_trailer_name` or `trust.commit_trailer_email`
-    changed from the default every prompt for a kind that commits must carry one of them, and with
+    (`commit_trailer`), and the attribution adding a trailer for `planner_model`, the model of the planner whose
+    approved plan the worker follows (`planner_trailer`); `{{COMMIT_TRAILER}}` is the worker's alone. With
+    `trust.commit_trailer_name` or `trust.commit_trailer_email` changed from the default every prompt for a kind that
+    commits must carry one of them, and with
     `trust.commit_trailer` off it must carry `{{COMMIT_ATTRIBUTION}}`. So does `{{BRANCH_UPDATE}}`, which every such
     prompt must carry with `trust.rebase` set. `notice` is the operator's notice in force (`core.notice`), for
     `{{NOTICE}}`: with one, every prompt must carry it.
@@ -770,7 +798,7 @@ def render_worker(
         **_standing_values(standing_instructions(config), _worker_reader(kind, private=private)),
         "PERSONA": persona.text if persona is not None else "",
         "NOTICE": notice,
-        "COMMIT_ATTRIBUTION": commit_attribution(config, model),
+        "COMMIT_ATTRIBUTION": commit_attribution(config, model, planner_model),
         "COMMIT_TRAILER": commit_trailer(config, model),
         "BRANCH_UPDATE": branch_update(config, values.get("BRANCH") or ""),
     }

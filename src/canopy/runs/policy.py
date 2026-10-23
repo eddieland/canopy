@@ -193,7 +193,7 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
     if repo is None:
         if len(worked) != 1:
             where = f"it has had runs in {', '.join(worked)}" if worked else "it has had no runs"
-            raise conversation.Refused("unknown_repo", f"name the repository with --repo: {where}")
+            raise conversation.Refused("unknown_repo", f"name the repository with repo (--repo): {where}")
         repo = worked[0]
     elif repo not in worked:
         raise conversation.Refused("unknown_repo", f"{key} has had no runs in {repo}")

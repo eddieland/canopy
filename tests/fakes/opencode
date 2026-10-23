@@ -15,7 +15,8 @@ Keys of the state besides `sessions`, each optional:
     exit    the exit code of every export, debug, and models command, with `stderr`, for an OpenCode that fails.
             Default none.
     stderr  text printed on stderr with `exit`.
-    config  what `debug config` prints, as JSON. Default `{"mcp": {}}`.
+    config  what `debug config` prints, as JSON. Default `{"mcp": {}}`. The servers of an inline config in
+            `OPENCODE_CONFIG_CONTENT`, as canopy gives a run its own, are merged over its `mcp`, as OpenCode does.
     skills  the names `debug skill` lists. Default none.
     agents  each agent's permission rules by name, `[permission, pattern, action]` each, that `debug agent NAME` prints
             after an allow of everything. Default none.
@@ -23,6 +24,9 @@ Keys of the state besides `sessions`, each optional:
             Default none.
     models  the lines `models` prints, each a `provider/model` as OpenCode lists them, or any other line. Default
             none.
+    variants  each model's variants by its line, which `models --verbose` prints in the model's JSON after its line,
+            indented as OpenCode indents it, `{"id": ..., "variants": {NAME: {...}}}`; a line not named gets no
+            `variants`. Default none.
 
 It writes the export as OpenCode does, so a pipe gets at most what fits in its buffer. `run` runs `agent` with the same
 arguments, so a template that runs `opencode run` plays the fake agent. Any other command exits 2.
@@ -49,7 +53,9 @@ def main() -> int:
         case ["debug", *command]:
             return debug(command)
         case ["models"]:
-            return models()
+            return models(verbose=False)
+        case ["models", "--verbose"]:
+            return models(verbose=True)
         case ["run", *_]:
             agent = Path(__file__).with_name("agent")
             os.execv(agent, [str(agent), *sys.argv[1:]])  # noqa: S606  (stands in for OpenCode running an agent)
@@ -69,6 +75,8 @@ def debug(command: list[str]) -> int:
     match command:
         case ["config"]:
             printed: Any = state.get("config", {"mcp": {}})
+            inline = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
+            printed = {**printed, "mcp": {**printed.get("mcp", {}), **inline}}
         case ["skill"]:
             printed = [
                 {"name": name, "description": "d", "location": "x", "content": "x"} for name in state.get("skills", [])
@@ -87,13 +95,19 @@ def debug(command: list[str]) -> int:
     return 0
 
 
-def models() -> int:
+def models(*, verbose: bool) -> int:
     state = read_state()
     if "exit" in state:
         sys.stderr.write(str(state.get("stderr", "")))
         return int(state["exit"])
+    variants = state.get("variants", {})
     for line in state.get("models", []):
         print(line)
+        if verbose:
+            model: dict[str, Any] = {"id": line.partition("/")[2], "name": line}
+            if line in variants:
+                model["variants"] = {name: {"reasoningEffort": name} for name in variants[line]}
+            print(json.dumps(model, indent=2))
     return 0
 
 

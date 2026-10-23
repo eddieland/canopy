@@ -174,6 +174,37 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the settings the web UI edits
+         * @description Each key the settings page edits: its value as the files say now, which file it comes from, and its bound.
+         *
+         *     Files that do not load are refused `config_invalid`, naming the file.
+         */
+        get: operations["getConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change settings in the private config
+         * @description Write the changes to the workspace's private file, then ask the loop to read its config again, as Reload does.
+         *
+         *     Refused, writing nothing: `inside_run`; `not_editable` for a key `GET /config` does not list; `past_bound` for a
+         *     limit loosened past its bound; `not_stricter` for a trust setting loosened; `stale` when the file changed since
+         *     `hash` was read; `unsafe_file` for a private file that is a symlink or not the operator's; `config_invalid` with
+         *     the loader's message.
+         */
+        patch: operations["saveConfig"];
+        trace?: never;
+    };
     "/api/drafts/send": {
         parameters: {
             query?: never;
@@ -2558,6 +2589,77 @@ export type components = {
             truncated: boolean;
         };
         /**
+         * ConfigChange
+         * @description A key a save changed.
+         */
+        ConfigChange: {
+            /**
+             * Name
+             * @description The key, as `section.key`.
+             */
+            name: string;
+            /** @description Its value now. */
+            new: components["schemas"]["ConfigValue"];
+            /** @description Its value before. */
+            old: components["schemas"]["ConfigValue"];
+        };
+        /**
+         * ConfigKey
+         * @description One config key the settings page edits (DESIGN §12, §22): its value as the files say now, and how far.
+         */
+        ConfigKey: {
+            /**
+             * Bound
+             * @description A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes. The file can set any.
+             */
+            bound: number | null;
+            /**
+             * Kind
+             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries).
+             * @enum {string}
+             */
+            kind: "limit" | "stricter";
+            /**
+             * Looser
+             * @description Which way loosens a limit: a count's higher, a pace's lower. None for a `stricter` key.
+             */
+            looser: ("higher" | "lower") | null;
+            /**
+             * Name
+             * @description The key, as `section.key`.
+             */
+            name: string;
+            /**
+             * Source
+             * @description Which file the value comes from: the workspace's private file, the user file (a save writes it to the private
+             *     file, where it shadows the user file's for this workspace), the workspace file (a shared `policy.*` key), or
+             *     none.
+             * @enum {string}
+             */
+            source: "private" | "user" | "workspace" | "default";
+            /** @description Its value now, from whichever file sets it, else the default. */
+            value: components["schemas"]["ConfigValue"];
+        };
+        /**
+         * ConfigPatch
+         * @description A save from the settings page: the keys to change, and the private file's hash as the page read it.
+         */
+        ConfigPatch: {
+            /**
+             * Changes
+             * @description The new values by key. A list's are the entries to keep; `capacity.repo_slots`'s the repositories whose count
+             *     changes.
+             */
+            changes: {
+                [key: string]: components["schemas"]["ConfigValue"];
+            };
+            /**
+             * Hash
+             * @description The `hash` the page read with `GET /config`.
+             */
+            hash: string;
+        };
+        /**
          * ConfigReload
          * @description What asking the loop to read its config again found (DESIGN §6). It applies at once, or after a running tick.
          */
@@ -2579,6 +2681,83 @@ export type components = {
              */
             restart: string[];
         };
+        /**
+         * ConfigSaved
+         * @description What a save wrote, apart from what the reload it asked for did (DESIGN §22).
+         */
+        ConfigSaved: {
+            /**
+             * Changed
+             * @description The keys whose values changed; empty when each already had the value asked for, and nothing was written.
+             */
+            changed: components["schemas"]["ConfigChange"][];
+            /**
+             * Every
+             * @description `canopy loop --every`'s minutes, which still set the pace until the loop restarts, or None.
+             */
+            every: number | null;
+            /**
+             * Hash
+             * @description The private file's SHA-256 now, for the next save.
+             */
+            hash: string;
+            /**
+             * @description What asking the loop to read its config again found; None when nothing changed or the reload was refused. A
+             *     run already running keeps the prompt and permissions it started with either way.
+             */
+            reload: components["schemas"]["ConfigReload"] | null;
+            /**
+             * Reload Refused
+             * @description Why the reload was refused, when it was: the save stands, and takes effect at the next reload.
+             */
+            reload_refused: string | null;
+        };
+        /**
+         * ConfigSettings
+         * @description The keys the settings page edits, and the files they come from (DESIGN §22, TRUST_MODEL T8).
+         */
+        ConfigSettings: {
+            /**
+             * Every
+             * @description `canopy loop --every`'s minutes, which set the pace until the loop restarts whatever the file says, or None.
+             */
+            every: number | null;
+            /**
+             * Hash
+             * @description The private file's SHA-256 as read, an empty file's when there is none: a save carries it, and is refused
+             *     `stale` if the file changed since.
+             */
+            hash: string;
+            /**
+             * Keys
+             * @description Every key the page edits, in the order it shows them. No other key can be changed from the web UI.
+             */
+            keys: components["schemas"]["ConfigKey"][];
+            /**
+             * Private File
+             * @description The workspace's private file (M49), the one a save writes, with comments and layout kept; made if not there.
+             */
+            private_file: string;
+            /**
+             * Repos
+             * @description The workspace map's repositories, each of which `capacity.repo_slots` may give a count.
+             */
+            repos: string[];
+            /**
+             * User File
+             * @description The user config file, which serves every workspace and which the web UI never writes.
+             */
+            user_file: string;
+            /**
+             * Workspace File
+             * @description The workspace file, which the web UI never writes.
+             */
+            workspace_file: string;
+        };
+        /** @description A config key's value: a count or minutes, a switch, a choice, a list's entries, or `capacity.repo_slots`'s counts by repository. None is a pool canopy does not manage. */
+        ConfigValue: number | boolean | string | string[] | {
+            [key: string]: number;
+        } | null;
         /**
          * CostTotal
          * @description What a subject's agent runs cost in all, as the agent runtime reported it (§13), however long ago they ran.
@@ -8679,6 +8858,167 @@ export interface operations {
             };
             /** @description No such chore defined for this workspace. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigSettings"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    saveConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigSaved"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

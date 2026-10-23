@@ -33,6 +33,7 @@ from canopy.core import (
     pools,
     progress,
     run_models,
+    sandboxing,
     task_tickets,
     tasks,
 )
@@ -386,7 +387,7 @@ def _run_agent(
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     runtime = ctx.config.runtime
     command = render_command(runtime.worker_template(runtime.private_worker_cmd), prompt, snapshot, f"task:{task.id}")
-    argv = command.argv
+    argv = sandboxing.wrap(runtime, [run.repo], "worker", command.argv, snapshot)
     timeout_minutes = runtime.worker_timeout_minutes
     log.info(
         "running the task's worker",

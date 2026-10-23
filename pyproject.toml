@@ -42,6 +42,7 @@ dependencies = [
     "rich>=15.0.0",
     # FastAPI's own foundation; canopy.serve's middleware and responses import it directly, so it is declared too.
     "starlette>=1.8.0",
+    "tomlkit>=0.15.1",
     "uvicorn>=0.54.0",
 ]
 

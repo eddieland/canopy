@@ -63,8 +63,7 @@ This is a live tick.
   },
   "running_workers": [],
   "mirror": {
-    "max_per_tick": 100,
-    "body_delimiter": "CANOPY_BODY_0123456789abcdef"
+    "max_per_tick": 100
   },
   "query_due": true,
   "tick_id": 1,
