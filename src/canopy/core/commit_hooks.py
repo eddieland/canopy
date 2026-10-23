@@ -10,8 +10,10 @@ included, then runs the repository's own hook of its name, the one git would hav
 operator's hooks run as before (docs/HOOKS.md).
 
 canopy's entry is the last of the `GIT_CONFIG_*` ones, after any the operator's environment holds, so a hook finds
-the repository's own hooks by asking git with one entry fewer. The variables reach every git the worker's tools run,
-in any repository: what they add there is canopy's marks, and what they run, that repository's own hooks.
+the repository's own hooks by asking git with one entry fewer, or more where a tool added its own after canopy's.
+`GIT_CONFIG_COUNT` needs git 2.31; an older git ignores it, adds no marks, and the run's note names the commits. The
+variables reach every git the worker's tools run, in any repository: what they add there is canopy's marks, and what
+they run, that repository's own hooks.
 """
 
 from __future__ import annotations
@@ -77,11 +79,21 @@ if [ "$name" = prepare-commit-msg ] && [ -n "${CANOPY_COMMIT_TRAILERS-}" ]; then
         fi
     done || exit
 fi
-# The hooks directory git would use without canopy's entry, the last of GIT_CONFIG_COUNT's.
-hooks=$(GIT_CONFIG_COUNT=$((${GIT_CONFIG_COUNT:-1} - 1)) git rev-parse --git-path hooks) || exit
-if [ -x "$hooks/$name" ]; then
-    exec "$hooks/$name" "$@"
-fi
+# The hooks directory git would use without canopy's entry: dropping GIT_CONFIG_COUNT's entries from the last, the
+# first that is not this one's. A tool may have added its own after canopy's, and handing on to this hook again would
+# never end.
+here=$(cd -P "${0%/*}" && pwd) || exit
+n=${GIT_CONFIG_COUNT:-0}
+while [ "$n" -gt 0 ]; do
+    n=$((n - 1))
+    hooks=$(GIT_CONFIG_COUNT=$n git rev-parse --git-path hooks) || exit
+    if [ "$(cd -P "$hooks" 2>/dev/null && pwd)" != "$here" ]; then
+        if [ -x "$hooks/$name" ]; then
+            exec "$hooks/$name" "$@"
+        fi
+        exit 0
+    fi
+done
 """
 
 

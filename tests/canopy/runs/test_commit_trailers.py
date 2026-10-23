@@ -99,3 +99,21 @@ def test_a_commit_without_the_prefix_is_named_and_left_as_it_is(scenario: Scenar
     trailer, prefix = note.split("; ")
     assert trailer.startswith(f"repo: 1 commit pushed to {BRANCH} lacks canopy's trailer: ")
     assert prefix.startswith(f"repo: 1 commit pushed to {BRANCH} lacks the prefix `PROJ-1: `: ")
+
+
+def test_an_entry_a_tool_adds_after_canopys_still_finds_the_repositorys_hooks(
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    ran = tmp_path / "ran"
+    for slot in git_pool.slots:
+        executable(slot / ".git" / "hooks" / "pre-commit", f'#!/bin/sh\necho pre-commit >>"{ran}"\n')
+    # The fixtures' git has one entry and canopy's is the second, so this third comes after it; bounded, so a hook
+    # that handed on to itself fails the commit rather than the test's time.
+    added = ["env", "GIT_CONFIG_COUNT=3", "GIT_CONFIG_KEY_2=user.name", "GIT_CONFIG_VALUE_2=tool"]
+    commit = ["timeout", "30", *added, "git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: the change"]
+    run = scenario.run(worker=worker_does(commit, commit_and_push(BRANCH)[1]))
+    assert run.status == "done"
+    assert ran.read_text().splitlines() == ["pre-commit"]
+    assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER]]
