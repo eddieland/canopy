@@ -14,8 +14,8 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.cli.main import main
 from canopy.core import conversation, db, feedback_items, feedback_plans, plan_export, plans, records, run_models
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import ModelsRead, PlanStatus
-from canopy.runtime.report import ModelUse
+from canopy.core.vocab import ModelsRead, PlanStatus, RunStatus
+from canopy.runtime.report import ModelUse, Usage
 from tests.canopy.helpers import KEY, PLAN, PLAN_PROMPT, operator, plan_prompt, plan_run, prompted, proposed
 from tests.conftest import CanopyEnv
 
@@ -166,6 +166,60 @@ def test_a_plan_names_its_planners_persona_and_models(
     assert plan_export.export(conn, state_dir, dest).written == [f"{KEY}/{file_of(dest, KEY, run_id).name}"]
     meta, _ = front_matter(file_of(dest, KEY, run_id))
     assert meta["models"] == ["anthropic/claude-x@high", "anthropic/claude-y"]
+
+
+def priced_run(conn: sqlite3.Connection, state_dir: Path, kind: str, cost: float | None, key: str = KEY) -> int:
+    """A run of `kind` on `key`, ended, that reported `cost`, or none. Returns its id."""
+    db.touch_ticket(conn, key, "/ws")
+    tick_id = db.start_tick(conn, dry_run=False)
+    run_id = db.insert_run(conn, tick_id=tick_id, key=key, kind=kind, branch="", slots=[], runs_dir=state_dir)
+    if cost is not None:
+        usage = Usage(cost, input=0, output=0, reasoning=0, cache_read=0, cache_write=0)
+        db.set_run_progress(conn, run_id, f"ses_{run_id}", usage=usage)
+    db.finish_run(conn, "runs", run_id, RunStatus.DONE, None)
+    return run_id
+
+
+def test_a_plan_names_what_it_and_every_run_it_took_cost(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+) -> None:
+    def planned(kind: str, cost: float | None, key: str = KEY) -> int:
+        run_id = priced_run(conn, state_dir, kind, cost, key)
+        written = plans.write(state_dir, key, run_id, PLAN)
+        if kind == "plan":
+            plans.record(conn, key, run_id, written)
+        else:
+            snapshot = feedback_items.Snapshot(heads={}, checks={}, given=())
+            feedback_plans.record(conn, key, run_id, written, [], snapshot=snapshot)
+        return run_id
+
+    # A planner blocked, then a plan the operator asks to change, a run that reported no cost, and the plan approved.
+    priced_run(conn, state_dir, "plan", 0.5)
+    first = planned("plan", 0.25)
+    priced_run(conn, state_dir, "plan", None)
+    approved = planned("plan", 1.0)
+    plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
+    # An approval ends a plan's runs: the plan asked for after it, and a feedback plan, count from there.
+    later = planned("plan", 2.0)
+    feedback = planned("feedback-plan", 0.125)
+    other = planned("plan", 4.0, key="PROJ-2")
+    unpriced = planned("plan", None, key="PROJ-3")
+    dest = tmp_path / "archive"
+
+    plan_export.export(conn, state_dir, dest)
+
+    def costs(key: str, run_id: int) -> tuple[object, object]:
+        meta, _ = front_matter(file_of(dest, key, run_id))
+        return meta.get("cost_usd"), meta.get("total_cost_usd")
+
+    assert costs(KEY, first) == (0.25, 0.75)
+    assert costs(KEY, approved) == (1.0, 1.75)
+    assert costs(KEY, later) == (2.0, 2.0)
+    assert costs(KEY, feedback) == (0.125, 0.125)
+    assert costs("PROJ-2", other) == (4.0, 4.0)
+    assert costs("PROJ-3", unpriced) == (None, None)
 
 
 def test_only_a_plans_own_earlier_names_are_removed(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:

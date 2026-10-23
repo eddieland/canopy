@@ -1,11 +1,12 @@
 """Plans exported into a directory of the operator's, each with what the journal records of it (DESIGN §25).
 
 `export` writes every plan and feedback plan the journal records, superseded ones included, to `<dest>/<KEY>/`: a front
-matter of its row and its planner's persona and models, then its file as it stands now. These are what a copy of
-`plans/` alone would lose: whether the plan was approved, by whom, and as which hash, in whose voice it was written, and
-by which model. The file's name says which plan it is and where it stands, so a listing reads without opening one: its
-run, its status in capitals so it stands out, then its title as a slug (`name`), as
-`412-APPROVED-export-reports-as-csv.md`; a plan that gives itself no title takes its ticket's in the journal.
+matter of its row and its planner's persona, models, and cost, then its file as it stands now. These are what a copy
+of `plans/` alone would lose: whether the plan was approved, by whom, and as which hash, in whose voice it was written,
+by which model, and at what cost, its own run's and every run it took to get there. The file's name says which plan it
+is and where it stands, so a listing reads without opening one: its run, its status in capitals so it stands out, then
+its title as a slug (`name`), as `412-APPROVED-export-reports-as-csv.md`; a plan that gives itself no title takes its
+ticket's in the journal.
 
 An export is the same bytes for the same plan and row, so a file is rewritten only when its plan's file or row changed,
 and a git repository at `dest` sees a change only where there is one. When a plan's status or title changes, so does its
@@ -59,7 +60,7 @@ from urllib.parse import quote
 
 from canopy.core import db, plans, records, run_models, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY
-from canopy.core.vocab import PlanStatus
+from canopy.core.vocab import PlanStatus, RunKind
 from canopy.infra.text import printable
 
 if TYPE_CHECKING:
@@ -84,6 +85,8 @@ _FRONT_MATTER = "---\n"
 # Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
 # and compared again.
 _FORMAT = 8
+# The decimal places of a cost in a front matter: a millionth of a dollar, below what any run's cost is reported to.
+_COST_DIGITS = 6
 # The most characters of a title a file's name carries.
 _MAX_SLUG = 60
 # The most characters of a title an index shows.
@@ -130,7 +133,7 @@ class Exported:
 
 @dataclass(frozen=True)
 class Planner:
-    """What the journal records of the run that wrote a plan, beyond the plan's own row."""
+    """What the journal records of the runs that wrote a plan, beyond the plan's own row."""
 
     #: The persona it was given (DESIGN §31); None for a run from before canopy recorded it.
     persona: str | None = None
@@ -140,6 +143,10 @@ class Planner:
     #: Each model its session names as having written its replies, as `provider/model`, the most costly first; empty
     #: until canopy has read the session, and for one the runtime no longer kept.
     models: Sequence[str] = ()
+    #: What its run cost, as the runtime reported it; None when it reported none.
+    cost_usd: float | None = None
+    #: What every run it took cost (`_planners`), its own included; None when none reported a cost.
+    total_cost_usd: float | None = None
 
 
 class ExportError(Exception):
@@ -179,7 +186,7 @@ def export(
     ]
     rows.sort(key=lambda kind_row: (kind_row[1].ticket_key, kind_row[1].run_id))
     prompt_paths = _prompt_paths(conn, state_dir) if prompts else None
-    planners = _planners(conn)
+    planners = _planners(conn, rows)
     planned = {row.ticket_key for _, row in rows}
     ticket_titles = db.ticket_titles(conn, planned)
     last_messages: dict[str, int] = (
@@ -310,8 +317,9 @@ def document(
 ) -> bytes:
     """A plan as it is exported: a front matter of its kind, its row's columns that are set, and its planner's.
 
-    Of `planner`, the front matter names the persona as `persona`, the model canopy chose as `model`, and the models
-    that wrote the plan as `models`, each only when the journal records it. Each value is written as JSON, which YAML
+    Of `planner`, the front matter names the persona as `persona`, the model canopy chose as `model`, the models that
+    wrote the plan as `models`, its run's cost as `cost_usd`, and every run's it took as `total_cost_usd`, each only
+    when the journal records it. Each value is written as JSON, which YAML
     reads as the same string, number, or list, so a reason the planner wrote cannot end the front matter or add a key
     to it.
 
@@ -330,6 +338,10 @@ def document(
             lines.append(f"model: {json.dumps(planner.model)}\n")
         if planner.models:
             lines.append(f"models: {json.dumps(list(planner.models))}\n")
+        for key, cost in (("cost_usd", planner.cost_usd), ("total_cost_usd", planner.total_cost_usd)):
+            if cost is not None:
+                # Rounded, so a sum reads as dollars rather than as a float's error.
+                lines.append(f"{key}: {json.dumps(round(cost, _COST_DIGITS))}\n")
     lines.extend([_FRONT_MATTER, "\n", text])
     return "".join(lines).encode("utf-8")
 
@@ -640,21 +652,57 @@ def _heading(m: records.Message) -> str:
     return " ".join(printable(", ".join(parts)).split())
 
 
-def _planners(conn: sqlite3.Connection) -> dict[int, Planner]:
-    """What the journal records of each plan run: its persona (DESIGN §31), and the models chosen and served (§13).
+def _planners(
+    conn: sqlite3.Connection,
+    rows: Iterable[tuple[Kind, records.Plan | records.FeedbackPlan]],
+) -> dict[int, Planner]:
+    """What the journal records of each plan's runs: its persona (DESIGN §31), its models (§13), and its cost.
+
+    A plan's runs are those of its kind on its ticket since the run of the ticket's last plan of that kind approved
+    before it, through its own: a planner blocked, failed, or asked for changes before it wrote this plan counts
+    towards it. A plan approved ends them, so a ticket's later plan, or a feedback plan's next round, starts afresh.
 
     Returns:
-        Each plan run's, by its run's id.
+        Each plan's planner, by its run's id.
     """
+    plan_rows = {row.run_id: (kind, row) for kind, row in rows}
     planned = sql.union(sql.select("run_id").from_("plans"), sql.select("run_id").from_("feedback_plans"))
-    runs = {
-        int(r["id"]): r
-        for r in sql.execute(conn, sql.select("id, persona, model").from_("runs").where("id IN ({})", planned))
-    }
-    served = run_models.of_runs(conn, "runs", runs)
-    return {
-        run_id: Planner(r["persona"], r["model"], tuple(m.model for m in served[run_id])) for run_id, r in runs.items()
-    }
+    runs = sql.select("id, ticket_key, kind, persona, model, cost_usd").from_("runs")
+    query = runs.where("kind IN (?, ?) OR id IN ({})", RunKind.PLAN, RunKind.FEEDBACK_PLAN, planned).order_by("id")
+    found = list(sql.execute(conn, query))
+    served = run_models.of_runs(conn, "runs", plan_rows.keys())
+    planners: dict[int, Planner] = {}
+    # Each ticket's costs of each kind since its last plan of that kind approved, oldest first.
+    since: dict[tuple[str, Kind], list[float | None]] = {}
+    for r in found:
+        run_id, cost = int(r["id"]), r["cost_usd"]
+        kind, row = plan_rows.get(run_id, (None, None))
+        # A run that wrote no plan counts towards the next plan of its kind.
+        kind = kind or ("plan" if r["kind"] == RunKind.PLAN else "feedback plan")
+        costs = since.setdefault((str(r["ticket_key"]), kind), [])
+        costs.append(None if cost is None else float(cost))
+        if row is None:
+            continue
+        planners[run_id] = Planner(
+            r["persona"],
+            r["model"],
+            tuple(m.model for m in served[run_id]),
+            costs[-1],
+            _sum(costs),
+        )
+        if row.approved_at is not None:
+            costs.clear()
+    return planners
+
+
+def _sum(costs: Iterable[float | None]) -> float | None:
+    """The sum of the costs reported.
+
+    Returns:
+        The sum, or None when none was.
+    """
+    reported = [c for c in costs if c is not None]
+    return sum(reported) if reported else None
 
 
 def _export_index(

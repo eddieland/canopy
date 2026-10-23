@@ -82,8 +82,10 @@ record or through a link, and shows a missing file as missing, never as an empty
 (§24); a plan's event to sinks (§20) carries none of its text.
 
 `canopy archive DIR`, the operator's alone, copies every plan, superseded and feedback plans included, into a directory
-of theirs, each under a front matter of its row and its planner's persona and models, since status, approval, voice, and
-model live only in the journal, and named for its run, status, and title, so a listing reads without opening a plan.
+of theirs, each under a front matter of its row and its planner's persona, models, and cost, since status, approval,
+voice, model, and spend live only in the journal; the cost is its own run's and, summed, every plan run of its kind on
+the ticket since the last plan approved, so a plan that took several tries shows what all of them cost. Each is named
+for its run, status, and title, so a listing reads without opening a plan.
 Beside each goes the prompt its planner was given, named for its run, so a plan can be read with what it was written
 from; a plan run keeps its prompt as long as its plan (§26). It rewrites a file only when its plan or row changed, and
 removes only a plan's own earlier name when its status or title moved it, so the directory can be a repository the

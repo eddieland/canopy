@@ -584,7 +584,7 @@ Controls:
 - With `paths.plan_archive` set (DESIGN §25), each live tick commits every plan, superseded and feedback plans
   included, to that clone of the operator's and pushes it to the clone's upstream: plan text, model-written from what
   planners read of tickets and repositories, leaves the machine for that remote and no other, under its row and its
-  planner's persona and models, the one canopy chose and those its session names. So does each plan's
+  planner's persona, models (canopy's choice and those its session names), and runs' cost. So does each plan's
   prompt unless `paths.plan_archive_prompts`, private and on by default, is off: the operator's messages and standing
   instructions, agent memory's lessons, and the persona that prompt carried, with local paths and repository names.
   With `paths.plan_archive_conversations`, private and off by default, so does each planned ticket's conversation:
