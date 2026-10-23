@@ -1,5 +1,4 @@
 import type { RunState, TaskRun, TaskStanding, TaskSummary } from '@/api/types'
-import { taskRef } from '@/lib/refs'
 import { inRepos, reposIn } from '@/lib/repo-filter'
 
 /** Where a task stands as the tasks list shows it: the run state it is colored as, and the word it reads. */
@@ -100,9 +99,4 @@ export function noReport(task: Pick<TaskSummary, 'standing'>, runs: readonly Tas
 /** The PRs a task's runs named, each once, in the order they first named them. */
 export function taskPrs(runs: readonly TaskRun[]): string[] {
     return [...new Set(runs.flatMap((run) => run.prs))]
-}
-
-/** The command that answers a task from the shell, until the page has a reply box: `canopy reply task:4`. */
-export function replyCommand(id: number): string {
-    return `canopy reply ${taskRef(id)}`
 }

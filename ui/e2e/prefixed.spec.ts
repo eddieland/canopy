@@ -869,3 +869,46 @@ test('a task the server refuses says why, naming its guard, and the form keeps i
     await expect(page).toHaveURL(/\/canopy\/tasks$/u)
     await expect(form.getByRole('textbox', { name: 'Task' })).toHaveValue('Plan the offline mode.')
 })
+
+test("a reply answers a task's question, which clears, and its reply shows", async ({ page }) => {
+    await page.goto('tasks/4')
+    const question = page.getByRole('region', { name: 'A question waiting on you' })
+    await expect(question).toBeVisible()
+    const form = page.getByRole('form', { name: 'Reply' })
+    await form.getByRole('textbox').fill('Yes: rename it in api too.')
+    await form.getByRole('button', { name: 'Reply' }).click()
+    await expect(form.getByRole('status')).toHaveText(
+        /^Recorded message \d+ on task:4, answering message \d+\. The next tick starts its next run, on its branch\.$/u,
+    )
+    const conversation = page.getByTestId('conversation')
+    const mine = conversation.locator('[data-source=operator]').filter({ hasText: 'Yes: rename it in api too.' })
+    await expect(mine).toContainText('via web')
+    await expect(conversation.getByText('waiting on you')).toHaveCount(0)
+    await expect(question).toHaveCount(0)
+    // It still takes a reply, now a plain one: the next run reads every one.
+    await expect(form.getByRole('textbox', { name: 'Reply', exact: true })).toBeVisible()
+})
+
+test('stopping a queued task asks once more, then drops it, and its reply goes', async ({ page }) => {
+    await page.goto('tasks/7')
+    const actions = page.getByTestId('task-actions')
+    await actions.getByRole('button', { name: 'Stop', exact: true }).click()
+    await actions.getByRole('button', { name: 'Stop task:7' }).click()
+    await expect(actions.getByRole('status')).toHaveText(
+        'task:7 is stopped; it had not started, and nothing starts it now.',
+    )
+    await expect(page.getByRole('form', { name: 'Reply' })).toHaveCount(0)
+    await expect(page.locator('main header p')).toContainText('stopped')
+})
+
+test("stop now ends a task's running run after asking once more", async ({ page }) => {
+    await page.goto('tasks/6')
+    const actions = page.getByTestId('task-actions')
+    await actions.getByRole('button', { name: 'Stop now' }).click()
+    await actions.getByRole('button', { name: 'End run 6 now' }).click()
+    await expect(actions.getByRole('status')).toHaveText(
+        'task:6 is stopped; nothing starts it again. Its run 6 was ended and its slot returned.',
+    )
+    await expect(page.getByTestId('working-now')).toHaveCount(0)
+    await expect(page.getByRole('form', { name: 'Reply' })).toHaveCount(0)
+})

@@ -43,6 +43,8 @@ import type {
     Started,
     Stopped,
     TaskSubmitted,
+    TaskReplied,
+    TaskStopped,
     TickAsked,
 } from './types'
 
@@ -154,6 +156,24 @@ export async function replyTicket(key: string, body: string, submission: string)
     return unwrap(
         await api.POST('/api/tickets/{key}/replies', { params: { path: { key } }, body: { body, submission } }),
     )
+}
+
+/**
+ * `canopy reply task:N`: the operator's next instruction to the task, answering its run's question if one asked. Its
+ * next run starts at the next tick, or once its running run ends. `submission` makes a resend a no-op.
+ */
+export async function replyTask(id: number, body: string, submission: string): Promise<TaskReplied> {
+    return unwrap(
+        await api.POST('/api/tasks/{task_id}/replies', {
+            params: { path: { task_id: id } },
+            body: { body, submission },
+        }),
+    )
+}
+
+/** `canopy stop task:N`, or `canopy stop task:N --now` with `now`, which also ends the run working it. */
+export async function stopTask(id: number, now: boolean): Promise<TaskStopped> {
+    return unwrap(await api.POST('/api/tasks/{task_id}/stop', { params: { path: { task_id: id } }, body: { now } }))
 }
 
 /**
@@ -588,6 +608,15 @@ export async function refreshTicketDrafts(client: QueryClient, key: string): Pro
 /** After an action on a ticket: read it again now, rather than wait for the stream to say it changed. */
 export function refreshTicket(client: QueryClient, key: string): Promise<void> {
     return client.invalidateQueries({ queryKey: keys.ticket(key) })
+}
+
+/** After an action on a task: read it, the tasks list, and the attention list again now, which its items are on. */
+export async function refreshTask(client: QueryClient, id: number): Promise<void> {
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.task(id) }),
+        client.invalidateQueries({ queryKey: keys.tasks }),
+        client.invalidateQueries({ queryKey: keys.attention }),
+    ])
 }
 
 /** A submission id for a reply form, drawn when the form is rendered and kept until the reply is recorded. */

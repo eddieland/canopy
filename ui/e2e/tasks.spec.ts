@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 import { settled, signIn } from './helpers.ts'
 
 // A task's page (ui/DESIGN.md, "A task"), over the mock journal's tasks: task 1 done with a report, a draft PR, and two
-// tickets; task 4 waiting on the operator's answer.
+// tickets; task 3 stopped; task 4 waiting on the operator's answer.
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -40,12 +40,34 @@ test('what a task left names its commit, its draft PR, and the tickets it filed,
     await expect(left).toContainText('All of it is throwaway until you give it a pass of its own.')
 })
 
-test("a task's open question is marked, and its foot names the command that answers it", async ({ page }) => {
+test("a task's open question is marked, and the reply form beside it answers it", async ({ page }) => {
     await page.goto('tasks/4')
     await settled(page)
     await expect(page.getByTestId('conversation').getByText('waiting on you')).toBeVisible()
-    const foot = page.getByRole('region', { name: 'A question waiting on you' })
-    await expect(foot).toContainText('canopy reply task:4 TEXT')
+    const question = page.getByRole('region', { name: 'A question waiting on you' })
+    await expect(question.getByRole('textbox', { name: /^Reply to message \d+$/u })).toBeVisible()
+    await expect(page.getByTestId('task-actions').getByRole('button', { name: 'Stop', exact: true })).toBeVisible()
+})
+
+test('a refused reply to a task names its guard, and keeps what was written', async ({ page }) => {
+    // Answered by the route, so the root server's journal never changes.
+    await page.route('**/api/tasks/4/replies', (route) =>
+        route.fulfill({ status: 409, json: { detail: { guard: 'stopped', reason: 'task:4 is stopped' } } }),
+    )
+    await page.goto('tasks/4')
+    await settled(page)
+    const form = page.getByRole('form', { name: 'Reply' })
+    await form.getByRole('textbox').fill('Rename it in api too.')
+    await form.getByRole('button', { name: 'Reply' }).click()
+    await expect(form.getByRole('alert')).toHaveText('refused (stopped): task:4 is stopped')
+    await expect(form.getByRole('textbox')).toHaveValue('Rename it in api too.')
+})
+
+test('a stopped task takes no reply', async ({ page }) => {
+    await page.goto('tasks/3')
+    await settled(page)
+    await expect(page.getByTestId('conversation')).toBeVisible()
+    await expect(page.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })
 
 test("a task's run opens its page: what it said, in full, over its session's transcript", async ({ page }) => {

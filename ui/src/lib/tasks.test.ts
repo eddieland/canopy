@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mockTaskRun, mockTasks } from '@/api/mocks'
 import type { TaskSummary } from '@/api/types'
 
-import { noReport, replyCommand, reportRun, submitRepo, TASK_LOOK, taskPrs, taskTitle, tasksShown } from './tasks'
+import { noReport, reportRun, submitRepo, TASK_LOOK, taskPrs, taskTitle, tasksShown } from './tasks'
 
 /** The ids of `tasks`, in order. */
 function ids(tasks: readonly TaskSummary[]) {
@@ -62,12 +62,6 @@ describe('taskPrs', () => {
         const b = 'https://github.com/acme/web/pull/98'
         expect(taskPrs([mockTaskRun({ prs: [a] }), mockTaskRun({ prs: [b, a] })])).toEqual([a, b])
         expect(taskPrs([])).toEqual([])
-    })
-})
-
-describe('replyCommand', () => {
-    it('names the task as the CLI reads it', () => {
-        expect(replyCommand(4)).toBe('canopy reply task:4')
     })
 })
 

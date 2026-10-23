@@ -1,39 +1,52 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
 import { useState } from 'react'
 import type { SubmitEvent } from 'react'
 
-import { newSubmission, refreshChore, refreshTicket, replyChore, replyTicket } from '@/api/mutations'
+import {
+    newSubmission,
+    refreshChore,
+    refreshTask,
+    refreshTicket,
+    replyChore,
+    replyTask,
+    replyTicket,
+} from '@/api/mutations'
 import type { Replied } from '@/api/types'
 import { Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
-import { notedText, repliedText } from '@/lib/outcomes'
+import { notedText, repliedText, taskRepliedText } from '@/lib/outcomes'
 import { draftKey, keepDraft, readDraft } from '@/lib/reply-draft'
 import { useSendKeys } from '@/lib/send-key'
+import { cn } from '@/lib/utils'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
 const MAX_REPLY = 4000
 
 /**
- * What a reply goes to: a ticket, public or private, or a chore, whose next runs read it as a note (DESIGN §19), and
- * which may have none yet (`noted` false), so its runs follow its prompt file alone.
+ * What a reply goes to: a ticket, public or private; a chore, whose next runs read it as a note (DESIGN §19), and
+ * which may have none yet (`noted` false), so its runs follow its prompt file alone; or a task, whose next run it
+ * starts as the operator's next instruction (DESIGN §36).
  */
 export type ReplyTarget =
     | { kind: 'ticket'; key: string; isPublic: boolean }
     | { kind: 'chore'; name: string; noted: boolean }
+    | { kind: 'task'; id: number }
 
 /**
- * Answers a ticket, as `canopy reply` does, or notes something to a chore, as `canopy reply chore:NAME` does. The
+ * Answers a ticket, as `canopy reply` does, notes something to a chore, as `canopy reply chore:NAME` does, or gives a
+ * task its next instruction, as `canopy reply task:N` does. The
  * submission id is drawn when the form is rendered and kept until a reply is recorded, so sending again after an
  * uncertain result records nothing new (DESIGN §22). Until it is recorded, what is written is kept with its submission
  * id for the tab's life (`src/lib/reply-draft.ts`), so a sign-out mid-reply loses nothing. On a public ticket the
  * reply stays in canopy: it is how the operator says what to do about an untrusted reviewer's comments (D089).
  *
- * It is always open, on any ticket and any chore, so a note for the next worker is never a click away; what it is
- * for is said by its label and placeholder: the message it answers (`waiting`), an untrusted review waiting on the
- * go-ahead (`untrusted`), or where a reply on a public ticket goes.
+ * It is always open, on any ticket, any chore, and any task not stopped, so a note for the next worker is never a click
+ * away; what it is for is said by its label and placeholder: the message it answers (`waiting`), an untrusted review
+ * waiting on the go-ahead (`untrusted`), where a reply on a public ticket goes, or that a task's next run reads it.
  *
  * `onReplied` hears each reply recorded, after the form has said what it did, with that line: the attention page moves
  * on to the next item that waits on the operator.
@@ -43,32 +56,45 @@ export function ReplyForm({
     waiting = null,
     untrusted = false,
     onReplied,
+    className,
 }: {
     target: ReplyTarget
     waiting?: number | null
     untrusted?: boolean
     onReplied?: (replied: Replied, said: string) => void
+    className?: string
 }) {
     const client = useQueryClient()
     const sendKeys = useSendKeys()
-    const stored = draftKey(target.kind === 'ticket' ? `ticket:${target.key}` : `chore:${target.name}`)
+    const stored = draftKey(subjectOf(target))
     // The parent keys the form by its subject, so the draft is read once for it, on mount.
     const [draft] = useState(() => readDraft(stored))
     const [body, setBody] = useState(draft?.body ?? '')
     const [submission, setSubmission] = useState(() => draft?.submission ?? newSubmission())
     const [said, setSaid] = useState<string | null>(null)
     const mutation = useMutation({
-        mutationFn: (text: string): Promise<Replied> =>
-            target.kind === 'ticket'
-                ? replyTicket(target.key, text, submission)
-                : replyChore(target.name, text, submission),
-        onSuccess: (replied) => {
-            const line = target.kind === 'ticket' ? repliedText(target.key, replied) : notedText(target.name, replied)
+        mutationFn: async (text: string): Promise<{ replied: Replied; line: string }> => {
+            switch (target.kind) {
+                case 'ticket': {
+                    const replied = await replyTicket(target.key, text, submission)
+                    return { replied, line: repliedText(target.key, replied) }
+                }
+                case 'chore': {
+                    const replied = await replyChore(target.name, text, submission)
+                    return { replied, line: notedText(target.name, replied) }
+                }
+                case 'task': {
+                    const replied = await replyTask(target.id, text, submission)
+                    return { replied, line: taskRepliedText(target.id, replied) }
+                }
+            }
+        },
+        onSuccess: ({ replied, line }) => {
             setSaid(line)
             setBody('')
             setSubmission(newSubmission())
             keepDraft(stored, { body: '', submission })
-            void (target.kind === 'ticket' ? refreshTicket(client, target.key) : refreshChore(client, target.name))
+            void refresh(client, target)
             onReplied?.(replied, line)
         },
     })
@@ -87,7 +113,9 @@ export function ReplyForm({
         label = `Reply to message ${waiting}`
     }
     let placeholder = 'The next worker reads it as an instruction.'
-    if (chore) {
+    if (target.kind === 'task') {
+        placeholder = 'Its next run reads it as your next instruction, with the conversation so far.'
+    } else if (chore) {
         placeholder = 'Its next runs read it as an instruction, a later note winning, such as a finding to leave out.'
         if (!target.noted) {
             // With no notes the panel says nothing of them, so the box says what that means.
@@ -102,7 +130,11 @@ export function ReplyForm({
     }
 
     return (
-        <form onSubmit={submit} aria-label={chore ? 'Note' : 'Reply'} className="flex flex-col gap-2 border-t p-3">
+        <form
+            onSubmit={submit}
+            aria-label={chore ? 'Note' : 'Reply'}
+            className={cn('flex flex-col gap-2 border-t p-3', className)}
+        >
             <label className="flex flex-col gap-1.5">
                 <span className="panel-label">{label}</span>
                 <Textarea
@@ -134,4 +166,34 @@ export function ReplyForm({
             </div>
         </form>
     )
+}
+
+/** Where the draft of a reply to `target` is kept: `ticket:ABC-1`, `chore:deps`, or `task:4`. */
+function subjectOf(target: ReplyTarget): string {
+    switch (target.kind) {
+        case 'ticket': {
+            return `ticket:${target.key}`
+        }
+        case 'chore': {
+            return `chore:${target.name}`
+        }
+        case 'task': {
+            return `task:${target.id}`
+        }
+    }
+}
+
+/** Reads what a reply to `target` changed again now, rather than wait for the stream to say it changed. */
+function refresh(client: QueryClient, target: ReplyTarget): Promise<void> {
+    switch (target.kind) {
+        case 'ticket': {
+            return refreshTicket(client, target.key)
+        }
+        case 'chore': {
+            return refreshChore(client, target.name)
+        }
+        case 'task': {
+            return refreshTask(client, target.id)
+        }
+    }
 }
