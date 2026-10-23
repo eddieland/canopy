@@ -135,8 +135,8 @@ pick another.
 ## Choosing a model
 
 Under the personas, the **models** row names, for each of the same three agents, the model its next run goes to. One
-this ticket overrides is marked **override**; hover an agent to see where the others come from, `[runtime.models]` in
-your config or nothing, which leaves it to the runtime's own default.
+this ticket overrides is marked **override**; hover an agent, or open its menu, to see where the others come from,
+`[runtime.models]` in your config or nothing, which leaves it to the runtime's own default.
 
 Open an agent's menu there to set this ticket's override, as `canopy model KEY MODEL --agent AGENT` does. The menu
 asks the runtime for its models each time it opens, the same list `canopy models` prints, so it may take a moment to

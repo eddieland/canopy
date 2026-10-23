@@ -121,6 +121,9 @@ function ModelMenu({
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
+                {/* The row's title says this too, but a title reaches neither a keyboard nor a touch. */}
+                <DropdownMenuItem disabled>Where it comes from: {MODEL_SOURCES[current.source]}</DropdownMenuItem>
+                <DropdownMenuSeparator />
                 {listed.isPending && <DropdownMenuItem disabled>Reading the runtime&apos;s models…</DropdownMenuItem>}
                 {why !== null && <DropdownMenuItem disabled>Could not read its models: {why}</DropdownMenuItem>}
                 <DropdownMenuRadioGroup

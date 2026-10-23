@@ -74,6 +74,8 @@ describe('TicketModels', () => {
         const menu = openMenu("reviewer model: the runtime's default")
         const items = await within(menu).findAllByRole('menuitemradio')
         expect(items.map((item) => item.textContent)).toEqual(LISTED)
+        // Where the model comes from is in the menu, for a keyboard or a touch that never sees the row's title.
+        expect(within(menu).getByRole('menuitem', { name: 'Where it comes from: nothing sets one' })).toBeTruthy()
         // Nothing is checked while no override stands.
         expect(items.map((item) => item.getAttribute('aria-checked'))).toEqual(['false', 'false'])
         expect(within(menu).getByRole('menuitem', { name: 'Clear the override' }).getAttribute('aria-disabled')).toBe(
