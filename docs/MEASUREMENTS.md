@@ -977,3 +977,25 @@ Status line, for the model list.
 - The run's last `step_finish` is still not printed, as in 2.1.2, so a run's cost comes from its session's export.
 - With the snapshot's links and the plugin's wait, the dry tick ended `ok`: the overseer ran on the stand-in, its first
   call was sent canopy's tools and the operator's server's, and it recorded the query through `canopy_queried`.
+
+## 2026-10-23: where OpenCode 2.1.4 caches an agent's request
+
+Whether OpenCode 2 needs the split canopy's plugin makes under OpenCode 1 (§33), which cuts the system prompt after
+the agent's body so that runs of one agent in different directories share a cached prefix. Cited by DESIGN §33.
+
+### Setup
+
+- OpenCode 2.1.4, canopy's snapshot of its definitions with the plugin as OpenCode 2 runs it, and a stand-in for
+  Anthropic's Messages API on loopback, declared as a provider through `@ai-sdk/anthropic` in the operator's config,
+  logging each request it was sent.
+- `canopy-reviewer` and `canopy-worker`, each run twice with `opencode run --standalone` in two directories; the
+  worker twice more, each with a `TMPDIR` of its own, as a sandboxed run has.
+
+### Findings
+
+- A request sends the tools, a `cache_control` breakpoint on the last of them, then the system blocks: the agent's
+  body alone, with a breakpoint; the model's name; the skills and the environment, which names the working
+  directory, the date, and the temporary directory; and OpenCode's own note on worktrees, with a breakpoint.
+- Between the two directories, and between the two `TMPDIR`s, the tools, the body, and every block but the
+  environment were identical. So every run of an agent, sandboxed or not, shares the tools and the body as a prefix
+  with breakpoints of its own, which the split gives OpenCode 1's unsandboxed runs alone, and OpenCode 2 needs none.
