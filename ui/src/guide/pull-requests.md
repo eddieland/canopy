@@ -121,8 +121,8 @@ before any worker touches it: a planner reads every new item (a review, a thread
 to do with each, and the resume waits for you. The PR's page shows that plan under **Feedback plan**, after the
 threads' panel.
 
-The panel says which run wrote it, when, and where it stands: `waiting` on you, `stale`, `approved`, or `spent` once a
-resume has gone ahead on it. Under that, a row for each item: its number, the first line of what was said, and where
+The panel says which run wrote it, when, and where it stands: `waiting on you`, `stale`, `approved`, or `spent` once
+a resume has gone ahead on it. Under that, a row for each item: its number, the first line of what was said, and where
 it is, which is a link: **on its thread** jumps to the thread's card on this page, and **the review** opens the review
 on GitHub. Under that line, what the plan proposes (`change`, `decline`, `ask`, or `leave`), who wrote the item,
 `trusted` if `trust.trusted_reviewers` names them, the plan's first line on it, which is why it proposes that, and
@@ -138,12 +138,17 @@ plans again once the PR has been quiet for `policy.feedback_quiet_minutes`, so a
 minutes gets one new plan, not ten.
 
 To approve, tick the items the resume should address and press the button: **Approve whole** with every box ticked,
-**Approve 2 of 3** otherwise. Hover it for the command it is, `canopy plan KEY --approve`, with `--item` or `--leave`
-for the ones you picked. Anything you write in **Your words, for its resume** goes after the message the approval
-writes on the ticket, which names the items to address and to leave by number, never by quoting them. Approving a
-stale plan is refused once, naming what changed, so you approve it knowing; press again and it's approved as it is,
-and the new feedback waits for the next plan. An approved plan can be approved again, with other boxes or other
-words, until its resume starts. To send the planner back instead, reply on the ticket.
+**Approve 2 of 3** otherwise, and nothing at all with none ticked, or while the plan's file has gone missing, in which
+case the panel says so and the way out is a reply on the ticket asking for a new plan. Hover the button for the
+command it is, `canopy plan KEY --approve`, with `--item` or `--leave` for the ones you picked. Anything you write in
+**Your words, for its resume** goes after the message the approval writes on the ticket, which names the items to
+address and to leave by number, never by quoting them. A stale plan's button reads **Approve stale plan**, and the
+first press is refused by design, so you approve it knowing what changed: the panel says so calmly, not in red, and
+the button becomes **Approve as it is**. Press it and the plan is approved as it stands, and the new feedback waits for
+the next plan. An approval done gets the band an approved ticket plan gets, with its leaf and the way back to
+Attention, and clears your words; the button rests as **Approve again** until you tick other boxes or write other
+words, so the send key cannot approve it twice by accident. Approving again is allowed until its resume starts. To
+send the planner back instead, reply on the ticket.
 
 ## When canopy reviews
 

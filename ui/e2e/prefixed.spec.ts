@@ -640,20 +640,22 @@ test("a stale feedback plan is approved by item from the PR's page, refused once
     const bob = page.getByTestId('review-thread').filter({ hasText: 'Why 250?' })
     await expect(bob.getByTestId('plan-proposal')).toContainText('Plan item 3')
     await feedback.getByRole('checkbox', { name: 'address item 1' }).click()
-    const approve = feedback.getByRole('button', { name: 'Approve 2 of 3' })
+    const approve = feedback.getByRole('button', { name: 'Approve stale plan' })
     await expect(approve).toHaveAttribute('title', 'canopy plan ABC-099 --approve --leave 1')
     await approve.click()
-    await expect(feedback.getByRole('alert')).toContainText(
-        'refused (stale): feedback plan 1 of ABC-099 is stale: new review',
-    )
+    // Refused once, as the step it is: a calm note, no error, and the button named for the step after.
+    await expect(feedback.getByRole('status')).toContainText('Refused once, as a stale plan is the first time')
+    await expect(feedback.getByRole('alert')).toHaveCount(0)
     await expect(feedback.getByTestId('feedback-plan-stale')).toContainText('Approving it again approves it as it is')
-    await approve.click()
-    await expect(feedback.getByRole('status')).toContainText(
+    await feedback.getByRole('button', { name: 'Approve as it is' }).click()
+    await expect(feedback.getByTestId('plan-approved')).toContainText(
         'Feedback plan 1 of ABC-099 is approved as its file stands now, for 2 of its 3 items: ' +
             'items 2 (id 2468013579) and 3 (id 2468013601).',
     )
     await expect(feedback).toHaveAttribute('data-status', 'approved')
     await expect(feedback.getByRole('checkbox', { name: 'address item 1' })).not.toBeChecked()
+    // At rest, so the send key cannot approve it twice: a box or the words have to change first.
+    await expect(feedback.getByRole('button', { name: 'Approve again' })).toBeDisabled()
 })
 
 test('a long conversation scrolled away from its end stays put as a message arrives', async ({ page }) => {

@@ -1601,15 +1601,19 @@ sliver beside four others; and its axis names short call numbers without measuri
   review on GitHub` beside it, which stages them in a pending review instead, its reactions added at once, with a muted
   line saying what each does; while the PR holds a staged review, neither shows, and a `staged-review` line links to the
   PR's files on GitHub to finish it. Then, while its ticket has a current feedback plan (docs/design §32), a `Feedback
-  plan` panel (`FeedbackPlanPanel`): `feedback-plan:N` and its status as a chip in its header (waiting and stale in
-  `status-blocked`, approved as running, spent plain), a muted line of who planned it and what its status means, a
+  plan` panel (`FeedbackPlanPanel`): `feedback-plan:N` and its status as a chip in its header (`waiting on you` and
+  stale in `status-blocked`, approved as running, spent plain), a muted line of who planned it and what its status
+  means, cut to the status once it is approved, a
   stale plan's changes in `status-blocked`, a row per item (a `Checkbox` until a resume spends it, its number, the
   first line of what was said as `MemoryText`, and where it is: `on its thread`, a router `Link` to the thread's card
   by its `threadAnchor`, `the review`, a link out to it on its host, or the other PR it is on; under that, muted, its
   proposal as a chip, its author, `trusted`, the plan's first line on it as `MemoryText`, and its id; and a reply no
   thread card shows, under `Proposed reply`, as `MemoryText`), and
-  in its foot the operator's words and `Approve whole` or `Approve N of M`, its command on hover, then a `Disclosure`
-  of the plan's file as `MemoryText`. Then the diff (`DiffPanels`), each thread's card
+  in its foot the operator's words and `Approve whole` or `Approve N of M`, its command on hover (`Approve stale
+  plan` then `Approve as it is` for a stale plan's two steps, the first refusal a muted `output` rather than a
+  `Notice`; disabled with no box ticked or no file; an outline `Approve again` once approved, at rest until a box or
+  the words change), an approval done as the `ApprovedBand` a ticket's plan gets, then a `Disclosure` of the plan's
+  file as `MemoryText`, or a muted line naming the file's problem. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
   `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
