@@ -197,6 +197,8 @@ export type ReviewDraftComment = Schemas['ReviewDraftComment']
 export type ReviewDraftVersion = Schemas['ReviewDraftVersion']
 /** What a publish of a review's draft did: the draft as it now stands, and why nothing posted, if nothing did. */
 export type ReviewDraftPublished = Schemas['ReviewDraftPublished']
+/** What a note on a review's draft recorded, as `canopy reply review:ID` reports it. */
+export type ReviewDraftNoted = Schemas['ReviewDraftNoted']
 /** How much a finding holds the merge: `blocking`, `major`, or `minor`. */
 export type FindingSeverity = Schemas['FindingSeverity']
 /** The reviewed commit's diff: the PR's own text, untrusted and bounded. */

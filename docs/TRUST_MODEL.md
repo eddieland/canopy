@@ -835,9 +835,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   memory promote`, `reject`, `renew`, `edit`, and `forget` do (DESIGN §28), edit a run's drafts' text and reaction,
   drop, send, and stage them as `canopy draft edit`, `drop`, `send`, and `stage` do (DESIGN §29), choose or clear the
   persona of one of a ticket's agents as `canopy persona` does, among the personas a run could already get (DESIGN §31),
-  edit a review's draft's body and comments, drop one, add one on a line of its kept diff, and publish or stage the
-  version the page showed, named by its hash, as `canopy review edit` and `publish` do (DESIGN §34), ask the loop to
-  read its config files again as SIGHUP does, and ask it for a tick now as `t` at its terminal does.
+  edit a review's draft's body and comments, drop one, add one on a line of its kept diff, note what a revision of it
+  should change as `canopy reply review:ID` does, and publish or stage the version the page showed, named by its hash,
+  as `canopy review edit` and `publish` do (DESIGN §34), ask the loop to read its config files again as SIGHUP does,
+  and ask it for a tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes what no command would, through a function of its own with the same guards: the
   marks of what the operator has seen (DESIGN §22), which authorize nothing and no agent reads, and two things that
   are the operator's own words on a plan (DESIGN §25): an edit of a
@@ -866,10 +867,13 @@ memory page list it, with where it came from. It can also edit a run's draft int
 and send it, which posts them on GitHub as the operator, unmarked, on a PR or a ticket a run drafted for; the journal records
 the edit, the send, and the channel. Likewise it can edit a review's draft into a review of its choosing and publish it,
 which posts it as the operator, unmarked, as a comment review on any PR canopy reviewed and the loop does not own, a
-coworker's included; the journal records each version, who wrote it, the channel, and what was posted. It can approve
-a waiting feedback plan, or an approved one again for other items, with words of its choosing after the approval's
-message, which starts a `resume` on that plan within the operator's attempt limits and capacity, its worker pushing to
-the ticket's branch as any resume does; the message and its channel are in the journal. Binding to a
+coworker's included; the journal records each version, who wrote it, the channel, and what was posted. A note it
+writes on a draft is the reviser's instruction, as the operator's own would be: it can have a revision, under the
+draft's limit and the review guards, write a version of its choosing, which posts only when published; the journal
+records the note and its channel. It can approve a waiting feedback plan, or an approved one again for other items,
+with words of its choosing after the approval's message, which starts a `resume` on that plan within the operator's
+attempt limits and capacity, its worker pushing to the ticket's branch as any resume does; the message and its channel
+are in the journal. Binding to a
 private address rather than loopback relies on the network
 for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port

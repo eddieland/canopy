@@ -34,6 +34,8 @@ ReviewId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The review run's i
 TickId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The tick's id.")]
 PlanId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The plan's id, as `plan:ID` names it.")]
 ThreadId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The comment thread's id.")]
+TaskId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The task's id, as `task:N` names it.")]
+TaskRunId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The task run's id.")]
 MemoryId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The memory's id, as `memory:ID` names it.")]
 
 # Every API route's: the guard answers 403, 411, or 413 before any route does (guard.py), and a session's check on a

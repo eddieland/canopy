@@ -110,7 +110,7 @@ describe('ReviewDraftPanel', () => {
         expect(within(found).queryByText('waiting')).toBeNull()
         expect(within(found).queryByText(/3f9a1c27b0de/u, { selector: 'p' })).toBeNull()
         expect(tipOf(within(found).getByTestId('draft-version'))).toBe(
-            "Version 1: made from review run 5's summary and findings, by the reviewer. " +
+            "Version 1: made from review run 5's body and findings, by the reviewer. " +
                 'A publish carries its hash, 3f9a1c27b0de.',
         )
         expect(within(found).getByText('<U+200B>')).toBeTruthy()
@@ -119,7 +119,7 @@ describe('ReviewDraftPanel', () => {
         expect(within(comments).getByText('finding 1')).toBeTruthy()
         expect(within(comments).getByText('api/upstream.py:15')).toBeTruthy()
         expect(within(found).getByTestId('draft-versions').textContent).toContain(
-            "1 3f9a1c27b0de by the reviewer: made from review run 5's summary and findings",
+            "1 3f9a1c27b0de by the reviewer: made from review run 5's body and findings",
         )
     })
 
@@ -268,6 +268,93 @@ describe('ReviewDraftPanel', () => {
         expect(within(found).getByRole('link', { name: 'on GitHub' }).getAttribute('href')).toBe(url)
         // Published before the page opened: nothing was just done here, so no leaf.
         expect(within(found).queryByTestId('leaf')).toBeNull()
+    })
+
+    it('asks for a revision with a note, as canopy reply review:ID does, and says a tick revises it', async () => {
+        const note = {
+            id: 7,
+            body: 'Say it more gently.',
+            channel: 'web',
+            after_version: 1,
+            created_at: '2026-10-08T12:00:00Z',
+        }
+        answer = () => Response.json({ note: 7, after_version: 1, draft: reviewDraft({ notes: [note] }) })
+        const found = await panel()
+        const revision = within(found).getByTestId('draft-revision')
+        expect(within(revision).getByText('0 of 3 revisions')).toBeTruthy()
+        expect(revision.textContent).toContain('Tell an agent what to change')
+        const form = within(revision).getByRole('form', { name: "Ask for a revision of review run 5's draft" })
+        const ask = within(form).getByRole('button', { name: /Ask for a revision/u })
+        expect(ask.getAttribute('title')).toBe('canopy reply review:5 TEXT')
+        // A blank note sends nothing.
+        fireEvent.change(within(form).getByRole('textbox', { name: 'What should change' }), { target: { value: ' ' } })
+        expect(ask).toHaveProperty('disabled', true)
+        fireEvent.change(within(form).getByRole('textbox'), { target: { value: 'Say it more gently.' } })
+        fireEvent.click(ask)
+        await waitFor(() => {
+            expect(
+                within(revision).getByText(
+                    "Recorded note 7 on review run 5's draft, at version 1. The next tick revises it, unless you " +
+                        'change the draft first.',
+                ),
+            ).toBeTruthy()
+        })
+        expect(writes()).toEqual([
+            { method: 'POST', path: '/api/reviews/5/draft/notes', body: { text: 'Say it more gently.' } },
+        ])
+
+        cleanup()
+        const asked = within(await panel(reviewDraft({ notes: [note] }))).getByTestId('draft-revision')
+        expect(asked.textContent).toContain('Your note asks for a revision: the next tick starts one')
+        expect(within(asked).getByRole('list', { name: 'Your notes' }).textContent).toContain('Say it more gently.')
+    })
+
+    it('says a revision is running, and lists it', async () => {
+        const running = {
+            id: 9,
+            status: 'running',
+            state: 'running' as const,
+            revised: 1,
+            started_at: '2026-10-08T12:00:00Z',
+            ended_at: null,
+        }
+        const found = await panel(reviewDraft({ revisions: [running] }))
+        const revision = within(found).getByTestId('draft-revision')
+        expect(revision.textContent).toContain('Review run 9 is revising it on your notes.')
+        expect(within(revision).getByText('1 of 3 revisions')).toBeTruthy()
+        expect(within(revision).getByRole('list', { name: 'Revisions' }).textContent).toContain(
+            'review run 9, of version 1: running',
+        )
+    })
+
+    it('at its limit says how to grant another, and that a failed revision left the draft as it was', async () => {
+        const failed = {
+            id: 9,
+            status: 'timeout',
+            state: 'failed' as const,
+            revised: 1,
+            started_at: '2026-10-08T12:00:00Z',
+            ended_at: '2026-10-08T12:10:00Z',
+        }
+        const found = await panel(reviewDraft({ revisions: [failed], revision_limit: 1 }))
+        const revision = within(found).getByTestId('draft-revision')
+        expect(revision.textContent).toContain(
+            'It has had its 1 revisions: allow it another with `canopy grant review:5 revision`.',
+        )
+        expect(within(revision).getByText('Revision run 9 ended timeout: the draft stands as it was.')).toBeTruthy()
+    })
+
+    it('names the guard of a refused note, as the CLI does', async () => {
+        answer = () =>
+            Response.json(
+                { detail: { guard: 'revising', reason: "review run 9 is revising review run 5's draft" } },
+                { status: 409 },
+            )
+        const found = await panel()
+        const form = within(found).getByRole('form', { name: "Ask for a revision of review run 5's draft" })
+        fireEvent.change(within(form).getByRole('textbox'), { target: { value: 'Shorter.' } })
+        fireEvent.click(within(form).getByRole('button', { name: /Ask for a revision/u }))
+        expect(await within(found).findByText('refused (revising):')).toBeTruthy()
     })
 
     it('says where to finish a staged review', async () => {

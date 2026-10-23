@@ -32,6 +32,7 @@ import type {
     ReviewDetail,
     ReviewDismissed,
     ReviewDraft,
+    ReviewDraftNoted,
     ReviewDraftPublished,
     ReviewRequested,
     ReviewRequestStopped,
@@ -51,9 +52,9 @@ import type {
  * pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and those on a run's
  * drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`,
  * `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, `notice`,
- * `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`, `draft edit`, `drop`, and `send`, and
- * `review edit` and `publish`, or as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming
- * its guard.
+ * `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`, `draft edit`, `drop`, and `send`,
+ * `review edit` and `publish`, and `reply review:ID`, or as `t` at the loop's terminal, with the same guards; a refusal
+ * is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -371,6 +372,16 @@ export async function addReviewDraftComment(
             params: { path: { run_id: run } },
             body: { path, line, text },
         }),
+    )
+}
+
+/**
+ * `canopy reply review:RUN TEXT`: what a revision of the review's draft should change. The next tick revises it with an
+ * agent, unless the operator changes the draft first; refused while a revision runs and at the draft's limit.
+ */
+export async function noteReviewDraft(run: number, text: string): Promise<ReviewDraftNoted> {
+    return unwrap(
+        await api.POST('/api/reviews/{run_id}/draft/notes', { params: { path: { run_id: run } }, body: { text } }),
     )
 }
 

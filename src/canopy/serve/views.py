@@ -26,7 +26,7 @@ from canopy.core import (
     run_models,
 )
 from canopy.core.items import fingerprint
-from canopy.core.vocab import ModelsRead, RunStatus
+from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunStatus
 from canopy.serve import draft_views, memory_views
 from canopy.serve.persona_schema import AgentPersona, PersonaChoice
 from canopy.serve.schema import (
@@ -321,7 +321,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None, models
         kind=str(row["kind"]),
         reasons=list(db.reasons_in(row)),
         status=status,
-        state=_run_state(status),
+        state=run_state(status),
         private=bool(row["private"]),
         ticket_stopped=bool(row["ticket_stopped"]),
         branch=str(row["branch"]) or None,
@@ -385,7 +385,7 @@ def _activity(row: sqlite3.Row) -> RunActivity | None:
     )
 
 
-def _run_state(status: str) -> RunState:
+def run_state(status: str) -> RunState:
     """What the web UI colors a run that has `status` as (DESIGN §22).
 
     Returns:
@@ -408,6 +408,23 @@ def _run_state(status: str) -> RunState:
             return "failed"
         case _:
             assert_never(known)
+
+
+def review_state(status: ReviewRunStatus) -> RunState:
+    """What the web UI colors a review run that has `status` as, a revision of a review's draft among them.
+
+    Returns:
+        The run's state: every ending but `done` is failed.
+    """
+    match status:
+        case ReviewRunStatus.RUNNING:
+            return "running"
+        case ReviewRunStatus.DONE:
+            return "done"
+        case ReviewRunStatus.FAILED | ReviewRunStatus.UNKNOWN | ReviewRunStatus.TIMEOUT | ReviewRunStatus.CRASHED:
+            return "failed"
+        case _:
+            assert_never(status)
 
 
 def new_tokens(row: sqlite3.Row | records.Row) -> int | None:
@@ -636,6 +653,7 @@ def message(row: records.Message) -> Message:
         kind=_KINDS.get(row.kind, "comment"),
         channel=row.channel,
         run_id=row.run_id,
+        task_run_id=row.task_run_id,
         answers=row.answers,
         body=conversation.printable(row.body),
         comment=comment,
