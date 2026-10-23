@@ -55,7 +55,24 @@ since those are the ones you come back to debug. After that your `[retention]` r
 
 [Spend](/spend) shows what agent runs cost, as the runtime reported it, over the last **24 hours**, **7 days**, or **30
 days**. The line under the title is the window at a glance, `$10.51 over 7 days · 2 tickets done`; hover the title for
-what the page holds. The **Totals** split it by who spent it: the overseer, then the part of that its idle ticks spent,
+what the page holds.
+
+**This month** sits on top whatever the window, and tracks the calendar month so far against the monthly budget you set
+under [Limits and trust](settings#limits-and-trust): what it spent of the budget, and what the month will cost if the
+rest of it spends like the start did. The bar fills with the budget spent, and the mark across it is how far through
+the month you are, so a bar past its mark is spending faster than the budget allows. It reads **On budget**, then
+**Headed over** once the pace passes the budget, then **Over budget**. The pace waits for the month's first day to end,
+since one morning's runs would otherwise forecast something dramatic. Nothing stops at the budget: it's a number to
+watch, not a brake. A sink that takes `loop` events hears once when the month reaches it, and again only if you raise
+the budget and the month reaches that too.
+
+Want a heads-up before the bill, not after? Add alerts at other percentages of the budget, `50, 80` say, or `150` for
+when the month really gets away from you. Each is sent once a month, as the spend reaches it, and the ones short of the
+budget show as ticks under the bar. A month that jumps past several at once hears about the highest one, because one
+message saying 80% beats two saying 50% and then 80%. The 100% alert always goes out. With no budget set, the panel says
+where to set one.
+
+The **Totals** split it by who spent it: the overseer, then the part of that its idle ticks spent,
 then the workers, plans, chores, reviews, your one-off tasks, and dry runs. Beside them are the tickets the loop marked
 done in that window, and what each cost on average, the overseer and chores included.
 

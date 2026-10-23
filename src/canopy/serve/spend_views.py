@@ -17,6 +17,7 @@ from canopy.serve.schema.spend import (
     SpendCosts,
     SpendDay,
     SpendModel,
+    SpendMonth,
     SpendPullRequest,
     SpendTicket,
     SpendTicks,
@@ -58,21 +59,24 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
     """What the last `days` local days cost, by the backend's clock, as `canopy spend --days` prints it.
 
     Returns:
-        The breakdown, with the newest idle ticks in the window.
+        The breakdown, with the newest idle ticks in the window, and the month against its budget.
     """
-    return _spend_breakdown(ctx, spending.breakdown(ctx.conn, backend.clock(), days))
+    now = backend.clock()
+    return _spend_breakdown(ctx, spending.breakdown(ctx.conn, now, days), now)
 
 
 def spend_breakdown_hours(backend: Backend, ctx: Context, hours: int) -> SpendBreakdown:
     """What the last `hours` clock hours cost, by the backend's clock, by the hour.
 
     Returns:
-        The breakdown, with the newest idle ticks in the window.
+        The breakdown, with the newest idle ticks in the window, and the month against its budget.
     """
-    return _spend_breakdown(ctx, spending.breakdown_hours(ctx.conn, backend.clock(), hours))
+    now = backend.clock()
+    return _spend_breakdown(ctx, spending.breakdown_hours(ctx.conn, now, hours), now)
 
 
-def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
+def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> SpendBreakdown:
+    month = spending.budget_month(ctx.conn, now, ctx.config.spend)
     return SpendBreakdown(
         since=db.parse_time(found.since),
         days=found.days,
@@ -128,6 +132,20 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
             SpendModel(kind=m.kind, model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd)
             for m in found.models
         ],
+        month=_spend_month(month) if month is not None else None,
+    )
+
+
+def _spend_month(found: spending.Month) -> SpendMonth:
+    return SpendMonth(
+        month=found.month,
+        since=db.parse_time(found.since),
+        until=db.parse_time(found.until),
+        budget_usd=found.budget_usd,
+        spent_usd=found.spent_usd,
+        elapsed=found.elapsed,
+        projected_usd=found.projected_usd,
+        alerts=list(found.alerts),
     )
 
 

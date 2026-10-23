@@ -584,6 +584,15 @@ def _sink_failing(e: Mapping[str, object]) -> list[str]:
     ]
 
 
+def _budget_reached(e: Mapping[str, object]) -> list[str]:
+    spent, projected, percent = e.get("spent"), e.get("projected"), e.get("percent")
+    so_far = _usd(spent) if isinstance(spent, int | float) else "-"
+    pace = f"; on pace for {_usd(projected)}" if isinstance(projected, int | float) else ""
+    month, budget = escape(e.get("month")), escape(e.get("budget"))
+    what = "its budget" if percent == 100 else f"{escape(percent)}% of its budget"  # noqa: PLR2004  (the budget whole)
+    return [f":moneybag: *Spend for {month} reached {what}:* {so_far} of ${budget}{pace}"]
+
+
 def _test(e: Mapping[str, object]) -> list[str]:
     return [f":test_tube: {_linked(e.get('text'))}"]
 
@@ -601,6 +610,7 @@ _EVENTS: dict[str, Callable[[Mapping[str, object]], list[str]]] = {
     "loop.failing": _loop_failing,
     "loop.recovered": _loop_recovered,
     "loop.sink_failing": _sink_failing,
+    "loop.budget_reached": _budget_reached,
     "test": _test,
 }
 

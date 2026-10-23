@@ -295,7 +295,8 @@ REPORT_TOOLS = (
     _report(
         reports.SPEND,
         "What canopy's agent runs cost over the last days, as JSON: per day and kind, by ticket, by tool with what "
-        "its calls returned and how many errored (tools), and by model.",
+        "its calls returned and how many errored (tools), by model, and the month against the operator's budget "
+        "(month, null with none set).",
         reports.Spend,
         reports.read_spend,
     ),

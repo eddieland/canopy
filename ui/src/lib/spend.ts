@@ -10,6 +10,7 @@ import type {
     SpendGroup,
     SpendKind,
     SpendModel,
+    SpendMonth,
     SpendTicket,
     SpendTool,
 } from '@/api/types'
@@ -290,4 +291,52 @@ function firstOf(...diffs: number[]): number {
 // Two costs summed, null only when neither reported one.
 function addCost(a: number | null | undefined, b: number | null | undefined): number | null {
     return a === null || a === undefined ? (b ?? null) : a + (b ?? 0)
+}
+
+/**
+ * Where the month stands against its budget: `over` once it spent it, `headed` over when its pace says it will by the
+ * month's end, else `under`.
+ */
+export type BudgetState = 'under' | 'headed' | 'over'
+
+/** Where the month stands against its budget. */
+export function budgetState(month: SpendMonth): BudgetState {
+    if (budgetPercent(month) >= 100) {
+        return 'over'
+    }
+    return month.projected_usd !== null && month.projected_usd > month.budget_usd ? 'headed' : 'under'
+}
+
+/**
+ * The month's spend over its budget, from 0, as a whole percentage: past 100 once it is over. Floored, so a month short
+ * of its budget never reads 100%, and counted in whole cents, so `0.29 * 100` never floors a point away.
+ */
+export function budgetPercent(month: SpendMonth): number {
+    return Math.floor(Math.round((month.spent_usd ?? 0) * 100) / month.budget_usd)
+}
+
+/** The alerts a sink hears the month reach, in words: `A sink that takes loop events hears at 50%, 80%, and 100%.` */
+export function alertsText(month: SpendMonth): string {
+    const percents = new Intl.ListFormat('en-US').format(month.alerts.map((p) => `${p}%`))
+    return `A sink that takes loop events hears at ${percents}.`
+}
+
+/** The alerts below the budget, which the bar has room to mark: those at or past 100% are past its end. */
+export function alertMarks(month: SpendMonth): number[] {
+    return month.alerts.filter((p) => p < 100)
+}
+
+/** The month in words, `October 2026`, from its `YYYY-MM`, as the operator's calendar names it. */
+export function monthName(month: SpendMonth): string {
+    const [year, number] = month.month.split('-').map(Number)
+    return new Date(year ?? 1970, (number ?? 1) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+
+/**
+ * What the month spent against its budget, and where its pace takes it: `$15.76 of $40 (39%), on pace for $65.14.`
+ */
+export function budgetText(month: SpendMonth): string {
+    const spent = `${costText(month.spent_usd ?? 0)} of $${month.budget_usd} (${budgetPercent(month)}%)`
+    const pace = month.projected_usd === null ? '' : `, on pace for ${costText(month.projected_usd)}`
+    return `${spent}${pace}.`
 }

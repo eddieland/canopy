@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, outbox, sql
+from canopy.core import contract, db, outbox, spend, sql
 from canopy.core.config import Sink, notify_words
 from canopy.infra import procs
 from canopy.notify import journal, message
@@ -71,6 +71,7 @@ def publish(
     now = datetime.now(UTC)
     if ctx.config.notify.takes(outbox.LOOP):
         _record_loop_events(ctx)
+        _record_budget_event(ctx, now)
     deliveries = [
         _deliver(ctx, name, sink, items, path=path, now=now, log=log, dismissed=dismissed, ui=ui)
         for name, sink in sinks.items()
@@ -177,6 +178,33 @@ def _record_loop_events(ctx: Context) -> None:
     if streak >= FAILING_AFTER and not failing:
         log_path = ctx.state_dir / "ticks" / f"{tick_id}.log"
         db.record_event(ctx.conn, outbox.loop_failing(streak, status, tick_id, str(log_path)))
+
+
+def _record_budget_event(ctx: Context, now: datetime) -> None:
+    """Record `loop.budget_reached` when the local month's spend reaches one of its alerts, 100% of the budget or more.
+
+    One event for the highest alert reached, never one for each passed on the way, and only for an amount above the
+    last told this month: a budget raised, or an alert added, past the month's spend is heard of once the spend reaches
+    it, while one lowered or added below it is not, since the sink already heard of more.
+    """
+    found = spend.budget_month(ctx.conn, now, ctx.config.spend)
+    if found is None or found.reached is None:
+        return
+    # Pruning always keeps the newest of these (journal.prune_events), so a month already told is never taken for new.
+    last = sql.execute(
+        ctx.conn,
+        sql.select("fields")
+        .from_("notify_events")
+        .where("kind = ?", outbox.BUDGET_REACHED)
+        .order_by("id DESC")
+        .limit(1),
+    ).fetchone()
+    told = contract.stored_object(str(last[0])) if last is not None else {}
+    budget, percent = told.get("budget"), told.get("percent")
+    heard = budget * percent if isinstance(budget, int) and isinstance(percent, int) else 0
+    if told.get("month") == found.month and heard >= found.budget_usd * found.reached:
+        return
+    db.record_event(ctx.conn, outbox.budget_reached(found, found.reached))
 
 
 def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:

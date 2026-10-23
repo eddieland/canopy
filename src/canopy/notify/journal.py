@@ -92,21 +92,27 @@ def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
     """Delete events every sink has passed that are older than `KEEP_EVENTS`.
 
     Returns:
-        How many were deleted. The newest `loop.failing` or `loop.recovered` event is kept.
+        How many were deleted. The newest `loop.failing` or `loop.recovered` event is kept, and the newest
+        `loop.budget_reached`.
     """
     cursors = [int(r[0]) for r in sql.execute(conn, sql.select("cursor").from_("notify_sinks"))]
     passed = min(cursors) if cursors else newest_event_id(conn)
-    # The newest `loop.failing` or `loop.recovered` stays: it is how a long streak is told from a new one.
-    marker = sql.execute(
+    # The newest `loop.failing` or `loop.recovered` stays: it is how a long streak is told from a new one. So does the
+    # newest `loop.budget_reached`: it is how an alert already told is told from a new one.
+    streak = sql.execute(
         conn,
         sql.select("coalesce(max(id), 0)").from_("notify_events").where("kind IN ('loop.failing', 'loop.recovered')"),
+    ).fetchone()[0]
+    budget = sql.execute(
+        conn,
+        sql.select("coalesce(max(id), 0)").from_("notify_events").where("kind = 'loop.budget_reached'"),
     ).fetchone()[0]
     cur = sql.execute(
         conn,
         sql.delete("notify_events")
         .where("id <= ?", passed)
         .where("at < ?", db.format_time(now - KEEP_EVENTS))
-        .where("id != ?", marker),
+        .where("id NOT IN (?, ?)", streak, budget),
     )
     return cur.rowcount
 
