@@ -301,7 +301,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
         sql.insert_rows("review_request_personas", ["request_id", "persona"]),
         [(made.lastrowid, persona) for persona in PERSONAS_14],
     )
-    # The reader's last read of Carol's PR, at the commit review 5 read, which names her as its author.
+    # The reader's last read of Carol's PR, at the commit review 5 read, which names her as its author and its title.
     sql.execute(
         conn,
         sql.insert(
@@ -315,6 +315,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
             draft=0,
             mergeable="mergeable",
             author="carol",
+            title="Retry the upstream on a 503, with backoff",
             observed_at=at(-29),
         ),
     )
