@@ -626,10 +626,10 @@ Controls:
   whole workspace on purpose, every run and every chore, as `canopy-introspect` must to find what keeps failing: any
   run's page, a private ticket's included, with the messages it sent, and any chore's findings and the operator's notes
   to it. An agent that allows one reads what the operator's `canopy show` would. The config's settings leave out every
-  key that holds text, a command, or a path. Asking what each agent is offered starts the agent runtime to read its config,
-  without the servers the chore's run was given. The server is named in the same environment, lists nothing outside a
-  chore's run, and writes nothing but the definitions snapshot a run would write; `canopy-chore` and every other
-  definition deny it, so only an agent that allows a report by name reads it.
+  key that holds text, a command, or a path. Asking what each agent is offered starts the agent runtime to read its
+  config, without the servers the chore's run was given. The server is named in the same environment, lists nothing
+  outside a chore's run, and writes nothing but the definitions snapshot a run would write; `canopy-chore` and every
+  other definition deny it, so only an agent that allows a report by name reads it.
   Off a GitHub tracker, the tracker's server is denied whole but its read tools, allowed by name, as for the reviewer.
   The agents example chores come with, `canopy-introspect` and `canopy-memory-tickets`, which `canopy chore install`
   copies into the workspace's state directory for a chore's `cmd` to name, are the same, but for that rendering, with
