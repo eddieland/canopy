@@ -57,7 +57,11 @@ test('a reply answers the waiting question, and a retry records nothing new', as
     // No tick has read it yet: the reply says so, and the inbox keeps the question, marked answered, until one does.
     await expect(mine).toContainText('waiting for the next tick')
     await page.goto('attention')
-    const item = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting reply' })
+    const item = page
+        .getByTestId('attention-list')
+        .getByRole('link')
+        .filter({ hasText: 'awaiting reply' })
+        .filter({ hasText: 'ABC-102' })
     await expect(item).toContainText('answered')
     await item.click()
     await expect(page.getByTestId('answered-note')).toContainText('leaves at the next tick')
