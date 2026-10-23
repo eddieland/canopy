@@ -1,5 +1,6 @@
 """End to end: `canopy tick --dry-run` against the fake treehouse and a fake overseer that calls the real `canopy`."""
 
+import dataclasses
 import errno
 import json
 import os
@@ -218,14 +219,16 @@ def test_the_query_runs_every_tick_by_default(scenario: Scenario) -> None:
 
 def test_the_query_runs_again_once_its_spacing_has_passed(scenario: Scenario) -> None:
     scenario.configures(tracker={"query_every_minutes": 30})
+    # A ticket to decide, so a tick the query is not due on still runs the overseer (DESIGN §39).
+    scenario.seen("PROJ-2")
     due: list[bool] = []
     ticks: list[Ticked] = []
     for _ in range(2):
-        ticks.append(scenario.tick())
+        ticks.append(scenario.tick(*waits("PROJ-2")))
         due.append(scenario.state()["query_due"])
     # The first tick ran it 31 minutes ago; the second, which left it out, does not count.
     scenario.time_passes(minutes=31)
-    ticks.append(scenario.tick())
+    ticks.append(scenario.tick(*waits("PROJ-2")))
     due.append(scenario.state()["query_due"])
     assert due == [True, False, True]
     assert [t.tick.query_due for t in ticks] == [True, False, True]
@@ -233,13 +236,15 @@ def test_the_query_runs_again_once_its_spacing_has_passed(scenario: Scenario) ->
 
 def test_only_a_live_ok_tick_counts_as_having_run_the_query(scenario: Scenario) -> None:
     scenario.configures(tracker={"query_every_minutes": 30})
+    # A ticket to decide, so a tick the query is not due on still runs the overseer (DESIGN §39).
+    scenario.seen("PROJ-2")
     due: list[bool] = []
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits("PROJ-2"), dry_run=True)
     due.append(scenario.state()["query_due"])
     scenario.tick(exit_code=3, code=1)
     due.append(scenario.state()["query_due"])
     for _ in range(2):
-        scenario.tick()
+        scenario.tick(*waits("PROJ-2"))
         due.append(scenario.state()["query_due"])
     assert due == [True, True, True, False]
 
@@ -250,7 +255,8 @@ def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(scenario: Sce
     with in_tick(conn) as tick_id:
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
     assert conn.execute("SELECT query_due FROM ticks").fetchone()["query_due"] is None
-    scenario.tick()
+    scenario.seen("PROJ-2")
+    scenario.tick(*waits("PROJ-2"))
     assert scenario.state()["query_due"] is False
 
 
@@ -468,9 +474,9 @@ def block_padded_past_one_argument() -> Iterator[None]:
     """Have each tick's state block run past Linux's 128 KiB for one argument, as many tickets' observations do."""
     render = tick._render  # noqa: SLF001
 
-    def padded(*args: Any, **kwargs: Any) -> tuple[str, duties.Duties, str]:  # noqa: ANN401
-        block, owed, title = render(*args, **kwargs)
-        return block + "x" * 200_000, owed, title
+    def padded(*args: Any, **kwargs: Any) -> object:  # noqa: ANN401
+        rendered = render(*args, **kwargs)
+        return dataclasses.replace(rendered, block=rendered.block + "x" * 200_000)
 
     with mock.patch.object(tick, "_render", autospec=True, side_effect=padded):
         yield
@@ -568,6 +574,17 @@ def test_a_canopy_that_does_not_work_closes_the_tick_without_the_overseer(
     # Once `canopy` works again, the next tick runs the overseer and the item is gone.
     scenario.tick(dry_run=True)
     assert len(agent_runs(scenario.agent_log)) == 2
+    assert scenario.attention() == []
+
+
+def test_a_tick_that_runs_no_overseer_skips_the_canopy_check(scenario: Scenario, tmp_path: Path) -> None:
+    # The query spaced an hour apart and run once, so the next tick leaves the overseer nothing (DESIGN §39).
+    scenario.configures(tracker={"query_every_minutes": 60})
+    scenario.tick()
+    with broken_canopy(tmp_path, "#!/bin/sh\nexit 1\n"):
+        quiet = scenario.tick()
+    assert (quiet.tick.status, quiet.tick.overseer_ran) == (TickStatus.OK, False)
+    assert len(agent_runs(scenario.agent_log)) == 1
     assert scenario.attention() == []
 
 

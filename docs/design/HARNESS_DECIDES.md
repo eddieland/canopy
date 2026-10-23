@@ -11,7 +11,10 @@ records before the overseer, each marked as its own; a ticket taken or left whol
 the tickets left (§6); the state block's `harness`, naming each ticket taken; and "Order and capacity", the order now
 in §7. The rows enabled are those read from the journal alone: `wait` for `running`, and for a private ticket's
 `needs_human`; and `chore run` for a due chore with no `when` (§19). No ticket's dispatch is enabled: each rests on an
-observation. The rest, from "The attention list, held in code" on, is designed, not built. Until it is, §8, §14, §21,
+observation. Of the attention list held in code, built: the overseer's items held through a tick that does not give
+the overseer their subject, until one that does leaves them out or the ticket is done or stopped (§14), so a ticket
+with one is the harness's for a `wait`, though not for a run. The rest, from "The attention list, held in code" on, is
+designed, not built. Until it is, §8, §14, §21,
 and TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that finishes it changes those
 sections and cuts this one to what is left.
 

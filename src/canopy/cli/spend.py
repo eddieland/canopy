@@ -43,6 +43,8 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
 )
 _DAY_WIDTH = 10
 _COST_WIDTH = 9
+#: The ticks' tables' last column: how many ran no overseer, left nothing to judge or halted before it (DESIGN §39).
+_NO_OVERSEER = "no overseer"
 _KEY_WIDTH = 16
 # The costliest tickets the text lists; `--json` lists every one.
 _TICKETS = 10
@@ -98,22 +100,28 @@ def render(found: Breakdown) -> list[str]:
     lines.extend(["", *_tickets(found)])
     lines.extend(["", *_tools(found)])
     lines.extend(["", *_models(found)])
-    lines.extend(["", f"{'ticks':<{_DAY_WIDTH}}{'count':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}"])
+    lines.extend(["", _tick_line("ticks", "count", "spent", _NO_OVERSEER)])
     lines.extend(
-        f"{GROUP_LABELS[g.group]:<{_DAY_WIDTH}}{g.ticks:>{_COST_WIDTH}}{cost_text(g.cost_usd):>{_COST_WIDTH}}"
-        for g in found.ticks
+        _tick_line(GROUP_LABELS[g.group], g.ticks, cost_text(g.cost_usd), g.without_overseer) for g in found.ticks
     )
     if found.idle_share is not None:
         lines.append(f"Idle ticks were {found.idle_share:.0%} of the live overseer's spend.")
-    lines.extend(["", f"{'woken by':<{_DAY_WIDTH}}{'count':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}"])
-    lines.extend(
-        f"{w.by:<{_DAY_WIDTH}}{w.ticks:>{_COST_WIDTH}}{cost_text(w.cost_usd):>{_COST_WIDTH}}" for w in found.woken
-    )
+    lines.extend(["", _tick_line("woken by", "count", "spent", _NO_OVERSEER)])
+    lines.extend(_tick_line(w.by, w.ticks, cost_text(w.cost_usd), w.without_overseer) for w in found.woken)
     if not found.woken:
         lines.append("no tick canopy loop ran")
     unpriced = ", ".join(f"{u.unpriced} of {u.runs} {KIND_LABELS[u.kind]}" for u in found.unpriced if u.unpriced)
     lines.extend(["", f"No cost reported: {unpriced}." if unpriced else "Every run that ended reported a cost."])
     return lines
+
+
+def _tick_line(label: str, ticks: int | str, spent: str, without: int | str) -> str:
+    """A line of the ticks' tables: a group or a cause, how many, what their overseers cost, and how many ran none.
+
+    Returns:
+        The line, in the tables' columns.
+    """
+    return f"{label:<{_DAY_WIDTH}}{ticks:>{_COST_WIDTH}}{spent:>{_COST_WIDTH}}{without:>{len(_NO_OVERSEER) + 2}}"
 
 
 def since_text(stamp: str) -> str:

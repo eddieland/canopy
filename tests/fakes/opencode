@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Fake `opencode` for tests: plays `opencode export ID --sanitize` and `opencode debug` from a state file, and hands
-`opencode run` to the fake agent beside it.
+"""Fake `opencode` for tests: plays `opencode export ID --sanitize`, `opencode debug`, and `opencode models` from a
+state file, and hands `opencode run` to the fake agent beside it.
 
 On PATH ahead of any real one, so no test reaches the operator's OpenCode or its sessions. Configured through the
 environment:
@@ -12,7 +12,8 @@ environment:
 
 Keys of the state besides `sessions`, each optional:
 
-    exit    the exit code of every export and debug command, with `stderr`, for an OpenCode that fails. Default none.
+    exit    the exit code of every export, debug, and models command, with `stderr`, for an OpenCode that fails.
+            Default none.
     stderr  text printed on stderr with `exit`.
     config  what `debug config` prints, as JSON. Default `{"mcp": {}}`.
     skills  the names `debug skill` lists. Default none.
@@ -20,6 +21,8 @@ Keys of the state besides `sessions`, each optional:
             after an allow of everything. Default none.
     tools   each agent's built-in tools by name, each to whether it keeps it, as `debug agent NAME` prints them.
             Default none.
+    models  the lines `models` prints, each a `provider/model` as OpenCode lists them, or any other line. Default
+            none.
 
 It writes the export as OpenCode does, so a pipe gets at most what fits in its buffer. `run` runs `agent` with the same
 arguments, so a template that runs `opencode run` plays the fake agent. Any other command exits 2.
@@ -45,13 +48,15 @@ def main() -> int:
             return export(session_id)
         case ["debug", *command]:
             return debug(command)
+        case ["models"]:
+            return models()
         case ["run", *_]:
             agent = Path(__file__).with_name("agent")
             os.execv(agent, [str(agent), *sys.argv[1:]])  # noqa: S606  (stands in for OpenCode running an agent)
             return 1  # not reached: `execv` returns only by raising
         case _:
             sys.stderr.write(
-                f"fake opencode plays only `export ID --sanitize`, `debug`, and `run`, not {sys.argv[1:]}\n",
+                f"fake opencode plays only `export ID --sanitize`, `debug`, `models`, and `run`, not {sys.argv[1:]}\n",
             )
             return 2
 
@@ -79,6 +84,16 @@ def debug(command: list[str]) -> int:
             sys.stderr.write(f"fake opencode does not play `debug {' '.join(command)}`\n")
             return 2
     print(json.dumps(printed, indent=2))
+    return 0
+
+
+def models() -> int:
+    state = read_state()
+    if "exit" in state:
+        sys.stderr.write(str(state.get("stderr", "")))
+        return int(state["exit"])
+    for line in state.get("models", []):
+        print(line)
     return 0
 
 

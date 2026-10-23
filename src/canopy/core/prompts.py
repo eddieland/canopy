@@ -197,8 +197,9 @@ REQUIRED_NOTES = ("NOTES",)
 REQUIRED_PREVIOUS_REVIEW = ("PREVIOUS_REVIEW",)
 # The kinds whose workers commit, and how their commits are attributed (TRUST_MODEL T5). The shipped prompts carry
 # `{{COMMIT_ATTRIBUTION}}`, the whole instruction; an older override may carry `{{COMMIT_TRAILER}}`, the trailer alone,
-# or neither. Neither still serves an operator who keeps the default trailer; once `trust.commit_trailer_name` or
-# `trust.commit_trailer_email` is changed, a prompt needs one of the two, so it cannot name the old trailer; and once
+# or neither. Neither still serves an operator who keeps the default trailer, a chosen model in its name included: the
+# trailer such an override spells out credits canopy's worker still, if not its model. Once `trust.commit_trailer_name`
+# or `trust.commit_trailer_email` is changed, a prompt needs one of the two, so it cannot name the old trailer; and once
 # `trust.commit_trailer` is off, it needs `{{COMMIT_ATTRIBUTION}}`, so it cannot keep adding one.
 COMMITS = (RunKind.IMPLEMENT, RunKind.RESUME)
 REQUIRED_TRAILER = ("COMMIT_ATTRIBUTION", "COMMIT_TRAILER")
@@ -512,16 +513,29 @@ def mark_comments(prefix: str, suffix: str, *, where: str = "on the ticket or a 
     return f"In every comment and reply you post, {where}, {', and '.join(marks)}, without the backticks."
 
 
-def commit_trailer(config: Config) -> str:
-    """Return the trailer a worker adds to its commits when the agent runtime adds no attribution of its own."""
-    return f"Co-authored-by: {config.trust.commit_trailer_name} <{config.trust.commit_trailer_email}>"
+def commit_trailer(config: Config, model: str | None = None) -> str:
+    """Return the trailer a worker adds to its commits when the agent runtime adds no attribution of its own.
+
+    `model` is the one canopy chose for the worker (DESIGN §13), or None for the runtime's default. While
+    `trust.commit_trailer_name` is the default, the name credits it, as `provider/model (canopy worker)`; a name the
+    operator set is used as it is (TRUST_MODEL T5).
+    """
+    name = config.trust.commit_trailer_name
+    if model is not None and name == DEFAULT_TRAILER_NAME:
+        # A `runtime.models` value is `provider/model`, with no space, backtick, or angle bracket (`agent_models`), so
+        # it ends neither the name nor the backticks the prompts quote the trailer in.
+        name = f"{model} ({DEFAULT_TRAILER_NAME})"
+    return f"Co-authored-by: {name} <{config.trust.commit_trailer_email}>"
 
 
-def commit_attribution(config: Config) -> str:
-    """Return the instruction for a worker's commits: keep the runtime's trailer, or add canopy's while it is on."""
+def commit_attribution(config: Config, model: str | None = None) -> str:
+    """Return the instruction for a worker's commits: keep the runtime's trailer, or add canopy's while it is on.
+
+    `model` is the worker's chosen model, which canopy's trailer may name (`commit_trailer`).
+    """
     if not config.trust.commit_trailer:
         return "Keep the agent runtime's attribution trailer on commits, if it adds one, and add no co-author trailer."
-    return f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config)}`."
+    return f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config, model)}`."
 
 
 def branch_update(config: Config, branch: str) -> str:
@@ -675,6 +689,7 @@ def render_worker(
     private: bool = False,
     notice: str | None = None,
     persona: personas.Persona | None = None,
+    model: str | None = None,
 ) -> str:
     """Return the worker prompt for `kind` with every `{{NAME}}` replaced from `values`.
 
@@ -689,7 +704,8 @@ def render_worker(
     text, `personas.DEFAULT`'s when it is None and the prompt carries the placeholder, and a prompt must carry it
     unless that is the persona (DESIGN §31).
     `{{COMMIT_ATTRIBUTION}}` and `{{COMMIT_TRAILER}}` come
-    from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
+    from the config too, the trailer naming `model`, the worker's chosen model, while its name is the default
+    (`commit_trailer`): with `trust.commit_trailer_name` or `trust.commit_trailer_email`
     changed from the default every prompt for a kind that commits must carry one of them, and with
     `trust.commit_trailer` off it must carry `{{COMMIT_ATTRIBUTION}}`. So does `{{BRANCH_UPDATE}}`, which every such
     prompt must carry with `trust.rebase` set. `notice` is the operator's notice in force (`core.notice`), for
@@ -714,8 +730,8 @@ def render_worker(
         **_standing_values(standing_instructions(config), _worker_reader(kind, private=private)),
         "PERSONA": persona.text if persona is not None else "",
         "NOTICE": notice,
-        "COMMIT_ATTRIBUTION": commit_attribution(config),
-        "COMMIT_TRAILER": commit_trailer(config),
+        "COMMIT_ATTRIBUTION": commit_attribution(config, model),
+        "COMMIT_TRAILER": commit_trailer(config, model),
         "BRANCH_UPDATE": branch_update(config, values.get("BRANCH") or ""),
     }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
@@ -766,12 +782,19 @@ def render_reviewer(
     return render(config, REVIEWER, values, required=required, one_of=standing)
 
 
-def render_task(config: Config, values: Mapping[str, str | None], *, notice: str | None = None) -> str:
+def render_task(
+    config: Config,
+    values: Mapping[str, str | None],
+    *,
+    notice: str | None = None,
+    model: str | None = None,
+) -> str:
     """Return a one-off task's prompt (DESIGN §36) with every `{{NAME}}` replaced from `values`.
 
     It must carry `REQUIRED_TASK`, and is held to what a worker's that commits is: `{{OPEN_PR}}` with
     `runtime.pr_skill` set, `{{NOTICE}}` while a notice is in force, the standing instructions to workers once
-    `paths.worker_instructions` is set, and the commit attribution the config asks for (`render_worker`).
+    `paths.worker_instructions` is set, and the commit attribution the config asks for, naming `model`, the private
+    worker's chosen model (`render_worker`).
 
     Returns:
         The rendered prompt.
@@ -780,8 +803,8 @@ def render_task(config: Config, values: Mapping[str, str | None], *, notice: str
         **values,
         **_standing_values(standing_instructions(config), "private"),
         "NOTICE": notice,
-        "COMMIT_ATTRIBUTION": commit_attribution(config),
-        "COMMIT_TRAILER": commit_trailer(config),
+        "COMMIT_ATTRIBUTION": commit_attribution(config, model),
+        "COMMIT_TRAILER": commit_trailer(config, model),
         "OPEN_PR": open_pr(config.runtime.pr_skill),
     }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill else ()
