@@ -12,6 +12,7 @@ export const REVIEW_DRAFT_TONE: Record<ReviewDraft['status'], Tone> = {
     unconfirmed: 'blocked',
     staged: 'blocked',
     published: 'plain',
+    discarded: 'plain',
 }
 
 /**
@@ -24,6 +25,7 @@ export const REVIEW_DRAFT_WORD: Record<ReviewDraft['status'], string> = {
     unconfirmed: 'unconfirmed',
     staged: 'staged',
     published: 'published',
+    discarded: 'discarded',
 }
 
 /** What each state of a review's draft means for the operator, on its chip's hover after the journal's word. */
@@ -33,6 +35,7 @@ export const REVIEW_DRAFT_MEANS: Record<ReviewDraft['status'], string> = {
     unconfirmed: 'a publish may have posted; the next read of the PR says',
     staged: 'a pending review on GitHub, for you to submit there',
     published: 'posted on GitHub',
+    discarded: 'you chose not to post it; nothing is on GitHub',
 }
 
 /** A line of the diff the operator is writing a new comment on: the file's index and path, and the new-side line. */

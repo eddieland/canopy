@@ -85,9 +85,9 @@ function notesField(): HTMLTextAreaElement {
     return screen.getByRole('textbox', { name: 'Notes for the reviewer (optional)' })
 }
 
-// Opens what the form keeps folded: its personas and its notes.
-function showMore() {
-    fireEvent.click(screen.getByRole('button', { name: 'Show persona and notes' }))
+// Opens what the form keeps folded: its personas.
+function showPersona() {
+    fireEvent.click(screen.getByRole('button', { name: 'Show persona' }))
 }
 
 async function openPersonas(name = 'Persona: canopy (default)') {
@@ -98,18 +98,19 @@ async function openPersonas(name = 'Persona: canopy (default)') {
 }
 
 describe('ReviewRequestForm', () => {
-    it('is a URL and an outline Review, saying its review is a draft, its persona and notes folded', async () => {
+    it('is a URL, its notes, and an outline Review, saying its review is a draft, its persona folded', async () => {
         await renderRouted(<ReviewRequestForm />)
         expect(screen.getByRole('status').textContent).toBe(
             "For a PR the loop does not own, such as a coworker's. " +
                 'Its review is a draft you may publish, word for word, as your own; nothing posts until you do.',
         )
-        expect(screen.queryByRole('textbox', { name: 'Notes for the reviewer (optional)' })).toBeNull()
-        expect(screen.getByRole('button', { name: 'Review' }).getAttribute('aria-keyshortcuts')).toBeNull()
+        // The notes are always open, so the form sends from them.
+        expect(notesField()).toBeTruthy()
+        expect(screen.getByRole('button', { name: /^Review/u }).getAttribute('aria-keyshortcuts')).toBe('Enter')
+        expect(screen.queryByRole('button', { name: 'Persona: canopy (default)' })).toBeNull()
         // Closed, it names what the review is written in.
         expect(await screen.findByText('in canopy, the default')).toBeTruthy()
-        showMore()
-        expect(notesField()).toBeTruthy()
+        showPersona()
         expect(screen.getByRole('button', { name: 'Persona: canopy (default)' })).toBeTruthy()
     })
 
@@ -158,7 +159,6 @@ describe('ReviewRequestForm', () => {
     it('hands the reviewer the notes as written, trimmed', async () => {
         await renderRouted(<ReviewRequestForm />)
         fireEvent.change(field(), { target: { value: PR } })
-        showMore()
         fireEvent.change(notesField(), { target: { value: '  Look hard at the retry loop.\n' } })
         fireEvent.click(screen.getByRole('button', { name: /^Review/u }))
         await waitFor(() => {
@@ -168,7 +168,6 @@ describe('ReviewRequestForm', () => {
 
     it('sends from the notes on the key Settings names, Shift+Enter making a new line', async () => {
         await renderRouted(<ReviewRequestForm />)
-        showMore()
         const review = screen.getByRole('button', { name: /^Review/u })
         expect(review.getAttribute('aria-keyshortcuts')).toBe('Enter')
         // With no URL there is nothing to review, so Enter sends nothing.
@@ -189,7 +188,7 @@ describe('ReviewRequestForm', () => {
     it('reviews in each persona checked, each described, and Use the default goes back', async () => {
         await renderRouted(<ReviewRequestForm />)
         fireEvent.change(field(), { target: { value: PR } })
-        showMore()
+        showPersona()
         const menu = await openPersonas()
         const items = within(menu).getAllByRole('menuitemcheckbox')
         expect(items).toEqual(
@@ -221,7 +220,7 @@ describe('ReviewRequestForm', () => {
 
     it('unchecks a persona, and Use the default clears them all', async () => {
         await renderRouted(<ReviewRequestForm />)
-        showMore()
+        showPersona()
         let menu = await openPersonas()
         expect(within(menu).getByRole('menuitem', { name: 'Use the default' }).getAttribute('aria-disabled')).toBe(
             'true',
@@ -239,7 +238,7 @@ describe('ReviewRequestForm', () => {
         setReviewPersonas(['skeptic', 'canopy'])
         await renderRouted(<ReviewRequestForm />)
         expect(await screen.findByText('in skeptic, canopy, as Settings prefers')).toBeTruthy()
-        showMore()
+        showPersona()
         expect(await screen.findByRole('button', { name: 'Persona: skeptic, canopy' })).toBeTruthy()
         expect(screen.getByText('as Settings prefers')).toBeTruthy()
 
@@ -261,7 +260,7 @@ describe('ReviewRequestForm', () => {
         setReviewPersonas(['gone', 'removed', 'skeptic'])
         await renderRouted(<ReviewRequestForm />)
         fireEvent.change(field(), { target: { value: PR } })
-        showMore()
+        showPersona()
         const menu = await openPersonas('Persona: skeptic')
         fireEvent.click(within(menu).getByRole('menuitem', { name: 'Use the default' }))
         fireEvent.click(await screen.findByRole('button', { name: /^Review/u }))
@@ -277,7 +276,7 @@ describe('ReviewRequestForm', () => {
             personas: names.map((name) => ({ name, yours: true, defaults: [], error: null, description: null })),
         }
         await renderRouted(<ReviewRequestForm />)
-        showMore()
+        showPersona()
         const menu = await openPersonas()
         for (const name of names.slice(0, 10)) {
             fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name }))

@@ -160,7 +160,7 @@ def task_report(ctx: Context, task_id: int, run_id: int) -> TaskReport | None:
     return TaskReport(
         task_id=task_id,
         run_id=run_id,
-        path=str(path),
+        path=shown_path(str(path), ctx.workspace.root),
         text=conversation.printable(reading.text) if reading.text is not None else None,
         problem=reading.problem,
         sha256=reading.sha256,

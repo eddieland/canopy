@@ -18,10 +18,12 @@ REPORT = "# Nightly export\n\nThe <script>alert(1)</script> step\x1b[31m re-read
 
 def test_a_task_is_listed_with_where_it_stands_as_it_goes(backend: Backend) -> None:
     c = client(None, backend)
-    assert c.get("/api/tasks").json() == []
+    # The mock's own tasks stay as they are, after the newest: this one.
+    seeded = c.get("/api/tasks").json()
     with backend.open() as ctx:
         task = submit(ctx)
-    [listed] = c.get("/api/tasks").json()
+    [listed, *rest] = c.get("/api/tasks").json()
+    assert rest == seeded
     assert (listed["id"], listed["repo"], listed["project"], listed["channel"]) == (task.id, "web", "ACME", "cli")
     # The operator's text as text, a control character a space.
     assert listed["text"] == TEXT.replace("\x07", " ")
@@ -30,7 +32,7 @@ def test_a_task_is_listed_with_where_it_stands_as_it_goes(backend: Backend) -> N
 
     with backend.open() as ctx:
         run_id = start(ctx, task)
-    [listed] = c.get("/api/tasks").json()
+    [listed, *_] = c.get("/api/tasks").json()
     assert (listed["standing"], listed["latest"]["id"], listed["latest"]["state"], listed["runs"]) == (
         "running",
         run_id,
@@ -41,18 +43,18 @@ def test_a_task_is_listed_with_where_it_stands_as_it_goes(backend: Backend) -> N
     with backend.open() as ctx:
         end(ctx, run_id, RunStatus.BLOCKED, question="Is the 02:00 window fixed?")
         question = present(conversation.task_question(ctx.conn, task.id))
-    [listed] = c.get("/api/tasks").json()
+    [listed, *_] = c.get("/api/tasks").json()
     # The CLI words it as the run's `blocked`; the API says what it waits on.
     assert (listed["standing"], listed["question_id"]) == ("awaiting_reply", question.id)
 
     with backend.open() as ctx:
         conversation.reply(ctx.conn, conversation.parse_ref(f"task:{task.id}"), "Yes.", channel="web")
-    [listed] = c.get("/api/tasks").json()
+    [listed, *_] = c.get("/api/tasks").json()
     assert (listed["standing"], listed["question_id"]) == ("queued", None)
 
     with backend.open() as ctx:
         tasks.stop(ctx.conn, task.id)
-    [listed] = c.get("/api/tasks").json()
+    [listed, *_] = c.get("/api/tasks").json()
     assert listed["standing"] == "stopped"
     assert listed["stopped_at"] is not None
 
@@ -156,7 +158,9 @@ def test_a_task_runs_report_is_its_file_as_text_and_says_when_it_was_edited_or_i
     found = c.get(url).json()
     # Markup stays its characters; a control character is a space.
     assert found["text"] == REPORT.replace("\x1b", " ")
-    assert (found["path"], found["problem"], found["edited"]) == (str(path), None, False)
+    # Its path from the workspace root, as a run's log path is shown, so a page never shows a machine's temp dir.
+    shown = str(path.relative_to(backend.workspace.root))
+    assert (found["path"], found["problem"], found["edited"]) == (shown, None, False)
     assert c.get(f"/api/tasks/{task.id}").json()["runs"][0]["reported"] is True
 
     path.write_text("# Edited by hand\n")

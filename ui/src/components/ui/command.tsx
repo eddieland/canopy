@@ -1,5 +1,5 @@
 // shadcn/ui Command, on cmdk, ported by hand because the registry was unreachable. Only the parts the UI uses: no
-// dialog, group, or shortcut. Its style classes are inlined and its per-theme overrides replaced with tokens: the item
+// dialog or shortcut. Its style classes are inlined and its per-theme overrides replaced with tokens: the item
 // the keys are on is tinted `surface-raised`, as a menu's is (ui/DESIGN.md). Only this file imports cmdk, which gives
 // a field over a list its combobox and listbox roles and its keys; Radix has no primitive for one.
 import { Command as CommandPrimitive } from 'cmdk'
@@ -62,6 +62,20 @@ function CommandEmpty({ className, ...props }: ComponentProps<typeof CommandPrim
     )
 }
 
+/** Items under a heading, which a screen reader names the group by: the heading is a panel's label. */
+function CommandGroup({ className, ...props }: ComponentProps<typeof CommandPrimitive.Group>) {
+    return (
+        <CommandPrimitive.Group
+            data-slot="command-group"
+            className={cn(
+                'overflow-hidden [&_[cmdk-group-heading]]:panel-label [&_[cmdk-group-heading]]:px-2',
+                className,
+            )}
+            {...props}
+        />
+    )
+}
+
 /** A hairline between items. */
 function CommandSeparator({ className, ...props }: ComponentProps<typeof CommandPrimitive.Separator>) {
     return (
@@ -90,4 +104,4 @@ function CommandItem({ className, ...props }: ComponentProps<typeof CommandPrimi
     )
 }
 
-export { Command, CommandEmpty, CommandInput, CommandItem, CommandList, CommandSeparator }
+export { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator }

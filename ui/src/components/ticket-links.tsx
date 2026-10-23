@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 import { LinkOutIcon } from '@/components/link-out-icon'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { addressOf } from '@/lib/links'
+import { addressOf, onGitHub } from '@/lib/links'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 
 // A default that is a fresh array on each render would be a new prop each time.
@@ -59,6 +59,23 @@ export function TicketLinks({
             )}
             <LinkGroup links={prs} icon={GitPullRequest} many="PRs" />
             <LinkGroup links={branchLinks} icon={GitBranch} many="branches" />
+        </nav>
+    )
+}
+
+/**
+ * A PR's link out, under the title of a page about it: a PR's own page, and each of its reviews'. The title names the
+ * PR, so the button says where it goes (`on GitHub`) rather than naming it again.
+ */
+export function PullRequestLinksOut({ url }: { url: string }) {
+    return (
+        <nav aria-label="Links out" className="mt-2 flex flex-wrap gap-2">
+            <LinkOutButton
+                href={url}
+                label={onGitHub(url) ? 'on GitHub' : addressOf(url)}
+                icon={GitPullRequest}
+                hint="The PR"
+            />
         </nav>
     )
 }

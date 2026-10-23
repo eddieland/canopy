@@ -39,6 +39,7 @@ describe('rowTemplate', () => {
             review: ['verdict', 'id'],
             'own-review': ['verdict', 'id'],
             ticket: ['run', 'key'],
+            task: ['state', 'id'],
             'pull-request': ['state', 'pr'],
             memory: ['state', 'id'],
             'memory-across': ['state', 'id'],

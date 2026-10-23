@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { SearchField } from '@/components/input'
 import { Kbd } from '@/components/ui/kbd'
+import { JumpButton } from './jump-palette'
 import { isSearchShortcut, SEARCH_DEBOUNCE_MS, SEARCH_MAX, searchQueryOf } from '@/lib/search'
 
 /**
@@ -11,8 +12,9 @@ import { isSearchShortcut, SEARCH_DEBOUNCE_MS, SEARCH_MAX, searchQueryOf } from 
  * is open, so Back leaves the search rather than stepping through each keystroke; Enter opens it at once. While it
  * holds text, a clear button takes the keycap's place: it empties the box and keeps the focus there. Emptying the box,
  * by the button or by deleting its text, clears the search page if it is open, and leaves any other page as it is.
+ * While it is empty, its end shows the `/` that focuses it and the ⌘K that opens the jump palette, which `onJump` does.
  */
-export function SearchBox() {
+export function SearchBox({ onJump }: { onJump: () => void }) {
     const navigate = useNavigate()
     const matchRoute = useMatchRoute()
     const q = useSearch({ strict: false, select: (s) => searchQueryOf(s.q) })
@@ -92,7 +94,12 @@ export function SearchBox() {
                     }}
                     onClear={clear}
                     clearLabel="Clear search"
-                    idle={<Kbd aria-hidden>/</Kbd>}
+                    idle={
+                        <span className="flex items-center gap-1">
+                            <Kbd aria-hidden>/</Kbd>
+                            <JumpButton onOpen={onJump} />
+                        </span>
+                    }
                 />
             </form>
         </search>

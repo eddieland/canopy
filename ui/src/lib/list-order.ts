@@ -24,6 +24,8 @@ export const LISTS = {
     'ticket-runs': 'newest',
     /** A ticket's decisions. */
     'ticket-decisions': 'newest',
+    /** A task's runs, as its story tells them: the first first. */
+    'task-runs': 'oldest',
     /** A chore's recent runs. */
     'chore-runs': 'newest',
     /** The ticks page. */

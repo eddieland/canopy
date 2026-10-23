@@ -44,6 +44,7 @@ const TEXT = [
     'section-runs',
     'section-worktrees',
     'section-tickets',
+    'section-tasks',
     'section-pull-requests',
     'section-reviews',
     'section-chores',

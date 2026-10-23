@@ -179,7 +179,8 @@ Controls:
   unread. A draft is the reviewer's text, written from the PR's, and untrusted until the operator publishes a version
   of it, which they name by its hash. So do `canopy reply review:ID`, the operator's note on a draft, which asks the
   next tick for a revision, and `canopy grant review:ID revision`: a note is the reviser's only instruction, so an
-  agent that could write one could choose what the operator is offered to publish.
+  agent that could write one could choose what the operator is offered to publish. So does `canopy review discard`:
+  an agent that could discard a draft could hide from the operator a review they asked for.
   So does `gc` (DESIGN §26): an agent that could remove history early
   could remove the transcript that shows what it did, and no flag of it shortens retention, which only the
   operator's private config sets. So does `notice`, when it sets or clears the operator's notice to workers
@@ -191,15 +192,15 @@ Controls:
   operator's word about the world, to hold a failed check the notice explains: that changes when a `resume` for CI runs,
   never what a worker may do.
 - A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `core/tasks.py` by a
-  channel that authenticated the operator: `canopy task submit` in the operator's shell, refused as `inside_run` when
-  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is, and so are `canopy reply task:N`, which queues its next run,
-  and `canopy stop task:N`. Its text, and the replies a later run takes, are the operator's instructions; what a run
-  reports, its summary, question, and report file, is data, and a later run's prompt says so. The report is kept as a
-  plan is (T2): copied out of the slot before it is returned, bounded and never through a link, into the
-  operator-only state directory, and only its copy in the task's next slot reaches an agent. A task never reaches the
-  overseer: a
-  tick starts a queued one in code, before the overseer runs, which sees only the capacity its run holds, so no tracker
-  or PR text can start, steer, or stop one. Its worker reads everything else as data, as a private ticket's does. Its
+  channel that authenticated the operator: `canopy task submit` in the operator's shell, or the web UI behind the
+  listener secret (T8), each refused as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is,
+  and so are `canopy reply task:N`, which queues its next run, and `canopy stop task:N`, from either. Its text, and
+  the replies a later run takes, are the operator's instructions; what a run reports, its summary, question, and
+  report file, is data, and a later run's prompt says so. The report is kept as a plan is (T2): copied out of the
+  slot before it is returned, bounded and never through a link, into the operator-only state directory, and only its
+  copy in the task's next slot reaches an agent. A task never reaches the overseer: a tick starts a queued one in
+  code, before the overseer runs, which sees only the capacity its run holds, so no tracker or PR text can start,
+  steer, or stop one. Its worker reads everything else as data, as a private ticket's does. Its
   branch, `<branch_prefix>task/N`, is a shape no ticket's branch takes, and nothing that reads canopy's branches counts
   it, or a PR from it, as a ticket's work. It is never pushed with force, whatever `trust.rebase` says: `_task`'s own
   push only adds commits, so a branch the worker rewrote and did not push is `unpushed`, and its prompt forbids a
@@ -617,13 +618,18 @@ Controls:
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
   one tool of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs and writes nothing, and denies
   MCP write tools by name. That tool's server is named in the chore run's environment alone (DESIGN §27), lists nothing
-  outside a chore's run, refuses another chore's history as the command does, and every other definition denies it. Off
-  a GitHub tracker, the tracker's server is denied whole but its read tools, allowed by name, as for the reviewer. The
-  agents example chores come with, `canopy-introspect` and `canopy-memory-tickets`, which `canopy chore install` copies
-  into the workspace's state directory for a chore's `cmd` to name, are the same, but for that rendering, with a shell
-  for canopy's read-only commands as well: `canopy chore history`, `canopy health --json`, `canopy spend --json`,
-  `canopy decisions`, `canopy show` of a run or a chore, and `opencode mcp list`; and `canopy memory lessons`,
-  `proposals`, and `list`. None of those writes, and the memory commands that do refuse inside any run.
+  outside a chore's run, refuses another chore's history as the command does, and every other definition denies it.
+  A chore's run is also given a server of canopy's read-only reports of the whole workspace, `canopy_reports`: health,
+  spend, and the three listings of agent memory, as `canopy health`, `spend`, and `memory lessons`, `proposals`, and
+  `list` print them with `--json`. It is named in the same environment, lists nothing outside a chore's run, and writes
+  nothing; `canopy-chore` and every other definition deny it, so only an agent that allows a report by name reads it.
+  Off a GitHub tracker, the tracker's server is denied whole but its read tools, allowed by name, as for the reviewer.
+  The agents example chores come with, `canopy-introspect` and `canopy-memory-tickets`, which `canopy chore install`
+  copies into the workspace's state directory for a chore's `cmd` to name, are the same, but for that rendering, with
+  the reports their prompts read allowed: health and spend for `canopy-introspect`, memory's listings for
+  `canopy-memory-tickets`, which has no shell. `canopy-introspect` keeps a shell for canopy's other read-only commands:
+  `canopy chore history`, `canopy decisions`, `canopy show` of a run or a chore, `canopy config show --json`, and
+  `canopy agents --json`. None of those writes.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.
@@ -833,9 +839,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   drop, send, and stage them as `canopy draft edit`, `drop`, `send`, and `stage` do (DESIGN §29), choose or clear the
   persona of one of a ticket's agents as `canopy persona` does, among the personas a run could already get (DESIGN §31),
   edit a review's draft's body and comments, drop one, add one on a line of its kept diff, note what a revision of it
-  should change as `canopy reply review:ID` does, and publish or stage the version the page showed, named by its hash,
-  as `canopy review edit` and `publish` do (DESIGN §34), ask the loop to read its config files again as SIGHUP does,
-  and ask it for a tick now as `t` at its terminal does.
+  should change as `canopy reply review:ID` does, publish or stage the version the page showed, named by its hash,
+  as `canopy review edit` and `publish` do, and discard a draft as `canopy review discard` does (DESIGN §34), ask the
+  loop to read its config files again as SIGHUP does, and ask it for a tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes what no command would, through a function of its own with the same guards: the
   marks of what the operator has seen (DESIGN §22), which authorize nothing and no agent reads, and two things that
   are the operator's own words on a plan (DESIGN §25): an edit of a

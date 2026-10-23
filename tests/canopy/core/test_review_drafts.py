@@ -259,6 +259,30 @@ def test_a_review_whose_pr_a_ticket_now_holds_publishes_nothing(scenario: Scenar
     assert "publish refused (not_ours)" in refused.err
 
 
+def test_a_discarded_draft_posts_nothing_and_takes_no_edit_note_or_publish(
+    scenario: Scenario,
+    reviewed: int,
+    github_state: Path,
+) -> None:
+    run, version = str(reviewed), newest(scenario, reviewed).hash
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "review-9"}):
+        assert main(["review", "discard", run]) == 1
+    assert draft_of(scenario, reviewed).status is ReviewDraftStatus.WAITING
+    out = scenario.operator("review", "discard", run).out
+    assert out == f"Discarded review run {reviewed}'s draft of {THEIRS}; nothing was posted.\n"
+    draft = draft_of(scenario, reviewed)
+    assert (draft.status, draft.why) == (ReviewDraftStatus.DISCARDED, "discarded by you through cli")
+    assert "discarded by you through cli" in scenario.operator("review", "draft", run).out
+    for refused, verb in [
+        (("review", "publish", run, version, "--submit"), "publish"),
+        (("review", "edit", run, "--drop", "1"), "edit"),
+        (("reply", f"review:{reviewed}", NOTE), "reply"),
+        (("review", "discard", run), "discard"),
+    ]:
+        assert f"{verb} refused (discarded)" in scenario.operator(*refused, code=1).err
+    assert posted(github_state) == []
+
+
 def test_a_comment_github_refuses_posts_nothing_and_the_draft_waits_again(
     scenario: Scenario,
     reviewed: int,
@@ -559,6 +583,8 @@ def test_while_a_revision_runs_the_draft_takes_no_note_and_no_publish_and_an_edi
     assert "publish refused (revising)" in held.err
     noted = scenario.operator("reply", f"review:{reviewed}", "And shorter.", code=1)
     assert "reply refused (revising)" in noted.err
+    discarded = scenario.operator("review", "discard", str(reviewed), code=1)
+    assert "discard refused (revising)" in discarded.err
     # The operator edits meanwhile: their version stands, and the revision's, made from the one before, is left out.
     scenario.operator("review", "edit", str(reviewed), "--body", "--text", "Mine now.")
     done = revising.finishes()
