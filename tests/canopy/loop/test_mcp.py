@@ -256,7 +256,7 @@ RECORDS = [
                 "key": "PROJ-1",
                 "repo": "repo",
                 "phase": "ci_red",
-                "cursors": ["comment", "ci"],
+                "cursors": ["comment"],
                 "done": False,
                 "dry_run": False,
             },
