@@ -120,6 +120,17 @@ spending no attempt and leasing no slot, in a dry run too; and the run records t
 refuses as `model_list_failed`. Built (2026-10-22, issue #275): the commit trailer names the model chosen for a
 worker or a task's run, `provider/model (canopy worker)`, while `trust.commit_trailer_name` is the default; a name the
 operator set is used as set, with no placeholder for the model.
+Built (2026-10-23, asked for by the operator): a chore's own model and each model's variant. Of the pinned OpenCode's
+source: an agent's `variant` is used only while the run's model is the agent's own and that model lists the variant,
+and is dropped without a word otherwise; `opencode run --variant` beats it; `opencode models --verbose` prints each
+model's JSON after its line, its `variants` among it. So a model is spelled `provider/model@variant` (the variant after
+the last `@`, when it starts with a letter, since a dated id may hold an `@`), rendered as `model:` and `variant:`; a
+`--variant` is refused wherever `--model` is; a dispatch at a variant reads `opencode models --verbose` and refuses
+`model_missing` when the model lacks it; and the run and the commit trailer name `provider/model@variant`.
+`[chores.<name>] model` runs that chore on a copy of `canopy-chore` made for it, `canopy-chore-<name>`, its command
+`runtime.chore_cmd` or its own running that copy; a chore whose `cmd` runs another agent is refused a `model`, its
+model set in its own definition, and a `--model` or `--variant` in a chore's `cmd` is refused when it runs
+`canopy-chore`. Chore runs keep no model of their own in the journal; what served them is read from their sessions.
 Not built yet: the per-ticket override (`canopy model`, a `ticket_overrides` row of
 kind `model`) and the ticket page's Model panel; `canopy models`; the settings page's read-only `[runtime.models]`; the
 check before a review, a chore, a task's run, and a tick's overseer, with its tick status; `canopy status` naming the

@@ -53,18 +53,31 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
     assert asked[4] not in {None, asked[0]}
 
 
-def test_a_review_is_titled_by_its_prs_own_title_else_its_tickets_else_none(backend: Backend) -> None:
+def test_a_review_is_titled_by_its_prs_own_title_else_as_canopy_read_it_else_its_tickets_else_none(
+    backend: Backend,
+) -> None:
+    urls = (mock_reviews.PR_91, mock_reviews.PR_12, mock_reviews.PR_14)
     with backend.open() as ctx:
-        ctx.conn.execute("DELETE FROM pr_titles WHERE pr_url IN (?, ?)", (mock_reviews.PR_91, mock_reviews.PR_12))
-    listed = client(None, backend).get("/api/reviews").json()
+        ctx.conn.execute("DELETE FROM pr_titles WHERE pr_url IN (?, ?, ?)", urls)
+        ctx.conn.execute(
+            "UPDATE observed_prs SET title = ? WHERE url = ?",
+            ("Retry on a 503\x1b[2J\n as GitHub has it", mock_reviews.PR_14),
+        )
+    c = client(None, backend)
+    listed = c.get("/api/reviews").json()
     assert [(r["id"], r["title"]) for r in listed] == [
-        (6, "Retry the upstream on a 503, with backoff"),  # a coworker's PR, titled by its own title
-        (5, "Retry the upstream on a 503, with backoff"),
+        (6, "Retry on a 503 [2J as GitHub has it"),  # a coworker's PR no review reported a title of, as canopy read it
+        (5, "Retry on a 503 [2J as GitHub has it"),
         (4, "ABC-099: debounce the search box by 250 ms"),
         (3, "Move billing to the v2 API"),  # ABC-103's, its PR having reported none
         (2, None),  # no title of its own, and no ticket
         (1, "ABC-099: debounce the search box by 250 ms"),
     ]
+    # One a review reported wins over the reader's, on the list and on the review's page.
+    with backend.open() as ctx:
+        db.set_pr_title(ctx.conn, mock_reviews.PR_14, "Retry the upstream on a 503, with backoff")
+    assert c.get("/api/reviews").json()[0]["title"] == "Retry the upstream on a 503, with backoff"
+    assert c.get("/api/reviews/6").json()["review"]["title"] == "Retry the upstream on a 503, with backoff"
 
 
 def test_a_requested_pr_is_listed_from_the_request_until_its_review_starts_and_again_if_it_fails(

@@ -57,7 +57,7 @@ Controls:
   one of `tracker.labels`, and whose replies count for resuming blocked work
   (`trust.authorized_repliers`). All other text is data. Prompts say so.
 - canopy has no tracker code, so it cannot read labels, and a live tick showed an overseer can skip its label check
-  for a ticket the journal remembers (D051). `canopy dispatch` refuses without `--label` naming one of
+  for a ticket the journal remembers (D051). A dispatch refuses without a `label` naming one of
   `tracker.labels`; that is a recorded claim a harness guard checks against config, not proof the label is on the
   ticket. Where a `tracker` source observes the ticket, it is checked against the observation too (below). The
   independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
@@ -151,12 +151,12 @@ Controls:
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
   `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). With `tracker.private`
   set (private), a labeled ticket canopy never ran is started by its first dispatch instead, on the overseer's
-  `--label` claim, which the harness checks against config as for any public dispatch (D119). No worker re-reads the
+  `label` claim, which the harness checks against config as for any public dispatch (D119). No worker re-reads the
   labels for it, then or later, and removing the label does not stop it: an overseer that claims a label a ticket
   does not carry starts it for good, with nothing but its own read to catch it, until the operator runs `canopy stop`.
   That is the switch's residual, beside D051's; `canopy show` and the dispatch's decision name such a start.
-  `canopy dispatch` checks the start record in code, in the transaction that inserts the run, so it needs no
-  `--label`, and `_run` reads it again before the worker starts. A stopped ticket is dispatched by nothing, whatever
+  A dispatch checks the start record in code, in the transaction that inserts the run, so it needs no `label`, and
+  `_run` reads it again before the worker starts. A stopped ticket is dispatched by nothing, whatever
   labels it carries. Tracker comments on a private ticket are data, whoever wrote them; only the operator's messages
   are instructions, and the harness renders them into the worker's prompt itself. `canopy forget` is the operator's
   too: it clears what the journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit
@@ -242,25 +242,31 @@ Controls:
   characters that hide text from a person who reads it, as a lesson does. A run whose persona's file is gone or past
   its bounds is refused, never run in canopy's voice instead, and a prompt override without `{{PERSONA}}` serves only
   a run in canopy's own voice.
-- Each agent's model (DESIGN §13, M58) is the operator's choice alone: `runtime.models`, private (T7), which canopy
-  writes into the agent's definition. The overseer, a dispatch, ticket text, and labels choose none, and a `runtime`
-  template, prefix, or suffix that passes a model is a config error, so no agent's command line overrides it unseen.
-  A worker run whose model the runtime does not list, or whose list cannot be read, is refused with an attention item,
-  never run on the runtime's default instead.
-- Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
-  and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
-  (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
-  worker's prompt labels a mirrored comment as data, with its author. The overseer passes a comment's text on stdin
-  through a quoted heredoc, never in an argument, so the shell expands nothing in it, and the heredoc's delimiter is
-  random and fresh each tick, so no comment can be written to end it early and run what follows (D081).
-- The overseer has no edit or write tools and can act only through the
-  `canopy` CLI, whose guards are code, and the commands the operator names for it in `runtime.allow_bash`, such as a
-  tracker's CLI while its MCP server is down. That key is private (T7): only the operator widens the overseer's shell,
-  and canopy renders each pattern last of its bash rules, so it wins, and lists them in `canopy agents`. The same key
-  takes allows for both workers, rendered last of theirs: a worker's shell already runs all but what it denies, so
-  there an allow undoes a deny, which the checks below keep from git, `gh`, `sudo`, and the loop's own tools, and leave
-  open for the private worker's tracker CLIs (T6). The planner takes them too, as the overseer does: its shell runs
-  nothing else. In code, canopy refuses an allow for the agents with no shell, a
+- Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
+  and a chore's `model`, both private (T7), which canopy writes into the agent's definition. The overseer, a dispatch,
+  ticket text, and labels choose none, and a `runtime` template, prefix, or suffix that passes a model or a variant is
+  a config error, as is a chore's command that does while it runs canopy's chore agent, so no agent's command line
+  overrides it unseen. A worker run whose model or variant the runtime does not list, or whose list cannot be read,
+  is refused with an attention item, never run on the runtime's default instead.
+- Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like a
+  dispatch's `label`, and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds
+  the workers' marks (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages
+  only. A private worker's prompt labels a mirrored comment as data, with its author. The overseer passes a comment's
+  text as a field of its `mirror` tool's JSON arguments, which no shell reads, so there is nothing in it to expand,
+  quote, or end early (DESIGN §27).
+- The overseer has no edit or write tools, and can act only through canopy's own MCP tools, whose guards are code
+  (D020, DESIGN §27), and the commands the operator names for it in `runtime.allow_bash`, such as a tracker's CLI while
+  its MCP server is down. The server is named in the overseer process's environment alone, from which the harness
+  removes it before any run it starts; it lists no tool and refuses every call under `CANOPY_RUN_ID` or outside a
+  running tick, the overseer's definition allows each tool by exact name, and every other definition denies them all.
+  A steered overseer can still make any call its tools take, as it could run any `canopy` command before; the guards
+  in the tools bound what that does. Its bash rules deny every command but those `runtime.allow_bash` names. That key
+  is private (T7): only the operator widens the overseer's shell, and canopy renders each pattern last of its bash
+  rules, so it wins, and lists them in `canopy agents`. The same key takes allows for both workers, rendered last of
+  theirs: a worker's shell already runs all but what it denies, so there an allow undoes a deny, which the checks below
+  keep from git, `gh`, `sudo`, and the loop's own tools, and leave open for the private worker's tracker CLIs (T6). The
+  planner takes them too, as the overseer does: its shell runs nothing else. In code, canopy refuses an allow for the
+  agents with no shell, a
   pattern that is not one plain command line (no quote, `$`, `;`, `&`, `|`, redirect, backslash, brace, or newline), a
   command named by a wildcard or a path, and one that runs a command it is given (a shell, an interpreter, a wrapper
   such as `env`, `xargs`, or `timeout`, a package or build runner, `find`, a pager, a database shell), fetches pages
@@ -450,16 +456,19 @@ Controls now:
 - Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
   operator prefixes `worker_cmd`, `private_worker_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
   each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
-  it writes for the run from the operator's template for that role. Under the shipped templates a sandboxed run reads, under
+  it writes for the run from the operator's template for that role; or names repositories in `runtime.sandbox_repos`,
+  and canopy starts their worker runs, setup, and reviews in the wrapper itself, by its absolute path, refusing a joint
+  run whose repositories disagree. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
   files: not `~/.ssh`, other repositories, `~/.config/canopy`, or the workspace's `.canopy/`. It writes only its
   worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and temp directory, and the runtime's
   data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on the host later
   reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
-- The prefix is in the user file or the workspace's private file, which no repository or workspace file can set (T7)
-  and no sandboxed run can write, so neither removes it. The harness never learns whether a run is sandboxed: it runs
-  the template (D023, D118).
+- The prefix and `runtime.sandbox_repos` are in the user file or the workspace's private file, which no repository or
+  workspace file can set (T7) and no sandboxed run can write, so neither removes them. Beyond adding the wrapper for
+  the repositories that key names, the harness never learns whether a run is sandboxed: it runs the template (D023,
+  D118).
 - With or without the sandbox, the harness's own steps after a worker run read nothing it could have planted: every
   git the harness runs has hooks and the filesystem monitor off (D107); a run that changed a slot's `.git` link or
   `commondir` is `crashed`, and no git runs in its slots until both are put back (DESIGN §8); and a slot whose run
@@ -488,7 +497,8 @@ but must be distinguishable:
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>`, whose name and address the operator may
   change in their own config (`trust.commit_trailer_*`, private), or the runtime's own attribution. The harness forms
   it, never the agent: left as the default, the name credits the model canopy chose for the worker (DESIGN §13), as
-  `provider/model (canopy worker)`, and a name the operator set is used as set. Never hidden: a
+  `provider/model (canopy worker)`, and a worker following an approved plan adds a second, `provider/model (canopy
+  planner)`, for the model canopy chose for its planner; a name the operator set is used as set, alone. Never hidden: a
   worker never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
   private), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
   that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
@@ -747,6 +757,10 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 
 - The harness refuses to start the overseer or a worker where the repository's OpenCode config defines one of canopy's
   agents, by file name under `.opencode/`, or by name anywhere in the text of an `opencode.json` or `opencode.jsonc`.
+- It refuses the same where that config names an MCP server `canopy` (DESIGN §27): canopy gives the overseer its own
+  server by that name, and a merge keeps the keys canopy's entry leaves out, such as the environment of canopy's
+  interpreter. That interpreter starts with the workspace root off its import path, so no file a workspace holds
+  stands in for canopy's modules.
 - A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
   back to its default agent, which allows everything.
 
@@ -768,8 +782,9 @@ undenied in that definition. An operator who works private tickets in a reposito
 also add skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the
 same exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
 canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
-agent's name out of JSON escapes or `{file:...}` substitution gets past it, and could then add bash rules to canopy's
-agents. A scalar rule canopy sets (the worker's `edit`, `external_directory`, and `task`) replaces whatever such an
+agent's name, or the `canopy` server's, out of JSON escapes or `{file:...}` substitution gets past it, and could then
+add bash rules to canopy's agents, or set the environment of the overseer's server. A scalar rule canopy sets (the
+worker's `edit`, `external_directory`, and `task`) replaces whatever such an
 agent sets for it, but OpenCode matches each permission key as a wildcard on the permission's name: an agent that sets
 the same permission and then a key such as `external_*` keeps that key after canopy's rule, and loosens it. These
 rules are defense in depth (T4), as the bash rules are, with branch protection (§7) the boundary for what a worker can
@@ -791,9 +806,10 @@ Controls:
   or prompts, and never reaches an agent's environment except the server that checks it.
 - Whoever holds the secret acts as the operator: they can prompt a worker directly, outside the authorized-replier
   check (T1). That is the point, and it is why the secret is an operator credential.
-- A listener only reads state and passes the operator's own input to agents. It does not lift any guard in §6: a
-  worker prompted through it still cannot merge, approve, or push outside its branch, and capacity and attempt limits
-  still hold.
+- A listener only reads state, passes the operator's own input to agents, and changes the few config keys the web UI
+  may, within bounds in code (below). It does not lift any guard in §6: a worker prompted through it still cannot
+  merge, approve, or push outside its branch, and capacity and attempt limits still hold, at whatever value the config
+  then gives them.
 
 The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 
@@ -868,13 +884,30 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   are the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
-  editor read it; and the operator's comments on a plan's passages, in the journal. Nothing else, but the record of
-  its writes above. It cannot write config: a reload reads only the operator's own files, and a `serve.*` change
-  waits for a restart, so the listener's bind and port never change under it. A forget must carry the ticket's key
+  editor read it; and the operator's comments on a plan's passages, in the journal. It also writes the limits and
+  trust settings below, in the workspace's private file. Nothing else, but the record of its writes above. A reload
+  reads only the operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port
+  never change under it. A forget must carry the ticket's key
   typed out, checked in code, and a memory's forget its ref (`memory:42`). A grant
   allows one more run a request, with `canopy grant`'s guards. A try is the operator's, as the CLI's is: it waits for
   no `every_minutes`, hours, or `capacity.max_chores` (DESIGN §19), and only a run of the same chore already running
   refuses it.
+- Its config writes (DESIGN §12, §22, D128) are an allowlist in code, by key name, never a section's wildcard, so a key
+  added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
+  count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt
+  limits and the CI cooldown in `policy`, and `loop.interval_minutes` and `loop.idle_max_minutes`. Trust settings
+  move only toward stricter: `policy.stacking` to `"never"`, an entry removed from `trust.authorized_repliers` or
+  `trust.trusted_reviewers` (never added), `trust.rebase` to false, and `trust.commit_trailer` to true. Nothing that
+  runs a command, chooses a prompt, is read as words, or moves the listener: no `runtime.*`, `notify.*`, `chores`,
+  `paths.*`, `review.*`, `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the
+  secret, which is why trust only tightens: a replier added through a stolen session would go on steering workers after
+  a new secret ended it. It writes the workspace's private file alone (M49), never the workspace file (T7) nor the user
+  file, which serves every workspace: a key from the user file is written to the private file, where it shadows the user
+  file's for this workspace alone. It keeps the file as it was as `config.toml.bak`; refuses a private file that is a
+  symlink or not the operator's (D053's check), one tomlkit would not write back byte for byte, and one that changed
+  since the page read it; validates the result as any `canopy` command would load it; and refuses inside a tick or run
+  (`inside_run`). Each change is logged with its old and new values. A running run keeps the prompt and permissions it
+  started with, so a stricter setting reaches only runs started after it.
 
 The mock server is not such a listener: it serves a journal seeded from fixtures, on loopback for development, or
 under public host names as the web UI's demo on a host such as Vercel (D122). It holds nothing of the operator's, so it
@@ -903,7 +936,9 @@ for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
-cannot be ended alone before its 30 days: a new secret ends them all. Plain HTTP on a private address can be read on
+cannot be ended alone before its 30 days: a new secret ends them all. Whoever holds a session can raise the limits up
+to their ceilings for that workspace, and that outlives a new secret until the operator reads the private file or the
+log: the residual is spend, bounded by the ceilings, never authority. Plain HTTP on a private address can be read on
 the network (D076), transcripts included: a secret a worker's tool printed into its log is then on the network too.
 Tick now, asked again and again, runs the overseer back to back, past `loop.min_gap_minutes`, as `t` held down at the
 loop's terminal would.
@@ -952,8 +987,8 @@ loop's terminal would.
   whatever the token can do. People who can read the channel see what the loop does; they cannot steer it.
 - If you allow a tool in a chore's agent definition, you are responsible for what that tool can do. canopy's controls
   assume chore tools only read.
-- If you sandbox runs (T4), prefix every command docs/SANDBOX.md lists, `private_worker_cmd` included, and run its
-  check. Keep each template's allowlist and `allowRead` to what the runs need: every host and file there is in a
-  steered worker's reach.
+- If you sandbox runs (T4), prefix every command docs/SANDBOX.md lists, `private_worker_cmd` included, or name the
+  repositories in `runtime.sandbox_repos`, and run its check. Keep each template's allowlist and `allowRead` to what
+  the runs need: every host and file there is in a steered worker's reach.
 - Keep the listener secret file private, and bind a listener to a private-network address only on a network whose
   members may see the operator's tickets and code (T8). Label only PRs you are willing to have a worker push to.

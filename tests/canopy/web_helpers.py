@@ -53,11 +53,16 @@ def signed_in_client(
     ctx: Context,
     reload: reread.Reload | None = None,
     asked: tick_now.TickNow | None = None,
+    *,
+    every: int | None = None,
 ) -> tuple[TestClient, dict[str, str]]:
-    """A browser signed in to a server over `ctx`'s journal, as the loop builds it, and the headers a write needs."""
+    """A browser signed in to a server over `ctx`'s journal, as the loop builds it, and the headers a write needs.
+
+    `every` is `canopy loop --every`'s minutes, as the loop hands them to the server.
+    """
     options = ServeOptions(port=8765)
     sessions = Sessions(SECRET, port=options.port, base_path="", hosts=options.hosts)
-    backend = web.backend(ctx, reload or reread.Reload(), asked or tick_now.TickNow())
+    backend = web.backend(ctx, reload or reread.Reload(), asked or tick_now.TickNow(), every)
     c = TestClient(create_app(options, backend, sessions), base_url=ORIGIN)
     return c, signed_in(c)
 

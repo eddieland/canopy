@@ -194,6 +194,7 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | Tick now, or pause and resume the loop | `t` or `p` in its terminal, or the web UI's header; `canopy pause`, `canopy resume` |
 | Tell every run about a CI outage until it is over | `canopy notice 'TEXT' --for 4h`, or the web UI's settings |
 | Read your config again after editing it | Reload in the web UI's settings, or `kill -HUP` the loop |
+| Change a limit, or tighten a trust setting, without opening the file | Settings, then Limits and trust, in the web UI |
 | Read the attention list | `canopy status`, or `.canopy/attention.md` |
 | Read a ticket's conversation, or answer canopy there | `canopy show KEY`, `canopy reply KEY 'text'` |
 | Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` |
@@ -211,6 +212,7 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | See each persona, yours and canopy's, and the one each agent writes in; choose under `[personas]` | `canopy personas` |
 | Give one ticket's workers, planner, or reviewer a persona of its own, until you clear it | `canopy persona KEY NAME [--agent planner\|reviewer]`, or the ticket's page |
 | See what canopy keeps of its own history, and what your retention would remove | `canopy gc --dry-run` |
+| Pack the primary clones' loose objects, between runs, since git's own maintenance is off in them | `canopy gc --git` |
 | Keep every plan, with its status, approval, and prompt, in a private repository of yours | `canopy archive DIR` |
 | Read a run's transcript | its page in the web UI, or `opencode export <session id>` |
 | Teach your own agent session canopy | `canopy skill --install`, which saves it in `~/.agents/skills/canopy/` |

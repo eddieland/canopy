@@ -29,6 +29,7 @@ from canopy.runtime.opencode.definitions import (
     RUNTIME_COMMANDS,
     SKILLS_SUBDIR,
     TOOL_PART_RE,
+    VARIANT_RE,
     agent_names,
     render,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "SKILLS_SUBDIR",
     "SKILL_NAME_RE",
     "TOOL_PART_RE",
+    "VARIANT_RE",
     "agent_names",
     "bundled",
     "render",

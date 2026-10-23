@@ -1,3 +1,3 @@
--- sha256 of 0082_draft_plan_items.sql: 07e198f4a19cff80ef042e1d8af271cbd2ff928371cc4d4c4156fc6c6fafe3c2
+-- sha256 of 0082_observed_pr_title.sql: 60077f3b14db74bf3f96e928820bca53188d76c07094256a7bebe7bc845dbc42
 
--- Creates no table, so seeds no row.
+UPDATE observed_prs SET title = 'Retry the upstream on a 503' WHERE url = (SELECT min(url) FROM observed_prs);

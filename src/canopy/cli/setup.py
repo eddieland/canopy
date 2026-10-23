@@ -198,6 +198,8 @@ def cmd_sandbox_setup(click_ctx: click.Context) -> int:
         click.echo(f"kept    {path}")
     if report.runtime:
         click.echo(report.runtime)
+    for note in report.notes:
+        click.echo(f"\nNote: {note}")
     for item in report.todo:
         click.echo(f"\nTo do: {item}")
     user_file = config.user_config_path()

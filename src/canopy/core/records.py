@@ -865,6 +865,8 @@ class ObservedPr(Row):
     #: Its labels' names, as a JSON list.
     labels: str
     mergeable_state: MergeState | None
+    #: Its title, the PR author's text, cut and marked, for display only: None from a reader that printed none.
+    title: str | None
 
 
 @dataclass(frozen=True)
@@ -1070,7 +1072,7 @@ class Draft(Row):
     #: The reaction a send added on GitHub, which stays there even when the send's review then failed.
     reacted: Reaction | None
     reacted_at: str | None
-    #: The number of the item of its run's feedback plan whose proposed reply it started from, or None (0082).
+    #: The number of the item of its run's feedback plan whose proposed reply it started from, or None (0083).
     plan_item: int | None
 
 

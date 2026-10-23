@@ -18,12 +18,16 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await expect(page.getByTestId('review-5')).toContainText('draft')
     await expect(page.getByTestId('review-2')).toContainText('published')
     await expect(page.getByTestId('review-4')).not.toContainText('draft')
+    // Each review names what its PR is about after the PR: the PR's own title, which a worker reported.
+    await expect(page.getByTestId('review-4')).toContainText('ABC-099: debounce the search box by 250 ms')
     // A PR waiting on its review names its author where a ticket would be, once canopy has read it.
     await expect(page.getByTestId('requested-https://github.com/acme/web/pull/95')).toContainText('dana')
 
     await page.getByTestId('review-4').getByRole('link', { name: 'review:4' }).click()
     await expect(page).toHaveURL(/\/reviews\/4$/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4 acme/web#88 Debounce search input')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+        'review:4 acme/web#88 ABC-099: debounce the search box by 250 ms',
+    )
     await expect(nav.getByRole('link', { name: 'Reviews' })).toHaveAttribute('data-status', 'active')
     // The PR on GitHub is under the title, as on the PR's own page.
     const out = page.locator('main header').getByRole('navigation', { name: 'Links out' }).getByRole('link')

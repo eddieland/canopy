@@ -234,15 +234,18 @@ between you and your coworker.
 ## The reviews page
 
 [Reviews](/reviews) lists every review, newest first: its verdict, its ticket, how big the change is (`low impact`,
-`normal impact`, `high impact`), the PR and commit, the persona it wrote in (`as skeptic`, where the list has room for
-it), and what it cost. A PR you had reviewed in several personas gets a row for each, and the persona is how you tell
-the skeptic from the minimalist. The reviews one request made of one commit sit together, with no rule between them:
-the first names the PR, and each after it says only `as minimalist`, since the PR and commit are the first's. The
-PR's page lists them the same way. A verdict reads `clean`, or counts the findings with the worst among them, such as
-`3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. A review of a PR the loop doesn't own carries its
-draft's chip after the verdict, as the pull requests list does. With no review yet, it points you to **Review a
-PR** above the list, which works with the defaults, and to `review.agent_prs` and `review.query`, which have the loop
-review PRs on its own. Either way, `capacity.max_reviews` must be above 0.
+`normal impact`, `high impact`), the PR and its title, the commit, the persona it wrote in (`as skeptic`, where the list
+has room for it), and what it cost. The title is the PR's own, as a worker or a review reported it, else as canopy last
+read it from GitHub, else its ticket's, so you can tell which change a review is about without opening it or remembering
+what `#88` was. A coworker's PR gets its title from that read, so only one canopy has never read shows the PR's name
+alone, and on a narrow list the title is the first thing to go. A PR you had reviewed in several personas gets a row for
+each, and the persona is how you tell the skeptic from the minimalist. The reviews one request made of one commit sit
+together, with no rule between them: the first names the PR, and each after it says only `as minimalist`, since the PR
+and commit are the first's. The PR's page lists them the same way. A verdict reads `clean`, or counts the findings with
+the worst among them, such as `3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. A review of a PR the
+loop doesn't own carries its draft's chip after the verdict, as the pull requests list does. With no review yet, it
+points you to **Review a PR** above the list, which works with the defaults, and to `review.agent_prs` and
+`review.query`, which have the loop review PRs on its own. Either way, `capacity.max_reviews` must be above 0.
 
 A PR you asked for that no review has started on yet leads the list as `requested`, with a hollow ring: it has no
 verdict, commit, or cost because nothing has read it yet. Where a ticket would be, it names the PR's author once canopy
