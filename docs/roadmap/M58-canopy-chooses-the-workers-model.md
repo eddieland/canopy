@@ -72,8 +72,9 @@ for the canary after it.
   timed-out list read refused `model_list_failed`; any template, prefix, or suffix passing `--model` a config error; the
   web API's override write refusing as the CLI does, and the ticket page's Model panel (Vitest and Playwright); the
   run's `model` in `canopy status`, a snapshot, and in the spend split by model.
-- **Follows from this, not built here.** Issue #275: once canopy knows a worker's model before the run starts, the
-  commit trailer (§8, `trust.commit_trailer_name`) can name it, with no change to the shipped prompts.
+- **The commit trailer names the model.** Issue #275: canopy knows a worker's model before the run starts, so the
+  commit trailer (§8, `trust.commit_trailer_name`) names it while its name is the default, with no change to the
+  shipped prompts.
 
 Accept: Stage 0 recorded, and the design written before work starts. Live, once built: with `runtime.models.worker`
 empty, the operator sets one labeled ticket to a model other than the default from its page in the web UI; its
@@ -97,7 +98,7 @@ at each dispatch with a model set, in the workspace root rather than a repositor
 refusing `model_list_failed` when the read fails as it refuses `model_missing`. The operator settled the two points
 left open (2026-10-19): every agent's model can be set, from `[runtime.models]` and per ticket for the ticket's own
 agents, and the web UI's control is built with it, on the ticket's page. The commit trailer naming the model
-(issue #275) follows from this, not built here. The operator settled the last two open points (2026-10-20): a run
+(issue #275) follows from this, built 2026-10-22. The operator settled the last two open points (2026-10-20): a run
 records the models its session says served it, not only what canopy asked for, since cost attribution needs what
 served; and past runs are attributed from their sessions too, a few each tick. Of the pinned OpenCode's source
 (2026-10-20): `opencode export` finds a session by its id alone, in the one database that holds every project's, so
@@ -116,7 +117,10 @@ dispatch whose agent has a model reads `opencode models` in the workspace root (
 lines that are no model passed over) and refuses `model_missing` or `model_list_failed`, each with its attention item,
 spending no attempt and leasing no slot, in a dry run too; and the run records the model asked for, `runs.model`, which
 `canopy status` shows on running and recent runs. OpenCode 2's list is not read yet, so under it a chosen model
-refuses as `model_list_failed`. Not built yet: the per-ticket override (`canopy model`, a `ticket_overrides` row of
+refuses as `model_list_failed`. Built (2026-10-22, issue #275): the commit trailer names the model chosen for a
+worker or a task's run, `provider/model (canopy worker)`, while `trust.commit_trailer_name` is the default; a name the
+operator set is used as set, with no placeholder for the model.
+Not built yet: the per-ticket override (`canopy model`, a `ticket_overrides` row of
 kind `model`) and the ticket page's Model panel; `canopy models`; the settings page's read-only `[runtime.models]`; the
 check before a review, a chore, a task's run, and a tick's overseer, with its tick status; `canopy status` naming the
 models that served a run; and TRUST_MODEL T8.
