@@ -7,6 +7,7 @@ import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelLoading } from '@/components/panel'
 import { ChangesAsked } from '@/components/plan-card'
 import { PlanState, TicketPlan } from '@/components/ticket-plan'
+import { useViewedTicket } from '@/lib/recent-tickets'
 import { planRef } from '@/lib/refs'
 
 /**
@@ -22,6 +23,7 @@ function PlanPage() {
     const { key } = Route.useParams()
     // The ticket for its title alone; the plans are the page.
     const title = useQuery(ticketQuery(key)).data?.ticket.title
+    useViewedTicket(key, title)
     const query = useQuery(ticketPlansQuery(key))
     const { data, error } = query
     const newest = data?.newest?.plan
