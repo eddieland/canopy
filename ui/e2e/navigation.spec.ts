@@ -16,7 +16,7 @@ test('the tab names the page, after what blocks on the operator', async ({ page 
     await page.goto('attention')
     await settled(page)
     // The mock's nine items less the PR that waits on a reviewer and the chore's finding, which block nothing.
-    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(9)
+    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(10)
     const count = 7
     await expect(page).toHaveTitle(`(${count}) Attention · canopy`)
 

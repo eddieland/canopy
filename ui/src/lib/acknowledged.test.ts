@@ -47,6 +47,18 @@ describe('answered', () => {
         expect(answered(review, undefined)).toBe(false)
     })
 
+    it('is not a plan review while its feedback plan waits, though its ticket plan does not', () => {
+        const review = {
+            ...item,
+            reason: 'plan_review',
+            detail: 'feedback plan 3 for https://github.com/acme/web/pull/88 waits: canopy plan ABC-102 --approve',
+        }
+        const plan = { id: 3, pr_urls: ['https://github.com/acme/web/pull/88'], items: 2, stale: true }
+        expect(answered(review, listing({ plan_waits: false, feedback_plan: plan }))).toBe(false)
+        // Approved, it waits on you no more, and the item leaves at the next tick.
+        expect(answered(review, listing({ plan_waits: false, feedback_plan: null }))).toBe(true)
+    })
+
     it('is never another reason', () => {
         expect(answered({ ...item, reason: 'worker_failed' }, listing({ awaiting: null }))).toBe(false)
     })

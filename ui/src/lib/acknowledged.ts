@@ -12,7 +12,9 @@ export function awaitsTick(message: Pick<Message, 'id' | 'source'>, acknowledged
 /**
  * Whether an item was answered since the tick that listed it: an `awaiting_reply` item's ticket, still started, or
  * public with a planner's question (DESIGN §25), waits on no question now, or a `plan_review` item's plan waits on the
- * operator no more, approved, skipped, or sent back for changes. A task's `awaiting_reply` item is answered once its
+ * operator no more, approved, skipped, or sent back for changes. The overseer raises a waiting feedback plan as
+ * `plan_review` too (DESIGN §32), so that item is answered only once neither the ticket's plan nor its feedback plan
+ * waits. A task's `awaiting_reply` item is answered once its
  * task waits on no reply, replied to or stopped (DESIGN §36). The list is the latest `ok` tick's (DESIGN §14), so the
  * item stays until the next one.
  */
@@ -37,7 +39,7 @@ export function answered(
             return ticket.start !== 'stopped' && ticket.awaiting === null
         }
         case 'plan_review': {
-            return !ticket.plan_waits
+            return !ticket.plan_waits && ticket.feedback_plan === null
         }
         default: {
             return false
