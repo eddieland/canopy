@@ -3353,14 +3353,20 @@ export type components = {
              */
             author: string | null;
             /**
+             * Check
+             * @description For a check, its name, as the plan's read saw it; None for any other item.
+             */
+            check: string | null;
+            /**
              * Item
-             * @description A review, or a review thread by the comment the plan covers.
+             * @description A review, a review thread by the comment the plan covers, a failed check at the PR's head, or its conflict.
              * @enum {string}
              */
-            item: "review" | "comment";
+            item: "review" | "comment" | "check" | "conflict";
             /**
              * Item Id
-             * @description The id the `vcs` source observed: the one the plan's `### Item <id>` heading carries.
+             * @description The one the plan's `### Item <id>` heading carries: the id the `vcs` source observed, or for a check or a
+             *     conflict the one canopy gives it, below zero.
              */
             item_id: number;
             /**
@@ -6663,6 +6669,13 @@ export type components = {
              * @description How many ticks.
              */
             ticks: number;
+            /**
+             * Without Overseer
+             * @description How many of them ran no overseer, the harness having left it nothing to judge or the tick halting before it
+             *     (DESIGN §39): each counted at nothing, never as a run that reported no cost.
+             * @default 0
+             */
+            without_overseer: number;
         };
         /**
          * SpendTool
@@ -6778,6 +6791,13 @@ export type components = {
              * @description How many ticks.
              */
             ticks: number;
+            /**
+             * Without Overseer
+             * @description How many of them ran no overseer, the harness having left it nothing to judge or the tick halting before it
+             *     (DESIGN §39): each counted at nothing, never as a run that reported no cost.
+             * @default 0
+             */
+            without_overseer: number;
         };
         /**
          * Started

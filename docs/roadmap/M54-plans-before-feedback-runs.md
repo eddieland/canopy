@@ -120,15 +120,24 @@ fakes, the plan on the PR's page: its threads carry the ticket's current feedbac
 with each change in the harness's words, approved, or spent), its file as text, and each item's proposal and reply on
 its thread's card, an item on no thread listed with its reply; and the page approves it whole or by item, with the
 operator's words, through `canopy plan --approve`'s function in channel `web`, refused as the CLI is, a write T8 now
-names with its residual. Built 2026-10-22, against the fakes, drafts starting from the plan: under
-`trust.review_replies = "approve"`, the `resume`'s `{{PLAN}}` gives each approved item's proposed reply, fenced as data,
-to start its thread's draft from, kept unless the work departed; migration 0084's `drafts.plan_item` records the item of
-the run's feedback plan a thread's draft answers, matched by thread, by `_run` or, for a comment only the checking read
-places, by that read; and whether a draft departs is computed in code, never claimed: `canopy draft show`, the threads
-route's `from_plan`, and the PR page's draft card, `as planned` or `changed from the plan` with the proposed reply shown
-on demand as plain text. Settled for it, open to the operator: under `post` the prompt gives no proposed reply; only a
-thread's draft starts from the plan, not a PR's comment; a draft departs when the run's own first text differs from the
-proposed reply past whitespace at either end, when its `did` is not the plan's change or decline, when the plan proposed
-no reply (`ask`, `leave`), or when the approval left the item out; the operator's edits are not compared; and the card
-marks a departure and shows the proposal, with no word diff. Left: the plan that changes nothing, and failed checks and
-conflicts as items with ids of their own.
+names with its residual. Built 2026-10-22, against the fakes, failed checks and conflicts as items: each check failed at
+a PR's head, but one its repository's `human_checks` names, and the PR's conflict with its base, are in the planner's
+items file with an id canopy gives them, below zero, from a hash of the PR, the head, and the check's name or the base,
+so it never meets an observed id and is the same on every read of that head; they are planned, numbered, approved or
+left by item, named in `{{PLAN}}` and `canopy show` as reviews are, and on the PR's page as a check by its name or a
+conflict, and an uncovered or left one goes to the next plan; migration 0086 widens `feedback_plan_items.item` and
+records whether each PR conflicted, so a conflict that comes or goes at an unmoved head makes a waiting plan stale.
+Settled for it, open to the operator: a check or a conflict carries no reply; a handled one stays handled until a push,
+even if the check is run again and fails at the same head; a conflict while the host is still working out mergeability
+is no change; and a merged blocker still reaches the planner as context. Built 2026-10-22, against the fakes, drafts
+starting from the plan: under `trust.review_replies = "approve"`, the `resume`'s `{{PLAN}}` gives each approved item's
+proposed reply, fenced as data, to start its thread's draft from, kept unless the work departed; migration 0087's
+`drafts.plan_item` records the item of the run's feedback plan a thread's draft answers, matched by thread, by `_run`
+or, for a comment only the checking read places, by that read; and whether a draft departs is computed in code, never
+claimed: `canopy draft show`, the threads route's `from_plan`, and the PR page's draft card, `as planned` or
+`changed from the plan` with the proposed reply shown on demand as plain text. Settled for it, open to the operator:
+under `post` the prompt gives no proposed reply; only a thread's draft starts from the plan, not a PR's comment; a draft
+departs when the run's own first text differs from the proposed reply past whitespace at either end, when its `did` is
+not the plan's change or decline, when the plan proposed no reply (`ask`, `leave`), or when the approval left the item
+out; the operator's edits are not compared; and the card marks a departure and shows the proposal, with no word diff.
+Left: the plan that changes nothing, and a merged blocker as an item.

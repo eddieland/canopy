@@ -337,6 +337,11 @@ def set_tick_query(conn: sqlite3.Connection, tick_id: int, *, due: bool) -> None
     sql.execute(conn, sql.update("ticks").set(query_due=int(due)).where("id = ?", tick_id))
 
 
+def set_tick_overseer(conn: sqlite3.Connection, tick_id: int, *, ran: bool) -> None:
+    """Record whether a tick runs its overseer: not when it is halted, nor when nothing is left to it (DESIGN §39)."""
+    sql.execute(conn, sql.update("ticks").set(overseer_ran=int(ran)).where("id = ?", tick_id))
+
+
 def last_query_at(conn: sqlite3.Connection) -> str | None:
     """When the newest live `ok` tick that ran the tracker query started (§7, Spacing the query).
 

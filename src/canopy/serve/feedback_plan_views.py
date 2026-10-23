@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 from canopy.core import db, feedback_items, feedback_plans, plans, records, sql
-from canopy.core.vocab import PlanStatus, ReviewItem
+from canopy.core.vocab import PlanItem, PlanStatus
 from canopy.serve.feedback_plan_schema import FeedbackPlan, FeedbackPlanApproved, FeedbackPlanItem, ItemName
 
 if TYPE_CHECKING:
@@ -46,11 +46,12 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
     path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
     reading = plans.read(path)
     who = feedback_plans.authors(conn, plan.id)
+    checks = feedback_items.check_names(conn, plan.id)
     trusted = ctx.config.trust.trusted_reviewers
     items: list[FeedbackPlanItem] = []
     for i in feedback_plans.items(conn, plan.id):
         author = who.get((i.pr_url, i.item, i.item_id))
-        on_page = i.pr_url == url and i.item is ReviewItem.COMMENT
+        on_page = i.pr_url == url and i.item is PlanItem.COMMENT
         items.append(
             FeedbackPlanItem(
                 number=i.number,
@@ -63,6 +64,7 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
                 author=author,
                 trusted=author is not None and author in trusted,
                 thread_id=thread_of.get(i.item_id) if on_page else None,
+                check=checks.get((i.pr_url, i.item_id)) if i.item is PlanItem.CHECK else None,
             ),
         )
     return FeedbackPlan(

@@ -171,6 +171,26 @@ describe('FeedbackPlanPanel', () => {
         expect(shown.querySelector('img')).toBeNull()
         expect(shown.querySelector('strong')).toBeNull()
     })
+
+    it('names a failed check and a conflict by what they are, with no author', async () => {
+        const check = feedbackPlanItem({
+            number: 1,
+            item: 'check',
+            item_id: -81234567,
+            proposal: 'change',
+            reply: null,
+            author: null,
+            trusted: false,
+            thread_id: null,
+            check: 'build',
+        })
+        const conflict = feedbackPlanItem({ ...check, number: 2, item: 'conflict', item_id: -91234567, check: null })
+        await renderRouted(<FeedbackPlanPanel plan={feedbackPlan({ items: [check, conflict] })} onChange={changed} />)
+        const [first, second] = screen.getAllByTestId('feedback-plan-item')
+        expect(first?.textContent).toContain('the failed check build on https://github.com/acme/web/pull/88')
+        expect(second?.textContent).toContain('the conflict with its base on https://github.com/acme/web/pull/88')
+        expect(screen.queryByText('no author recorded')).toBeNull()
+    })
 })
 
 describe("ThreadCard's proposal", () => {

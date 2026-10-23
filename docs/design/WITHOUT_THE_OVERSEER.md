@@ -6,9 +6,12 @@ whole design; the [README](README.md) has the map. Previous: [Artifacts](ARTIFAC
 
 ## 39. A tick without the overseer
 
-Designed, not built (ROADMAP M39). It waits on §37, and on the overnight run that tests idle pacing (SCENARIOS S27).
-Until it is built, §5, §6, §11, §13, §15, §35, §37, and TRUST_MODEL describe canopy as it is; this section says what
-changes, and the PR that builds it changes those sections and cuts this one to what is left.
+Being built (ROADMAP M39). It waits on §37, and on the overnight run that tests idle pacing (SCENARIOS S27). Built:
+"When the tick runs no overseer", in §6, §11, and TRUST_MODEL T3, with what is left to the overseer also counting the
+query when no source read it and the reviews it starts (the review query, the operator's requests, and revisions),
+until those are the harness's too. The rest is designed, not built: until it is, §5, §6, §11, §13, §15, §35, §37, and
+TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that finishes it changes those
+sections and cuts this one to what is left.
 
 Once the harness decides what needs no judgment (§37), most ticks leave the overseer nothing: overnight, while PRs wait
 on a human, after a run ends with nothing to classify. The connectors' polls (§6) already read the world every few

@@ -1,3 +1,3 @@
--- sha256 of 0084_draft_plan_items.sql: 07e198f4a19cff80ef042e1d8af271cbd2ff928371cc4d4c4156fc6c6fafe3c2
+-- sha256 of 0084_tick_overseer_ran.sql: 7eb6b0f2aef4babe440d62a0208a9b1e21cf6faf1c43f59f5456d396a999001e
 
--- Creates no table, so seeds no row.
+UPDATE ticks SET overseer_ran = 0 WHERE id = (SELECT min(id) FROM ticks);
