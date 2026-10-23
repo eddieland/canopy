@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 
 import { applyStreamEvent, parseStreamEvent } from './live'
-import { mockAttention, mockCapacity, mockChores, mockReviews, mockRuns, mockTickets } from './mocks'
+import { mockAttention, mockCapacity, mockChores, mockReviews, mockRuns, mockTasks, mockTickets } from './mocks'
 import { keys } from './queries'
 import type { ChoreDetail, ChoreRunDetail, ReviewDetail, ReviewSummary, Run, TicketDetail } from './types'
 
@@ -90,6 +90,15 @@ describe('applyStreamEvent', () => {
 
         expect(client.getQueryData(keys.chores)).toEqual(mockChores)
         expect(client.getQueryState(keys.chore('deps'))?.isInvalidated).toBe(true)
+    })
+
+    it('replaces the tasks whole, as a task is submitted or its run starts or ends', () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.tasks, mockTasks.slice(1))
+
+        applyStreamEvent(client, { type: 'tasks.updated', tasks: mockTasks })
+
+        expect(client.getQueryData(keys.tasks)).toEqual(mockTasks)
     })
 
     it("reads a chore run's page and transcript again only when its status or cost moves", () => {
@@ -329,6 +338,9 @@ describe('parseStreamEvent', () => {
         const chores = { type: 'chores.updated', chores: mockChores }
         expect(parseStreamEvent(JSON.stringify(chores))).toEqual(chores)
         expect(parseStreamEvent('{"type":"chores.updated","chores":null}')).toBeNull()
+        const tasks = { type: 'tasks.updated', tasks: mockTasks }
+        expect(parseStreamEvent(JSON.stringify(tasks))).toEqual(tasks)
+        expect(parseStreamEvent('{"type":"tasks.updated","tasks":null}')).toBeNull()
         const reviews = { type: 'reviews.updated', reviews: mockReviews }
         expect(parseStreamEvent(JSON.stringify(reviews))).toEqual(reviews)
         expect(parseStreamEvent('{"type":"reviews.updated"}')).toBeNull()

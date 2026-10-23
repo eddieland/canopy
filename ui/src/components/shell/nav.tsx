@@ -11,6 +11,7 @@ import {
     History,
     Inbox,
     MessagesSquare,
+    Sprout,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -41,6 +42,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
         to: '/tickets',
         icon: MessagesSquare,
         hint: 'Every ticket canopy has worked, and a form to start one',
+    },
+    {
+        to: '/tasks',
+        icon: Sprout,
+        hint: 'One-off work you handed canopy in your own words, about no ticket, and where each stands',
     },
     {
         to: '/pull-requests',

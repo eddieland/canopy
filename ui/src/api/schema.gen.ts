@@ -6339,7 +6339,7 @@ export type components = {
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["ReviewsUpdated"] | components["schemas"]["ReviewRequestsUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["TasksUpdated"] | components["schemas"]["ReviewsUpdated"] | components["schemas"]["ReviewRequestsUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
         /**
          * TaskDetail
          * @description One task: what `canopy show task:N` prints.
@@ -6687,6 +6687,22 @@ export type components = {
              * @description The operator's words, control characters dropped and line breaks kept.
              */
             text: string;
+        };
+        /**
+         * TasksUpdated
+         * @description The tasks changed: one was submitted, replied to, or stopped, or a run of one started or ended. Whole.
+         */
+        TasksUpdated: {
+            /**
+             * Tasks
+             * @description The tasks, as `GET /tasks` returns them.
+             */
+            tasks: components["schemas"]["TaskSummary"][];
+            /**
+             * @description What the event is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            type: "tasks.updated";
         };
         /**
          * TaskTicket
