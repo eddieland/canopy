@@ -10,15 +10,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import hostgit
+from canopy.core import commit_hooks, hostgit
+from canopy.core.config import AUTOSQUASH
 from canopy.infra import procs
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from canopy.infra import logs
 
 _GIT_TIMEOUT_SECONDS = 300
+# The most commits a note names that lack one of canopy's marks; it counts the rest.
+_MAX_NAMED = 5
 
 
 class SetupError(Exception):
@@ -159,6 +162,55 @@ def remote_head(git: Git, branch: str) -> str:
     """
     listed = git.run("ls-remote", "origin", f"refs/heads/{branch}")
     return listed.split()[0] if listed else ""
+
+
+def unmarked(git: Git, branch: str, start: Start, base: str, marks: commit_hooks.Marks) -> list[str]:
+    """Return a harness note for each of `marks` that a run's commit on origin's `branch` lacks, naming those commits.
+
+    The run's commits are those the branch holds that neither HEAD at the start nor origin's `base` does. canopy's
+    hooks put the marks on them (`commit_hooks`, TRUST_MODEL T5); a commit made around them is reported, never
+    rewritten. A fixup, which keeps its subject for `--autosquash`, needs no prefix. Best effort: a git step that fails
+    reports nothing.
+
+    Returns:
+        A note for the trailers and one for the prefix, each only when a commit lacks it.
+
+    Raises:
+        SetupError: git could not start, or timed out.
+    """
+    remote = remote_head(git, branch) if marks.trailers or marks.prefix else ""
+    if not remote:
+        return []
+    # Unfolded and joined, each commit's subject and trailers fit on its line.
+    listed = git.result(
+        "log",
+        "--format=%h%x1f%s%x1f%(trailers:only,unfold,separator=%x1e)",
+        remote,
+        f"^{start.commit}",
+        f"^refs/remotes/origin/{base}",
+        "--",
+    )
+    if not listed.ok:
+        return []
+    untrailed: list[str] = []
+    unprefixed: list[str] = []
+    for line in listed.stdout.splitlines():
+        commit, subject, found = [*line.split("\x1f"), "", ""][:3]
+        if not set(marks.trailers) <= set(found.split("\x1e")):
+            untrailed.append(commit)
+        if marks.prefix and not subject.startswith((marks.prefix, *AUTOSQUASH)):
+            unprefixed.append(commit)
+    notes = [(untrailed, "canopy's trailer"), (unprefixed, f"the prefix `{marks.prefix}`")]
+    return [f"{git.where}{_lacking(commits, branch, what)}" for commits, what in notes if commits]
+
+
+def _lacking(commits: Sequence[str], branch: str, what: str) -> str:
+    named = ", ".join(commits[:_MAX_NAMED])
+    more = f" and {len(commits) - _MAX_NAMED} more" if len(commits) > _MAX_NAMED else ""
+    pushed = (
+        f"1 commit pushed to {branch} lacks" if len(commits) == 1 else f"{len(commits)} commits pushed to {branch} lack"
+    )
+    return f"{pushed} {what}: {named}{more}"
 
 
 def ignore(git: Git, name: str) -> None:

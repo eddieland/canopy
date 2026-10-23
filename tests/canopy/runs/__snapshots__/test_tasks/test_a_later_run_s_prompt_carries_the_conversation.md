@@ -48,7 +48,7 @@ mention it in your summary.
   `cd app && cd ../lib` is refused as leaving it: `cd` by a path from /pool/1/repo, or set the command's working directory.
 - Write nothing to any ticket that already exists: never comment on, label, edit, or change the state of one,
   through any tool or command. Create a ticket only as the Tickets section below allows.
-- Commit what you change. Keep the agent runtime's attribution trailer on commits, or add `Co-authored-by: canopy worker <noreply@canopy.invalid>`. Never disguise agent work as human work. A task that needs no change
+- Commit what you change. git adds `Co-authored-by: canopy worker <noreply@canopy.invalid>` to each commit; keep it, and the agent runtime's attribution trailer if it adds one. Never disguise agent work as human work. A task that needs no change
   commits and pushes nothing.
 - Push only to `agent/task/1`, with `git push origin HEAD:refs/heads/agent/task/1`. Commit on the detached HEAD as it is:
   create no local branch. Never rewrite a commit that is already pushed, and never push with force, even if another

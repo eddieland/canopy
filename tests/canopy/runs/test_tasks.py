@@ -42,6 +42,7 @@ from tests.canopy.helpers import (
     private_worker_does,
     running_run,
     tools_of,
+    trailers_on,
     with_events,
     with_rebase,
 )
@@ -252,17 +253,27 @@ def test_the_worker_is_the_private_one_and_its_prompt_carries_the_text(inline: C
     assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>`" in prompt
 
 
-@pytest.mark.usefixtures("git_pool")
-def test_the_commit_trailer_names_the_private_workers_chosen_model(canopy_env: CanopyEnv, agent_log: Path) -> None:
-    """A task's run is the private worker's, on the model `runtime.models.worker` chooses (DESIGN §13)."""
+def test_the_commit_trailer_names_the_private_workers_chosen_model(
+    canopy_env: CanopyEnv,
+    agent_log: Path,
+    git_pool: GitPool,
+) -> None:
+    """A task's run is the private worker's, on the model `runtime.models.worker` chooses (DESIGN §13).
+
+    git adds the trailer that names it to the task's commits (TRUST_MODEL T5).
+    """
     canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"worker": "provider/model-a"}}})
     ctx = inline_context(canopy_env)
     submit()
     [started] = start(ctx)
-    with private_worker_does(result=DONE):
-        run_task(ctx, started.run_id)
+    with private_worker_does(*commit_and_push(BRANCH, "task 1: the fix"), result=DONE):
+        run = run_task(ctx, started.run_id)
     [worker] = agent_runs(agent_log)
-    assert "`Co-authored-by: provider/model-a (canopy worker) <noreply@canopy.invalid>`" in worker["argv"][-1]
+    trailer = "Co-authored-by: provider/model-a (canopy worker) <noreply@canopy.invalid>"
+    assert f"`{trailer}`" in worker["argv"][-1]
+    assert trailers_on(git_pool.origin, BRANCH) == [[trailer]]
+    assert run.status == RunStatus.DONE
+    assert "harness" not in json.loads(present(run.result_json))
 
 
 def test_a_pushed_branch_is_recorded_with_its_head_and_the_slot_returned(

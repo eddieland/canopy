@@ -27,7 +27,7 @@ from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
 from canopy.loop import connectors
 from canopy.runs import drafted
-from tests.conftest import CanopyEnv, Journals
+from tests.conftest import CanopyEnv, Journals, git
 
 KEY = "PROJ-1"
 #: A plan as a planner writes one, for a test that needs any.
@@ -794,6 +794,13 @@ def commit_and_push(branch: str, message: str = "PROJ-1: the change") -> list[li
         ["git", "commit", "--quiet", "--allow-empty", "-m", message],
         ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{branch}"],
     ]
+
+
+def trailers_on(origin: Path, branch: str, base: str = "main") -> list[list[str]]:
+    """The trailers of each commit `branch` holds and `base` does not in the repository `origin`, newest first."""
+    listed = git("log", "--format=%H %(trailers:only,unfold,separator=%x1f)", branch, f"^{base}", "--", cwd=origin)
+    found = [line.partition(" ")[2] for line in listed.splitlines()]
+    return [line.split("\x1f") if line else [] for line in found]
 
 
 def agent_runs(agent_log: Path) -> list[dict[str, Any]]:

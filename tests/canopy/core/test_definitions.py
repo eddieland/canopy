@@ -14,7 +14,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.chores import history
-from canopy.core import config, definitions, git_tools, plans, prompts, reports
+from canopy.core import commit_hooks, config, definitions, git_tools, plans, prompts, reports
 from canopy.infra import resources
 from canopy.loop import mcp
 from canopy.runtime import agents, servers
@@ -39,6 +39,10 @@ def test_the_snapshot_holds_the_bundled_agents_skills_and_plugins(tmp_path: Path
     assert (snapshot / "plugins" / "canopy.js").read_text() == clock.read_text()
     assert "canopy-worker" in runtime_definitions.agent_names()
     assert "canopy-overseer" in runtime_definitions.agent_names()
+    # The git hooks that put canopy's trailers on a worker's commits (TRUST_MODEL T5), which only the operator may run.
+    hooks = snapshot / commit_hooks.HOOKS_DIR
+    assert sorted(p.name for p in hooks.iterdir()) == sorted(commit_hooks.NAMES)
+    assert {stat.S_IMODE(p.lstat().st_mode) for p in hooks.iterdir()} == {0o500}
 
 
 def test_the_snapshot_is_unwritable_by_anyone_its_owner_included(tmp_path: Path) -> None:
