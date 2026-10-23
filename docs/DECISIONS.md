@@ -475,7 +475,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D122. The web UI's public demo serves mock data only
 
-- `canopy.serve.demo` serves the fixtures (`serve/mock.py`) under public host names with no listener secret, on a host
+- `canopy.serve.demo` serves the fixtures (`serve/mock/`) under public host names with no listener secret, on a host
   that runs the app itself (Vercel, `vercel_app.py`). `ServeOptions` refuses `public_hosts` without `mock`, so the
   loop's server never takes one (TRUST_MODEL T8).
 - Why: anyone can try the latest UI, at no cost on Vercel's free plan; the fixtures hold nothing of the operator's.

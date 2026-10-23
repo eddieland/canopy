@@ -1,6 +1,6 @@
 """The API's types for one ticket's page (DESIGN §22), and the operator's start, stop, forget, and grant of it.
 
-Built on `schema.Model`, as every API type is; the ticket as the tickets list shows it is shared (schema.py).
+Built on `schema.Model`, as every API type is; the ticket as the tickets list shows it is shared (schema/__init__.py).
 """
 
 from __future__ import annotations
@@ -10,10 +10,10 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.serve.draft_schema import Draft
-from canopy.serve.model_schema import AgentModel
-from canopy.serve.persona_schema import AgentPersona
 from canopy.serve.schema import Attachments, CostTotal, Decision, Limit, Message, Model, Run, TicketSummary
+from canopy.serve.schema.draft import Draft
+from canopy.serve.schema.model import AgentModel
+from canopy.serve.schema.persona import AgentPersona
 
 type GrantKind = Annotated[
     Literal["implement", "resume"],

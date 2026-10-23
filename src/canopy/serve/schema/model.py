@@ -1,7 +1,7 @@
 """The API's types for each agent's model (DESIGN §13): the model each of a ticket's agents runs on, and its override.
 
 Also the models the runtime lists, which the operator chooses from. Built on `schema.Model`, as every API type is
-(schema.py).
+(schema/__init__.py).
 """
 
 from __future__ import annotations

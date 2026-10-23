@@ -15,7 +15,7 @@ from canopy.infra import logs
 from canopy.serve import memory_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, MemoryId, RefusedError, RunId, TicketKey, not_found, ticket_ref
-from canopy.serve.memory_schema import (
+from canopy.serve.schema.memory import (
     LessonEditRequest,
     MemoryEdited,
     MemoryForgetRequest,

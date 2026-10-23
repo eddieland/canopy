@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { openRepoPicker, settled, signIn } from './helpers.ts'
 
-// The mock journal has ticket notes in use and lessons recording (canopy/serve/mock_memory.py).
+// The mock journal has ticket notes in use and lessons recording (canopy/serve/mock/memory.py).
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)

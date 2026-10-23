@@ -14,10 +14,10 @@ from typing import TYPE_CHECKING, Literal
 
 from canopy.core import db, drafts, drafts_manage, records, review_diff, sql
 from canopy.core.vocab import DraftKind, ReviewItem
-from canopy.serve.draft_schema import Draft, DraftFailure, DraftsSent, PullRequestThreads, Thread, ThreadComment
 from canopy.serve.draft_views import draft
 from canopy.serve.feedback_plan_views import for_pr
 from canopy.serve.reviews import diff_view
+from canopy.serve.schema.draft import Draft, DraftFailure, DraftsSent, PullRequestThreads, Thread, ThreadComment
 
 if TYPE_CHECKING:
     import sqlite3

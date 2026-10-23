@@ -18,7 +18,7 @@ from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.loop import pacing, reread, tick_now, web
 from canopy.serve import live
-from canopy.serve.event_schema import LoopUpdated
+from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
     PROMPT_VALUES,
     InlineRunner,
