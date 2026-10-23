@@ -1,5 +1,7 @@
-"""Agent memory in the web API (DESIGN §28, ROADMAP M50 and M52): each tier's mode in words, what it holds, and the
-operator's verbs on it, which are `canopy memory`'s."""
+"""Agent memory in the web API (DESIGN §28, ROADMAP M50 and M52).
+
+Each tier's mode in words, what it holds, and the operator's verbs on it, which are `canopy memory`'s.
+"""
 
 from __future__ import annotations
 

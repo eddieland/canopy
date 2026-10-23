@@ -1,5 +1,8 @@
-"""The operator's tasks through the web UI (DESIGN §36, TRUST_MODEL T1): a submission, a reply, and a stop write
-through the functions the CLI's verbs call, with channel `web`, and its guards refuse them as they refuse the CLI's."""
+"""The operator's tasks through the web UI (DESIGN §36, TRUST_MODEL T1).
+
+A submission, a reply, and a stop write through the functions the CLI's verbs call, with channel `web`, and its guards
+refuse them as they refuse the CLI's.
+"""
 
 from pathlib import Path
 

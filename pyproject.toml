@@ -238,7 +238,7 @@ banned-from = ["unittest.mock"]
 "src/canopy/infra/procs.py" = ["TID251", "S603"]
 "tests/**" = [
     "ARG001",  # Fixtures requested only for their side effects (fakes on PATH, state files set).
-    "D",       # Docstrings are optional in tests and unchecked when present; test names are the documentation.
+    "D1",      # Docstrings are optional in tests; test names are the documentation. One that is there is checked.
     "DOC",     # Same as D: a test's docstring, when it has one, needs no sections.
     "PLR0917", # pytest passes fixtures as positional arguments; a test's signature is its fixture list.
     "PLR2004", # Expected exit codes and counts are clearer inline than as named constants.

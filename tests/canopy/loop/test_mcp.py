@@ -953,8 +953,11 @@ def test_the_agents_report_asks_the_runtime_without_the_servers_its_run_was_give
     overseen: CanopyEnv,
     opencode_state: Path,
 ) -> None:
-    """A chore's run is given canopy's servers in its inline config; the runtime `agents` asks is started as a run
-    would be, without them, so they are not reported as what canopy's agents are offered."""
+    """A chore's run is given canopy's servers in its inline config.
+
+    The runtime `agents` asks is started as a run would be, without them, so they are not reported as what canopy's
+    agents are offered.
+    """
     two_chore_runs(overseen)
     given = servers.env(
         {history.SERVER: history.SERVER_COMMAND, reports.SERVER: reports.SERVER_COMMAND},

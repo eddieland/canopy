@@ -1,5 +1,7 @@
-"""Which models served each agent run (DESIGN §13, Each agent's model): each live tick reads its overseer's session, and
-the wait after it reads the runs left unread."""
+"""Which models served each agent run (DESIGN §13, Each agent's model).
+
+Each live tick reads its overseer's session, and the wait after it reads the runs left unread.
+"""
 
 import json
 import sqlite3

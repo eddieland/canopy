@@ -1,5 +1,7 @@
-"""The web UI's transcripts (DESIGN §13, §22): a run's and a chore run's pages, and a run's, chore run's, or tick's
-session read back from the events its log holds. Reads only; every text in them is agent output."""
+"""The web UI's transcripts (DESIGN §13, §22). Reads only; every text in them is agent output.
+
+A run's and a chore run's pages, and a run's, chore run's, or tick's session read back from the events its log holds.
+"""
 
 import dataclasses
 import json

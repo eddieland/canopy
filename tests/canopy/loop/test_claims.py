@@ -46,8 +46,10 @@ LATER = "2026-10-01T11:00:00Z"
 
 @pytest.fixture
 def observed(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> sqlite3.Connection:
-    """KEY observed fresh, labeled, with a branch and its PR in `repo`, held since before it was read. Returns the
-    journal."""
+    """KEY observed fresh, labeled, with a branch and its PR in `repo`, held since before it was read.
+
+    Returns the journal.
+    """
     canopy_env.configure(canopy_env.user_file, {**TRACKER, **TRUST})
     held(canopy_env, conn, KEY, at=ago(hours=1))
     with_unit(canopy_env, conn, KEY)

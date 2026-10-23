@@ -1,5 +1,8 @@
-"""The web UI's server (canopy.serve): the guard, the SPA fallback and caching, base paths, signing in, the stream, and
-the mock journal. The API over a real journal, and the loop serving it, are in test_web.py."""
+"""The web UI's server (canopy.serve) and the mock journal.
+
+The guard, the SPA fallback and caching, base paths, signing in, and the stream. The API over a real journal, and the
+loop serving it, are in test_web.py.
+"""
 
 import asyncio
 import dataclasses
@@ -800,8 +803,10 @@ def test_a_client_leaving_a_stream_mid_send_logs_no_error(ui: Path, backend: Bac
 
 
 def test_the_loop_stopping_its_server_with_a_stream_open_logs_the_cancel_as_info(ui: Path, backend: Backend) -> None:
-    """uvicorn cancels a request still open once the grace period ends, and logs its `CancelledError` as an exception:
-    in canopy.log, at ERROR with a traceback, for a tab left open when the loop stopped."""
+    """Uvicorn cancels a request still open once the grace period ends, and logs its `CancelledError` as an exception.
+
+    It would land in canopy.log, at ERROR with a traceback, for a tab left open when the loop stopped.
+    """
     options = ServeOptions(ui_dir=ui, mock=True, mock_event_seconds=0.05, port=free_port())
     sessions = Sessions(None, port=options.port, base_path="", hosts=options.hosts)
     web = server.WebServer(create_app(options, backend, sessions), options, logs.for_tick(None))

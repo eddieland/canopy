@@ -1,5 +1,7 @@
-"""`canopy gc --vacuum` (DESIGN §26, The journal): it shrinks the journal between ticks, and refuses while a tick is
-running, a run is live, or the disk has no room for a copy of the journal."""
+"""`canopy gc --vacuum` (DESIGN §26, The journal): it shrinks the journal between ticks.
+
+It refuses while a tick is running, a run is live, or the disk has no room for a copy of the journal.
+"""
 
 import os
 import shutil

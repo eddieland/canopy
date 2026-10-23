@@ -1,5 +1,7 @@
-"""Review replies in the web API (DESIGN §29): a PR's threads on its diff, and the operator's verbs on its drafts,
-which are `canopy draft`'s."""
+"""Review replies in the web API (DESIGN §29).
+
+A PR's threads on its diff, and the operator's verbs on its drafts, which are `canopy draft`'s.
+"""
 
 from __future__ import annotations
 

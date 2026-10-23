@@ -1,6 +1,8 @@
-"""Personas (DESIGN §31): canopy's own voice and the operator's, each rendered into a planner's, a reviewer's, or a
-worker's prompt below its obligations; a file canopy will not put in a prompt refused; a prompt override without
-`{{PERSONA}}` serving a run in canopy's voice alone; and `canopy personas`, which lists them."""
+"""Personas (DESIGN §31): canopy's own voice and the operator's, and `canopy personas`, which lists them.
+
+Each is rendered into a planner's, a reviewer's, or a worker's prompt below its obligations; a file canopy will not put
+in a prompt is refused; and a prompt override without `{{PERSONA}}` serves a run in canopy's voice alone.
+"""
 
 from __future__ import annotations
 

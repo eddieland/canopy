@@ -1011,8 +1011,9 @@ def paced(env: CanopyEnv, minutes: int) -> None:
 
 
 def polled(env: CanopyEnv, *, interval: int, every: int) -> None:
-    """Write the user config with ticks `interval` minutes apart, idle pacing off, and one `vcs` connector polled
-    every `every` minutes.
+    """Write the user config with ticks `interval` minutes apart and idle pacing off.
+
+    It has one `vcs` connector, polled every `every` minutes.
     """
     env.write_user(
         user_toml()

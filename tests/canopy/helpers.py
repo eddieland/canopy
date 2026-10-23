@@ -564,8 +564,9 @@ def overseer_does(
     queried: str | None = None,
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
-    """Until the block ends, the fake overseer makes the calls `tools` names, runs `commands`, and then prints `result`,
-    by default ending its tick.
+    """Until the block ends, the fake overseer makes the calls `tools` names, runs `commands`, and prints `result`.
+
+    `result` by default ends its tick.
 
     `queried`, if given, is what it records when the tracker query is due, with the `canopy_queried` tool when it calls
     any; see FAKE_AGENT_QUERIED in the fake.
@@ -722,15 +723,19 @@ def chore_reports(
     tools: Sequence[Called] = (),
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
-    """Until the block ends, the fake chore prints `report`, verbatim if it is a string, after making the calls `tools`
-    names and running `commands`, if given."""
+    """Until the block ends, the fake chore prints `report`, verbatim if it is a string.
+
+    It prints it after making the calls `tools` names and running `commands`, if given.
+    """
     with scripted("CHORE", reported(report, commands, tools), behavior):
         yield
 
 
 def reported(report: object, commands: Sequence[list[str]], tools: Sequence[Called] = ()) -> dict[str, str]:
-    """A `*_reports` helper's settings: `report` as the result line, verbatim if a string, and `commands` and the calls
-    `tools` names, if any."""
+    """A `*_reports` helper's settings.
+
+    `report` as the result line, verbatim if a string, and `commands` and the calls `tools` names, if any.
+    """
     settings = {"RESULT": report if isinstance(report, str) else json.dumps(report)}
     if commands:
         settings["COMMANDS"] = json.dumps(commands)
@@ -746,11 +751,11 @@ def planner_does(
     result: Mapping[str, object] | None = None,
     tools: Sequence[Called] = (),
 ) -> Iterator[None]:
-    """Until the block ends, the fake planner makes the calls `tools` names, writes `plan` to its desk's plan file, runs
-    `commands`, and reports.
+    """Until the block ends, the fake planner makes the calls `tools` names, writes `plan`, and reports.
 
-    It writes as the planner's edit tool would, before `commands`; with `plan` None it writes no file. `result`, its
-    result line, defaults to a `done` one (DESIGN §25).
+    It writes `plan` to its desk's plan file and runs `commands` before it reports. It writes as the planner's edit
+    tool would, before `commands`; with `plan` None it writes no file. `result`, its result line, defaults to a `done`
+    one (DESIGN §25).
     """
     script = "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2])"
     write = [["python3", "-c", script, plans.WRITTEN, plan]] if plan is not None else []
@@ -799,8 +804,11 @@ def agent_runs(agent_log: Path) -> list[dict[str, Any]]:
 
 
 def has_deadline(run: Mapping[str, Any], minutes: int, *, before: float, after: float) -> bool:
-    """Whether agent run `run`, as the fake agent logged it, had a deadline `minutes` after a start between `before` and
-    `after`: the moment the clock canopy kills it by fires, in `CANOPY_DEADLINE` (DESIGN §33)."""
+    """Whether agent run `run`, as the fake agent logged it, had a deadline `minutes` after its start.
+
+    The start is between `before` and `after`; the deadline is the moment the clock canopy kills it by fires, in
+    `CANOPY_DEADLINE` (DESIGN §33).
+    """
     deadline = int(run["env"][procs.DEADLINE_ENV])
     return int(before) + minutes * 60 <= deadline <= after + minutes * 60
 
@@ -814,8 +822,10 @@ def titled_overseer(env: CanopyEnv) -> None:
 
 
 def titled_workers(env: CanopyEnv) -> None:
-    """Have the test config's worker template pass `--title={title}`, as the default templates do, so the fake worker
-    knows the ticket each run is of (FAKE_WORKER_FOR in the fake)."""
+    """Have the test config's worker template pass `--title={title}`, as the default templates do.
+
+    So the fake worker knows the ticket each run is of (FAKE_WORKER_FOR in the fake).
+    """
     template = "agent run --agent canopy-worker {prompt}"
     text = env.user_file.read_text()
     assert template in text
@@ -916,10 +926,11 @@ def mcp_session(
     reports: bool = False,
     git: Sequence[str] = (),
 ) -> Served:
-    """Talk to `canopy _mcp` as the runtime does for the overseer, with `chore` for a chore's run, `reports` for the
-    server of canopy's reports, or with `git`, each `NAME=PATH`, for a review's or a plan's, here, in this environment:
-    open the session, send each of `requests` numbered from 1, then each line of `raw` as it is, and close the server's
-    stdin.
+    """Talk to `canopy _mcp` as the runtime does, here, in this environment.
+
+    It talks as the runtime does for the overseer, with `chore` for a chore's run, `reports` for the server of canopy's
+    reports, or with `git`, each `NAME=PATH`, for a review's or a plan's: open the session, send each of `requests`
+    numbered from 1, then each line of `raw` as it is, and close the server's stdin.
 
     The server answers one message at a time, and the session waits for it to exit, which it must on its own.
     """

@@ -345,8 +345,10 @@ def test_a_run_of_several_checkouts_names_the_one_it_reads(repo: Repo) -> None:
 
 
 def test_nothing_the_repository_names_runs(repo: Repo, tmp_path: Path) -> None:
-    """Hooks, external diffs, textconv filters, the filesystem monitor, a pager, and signature checks the repository's
-    config or attributes name, each a program that would run on the host, never run (TRUST_MODEL T1)."""
+    """Programs the repository's config or attributes name, which would run on the host, never run (TRUST_MODEL T1).
+
+    They are hooks, external diffs, textconv filters, the filesystem monitor, a pager, and signature checks.
+    """
     marker = tmp_path / "ran"
 
     def program(name: str) -> str:
