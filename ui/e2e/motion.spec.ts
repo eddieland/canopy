@@ -38,7 +38,7 @@ test('under reduced motion, counters read their values and nothing waits on an a
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('attention')
     await settled(page)
-    await expect(page.getByTestId('counter-attention')).toContainText('7')
+    await expect(page.getByTestId('counter-attention')).toContainText('9')
     const running = await page.evaluate(() => document.getAnimations().map((a) => a.constructor.name))
     expect(running).toEqual([])
 })

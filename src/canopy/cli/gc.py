@@ -9,8 +9,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.cli.render import report_json
-from canopy.core import conversation
+from canopy.core import conversation, reports
 from canopy.loop import gc, vacuum
 
 if TYPE_CHECKING:
@@ -60,7 +59,7 @@ def cmd_gc(click_ctx: click.Context, *, dry_run: bool, as_json: bool, vacuum_jou
         return 0
     report = gc.measure(ctx, datetime.now(UTC))
     if as_json:
-        click.echo(report_json(dataclasses.asdict(report)))
+        click.echo(reports.report_json(dataclasses.asdict(report)))
         return 0
     for line in render(report):
         click.echo(line)

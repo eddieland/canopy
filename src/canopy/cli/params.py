@@ -55,7 +55,7 @@ __all__ = [
 
 def verb[R: BaseModel](
     click_ctx: click.Context,
-    do: Callable[[Context, R], str],
+    do: Callable[[Context, R], tools.Outcome[tools.Result]],
     request: type[R],
     **fields: object,
 ) -> int:
@@ -74,7 +74,7 @@ def verb[R: BaseModel](
         said = do(ctx, built)
     except tools.Refused as e:
         raise CliError(str(e)) from None
-    click.echo(said)
+    click.echo(said.text)
     return 0
 
 

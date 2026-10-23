@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { History } from 'lucide-react'
+import { History, Pin } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -28,7 +28,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { ticketNotesUsedText } from '@/lib/memory'
+import { lessonGroups, ticketNotesUsedText } from '@/lib/memory'
 import type { TierModes } from '@/lib/memory'
 import {
     foundCount,
@@ -272,8 +272,9 @@ function Proposals({
 }
 
 /**
- * The lessons the operator promoted, under the band that says whether runs read them, those a run reported wrong first,
- * then by review date. What every run is served of them opens under the list.
+ * The lessons the operator promoted, under the band that says whether runs read them: the pinned ones first, under a
+ * heading of their own, as runs are served them; then the rest, in each those a run reported wrong first, then by
+ * review date (the server's order). What every run is served of them opens under the list.
  */
 function Lessons({
     lessons,
@@ -330,20 +331,54 @@ function Lessons({
                 <Empty>no lessons yet: promote a proposal above, or a ticket&apos;s note from its page</Empty>
             ) : (
                 <PanelScroll label="Lessons">
-                    {/* The proposals' columns, the ticket's left empty, so key and text line up down the page. */}
-                    <MemoryRows
-                        entries={lessons}
-                        across
-                        digest={digest}
-                        below={below}
-                        modes={modes}
-                        onVersionSaid={acting ? setSaid : undefined}
-                    />
+                    {lessonGroups(lessons).map((group) => (
+                        // Named only while headed: alone, it is the whole list, which the scroller names.
+                        <section
+                            key={group.label}
+                            aria-label={group.pinned === undefined ? undefined : group.label}
+                            className="not-first:border-t"
+                        >
+                            {group.pinned !== undefined && (
+                                <LessonsHeading
+                                    label={group.label}
+                                    pinned={group.pinned}
+                                    count={group.entries.length}
+                                />
+                            )}
+                            {/* The proposals' columns, the ticket's left empty, so key and text line up down the
+                                page. */}
+                            <MemoryRows
+                                entries={group.entries}
+                                across
+                                digest={digest}
+                                below={below}
+                                modes={modes}
+                                onVersionSaid={acting ? setSaid : undefined}
+                            />
+                        </section>
+                    ))}
                 </PanelScroll>
             )}
             {past !== undefined && <Past label="Retired" entries={past} none="no lesson replaced or forgotten yet" />}
             {digest !== null && <MemoryDigestFold digest={digest} who="every run" />}
         </Panel>
+    )
+}
+
+/**
+ * A group's heading in the Lessons panel: its name and count, and what being in it means for a run and for review.
+ * The pinned group's carries a filled pin in the foreground, so it is seen at a glance over the muted labels.
+ */
+function LessonsHeading({ label, pinned, count }: { label: string; pinned: boolean; count: number }) {
+    return (
+        <h3 className="flex items-center gap-1.5 border-b px-3 py-1.5" data-testid="memory-lessons-group">
+            {pinned && <Pin aria-hidden className="size-3 fill-current text-foreground" />}
+            <span className={cn('panel-label', pinned && 'text-foreground')}>{label}</span>
+            <span className="readout text-2xs text-muted-foreground">{count}</span>
+            <span className="ml-auto text-2xs text-muted-foreground">
+                {pinned ? 'served first, never due' : 'wrong first, then by review date'}
+            </span>
+        </h3>
     )
 }
 

@@ -962,6 +962,54 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reviews/{run_id}/draft/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discard a review's draft, posting nothing
+         * @description `canopy review discard ID`: the operator has seen the draft and will not post it.
+         *
+         *     Nothing posts, and the draft takes no edit, note, or publish after. Refused as the CLI refuses it: `no_draft`, a
+         *     status past edits (`published`, `staged`, `discarded`, ...), and `revising` while a revision of it runs.
+         */
+        post: operations["discardReviewDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{run_id}/draft/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask for a revision of a review's draft
+         * @description `canopy reply review:ID TEXT`: what a revision of the review's draft should change, in the operator's words.
+         *
+         *     The next tick revises the draft with an agent, which reads the PR and the draft and makes a new version, posting
+         *     nothing, unless the operator changes the draft first. Refused as the CLI refuses it: `no_draft`, `not_ours` for a
+         *     PR a ticket holds now, a status past edits (`published`, `staged`, ...), `bad_body` for an empty note or one past
+         *     the bound, `no_diff`, `revising` while a revision of it runs, and `revision_limit` once it has had its revisions.
+         */
+        post: operations["noteReviewDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews/{run_id}/draft/publish": {
         parameters: {
             query?: never;
@@ -1322,6 +1370,159 @@ export type paths = {
         get: operations["getSpendBreakdown"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tasks
+         * @description Every task the operator submitted, the newest first, with where each stands, as `canopy task list` lists them.
+         */
+        get: operations["listTasks"];
+        put?: never;
+        /**
+         * Submit a task
+         * @description `canopy task submit`: queue the operator's text as a task; the next tick starts it, as capacity allows.
+         *
+         *     Refused `bad_body` for an empty text or one too long, `unknown_repo` for a repository the workspace has not, or
+         *     none named in a workspace of several, and `bad_project` for a project no tracker could name.
+         */
+        post: operations["submitTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a task
+         * @description One task: what `canopy show task:N` prints, its text, every run, its conversation, and its tickets.
+         */
+        get: operations["getTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{task_id}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reply to a task
+         * @description `canopy reply task:N`: the operator's next instruction, answering its run's question if one asked.
+         *
+         *     It queues the task's next run, on its branch, once no run of it is working. Idempotent on the submission id.
+         */
+        post: operations["replyTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{task_id}/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a task run
+         * @description One run of the task: its row, the whole of its summary and question, the harness's note, and its tickets.
+         *
+         *     A run is found only under its own task.
+         */
+        get: operations["getTaskRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{task_id}/runs/{run_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a task run's report
+         * @description The report the run left, as its file in the state directory stands now: the worker's Markdown, untrusted.
+         *
+         *     A run that left none is a 404; a file no longer a report says why, as `canopy show task:N` does.
+         */
+        get: operations["getTaskRunReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{task_id}/runs/{run_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a task run's transcript
+         * @description The task run's session, read back from its log: agent output, untrusted and bounded.
+         */
+        get: operations["getTaskRunTranscript"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{task_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop a task
+         * @description `canopy stop task:N`: no tick starts it again; a running run finishes unless `now` ends it, as `--now` does.
+         */
+        post: operations["stopTask"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3437,7 +3638,7 @@ export type components = {
         };
         /**
          * Message
-         * @description One message in a ticket's conversation.
+         * @description One message in a ticket's, a chore's, or a task's conversation.
          */
         Message: {
             /**
@@ -3472,11 +3673,16 @@ export type components = {
             kind: components["schemas"]["MessageKind"];
             /**
              * Run Id
-             * @description The run that wrote it, for a worker's message.
+             * @description The run that wrote it, for a worker's message about a ticket.
              */
             run_id: number | null;
             /** @description Who wrote it. */
             source: components["schemas"]["MessageSource"];
+            /**
+             * Task Run Id
+             * @description The task's run that wrote it, for a worker's message about a one-off task (DESIGN §36).
+             */
+            task_run_id: number | null;
         };
         /**
          * @description What a message is (DESIGN §22): a `note` is canopy's word on what a tick did.
@@ -4356,6 +4562,11 @@ export type components = {
             submission: string;
         };
         /**
+         * @description Why a kept report's file is not a report any more, as a plan's is read (DESIGN §25, §36).
+         * @enum {string}
+         */
+        ReportProblem: "missing" | "not a regular file" | "unreadable" | "not UTF-8" | "empty" | "over the bound";
+        /**
          * RequestedReview
          * @description A PR the operator asked canopy to review that no review of is running yet: it waits on a tick (DESIGN §21).
          */
@@ -4578,6 +4789,12 @@ export type components = {
              */
             moved_head: string | null;
             /**
+             * Notes
+             * @description The operator's notes no version has answered, oldest first: while there are any and it waits, the next tick
+             *     revises it, unless they change it first.
+             */
+            notes: components["schemas"]["ReviewDraftNote"][];
+            /**
              * Pr Author
              * @description The PR's author's login as canopy last read the PR, whose PR the review would post on: untrusted text; None
              *     when canopy has not read the PR, or the account is gone.
@@ -4598,6 +4815,17 @@ export type components = {
              * @description What canopy left out as it made that version, and why, in the harness's words.
              */
             refused: string[];
+            /**
+             * Revision Limit
+             * @description How many revisions it may have: `policy.max_revisions_per_draft` plus the operator's grants. A note at it is
+             *     refused.
+             */
+            revision_limit: number;
+            /**
+             * Revisions
+             * @description Its revisions so far, however they ended, newest first.
+             */
+            revisions: components["schemas"]["ReviewDraftRevision"][];
             /** @description Where it stands. */
             status: components["schemas"]["ReviewDraftStatusName"];
             /**
@@ -4706,6 +4934,67 @@ export type components = {
             text: string;
         };
         /**
+         * ReviewDraftNote
+         * @description The operator's note on a review's draft, as `canopy reply review:ID` records it: what to revise in it.
+         */
+        ReviewDraftNote: {
+            /**
+             * After Version
+             * @description The draft's newest version when they wrote it: the note asks for a revision while that is still the newest.
+             */
+            after_version: number;
+            /**
+             * Body
+             * @description The note, in the operator's words: the reviser's only instructions.
+             */
+            body: string;
+            /**
+             * Channel
+             * @description Where they wrote it: `cli` or `web`.
+             */
+            channel: string;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When they wrote it.
+             */
+            created_at: string;
+            /**
+             * Id
+             * @description The note's id.
+             */
+            id: number;
+        };
+        /**
+         * ReviewDraftNoted
+         * @description What a note recorded, as `canopy reply review:ID` reports it: the note, and the draft as it now stands.
+         */
+        ReviewDraftNoted: {
+            /**
+             * After Version
+             * @description The version it asks a revision of: the draft's newest when it was written.
+             */
+            after_version: number;
+            /** @description The draft, its notes this one among them. */
+            draft: components["schemas"]["ReviewDraft"];
+            /**
+             * Note
+             * @description The note's id.
+             */
+            note: number;
+        };
+        /**
+         * ReviewDraftNoteRequest
+         * @description A note asking for a revision of a review's draft, as `canopy reply review:ID TEXT` takes it.
+         */
+        ReviewDraftNoteRequest: {
+            /**
+             * Text
+             * @description What the revision should change. Bounded again in code at 4000 characters, after stripping, and refused empty.
+             */
+            text: string;
+        };
+        /**
          * ReviewDraftPublished
          * @description What a publish did, as `canopy review publish` reports it: the draft as it now stands.
          */
@@ -4741,10 +5030,46 @@ export type components = {
             submit: boolean;
         };
         /**
-         * @description Where a review's draft stands (DESIGN §34): the operator's to edit and publish while `waiting`; `staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted.
+         * ReviewDraftRevision
+         * @description One revision of a review's draft (DESIGN §34): a review run on the operator's notes, its result a new version.
+         *
+         *     It runs at the commit the review read, and reads the PR and the draft's newest version.
+         */
+        ReviewDraftRevision: {
+            /**
+             * Ended At
+             * @description When it ended; None while it runs.
+             */
+            ended_at: string | null;
+            /**
+             * Id
+             * @description The revision's review run id.
+             */
+            id: number;
+            /**
+             * Revised
+             * @description The version it read and revises.
+             */
+            revised: number;
+            /**
+             * Started At
+             * Format: date-time
+             * @description When it started.
+             */
+            started_at: string;
+            /** @description `done` is done; every other ending is failed. */
+            state: components["schemas"]["RunState"];
+            /**
+             * Status
+             * @description The journal's status: running, done, failed, unknown, timeout, crashed.
+             */
+            status: string;
+        };
+        /**
+         * @description Where a review's draft stands (DESIGN §34): the operator's to edit and publish while `waiting`; `staged` in a pending review for them to submit on GitHub; `unconfirmed` until a read says whether it posted; `discarded` once they said it will not post.
          * @enum {string}
          */
-        ReviewDraftStatusName: "waiting" | "publishing" | "unconfirmed" | "staged" | "published";
+        ReviewDraftStatusName: "waiting" | "publishing" | "unconfirmed" | "staged" | "published" | "discarded";
         /**
          * ReviewDraftVersion
          * @description One version of a review's draft, as its history lists it.
@@ -6037,7 +6362,409 @@ export type components = {
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["ReviewsUpdated"] | components["schemas"]["ReviewRequestsUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["TasksUpdated"] | components["schemas"]["TaskChanged"] | components["schemas"]["ReviewsUpdated"] | components["schemas"]["ReviewRequestsUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"] | components["schemas"]["StreamEnding"];
+        /**
+         * TaskChanged
+         * @description Something about one task changed, its summary or its conversation: a page showing it reads it again.
+         */
+        TaskChanged: {
+            /**
+             * Id
+             * @description The task's id, as `task:N` names it.
+             */
+            id: number;
+            /**
+             * @description What the event is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            type: "task.changed";
+        };
+        /**
+         * TaskDetail
+         * @description One task: what `canopy show task:N` prints.
+         */
+        TaskDetail: {
+            /**
+             * Messages
+             * @description Its conversation, the oldest first: its runs' reports and questions, and the operator's replies.
+             */
+            messages: components["schemas"]["Message"][];
+            /**
+             * Runs
+             * @description Every run of it, the oldest first.
+             */
+            runs: components["schemas"]["TaskRun"][];
+            /** @description The task, as the tasks list shows it. */
+            task: components["schemas"]["TaskSummary"];
+            /**
+             * Tickets
+             * @description The tickets its runs filed, the oldest first.
+             */
+            tickets: components["schemas"]["TaskTicket"][];
+        };
+        /**
+         * TaskReplied
+         * @description What a reply recorded, as `canopy reply task:N` says: the message, what it answers, and what starts next.
+         */
+        TaskReplied: {
+            /**
+             * Answers
+             * @description The question it answers, if it answers one.
+             */
+            answers: number | null;
+            /**
+             * Message Id
+             * @description The message the reply is.
+             */
+            message_id: number;
+            /**
+             * New
+             * @description Whether it was recorded now, rather than by an earlier submission with the same id.
+             */
+            new: boolean;
+            /**
+             * Running Run
+             * @description A run of the task still working: the first tick after it ends starts the next. None: the next tick does.
+             */
+            running_run: number | null;
+        };
+        /**
+         * TaskReport
+         * @description The report a task run left, as its file in the state directory stands now (DESIGN §36), as a plan is read.
+         */
+        TaskReport: {
+            /**
+             * Edited
+             * @description Whether the file has changed since its run left it.
+             * @default false
+             */
+            edited: boolean;
+            /**
+             * Path
+             * @description Its file, `<state_dir>/tasks/<task>/<run>.md`: from the workspace root when under it, as a log path is.
+             */
+            path: string;
+            /** @description Why it is not: missing, not a regular file, unreadable, not UTF-8, empty, or over the bound. */
+            problem: components["schemas"]["ReportProblem"] | null;
+            /**
+             * Run Id
+             * @description The run that left it.
+             */
+            run_id: number;
+            /**
+             * Sha256
+             * @description The file's hash now, whenever it could be read.
+             */
+            sha256: string | null;
+            /**
+             * Task Id
+             * @description The task it is a report of.
+             */
+            task_id: number;
+            /**
+             * Text
+             * @description Its Markdown, control characters dropped, or none when the file is not a report any more: `problem` says why.
+             *     Agent-written and untrusted: the UI renders it as text.
+             */
+            text: string | null;
+        };
+        /**
+         * TaskRun
+         * @description One run of a task's worker (DESIGN §36).
+         */
+        TaskRun: {
+            /**
+             * Branch
+             * @description The branch it worked on, `<branch_prefix>task/N`: every run of the task shares it.
+             */
+            branch: string;
+            /**
+             * Cost Usd
+             * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
+             */
+            cost_usd: number | null;
+            /**
+             * Ended At
+             * @description When it ended; None while it runs.
+             */
+            ended_at: string | null;
+            /**
+             * Head
+             * @description The commit its branch was at on origin when it ended; None when nothing was pushed, or while it runs.
+             */
+            head: string | null;
+            /**
+             * Id
+             * @description The task run's id.
+             */
+            id: number;
+            /**
+             * Log Path
+             * @description Where its log is: from the workspace root when under it.
+             */
+            log_path: string;
+            /**
+             * New Tokens
+             * @description The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
+             *     reported nothing.
+             */
+            new_tokens: number | null;
+            /**
+             * Peak Context
+             * @description The most tokens one of its model calls was sent; None when the runtime reported nothing.
+             */
+            peak_context: number | null;
+            /**
+             * Prs
+             * @description The PRs its result names, each a plain https:// URL.
+             * @default []
+             */
+            prs: string[];
+            /**
+             * Reported
+             * @description Whether it left a report, kept in the state directory: its `report` route reads it.
+             * @default false
+             */
+            reported: boolean;
+            /**
+             * Session Id
+             * @description The runtime's session, for opening its transcript with the runtime's own tools.
+             */
+            session_id: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             * @description When it started.
+             */
+            started_at: string;
+            /** @description What the UI colors it as, as a ticket's run. */
+            state: components["schemas"]["RunState"];
+            /**
+             * Status
+             * @description The journal's status: running, done, blocked, failed, unknown, unpushed, crashed, timeout, or stopped.
+             */
+            status: string;
+            /**
+             * Summary
+             * @description The harness's note or the agent's summary, line breaks kept, cut at 300 characters: untrusted.
+             */
+            summary: string | null;
+        };
+        /**
+         * TaskRunDetail
+         * @description One task run: its row as its task's page lists it, and the whole of what it reported (DESIGN §36).
+         */
+        TaskRunDetail: {
+            /** @description Which models served it. */
+            models: components["schemas"]["ModelsServed"];
+            /**
+             * Note
+             * @description Why the harness decided the run's status, when it did: a timeout, a crash, a result that did not validate.
+             */
+            note: string | null;
+            /**
+             * Question
+             * @description The question a `blocked` run asked the operator, line breaks kept: untrusted.
+             */
+            question: string | null;
+            /** @description The run, as its task's page lists it. */
+            run: components["schemas"]["TaskRun"];
+            /**
+             * Summary
+             * @description The agent's summary, line breaks kept and not cut: untrusted.
+             */
+            summary: string | null;
+            /**
+             * Task Id
+             * @description The task it is a run of.
+             */
+            task_id: number;
+            /**
+             * Tickets
+             * @description The tickets canopy recorded from its result.
+             * @default []
+             */
+            tickets: components["schemas"]["TaskTicket"][];
+        };
+        /**
+         * @description Where a task stands (DESIGN §36): `queued` for a run a tick will start, its first or one a reply asked for; `awaiting_reply` while its latest run's question waits on the operator, which `canopy task list` words as the run's `blocked`; `stopped` once the operator stopped it and no run of it runs; else its latest run's status.
+         * @enum {string}
+         */
+        TaskStanding: "queued" | "running" | "awaiting_reply" | "blocked" | "done" | "failed" | "unknown" | "unpushed" | "crashed" | "timeout" | "stopped";
+        /**
+         * TaskStopped
+         * @description What a stop did, as `canopy stop task:N` says: no tick starts the task again.
+         */
+        TaskStopped: {
+            /**
+             * Already
+             * @description Whether the task was already stopped.
+             */
+            already: boolean;
+            /**
+             * Dropped
+             * @description Whether it was still queued, its first run or one a reply asked for, which nothing starts now.
+             */
+            dropped: boolean;
+            /**
+             * Ended
+             * @description Whether `now` ended that run and returned its slot.
+             * @default false
+             */
+            ended: boolean;
+            /**
+             * Running Run
+             * @description A run of it still working, if one is: it finishes unless `now` ended it.
+             */
+            running_run: number | null;
+        };
+        /**
+         * TaskSubmitRequest
+         * @description A task's text, in the operator's words, and where it runs, as `canopy task submit` takes them.
+         */
+        TaskSubmitRequest: {
+            /**
+             * Project
+             * @description The tracker project its tickets may go in, as `--project` names it. None: it files no tickets.
+             */
+            project?: string | null;
+            /**
+             * Repo
+             * @description The repository it runs in, as `--repo` names it. Required when the workspace has several.
+             */
+            repo?: string | null;
+            /**
+             * Text
+             * @description The task's text. Bounded again in code at 4000 characters, after stripping (DESIGN §36).
+             */
+            text: string;
+        };
+        /**
+         * TaskSubmitted
+         * @description What a submission recorded: the task, queued for the next tick, and where it will run.
+         */
+        TaskSubmitted: {
+            /**
+             * Branch
+             * @description The branch every run of it works on, `<branch_prefix>task/N`.
+             */
+            branch: string;
+            /**
+             * Id
+             * @description The task's id, as `task:N` names it.
+             */
+            id: number;
+            /**
+             * No Capacity
+             * @description Whether `capacity.max_tasks` is 0, so no tick starts it until the operator raises it.
+             */
+            no_capacity: boolean;
+            /**
+             * Repo
+             * @description The repository it runs in.
+             */
+            repo: string;
+        };
+        /**
+         * TaskSummary
+         * @description A task as `canopy task list` lists it: its text, where it runs, and where it stands.
+         */
+        TaskSummary: {
+            /**
+             * Branch
+             * @description The branch its runs work on, `<branch_prefix>task/N`.
+             */
+            branch: string;
+            /**
+             * Channel
+             * @description Where the operator submitted it: cli or web.
+             */
+            channel: string;
+            /**
+             * Id
+             * @description The task's id, as `task:N` names it.
+             */
+            id: number;
+            /** @description Its newest run; None before its first starts. */
+            latest: components["schemas"]["TaskRun"] | null;
+            /**
+             * Project
+             * @description The tracker project its tickets may go in; None when it files none.
+             */
+            project: string | null;
+            /**
+             * Question Id
+             * @description The message of its latest run's that asks the operator a question no reply has followed, while not stopped.
+             */
+            question_id: number | null;
+            /**
+             * Repo
+             * @description The repository it runs in.
+             */
+            repo: string;
+            /**
+             * Runs
+             * @description How many runs it has had.
+             * @default 0
+             */
+            runs: number;
+            /** @description Where it stands now. */
+            standing: components["schemas"]["TaskStanding"];
+            /**
+             * Stopped At
+             * @description When the operator stopped it; None while it is not stopped.
+             */
+            stopped_at: string | null;
+            /**
+             * Submitted At
+             * Format: date-time
+             * @description When the operator submitted it.
+             */
+            submitted_at: string;
+            /**
+             * Text
+             * @description The operator's words, control characters dropped and line breaks kept.
+             */
+            text: string;
+        };
+        /**
+         * TasksUpdated
+         * @description The tasks changed: one was submitted, replied to, or stopped, or a run of one started or ended. Whole.
+         */
+        TasksUpdated: {
+            /**
+             * Tasks
+             * @description The tasks, as `GET /tasks` returns them.
+             */
+            tasks: components["schemas"]["TaskSummary"][];
+            /**
+             * @description What the event is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            type: "tasks.updated";
+        };
+        /**
+         * TaskTicket
+         * @description A ticket a task's run reported filing in the task's project, unlabeled, worked only once the operator says so.
+         */
+        TaskTicket: {
+            /**
+             * At
+             * Format: date-time
+             * @description When canopy recorded it.
+             */
+            at: string;
+            /**
+             * Key
+             * @description The ticket's key, as the run's result spelled it.
+             */
+            key: string;
+            /**
+             * Run Id
+             * @description The task run that reported it.
+             */
+            run_id: number;
+        };
         /**
          * Thread
          * @description A PR's review thread as last read, where it sits on the diff, and the drafts that answer it.
@@ -10538,6 +11265,182 @@ export interface operations {
             };
         };
     };
+    discardReviewDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraft"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    noteReviewDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDraftNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDraftNoted"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     publishReviewDraft: {
         parameters: {
             query?: never;
@@ -11991,6 +12894,688 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSummary"][];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    submitTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSubmitted"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task's id, as `task:N` names it. */
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDetail"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such task. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    replyTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task's id, as `task:N` names it. */
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskReplied"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTaskRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task run's id. */
+                run_id: number;
+                /** @description The task's id, as `task:N` names it. */
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRunDetail"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such run of this task. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTaskRunReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task run's id. */
+                run_id: number;
+                /** @description The task's id, as `task:N` names it. */
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskReport"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such report this run of the task left. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTaskRunTranscript: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task run's id. */
+                run_id: number;
+                /** @description The task's id, as `task:N` names it. */
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transcript"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such run of this task. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stopTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task's id, as `task:N` names it. */
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StopRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskStopped"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
             /** @description Refused before the route ran: a chunked body, with no Content-Length. */
