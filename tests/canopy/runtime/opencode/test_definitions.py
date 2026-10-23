@@ -57,6 +57,7 @@ PLAIN = agents.Rules(
     tracker_provider="no-such-tracker",
     bash_allows={},
     artifacts=None,
+    models={},
 )
 
 
@@ -329,3 +330,25 @@ def test_a_definition_without_its_artifact_lines_is_refused() -> None:
         definitions.render_artifacts(bundled.replace(ARTIFACT_TOOLS_MARKER, ""), agents.WORKER, None)
     with pytest.raises(agents.DefinitionsError, match="artifact skill"):
         definitions.render_artifacts(bundled.replace(ARTIFACT_SKILL_MARKER, ""), agents.WORKER, STORE)
+
+
+@pytest.mark.parametrize("agent", definitions.agent_names())
+def test_each_agent_is_rendered_with_its_model_in_its_frontmatter(agent: str) -> None:
+    rendered = definitions.render(definitions.bundled(), replace(PLAIN, models={agent: "acme/fake-model-1"}))
+    text = rendered[f"agents/{agent}.md"].decode()
+    frontmatter = text.split("---")[1]
+    assert '\nmodel: "acme/fake-model-1"\n' in frontmatter
+    # No other agent's definition names one.
+    assert [rel for rel in rendered if b"\nmodel: " in rendered[rel]] == [f"agents/{agent}.md"]
+
+
+def test_a_definition_without_its_model_line_is_refused() -> None:
+    bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
+    with pytest.raises(agents.DefinitionsError, match="has no line '# canopy: model'"):
+        definitions.render_model(bundled.replace("# canopy: model\n", ""), "canopy-worker", "acme/x")
+
+
+@pytest.mark.parametrize("model", ['acme/x"\npermission: allow', "acme", "/x", "acme/x y", ""])
+def test_a_model_canopy_would_not_render_is_refused(model: str) -> None:
+    with pytest.raises(agents.DefinitionsError, match="is not a model canopy renders"):
+        definitions.render(definitions.bundled(), replace(PLAIN, models={agents.WORKER: model}))

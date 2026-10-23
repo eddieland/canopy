@@ -1,4 +1,3 @@
--- sha256 of 0081_feedback_plan_check_items.sql: 5935311dfa6a224a53f8c5f6b05c29b319f6a7a2f880bca07fcd6a480df6a7de
+-- sha256 of 0081_run_model.sql: 66979886f79043c93a6b6a3a95bc5f6b89bd0ba257bf45a1c117a3ca5d11f7a7
 
-INSERT INTO feedback_plan_items (plan_id, number, pr_url, item, item_id, proposal, reply, left_out)
-VALUES (1, 2, 'https://github.com/acme/api/pull/7', 'check', -281474976710656, 'change', NULL, 1);
+UPDATE runs SET model = 'acme/fake-model' WHERE id = (SELECT min(id) FROM runs);
