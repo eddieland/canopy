@@ -254,7 +254,8 @@ cmd = ""
 
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
 # what each kind holds and what a pass would remove. A live tick removes the files and the journal's rows once a day,
-# and rotates canopy.log; `canopy gc --vacuum`, between ticks, gives the journal's free pages back to the disk.
+# and rotates canopy.log; `canopy gc --vacuum`, between ticks, gives the journal's free pages back to the disk, and
+# `canopy gc --git` packs the primary clones' loose objects.
 # [retention]
 # run_files_days = 30    # a run's, chore run's, or review's log, prompt, and diff, once it ended this long ago
 # tick_files_days = 7    # a tick's log and prompt; a tick not `ok` keeps them for run_files_days
