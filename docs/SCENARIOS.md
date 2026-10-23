@@ -57,15 +57,15 @@ any OpenCode upgrade, and before relying on a permission they check.
   `.opencode/` directory, sandboxed with the registry refused, and time the wait before the session starts. Record the
   times in `MEASUREMENTS.md`.
 - **S65. The split** (#923). Confirmed against OpenCode's source (1.19.3), not in a run: the plugin finds where the
-  environment starts by the lines `session/system.ts` writes. With S40's recorder, run two workers in two slots, then
-  two reviews, each pair within five minutes. Expect two system blocks in every request, the first the agent's body
-  alone and equal across the pair, each with a breakpoint; and the second run's first call reading the tools and the
-  body from the cache, writing only from the environment on. One system block means OpenCode changed those lines: the
-  split leaves the prompt as it was. Record the tables in `MEASUREMENTS.md`. Then, over a week of real use, compare
-  `canopy spend --json`'s first calls for the `workers`, `plans`, and `reviews` kinds on the snapshot with the split
-  against the one before it: expect `cold_share` to fall where runs of one kind start within five minutes of each
-  other, and no change otherwise. No fall at all means the split found no boundary, or such runs are too rare for it
-  to pay.
+  environment starts by the lines `session/system.ts` writes. With S40's recorder, unsandboxed, run two workers in two
+  slots, then two reviews, each pair within five minutes. Expect two system blocks in every request, the first the
+  agent's body alone and equal across the pair, each with a breakpoint; and the second run's first call reading the
+  tools and the body from the cache, writing only from the environment on. One system block means OpenCode changed those
+  lines: the split leaves the prompt as it was. Record the tables in `MEASUREMENTS.md`. Then, over a week of real use,
+  compare `canopy spend --json`'s first calls for the `workers`, `plans`, and `reviews` kinds on the snapshot with the
+  split against the one before it: expect `cold_share` to fall where unsandboxed runs of one kind start within five
+  minutes of each other, and no change otherwise, sandboxed runs' included. No fall at all means the split found no
+  boundary, or such runs are too rare for it to pay.
 
 ## Before a release
 
@@ -202,8 +202,9 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   OpenCode's own prompt absent and the agent's body first; no schema for a tool a definition denies outright; and,
   against the latest such section (2026-10-21), a difference only where the change made one. A body the split cannot
   find means OpenCode moved it. Record the tables in `MEASUREMENTS.md`. After an OpenCode upgrade, record one agent
-  twice more, in two directories, and compare the two requests as 2026-10-19's second section did: expect them to
-  share the tools and the body, which canopy's plugin splits from the rest (F50, S65), and nothing if it did not (F48).
+  twice more, in two directories, unsandboxed, and compare the two requests as 2026-10-19's second section did: expect
+  them to share the tools and the body, which canopy's plugin splits from the rest (F50, S65), and nothing if it did
+  not (F48). Sandboxed, expect them to share nothing: the shell tool names each run's own `TMPDIR`.
   Of the tracker's server, expect the overseer, the reviewer, and the chore sent only its read tools (Jira's 12 by
   default). Off a GitHub tracker, expect both workers and the planner sent none of GitHub's issue tools (`issue_read`,
   `issue_write`, `list_issues`, `search_issues`, `list_issue_types`, `list_issue_fields`, `get_label`; #436): about

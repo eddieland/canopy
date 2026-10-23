@@ -299,8 +299,8 @@ repository can also define its own agents under other names, MCP servers, and pe
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
 canopy ships one plugin, `canopy.js`, whose jobs are a clock that tells a running agent the minutes left and a split
-that lets every run of an agent read its tools and body from the provider's cache; they, and what OpenCode does with a
-plugin, are §33.
+that lets an unsandboxed run's first call read its agent's tools and body from the provider's cache; they, and what
+OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 
