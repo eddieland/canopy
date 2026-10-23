@@ -2,10 +2,10 @@
 
 The detached `_review` does one review run (DESIGN §21), or one revision of a review's draft (§34). A review of a PR
 the loop does not own is a draft of a review on that PR (§34): `draft` shows it as it would post, `edit` changes it,
-and `publish` posts one version as the operator's own comment review, named by the hash `draft` printed. A draft's
-text is the reviewer's, or a reviser's, written from the PR's, until the operator publishes it, so it is printed as
-plain text with each character that hides text named. The commands that write refuse inside canopy's own ticks and
-runs; `canopy reply review:ID` notes what a revision should change.
+`publish` posts one version as the operator's own comment review, named by the hash `draft` printed, and `discard`
+says it will not post. A draft's text is the reviewer's, or a reviser's, written from the PR's, until the operator
+publishes it, so it is printed as plain text with each character that hides text named. The commands that write refuse
+inside canopy's own ticks and runs; `canopy reply review:ID` notes what a revision should change.
 """
 
 from __future__ import annotations
@@ -246,11 +246,30 @@ def cmd_review_publish(click_ctx: click.Context, run_id: int, version_hash: str,
                 f"Version {number} of review run {run_id}'s draft may have been posted: the post ended without saying. "
                 "A read of the PR settles it; canopy posts it no other time.",
             )
-        case ReviewDraftStatus.WAITING | ReviewDraftStatus.PUBLISHING:
+        case ReviewDraftStatus.WAITING | ReviewDraftStatus.PUBLISHING | ReviewDraftStatus.DISCARDED:
             click.echo(f"Version {number} of review run {run_id}'s draft was not published: {done.failed}")
         case _:
             assert_never(draft.status)
     return 0 if done.failed is None and draft.status is not ReviewDraftStatus.UNCONFIRMED else 1
+
+
+@review_group.command("discard")
+@click.argument("run_id", type=click.IntRange(min=1))
+@click.pass_context
+def cmd_review_discard(click_ctx: click.Context, run_id: int) -> int:
+    """Discard the draft of review RUN_ID: you have seen it and will not post it.
+
+    Nothing is posted, the draft takes no edit, note, or publish from now on, and its PR stops waiting on you. A review
+    of a later commit is a new draft.
+    """
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        draft = review_drafts_manage.discard(ctx.conn, run_id, channel=CLI)
+    except conversation.Refused as r:
+        raise CliError(f"discard refused ({r.guard}): {r.reason}") from None
+    click.echo(f"Discarded review run {run_id}'s draft of {draft.pr_url}; nothing was posted.")
+    return 0
 
 
 def _print_draft(conn: sqlite3.Connection, draft: records.ReviewDraft) -> None:
@@ -275,7 +294,8 @@ def _print_draft(conn: sqlite3.Connection, draft: records.ReviewDraft) -> None:
     if draft.status is ReviewDraftStatus.WAITING:
         click.echo(
             f"\nTo leave it pending on GitHub for you to submit: canopy review publish {run_id} {current.hash}"
-            "\nTo submit it now, add --submit.",
+            "\nTo submit it now, add --submit."
+            f"\nTo post nothing and stop it waiting on you: canopy review discard {run_id}",
         )
 
 
