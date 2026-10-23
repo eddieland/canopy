@@ -604,8 +604,8 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
 
     await form.getByLabel('PR URL').fill(pr)
     await expect(form.getByTestId('review-request-submit')).toHaveAttribute('title', 'canopy start URL --review')
-    // Its review is written in skeptic, as `--persona skeptic` asks: the persona is folded with the notes.
-    await form.getByRole('button', { name: 'Show persona and notes' }).click()
+    // Its review is written in skeptic, as `--persona skeptic` asks: the persona is folded under the notes.
+    await form.getByRole('button', { name: 'Show persona' }).click()
     await form.getByRole('button', { name: 'Persona: canopy (default)' }).click()
     await expect(page.getByRole('menuitemcheckbox', { name: 'skeptic' })).toHaveAccessibleDescription(
         /^Plans and reviews by naming the input that would break each claim/u,
