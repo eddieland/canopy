@@ -33,6 +33,7 @@ from canopy.core.vocab import (
     ChoreRunStatus,
     ConnectorRunStatus,
     Decider,
+    DismissalReason,
     DraftAuthor,
     DraftKind,
     DraftStance,
@@ -1471,6 +1472,8 @@ class ReviewDismissal(Row):
     finding: int
     dismissed_at: str
     channel: str
+    #: Why the operator dismissed it; None for a dismissal from before canopy asked.
+    reason: DismissalReason | None
 
 
 @dataclass(frozen=True)

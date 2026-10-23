@@ -310,8 +310,14 @@ so far moves with each model call.
 A review changes nothing on its own: canopy never approves a PR, requests changes on it, or merges it. What you can do
 is tell canopy which findings matter.
 
-- **dismiss**, on a finding's card, as `canopy dismiss review:ID N`: no worker or tick acts on it. It stays listed, and
-  **undo** brings it back. If you dismiss every finding, the PR moves on as if the review were clean.
+- **dismiss**, on a finding's card, as `canopy dismiss review:ID N --reason REASON`: no worker or tick acts on it. It
+  asks why first: **wrong**, it doesn't hold; **intentional**, it holds and the change means it; **not worth it**, it
+  holds and isn't worth the fix. The card then says `dismissed: wrong`, say. It stays listed, and **undo** brings it
+  back. If you dismiss every finding, the PR moves on as if the review were clean.
+
+  The reason is how canopy tells a noisy reviewer from one that's right about things you chose to live with.
+  `canopy review noise` counts them by severity, persona, and model: a high `wrong` rate is a reviewer worth retuning,
+  and a high `not worth it` rate is one that's worth asking for fewer minor findings.
 - **send to a worker**, on a finished review of one of the loop's own PRs: tick the findings worth fixing and press
   it, as `canopy send review:ID N`. canopy records a reply on the ticket naming them, and the next tick reads it as
   your go-ahead for a worker to fix those and leave the rest alone. For an untrusted reviewer it's the go-ahead the
@@ -349,9 +355,9 @@ Change it until it says what you would:
 
 - **edit**, beside **Body**, rewrites the body; empty, the comments post alone.
 - **Edit**, on a finding's card, rewords its comment in place.
-- **leave out**, on the same card, takes the finding out of your review: it dismisses the finding, which drops its
-  comment or its paragraph of the body. **put back** takes that back, in the reviewer's words, so your edit of it goes
-  with the dismissal. The **Comments** list says which findings you've left out.
+- **leave out**, on the same card, takes the finding out of your review: it dismisses the finding, for the reason you
+  pick, which drops its comment or its paragraph of the body. **put back** takes that back, in the reviewer's words,
+  so your edit of it goes with the dismissal. The **Comments** list says which findings you've left out.
 - The **+** beside a line's number on the diff, there when you hover the line, opens a comment of your own on it. Yours
   keep cards of their own, with **Edit** and **Drop**.
 

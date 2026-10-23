@@ -919,7 +919,7 @@ export type paths = {
         put?: never;
         /**
          * Dismiss a review's finding
-         * @description `canopy dismiss review:ID N`: no worker or tick acts on the finding. With `undo`, `--undo` (DESIGN §21).
+         * @description `canopy dismiss review:ID N --reason R`: no worker or tick acts on the finding. With `undo`, `--undo` (§21).
          */
         post: operations["dismissReviewFinding"];
         delete?: never;
@@ -3102,6 +3102,11 @@ export type components = {
          * @enum {string}
          */
         DiffLineKind: "add" | "del" | "ctx";
+        /**
+         * @description Why the operator dismissed a review's finding (DESIGN §21): `wrong`, it does not hold; `intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix.
+         * @enum {string}
+         */
+        DismissalReasonName: "wrong" | "intentional" | "not_worth_it";
         /**
          * Dismissed
          * @description What a dismissal left: the finding, and whether it is now dismissed.
@@ -5385,6 +5390,8 @@ export type components = {
              * @description The finding's number in the review, from 1.
              */
             finding: number;
+            /** @description Why it is dismissed; None after an `undo`. */
+            reason: components["schemas"]["DismissalReasonName"] | null;
             /**
              * Run
              * @description The review run's id.
@@ -5401,6 +5408,8 @@ export type components = {
              * @description The finding's number in the review, from 1.
              */
             finding: number;
+            /** @description Why it is dismissed, as `--reason` says: required to dismiss, refused with `undo`. */
+            reason?: components["schemas"]["DismissalReasonName"] | null;
             /**
              * Undo
              * @description Take the dismissal back, as `--undo` does.
@@ -5794,6 +5803,8 @@ export type components = {
              * @default false
              */
             dismissed: boolean;
+            /** @description Why they dismissed it; None when it is not dismissed, or was before canopy asked why. */
+            dismissed_reason: components["schemas"]["DismissalReasonName"] | null;
             /**
              * File
              * @description The index in the diff's files of the file it is in; None when the diff does not show it.

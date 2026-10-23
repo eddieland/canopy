@@ -27,7 +27,7 @@ from canopy.core import (
 from canopy.core import review_result as result
 from canopy.core.config import load
 from canopy.core.context import Context
-from canopy.core.vocab import ResumeReason, RunKind, SeenKind
+from canopy.core.vocab import DismissalReason, ResumeReason, RunKind, SeenKind
 from canopy.infra import procs
 from canopy.loop import attention
 from canopy.reviews import grants
@@ -961,26 +961,30 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
 
     # Only the operator dismisses, and only a finding the review has.
     with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": "1"}):
-        assert main(["dismiss", ref, "2"]) == 1
+        assert main(["dismiss", ref, "2", "--reason", "wrong"]) == 1
         assert "dismiss refused (inside_run)" in capsys.readouterr().err
+    wrong = ("--reason", "wrong")
     for args, guard in [
-        ([ref, "3"], "unknown"),
-        ([ref, "0"], "bad_finding"),
-        ([ref, "two"], "bad_finding"),
-        (["review:99", "1"], "unknown"),
-        (["review:x", "1"], "bad_ref"),
+        ([ref, "3", *wrong], "unknown"),
+        ([ref, "0", *wrong], "bad_finding"),
+        ([ref, "two", *wrong], "bad_finding"),
+        (["review:99", "1", *wrong], "unknown"),
+        (["review:x", "1", *wrong], "bad_ref"),
         ([ref, "2", "--undo"], "unknown"),
-        ([ref, "2", "3"], "unknown"),
-        ([ref, "2", "two"], "bad_finding"),
+        ([ref, "2", "3", *wrong], "unknown"),
+        ([ref, "2", "two", *wrong], "bad_finding"),
+        # A review's dismissal says why, and taking one back says nothing.
+        ([ref, "2"], "bad_reason"),
+        ([ref, "2", "--undo", *wrong], "bad_reason"),
     ]:
         assert f"dismiss refused ({guard})" in scenario.operator("dismiss", *args, code=1).err
     # Several are dismissed together or not at all.
-    assert review_runs.review_dismissals(conn, review_id) == frozenset()
+    assert review_runs.review_dismissals(conn, review_id) == {}
 
-    dismissed = scenario.operator("dismiss", ref, "2")
-    assert f"{ref} finding 2 is dismissed: no worker or tick acts on it." in dismissed.out
+    dismissed = scenario.operator("dismiss", ref, "2", "--reason", "not_worth_it")
+    assert f"{ref} finding 2 is dismissed as not_worth_it: no worker or tick acts on it." in dismissed.out
     shown = scenario.operator("review", "show", str(review_id)).out
-    assert "2. **minor** `src/retry.py:7`: log line is noisy (dismissed)" in shown
+    assert "2. **minor** `src/retry.py:7`: log line is noisy (dismissed: not_worth_it)" in shown
     assert "findings, 2 findings (1 dismissed), impact normal" in scenario.operator("review", "show").out
 
     # The overseer reads only the findings the operator kept.
@@ -995,8 +999,8 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     assert "log line is noisy" not in prompt
 
     # With every finding dismissed, there is nothing for a worker to address.
-    both = scenario.operator("dismiss", ref, "2", "1")
-    assert f"{ref} findings 2, 1 are dismissed: no worker or tick acts on them." in both.out
+    both = scenario.operator("dismiss", ref, "2", "1", "--reason", "intentional")
+    assert f"{ref} findings 2, 1 are dismissed as intentional: no worker or tick acts on them." in both.out
     assert scenario.refuses(resume(review_id)) == [
         (
             "refused:bad_review",
@@ -1007,7 +1011,57 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     # Undo hands it back.
     undone = scenario.operator("dismiss", ref, "1", "--undo")
     assert "is no longer dismissed: a resume hands it to the worker again." in undone.out
-    assert review_runs.review_dismissals(conn, review_id) == frozenset({2})
+    # Dismissing one again records the reason anew.
+    assert review_runs.review_dismissals(conn, review_id) == {2: DismissalReason.INTENTIONAL}
+
+
+def test_review_noise_counts_findings_by_severity_persona_and_model_and_why_each_was_dismissed(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    opencode_state: Path,
+) -> None:
+    """`canopy review noise` reads the reviewer's noise from the operator's dismissals: `wrong` ones (DESIGN §21)."""
+    nothing = scenario.operator("review", "noise").out
+    assert nothing.startswith("0 done reviews since ")
+    assert nothing.endswith(": no findings.\n")
+    opencode_state.write_text(json.dumps({"sessions": {"ses_review": [["anthropic", "claude-x", 0.25]]}}))
+    with_events(reviewing, "canopy-reviewer")
+    three = {**TWO_FINDINGS, "findings": [*TWO_FINDINGS["findings"], {**FINDINGS["findings"][0], "title": "again"}]}
+    reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(three, session="ses_review"))
+    ref = f"review:{reviewed.id}"
+    scenario.operator("dismiss", ref, "1", "--reason", "wrong")
+    scenario.operator("dismiss", ref, "2", "--reason", "not_worth_it")
+    scenario.operator("dismiss", ref, "3", "--reason", "intentional")
+    # As a dismissal from before canopy asked why.
+    sql.execute(scenario.conn, sql.update("review_dismissals").set(reason=None).where("finding = ?", 3))
+
+    found = json.loads(scenario.operator("review", "noise", "--json").out)
+    assert found["reviews"] == 1
+    assert found["severity"] == [
+        {
+            "key": "blocking",
+            "findings": 2,
+            "dismissed": {"wrong": 1, "unrecorded": 1},
+            "rates": {"wrong": 0.5, "intentional": 0.0, "not_worth_it": 0.0},
+        },
+        {
+            "key": "minor",
+            "findings": 1,
+            "dismissed": {"not_worth_it": 1},
+            "rates": {"wrong": 0.0, "intentional": 0.0, "not_worth_it": 1.0},
+        },
+    ]
+    assert [(g["key"], g["findings"], g["dismissed"]) for g in found["persona"]] == [
+        (reviewed.row.persona, 3, {"wrong": 1, "not_worth_it": 1, "unrecorded": 1}),
+    ]
+    assert [g["key"] for g in found["model"]] == ["anthropic/claude-x"]
+    text = scenario.operator("review", "noise").out.splitlines()
+    assert text[2:5] == [
+        "severity  findings  wrong  intentional  not_worth_it  unrecorded  wrong rate",
+        "blocking         2      1            0             0           1         50%",
+        "minor            1      0            0             1           0          0%",
+    ]
 
 
 def previous_review(prompt: str) -> str:
@@ -1024,7 +1078,7 @@ def test_a_later_review_reads_the_prs_last_done_review_less_what_the_operator_di
     first = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS))
     # A PR's first review has none, so its prompt has no section for one.
     assert "## The previous review" not in first.prompt
-    scenario.operator("dismiss", f"review:{first.id}", "2")
+    scenario.operator("dismiss", f"review:{first.id}", "2", "--reason", "wrong")
     # Another PR's review reaches none of this PR's.
     other = scenario.review(reviews(sha, f"{PR}0"), reviewer=reviewer_reports(CLEAN))
     assert "## The previous review" not in other.prompt
@@ -1046,7 +1100,7 @@ def test_a_later_review_reads_the_prs_last_done_review_less_what_the_operator_di
     )
     assert previous_review(second.prompt) == previous_review(third.prompt) == expected
 
-    scenario.operator("dismiss", f"review:{first.id}", "1")
+    scenario.operator("dismiss", f"review:{first.id}", "1", "--reason", "wrong")
     scenario.operator("grant", PR, "review")
     fourth = scenario.review(reviews("d" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
     assert previous_review(fourth.prompt) == (
@@ -1095,7 +1149,7 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     with in_run(1):
         assert main(["send", ref, "1"]) == 1
         assert "send refused (inside_run)" in capsys.readouterr().err
-    scenario.operator("dismiss", ref, "2")
+    scenario.operator("dismiss", ref, "2", "--reason", "wrong")
     for args, guard in [
         ([ref, "3"], "unknown"),
         ([ref, "0"], "bad_finding"),
@@ -1287,7 +1341,7 @@ def test_a_resume_addresses_the_findings_of_each_reviewer_of_its_commit(
     assert f"canopy's review run {explainer.id} of {PR} at commit `{sha}`, in explainer, found these" in section
     assert f"canopy's review run {skeptic.id} of {PR} at commit `{sha}`, in skeptic, found these" in section
     # A persona's review whose findings the operator dismissed adds nothing.
-    scenario.operator("dismiss", f"review:{skeptic.id}", "1")
+    scenario.operator("dismiss", f"review:{skeptic.id}", "1", "--reason", "wrong")
     again = scenario.run(resume(explainer.id), worker=pushes())
     assert f"review run {skeptic.id} " not in again.prompt.split("## canopy's review\n\n", 1)[1]
 
