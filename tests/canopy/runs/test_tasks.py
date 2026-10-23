@@ -258,8 +258,10 @@ def test_the_commit_trailer_names_the_private_workers_chosen_model(
     agent_log: Path,
     git_pool: GitPool,
 ) -> None:
-    """A task's run is the private worker's, on the model `runtime.models.worker` chooses (DESIGN §13), and git adds
-    the trailer that names it to the task's commits (TRUST_MODEL T5)."""
+    """A task's run is the private worker's, on the model `runtime.models.worker` chooses (DESIGN §13).
+
+    git adds the trailer that names it to the task's commits (TRUST_MODEL T5).
+    """
     canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"worker": "provider/model-a"}}})
     ctx = inline_context(canopy_env)
     submit()

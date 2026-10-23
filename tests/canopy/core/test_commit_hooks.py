@@ -1,5 +1,8 @@
-"""What canopy hands a worker's environment so that git adds its trailers (TRUST_MODEL T5): an entry for git's hooks
-directory after any the operator's environment holds, and the trailers, unless there are none to add."""
+"""What canopy hands a worker's environment so that git adds its trailers (TRUST_MODEL T5).
+
+That is an entry for git's hooks directory after any the operator's environment holds, and the trailers, unless there
+are none to add.
+"""
 
 from pathlib import Path
 

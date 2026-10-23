@@ -1,5 +1,8 @@
-"""canopy's commit trailers (TRUST_MODEL T5): git adds them to every commit a worker makes, through canopy's hooks, and
-the repository's own hooks still run; a commit made around them is named in the run's harness note, never rewritten."""
+"""canopy's commit trailers (TRUST_MODEL T5): git adds them to every commit a worker makes.
+
+It adds them through canopy's hooks, and the repository's own hooks still run; a commit made around them is named in
+the run's harness note, never rewritten.
+"""
 
 import json
 from pathlib import Path
