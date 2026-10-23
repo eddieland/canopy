@@ -995,6 +995,9 @@ class Paths(Section):
     #: operator's replies, and mirrored tracker comments, a private ticket's too. Off by default, and private, so only
     #: the operator sends a conversation to a remote chosen for plans.
     plan_archive_conversations: Annotated[StrictBool, Scope.PRIVATE] = False
+    #: Whether `plan_archive` also takes the operator's comments on each ticket's plans, with the passages they quote
+    #: and their replies. Private, as `plan_archive` is: comments are the operator's own words.
+    plan_archive_comments: Annotated[StrictBool, Scope.PRIVATE] = True
 
 
 class Personas(Section):

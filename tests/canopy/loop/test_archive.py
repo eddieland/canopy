@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import db, plans, workspace
+from canopy.core import db, plan_threads, plans, workspace
 from canopy.core.context import DISPATCH_LOCK
 from canopy.loop import archive, attention
 from tests.canopy.helpers import KEY, PLAN, PLAN_PROMPT, prompted, proposed, waits
@@ -147,6 +147,46 @@ def test_each_plans_prompt_goes_beside_it(scenario: Scenario, clone: Path, upstr
     )
 
 
+def test_an_edited_plans_original_and_the_operators_comments_go_beside_it(
+    scenario: Scenario,
+    clone: Path,
+    upstream: Path,
+) -> None:
+    run_id = proposed(scenario.conn, scenario.env.state_dir)
+    name = workspace.find(scenario.env.root).name
+    scenario.tick(*waits(KEY))
+
+    plans.path_for(scenario.env.state_dir, KEY, run_id).write_text(PLAN + "\nThe operator's line.\n")
+    plan_threads.add(scenario.conn, KEY, quote="Add the endpoint.", prefix="", suffix="", body="Which one?")
+    scenario.tick(*waits(KEY))
+
+    assert archived(scenario, upstream) == [
+        f"{name}/{KEY}/{run_id}-ORIGINAL.md",
+        f"{name}/{KEY}/{run_id}-PROPOSED.md",
+        f"{name}/{KEY}/COMMENTS.md",
+        f"{name}/{KEY}/README.md",
+        f"{name}/README.md",
+    ]
+    assert git("show", f"main:{name}/{KEY}/{run_id}-ORIGINAL.md", cwd=upstream) == PLAN.strip()
+    assert "\n> Which one?" in git("show", f"main:{name}/{KEY}/COMMENTS.md", cwd=upstream)
+    assert git("log", "-1", "--format=%B", "main", cwd=upstream) == (
+        f"Archive 1 plan, 1 original, 1 comments file and 1 README of {name}: {KEY}\n\n"
+        f"New:\n- {KEY}/{run_id}-ORIGINAL.md\n- {KEY}/COMMENTS.md\n\n"
+        f"Changed:\n- {KEY}/{run_id}-PROPOSED.md\n- {KEY}/README.md"
+    )
+
+
+def test_comments_off_archives_none(scenario: Scenario, clone: Path, upstream: Path) -> None:
+    scenario.configures(paths={"plan_archive_comments": False})
+    proposed(scenario.conn, scenario.env.state_dir)
+    plan_threads.add(scenario.conn, KEY, quote="Add the endpoint.", prefix="", suffix="", body="Which one?")
+    name = workspace.find(scenario.env.root).name
+
+    scenario.tick(*waits(KEY))
+
+    assert f"{name}/{KEY}/COMMENTS.md" not in archived(scenario, upstream)
+
+
 def test_a_name_changed_in_case_alone_is_renamed_where_git_ignores_case(
     scenario: Scenario,
     clone: Path,
@@ -249,14 +289,16 @@ def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Pa
         scenario.tick(*waits(KEY, "PROJ-2"))
         assert archived(scenario, upstream) == [f"{name}/{KEY}/{first}-PROPOSED.md", f"{name}/{KEY}/README.md"]
         assert unpushed(scenario) == (
-            "3 plans, conversations, or READMEs wait for the next tick's archive: a tick archives at most 2 files"
+            "3 plans, conversations, comments files, or READMEs wait for the next tick's archive: "
+            "a tick archives at most 2 files"
         )
 
         scenario.tick(*waits(KEY, "PROJ-2"))
         # The index of every ticket waits for the tick that finds every ticket exported.
         assert f"{name}/README.md" not in archived(scenario, upstream)
         assert unpushed(scenario) == (
-            "1 plan, conversation, or README waits for the next tick's archive: a tick archives at most 2 files"
+            "1 plan, conversation, comments file, or README waits for the next tick's archive: "
+            "a tick archives at most 2 files"
         )
 
         scenario.tick(*waits(KEY, "PROJ-2"))

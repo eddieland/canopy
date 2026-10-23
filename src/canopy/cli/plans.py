@@ -128,11 +128,13 @@ def cmd_archive(click_ctx: click.Context, dest: Path, *, conversations: bool) ->
 
     Each plan goes to DIR/KEY/, named for its run, status, and title, as RUN-APPROVED-export-reports-as-csv.md, as its
     file stands now under a front matter of its status, hashes, approval, and its planner's persona, and beside it the
-    prompt its planner was given, as RUN-PROMPT.md. Each ticket's DIR/KEY/README.md lists its plans, and DIR/README.md
-    every ticket, unless one there is your own: canopy rewrites only a README.md its first line says canopy wrote. A
-    file is rewritten only when its plan changed, and removed only when it moved to a new name, so DIR can be a clone
-    of a repository of yours that you commit and push. Plans hold what the planners read of your tickets, and prompts
-    your messages and standing instructions: keep that repository private.
+    prompt its planner was given, as RUN-PROMPT.md, and, when you edited it, the plan as its planner wrote it, as
+    RUN-ORIGINAL.md. Your comments on a ticket's plans go to DIR/KEY/COMMENTS.md. Each ticket's DIR/KEY/README.md lists
+    its plans and the runs and PRs that followed them, and DIR/README.md every ticket, unless one there is your own:
+    canopy rewrites only a README.md its first line says canopy wrote. A file is rewritten only when what it holds
+    changed, and removed only when it moved to a new name, so DIR can be a clone of a repository of yours that you
+    commit and push. Plans hold what the planners read of your tickets, and prompts and comments your own words: keep
+    that repository private.
 
     --conversations adds each planned ticket's conversation, every message canopy records on it, as
     DIR/KEY/CONVERSATION.md: workers' reports and questions, your replies, and mirrored tracker comments, a private
@@ -147,7 +149,14 @@ def cmd_archive(click_ctx: click.Context, dest: Path, *, conversations: bool) ->
         raise CliError(f"archive refused ({r.guard}): {r.reason}") from None
     ctx = open_context(click_ctx)
     try:
-        exported = plan_export.export(ctx.conn, ctx.state_dir, dest, conversations=conversations, indexes=True)
+        exported = plan_export.export(
+            ctx.conn,
+            ctx.state_dir,
+            dest,
+            conversations=conversations,
+            comments=True,
+            indexes=True,
+        )
     except plan_export.ExportError as e:
         raise CliError(f"archive failed: {e}") from None
     logs.for_tick(None).info(
@@ -160,20 +169,9 @@ def cmd_archive(click_ctx: click.Context, dest: Path, *, conversations: bool) ->
         click.echo(f"removed {name}, now under another name")
     for s in exported.skipped:
         click.echo(f"skipped {s.ticket_key}'s {s.kind} of run {s.run_id}: its file is {s.problem}")
-    names = [Path(name).name for name in exported.written]
-    prompts = sum(map(plan_export.is_prompt, names))
-    exported_conversations = sum(map(plan_export.is_conversation, names))
-    readmes = sum(map(plan_export.is_index, names))
-    counted = [(len(names) - prompts - exported_conversations - readmes, "plan"), (prompts, "prompt")]
-    if conversations:
-        counted.append((exported_conversations, "conversation"))
-    counted.append((readmes, "README"))
-    written = ", ".join(f"{n} {noun}{'s' if n != 1 else ''}" for n, noun in counted[:-1])
-    last, noun = counted[-1]
-    click.echo(
-        f"Exported {written} and {last} {noun}{'s' if last != 1 else ''} to {dest}; {exported.unchanged} unchanged, "
-        f"{len(exported.skipped)} skipped.",
-    )
+    always = {"plan", "prompt", "README", *(("conversation",) if conversations else ())}
+    written = plan_export.counted((Path(name).name for name in exported.written), always=always)
+    click.echo(f"Exported {written} to {dest}; {exported.unchanged} unchanged, {len(exported.skipped)} skipped.")
     return 0
 
 
