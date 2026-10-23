@@ -26,8 +26,8 @@ memory, and do not upgrade in passing.
 - Shiki for a review's diff and the guide's code blocks alone (D121): only `src/lib/highlight.ts` and
   `src/lib/languages.ts`, its grammars, import it, and only on demand, each grammar its own chunk.
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
-- cmdk for the repository picker's and the jump palette's searchable lists, which Radix has no primitive for: only
-  `src/components/ui/command.tsx` imports it, and the lint refuses it elsewhere.
+- cmdk for the repository picker's, the model picker's, and the jump palette's searchable lists, which Radix has no
+  primitive for: only `src/components/ui/command.tsx` imports it, and the lint refuses it elsewhere.
 - oxlint (with the React Compiler's rules, eslint-plugin-jsdoc's, eslint-plugin-playwright's on `e2e/`, and
   type-aware rules through oxlint-tsgolint) and oxfmt, Vitest, Playwright.
 

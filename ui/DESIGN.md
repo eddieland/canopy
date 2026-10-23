@@ -1431,18 +1431,23 @@ sliver beside four others; and its axis names short call numbers without measuri
   description.
   A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
   to the config: `Clear the override`, or `Use the default`.
-- **A choice of model** (`src/components/ticket-models.tsx`) is the same menu over the models the runtime lists, read
-  when it opens, in a row per agent laid out as the persona rows are: `worker model`, then the button, then where it
+- **A choice of model** (`src/components/ticket-models.tsx`) is a picker like the repository picker's, since a runtime
+  with a gateway behind it lists hundreds: an outline `xs` trigger opening the models the runtime lists, read when it
+  opens, grouped by provider under a field that keeps the ids holding what is typed, with the model chosen now pinned
+  in a `Chosen now` group at the top, its source in muted sans after it, and a check in the accent on it wherever it
+  sits, whatever sets it; the runtime's default is pinned disabled, a state rather than a choice. It is in a row per
+  agent laid out as the persona rows are: `worker model`, then the button, then where it
   comes from in muted `text-xs`, beside the persona rows once the Work panel is `@3xl`, so each agent's model is level
   with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
   is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
   `last served` names the model that served the agent's latest read run when it is not the button's. A choice saved
   is confirmed in its row, a `saved` in `status-done`, so nothing below moves, until the ticket's models change after
-  it. The menu offers only what the server would take: the model chosen now, when it is not one, is a disabled item
+  it. The picker offers only what the server would take: the model chosen now, when it is not one, is pinned disabled
   with why in muted text after it (`no longer listed; its next run is refused`, `config's, with a variant`), and a
   model gone from the list marks its
   trigger in `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
-  `Read again` item. While a choice saves, its trigger names it with a trailing `…` and is `aria-busy`; a refusal's
+  `Read again` item; `Clear the override` ends the list whatever is typed. While a choice saves, its trigger names it
+  with a trailing `…` and is `aria-busy`; a refusal's
   `Notice` names the agent before its guard.
 - **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, under the
   verbs at the foot of a ticket's or a task's conversation, beside the reply that says what to do with them: each file a
