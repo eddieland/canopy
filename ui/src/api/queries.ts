@@ -32,6 +32,7 @@ export const keys = {
     ticketPlans: (key: string) => ['ticket', key, 'plans'] as const,
     ticketPlan: (key: string, id: number) => ['ticket', key, 'plans', id] as const,
     chores: ['chores'] as const,
+    tasks: ['tasks'] as const,
     chore: (name: string) => ['chore', name] as const,
     // A chore run, and its transcript: read again only when the stream says the run's status changed.
     choreRun: (name: string, id: number) => ['chore-run', name, id] as const,
@@ -251,6 +252,12 @@ export function ticketPlanQuery(key: string, id: number) {
 export const choresQuery = queryOptions({
     queryKey: keys.chores,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/chores', { signal })),
+})
+
+/** Every task the operator submitted, the newest first. The stream sends the list again whenever it changes. */
+export const tasksQuery = queryOptions({
+    queryKey: keys.tasks,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/tasks', { signal })),
 })
 
 /** One chore, as `canopy show chore:NAME` prints it. The stream marks it stale whenever the chores list changes. */

@@ -73,6 +73,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             }
             break
         }
+        case 'tasks.updated': {
+            client.setQueryData(keys.tasks, event.tasks)
+            break
+        }
         case 'reviews.updated': {
             const before = client.getQueryData<ReviewSummary[]>(keys.reviews)
             client.setQueryData(keys.reviews, event.reviews)
@@ -190,6 +194,7 @@ const LISTS: Record<string, string> = {
     'runs.updated': 'runs',
     'tickets.updated': 'tickets',
     'chores.updated': 'chores',
+    'tasks.updated': 'tasks',
     'reviews.updated': 'reviews',
     'review_requests.updated': 'requests',
 }

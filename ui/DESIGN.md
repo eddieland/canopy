@@ -70,6 +70,8 @@ Rules:
   is for (`src/lib/sections.ts`; the current one from `useSection`):
   - Attention rose, an alarm light: something needs you.
   - Tickets sky, a message bubble: a ticket is a conversation with the operator.
+  - Tasks chartreuse, a new shoot: a task seeds the tickets that follow it, and a shoot is yellow-green before it
+    is emerald, which is `status-running`'s hue and would read as a running task on its own page.
   - Pull requests violet, the purple a merged PR turns, where every PR is headed.
   - Reviews fuchsia, the proofreader's pen.
   - Runs indigo, the night shift: workers carry on after the operator logs off.
@@ -82,7 +84,7 @@ Rules:
     wears its color on its trail alone.
 
   A new section takes a color the same way, from what its page holds, and stays apart from its neighbours in the nav
-  and from the status colors on its own page. Ten nav hues, five statuses, and the accent leave the wheel full, so a
+  and from the status colors on its own page. Eleven nav hues, five statuses, and the accent leave the wheel full, so a
   new one may mean moving another. They go on the nav's icons and highlight, the first step of the page header's trail,
   and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no
   section (the 404) takes the accent.
@@ -151,12 +153,12 @@ Rules:
   by script: `#main` under the base path would be another page's address.
 - **The rail** holds, top to bottom: the search box, the nav, what is working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
-  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check now
-  and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav item is height
-  the sticky part has none to spare of in an 800px window. Each nav item says on hover what its page holds, and each
-  spend window what it covers, as a native `title`; a spend window opens the spend page over its week or month. Each
-  block under the nav is a hairline and a `panel-label` over its content, but the spend's, where each window's name is
-  the label. What is working is every agent run running,
+  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Tasks, Pull requests, Reviews), then what they
+  check now and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav item
+  is height the sticky part has none to spare of in an 800px window. Each nav item says on hover what its page holds,
+  and each spend window what it covers, as a native `title`; a spend window opens the spend page over its week or
+  month. Each block under the nav is a hairline and a `panel-label` over its content, but the spend's, where each
+  window's name is the label. What is working is every agent run running,
   worker runs, reviews of PRs, and chore runs alike, then the worker runs waiting on the operator's answer, each oldest
   first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the PR, the
   chore), how long it has run (or `waiting on you` in `status-blocked`), and under it the ticket's title, the review's
@@ -771,6 +773,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   word, its age, then where it stands; a worktree's what holds it, before its branch is cut, since the branch names the
   ticket too, then its age. At half a monitor (an 820px window, a list about 44rem wide) a run keeps its age and a
   slot its branch. Money and tokens go before what names a row. Each kind's order is in `ROW_COLUMNS`.
+- **The tasks list**: where the task stands (`TASK_LOOK` in `src/lib/tasks.ts`, a run state's dot and color: `waiting
+  on you` in blocked's, `queued` muted, else its latest run's status), `task:N`, the repository, the text's first line
+  in the free column, and the age since it was submitted; under the text, the first line of what its latest run said.
+  The tasks waiting on the operator's reply come first, the rest newest first, so it has no `OrderToggle`. Narrow, the
+  repository goes first, then the age, then where it stands. A repository picker (`?repo=`) narrows it.
 - **The tickets filters** narrow the list two ways at once (`src/lib/ticket-filter.ts`). Where a ticket stands is the
   runs page's chips, in the Tickets panel's header (`?show=`): `open` (not done), `working` (a run on it now) and
   `waiting on you` (a question waiting), each with its run's dot, `blocked` (the overseer's phase for a ticket an
