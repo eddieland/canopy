@@ -14,7 +14,7 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.cli.main import main
 from canopy.core import conversation, db, feedback_items, feedback_plans, plan_export, plans, records, run_models
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import ModelsRead, PlanStatus, RunStatus
+from canopy.core.vocab import ModelsRead, PlanEffort, PlanStatus, RunStatus
 from canopy.runtime.report import ModelUse, Usage
 from tests.canopy.helpers import KEY, PLAN, PLAN_PROMPT, operator, plan_prompt, plan_run, prompted, proposed
 from tests.conftest import CanopyEnv
@@ -168,11 +168,32 @@ def test_a_plan_names_its_planners_persona_and_models(
     assert meta["models"] == ["anthropic/claude-x@high", "anthropic/claude-y"]
 
 
-def priced_run(conn: sqlite3.Connection, state_dir: Path, kind: str, cost: float | None, key: str = KEY) -> int:
-    """A run of `kind` on `key`, ended, that reported `cost`, or none. Returns its id."""
+def priced_run(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    kind: str,
+    cost: float | None,
+    key: str = KEY,
+    *,
+    persona: str | None = None,
+    model: str | None = None,
+) -> int:
+    """A run of `kind` on `key`, ended, that reported `cost`, or none, in `persona` on `model`. Returns its id."""
     db.touch_ticket(conn, key, "/ws")
     tick_id = db.start_tick(conn, dry_run=False)
-    run_id = db.insert_run(conn, tick_id=tick_id, key=key, kind=kind, branch="", slots=[], runs_dir=state_dir)
+    run_id = db.insert_run(
+        conn,
+        tick_id=tick_id,
+        key=key,
+        kind=kind,
+        branch="",
+        slots=[],
+        runs_dir=state_dir,
+        persona=persona,
+        persona_digest=None if persona is None else "0" * 64,
+        persona_text=None if persona is None else "Doubt everything.\n",
+        model=model,
+    )
     if cost is not None:
         usage = Usage(cost, input=0, output=0, reasoning=0, cache_read=0, cache_write=0)
         db.set_run_progress(conn, run_id, f"ses_{run_id}", usage=usage)
@@ -220,6 +241,38 @@ def test_a_plan_names_what_it_and_every_run_it_took_cost(
     assert costs(KEY, feedback) == (0.125, 0.125)
     assert costs("PROJ-2", other) == (4.0, 4.0)
     assert costs("PROJ-3", unpriced) == (None, None)
+
+
+def untimed(path: Path) -> str:
+    """An exported file, each time in it as `<time>`, so its snapshot holds at any time."""
+    return re.sub(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z", "<time>", path.read_text())
+
+
+def test_an_archived_plan_reads_whole(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    tmp_path: Path,
+    markdown_snapshot: SnapshotAssertion,
+) -> None:
+    # A planner blocked first, then one that wrote a plan it said needs no review, with every key a front matter holds.
+    priced_run(conn, state_dir, "plan", 0.5)
+    run_id = priced_run(conn, state_dir, "plan", 0.25, persona="skeptic", model="anthropic/claude-x@high")
+    used = [ModelUse("anthropic/claude-x@high", 3, 0.2), ModelUse("anthropic/claude-y", 1, 0.05)]
+    run_models.record(conn, run_models.Due("runs", run_id, f"ses_{run_id}", attempts=0), ModelsRead.FOUND, used)
+    text = f"# Plan: {KEY} Export reports as CSV\n\n## api\n\nAdd `GET /reports.csv`.\n"
+    written = plans.write(state_dir, KEY, run_id, text)
+    plans.record(conn, KEY, run_id, written, no_review="One endpoint, *no* schema change.", effort=PlanEffort.SMALL)
+    # A feedback plan after it: no persona, no model chosen, its session not read.
+    feedback = priced_run(conn, state_dir, "feedback-plan", 0.125)
+    written = plans.write(state_dir, KEY, feedback, f"# Feedback plan: {KEY} Answer the review\n")
+    snapshot = feedback_items.Snapshot(heads={}, checks={}, given=())
+    feedback_plans.record(conn, KEY, feedback, written, [], snapshot=snapshot)
+    dest = tmp_path / "archive"
+
+    plan_export.export(conn, state_dir, dest, prompts=False)
+
+    assert untimed(file_of(dest, KEY, run_id)) == markdown_snapshot
+    assert untimed(file_of(dest, KEY, feedback)) == markdown_snapshot
 
 
 def test_only_a_plans_own_earlier_names_are_removed(conn: sqlite3.Connection, state_dir: Path, tmp_path: Path) -> None:
