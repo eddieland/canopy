@@ -61,12 +61,17 @@ describe('viewed', () => {
 })
 
 describe('known', () => {
-    it('keeps only the tickets the journal still holds', () => {
+    it('keeps only the tickets the journal still holds, by a list read after they were viewed', () => {
         const list = [
             { key: 'ABC-1', title: null, viewedAt: AT },
             { key: 'ABC-2', title: null, viewedAt: AT },
         ]
-        expect(known(list, new Set(['ABC-2'])).map((t) => t.key)).toEqual(['ABC-2'])
+        expect(known(list, new Set(['ABC-2']), Date.parse(AT) + 1000).map((t) => t.key)).toEqual(['ABC-2'])
+    })
+
+    it('keeps a ticket viewed after the list was read, which that list cannot know', () => {
+        const list = [{ key: 'ABC-1', title: null, viewedAt: AT }]
+        expect(known(list, new Set(), Date.parse(AT) - 1000).map((t) => t.key)).toEqual(['ABC-1'])
     })
 })
 
@@ -84,6 +89,21 @@ describe('useViewedTicket', () => {
         rerender({ ticketKey: 'ABC-2', title: null })
         expect(parseRecent(localStorage.getItem(STORAGE_KEY)).map((t) => [t.key, t.title])).toEqual([
             ['ABC-2', null],
+            ['ABC-1', 'One'],
+        ])
+    })
+
+    it('records nothing when the title changes on the page, as the overseer renaming it', () => {
+        const { rerender } = renderHook(
+            ({ ticketKey, title }: { ticketKey: string; title: string | null | undefined }) => {
+                useViewedTicket(ticketKey, title)
+            },
+            { initialProps: { ticketKey: 'ABC-1', title: 'One' } },
+        )
+        rerender({ ticketKey: 'ABC-2', title: 'Two' })
+        rerender({ ticketKey: 'ABC-2', title: 'Two, renamed' })
+        expect(parseRecent(localStorage.getItem(STORAGE_KEY)).map((t) => [t.key, t.title])).toEqual([
+            ['ABC-2', 'Two'],
             ['ABC-1', 'One'],
         ])
     })

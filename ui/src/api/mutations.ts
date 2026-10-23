@@ -9,6 +9,7 @@ import type {
     Dismissed,
     Draft,
     DraftsSent,
+    FeedbackPlanApproved,
     Forgot,
     Granted,
     Limit,
@@ -42,18 +43,21 @@ import type {
     PromoteRequest,
     Started,
     Stopped,
+    TaskSubmitted,
+    TaskReplied,
+    TaskStopped,
     TickAsked,
 } from './types'
 
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, trying a chore, dismissing
  * a finding, sending a review's findings to a worker, granting a run past a limit, asking for a PR to be reviewed,
- * pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and those on a run's
- * drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`,
- * `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, `notice`,
- * `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`, `draft edit`, `drop`, and `send`,
- * `review edit` and `publish`, and `reply review:ID`, or as `t` at the loop's terminal, with the same guards; a refusal
- * is an ApiError naming its guard.
+ * submitting a task, pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and
+ * those on a run's drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`,
+ * `forget`, `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `task submit`, `pause`,
+ * `resume`, `notice`, `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`, `draft edit`, `drop`,
+ * and `send`, `review edit` and `publish`, and `reply review:ID`, or as `t` at the loop's terminal, with the same
+ * guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -135,6 +139,14 @@ export async function requestReview(
     )
 }
 
+/**
+ * `canopy task submit TEXT --repo NAME --project KEY`: the text is queued as a task, run in `repo` (which may be left
+ * out in a workspace of one) and filing tickets only in `project`, or none without one; the next tick starts it.
+ */
+export async function submitTask(text: string, repo: string | null, project: string | null): Promise<TaskSubmitted> {
+    return unwrap(await api.POST('/api/tasks', { body: { text, repo, project } }))
+}
+
 /** `canopy stop URL`: the PR's review request ends, and a review of it already running finishes. */
 export async function stopReview(url: string): Promise<ReviewRequestStopped> {
     return unwrap(await api.POST('/api/pull-request/stop', { params: { query: { url } } }))
@@ -148,11 +160,41 @@ export async function replyTicket(key: string, body: string, submission: string)
 }
 
 /**
+ * `canopy reply task:N`: the operator's next instruction to the task, answering its run's question if one asked. Its
+ * next run starts at the next tick, or once its running run ends. `submission` makes a resend a no-op.
+ */
+export async function replyTask(id: number, body: string, submission: string): Promise<TaskReplied> {
+    return unwrap(
+        await api.POST('/api/tasks/{task_id}/replies', {
+            params: { path: { task_id: id } },
+            body: { body, submission },
+        }),
+    )
+}
+
+/** `canopy stop task:N`, or `canopy stop task:N --now` with `now`, which also ends the run working it. */
+export async function stopTask(id: number, now: boolean): Promise<TaskStopped> {
+    return unwrap(await api.POST('/api/tasks/{task_id}/stop', { params: { path: { task_id: id } }, body: { now } }))
+}
+
+/**
  * `canopy plan KEY --approve`, `canopy plan KEY`, or `canopy plan KEY --skip`: approve the newest plan as its file
  * stands, ask for a new one, or skip the plan (DESIGN §25).
  */
 export async function decidePlan(key: string, action: PlanChanged['action']): Promise<PlanChanged> {
     return unwrap(await api.POST('/api/tickets/{key}/plan', { params: { path: { key } }, body: { action } }))
+}
+
+/**
+ * `canopy plan KEY --approve`, on its feedback plan (DESIGN §32): whole when `items` and `leave` are both empty, else
+ * only the items `items` names by number, as `--item N`, or all but those `leave` names, as `--leave N`, with the
+ * operator's own `message` after the one the approval writes on the ticket, as `--message`.
+ */
+export async function approveFeedbackPlan(
+    key: string,
+    choice: { items: number[]; leave: number[]; message: string | null },
+): Promise<FeedbackPlanApproved> {
+    return unwrap(await api.POST('/api/tickets/{key}/feedback-plan', { params: { path: { key } }, body: choice }))
 }
 
 /**
@@ -579,6 +621,15 @@ export async function refreshTicketDrafts(client: QueryClient, key: string): Pro
 /** After an action on a ticket: read it again now, rather than wait for the stream to say it changed. */
 export function refreshTicket(client: QueryClient, key: string): Promise<void> {
     return client.invalidateQueries({ queryKey: keys.ticket(key) })
+}
+
+/** After an action on a task: read it, the tasks list, and the attention list again now, which its items are on. */
+export async function refreshTask(client: QueryClient, id: number): Promise<void> {
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.task(id) }),
+        client.invalidateQueries({ queryKey: keys.tasks }),
+        client.invalidateQueries({ queryKey: keys.attention }),
+    ])
 }
 
 /** A submission id for a reply form, drawn when the form is rendered and kept until the reply is recorded. */

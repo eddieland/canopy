@@ -28,6 +28,23 @@ test('the rail lists what is working now, the running runs and chore runs first,
     await expect(page).toHaveURL(/\/chores\/build-health\/runs\/4$/u)
 })
 
+test("a worker run's row says what it is doing, as a quip until Settings turns them off", async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    // Run 43 resumes for a failed check and review feedback together; run 42 waits on the operator.
+    const resuming = page.getByTestId('rail-phase-43')
+    await expect(resuming).toHaveAttribute('title', 'fixing CI, addressing review')
+    await expect(resuming).toHaveText(/CI.* \+1$/u)
+    await expect(page.getByTestId('rail-phase-42')).toHaveText('implementing')
+
+    await page.getByTestId('fun-quips').click()
+    await expect(resuming).toHaveText('fixing CI, addressing review')
+    await page.reload()
+    await settled(page)
+    await expect(page.getByTestId('fun-quips')).not.toBeChecked()
+    await expect(page.getByTestId('rail-phase-41')).toHaveText('implementing')
+})
+
 test('the nav lists the sections by how often the operator opens them, and the foot opens Settings', async ({
     page,
 }) => {

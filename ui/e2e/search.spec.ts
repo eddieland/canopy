@@ -47,6 +47,31 @@ test('every source that holds a word has its panel, in the server order', async 
     await expect(page).toHaveURL(/\/chores\/[\w-]+\/runs\/\d+$/u)
 })
 
+test("a task is found by its text, named by its first line, and its run's report opens the run", async ({ page }) => {
+    await page.goto('search?q=checkout+bundle')
+    const tasks = page.getByTestId('search-task')
+    await expect(tasks.getByTestId('search-hit')).toHaveCount(1)
+    await expect(tasks.getByTestId('search-hit')).toContainText("The checkout page's bundle grew past 900 kB")
+    const messages = page.getByTestId('search-message')
+    await expect(messages.getByRole('link', { name: /^task:1#\d+$/u })).toBeVisible()
+
+    await tasks.getByRole('link', { name: 'task:1', exact: true }).click()
+    await expect(page).toHaveURL(/\/tasks\/1$/u)
+    await page.goBack()
+    await messages.getByRole('link', { name: /^task:1#\d+$/u }).click()
+    await expect(page).toHaveURL(/\/tasks\/1\/runs\/\d+$/u)
+})
+
+test("a task's reference alone in the box opens the task on Enter", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const box = page.getByRole('searchbox', { name: 'Search the journal' })
+    await box.fill('task:4')
+    await box.press('Enter')
+    await expect(page).toHaveURL(/\/tasks\/4$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Rename the `billing_v1` feature flag')
+})
+
 test('slash focuses the box from anywhere but a text field, and Escape leaves it', async ({ page }) => {
     await page.goto('ticks')
     await settled(page)

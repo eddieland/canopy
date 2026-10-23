@@ -67,7 +67,13 @@ export function storedSetting<T>({ key, parse, serialize }: StoredSettingOptions
             }
         }
     }
-    const get = () => snapshot
+    const get = () => {
+        // With no listener, no `storage` event has kept the snapshot current: another tab may have changed it since.
+        if (listeners.size === 0) {
+            announce(parse(readRaw(key)))
+        }
+        return snapshot
+    }
     return {
         get,
         set: (next) => {

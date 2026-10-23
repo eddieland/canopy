@@ -271,7 +271,8 @@ test("what the runs spent on each model, every kind's summed, or one kind's from
     await expect(models.nth(1).getByRole('rowheader')).toHaveText('anthropic/claude-opus-4-1')
     await expect(models.nth(1).getByRole('cell')).toHaveText(['1', '23', '$1.65'])
     await expect(models.last().getByRole('rowheader')).toHaveText('none: no session named one')
-    await expect(models.last().getByRole('cell')).toHaveText(['5', '–', '$2.53'])
+    // ABC-099's feedback plan run among them, which recorded no cost.
+    await expect(models.last().getByRole('cell')).toHaveText(['6', '–', '$2.53'])
 })
 
 test.describe('on a wide monitor', () => {

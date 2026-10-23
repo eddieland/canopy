@@ -10,7 +10,7 @@ import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Kbd } from '@/components/ui/kbd'
 import { phaseLabel } from '@/lib/phase'
-import { keepKnown, useRecentTickets } from '@/lib/recent-tickets'
+import { isKnown, keepKnown, useRecentTickets } from '@/lib/recent-tickets'
 import type { RecentTicket } from '@/lib/recent-tickets'
 import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
@@ -98,18 +98,20 @@ function Jump({ onJump }: { onJump: () => void }) {
     const here = useParams({ strict: false }).key
     const [text, setText] = useState('')
     const recent = useRecentTickets()
-    const tickets = useQuery(ticketsQuery).data
-    // A ticket viewed and forgotten since is no longer the journal's: it leaves the list, and the store with it.
+    const { data: tickets, dataUpdatedAt } = useQuery(ticketsQuery)
+    // A ticket viewed and forgotten since is no longer the journal's: it leaves the list, and the store with it. One
+    // viewed after the list was read is kept, since that list cannot know it.
     useEffect(() => {
         if (tickets !== undefined) {
-            keepKnown(new Set(tickets.map((t) => t.key)))
+            keepKnown(new Set(tickets.map((t) => t.key)), dataUpdatedAt)
         }
-    }, [tickets])
+    }, [tickets, dataUpdatedAt])
 
     const byKey = new Map(tickets?.map((t) => [t.key, t]))
+    const keys = new Set(byKey.keys())
     const query = text.trim() === '' ? undefined : text
     const shownRecent = recent
-        .filter((t) => t.key !== here && (tickets === undefined || byKey.has(t.key)))
+        .filter((t) => t.key !== here && (tickets === undefined || isKnown(t, keys, dataUpdatedAt)))
         .filter((t) => keyOrTitleHolds({ key: t.key, title: byKey.get(t.key)?.title ?? t.title }, query))
         .slice(0, RECENT_SHOWN)
     const listed = new Set(shownRecent.map((t) => t.key))
