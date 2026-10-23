@@ -430,6 +430,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         "model": "acme/fake-model-2",
         "source": "ticket",
         "variant": None,
+        "last_served": None,
     }
     ended_run(ctx, KEY, "implement")
     got = c.get(f"/api/tickets/{KEY}").json()
@@ -445,6 +446,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         "model": None,
         "source": "default",
         "variant": None,
+        "last_served": None,
     }
     assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
     # A list that cannot be read says why, and refuses a choice as the CLI does.
@@ -463,7 +465,49 @@ def test_a_configured_model_with_a_variant_is_sent_with_it_so_the_page_offers_it
         "model": "acme/fake-model-1@high",
         "source": "config",
         "variant": "high",
+        "last_served": None,
     }
+
+
+def test_each_agent_names_the_model_that_served_its_latest_read_run_beside_the_one_its_next_runs_on(
+    ctx: Context,
+    opencode_state: Path,
+) -> None:
+    """The runtime's default names no model, so the page names what served the agent's runs instead (DESIGN §13)."""
+    opencode_state.write_text(json.dumps({"models": ["acme/fake-model-1"]}))
+    c, headers = signed_in_client(ctx)
+
+    def served(run_table: run_models.RunTable, run_id: int, *models: str) -> None:
+        used = [ModelUse(m, replies=1, cost_usd=1.0 / (i + 1)) for i, m in enumerate(models)]
+        run_models.record(ctx.conn, run_models.Due(run_table, run_id, "ses", 0), ModelsRead.FOUND, used)
+
+    def last_served() -> list[tuple[str, str | None]]:
+        return [(m["agent"], m["last_served"]) for m in c.get(f"/api/tickets/{KEY}").json()["models"]]
+
+    served("runs", ended_run(ctx, KEY, "implement"), "acme/older")
+    # The latest worker run, a resume after it, named by its most costly model.
+    served("runs", ended_run(ctx, KEY, "resume"), "acme/costly", "acme/cheap")
+    served("runs", ended_run(ctx, KEY, "plan"), "acme/planned")
+    served("runs", ended_run(ctx, KEY, "feedback-plan"))  # read, but it made no model call: the plan before names it
+    ended_run(ctx, KEY, "implement")  # not read yet: the run before it names the model
+    served("runs", ended_run(ctx, "PROJ-2", "implement"), "acme/another-tickets")
+    assert last_served() == [("worker", "acme/costly"), ("planner", "acme/planned"), ("reviewer", None)]
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    review = review_runs.insert_review_run(
+        ctx.conn,
+        tick_id=tick_id,
+        pr_url="https://github.com/acme/web/pull/1",
+        sha="a" * 40,
+        ticket=KEY,
+        repo=None,
+        purpose="own",
+        logs_dir=ctx.workspace.root,
+    )
+    served("review_runs", review, "acme/reviewed")
+    assert last_served()[2] == ("reviewer", "acme/reviewed")
+    # A choice says what served the agent before it, which its next run may not.
+    chosen = c.post(f"/api/tickets/{KEY}/models", json={"model": "acme/fake-model-1"}, headers=headers).json()
+    assert (chosen["model"], chosen["last_served"]) == ("acme/fake-model-1", "acme/costly")
 
 
 def test_the_web_lists_the_personas_canopy_personas_lists(ctx: Context) -> None:

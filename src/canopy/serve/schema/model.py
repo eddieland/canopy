@@ -33,6 +33,13 @@ class AgentModel(Model):
     The runtime's list names the model without it, and a ticket's override names none, so a model with one is not a
     choice the page can make: it chooses the model alone.
     """
+    last_served: str | None = None
+    """The model that served the agent's latest run for the ticket whose session canopy has read, as `provider/model`,
+    the most costly when it called several; None when none of its runs has been read.
+
+    What served may differ from `model`: a run before the choice changed, or the runtime's default, which `model` cannot
+    name.
+    """
 
 
 class ModelRequest(Model):
