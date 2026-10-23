@@ -1,4 +1,3 @@
--- sha256 of 0084_feedback_plan_check_items.sql: 3c4e851c00580a49c2fbbbdff3db4a014e12b1a39d74f817f09e7d7c8907ffb4
+-- sha256 of 0084_tick_overseer_ran.sql: 7eb6b0f2aef4babe440d62a0208a9b1e21cf6faf1c43f59f5456d396a999001e
 
-INSERT INTO feedback_plan_items (plan_id, number, pr_url, item, item_id, proposal, reply, left_out)
-VALUES (1, 2, 'https://github.com/acme/api/pull/7', 'check', -281474976710656, 'change', NULL, 1);
+UPDATE ticks SET overseer_ran = 0 WHERE id = (SELECT min(id) FROM ticks);

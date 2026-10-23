@@ -82,8 +82,14 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown) -> SpendBreakdown:
             for d in found.per_day
         ],
         totals=_spend_costs(found.totals),
-        ticks=[SpendTicks(group=g.group, ticks=g.ticks, cost_usd=g.cost_usd) for g in found.ticks],
-        woken=[SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd) for w in found.woken],
+        ticks=[
+            SpendTicks(group=g.group, ticks=g.ticks, cost_usd=g.cost_usd, without_overseer=g.without_overseer)
+            for g in found.ticks
+        ],
+        woken=[
+            SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd, without_overseer=w.without_overseer)
+            for w in found.woken
+        ],
         unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in found.unpriced],
         idle_share=found.idle_share,
         idle_ticks=list(starmap(tick_of, spending.idle_ticks(ctx.conn, found.since, found.until))),
