@@ -8,10 +8,12 @@ with its own async stack and HTTP transports, for these few methods.
 It serves in one of three modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the
 same command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call
 at a time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every call. A chore's
-(`CHORE`, `canopy _mcp --chore`) is one tool, its own chore's history (`chores.history`, DESIGN §19), which `canopy
-chore history` also reads; it lists and serves it only where CANOPY_RUN_ID names a chore's run, and serves nothing of
-the overseer's. The reviewer's and the planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in
-the checkouts its command line names, the run's own (`core.git_tools`); it opens no workspace, and serves nothing else.
+(`CHORE`, `canopy _mcp --chore`) are its own chore's history (`chores.history`, DESIGN §19), which `canopy chore
+history` also reads, and canopy's read-only reports, health, spend, and the memory listings, which those commands print
+with `--json` (`core.reports`); it lists and serves them only where CANOPY_RUN_ID names a chore's run, and serves
+nothing of the overseer's. The reviewer's and the planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are
+read-only git in the checkouts its command line names, the run's own (`core.git_tools`); it opens no workspace, and
+serves nothing else.
 
 A refusal or an invalid argument is a tool error, `isError`, with the text the command prints, and the server goes on.
 It writes nothing to stderr, which the runtime never reads, and logs no argument's text.
@@ -32,7 +34,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
 from canopy.chores import history
-from canopy.core import config, context, conversation, db, git_tools
+from canopy.core import config, context, conversation, db, git_tools, reports
 from canopy.infra import logs
 from canopy.loop import chore_tools, review_tools, tools
 
@@ -198,7 +200,33 @@ def _chore_history(arguments: Mapping[str, object], opened: Opener) -> str:
             raise tools.Refused(str(r)) from None
 
 
-#: A chore's one tool, which the runtime names `canopy_chore_history` (its server is `history.SERVER`).
+#: Why a chore's report is refused outside a chore's run.
+_CHORES_ALONE = "canopy's chore tools serve a chore's own run alone, and this is none"
+
+
+def _chore_report[R: BaseModel](name: str, description: str, request: type[R], do: Callable[[Context, R], str]) -> Tool:
+    """Make report `do` a chore's tool, taking `request` as its arguments: what `--json` prints (`core.reports`).
+
+    Every call is refused but in a chore's run, as the history tool's is.
+
+    Returns:
+        The tool.
+    """
+
+    def call(arguments: Mapping[str, object], opened: Opener) -> str:
+        asked = request.model_validate(arguments)
+        with opened() as ctx:
+            try:
+                history.run_chore(ctx.conn)
+            except history.Refused as r:
+                raise tools.Refused(f"{name} refused ({r.guard}): {_CHORES_ALONE}") from None
+            return do(ctx, asked)
+
+    return Tool(name, description, request, call)
+
+
+#: A chore's tools, which the runtime names `canopy_chore_history` and so on (their server is `history.SERVER`): its own
+#: history, and canopy's read-only reports. A chore's agent allows those it needs by name; `canopy-chore` only history.
 CHORE_TOOLS = (
     Tool(
         history.TOOL,
@@ -207,12 +235,48 @@ CHORE_TOOLS = (
         history.History,
         _chore_history,
     ),
+    _chore_report(
+        reports.HEALTH,
+        "How canopy's ticks and runs of the last days ended, as JSON: each kind of run by status and cost "
+        "(outcomes), the newest failures with an id and a note (failures), and the overseer's asks a guard refused "
+        "(refusals).",
+        reports.Health,
+        reports.read_health,
+    ),
+    _chore_report(
+        reports.SPEND,
+        "What canopy's agent runs cost over the last days, as JSON: per day and kind, by ticket, by tool with what "
+        "its calls returned and how many errored (tools), and by model.",
+        reports.Spend,
+        reports.read_spend,
+    ),
+    _chore_report(
+        reports.MEMORY_LESSONS,
+        "The lessons the operator promoted, as JSON (lessons), each with its reads, citations, review date, and any "
+        "run's report that it is wrong; and each memory tier's mode (modes).",
+        reports.MemoryLessons,
+        reports.read_lessons,
+    ),
+    _chore_report(
+        reports.MEMORY_PROPOSALS,
+        "The lessons workers proposed that wait on the operator, as JSON (proposals), each with its ticket and run, "
+        "whether that ticket is done, and whether the run was a private ticket's; and each tier's mode (modes).",
+        reports.MemoryProposals,
+        reports.read_proposals,
+    ),
+    _chore_report(
+        reports.MEMORY_LIST,
+        "The ticket notes workers recorded, as JSON (notes), of one ticket or every one, each with the run that "
+        "wrote it and how many runs read and cited it; and each tier's mode (modes).",
+        reports.MemoryList,
+        reports.read_notes,
+    ),
 )
 
 
 @dataclass(frozen=True)
 class Mode:
-    """What the server serves: the overseer's verbs, or a chore its history."""
+    """What the server serves: the overseer's verbs, a chore its history and canopy's reports, or git."""
 
     #: The tools it lists and serves.
     tools: Sequence[Tool]
@@ -546,7 +610,7 @@ def _chore_refusal(opener: Opener) -> str | None:
 
 #: The overseer's verbs, served inside a running tick and never inside a run.
 OVERSEER = Mode(TOOLS, _overseer_refusal)
-#: A chore's history, served inside that chore's run alone.
+#: A chore's history and canopy's read-only reports, served inside a chore's run alone.
 CHORE = Mode(CHORE_TOOLS, _chore_refusal)
 
 

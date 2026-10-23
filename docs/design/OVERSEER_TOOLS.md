@@ -41,11 +41,14 @@ runtime dependency with its own async stack and HTTP transports, for the few met
   reparented, as a `canopy dispatch` run is today.
 
 A chore trials it first (ROADMAP M48, stage 1b). `canopy _mcp --chore`, a server named `canopy_chore` in a chore run's
-inline config, serves that run one tool, `history`, which the chore sees as `canopy_chore_history`: its own chore's
-history (§19), the request and text `canopy chore history` has, refused for any other chore. It lists nothing where
-`CANOPY_RUN_ID` names no chore's run, and serves none of the overseer's tools. The chore's definition allows the tool by
-exact name and denies bash; every other definition denies it. Each run canopy starts drops the variables that name a
-server, so none passes below the run it was given to.
+inline config, serves that run `history`, which the chore sees as `canopy_chore_history`: its own chore's history
+(§19), the request and text `canopy chore history` has, refused for any other chore. Beside it are canopy's read-only
+reports, `health`, `spend`, `memory-lessons`, `memory-proposals`, and `memory-list`, each the request and JSON its
+command prints with `--json`, so an agent that reads them needs no shell. It lists nothing where `CANOPY_RUN_ID` names
+no chore's run, and serves none of the overseer's tools. `canopy-chore` allows `history` by exact name, denies the
+rest, and denies bash; an agent of the operator's allows each report it reads by name; every other definition denies
+`canopy_chore_*`. Each run canopy starts drops the variables that name a server, so none passes below the run it was
+given to.
 
 The reviewer, which has no shell, and the planner, whose shell runs only what `runtime.allow_bash` names, never git,
 read git so too. `canopy _mcp --git NAME=PATH`, named `canopy_git` in a review's or a plan's inline config, serves

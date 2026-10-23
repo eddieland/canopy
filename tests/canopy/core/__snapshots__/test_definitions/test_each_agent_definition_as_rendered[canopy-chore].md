@@ -72,7 +72,9 @@ permission:
   # above reopens one.
   "canopy_git_*": deny
   # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
-  # chore's, allowed by exact name: last, so no pattern above closes it.
+  # chore's, allowed by exact name: last, so no pattern above closes it. The server's other tools, canopy's read-only
+  # reports (DESIGN §27), are for an agent of the operator's that allows each by name; this one reads none of them.
+  "canopy_chore_*": deny
   "canopy_chore_history": allow
 ---
 

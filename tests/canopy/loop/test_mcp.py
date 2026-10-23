@@ -16,7 +16,7 @@ import pytest
 from canopy.chores import history
 from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
-from canopy.core import chore_runs, db, git_tools
+from canopy.core import chore_runs, db, git_tools, reports
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, TickStatus
 from canopy.infra import procs
@@ -675,7 +675,7 @@ def two_chore_runs(env: CanopyEnv) -> sqlite3.Connection:
     return conn
 
 
-def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
+def test_a_chores_run_is_served_its_history_and_canopys_reports_alone(overseen: CanopyEnv) -> None:
     conn = two_chore_runs(overseen)
     for run in ("chore-2", "chore-try:build-health"):
         with in_run(run):
@@ -684,7 +684,7 @@ def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
                 tool_call("decide", key="PROJ-1", action="wait", rationale="r"),
                 chore=True,
             )
-        assert served.listed() == ["history"], run
+        assert served.listed() == ["history", *reports.TOOLS], run
         # None of the overseer's verbs is served to a chore, whatever it asks.
         assert served.responses[2]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
     schema = served.responses[1]["result"]["tools"][0]["inputSchema"]
@@ -700,12 +700,17 @@ def test_nothing_is_served_where_no_chores_run_is(overseen: CanopyEnv, run: str 
     conn = two_chore_runs(overseen)
     read = tool_call("history", name="build-health")
     with in_tick(conn), in_run(run) if run is not None else contextlib.nullcontext():
-        served = mcp_session(LIST_TOOLS, read, chore=True)
+        served = mcp_session(LIST_TOOLS, read, *(tool_call(name) for name in reports.TOOLS), chore=True)
     assert served.listed() == []
     assert served.said(2) == (
         "chore history refused (not_chore): the history tool serves a chore's own runs alone, and this is none",
         True,
     )
+    for n, name in enumerate(reports.TOOLS, 3):
+        assert served.said(n) == (
+            f"{name} refused (not_chore): canopy's chore tools serve a chore's own run alone, and this is none",
+            True,
+        )
 
 
 def test_a_chores_history_tool_says_what_its_command_prints(
@@ -765,6 +770,75 @@ def test_a_chores_history_tool_refuses_what_its_command_refuses(
         assert refused[0][1] in capsys.readouterr().err
         assert main(["chore", "history", "build-health", "--run", "1", "--before", "2"]) == 2
         assert "run (--run) prints one run and before (--before) pages" in capsys.readouterr().err
+
+
+#: Each of canopy's reports a chore reads, as a tool's call and the command that prints the same, `--json`.
+REPORT_READS: list[tuple[Mapping[str, object], list[str]]] = [
+    ({}, ["health", "--json"]),
+    ({"days": 30}, ["health", "--json", "--days", "30"]),
+    ({"days": 1}, ["spend", "--json", "--days", "1"]),
+    ({}, ["memory", "lessons", "--json"]),
+    ({"repo": "repo"}, ["memory", "lessons", "--json", "--repo", "repo"]),
+    ({}, ["memory", "proposals", "--json"]),
+    ({}, ["memory", "list", "--json"]),
+    ({"key": "PROJ-1", "all": True}, ["memory", "list", "PROJ-1", "--all", "--json"]),
+]
+
+
+def test_a_chores_report_tools_say_what_their_commands_print(
+    overseen: CanopyEnv,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    conn = two_chore_runs(overseen)
+    # A lesson whose text hides a character, which the listing names.
+    conn.execute(
+        "INSERT INTO memories (scope, key, body, status, author, created_at, approved_at, review_at) "
+        "VALUES ('lesson', 'lint', ?, 'active', 'operator', ?, ?, ?)",
+        ("Run `make lint`\u200b first.", db.now(), db.now(), db.now()),
+    )
+    conn.commit()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    env = {history.WORKSPACE_ENV: str(overseen.root)}
+    calls = [tool_call(_report_tool(command), **arguments) for arguments, command in REPORT_READS]
+    # From a `cwd` outside the workspace, as a chore's may be: its run names the workspace.
+    with in_run("chore-2"), mock.patch.dict(os.environ, env), contextlib.chdir(elsewhere):
+        served = mcp_session(*calls, chore=True)
+    printed: list[str] = []
+    with in_run("chore-2"):
+        for _, command in REPORT_READS:
+            assert main(command) == 0
+            printed.append(capsys.readouterr().out)
+    for n, out in enumerate(printed, 1):
+        said = served.said(n)
+        assert not said.error, said.text
+        assert f"{said.text}\n" == out
+    assert json.loads(served.said(1).text)["outcomes"][0]["what"] == "build-health"
+    assert json.loads(served.said(4).text)["lessons"][0]["text"] == "Run `make lint`<U+200B> first."
+
+
+def test_a_chores_report_tools_refuse_what_their_commands_refuse(overseen: CanopyEnv) -> None:
+    two_chore_runs(overseen)
+    refused = [
+        ("health", {"days": 0}, "days: Input should be greater than or equal to 1"),
+        ("spend", {"days": 367}, "days: Input should be less than or equal to 366"),
+        ("spend", {"days": "7"}, "days: Input should be a valid integer"),
+        ("memory-lessons", {"repo": "../web"}, "invalid repository name '../web'"),
+        ("memory-list", {"key": "PROJ 1"}, "invalid ticket key 'PROJ 1'"),
+        ("memory-proposals", {"all": True}, "all: Extra inputs are not permitted"),
+    ]
+    with in_run("chore-2"):
+        served = mcp_session(*(tool_call(name, **arguments) for name, arguments, _ in refused), chore=True)
+    for n, (_, _, refusal) in enumerate(refused, 1):
+        said = served.said(n)
+        assert said.error
+        assert refusal in said.text, said.text
+
+
+def _report_tool(command: Sequence[str]) -> str:
+    """The tool that reads what `command` prints: `memory lessons --json` is `memory-lessons`."""
+    return "-".join(word for word in command[: 2 if command[0] == "memory" else 1])
 
 
 # A review's or a plan's run: `canopy _mcp --git NAME=PATH` serves it read-only git in those checkouts alone (§27).
