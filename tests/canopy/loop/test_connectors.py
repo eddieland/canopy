@@ -407,7 +407,8 @@ def test_a_slack_source_records_a_listed_operators_reply_in_a_live_tick_and_a_po
     assert operator_replies(scenario) == []
     ticked = scenario.tick(*waits(*KEYS))
     assert [r["name"] for r in asked(watched)][-1] == "slack"
-    assert asked(watched)[-1]["request"] == {"repo": str(scenario.env.root)}
+    # Asked for the operator's replies alone: nobody else's words reach canopy.
+    assert asked(watched)[-1]["request"] == {"repo": str(scenario.env.root), "operators": [OPERATOR]}
     slack = runs(scenario)[-1]
     assert (slack.source, slack.kind, slack.status, slack.tick_id) == (
         "slack",

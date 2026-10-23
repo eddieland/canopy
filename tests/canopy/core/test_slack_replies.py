@@ -39,7 +39,7 @@ def asked(state: Path) -> list[dict[str, Any]]:
 
 def run(ctx: Context, *, dry_run: bool = False) -> observe.Observed:
     """Run the slack source, as a tick does."""
-    request = observe.Request(repo=ctx.repo)
+    request = observe.Request(repo=ctx.repo, operators=SOURCE.operators)
     return slack_replies.read(ctx.conn, ctx.runner, SOURCE, request, dry_run=dry_run, log=logs.for_tick(None))
 
 
@@ -77,11 +77,13 @@ def test_a_listed_operators_reply_is_their_message_recorded_once(ctx: Context, c
     # The reader reads the thread again on every run: the same message records nothing new.
     again = run(ctx)
     assert (again.recorded, len(replies(ctx))) == ({"already": 1}, 1)
-    # Asked about the workspace, as canopy's messages to the sink name it, which files the sink's threads.
-    assert asked(connector_state) == [{"repo": ctx.repo}, {"repo": ctx.repo}]
+    # Asked about the workspace, as canopy's messages to the sink name it, which files the sink's threads, and for the
+    # listed operators' replies alone.
+    assert asked(connector_state) == [{"repo": ctx.repo, "operators": [OPERATOR]}] * 2
 
 
 def test_a_reply_from_anyone_not_listed_records_nothing(ctx: Context, connector_state: Path) -> None:
+    """A reader that prints someone it was not asked for, as one of the operator's own might, widens nothing."""
     db.touch_ticket(ctx.conn, KEY, ctx.repo)
     reads(connector_state, says("1790.000005", "LGTM, ship it", user="U0COWORKER"))
     ran = run(ctx)

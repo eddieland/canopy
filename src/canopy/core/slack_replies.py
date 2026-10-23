@@ -1,18 +1,19 @@
 """What a `slack` source read of the replies in the Slack sink's ticket threads (DESIGN §22, §30, ROADMAP M64).
 
 The source is a command of the operator's config, `canopy-connect-slack`, run as every connector is (`observe.run`),
-with `{"repo": ROOT}` on stdin: the workspace as canopy's messages to the sink name it, which files the sink's threads.
-It prints a `reply` line for each message a person wrote in a ticket's thread, whoever they are, and last
+with `{"repo": ROOT, "operators": [ID, ...]}` on stdin: the workspace as canopy's messages to the sink name it, which
+files the sink's threads, and the source's `operators`. It prints a `reply` line for each message one of them wrote in
+a ticket's thread, nobody else's, and last
 `{"kind": "end", "tickets": [...], "unread": [...]}`, naming the tickets whose threads it read whole and those it could
 not.
 
 Unlike the other sources, what it reads is no observation. A reply from one of the source's `operators`, on a ticket
 canopy knows, is the operator's own message, recorded through `conversation.reply` as `canopy reply` records one, on
 the channel `slack`, the message's `ts` its submission: the next run reads it again, and records nothing new
-(TRUST_MODEL T1). Whose reply counts is checked here, in code, against the operator's private config, whatever the
-reader printed. Any other line records nothing, not even as data: a reply from someone not listed, on a ticket canopy
-does not know, or one `reply` refuses, such as one over its bound. Each is counted in the run's record by why, and a
-refused operator's reply is logged.
+(TRUST_MODEL T1). Whose reply counts is checked here too, in code, against the operator's private config, whatever
+the reader printed, so a reader of the operator's own that prints more widens nothing. Any other line records
+nothing, not even as data: a reply from someone not listed, on a ticket canopy does not know, or one `reply` refuses,
+such as one over its bound. Each is counted in the run's record by why, and a refused operator's reply is logged.
 
 A run with no `end` line records nothing, as any connector's. A dry run records no message (D036): it counts the replies
 it would have recorded.

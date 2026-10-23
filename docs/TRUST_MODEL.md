@@ -153,8 +153,10 @@ Controls:
   it into every public worker prompt itself (`implement`, `resume`), and refuses a prompt override that
   would drop it (D093).
 - A reply in the Slack sink's ticket thread (DESIGN §22, M64) is an operator message only when the Slack user id that
-  wrote it is one a `slack` source's `operators` lists (private, T7), checked in code against what
-  `canopy-connect-slack` printed, and only on a ticket the journal already has. It is recorded through
+  wrote it is one a `slack` source's `operators` lists (private, T7), and only on a ticket the journal already has.
+  The ids are enforced twice: `canopy-connect-slack` is asked for their replies alone, and refuses to run without one,
+  so nobody else's words reach canopy; and the harness checks each line's id against config in code, whatever the
+  connector printed, so a connector of the operator's own that prints more widens nothing. It is recorded through
   `core/conversation.py`'s `reply`, with its guards and its bound, on the channel `slack`, once per Slack message. That
   channel proves the operator by three things of theirs: the command in their private config, the bot token in their
   operator-only file, and the ids they listed, each of which Slack's own sign-in proves. A reply from anyone else, or

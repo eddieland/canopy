@@ -206,8 +206,9 @@ cmd = "canopy-connect-slack --channel C0123ABCD"
 operators = ["U0123ABCD"]
 ```
 
-`operators` is the whole guard, and canopy checks it in code, not the connector. Only a reply written by an id on that
-list counts; anyone else's records nothing, not even a note, and neither does a bot's, even one posting under your name.
+`operators` is the whole guard, and it's checked twice. canopy asks the connector for those ids' replies alone, so
+a coworker's never even reaches canopy, and then checks every reply's id again itself, in code, so a connector that
+prints more can't widen it. A bot's reply never counts either, even one posting under your name.
 List only yourself. Whoever signs in as a listed account answers your workers as you, and "my laptop was unlocked" is a
 story best told about somebody else's loop.
 

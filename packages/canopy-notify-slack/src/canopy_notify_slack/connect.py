@@ -7,14 +7,15 @@ the sink's checks; the bot needs the channel's history scope, `channels:history`
 `groups:history`, beside the sink's `chat:write`.
 
 On stdin, one JSON object: `repo`, the repository canopy's messages name, which with the channel picks the sink's
-threads, and optionally `tickets`, the ticket keys to read; without it every ticket's threads are read. It reads the
-sink's threads file and never writes it. For each ticket's threads started in the last `--days`, today's among them, it
-calls `conversations.replies` to the last page and prints, in DESIGN §30's shape, a `reply` line for each message a
-person wrote in the thread: the ticket, the thread's and the message's `ts`, the Slack user id, the time, and the text
-as Slack holds it, its own escaping undone, whole. A thread's first post, the sink's own, is not printed, and neither is
-a message with no user, from a bot (`bot_id`, which a bot posting under a person's name still carries), or with a
-`subtype`, such as a join or a file comment. An edited message is printed as it reads now; canopy records a message by
-its `ts`, once, so an edit after that changes nothing. A review's thread is not read, nor the channel itself.
+threads; `operators`, the Slack user ids whose replies it prints, at least one; and optionally `tickets`, the ticket
+keys to read; without it every ticket's threads are read. It reads the sink's threads file and never writes it. For
+each ticket's threads started in the last `--days`, today's among them, it calls `conversations.replies` to the last
+page and prints, in DESIGN §30's shape, a `reply` line for each message one of `operators` wrote in the thread: the
+ticket, the thread's and the message's `ts`, the Slack user id, the time, and the text as Slack holds it, its own
+escaping undone, whole. Nobody else's words leave the process. A thread's first post, the sink's own, is not printed,
+and neither is a message with no user, from a bot (`bot_id`, which a bot posting under a person's name still carries),
+or with a `subtype`, such as a join or a file comment. An edited message is printed as it reads now; canopy records a
+message by its `ts`, once, so an edit after that changes nothing. A review's thread is not read, nor the channel itself.
 
 Last, an `end` line naming the tickets whose threads were each read to the last page, `tickets`, and those it could
 not read, `unread`. A thread that could not be read prints nothing for its ticket but its error on stderr, so a cut-off
@@ -104,29 +105,41 @@ def main(ctx: click.Context, channel: str, token_file: Path | None, days: int) -
     reach = ctx.find_object(Reach) or Reach()
     try:
         checked = check_channel(channel)
-        repo, tickets = _request(sys.stdin.read())
+        request = _request(sys.stdin.read())
         token = read_token(token_file or default_token_file())
-        threads = Threads.load(default_threads_file(), checked, repo)
+        threads = Threads.load(default_threads_file(), checked, request.repo)
     except SinkError as e:
         _say(str(e))
         ctx.exit(2)
     asked = threads.recent(reach.today().isoformat(), days)
-    reader = _Reader(reach.replies_url, token, checked, sys.stdout)
+    reader = _Reader(reach.replies_url, token, checked, request.operators, sys.stdout)
     for key, started in asked.items():
-        if _KEY.fullmatch(key) and (tickets is None or key in tickets):
+        if _KEY.fullmatch(key) and (request.tickets is None or key in request.tickets):
             reader.read(key, [ts for _, ts in started])
     _emit(sys.stdout, {"kind": "end", "tickets": reader.whole, "unread": reader.unread})
     ctx.exit(1 if reader.failed else 0)
 
 
-def _request(stdin: str) -> tuple[str, AbstractSet[str] | None]:
-    """Read the request: the repository, and the tickets to read, if it names them.
+@dataclass(frozen=True)
+class _Request:
+    """What canopy asks a run to read."""
+
+    #: The workspace as canopy's messages to the sink name it, which with the channel picks the sink's threads.
+    repo: str
+    #: The Slack user ids whose replies are printed: the `slack` source's `operators`, never empty.
+    operators: AbstractSet[str]
+    #: The tickets to read, or None for every ticket's threads.
+    tickets: AbstractSet[str] | None
+
+
+def _request(stdin: str) -> _Request:
+    """Read the request: the repository, the operators whose replies to print, and the tickets to read, if named.
 
     Returns:
-        The repository, and the tickets, or None for every ticket.
+        The request.
 
     Raises:
-        SinkError: stdin is not a JSON object, or its `repo` or `tickets` is not usable.
+        SinkError: stdin is not a JSON object, or its `repo`, `operators`, or `tickets` is not usable.
     """
     try:
         raw: object = json.loads(stdin)
@@ -137,12 +150,20 @@ def _request(stdin: str) -> tuple[str, AbstractSet[str] | None]:
     repo = raw.get("repo")
     if not isinstance(repo, str):
         raise SinkError("stdin's repo must be a string: the repository canopy's messages name")
+    operators = raw.get("operators")
+    # Only the ids asked for are printed: nobody else's words leave this process, and with none it reads nothing.
+    if not isinstance(operators, list) or not operators or not all(_is_user(o) for o in operators):
+        raise SinkError('stdin\'s operators must be a list of Slack user ids: {"operators": ["U0123ABCD"]}')
     tickets = raw.get("tickets")
     if tickets is None:
-        return repo, None
+        return _Request(repo, frozenset(operators), None)
     if not isinstance(tickets, list) or not all(isinstance(t, str) and _KEY.fullmatch(t) for t in tickets):
         raise SinkError('stdin\'s tickets must be a list of ticket keys: {"tickets": ["PROJ-1"]}')
-    return repo, frozenset(tickets)
+    return _Request(repo, frozenset(operators), frozenset(tickets))
+
+
+def _is_user(value: object) -> bool:
+    return isinstance(value, str) and _USER.fullmatch(value) is not None
 
 
 @dataclass
@@ -152,6 +173,8 @@ class _Reader:
     url: str
     token: str
     channel: str
+    #: The Slack user ids whose replies are printed.
+    operators: AbstractSet[str]
     stdout: TextIO
     #: The tickets each of whose threads was read to the last page, in the order read.
     whole: list[str] = field(default_factory=list[str])
@@ -168,7 +191,9 @@ class _Reader:
         lines: list[dict[str, object]] = []
         for thread in threads:
             try:
-                lines += [line for m in self._messages(thread) if (line := _reply(key, thread, m)) is not None]
+                lines += [
+                    line for m in self._messages(thread) if (line := _reply(key, thread, m, self.operators)) is not None
+                ]
             except SinkError as e:
                 self.unread.append(key)
                 _say(f"cannot read {key}'s thread {thread}: {e}")
@@ -246,8 +271,13 @@ class _GoneError(SinkError):
     """Slack no longer has the thread asked for."""
 
 
-def _reply(key: str, thread: str, message: Mapping[str, object]) -> dict[str, object] | None:
-    """A message's `reply` line, if a person wrote it in the thread: not its first post, a bot's, or a `subtype`'s.
+def _reply(
+    key: str,
+    thread: str,
+    message: Mapping[str, object],
+    operators: AbstractSet[str],
+) -> dict[str, object] | None:
+    """A message's `reply` line, if one of `operators` wrote it in its thread: not a first post, a bot's, a `subtype`'s.
 
     Returns:
         The line, or None.
@@ -257,7 +287,7 @@ def _reply(key: str, thread: str, message: Mapping[str, object]) -> dict[str, ob
         return None
     if "bot_id" in message or "subtype" in message:
         return None
-    if not isinstance(user, str) or not _USER.fullmatch(user) or not isinstance(text, str) or not text.strip():
+    if not isinstance(user, str) or user not in operators or not isinstance(text, str) or not text.strip():
         return None
     return {
         "kind": "reply",

@@ -10,7 +10,8 @@ stages, in order, each in its own PRs.
 - **Stage 1, reading threads.** `canopy-connect-slack`, a second command in the `canopy-notify-slack` member,
   importing nothing from canopy, on click (D025). It reads the sink's bot token file, held to the sink's checks, and
   its threads file, and calls `conversations.replies` for each ticket's threads of the last `--days` (3, at most 7).
-  It prints a `reply` line for each message a person wrote, whoever they are: the thread's ticket key, the Slack user
+  It prints a `reply` line for each message one of the ids canopy asks for wrote (stage 2: the source's `operators`,
+  and it refuses to run without one), nobody else's: the thread's ticket key, the Slack user
   id, the message's `ts`, and its text with Slack's escaping undone, whole, since canopy refuses an overlong reply
   (4000 characters, `conversation.MAX_OPERATOR`) rather than cut it; then §30's `end` line, naming the tickets whose
   threads were each read whole. It skips a thread's first post and any message with no user, a `bot_id`, or a

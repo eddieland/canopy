@@ -98,6 +98,8 @@ class Request:
     since: int | None = None
     #: For a `slack` source, the workspace as canopy's messages to the sink name it, which files the sink's threads.
     repo: str | None = None
+    #: For a `slack` source, its `operators`: the only Slack user ids whose replies the connector is asked to print.
+    operators: Sequence[str] | None = None
 
     def to_json(self) -> dict[str, object]:
         """The request as the connector reads it on stdin.
@@ -125,6 +127,8 @@ class Request:
             found["since"] = self.since
         if self.repo is not None:
             found["repo"] = self.repo
+        if self.operators is not None:
+            found["operators"] = list(self.operators)
         return found
 
 

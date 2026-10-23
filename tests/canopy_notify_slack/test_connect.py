@@ -101,7 +101,7 @@ def _read(
     today: date = date(2026, 9, 26),
 ) -> Result:
     argv = ["--channel", CHANNEL, "--token-file", str(token_file(tmp_path)), *flags]
-    stdin = json.dumps({"repo": REPO} if request is None else request)
+    stdin = json.dumps({"repo": REPO, "operators": [OPERATOR]} if request is None else request)
     return invoke(connect.main, argv, stdin=stdin, obj=connect.Reach(url, lambda: today))
 
 
@@ -137,7 +137,7 @@ def test_a_reply_a_person_wrote_in_a_tickets_thread_is_printed(replies: str, tmp
     assert query == {"channel": CHANNEL, "ts": "1790.000001", "limit": "200"}
 
 
-def test_only_what_a_person_wrote_is_printed(replies: str, tmp_path: Path, state: Path) -> None:
+def test_only_what_an_operator_wrote_is_printed(replies: str, tmp_path: Path, state: Path) -> None:
     _threads(state, {"PROJ-1": {"day": "2026-09-26", "ts": "1790.000001"}})
     _Replies.threads["1790.000001"] = [
         _says("1790.000002", "a bot, under the operator's name", bot_id="B9"),
@@ -150,8 +150,12 @@ def test_only_what_a_person_wrote_is_printed(replies: str, tmp_path: Path, state
     ]
     result = _read(replies, tmp_path)
     assert result.exit_code == 0, result.stderr
-    # An edited message as it reads now; a coworker's too, for canopy to decide whose words count (stage 2).
-    assert _bodies(result) == [("PROJ-1", OPERATOR, "it reads like this now"), ("PROJ-1", "U0COWORKER", "LGTM from me")]
+    # An edited message as it reads now. A coworker's never leaves the reader: canopy asked for the operator's alone.
+    assert _bodies(result) == [("PROJ-1", OPERATOR, "it reads like this now")]
+    assert "LGTM" not in result.stdout
+    # Asked for both, it prints both.
+    both = _read(replies, tmp_path, {"repo": REPO, "operators": [OPERATOR, "U0COWORKER"]})
+    assert [user for _, user, _ in _bodies(both)] == [OPERATOR, "U0COWORKER"]
 
 
 def test_the_threads_of_the_last_days_are_read_and_no_review_thread(
@@ -187,7 +191,7 @@ def test_only_the_tickets_asked_are_read(replies: str, tmp_path: Path, state: Pa
         {"PROJ-1": {"day": "2026-09-26", "ts": "1790.000001"}, "PROJ-2": {"day": "2026-09-26", "ts": "1790.000002"}},
     )
     _Replies.threads = {"1790.000001": [], "1790.000002": [_says("1790.000003", "on two")]}
-    result = _read(replies, tmp_path, {"repo": REPO, "tickets": ["PROJ-2", "PROJ-9"]})
+    result = _read(replies, tmp_path, {"repo": REPO, "operators": [OPERATOR], "tickets": ["PROJ-2", "PROJ-9"]})
     assert _bodies(result) == [("PROJ-2", OPERATOR, "on two")]
     assert _lines(result)[-1] == {"kind": "end", "tickets": ["PROJ-2"], "unread": []}
     assert [q["ts"] for _, q in _Replies.received] == ["1790.000002"]
@@ -243,7 +247,13 @@ def test_a_thread_slack_no_longer_has_reads_as_one_with_no_replies(replies: str,
         ("not json", "stdin is not a JSON object"),
         ('["/r/api"]', "stdin is not a JSON object"),
         ("{}", "stdin's repo must be a string"),
-        ('{"repo": "/r/api", "tickets": ["review:x"]}', "stdin's tickets must be a list of ticket keys"),
+        ('{"repo": "/r/api"}', "stdin's operators must be a list of Slack user ids"),
+        ('{"repo": "/r/api", "operators": []}', "stdin's operators must be a list of Slack user ids"),
+        ('{"repo": "/r/api", "operators": ["@me"]}', "stdin's operators must be a list of Slack user ids"),
+        (
+            '{"repo": "/r/api", "operators": ["U0OPERATOR"], "tickets": ["review:x"]}',
+            "stdin's tickets must be a list of ticket keys",
+        ),
     ],
 )
 def test_a_request_that_is_not_usable_is_exit_2(
@@ -264,7 +274,8 @@ def test_a_request_that_is_not_usable_is_exit_2(
 def test_a_token_file_others_can_read_is_exit_2(replies: str, tmp_path: Path, state: Path) -> None:
     del state
     argv = ["--channel", CHANNEL, "--token-file", str(token_file(tmp_path, mode=0o644))]
-    result = invoke(connect.main, argv, stdin=json.dumps({"repo": REPO}), obj=connect.Reach(replies))
+    stdin = json.dumps({"repo": REPO, "operators": [OPERATOR]})
+    result = invoke(connect.main, argv, stdin=stdin, obj=connect.Reach(replies))
     assert result.exit_code == 2
     assert "readable by others" in result.stderr
 

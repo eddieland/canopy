@@ -68,7 +68,7 @@ def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter, *, dry_run: bo
             case SourceKind.ARTIFACTS:
                 request = observe.Request(since=artifact_feed.cursor(ctx.conn, name))
             case SourceKind.SLACK:
-                request = observe.Request(repo=ctx.repo)
+                request = observe.Request(repo=ctx.repo, operators=source.operators)
             case _:
                 assert_never(kind)
         started = db.now()

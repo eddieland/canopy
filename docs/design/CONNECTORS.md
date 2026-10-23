@@ -35,7 +35,7 @@ On stdin, one JSON object naming what to observe, and a connector reads only wha
 tracker query and every ticket the state block lists (§6 step 4); a `vcs` source every PR of a ticket not marked done,
 with a draft waiting (§29), or last observed open, so no observation stays open unread, the repositories, the branch
 prefix, and the review query; an `artifacts` source its feed's cursor; a `slack` source the workspace, which names
-the sink's threads. On stdout, one JSON line per observation, naming
+the sink's threads, and its `operators`, whose replies alone it prints. On stdout, one JSON line per observation, naming
 its kind (tickets and comments; PRs, branches, checks, and reviews; a feed's changes to comments and threads), and last
 an `end` line naming what the run read whole, or for a feed the cursor its next run reads from; the exit code is not
 read. A connector of the operator's own speaks this contract and nothing else: it is all the harness knows of any of
@@ -120,8 +120,8 @@ sink's checks (§20), sent only to the site the operator names, and never in con
 
 What a `slack` source reads is no observation: a reply from one of its `operators`, on a ticket canopy knows, is the
 operator's message, recorded as `canopy reply` records one, once per Slack message (§22, TRUST_MODEL T1); the harness
-checks the id against config in code, whatever the connector printed. Anyone else's records nothing, and a dry run
-records none (D036).
+checks the id against config in code, whatever the connector printed. The connector prints no one else's, and a dry
+run records none (D036).
 
 Rejected: the harness calling the APIs (D003, TRUST_MODEL T2: the process that holds the journal and enforces the
 guards never opens a connection or reads a token); an agent as the connector (a model run as a poll, against §4
