@@ -37,7 +37,7 @@ dependencies = [
     "canopy-notify-slack",
     "canopy-sandbox",
     "click>=8.5.0",
-    "fastapi>=0.143.2",
+    "fastapi>=0.143.3",
     "pydantic>=2.14.1",
     "rich>=15.0.0",
     # FastAPI's own foundation; canopy.serve's middleware and responses import it directly, so it is declared too.
@@ -132,7 +132,7 @@ dev = [
     "actionlint-py>=1.7.12.25",
     "editorconfig-checker>=3.11.1",
     "httpx2>=2.13.1",
-    "hypothesis>=6.170.0",
+    "hypothesis>=6.170.1",
     # Holds what an MCP tool returns to the schema it lists, as a client would check it (tests/canopy/loop/test_mcp.py).
     "jsonschema>=4.26.0",
     "pyrefly>=1.4.0",
