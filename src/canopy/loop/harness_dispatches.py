@@ -27,10 +27,11 @@ from typing import TYPE_CHECKING, TypedDict, assert_never
 from canopy.chores import start as chore_start
 from canopy.core import chore_view, conversation, db, feedback_plans, records, sql
 from canopy.core.vocab import Decider, Phase, ResumeReason, RunKind
-from canopy.loop import attention, harness, phases
+from canopy.loop import attention, phases
 from canopy.runs import dispatch
 
 if TYPE_CHECKING:
+    import sqlite3
     from collections.abc import Iterable, Mapping, Sequence
 
     from canopy.core.config import Chore
@@ -174,7 +175,7 @@ def runs(ctx: Context, tick_id: int) -> list[TicketRun]:
     by_ticket: dict[str, list[phases.Derived]] = {}
     for d in phases.recorded(ctx.conn, tick_id):
         by_ticket.setdefault(d.ticket_key, []).append(d)
-    kept = harness.held(ctx.conn)
+    kept = _held(ctx.conn)
     found = [
         run for key in sorted(by_ticket) if key not in kept and (run := _run(ctx, key, by_ticket[key])) is not None
     ]
@@ -272,6 +273,19 @@ def make(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
         _resume(ctx, tick_id, run, dry_run=dry_run, log=log)
     for name in planned.chores:
         _chore(ctx, tick_id, name, dry_run=dry_run, log=log)
+
+
+def _held(conn: sqlite3.Connection) -> set[str]:
+    """The tickets with an item the overseer holds open on the attention list: none gets the harness's run.
+
+    What the item says may be why not to run, which is judgment; a `wait` acts on nothing, so the harness still takes
+    one, and the item stands while it does (`attention.current`).
+
+    Returns:
+        Their keys.
+    """
+    items = attention.current(conn)
+    return {i.ticket_key for i in items if i.ticket_key is not None and i.reason not in attention.HARNESS_REASONS}
 
 
 def _run(ctx: Context, key: str, subjects: Sequence[phases.Derived]) -> TicketRun | None:

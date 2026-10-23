@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
-import { choresQuery, loopQuery, reviewsQuery, runsQuery } from '@/api/queries'
+import { choresQuery, loopQuery, reviewsQuery, runsQuery, tasksQuery } from '@/api/queries'
 import { RUN_STATES } from '@/api/types'
 import type { Capacity, RunState } from '@/api/types'
 import { OrderToggle } from '@/components/order-toggle'
@@ -40,6 +40,7 @@ function RunsPage() {
     const runs = useQuery(runsQuery).data
     const reviews = useQuery(reviewsQuery).data
     const chores = useQuery(choresQuery).data
+    const tasks = useQuery(tasksQuery).data
     const capacity = useQuery(loopQuery).data?.capacity
     // The worker runs lead the page: it waits on them, and lists the reviews and chores as they arrive.
     const groups = runs === undefined ? undefined : subjectRuns({ runs, reviews, chores })
@@ -52,7 +53,7 @@ function RunsPage() {
                 links={
                     runs !== undefined &&
                     capacity !== undefined && (
-                        <CapacityLine capacity={capacity} busy={busy({ runs, reviews, chores })} />
+                        <CapacityLine capacity={capacity} busy={busy({ runs, reviews, chores, tasks })} />
                     )
                 }
             >

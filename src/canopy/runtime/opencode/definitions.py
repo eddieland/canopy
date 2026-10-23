@@ -15,6 +15,7 @@ files mark for it:
 - the artifact store's MCP server, denied whole to every agent, then for each agent config lets publish its tools
   allowed by name, and the store's skill, which every definition denies as shipped (DESIGN §38);
 - the reviewer's and overseer's temperature, unless it sets none;
+- each agent's model, from `runtime.models`, unless it sets none (DESIGN §13, Each agent's model);
 - the commands the operator allows an agent beyond its own bash rules (`runtime.allow_bash`, DESIGN §13), last of
   them;
 - the overseer's prompt, then the tracker's skill if canopy ships one, as the overseer's body: the body is the agent's
@@ -63,6 +64,10 @@ MAX_SKILL_NAME = 64
 BASH_ALLOW_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*(?: [A-Za-z0-9._,:=@%+/*?-]+)*")
 #: The commands of OpenCode itself, which run an agent with rules of its own.
 RUNTIME_COMMANDS = ("opencode",)
+#: A model as OpenCode names it, `provider/model`, as `opencode models` lists it one a line: a provider's id, then the
+#: model's, which may hold a `/` of its own (`openrouter/vendor/model`). At most 200 characters, none of which ends a
+#: YAML string in double quotes, so it is rendered into a definition as it is.
+MODEL_RE = re.compile(r"(?=.{3,200}\Z)[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._:@/+-]*")
 
 
 def _file(agent: str) -> str:
@@ -143,6 +148,8 @@ _ARTIFACT_SKILL = "canopy-artifacts"
 _AGENTS = (WORKER, PRIVATE_WORKER, PLANNER, REVIEWER, OVERSEER, CHORE)
 # The line of the shipped reviewer's and overseer's definitions their temperature is rendered at.
 _TEMPERATURE_MARKER = "# canopy: temperature\n"
+# The line of every shipped definition its model is rendered at.
+_MODEL_MARKER = "# canopy: model\n"
 # The line of the shipped overseer definition its prompt replaces, with everything after it.
 _PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 # The line of the shipped overseer definition the denial of its skill tool is rendered at, when its body holds the
@@ -215,7 +222,7 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
 
 
 def _render_by_agent(found: dict[str, bytes], rules: Rules) -> None:
-    """Render into `found`, in place, what `rules` gives agents by name: the store, bash allows, temperature."""
+    """Render into `found`, in place, what `rules` gives agents by name: the store, bash allows, temperature, model."""
     for agent in _AGENTS:
         rel = _file(agent)
         if rel in found:
@@ -228,6 +235,10 @@ def _render_by_agent(found: dict[str, bytes], rules: Rules) -> None:
         rel = _file(agent)
         if rel in found:
             found[rel] = render_temperature(found[rel].decode(), rel, temperature).encode()
+    for agent, model in rules.models.items():
+        rel = _file(agent)
+        if rel in found:
+            found[rel] = render_model(found[rel].decode(), rel, model).encode()
 
 
 def render_private(text: str, tools: McpTools | None, name: str = _PRIVATE_FILE) -> str:
@@ -353,6 +364,21 @@ def render_temperature(text: str, name: str, temperature: float | None) -> str:
     if temperature is None:
         return text
     return text.replace(_TEMPERATURE_MARKER, f"{_TEMPERATURE_MARKER}temperature: {temperature}\n", 1)
+
+
+def render_model(text: str, name: str, model: str) -> str:
+    """Return definition `name` with `model` at its marked line: the model `opencode run --agent` runs it on.
+
+    A `--model` on the command line would beat it, which config refuses in every template (DESIGN §13).
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the model at, or `model` is not a model canopy renders.
+    """
+    if _MODEL_MARKER not in text:
+        raise DefinitionsError(f"{name} has no line {_MODEL_MARKER.strip()!r} to render the model at")
+    if not MODEL_RE.fullmatch(model):
+        raise DefinitionsError(f"{name}: {model!r} is not a model canopy renders")
+    return text.replace(_MODEL_MARKER, f'{_MODEL_MARKER}model: "{model}"\n', 1)
 
 
 def render_bash_allows(text: str, name: str, allows: Sequence[str]) -> str:

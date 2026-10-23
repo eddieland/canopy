@@ -995,7 +995,7 @@ def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
     else:
         return
     reason = f"the harness {where} {key} this tick (the state block's `{shown}`); record nothing about it"
-    db.record_decision(ctx.conn, tick_id, key, f"refused:{DECIDED}", reason)
+    db.record_decision(ctx.conn, tick_id, key, attention.REFUSED_DECIDED, reason)
     logs.for_tick(tick_id).info("refused: decided by the harness", extra={"ticket": key, "verb": verb})
     raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")
 

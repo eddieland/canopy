@@ -6444,6 +6444,13 @@ export type components = {
              * @description How many ticks.
              */
             ticks: number;
+            /**
+             * Without Overseer
+             * @description How many of them ran no overseer, the harness having left it nothing to judge or the tick halting before it
+             *     (DESIGN §39): each counted at nothing, never as a run that reported no cost.
+             * @default 0
+             */
+            without_overseer: number;
         };
         /**
          * SpendTool
@@ -6559,6 +6566,13 @@ export type components = {
              * @description How many ticks.
              */
             ticks: number;
+            /**
+             * Without Overseer
+             * @description How many of them ran no overseer, the harness having left it nothing to judge or the tick halting before it
+             *     (DESIGN §39): each counted at nothing, never as a run that reported no cost.
+             * @default 0
+             */
+            without_overseer: number;
         };
         /**
          * Started
