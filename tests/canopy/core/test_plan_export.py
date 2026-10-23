@@ -167,6 +167,12 @@ def test_a_plan_names_its_planners_persona_and_models(
     meta, _ = front_matter(file_of(dest, KEY, run_id))
     assert meta["models"] == ["anthropic/claude-x@high", "anthropic/claude-y"]
 
+    # A read that finds the chosen model alone wrote it says nothing `model` does not, so `models` is left out.
+    run_models.record(conn, due, ModelsRead.FOUND, [ModelUse("anthropic/claude-x@high", 4, 0.6)])
+    plan_export.export(conn, state_dir, dest)
+    meta, _ = front_matter(file_of(dest, KEY, run_id))
+    assert (meta["model"], "models" in meta) == ("anthropic/claude-x@high", False)
+
 
 def priced_run(
     conn: sqlite3.Connection,

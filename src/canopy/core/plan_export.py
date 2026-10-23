@@ -318,10 +318,9 @@ def document(
     """A plan as it is exported: a front matter of its kind, its row's columns that are set, and its planner's.
 
     Of `planner`, the front matter names the persona as `persona`, the model canopy chose as `model`, the models that
-    wrote the plan as `models`, its run's cost as `cost_usd`, and every run's it took as `total_cost_usd`, each only
-    when the journal records it. Each value is written as JSON, which YAML
-    reads as the same string, number, or list, so a reason the planner wrote cannot end the front matter or add a key
-    to it.
+    wrote the plan as `models` unless they are that model alone, its run's cost as `cost_usd`, and every run's it took
+    as `total_cost_usd`, each only when the journal records it. Each value is written as JSON, which YAML reads as the
+    same string, number, or list, so a reason the planner wrote cannot end the front matter or add a key to it.
 
     Returns:
         The file's bytes, UTF-8.
@@ -336,7 +335,8 @@ def document(
             lines.append(f"persona: {json.dumps(planner.persona)}\n")
         if planner.model is not None:
             lines.append(f"model: {json.dumps(planner.model)}\n")
-        if planner.models:
+        # Only when they say more than `model` does: a run served by the model canopy chose alone names it once.
+        if planner.models and list(planner.models) != [planner.model]:
             lines.append(f"models: {json.dumps(list(planner.models))}\n")
         for key, cost in (("cost_usd", planner.cost_usd), ("total_cost_usd", planner.total_cost_usd)):
             if cost is not None:
