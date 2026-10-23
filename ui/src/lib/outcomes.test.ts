@@ -17,6 +17,7 @@ import {
     failedText,
     forgotText,
     grantedText,
+    itemNames,
     memoryForgottenText,
     notedText,
     planText,
@@ -36,6 +37,8 @@ import {
     reviewStoppedText,
     startedText,
     stoppedText,
+    taskRepliedText,
+    taskStoppedText,
     triedText,
 } from './outcomes'
 
@@ -116,6 +119,24 @@ describe('outcomes', () => {
             'A-1 was already stopped; nothing dispatches it now. Run 4 was ended and its slots returned.',
         )
         expect(stoppedText('A-1', { already: true, running_run: 4, ended: false }, true)).toContain('had already ended')
+    })
+
+    it("say what a task's stop did, as canopy stop task:N does", () => {
+        const stop = { already: false, dropped: false, running_run: null, ended: false }
+        expect(taskStoppedText(7, { ...stop, dropped: true }, false)).toBe(
+            'task:7 is stopped; it had not started, and nothing starts it now.',
+        )
+        expect(taskStoppedText(3, { ...stop, already: true }, false)).toBe('task:3 was already stopped.')
+        expect(taskStoppedText(6, { ...stop, already: true, running_run: 6 }, true)).toBe(
+            'task:6 was already stopped. Its run 6 had already ended.',
+        )
+    })
+
+    it("say what a task's reply recorded, or that one already said it, and what starts its next run", () => {
+        expect(taskRepliedText(4, { message_id: 14, answers: 13, new: false, running_run: null })).toBe(
+            'Message 14 on task:4 already says this, answering message 13; nothing new recorded. The next tick ' +
+                'starts its next run, on its branch.',
+        )
     })
 
     it("say what a forget cleared, and that its PRs and branch are the operator's to close", () => {
@@ -412,6 +433,19 @@ describe('outcomes', () => {
         const forgot = { id: 9, scope: 'lesson', key: 'web-tests', checkpointed: true } as const
         expect(memoryForgottenText(forgot)).toBe('Memory 9 (lesson `web-tests`) is forgotten: its text is deleted.')
         expect(memoryForgottenText({ ...forgot, checkpointed: false })).toContain('may stay in the log')
+    })
+})
+
+// A feedback plan's item `number`, its observed id 500 more.
+function item(number: number) {
+    return { number, item_id: 500 + number }
+}
+
+describe('itemNames', () => {
+    it("names a feedback plan's items by number and id, as canopy/core/prompts.py item_names does", () => {
+        expect(itemNames([item(2)])).toBe('item 2 (id 502)')
+        expect(itemNames([item(1), item(3)])).toBe('items 1 (id 501) and 3 (id 503)')
+        expect(itemNames([item(1), item(3), item(5)])).toBe('items 1 (id 501), 3 (id 503), and 5 (id 505)')
     })
 })
 

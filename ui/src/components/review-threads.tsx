@@ -5,10 +5,11 @@ import { useId, useState } from 'react'
 
 import { dropDraft, editDraft, refreshThreads, sendDrafts, stageDrafts } from '@/api/mutations'
 import { pullRequestThreadsQuery } from '@/api/queries'
-import type { Draft, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
+import type { Draft, FeedbackPlanItem, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
 import { Age } from '@/components/age'
 import { CommentText } from '@/components/comment-text'
 import { DraftCardFrame, DraftForm, DraftVerbs, DropVerb, EditVerb } from '@/components/draft-card'
+import { FeedbackPlanPanel, PlanProposal } from '@/components/feedback-plan'
 import { LinkOut } from '@/components/link-out-icon'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
@@ -53,7 +54,8 @@ import { cn } from '@/lib/utils'
  * file when the diff does not show the line or it is outdated, or in a Not in the diff panel. Its comments and every
  * draft are plain text, every hidden character named, a comment's `<details>` blocks folded. A draft is edited,
  * dropped, or sent where it sits; the head panel lists every draft with a link to its card, and sends every waiting one
- * together, as one comment review.
+ * together, as one comment review. The current feedback plan of the PR's ticket, when it has one, follows the head
+ * panel, where it is approved, and each thread it covers carries its proposal above the drafts (DESIGN §32).
  */
 export function ReviewThreads({ url }: { url: string }) {
     const client = useQueryClient()
@@ -71,16 +73,20 @@ export function ReviewThreads({ url }: { url: string }) {
         )
     }
     const placed = placeThreads(data)
+    const proposals = new Map((data.feedback_plan?.items ?? []).map((i) => [i.thread_id, i]))
     return (
         <>
             <RepliesPanel threads={data} placed={placed} onChange={changed} onFollow={(file) => setWanted({ file })} />
+            {data.feedback_plan !== null && <FeedbackPlanPanel plan={data.feedback_plan} onChange={changed} />}
             {data.diff !== null && (
                 <DiffPanels
                     diff={data.diff}
                     placed={placed}
                     wanted={wanted}
                     cards={['thread', 'threads']}
-                    renderCard={(t) => <ThreadCard key={t.id} thread={t} onChange={changed} />}
+                    renderCard={(t) => (
+                        <ThreadCard key={t.id} thread={t} item={proposals.get(t.id)} onChange={changed} />
+                    )}
                 />
             )}
             {placed.elsewhere.length > 0 && (
@@ -90,7 +96,7 @@ export function ReviewThreads({ url }: { url: string }) {
                     </PanelHeader>
                     <div className="flex flex-col gap-2 p-3">
                         {placed.elsewhere.map((t) => (
-                            <ThreadCard key={t.id} thread={t} onChange={changed} />
+                            <ThreadCard key={t.id} thread={t} item={proposals.get(t.id)} onChange={changed} />
                         ))}
                     </div>
                 </Panel>
@@ -346,10 +352,19 @@ function sendRefs(drafts: Draft[]): string {
 
 /**
  * One review thread: where it is, whether GitHub says it is outdated or resolved, its comments as their authors wrote
- * them, plain text with each `<details>` block folded (`CommentText`), with a link to each on its host, then the drafts
- * that answer it. One the operator sent wears `sent by you`. A thread no draft answers shows as it is.
+ * them, plain text with each `<details>` block folded (`CommentText`), with a link to each on its host, then the
+ * feedback plan's proposal for it, `item`, when the plan covers it, then the drafts that answer it. One the operator
+ * sent wears `sent by you`. A thread no draft answers shows as it is.
  */
-export function ThreadCard({ thread, onChange }: { thread: ReviewThread; onChange: () => void }) {
+export function ThreadCard({
+    thread,
+    item,
+    onChange,
+}: {
+    thread: ReviewThread
+    item?: FeedbackPlanItem | undefined
+    onChange: () => void
+}) {
     const where = threadWhere(thread)
     return (
         <article className="rounded-md border bg-surface-raised p-3 text-sm" data-testid="review-thread">
@@ -372,6 +387,7 @@ export function ThreadCard({ thread, onChange }: { thread: ReviewThread; onChang
                     </li>
                 ))}
             </ol>
+            {item !== undefined && <PlanProposal item={item} />}
             {thread.drafts.length > 0 && (
                 <div className="mt-2 flex flex-col gap-2">
                     {thread.drafts.map((d) => (

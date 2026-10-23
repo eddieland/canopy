@@ -16,6 +16,7 @@ from canopy.core import db, drafts, drafts_manage, records, review_diff, sql
 from canopy.core.vocab import DraftKind, ReviewItem
 from canopy.serve.draft_schema import Draft, DraftFailure, DraftsSent, PullRequestThreads, Thread, ThreadComment
 from canopy.serve.draft_views import draft
+from canopy.serve.feedback_plan_views import for_pr
 from canopy.serve.reviews import diff_view
 
 if TYPE_CHECKING:
@@ -28,7 +29,8 @@ def threads(ctx: Context, url: str) -> PullRequestThreads | None:
     """The PR's threads on its latest kept diff, with every draft for it, or None when the journal knows neither.
 
     Returns:
-        The threads, the PR's own comment's drafts, and the drafts no read has placed on a thread.
+        The threads, the PR's own comment's drafts, the drafts no read has placed on a thread, and the current feedback
+        plan of the PR's ticket, each of its items naming the thread it is.
     """
     conn = ctx.conn
     observed = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", url))
@@ -80,6 +82,7 @@ def threads(ctx: Context, url: str) -> PullRequestThreads | None:
         threads=listed,
         pr_drafts=[views[d.id] for d in found if d.kind is DraftKind.PR],
         unplaced=unplaced,
+        feedback_plan=for_pr(ctx, url, {i: t for i, t in placed.items() if t is not None}),
     )
 
 

@@ -30,6 +30,8 @@ def found(ctx: Context, query: str) -> SearchResults:
                 snippet=h.snippet,
                 ticket_key=h.ticket_key,
                 chore=h.chore,
+                task_id=h.task_id,
+                task_title=h.task_title,
                 run_id=h.run_id,
                 tick_id=h.tick_id,
                 label=h.label,

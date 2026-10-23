@@ -112,3 +112,20 @@ def test_a_discarded_draft_waits_on_nobody(scenario: Scenario, requested: int) -
     assert [i.reason for i in waiting.items(scenario.conn)] == [waiting.WAITING_REASON]
     scenario.operator("review", "discard", str(requested))
     assert waiting.items(scenario.conn) == []
+
+
+def test_a_requested_review_of_a_pr_never_read_waits_until_a_tick_reads_it_merged(
+    scenario: Scenario,
+    requested: int,
+    github_state: Path,
+    ctx: Context,
+) -> None:
+    del requested
+    # Its request ended with the review, before any read saw the PR: only its draft keeps the PR read.
+    github_state.write_text(json.dumps({"prs": {THEIRS: {"pr": {"state": "merged"}}}}))
+    assert [i.reason for i in waiting.items(scenario.conn)] == [waiting.WAITING_REASON]
+    assert waiting.unread_prs(scenario.conn) == [THEIRS]
+    tick_reads(ctx)
+    assert waiting.items(scenario.conn) == []
+    # Seen merged, it is read no more.
+    assert waiting.unread_prs(scenario.conn) == []

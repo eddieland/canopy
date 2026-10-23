@@ -15,9 +15,9 @@ from canopy.serve.schema import Model, Run
 type WorktreeState = Annotated[
     Literal["working", "held", "dirty", "idle", "broken"],
     Field(
-        description="A worktree's state, in five groups the UI colors (DESIGN §22). `working` is held by a run or "
-        "review the journal shows running; `held` is leased or in use by anything else; `dirty` is unleased with "
-        "uncommitted changes; `broken` is damaged, unverified, or a status canopy does not know.",
+        description="A worktree's state, in five groups the UI colors (DESIGN §22). `working` is held by a run, "
+        "review, or task's run the journal shows running; `held` is leased or in use by anything else; `dirty` is "
+        "unleased with uncommitted changes; `broken` is damaged, unverified, or a status canopy does not know.",
     ),
 ]
 
@@ -40,6 +40,17 @@ class ReviewHold(Model):
     """The URL of the PR it reviews."""
     started_at: datetime
     """When it started."""
+
+
+class TaskHold(Model):
+    """A running task's run that holds a worktree (DESIGN §36)."""
+
+    task_id: int
+    """The task's id."""
+    run_id: int
+    """Its run's id."""
+    started_at: datetime
+    """When the run started."""
 
 
 class Worktree(Model):
@@ -67,6 +78,8 @@ class Worktree(Model):
     """The running run holding this lease, matched by lease id."""
     review: ReviewHold | None = None
     """The running review holding this lease, matched by lease id."""
+    task: TaskHold | None = None
+    """The running task's run holding this lease, matched by lease id."""
     note: str | None = None
     """Something the operator should know about this slot, in the CLI's words: a stale canopy lease, say."""
     processes: list[Process] = []

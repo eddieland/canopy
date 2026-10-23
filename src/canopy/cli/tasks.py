@@ -14,12 +14,12 @@ import click
 
 from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.params import REPO
-from canopy.cli.render import result_of, spent
 from canopy.core import conversation, plans, task_tickets, tasks
 from canopy.core.items import age
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
 from canopy.infra.text import one_line, printable
+from canopy.loop.render import result_of, spent
 from canopy.runs import task_run
 
 if TYPE_CHECKING:

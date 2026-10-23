@@ -10,6 +10,7 @@ import type { ReplyTarget } from './reply-form'
 
 const TICKET: ReplyTarget = { kind: 'ticket', key: 'ABC-1', isPublic: false }
 const CHORE: ReplyTarget = { kind: 'chore', name: 'deps', noted: true }
+const TASK: ReplyTarget = { kind: 'task', id: 4 }
 
 // Every reply the form sends, and what the server stand-in answers next: a failure, then the reply recorded. An error
 // is what fetch throws when no server answers.
@@ -115,6 +116,39 @@ describe('ReplyForm', () => {
             ['/api/chores/deps/replies', 'Leave lodash at 4'],
         ])
         expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Note' }).value).toBe('')
+    })
+
+    it('gives a task its next instruction, saying in the CLI’s words what starts its next run', async () => {
+        answers = [
+            Response.json({ message_id: 14, answers: 13, new: true, running_run: null }),
+            Response.json({ message_id: 15, answers: null, new: true, running_run: 6 }),
+        ]
+        renderForm(TASK, 13)
+        const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply to message 13' })
+        expect(field.placeholder).toMatch(/^Its next run reads it as your next instruction/u)
+        type('Reply to message 13', 'Yes, rename it in api too')
+        fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            'Recorded message 14 on task:4, answering message 13. The next tick starts its next run, on its branch.',
+        )
+
+        type('Reply to message 13', 'And the docs')
+        fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+        await screen.findByText(
+            'Recorded message 15 on task:4. Its run 6 is still working; the first tick after it ends starts the ' +
+                'next run.',
+        )
+        expect(new Set(sent.map((request) => request.path))).toEqual(new Set(['/api/tasks/4/replies']))
+        // A task's draft is its own: the ticket's box starts empty.
+        cleanup()
+        renderForm(TASK)
+        type('Reply', 'Half written')
+        cleanup()
+        renderForm(TICKET)
+        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('')
+        cleanup()
+        renderForm(TASK)
+        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('Half written')
     })
 
     it('sends a retry after a failure as the same submission, and the reply after it as another', async () => {

@@ -31,6 +31,7 @@ import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
 import { setRave, useRave } from '@/lib/rave'
 import { dropDrafts } from '@/lib/reply-draft'
+import { setQuips, useQuips } from '@/lib/run-phase'
 import { setReviewPersonas, usablePersonas, useReviewPersonas } from '@/lib/review-personas'
 import { setSendKey, useSendKey } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
@@ -191,12 +192,13 @@ function PaletteRow<T extends ResolvedTheme>({
 }
 
 /**
- * The fun, in one place: an on/off for the ticker and for Sprig, then the ticker's pace, the pause between its
- * headlines, and the topics they are drawn from. Its header hides a light switch.
+ * The fun, in one place: an on/off for the ticker, for Sprig, and for the rail's quips, then the ticker's pace, the
+ * pause between its headlines, and the topics they are drawn from. Its header hides a light switch.
  */
 function FunPanel() {
     const { on, speed, gap, hidden } = useTickerSettings()
     const buddy = useBuddy()
+    const quips = useQuips()
     return (
         <Panel>
             <PanelHeader label="Fun">
@@ -205,7 +207,8 @@ function FunPanel() {
             <div className="flex items-center justify-between gap-4 border-b p-3">
                 <p id="fun-items" className="max-w-3xl text-sm text-muted-foreground">
                     The ticker crawls joke headlines across the header. Sprig, at the foot of the side rail, has a tip
-                    for every page; none of them help. Each sits out a window with no room for it.
+                    for every page; none of them help. Each sits out a window with no room for it. Quips say what each
+                    run in the rail is doing, in words of their own.
                 </p>
                 <fieldset aria-labelledby="fun-items" className="flex shrink-0 items-center gap-4">
                     <label htmlFor="fun-ticker" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
@@ -225,6 +228,15 @@ function FunPanel() {
                             onCheckedChange={(checked) => setBuddy(checked === true ? 'on' : 'off')}
                         />
                         Sprig
+                    </label>
+                    <label htmlFor="fun-quips" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
+                        <Checkbox
+                            id="fun-quips"
+                            checked={quips === 'on'}
+                            data-testid="fun-quips"
+                            onCheckedChange={(checked) => setQuips(checked === true ? 'on' : 'off')}
+                        />
+                        Quips
                     </label>
                 </fieldset>
             </div>

@@ -83,6 +83,10 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   or you dismiss and delete everything the draft would post, which is how you say "thanks, no". A staged one waits
   until you submit or delete it on GitHub and the next read notices. A review canopy found on its own waits on
   nobody: read it or don't.
+- **A task** (`awaiting reply`, `task ticket unrecorded`): named by the first line of what you asked it, with a button
+  to its page, where its question waits, marked, and where you answer it
+  ([Replying and stopping](tasks#replying-and-stopping)). The other item, tickets its run reported that canopy
+  couldn't record, opens the task too: a reply or a stop clears it.
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
   There's nothing to answer here; the item leaves once the command has fixed its cause.
 

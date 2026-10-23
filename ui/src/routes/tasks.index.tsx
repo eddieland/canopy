@@ -5,6 +5,7 @@ import { tasksQuery } from '@/api/queries'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RepoFilter } from '@/components/repo-picker'
 import { TaskRow } from '@/components/task-row'
+import { TaskSubmitForm } from '@/components/task-submit'
 import { countText, reposOf } from '@/lib/pull-request-filter'
 import { repoListFrom, repoListOf, reposIn, reposWords } from '@/lib/repo-filter'
 import { tasksShown } from '@/lib/tasks'
@@ -14,8 +15,8 @@ interface TasksSearch {
 }
 
 /**
- * Every task the operator submitted, the ones waiting on their reply first, then the newest first. `?repo=` keeps the
- * tasks in its repositories.
+ * Every task the operator submitted, the ones waiting on their reply first, then the newest first, under the form that
+ * submits one. `?repo=` keeps the tasks in its repositories, and starts the form at the one it names.
  */
 export const Route = createFileRoute('/tasks/')({
     // Typed search params, as the pull requests page's: every key returned, undefined when the page does not offer it.
@@ -38,6 +39,10 @@ function TasksPage() {
                 branch, and perhaps a draft PR or some tickets. Those waiting on your reply come first.
             </PageHeader>
             <Panel>
+                <PanelHeader label="Submit a task" />
+                <TaskSubmitForm tasks={data} filter={repo} />
+            </Panel>
+            <Panel>
                 <PanelHeader label="Tasks">
                     <span className="readout text-xs text-muted-foreground" data-testid="tasks-count">
                         {countText(shown?.length, data?.length, repo !== undefined)}
@@ -47,10 +52,7 @@ function TasksPage() {
                 {data === undefined || shown === undefined ? (
                     <PanelLoading query={query} className="min-h-72" />
                 ) : data.length === 0 ? (
-                    <Empty size="panel">
-                        no tasks yet: <code className="font-mono text-xs">canopy task submit TEXT</code> hands canopy
-                        one, and the next tick starts it
-                    </Empty>
+                    <Empty size="panel">no tasks yet: one you submit above starts at the next tick</Empty>
                 ) : shown.length === 0 ? (
                     <Empty size="panel">{`no tasks in ${reposWords(repo ?? '')}`}</Empty>
                 ) : (
