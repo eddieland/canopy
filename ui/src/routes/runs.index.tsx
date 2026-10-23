@@ -11,19 +11,23 @@ import { SubjectRunsTable } from '@/components/runs-table'
 import { RunDot } from '@/components/status'
 import { Tip } from '@/components/tip'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { ranOn } from '@/lib/models'
 import { busy, RUN_WORD, RUNS_OF, RUNS_OF_WORD, runsListed, subjectRuns } from '@/lib/run-state'
-import type { RunsOf } from '@/lib/run-state'
+import type { EveryRun, RunsOf } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
 interface RunsSearch {
     state?: RunState | undefined
     kind?: RunsOf | undefined
+    model?: string | undefined
 }
 
 /**
  * Every run of an agent, a row per subject by its latest run: a ticket's worker runs, a PR's reviews, a chore's runs.
  * Running ones first, then the ones that ended last. `?state=` keeps the subjects whose latest run is in that state,
- * and `?kind=` those of one kind.
+ * and `?kind=` those of one kind. `?model=`, which the spend page's By model links to, keeps the worker runs that model
+ * ran (`ranOn`), each ticket by its latest of them: reviews and chores are listed without their models, so it leaves
+ * them out.
  */
 export const Route = createFileRoute('/runs/')({
     // Typed search params: `?state=blocked` filters; anything else is dropped, never trusted. Return every key, even
@@ -31,19 +35,20 @@ export const Route = createFileRoute('/runs/')({
     validateSearch: (search: Record<string, unknown>): RunsSearch => ({
         state: RUN_STATES.find((s) => s === search['state']),
         kind: RUNS_OF.find((k) => k === search['kind']),
+        model: typeof search['model'] === 'string' && search['model'] !== '' ? search['model'] : undefined,
     }),
     component: RunsPage,
 })
 
 function RunsPage() {
-    const { state, kind } = Route.useSearch()
+    const { state, kind, model } = Route.useSearch()
     const runs = useQuery(runsQuery).data
     const reviews = useQuery(reviewsQuery).data
     const chores = useQuery(choresQuery).data
     const tasks = useQuery(tasksQuery).data
     const capacity = useQuery(loopQuery).data?.capacity
     // The worker runs lead the page: it waits on them, and lists the reviews and chores as they arrive.
-    const groups = runs === undefined ? undefined : subjectRuns({ runs, reviews, chores })
+    const groups = runs === undefined ? undefined : subjectRuns(onModel({ runs, reviews, chores }, model))
     const shown = groups?.filter((g) => (state === undefined || g.latest.state === state) && (kind ?? g.of) === g.of)
     const order = useListOrder('runs')
     return (
@@ -65,27 +70,39 @@ function RunsPage() {
                     <span className="flex flex-wrap items-center gap-x-3">
                         <nav aria-label="Filter by kind" className="flex flex-wrap items-center gap-1">
                             <span className="mr-1 font-mono text-xs text-muted-foreground">kind</span>
-                            <FilterLink search={{ state, kind: undefined }} selected={kind === undefined}>
+                            <FilterLink search={{ state, kind: undefined, model }} selected={kind === undefined}>
                                 all
                             </FilterLink>
                             {RUNS_OF.map((k) => (
-                                <FilterLink key={k} search={{ state, kind: k }} selected={kind === k}>
+                                <FilterLink key={k} search={{ state, kind: k, model }} selected={kind === k}>
                                     {RUNS_OF_WORD[k]}
                                 </FilterLink>
                             ))}
                         </nav>
                         <nav aria-label="Filter by state" className="flex flex-wrap items-center gap-1">
                             <span className="mr-1 font-mono text-xs text-muted-foreground">state</span>
-                            <FilterLink search={{ state: undefined, kind }} selected={state === undefined}>
+                            <FilterLink search={{ state: undefined, kind, model }} selected={state === undefined}>
                                 all
                             </FilterLink>
                             {RUN_STATES.map((s) => (
-                                <FilterLink key={s} search={{ state: s, kind }} selected={state === s}>
+                                <FilterLink key={s} search={{ state: s, kind, model }} selected={state === s}>
                                     <RunDot state={s} />
                                     {RUN_WORD[s]}
                                 </FilterLink>
                             ))}
                         </nav>
+                        {model !== undefined && (
+                            // Offered only once chosen, from the spend page's By model: `all` takes it off.
+                            <nav aria-label="Filter by model" className="flex flex-wrap items-center gap-1">
+                                <span className="mr-1 font-mono text-xs text-muted-foreground">model</span>
+                                <FilterLink search={{ state, kind, model: undefined }} selected={false}>
+                                    all
+                                </FilterLink>
+                                <FilterLink search={{ state, kind, model }} selected>
+                                    {model}
+                                </FilterLink>
+                            </nav>
+                        )}
                         {shown !== undefined && shown.length > 1 && <OrderToggle list="runs" />}
                         {shown !== undefined && (
                             // Every run listed, a subject's earlier ones too, as a ticket's Runs panel counts them.
@@ -99,8 +116,8 @@ function RunsPage() {
                     <PanelSkeleton className="min-h-72" />
                 ) : shown.length === 0 ? (
                     <Empty size="panel">
-                        {state !== undefined || kind !== undefined ? (
-                            emptyWords(state, kind)
+                        {state !== undefined || kind !== undefined || model !== undefined ? (
+                            emptyWords(state, kind, model)
                         ) : (
                             <>
                                 no runs yet: give a ticket your queue label, or start one privately on{' '}
@@ -118,9 +135,19 @@ function RunsPage() {
     )
 }
 
+// Every run the page lists, or under a model the worker runs it ran alone: reviews and chores come without models.
+function onModel(every: EveryRun, model: string | undefined): EveryRun {
+    return model === undefined ? every : { runs: every.runs.filter((r) => ranOn(r, model)) }
+}
+
 // What a filter that keeps nothing says: `no reviews running now`, by each subject's latest run, or `no chores yet`.
-function emptyWords(state: RunState | undefined, kind: RunsOf | undefined): string {
+// Under a model, the runs listed are the recent ones, so an older run on it may be out of the list.
+function emptyWords(state: RunState | undefined, kind: RunsOf | undefined, model: string | undefined): string {
     const noun = kind === undefined ? 'runs' : RUNS_OF_WORD[kind]
+    if (model !== undefined) {
+        const on = `no recent ${noun} on ${model}`
+        return state === undefined ? on : `${on} ${RUN_WORD[state]} now`
+    }
     return state === undefined ? `no ${noun} yet` : `no ${noun} ${RUN_WORD[state]} now`
 }
 

@@ -261,7 +261,8 @@ class Run(Model):
     from its start, before its session is read; None when it asked for none, so the runtime's default served it, and
     for a run from before canopy chose one."""
     models: ModelsServed | None = None
-    """Which models served it, on its page and in the runs list; None where another page lists it."""
+    """Which models served it, on its page, in the runs list, and in a ticket's or a PR's runs; None where another page
+    lists it."""
     feedback_plan: FeedbackPlanWritten | None = None
     """For a `feedback-plan` run, the plan it wrote, on its page alone; None for a run of another kind, one whose plan
     was never recorded, and in the lists."""
@@ -442,6 +443,17 @@ class Limit(Model):
     """The most runs of the kind it may have: the policy's limit plus `granted`."""
 
 
+class ModelCost(Model):
+    """What one model cost over a subject's agent runs, as their sessions say (DESIGN §13)."""
+
+    model: str
+    """As `provider/model`, as the runtime names it."""
+    runs: int
+    """How many of the runs it wrote a reply of: a run on two models counts under each."""
+    cost_usd: float
+    """What the sessions priced its replies at, in US dollars."""
+
+
 class CostTotal(Model):
     """What a subject's agent runs cost in all, as the agent runtime reported it (§13), however long ago they ran."""
 
@@ -453,6 +465,9 @@ class CostTotal(Model):
     """How many of those runs and review runs reported a cost."""
     cost_usd: float | None = None
     """What they cost, in US dollars; None when none reported a cost."""
+    models: list[ModelCost] = []
+    """A ticket's: what each model their sessions named cost, the most costly first; the rest of `cost_usd` is the
+    runs no session named a model for. Empty for a PR's."""
 
 
 class Granted(Model):
