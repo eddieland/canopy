@@ -191,8 +191,11 @@ def test_dry_run_names_the_base(scenario: Scenario, treehouse_state: Path) -> No
 
 
 def test_two_linked_tickets_are_worked_in_order(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
-    """M4 acceptance, the harness's half, against the fakes. The overseer's reading of blockers and PR state is prompt
-    behavior: here a scripted overseer waits on the blocked ticket, then stacks it once the blocker's PR exists."""
+    """M4 acceptance, the harness's half, against the fakes.
+
+    The overseer's reading of blockers and PR state is prompt behavior: here a scripted overseer waits on the blocked
+    ticket, then stacks it once the blocker's PR exists.
+    """
     # Both tickets' workers run this, so neither pushes: `_run`'s own push puts each branch on origin (DESIGN §8).
     commits = worker_does(["git", "commit", "--quiet", "--allow-empty", "-m", "the change"])
     first = scenario.tick(

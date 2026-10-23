@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import (
+    agent_models,
     attachments,
     contract,
     conversation,
@@ -30,8 +31,6 @@ from canopy.core import (
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunStatus
 from canopy.serve import draft_views, memory_views
-from canopy.serve.model_schema import AgentModel
-from canopy.serve.persona_schema import AgentPersona, PersonaChoice
 from canopy.serve.schema import (
     Attachment,
     Attachments,
@@ -58,7 +57,9 @@ from canopy.serve.schema import (
     TicketSummary,
     WorkerNotice,
 )
-from canopy.serve.ticket_schema import TicketDetail, TicketForget, Unit
+from canopy.serve.schema.model import AgentModel
+from canopy.serve.schema.persona import AgentPersona, PersonaChoice
+from canopy.serve.schema.ticket import TicketDetail, TicketForget, Unit
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
 
 if TYPE_CHECKING:
@@ -69,7 +70,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve import backend as served
     from canopy.serve.backend import Backend
-    from canopy.serve.transcript_schema import RawOutput, Transcript
+    from canopy.serve.schema.transcript import RawOutput, Transcript
 
 # How many runs that ended the runs list carries, after the running ones.
 RECENT_RUNS = 50
@@ -605,9 +606,10 @@ def agent_model(found: ticket_models.Next) -> AgentModel:
     """The model one of a ticket's agents runs on at its next run, as the API sends it.
 
     Returns:
-        The agent, its model, or None for the runtime's default, and where that comes from.
+        The agent, its model, or None for the runtime's default, where that comes from, and the model's variant.
     """
-    return AgentModel(agent=found.agent, model=found.model, source=found.source)
+    variant = agent_models.parse(found.model).variant if found.model is not None else None
+    return AgentModel(agent=found.agent, model=found.model, source=found.source, variant=variant)
 
 
 def persona_choice(found: personas.Listed) -> PersonaChoice:

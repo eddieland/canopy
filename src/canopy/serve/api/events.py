@@ -11,7 +11,7 @@ from fastapi.sse import EventSourceResponse
 
 from canopy.serve import live
 from canopy.serve.api.deps import BackendDep, OptionsDep
-from canopy.serve.event_schema import StreamEvent
+from canopy.serve.schema.event import StreamEvent
 
 TAG = "events"
 router = APIRouter(tags=[TAG])

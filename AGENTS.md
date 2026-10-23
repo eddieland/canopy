@@ -82,13 +82,19 @@ If code and the design disagree, the design doc wins until a decision entry says
   agent plugin's JSDoc with `tsc`, from npm packages in `tests/plugins`, so it needs Node 22.12+ and npm, as `ui/` does.
 - ruff selects every stable rule, and preview rules named one by one, the pydoclint ones among them (D018): a public
   module, class, or function has a Google docstring, with Returns, Yields, and Raises sections that match its body.
-  Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow `select`.
+  Every docstring, a test's included, opens with a one-line summary ending in a period, and a blank line before
+  anything more. A function whose parameters its signature does not explain should have an Args section; it is not
+  required, and older code without one needs no bulk fix: add it to a function a PR is already changing. Opt out with
+  a commented `ignore` entry or a `noqa` with a code; never narrow `select`.
 - `make all` runs fmt, lint (including type checks), and tests; `make check` is the same without fmt, and never
   rewrites files. CI runs `make check`, as two jobs side by side (`lint test` and `ui-check`), and is the backstop
   for the whole suite. An agent does not run `make all` or `make check` before pushing unless the operator asks.
   Every formatter and linter is cheap, so it runs them all; the tests it runs are the ones its change reaches.
   - Always `make fmt` and `make lint`: every formatter, then every linter and the type checker, over the whole
     repository, in seconds. A change under `ui/` also runs `npm --prefix ui run lint` and `typecheck`.
+  - Optionally `make hooks`, once per clone: prek's git hooks (`prek.toml`) then run the same formatters and linters
+    on each commit's files, and `ui/`'s lint and type check on a push. They stop a commit that fails one; they do not
+    replace the step above. A Claude Code cloud session installs them when it starts (`.claude/settings.json`).
   - Tests: `uv run pytest -q <test modules>` for the package you changed, which sits parallel to it under `tests/`
     (add `-n auto` for a directory). Add the whole-canopy tests your change can trip: `tests/canopy/test_layers.py`
     for a new import, module, or test helper, `test_frozen.py` for a dataclass, `test_prompt_sizes.py` for a prompt,

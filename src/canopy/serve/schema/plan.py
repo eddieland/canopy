@@ -1,6 +1,6 @@
 """The API's types for a ticket's plans (DESIGN §25): the plans, the newest as its file stands, and comments on it.
 
-Also the operator's word on a plan, and edits of it. Built on `schema.Model`, as every API type is (schema.py).
+Also the operator's word on a plan, and edits of it. Built on `schema.Model`, as every API type is (schema/__init__.py).
 """
 
 from __future__ import annotations
@@ -10,8 +10,8 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.serve.persona_schema import RunPersona
 from canopy.serve.schema import Model
+from canopy.serve.schema.persona import RunPersona
 
 
 class PlanSummary(Model):

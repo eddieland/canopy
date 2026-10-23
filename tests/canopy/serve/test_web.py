@@ -1,5 +1,8 @@
-"""The web UI over the operator's own journal (DESIGN §22, ROADMAP M20): its channel writes through the CLI's guards,
-its pages read what `canopy show` and `canopy status` print, and `canopy loop` serves it from a thread."""
+"""The web UI over the operator's own journal (DESIGN §22, ROADMAP M20).
+
+Its channel writes through the CLI's guards, its pages read what `canopy show` and `canopy status` print, and
+`canopy loop` serves it from a thread.
+"""
 
 import dataclasses
 import json
@@ -22,7 +25,7 @@ from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.runtime.report import ModelUse, Usage
 from canopy.serve import live, secret, spend_views
-from canopy.serve.event_schema import LoopUpdated
+from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
     KEY,
     FakeTime,
@@ -402,6 +405,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         "agent": "planner",
         "model": "acme/fake-model-2",
         "source": "ticket",
+        "variant": None,
     }
     ended_run(ctx, KEY, "implement")
     got = c.get(f"/api/tickets/{KEY}").json()
@@ -412,12 +416,30 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
     ]
     assert [tuple(r) for r in ctx.conn.execute("SELECT kind, channel FROM ticket_overrides")] == [("model", "web")]
     # No model clears it, as `--clear` does.
-    assert choose({"agent": "planner"}).json() == {"agent": "planner", "model": None, "source": "default"}
+    assert choose({"agent": "planner"}).json() == {
+        "agent": "planner",
+        "model": None,
+        "source": "default",
+        "variant": None,
+    }
     assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
     # A list that cannot be read says why, and refuses a choice as the CLI does.
     opencode_state.write_text(json.dumps({"exit": 1}))
     assert c.get("/api/models").json() == {"models": [], "error": "`opencode models` exited 1"}
     assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")
+
+
+def test_a_configured_model_with_a_variant_is_sent_with_it_so_the_page_offers_it_as_no_choice(ctx: Context) -> None:
+    """Config's model at a variant names the variant, which an override cannot, so the menu offers the model alone."""
+    runtime = ctx.config.runtime.model_copy(update={"models": {"worker": "acme/fake-model-1@high"}})
+    c, _ = signed_in_client(dataclasses.replace(ctx, config=ctx.config.model_copy(update={"runtime": runtime})))
+    ended_run(ctx, KEY, "implement")
+    assert c.get(f"/api/tickets/{KEY}").json()["models"][0] == {
+        "agent": "worker",
+        "model": "acme/fake-model-1@high",
+        "source": "config",
+        "variant": "high",
+    }
 
 
 def test_the_web_lists_the_personas_canopy_personas_lists(ctx: Context) -> None:

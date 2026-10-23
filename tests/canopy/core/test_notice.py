@@ -1,5 +1,8 @@
-"""The operator's notice to workers (DESIGN §8, §22, ROADMAP M35): set and cleared by the operator alone, bounded when
-it is set, and heard while it is in force by every run that builds or reads CI, by the overseer, and by the loop."""
+"""The operator's notice to workers (DESIGN §8, §22, ROADMAP M35): set and cleared by the operator alone.
+
+It is bounded when it is set, and heard while it is in force by every run that builds or reads CI, by the overseer, and
+by the loop.
+"""
 
 import os
 import sqlite3
@@ -15,7 +18,7 @@ from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.loop import pacing, reread, tick_now, web
 from canopy.serve import live
-from canopy.serve.event_schema import LoopUpdated
+from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
     PROMPT_VALUES,
     InlineRunner,

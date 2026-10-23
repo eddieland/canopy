@@ -153,8 +153,10 @@ def sandbox_runtime(fakes_on_path: Path) -> Iterator[Path]:
 
 @pytest.fixture
 def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iterator[Canary]:
-    """The shipped templates, unchanged, and a primary clone with two linked worktrees, all under HOME, as is the
-    operator's cache directory, with OpenCode's in it."""
+    """The shipped templates, unchanged, and a primary clone with two linked worktrees, all under HOME.
+
+    The operator's cache directory is under HOME too, with OpenCode's in it.
+    """
     home = canopy_env.home
     templates = home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
@@ -234,7 +236,9 @@ def test_a_run_cannot_write_home_or_the_state_dir(canary: Canary, script: str, t
 @pytest.mark.parametrize("role", ROLES)
 def test_a_run_keeps_its_cache_in_its_roles_own_directory(canary: Canary, role: str) -> None:
     """A positive control: what a run's tools cache lands in the role's cache directory, and the next run reads it.
-    Setup's is the worker's, which it warms."""
+
+    Setup's is the worker's, which it warms.
+    """
     kept = canary.home / ".cache" / "canopy" / "sandbox" / ("worker" if role == "setup" else role) / "tool" / "kept"
 
     canary.run('mkdir -p "$XDG_CACHE_HOME/tool" && echo "$1" > "$XDG_CACHE_HOME/tool/kept"', role, role=role)
@@ -368,10 +372,12 @@ def test_a_worker_cannot_reach_the_hosts_loopback(canary: Canary, route: str) ->
 
 
 def test_a_worker_cannot_reach_a_unix_socket_on_the_host(canary: Canary) -> None:
-    """Such as the Docker daemon's or the SSH agent's: on Linux, srt refuses the run any Unix socket of its own, and on
-    macOS any not allowed by path. The socket here is in the slot, which the run may read and write, so only that
-    refusal stands in the way. A local MCP server started with `docker run` cannot work in the sandbox for the same
-    reason (DESIGN §24)."""
+    """A Unix socket on the host, such as the Docker daemon's or the SSH agent's, is out of the worker's reach.
+
+    On Linux, srt refuses the run any Unix socket of its own, and on macOS any not allowed by path. The socket here is
+    in the slot, which the run may read and write, so only that refusal stands in the way. A local MCP server started
+    with `docker run` cannot work in the sandbox for the same reason (DESIGN §24).
+    """
     # Bound by a relative name, in the slot: the slot's full path is longer than a Unix socket's.
     with contextlib.chdir(canary.slot), socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind("host.sock")
@@ -407,8 +413,11 @@ def test_a_worker_commits_in_its_slot(canary: Canary) -> None:
 
 
 def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None:
-    """A positive control for the run's git (DESIGN §24): a repository a tool keeps as a cache, here in the
-    run's temp directory, gets its objects in its own directory, while the worker's commit goes to the run's."""
+    """A positive control for the run's git (DESIGN §24): a repository a tool makes keeps its own objects.
+
+    A repository a tool keeps as a cache, here in the run's temp directory, gets its objects in its own directory, while
+    the worker's commit goes to the run's.
+    """
     cache = '"$TMPDIR/cache"'
     script = (
         "git commit --quiet --allow-empty -m work && "
@@ -426,9 +435,11 @@ def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None
 
 
 def test_a_worker_runs_under_the_system_temp_directory(canary: Canary) -> None:
-    """A positive control: the wrapper's run directory, under the TMPDIR canopy runs with, leaves srt room for its
-    sockets. The rest of the canary runs under a short one of its own, so that this is the only test that depends on it
-    (DESIGN §24, the temp directory on macOS)."""
+    """A positive control: the wrapper's run directory, under canopy's TMPDIR, leaves srt room for its sockets.
+
+    The TMPDIR is the one canopy runs with. The rest of the canary runs under a short one of its own, so that this is
+    the only test that depends on it (DESIGN §24, the temp directory on macOS).
+    """
     done = canary.run("true", tmpdir=SYSTEM_TMP)
 
     assert done.ok, done.stderr
@@ -455,7 +466,7 @@ def test_a_worker_receives_its_prompt_byte_for_byte(canary: Canary, prompt: str)
 
 
 def test_a_timed_out_run_leaves_no_process_behind(canary: Canary) -> None:
-    """canopy kills a timed-out run's process group; what the sandbox started, in a session of its own too, ends."""
+    """On a timeout canopy kills the run's process group; all the sandbox started, in a session of its own too, ends."""
     # Not holding the run's output, so a process the sandbox lets outlive it fails the test instead of hanging it.
     script = f"setsid sleep {LINGERER} >/dev/null 2>&1 & sleep {LINGERER} >/dev/null 2>&1 & sleep {LINGERER}"
 

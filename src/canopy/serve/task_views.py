@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from canopy.core import contract, conversation, db, plans, sql, task_tickets, tasks
 from canopy.core.vocab import RunStatus
 from canopy.serve import views
-from canopy.serve.task_schema import TaskDetail, TaskReport, TaskRun, TaskRunDetail, TaskSummary, TaskTicket
+from canopy.serve.schema.task import TaskDetail, TaskReport, TaskRun, TaskRunDetail, TaskSummary, TaskTicket
 from canopy.serve.transcript_views import removed_after, session_transcript
 from canopy.serve.views import lines, message, models_served, new_tokens, run_state, said, shown_path
 
@@ -24,8 +24,8 @@ if TYPE_CHECKING:
 
     from canopy.core import records
     from canopy.core.context import Context
-    from canopy.serve.task_schema import TaskStanding
-    from canopy.serve.transcript_schema import Transcript
+    from canopy.serve.schema.task import TaskStanding
+    from canopy.serve.schema.transcript import Transcript
 
 #: A task's latest run's status as where the task stands, every status the same word.
 RUN_STANDINGS: Mapping[RunStatus, TaskStanding] = {

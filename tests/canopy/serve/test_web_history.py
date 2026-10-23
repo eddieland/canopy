@@ -1,5 +1,8 @@
-"""The web UI on a journal with a long history (DESIGN §22): what a page or the event stream reads costs what the page
-shows, not what the journal has recorded; and the reads that weigh only candidates find what weighing every row did."""
+"""The web UI on a journal with a long history (DESIGN §22).
+
+What a page or the event stream reads costs what the page shows, not what the journal has recorded; and the reads that
+weigh only candidates find what weighing every row did.
+"""
 
 import dataclasses
 import json
@@ -230,8 +233,10 @@ def ok_run(conn: sqlite3.Connection, run_id: int, minutes: float, findings: list
 
 
 def instructions(ctx: Context, read: Callable[[], object]) -> int:
-    """How many hundred SQLite instructions `read` ran on `ctx`'s connection: what it read, in a measure that never
-    depends on the machine running the test."""
+    """How many hundred SQLite instructions `read` ran on `ctx`'s connection.
+
+    That is what it read, in a measure that never depends on the machine running the test.
+    """
     counted = [0]
 
     def count() -> int:

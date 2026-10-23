@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.model_schema import ModelList
+from canopy.serve.schema.model import ModelList
 
 TAG = "models"
 router = APIRouter(tags=[TAG])

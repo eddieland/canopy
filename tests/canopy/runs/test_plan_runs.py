@@ -91,8 +91,10 @@ def test_a_planner_reads_its_worktrees_history_through_canopys_git_tools(
     scenario: Scenario,
     git_pool: GitPool,
 ) -> None:
-    """#1130: the planner has no shell; canopy's read-only git tools, over its own worktrees alone, read their history,
-    each named for its repository."""
+    """#1130: the planner has no shell; canopy's read-only git tools read the history of its own worktrees.
+
+    They read over its own worktrees alone, each tool named for its repository.
+    """
     reads = [
         calls("canopy_git_log", range="HEAD", repo="repo"),
         calls("canopy_git_merge-base", base="origin/main", head="HEAD"),

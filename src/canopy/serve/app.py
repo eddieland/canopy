@@ -32,7 +32,7 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        # Mock data changes now and then, so the stream has something to show (mock.py).
+        # Mock data changes now and then, so the stream has something to show (mock/).
         task = asyncio.create_task(mock.changes(backend, options.mock_event_seconds)) if backend.mock else None
         try:
             yield

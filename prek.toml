@@ -1,0 +1,132 @@
+# Git hooks, run by prek (https://prek.j178.dev): `make hooks` installs them. They run the checks of `make fmt` and
+# `make lint` on what a commit changes, so a lint failure shows before CI's. Each calls the tool uv.lock pins, through
+# `uv run --no-sync`, so nothing here pins a second version, and a commit neither syncs nor rebuilds the environment:
+# run `uv sync` first. `git commit --no-verify` skips them; CI's `make check` stays the backstop.
+#:schema https://www.schemastore.org/prek.json
+
+minimum_prek_version = "0.5.7"
+default_install_hook_types = ["pre-commit", "pre-push"]
+# A hook runs on commit unless it names its stages.
+default_stages = ["pre-commit"]
+
+# The formatters rewrite the files they are given and fail the commit when they change one: stage the result and
+# commit again.
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "ruff-fix"
+name = "ruff (imports, trailing commas)"
+language = "system"
+entry = "uv run --no-sync ruff check --select I,COM812 --fix --force-exclude"
+types_or = ["python", "pyi"]
+
+[[repos.hooks]]
+id = "ruff-format"
+name = "ruff format"
+language = "system"
+entry = "uv run --no-sync ruff format --force-exclude"
+types_or = ["python", "pyi"]
+
+[[repos.hooks]]
+id = "rumdl-fmt"
+name = "rumdl fmt"
+language = "system"
+entry = "uv run --no-sync rumdl fmt"
+types = ["markdown"]
+
+[[repos.hooks]]
+id = "oxfmt"
+name = "oxfmt (ui/)"
+language = "system"
+entry = "make -s ui-fmt"
+files = "^ui/"
+pass_filenames = false
+
+# The linters and type checkers. pyrefly, actionlint, and zizmor check the whole repository, as `make lint` does, when
+# a file they read changes: a type error or a workflow finding can sit in a file the commit did not touch.
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "ruff"
+name = "ruff check"
+language = "system"
+entry = "uv run --no-sync ruff check --force-exclude"
+types_or = ["python", "pyi"]
+
+[[repos.hooks]]
+id = "pyrefly"
+name = "pyrefly"
+language = "system"
+entry = "uv run --no-sync pyrefly check"
+pass_filenames = false
+types_or = ["python", "pyi"]
+
+[[repos.hooks]]
+id = "rumdl"
+name = "rumdl check"
+language = "system"
+entry = "uv run --no-sync rumdl check"
+types = ["markdown"]
+
+[[repos.hooks]]
+id = "ec"
+name = "editorconfig-checker"
+language = "system"
+entry = "uv run --no-sync ec"
+types = ["text"]
+
+[[repos.hooks]]
+id = "shellcheck"
+name = "shellcheck"
+language = "system"
+entry = "uv run --no-sync shellcheck"
+files = "\\.sh$"
+
+[[repos.hooks]]
+id = "actionlint"
+name = "actionlint"
+language = "system"
+entry = "uv run --no-sync actionlint"
+files = "^\\.github/workflows/"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "zizmor"
+name = "zizmor"
+language = "system"
+entry = "uv run --no-sync zizmor --offline --quiet ."
+files = "^\\.github/"
+pass_filenames = false
+
+# The JSDoc types of the plugin canopy ships for its agents, as `make lint` checks them.
+[[repos.hooks]]
+id = "tsc-plugin"
+name = "tsc (agent plugin)"
+language = "system"
+entry = "sh -c 'make -s tests/plugins/node_modules && npm --prefix tests/plugins exec -- tsc -p tests/plugins'"
+files = "^(\\.agents/plugins/|tests/plugins/)"
+pass_filenames = false
+
+# ui/'s type-aware lint and type check take half a minute each, too long for every commit, so they wait for a push.
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "oxlint"
+name = "oxlint (ui/)"
+language = "system"
+entry = "sh -c 'make -s ui/node_modules && npm --prefix ui run -s lint'"
+files = "^ui/"
+pass_filenames = false
+stages = ["pre-push"]
+
+[[repos.hooks]]
+id = "ui-typecheck"
+name = "tsc (ui/)"
+language = "system"
+entry = "sh -c 'make -s ui/node_modules && npm --prefix ui run -s typecheck'"
+files = "^ui/"
+pass_filenames = false
+stages = ["pre-push"]

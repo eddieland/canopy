@@ -62,7 +62,7 @@ export const WHOLE_ROUTES: readonly Route[] = ['attention', 'tickets/ABC-102', '
 export const LIGHT_ROUTES: readonly Route[] = ['attention', 'runs', 'tickets/ABC-102']
 /** The themes the app has; a page is screenshotted in light only if in LIGHT_ROUTES. */
 export const THEMES = ['light', 'dark'] as const
-/** Half an hour after the fixtures' T0 (canopy/serve/mock.py): every age on a page is the same on every run. */
+/** Half an hour after the fixtures' T0 (canopy/serve/mock/): every age on a page is the same on every run. */
 export const NOW = new Date('2026-10-08T12:30:00Z')
 
 /**

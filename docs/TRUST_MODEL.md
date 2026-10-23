@@ -237,9 +237,9 @@ Controls:
   at `use`, framed as the operator's words that the prompt's obligations come before; reviews, chores, and the
   overseer hear none. A run's report that a lesson is wrong retires nothing: it raises `lesson_wrong` for the
   operator. The proposals list, and `promote` of a proposal or a note in its own words, warn on one from a private
-  ticket's run, whose text may hold what the operator kept off the tracker. Residual, D076's: until workers are
-  sandboxed (M26), a steered worker's bash runs as the operator and could insert a `lesson` row into the journal, as it
-  could a `notices` row.
+  ticket's run, whose words come from a conversation the operator kept off the tracker, which a lesson would carry
+  into public tickets' runs. Residual, D076's: until workers are sandboxed (M26), a steered worker's bash runs as the
+  operator and could insert a `lesson` row into the journal, as it could a `notices` row.
 - Personas (DESIGN §31, ROADMAP M60) are operator text, as the standing instructions are: a short file of voice and
   emphasis in every planner's, reviewer's, or worker's prompt it reaches, below the prompt's obligations, which the
   prompt says come first. Only the operator chooses one, in `[personas]`, private config (T7), for one ticket's agent
@@ -446,12 +446,13 @@ Controls now:
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
 - canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
-  clock and, under OpenCode 2, holding a session's first prompt until its MCP tools are registered (DESIGN §33), from
-  the snapshot. canopy takes the snapshot's write permission away once it is written,
-  the operator's included, so no run changes it through its permissions or its sandbox, and the runtime installs
-  nothing into it. The plugin reads one variable, `CANOPY_DEADLINE`, the clock, and under OpenCode 2 the runtime's
-  MCP servers' states and its tools' names; it writes nothing, refuses no call, grants no tool, and catches its own
-  errors. A repository's own plugins already load in the same process (T7).
+  clock, the split, and, under OpenCode 2, holding a session's first prompt until its MCP tools are registered
+  (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is written, the
+  operator's included, so no run changes it through its permissions or its sandbox, and the runtime installs nothing
+  into it. The plugin reads one variable, `CANOPY_DEADLINE`, the clock, the system prompt the runtime hands it, which
+  it cuts in two without changing its text, and under OpenCode 2 the runtime's MCP servers' states and its tools'
+  names; it writes no file, refuses no call, grants no tool, and catches its own errors. A repository's own plugins
+  already load in the same process (T7).
 - `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
   and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
   the agent runtime's permissions. It is private (T7), and the code is what the worker's own shell runs a moment
@@ -586,7 +587,8 @@ Controls:
   push verification gives the run a harness note when a pushed branch holds the copy; nothing prevents it.
 - With `paths.plan_archive` set (DESIGN §25), each live tick commits every plan, superseded and feedback plans
   included, to that clone of the operator's and pushes it to the clone's upstream: plan text, model-written from what
-  planners read of tickets and repositories, leaves the machine for that remote and no other. So does each plan's
+  planners read of tickets and repositories, leaves the machine for that remote and no other, under its row and its
+  planner's persona, models (canopy's choice and those its session names), and runs' cost. So does each plan's
   prompt unless `paths.plan_archive_prompts`, private and on by default, is off: the operator's messages and standing
   instructions, agent memory's lessons, and the persona that prompt carried, with local paths and repository names.
   With `paths.plan_archive_conversations`, private and off by default, so does each planned ticket's conversation:
@@ -927,10 +929,12 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - Its config writes (DESIGN §12, §22, D128) are an allowlist in code, by key name, never a section's wildcard, so a key
   added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
   count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt
-  limits, the attachment limits under their own ceilings, and the CI cooldown in `policy`, and `loop.interval_minutes`
-  and `loop.idle_max_minutes`. Trust settings
-  move only toward stricter: `policy.stacking` to `"never"`, an entry removed from `trust.authorized_repliers` or
-  `trust.trusted_reviewers` (never added), `trust.rebase` to false, and `trust.commit_trailer` to true. Nothing that
+  limits, the attachment limits under their own ceilings, and the CI cooldown in `policy`, `loop.interval_minutes`
+  and `loop.idle_max_minutes`, and `spend.monthly_budget_usd`, which spends nothing but would silence the sink that
+  hears the month reached it. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100%
+  alert. Trust settings move only toward stricter: `policy.stacking` to `"never"`, an entry removed from
+  `trust.authorized_repliers` or `trust.trusted_reviewers` (never added), `trust.rebase` to false, and
+  `trust.commit_trailer` to true. Nothing that
   runs a command, chooses a prompt, is read as words, or moves the listener: no `runtime.*`, `notify.*`, `chores`,
   `paths.*`, `review.*`, `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the
   secret, which is why trust only tightens: a replier added through a stolen session would go on steering workers after

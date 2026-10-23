@@ -59,8 +59,11 @@ class Call(TypedDict):
 
 @dataclass(frozen=True)
 class Machine:
-    """The stubs' directory, which is all of PATH, the log of what they were run with, the user's id, uname, and
-    whether its kernel lacks IPv6."""
+    """The machine the stubs play.
+
+    The stubs' directory, which is all of PATH, the log of what they were run with, the user's id, uname, and whether
+    its kernel lacks IPv6.
+    """
 
     bin: Path
     log: Path

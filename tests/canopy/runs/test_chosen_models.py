@@ -1,9 +1,12 @@
-"""A worker's or a planner's model (DESIGN §13, Each agent's model): its ticket's override for its agent, else
-`runtime.models`' for it, written into the agent's definition, recorded on the run, and looked up in the runtime's list
-before the run starts, never fallen back from: a model the list lacks, or a list that cannot be read, refuses the run
-with an attention item, spending no attempt and leasing no slot; with a variant, the variant too. Only the operator
-sets the override, with `canopy model`, never an agent. canopy's commit trailer names it, and a worker following an
-approved plan names its planner's on a trailer of its own, while the operator has not named the trailer themselves."""
+"""A worker's or a planner's model (DESIGN §13, Each agent's model).
+
+The model is its ticket's override for its agent, else `runtime.models`' for it, written into the agent's definition,
+recorded on the run, and looked up in the runtime's list before the run starts, never fallen back from: a model the list
+lacks, or a list that cannot be read, refuses the run with an attention item, spending no attempt and leasing no slot;
+with a variant, the variant too. Only the operator sets the override, with `canopy model`, never an agent. canopy's
+commit trailer names it, and a worker following an approved plan names its planner's on a trailer of its own, while the
+operator has not named the trailer themselves.
+"""
 
 import json
 from collections.abc import Mapping, Sequence

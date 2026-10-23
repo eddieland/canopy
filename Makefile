@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help all check fmt lint test coverage snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
-.PHONY: screenshots test-plugin pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
+.PHONY: hooks screenshots test-plugin pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
 
 ##@ General
 
@@ -149,6 +149,10 @@ pool-contract: ## Check that real treehouse keeps every guarantee canopy takes f
 	CANOPY_POOL_CONTRACT=1 uv run pytest -q -n auto tests/canopy/core/test_pool_contract.py
 
 ##@ Setup
+
+# Optional: CI's `make check` runs every check anyway. prek.toml says which hook runs what, and on which stage.
+hooks: ## Install git hooks (prek): the formatters and linters on each commit, ui/'s lint and types on each push
+	uv run prek install
 
 TREEHOUSE_REPO := https://github.com/kunchenguid/treehouse
 # A release tag, commit, or branch, e.g. `make treehouse TREEHOUSE_VERSION=v2.4.0`. The default is a pinned commit, not

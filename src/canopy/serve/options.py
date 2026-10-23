@@ -29,7 +29,7 @@ class ServeOptions(BaseModel):
     port: int = Field(default=8765, ge=1, le=65535)
     #: Empty for the root, otherwise starting with `/` and with no trailing `/`.
     base_path: Annotated[str, AfterValidator(check_base_path)] = ""
-    #: Serve a journal seeded from fixtures (mock.py), shown as `mock` in the UI's header.
+    #: Serve a journal seeded from fixtures (mock/), shown as `mock` in the UI's header.
     mock: bool = False
     #: Seconds between the mock journal's changes, which the stream then shows; None makes none, for stable screenshots.
     mock_event_seconds: float | None = Field(default=3.0, gt=0)
