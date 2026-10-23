@@ -80,8 +80,10 @@ class Serve:
     rules: Mapping[str, Sequence[dict[str, str]]]
     config: object = field(default_factory=lambda: CONFIG)
     skills: object = field(default_factory=lambda: SKILLS)
-    #: How many times `agent.list` answers that no agent has loaded yet.
+    #: How many times `agent.list` answers with OpenCode's own agents alone, before the plugins load canopy's.
     loading: int = 0
+    #: Whether `agent.list` answers with no agent at all while loading, rather than OpenCode's own.
+    empty: bool = False
     #: What answers in place of the play, for a command it is given.
     fail: Callable[[Sequence[str]], procs.Result | None] = lambda _: None
     ran: list[tuple[tuple[str, ...], Path | None, dict[str, str]]] = field(default_factory=list)
@@ -127,8 +129,8 @@ class Serve:
             case "agent.list":
                 if self.loading:
                     self.loading -= 1
-                    none: list[object] = []
-                    return {"location": location, "data": none}
+                    own: list[object] = [] if self.empty else [{"id": "build", "permissions": DEFAULTS}]
+                    return {"location": location, "data": own}
                 agents = [{"id": n, "mode": "primary", "permissions": [*DEFAULTS, *r]} for n, r in self.rules.items()]
                 return {"location": location, "data": [{"id": "build", "permissions": DEFAULTS}, *agents]}
             case "skill.list":
@@ -226,7 +228,8 @@ def test_a_server_in_code_mode_is_reached_through_execute_alone() -> None:
 
 
 def test_an_agent_opencode_did_not_load_says_so() -> None:
-    found = offered(Serve({"canopy-worker": []}), "canopy-worker", "canopy-chore")
+    with mock.patch.object(offerings, "LOADED_SECONDS", 0):
+        found = offered(Serve({"canopy-worker": []}), "canopy-worker", "canopy-chore")
     assert found.agents[1] == AgentOffer(
         "canopy-chore",
         error="OpenCode has no agent canopy-chore: its definition did not load",
@@ -235,7 +238,7 @@ def test_an_agent_opencode_did_not_load_says_so() -> None:
 
 def test_a_server_that_never_loads_an_agent_is_the_error() -> None:
     with mock.patch.object(offerings, "LOADED_SECONDS", 0):
-        found = offered(Serve({"canopy-worker": []}, loading=10**6))
+        found = offered(Serve({"canopy-worker": []}, loading=10**6, empty=True), "canopy-worker")
     assert found.error == "`opencode serve` had loaded no agent after 0 seconds"
 
 

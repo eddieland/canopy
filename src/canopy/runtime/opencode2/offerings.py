@@ -41,7 +41,7 @@ from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer
 from canopy.runtime.opencode2.invocation import CONFIG_DIR_ENV
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Collection
 
 #: How long the server may take to say where it listens, and its plugins to load once it has.
 TIMEOUT_SECONDS = 120
@@ -162,7 +162,7 @@ def offerings(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents:
         else, when they could not be listed, and an agent's `error` set when OpenCode has no such agent.
     """
     try:
-        loaded = _load(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)})
+        loaded = _load(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)}, agents)
     except _FailedError as e:
         return Offerings(error=str(e))
     return Offerings(
@@ -188,7 +188,7 @@ def offered(runner: procs.Runner, argv: Sequence[str], *, cwd: Path, env: Mappin
     if agent is None:
         return AgentOffer("", error="its command names no agent")
     try:
-        loaded = _load(runner, words[: start + 1], cwd, env)
+        loaded = _load(runner, words[: start + 1], cwd, env, (agent,))
     except _FailedError as e:
         return AgentOffer(agent, error=str(e))
     on = {name: server for name, server in loaded.servers.items() if not server.disabled}
@@ -219,8 +219,16 @@ def _agent(args: Sequence[str]) -> str | None:
     return None
 
 
-def _load(runner: procs.Runner, launcher: Sequence[str], cwd: Path, env: Mapping[str, str]) -> _Loaded:
+def _load(
+    runner: procs.Runner,
+    launcher: Sequence[str],
+    cwd: Path,
+    env: Mapping[str, str],
+    agents: Collection[str],
+) -> _Loaded:
     """Start a server with `launcher`, the words that start OpenCode, in `cwd` with `env`, and ask what it loaded.
+
+    It waits for `agents`, the ones asked about, to load.
 
     Returns:
         canopy's agents' rules, the skills, and the MCP servers, as the server loaded them.
@@ -229,7 +237,7 @@ def _load(runner: procs.Runner, launcher: Sequence[str], cwd: Path, env: Mapping
         _FailedError: The server could not be started, did not load in time, or said what canopy cannot read.
     """
     serve = _Serve(runner, launcher, cwd, {**env, PASSWORD_ENV: secrets.token_urlsafe(24)})
-    return serve.ask(_loaded)
+    return serve.ask(lambda client: _loaded(client, agents))
 
 
 class _Serve:
@@ -306,8 +314,11 @@ class _Client:
         return result.stdout
 
 
-def _loaded(client: _Client) -> _Loaded:
-    """Ask the server for its agents once its plugins have loaded them, then its skills and its MCP servers.
+def _loaded(client: _Client, wanted: Collection[str]) -> _Loaded:
+    """Ask the server for its agents once its plugins have loaded `wanted`, then its skills and its MCP servers.
+
+    OpenCode lists its own agents before the plugins have loaded the definitions, canopy's among them, so it waits for
+    the agents asked about, at most `LOADED_SECONDS`; one still missing then is one whose definition did not load.
 
     Returns:
         Each agent's rules by its name, the skills' ids, sorted, and the MCP servers in config's order.
@@ -316,9 +327,14 @@ def _loaded(client: _Client) -> _Loaded:
         _FailedError: An answer could not be read, or no agent had loaded within `LOADED_SECONDS`.
     """
     deadline = time.monotonic() + LOADED_SECONDS
-    while not (agents := _read(client.get("agent.list"), _Agents.model_validate_json, "agent.list").data):
+    while True:
+        agents = _read(client.get("agent.list"), _Agents.model_validate_json, "agent.list").data
+        if set(wanted) <= {agent.id for agent in agents}:
+            break
         if time.monotonic() >= deadline:
-            raise _FailedError(f"`opencode serve` had loaded no agent after {LOADED_SECONDS} seconds")
+            if not agents:
+                raise _FailedError(f"`opencode serve` had loaded no agent after {LOADED_SECONDS} seconds")
+            break
         time.sleep(POLL_SECONDS)
     skills = _read(client.get("skill.list"), _Skills.model_validate_json, "skill.list").data
     entries = _read(client.get("config.get"), _entries, "config.get")
