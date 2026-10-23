@@ -746,22 +746,24 @@ sliver beside four others; and its axis names short call numbers without measuri
   while the operator is within a bubble's gap of it; scrolled away to read, it stays where they put it. A flip, or
   another ticket or chore, on its page or in the inbox, opens it at the newest end again.
 - **The runs page is a row per subject** (`SubjectRunsTable`, `subjectRuns` in `src/lib/run-state.ts`): every agent
-  canopy runs, a ticket's worker runs, a PR's reviews, and a chore's runs, in one list, so the operator sees where
-  the sessions go and what waits on what. A subject's row is its latest run, which says where it stands, and under it
-  `Show N earlier runs`, a `Disclosure` that opens the runs before it, newest first, each one line in the row's own
-  columns (a `ListRow` of the same kind): its state, its id, its chips, the first line of what it said in muted text
-  where the title is, cost, and when; the rest is on its run's page. A chore's earlier run is only its latest that
-  ended, under one running; its chore's page has the rest. The head line reads the state, the run's id (`run:41`,
-  `review:4`, or a chore run's `#2`), what it works for (the ticket's key, a review's ticket, the chore), its kind's
-  chips (`resume (ci)`, `review`, `chore`), and in the free column the ticket's title, or a review's PR, commit, and
-  verdict. What goes under it starts under the title. A ticket that asked, got its answer, and asked again is one
-  blocked row, not two. The kind and state filters keep each other, and the state filter goes by each subject's
-  latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing. `?model=`, which
-  By model links to, keeps the worker runs that model ran (`ranOn`) before they are grouped, and leaves out reviews and
-  chores, whose rows name no model; its filter shows in the header only once chosen, with `all` to take it off.
-  Under the page's description, a line counts what runs against each `[capacity]` limit as the harness counts it
-  (`workers 2 of 2`, reviews among them, and `chores` apart), a full one in `status-blocked` with `full`: the next
-  start of its kind waits for a run to end. A ticket's page lists its runs flat
+  canopy runs, a ticket's worker runs, a PR's reviews, a chore's runs, and a task's, in one list, so the operator sees
+  where the sessions go and what waits on what. A subject's row is its latest run, which says where it stands, and
+  under it `Show N earlier runs`, a `Disclosure` that opens the runs before it, newest first, each one line in the
+  row's own columns (a `ListRow` of the same kind): its state, its id, its chips, the first line of what it said in
+  muted text where the title is, cost, and when; the rest is on its run's page. A chore's earlier run is only its
+  latest that ended, under one running; its chore's page has the rest. A task shows its newest run alone; its task's
+  page has the rest. The head line reads the state, the run's id (`run:41`, `review:4`, a chore run's `#2`, or
+  `task:6#6`), what it works for (the ticket's key, a review's ticket, the chore, a task's repository), its kind's
+  chips (`resume (ci)`, `review`, `chore`, `task`), and in the free column the ticket's title, or a review's PR,
+  commit, and verdict. What goes under it starts under the title. A ticket that asked, got its answer, and asked again
+  is one blocked row, not two. The kind and state filters keep each other, and the state filter goes by each
+  subject's latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing.
+  `?model=`, which By model links to, keeps the worker runs that model ran (`ranOn`) before they are grouped, and
+  leaves out reviews, chores, and tasks, whose rows name no model; its filter shows in the header only once chosen,
+  with `all` to take it off. Under the page's description, a line counts what runs against each `[capacity]` limit as
+  the harness counts it
+  (`workers 2 of 2`, reviews and task runs among them, and `chores` apart), a full one in `status-blocked` with
+  `full`: the next start of its kind waits for a run to end. A ticket's page lists its runs flat
   (`RunsTable`), since every row there is the same ticket's. A run's line of links names its first three worktrees,
   then `+N more worktrees` with every one in its tip, never `+1 more`, which would take the room the fourth's path
   does: a ticket across many repositories holds a slot in each, and its run's page lists them all. Beside its session

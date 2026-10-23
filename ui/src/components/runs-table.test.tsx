@@ -2,9 +2,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { mockChores, mockReviews, mockRuns } from '@/api/mocks'
+import { mockChores, mockReviews, mockRuns, mockTasks } from '@/api/mocks'
 import { keys } from '@/api/queries'
-import type { ChoreSummary, ReviewSummary, Run } from '@/api/types'
+import type { ChoreSummary, ReviewSummary, Run, TaskSummary } from '@/api/types'
 import { subjectRuns } from '@/lib/run-state'
 import { renderRouted, tipOf } from '@/test-utils'
 
@@ -214,6 +214,26 @@ describe('SubjectRunsTable', () => {
         const earlier = within(screen.getByTestId('earlier-chore-runs-deps'))
         expect(earlier.getByRole('link', { name: '#2' })).toBeDefined()
         expect(earlier.getByText("One advisory touches web's lockfile.")).toBeDefined()
+    })
+
+    it('lists a task by its newest run, as task:N#M opening its page, its repository, and its text', async () => {
+        const [, running, waiting] = mockTasks as [unknown, TaskSummary, TaskSummary]
+        const groups = subjectRuns({ runs: [], tasks: [running, waiting] })
+        await renderRouted(<SubjectRunsTable groups={groups} />, { client: client() })
+        const row = within(screen.getByTestId('task-run-6-8'))
+        expect(row.getByRole('link', { name: 'task:6#8' }).getAttribute('href')).toBe('/tasks/6/runs/8')
+        expect(row.getByText('running')).toBeDefined()
+        expect(row.getByText('mobile')).toBeDefined()
+        expect(row.getByText('task')).toBeDefined()
+        expect(row.getByText("Add a dark launch screen to match the app's theme.")).toBeDefined()
+        // Its runs before this one are on the task's page, not folded under it.
+        expect(row.queryByRole('button', { name: /earlier/u })).toBeNull()
+
+        const asked = within(screen.getByTestId('task-run-4-5'))
+        expect(asked.getByText('blocked')).toBeDefined()
+        expect(
+            asked.getByText('The flag is also read by the billing worker in api; rename it there too?'),
+        ).toBeDefined()
     })
 
     it('says untitled for a review or a chore with no title, so its title cell is never blank', async () => {
