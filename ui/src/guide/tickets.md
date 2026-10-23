@@ -140,15 +140,24 @@ this ticket overrides is marked **override**; hover an agent, or open its menu, 
 
 Open an agent's menu there to set this ticket's override, as `canopy model KEY MODEL --agent AGENT` does. The menu
 asks the runtime for its models each time it opens, the same list `canopy models` prints, so it may take a moment to
-fill. The override holds for every run of that agent on this ticket, a `resume` after review comments included,
-until you pick **Clear the override**. That is the canary: one ticket on the new model, the rest on the one you
-trust, and [the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run's page names
-the model it asked for while it works, then the model that served it, and both when they differ, so you can check the
-canary actually sang.
+fill. If the runtime can't answer, the menu says why in red and offers **Read again**; until it answers, the only
+thing you can do is clear the override, since canopy won't take a model it can't look up. Picking one saves it after
+the runtime's list is read once more, so the button shows your pick with a trailing `…` for those few seconds. The
+override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
+**Clear the override**. That is the canary: one ticket on the new model, the rest on the one you trust, and
+[the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run's page names the model
+it asked for while it works, then the model that served it, and both when they differ, so you can check the canary
+actually sang.
+
+An override names the model alone. If your config runs an agent at a variant, such as `openai/gpt-5@high`, the menu
+shows it greyed out as **config's, with a variant**, and offers `openai/gpt-5` itself: the variant, a reasoning effort,
+stays your config's to choose.
 
 The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
 override names drops off the runtime's list before the next run, that run is refused rather than sent to another
-model, and the ticket lands on your attention list as `model_missing`. Pick another, or set its provider up again.
+model, and the ticket lands on your attention list as `model_missing`. The menu sees it first: once it has read the
+list, the agent's button turns amber and the model shows greyed out as **no longer listed**. Pick another, or set its
+provider up again.
 
 ## Attaching files
 

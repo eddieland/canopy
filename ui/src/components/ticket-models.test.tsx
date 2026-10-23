@@ -10,15 +10,15 @@ import { TicketModels } from './ticket-models'
 
 const LISTED = ['acme/fast-1', 'acme/deep-2']
 const MODELS: AgentModel[] = [
-    { agent: 'worker', model: 'acme/deep-2', source: 'ticket' },
-    { agent: 'planner', model: 'acme/fast-1', source: 'config' },
-    { agent: 'reviewer', model: null, source: 'default' },
+    { agent: 'worker', model: 'acme/deep-2', source: 'ticket', variant: null },
+    { agent: 'planner', model: 'acme/fast-1', source: 'config', variant: null },
+    { agent: 'reviewer', model: null, source: 'default', variant: null },
 ]
 
 // Every request the panel sends, and what the server stand-in answers each: the list for a read, `answer` for a write.
 let sent: { method: string; path: string; body: unknown }[] = []
 let listed: Response | undefined
-let answer: Response | undefined
+let answer: Response | Promise<Response> | undefined
 
 const server: Middleware = {
     async onRequest({ request }) {
@@ -28,7 +28,7 @@ const server: Middleware = {
         if (request.method === 'GET') {
             return listed ?? Response.json({ models: LISTED, error: null })
         }
-        return answer ?? Response.json({ agent: 'reviewer', model: 'acme/deep-2', source: 'ticket' })
+        return answer ?? Response.json({ agent: 'reviewer', model: 'acme/deep-2', source: 'ticket', variant: null })
     },
 }
 
@@ -94,7 +94,7 @@ describe('TicketModels', () => {
     })
 
     it('clears an override standing, as --clear does', async () => {
-        answer = Response.json({ agent: 'worker', model: null, source: 'default' })
+        answer = Response.json({ agent: 'worker', model: null, source: 'default', variant: null })
         renderModels()
         const menu = openMenu('worker model: acme/deep-2')
         const chosen = await within(menu).findByRole('menuitemradio', { name: 'acme/deep-2' })
@@ -112,18 +112,87 @@ describe('TicketModels', () => {
         })
     })
 
-    it('says why the list could not be read, and keeps a model the runtime no longer lists checked', async () => {
+    it('says in the failure color why the list could not be read, offers no model, and reads it again', async () => {
         listed = Response.json({ models: [], error: '`opencode models` exited 1' })
         renderModels()
         const menu = openMenu('worker model: acme/deep-2')
         expect(await within(menu).findByText('Could not read its models: `opencode models` exited 1')).toBeDefined()
-        const items = within(menu).getAllByRole('menuitemradio')
-        expect(items.map((item) => [item.textContent, item.getAttribute('aria-checked')])).toEqual([
-            ['acme/deep-2', 'true'],
-        ])
+        // Every choice would be refused `model_list_failed`: none is offered, but clearing needs no list.
+        expect(within(menu).queryAllByRole('menuitemradio')).toEqual([])
+        expect(
+            within(menu).getByRole('menuitem', { name: 'Clear the override' }).getAttribute('aria-disabled'),
+        ).toBeNull()
+        listed = undefined
+        fireEvent.click(within(menu).getByRole('menuitem', { name: 'Read again' }))
+        const items = await within(menu).findAllByRole('menuitemradio')
+        expect(items.map((item) => item.textContent)).toEqual(LISTED)
+        expect(within(menu).queryByText(/Could not read its models/u)).toBeNull()
+        expect(sent.map((s) => s.path)).toEqual(['/api/models', '/api/models'])
     })
 
-    it('names the guard of a refusal', async () => {
+    it('shows a model the runtime no longer lists checked but not offered, its trigger marked', async () => {
+        renderModels([{ agent: 'worker', model: 'acme/gone-1', source: 'ticket', variant: null }])
+        // Nothing is known gone until the list is read.
+        expect(screen.getByRole('button', { name: 'worker model: acme/gone-1' })).toBeDefined()
+        const menu = openMenu('worker model: acme/gone-1')
+        const items = await within(menu).findAllByRole('menuitemradio')
+        expect(
+            items.map((item) => [
+                item.textContent,
+                item.getAttribute('aria-checked'),
+                item.getAttribute('aria-disabled'),
+            ]),
+        ).toEqual([
+            ['acme/fast-1', 'false', null],
+            ['acme/deep-2', 'false', null],
+            ['acme/gone-1: no longer listed; its next run is refused', 'true', 'true'],
+        ])
+        // The menu hides the rest of the page from a screen reader while it is open.
+        expect(
+            screen.getByRole('button', {
+                name: 'worker model: acme/gone-1, no longer listed; its next run is refused',
+                hidden: true,
+            }),
+        ).toBeDefined()
+    })
+
+    it("offers config's model at a variant as the model alone, since an override names no variant", async () => {
+        renderModels([{ agent: 'planner', model: 'acme/fast-1@high', source: 'config', variant: 'high' }])
+        const menu = openMenu('planner model: acme/fast-1@high')
+        const items = await within(menu).findAllByRole('menuitemradio')
+        expect(items.map((item) => [item.textContent, item.getAttribute('aria-disabled')])).toEqual([
+            ['acme/fast-1', null],
+            ['acme/deep-2', null],
+            ["acme/fast-1@high: config's, with a variant", 'true'],
+        ])
+        // Its model is listed, so its next run goes ahead: the trigger is not marked.
+        expect(screen.getByRole('button', { name: 'planner model: acme/fast-1@high', hidden: true })).toBeDefined()
+    })
+
+    it('shows the model being saved on its button, marked pending, until the server answers', async () => {
+        // The server's answer, held until the test gives it.
+        const replies: ((response: Response) => void)[] = []
+        answer = new Promise((resolve) => {
+            replies.push(resolve)
+        })
+        renderModels()
+        const menu = openMenu("reviewer model: the runtime's default")
+        fireEvent.click(await within(menu).findByRole('menuitemradio', { name: 'acme/deep-2' }))
+        const pending = await screen.findByRole('button', { name: 'reviewer model: acme/deep-2…' })
+        expect(pending.getAttribute('aria-busy')).toBe('true')
+        expect(screen.getByRole('button', { name: 'worker model: acme/deep-2' }).hasAttribute('disabled')).toBe(true)
+        replies[0]?.(Response.json({ agent: 'reviewer', model: 'acme/deep-2', source: 'ticket', variant: null }))
+        expect(
+            await screen.findByText(
+                "ABC-1's reviewer runs use acme/deep-2 from their next run: this ticket's override.",
+            ),
+        ).toBeDefined()
+        expect(
+            screen.getByRole('button', { name: "reviewer model: the runtime's default" }).getAttribute('aria-busy'),
+        ).toBe('false')
+    })
+
+    it('names the agent and the guard of a refusal', async () => {
         answer = Response.json(
             { detail: { guard: 'unknown_model', reason: 'OpenCode does not list the model acme/fast-1' } },
             { status: 409 },
@@ -132,7 +201,7 @@ describe('TicketModels', () => {
         const menu = openMenu("reviewer model: the runtime's default")
         fireEvent.click(await within(menu).findByRole('menuitemradio', { name: 'acme/fast-1' }))
         expect((await screen.findByRole('alert')).textContent).toBe(
-            'refused (unknown_model): OpenCode does not list the model acme/fast-1',
+            'reviewer: refused (unknown_model): OpenCode does not list the model acme/fast-1',
         )
     })
 
