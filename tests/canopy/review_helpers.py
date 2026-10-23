@@ -76,8 +76,10 @@ def reviewer_reports(
     tools: Sequence[Called] = (),
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
-    """Until the block ends, the fake reviewer prints `report`, verbatim if it is a string, after making the calls
-    `tools` names and running `commands`, if given."""
+    """Until the block ends, the fake reviewer prints `report`, verbatim if it is a string.
+
+    It prints it after making the calls `tools` names and running `commands`, if given.
+    """
     with scripted("REVIEWER", reported(report, commands, tools), behavior):
         yield
 

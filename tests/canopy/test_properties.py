@@ -35,8 +35,11 @@ fixtures = [HealthCheck.function_scoped_fixture]
 
 
 def near(pattern: re.Pattern[str]) -> st.SearchStrategy[str]:
-    """Strings that match `pattern`, with a little junk around them. Random text almost never lands one character away
-    from a valid value, which is where anchoring bugs live (a trailing newline once passed as part of a key)."""
+    """Strings that match `pattern`, with a little junk around them.
+
+    Random text almost never lands one character away from a valid value, which is where anchoring bugs live (a
+    trailing newline once passed as part of a key).
+    """
     junk = st.text(max_size=3) | st.sampled_from(["\n", "\r\n", " ", "/", ";"])
     return st.builds(_concat, junk | st.just(""), st.from_regex(pattern, fullmatch=True), junk)
 

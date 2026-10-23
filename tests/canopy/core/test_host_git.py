@@ -92,8 +92,10 @@ def test_a_worker_that_rewrites_the_git_link_crashes_the_run_and_the_link_is_put
 
 
 def plant_common_dir(fired: Path) -> str:
-    """Return a script that points the slot's `commondir` at a copy of the common directory, whose config runs a
-    command on a fetch from origin."""
+    """Return a script that points the slot's `commondir` at a copy of the common directory.
+
+    The copy's config runs a command on a fetch from origin.
+    """
     return (
         "own=$(git rev-parse --path-format=absolute --git-dir) && common=$(git rev-parse --git-common-dir) && "
         'mkdir planted && cp -R "$common/objects" "$common/refs" "$common/HEAD" "$common/config" planted/ && '

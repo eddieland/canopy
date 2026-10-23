@@ -30,8 +30,6 @@ from canopy.core import (
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunStatus
 from canopy.serve import draft_views, memory_views
-from canopy.serve.model_schema import AgentModel
-from canopy.serve.persona_schema import AgentPersona, PersonaChoice
 from canopy.serve.schema import (
     Attachment,
     Attachments,
@@ -58,7 +56,9 @@ from canopy.serve.schema import (
     TicketSummary,
     WorkerNotice,
 )
-from canopy.serve.ticket_schema import TicketDetail, TicketForget, Unit
+from canopy.serve.schema.model import AgentModel
+from canopy.serve.schema.persona import AgentPersona, PersonaChoice
+from canopy.serve.schema.ticket import TicketDetail, TicketForget, Unit
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
 
 if TYPE_CHECKING:
@@ -69,7 +69,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve import backend as served
     from canopy.serve.backend import Backend
-    from canopy.serve.transcript_schema import RawOutput, Transcript
+    from canopy.serve.schema.transcript import RawOutput, Transcript
 
 # How many runs that ended the runs list carries, after the running ones.
 RECENT_RUNS = 50

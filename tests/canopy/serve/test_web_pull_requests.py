@@ -11,8 +11,9 @@ import pytest
 from canopy.core import conversation, db
 from canopy.core.vocab import TickStatus
 from canopy.infra import procs
-from canopy.serve import mock_reviews, pull_requests
+from canopy.serve import pull_requests
 from canopy.serve.backend import Backend
+from canopy.serve.mock import reviews as mock_reviews
 from tests.canopy.web_helpers import SECRET, client, signed_in
 
 

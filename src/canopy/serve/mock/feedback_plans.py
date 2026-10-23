@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import feedback_items, plans, sql
 from canopy.core.vocab import PlanStatus, Proposal, ReviewItem, RunKind, RunStatus
-from canopy.serve.mock_reviews import PR_88
+from canopy.serve.mock.reviews import PR_88
 
 if TYPE_CHECKING:
     import sqlite3

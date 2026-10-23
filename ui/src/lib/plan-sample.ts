@@ -4,7 +4,7 @@
 // planner has since rewritten, which shows as gone, and one the operator resolved.
 import type { PlanThread } from '@/lib/plan-threads'
 
-/** The sample plan, for ABC-102 in the mock journal (canopy/serve/mock.py). */
+/** The sample plan, for ABC-102 in the mock journal (canopy/serve/mock/). */
 export const SAMPLE_PLAN = `# Export reports as CSV
 
 ## What changes

@@ -242,11 +242,11 @@ def test_the_chore_prompt(
     agent_log: Path,
     markdown_snapshot: SnapshotAssertion,
 ) -> None:
-    """A chore's prompt, whole, at its first run and at one after it, so a change to the `## Run` section the harness
-    writes is a diff in review (DESIGN §19).
+    """A chore's prompt, whole, at its first run and at one after it (DESIGN §19).
 
-    The second run has a previous run, an open finding, a note from the operator, a notice, and standing instructions
-    to every chore. Each time the journal records shows as `TIME`.
+    So a change to the `## Run` section the harness writes is a diff in review. The second run has a previous run, an
+    open finding, a note from the operator, a notice, and standing instructions to every chore. Each time the journal
+    records shows as `TIME`.
     """
     conn = canopy_env.journal()
     runs = canopy_env.state_dir / "chore-runs" / "build-health"
@@ -1018,8 +1018,11 @@ def test_a_chore_reads_its_earlier_runs_through_its_tool_from_a_cwd_outside_the_
     chores: Path,
     agent_log: Path,
 ) -> None:
-    """DESIGN §19, History: a run lists its chore's runs and reads one whole through `canopy_chore_history`, the
-    server its inline config names (§27), from wherever its `cwd` is, and is told the same as the command says."""
+    """DESIGN §19, History: a run reads its chore's runs through `canopy_chore_history`, from wherever its `cwd` is.
+
+    It lists them and reads one whole, through the server its inline config names (§27), and is told the same as the
+    command says.
+    """
     own = canopy_env.home / "build-tools"
     own.mkdir()
     canopy_env.user_file.write_text(
