@@ -11,11 +11,13 @@ runs:
   using: composite
   steps:
     # A new runner image or Playwright version saves a new cache, starting from the last one so only the new packages
-    # are downloaded.
-    - name: Name the cache
+    # are downloaded. The directory is outside $HOME, which apt's download user cannot enter: there apt would download
+    # as root instead, with a warning.
+    - name: Prepare the cache
       id: cache-key
       shell: bash
       run: |
+        sudo install -d -o "$(id -u)" -g "$(id -g)" /var/cache/playwright-apt
         version=$(node -p 'require("./ui/node_modules/@playwright/test/package.json").version')
         echo "key=playwright-apt-$ImageOS-$ImageVersion-$version" >>"$GITHUB_OUTPUT"
         echo "prefix=playwright-apt-$ImageOS-" >>"$GITHUB_OUTPUT"
@@ -23,7 +25,7 @@ runs:
     - name: Restore the system packages
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ~/.cache/playwright-apt
+        path: /var/cache/playwright-apt
         key: ${{ steps.cache-key.outputs.key }}
         restore-keys: ${{ steps.cache-key.outputs.prefix }}
 
@@ -31,7 +33,7 @@ runs:
       shell: bash
       working-directory: ui
       run: |
-        archives="$HOME/.cache/playwright-apt"
+        archives=/var/cache/playwright-apt
         conf=/etc/apt/apt.conf.d/90playwright-archives
         mkdir -p "$archives/partial"
         echo "Dir::Cache::Archives \"$archives/\";" | sudo tee "$conf" >/dev/null
