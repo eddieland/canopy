@@ -468,6 +468,7 @@ class _Review(_Line):
     url: _Url | None = None
     review: Annotated[int, Field(ge=1)] | None = None
     thread: _Thread | None = None
+    commit: _Sha | None = None
 
     @model_validator(mode="after")
     def _a_comment_has_its_thread(self) -> _Review:
@@ -772,6 +773,7 @@ def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
             outdated=None if thread is None else thread.outdated,
             resolved=None if thread is None else thread.resolved,
             observed_at=now,
+            commit_sha=line.commit if line.item is ReviewItem.REVIEW else None,
         ).or_replace(),
     )
 

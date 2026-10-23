@@ -655,7 +655,7 @@ class _World:
             phases.append(Phase.CONFLICTED)
         ci, passed = self._ci(repo, pr, unit)
         phases.extend(ci)
-        approved = _approved(self.reviews.get(url, []))
+        approved = _approved(self.reviews.get(url, []), pr.head_sha)
         phases.extend(self._feedback(key, pr, unit))
         if passed and not approved:
             phases.append(Phase.GREEN_UNREVIEWED)
@@ -775,20 +775,21 @@ def _done(conn: sqlite3.Connection) -> set[str]:
     return {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
 
 
-def _approved(reviews: Collection[records.ObservedReview]) -> bool:
-    """Whether a person approved the PR: an author's latest approval or change request is an approval.
+def _approved(reviews: Collection[records.ObservedReview], head: str | None) -> bool:
+    """Whether a person approved the PR at its head: an author's latest approval or change request is their verdict.
 
-    A bot's approval is not approval (DESIGN §7), and a dismissed review leaves its author with none.
+    A bot's approval is not approval (DESIGN §7), and a dismissed review leaves its author with none. An approval covers
+    the commit it was given on, so one of an earlier commit, or of none GitHub names, does not count.
 
     Returns:
-        True if some person's latest verdict approves.
+        True if some person's latest verdict approves the head.
     """
-    latest: dict[str, ReviewState] = {}
+    latest: dict[str, records.ObservedReview] = {}
     verdicts = {ReviewState.APPROVED, ReviewState.CHANGES_REQUESTED, ReviewState.DISMISSED}
     for r in reviews:
         if r.item is ReviewItem.REVIEW and not r.bot and r.author is not None and r.state in verdicts:
-            latest[r.author.lower()] = r.state
-    return any(state is ReviewState.APPROVED for state in latest.values())
+            latest[r.author.lower()] = r
+    return head is not None and any(r.state is ReviewState.APPROVED and r.commit_sha == head for r in latest.values())
 
 
 # The `ci` cursor, a check run's id; None when it is empty or not a number, so every failure is new.

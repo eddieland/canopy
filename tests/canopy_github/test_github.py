@@ -311,6 +311,7 @@ class Fake:
                 "body": r.body,
                 "url": f"{PR}#pullrequestreview-{r.id}",
                 "author": {"__typename": "User", "login": r.author},
+                "commit": None if r.commit is None else {"oid": r.commit},
             }
             for r in pull.reviews
         ]
@@ -422,7 +423,7 @@ def github() -> Generator[tuple[Fake, str]]:
     fake = Fake()
     fake.pulls["acme", "api", 7] = Pull(
         node="PR_7",
-        reviews=[Review(node="PRR_1", id=101, author="alice", state="COMMENTED", body="A few things.")],
+        reviews=[Review(node="PRR_1", id=101, author="alice", state="COMMENTED", body="A few things.", commit=HEAD)],
         threads=[
             Thread(
                 id="PRRT_1",
@@ -501,6 +502,7 @@ def test_the_reader_prints_a_prs_reviews_and_threads_then_its_end(github: tuple[
     }
     assert review["state"] == "commented"
     assert review["body"] == "A few things."
+    assert review["commit"] == HEAD, "the commit it was given on, so canopy counts an approval only at the head"
     assert first["thread"] == {
         "id": "PRRT_1",
         "path": "src/app.py",

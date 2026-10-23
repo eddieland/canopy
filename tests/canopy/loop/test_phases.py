@@ -117,12 +117,20 @@ def check(
     )
 
 
-def review(conn: sqlite3.Connection, author: str, state: str, *, at: str = FRESH, body: str = "") -> None:
-    """Record a review of PR by `author`."""
+def review(
+    conn: sqlite3.Connection,
+    author: str,
+    state: str,
+    *,
+    at: str = FRESH,
+    body: str = "",
+    commit: str | None = HEAD,
+) -> None:
+    """Record a review of PR by `author`, given on `commit`."""
     conn.execute(
-        "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, observed_at) "
-        "VALUES (?, 'review', (SELECT count(*) + 1 FROM observed_reviews), ?, 0, ?, ?, ?, ?)",
-        (PR, author, state, at, body, FRESH),
+        "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, observed_at, "
+        "commit_sha) VALUES (?, 'review', (SELECT count(*) + 1 FROM observed_reviews), ?, 0, ?, ?, ?, ?, ?)",
+        (PR, author, state, at, body, FRESH, commit),
     )
 
 
@@ -318,6 +326,27 @@ def test_a_head_is_review_pending_until_each_of_personas_reviewers_has_reviewed_
     reviewed(observed, findings=0, persona="explainer")
     observed.commit()
     assert not any(phases.Phase.REVIEW_PENDING in d.phases for d in derived(canopy_env))
+
+
+@pytest.mark.parametrize("commit", ["0ld0ld0", None], ids=["an earlier commit", "no commit"])
+def test_an_approval_covers_only_the_commit_it_was_given_on(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    commit: str | None,
+) -> None:
+    # DESIGN §7: a push after an approval, a worker's included, is not approved, and canopy's reviewer reads it.
+    canopy_env.configure(canopy_env.user_file, {"review": {"agent_prs": True}})
+    green(canopy_env, observed)
+    review(observed, "octocat", "approved", commit=commit)
+    observed.commit()
+    found = {phase for d in derived(canopy_env) for phase in d.phases}
+    assert phases.Phase.APPROVED not in found
+    assert {phases.Phase.GREEN_UNREVIEWED, phases.Phase.REVIEW_PENDING} <= found
+
+    review(observed, "octocat", "approved")
+    observed.commit()
+    found = {phase for d in derived(canopy_env) for phase in d.phases}
+    assert phases.Phase.APPROVED in found, "approving the head again approves it"
 
 
 def test_a_closed_ticket_has_no_phase(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:

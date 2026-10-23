@@ -150,12 +150,12 @@ escapes it (§20).
 | `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to bring the base in |
 | `ci_running` | PR open, checks pending | wait |
 | `ci_red` | PR open, checks failed, newer than cursor | dispatch `resume` for `ci`, with anything else the unit has (§8, One resume for what comes back to a PR); at the attempt limit, attention; in cooldown, wait; held for a notice, wait (§8); left by a worker as flaky, attention (§23) |
-| `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
+| `review_pending` | with `review.agent_prs`: checks pass, no approval of the head, head commit not reviewed (§21) | review it |
 | `review_findings` | with `review.agent_prs` and `canopy:review` trusted: findings on the head's review, newer than the cursor | as comments (§7) |
 | `changes_requested` | a trusted reviewer's comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
 | `untrusted_review` | review feedback newer than cursor from a reviewer not in `trust.trusted_reviewers`, with no operator message about it | attention: the operator says what to do with `canopy reply` (below) |
-| `green_unreviewed` | checks pass, no approval | attention: needs a reviewer |
-| `approved` | approved, not merged | attention: ready to merge |
+| `green_unreviewed` | checks pass, no approval of the head | attention: needs a reviewer |
+| `approved` | approved at the head, not merged; an approval covers only the commit it was given on | attention: ready to merge |
 | `merged` | every unit's PR merged, and no other repository left to change (§18) | mark ticket `done` in the journal; humans handle the tracker transition |
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
 | `human_replied` | authorized reply newer than the label, or an operator message newer than the message cursor | dispatch `resume` pointing at the reply; the worker removes the label |

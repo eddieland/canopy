@@ -139,13 +139,27 @@ def review(
     *,
     item: str = "review",
     bot: bool = False,
+    commit: str = HEAD,
 ) -> None:
-    """Record a review, or with `item` a review comment, of PR by `author`."""
+    """Record a review given on `commit`, or with `item` a review comment, of PR by `author`."""
     thread = "PRRT_1" if item == "comment" else None
     conn.execute(
         "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, url, thread_id, "
-        "observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (PR, item, ident, author, bot, state, at, body, f"{PR}#review-{ident}", thread, FRESH),
+        "observed_at, commit_sha) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            PR,
+            item,
+            ident,
+            author,
+            bot,
+            state,
+            at,
+            body,
+            f"{PR}#review-{ident}",
+            thread,
+            FRESH,
+            commit if thread is None else None,
+        ),
     )
 
 

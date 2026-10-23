@@ -36,7 +36,7 @@ MAX_URL = 2000
 
 _REVIEW = """
 fragment Review on PullRequestReview {
-  id fullDatabaseId state submittedAt createdAt body url author { __typename login }
+  id fullDatabaseId state submittedAt createdAt body url author { __typename login } commit { oid }
 }
 """
 
@@ -394,6 +394,8 @@ def _review(ref: Ref, node: Mapping[str, object]) -> Mapping[str, object]:
         "time": text(node.get("submittedAt")) or text(node.get("createdAt")),
         "body": cut(node.get("body")),
         "url": text(node.get("url")),
+        # The commit it was given on, so canopy counts an approval only at the head; None when GitHub names none.
+        "commit": _oid(node.get("commit")),
     }
 
 
@@ -438,6 +440,11 @@ def _comment(ref: Ref, where: Mapping[str, object], node: Mapping[str, object]) 
 def _login(author: object) -> str | None:
     # A deleted account's content has no author.
     return text(obj(author, "author").get("login")) if isinstance(author, dict) else None
+
+
+def _oid(commit: object) -> str | None:
+    # A review of a commit a force push dropped has none.
+    return text(obj(commit, "commit").get("oid")) if isinstance(commit, dict) else None
 
 
 def _bot(author: object) -> bool:
