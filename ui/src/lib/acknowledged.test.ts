@@ -47,6 +47,34 @@ describe('answered', () => {
         expect(answered(review, undefined)).toBe(false)
     })
 
+    it('is not a plan review while its feedback plan waits, though its ticket plan does not', () => {
+        const review = {
+            ...item,
+            reason: 'plan_review',
+            detail: 'feedback plan 3 for https://github.com/acme/web/pull/88 waits: canopy plan ABC-102 --approve',
+        }
+        const plan = { id: 3, pr_urls: ['https://github.com/acme/web/pull/88'], items: 2, stale: true }
+        expect(answered(review, listing({ plan_waits: false, feedback_plan: plan }))).toBe(false)
+        // Approved, it waits on you no more, and the item leaves at the next tick.
+        expect(answered(review, listing({ plan_waits: false, feedback_plan: null }))).toBe(true)
+        // A later feedback plan waiting does not hold the item about this one.
+        expect(answered(review, listing({ plan_waits: false, feedback_plan: { ...plan, id: 4 } }))).toBe(true)
+    })
+
+    it('is a ticket plan review answered by its own plan, whatever its feedback plan does', () => {
+        const review = { ...item, reason: 'plan_review', detail: 'plan 7 waits: canopy show ABC-102, then ...' }
+        const plan = { id: 3, pr_urls: ['https://github.com/acme/web/pull/88'], items: 2, stale: false }
+        expect(answered(review, listing({ plan_waits: false, feedback_plan: plan }))).toBe(true)
+        expect(answered(review, listing({ plan_waits: true, feedback_plan: null }))).toBe(false)
+    })
+
+    it('is a plan review naming no plan answered once neither plan waits', () => {
+        const review = { ...item, reason: 'plan_review', detail: 'a plan waits' }
+        const plan = { id: 3, pr_urls: ['https://github.com/acme/web/pull/88'], items: 2, stale: false }
+        expect(answered(review, listing({ plan_waits: false, feedback_plan: plan }))).toBe(false)
+        expect(answered(review, listing({ plan_waits: false, feedback_plan: null }))).toBe(true)
+    })
+
     it('is never another reason', () => {
         expect(answered({ ...item, reason: 'worker_failed' }, listing({ awaiting: null }))).toBe(false)
     })

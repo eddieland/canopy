@@ -27,7 +27,7 @@ The items come in four groups, in this order, and within a group the one open lo
    `canopy unavailable`, when the overseer couldn't run canopy at all; or `disk low`, when the disk was too full for
    the overseer to run.
 2. **Waiting on you**, in amber: a worker's question (`awaiting reply`), a review from someone the loop doesn't trust
-   (`untrusted review`), a plan to approve (`plan review`), replies a run drafted for you to send
+   (`untrusted review`), a plan or a feedback plan to approve (`plan review`), replies a run drafted for you to send
    (`drafts waiting`), a review you asked for that's done with its draft unpublished (`review waiting`), and a review
    you staged on GitHub, or whose post never said how it went (`review unsettled`).
 3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, a
@@ -37,7 +37,8 @@ The items come in four groups, in this order, and within a group the one open lo
 4. **Findings**: what your chores found.
 
 The counters above the list say how many runs are going, a task's among them, how many tickets and tasks wait on you
-and how long the oldest question has waited, and how many items the list holds. How those items break down is the
+(on your reply, or on your approval of a feedback plan) and how long the oldest question has waited, and how many items
+the list holds. How those items break down is the
 nav's badge, on every page, so the counters don't say it again; one page saying a number five times doesn't make it
 truer. The browser tab's title counts the items that block work, so a glance at the tab says whether to look.
 Findings, `needs reviewer`, and `ready to merge` don't count there: they're news, not blockers.
@@ -76,6 +77,11 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   wrote it, how many comments are open, **Approve**, and **Open plan**. Approve right there if you've already read it;
   open it if you haven't, which is the honest option more often than anyone admits. Once you approve it, skip it, or
   ask for changes, the item shows `answered` until the next tick clears it. See [Plans](plans).
+- **A feedback plan to approve** (`plan review` too, for the round of review feedback a ticket's next resume acts on):
+  which plan it is, the PR it covers, how many items it has, and whether the PR moved on since it was written, with a
+  button to the PR's page, straight to the plan, where you approve it item by item
+  ([The feedback plan](pull-requests#the-feedback-plan)). The resume waits on it, so the item stays unanswered until
+  you approve it; a plan nobody approves is a very patient way to stall a PR.
 - **Replies waiting on you** (`drafts waiting`): a button to the PR's page, where each reply a run drafted sits on the
   thread it answers, or for a comment on the ticket itself, the draft right here, with **Send**. See
   [Pull requests](pull-requests#replying-to-your-coworkers-reviews).

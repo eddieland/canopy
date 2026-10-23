@@ -30,7 +30,7 @@ from canopy.core import (
 )
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunStatus
-from canopy.serve import draft_views, memory_views
+from canopy.serve import draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
     Attachments,
@@ -483,16 +483,17 @@ def tickets(ctx: Context) -> list[TicketSummary]:
     Returns:
         At most `TICKETS` tickets, as the tickets list shows them.
     """
-    return [summary(ctx.conn, row) for row in db.recent_tickets(ctx.conn, TICKETS)]
+    return [summary(ctx, row) for row in db.recent_tickets(ctx.conn, TICKETS)]
 
 
-def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
+def summary(ctx: Context, row: sqlite3.Row) -> TicketSummary:
     """A ticket row, with `active_at` as `db.recent_tickets` adds it, as the tickets list shows it.
 
     Returns:
         The ticket, with whether it was started privately, the question it awaits, its running run, if any, and
-        whether its plan waits on the operator.
+        whether its plan or its feedback plan waits on the operator.
     """
+    conn = ctx.conn
     key = str(row["key"])
     record = conversation.start_of(conn, key)
     status: StartStatus | None = None
@@ -518,6 +519,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
         awaiting=waiting.id if waiting is not None else None,
         running_run=running.id if running is not None else None,
         plan_waits=ticket is not None and plans.waits(conn, ticket),
+        feedback_plan=feedback_plan_views.waiting(ctx, key),
     )
 
 
@@ -546,7 +548,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         if u.pr_url is not None and (found := backend.review_limit(ctx, u.pr_url)) is not None
     ]
     return TicketDetail(
-        ticket=summary(ctx.conn, row),
+        ticket=summary(ctx, row),
         units=units,
         limits=[limit(found) for found in backend.limits(ctx, key)]
         + [limit(found, repo=repo) for repo, found in reviews],

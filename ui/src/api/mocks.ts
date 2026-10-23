@@ -126,6 +126,7 @@ export const mockTickets: TicketSummary[] = [
         awaiting: 5,
         running_run: null,
         plan_waits: false,
+        feedback_plan: null,
     },
 ]
 

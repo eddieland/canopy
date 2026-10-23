@@ -80,6 +80,19 @@ describe('Counters', () => {
         expect(tipOf(waiting.getByRole('time'))).toBe(localTime('2026-10-08T10:00:00Z', DEFAULT_CLOCK))
     })
 
+    it('counts a ticket whose feedback plan waits on your approval, once though a question waits too', () => {
+        const plan = { id: 3, pr_urls: ['https://github.com/acme/web/pull/88'], items: 2, stale: false }
+        renderCounters({
+            tickets: [
+                { ...ticket('ABC-099', null), feedback_plan: plan },
+                { ...ticket('ABC-102', 5), feedback_plan: plan },
+                ticket('ABC-104', null),
+            ],
+            attention: [],
+        })
+        expect(within(counter('waiting')).getByText('2')).toBeDefined()
+    })
+
     it("counts a task's run running among the runs", () => {
         renderCounters({ runs: mockRuns, tasks: mockTasks })
         // Run 41, and task 6's run.

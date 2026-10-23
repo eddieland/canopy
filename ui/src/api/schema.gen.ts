@@ -8150,6 +8150,8 @@ export type components = {
              * @description Whether the overseer marked it done.
              */
             done: boolean;
+            /** @description Its current feedback plan while it waits on the operator, proposed and not yet approved; None otherwise. */
+            feedback_plan: components["schemas"]["WaitingFeedbackPlan"] | null;
             /**
              * Key
              * @description The ticket's key, as the tracker names it.
@@ -8526,6 +8528,32 @@ export type components = {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * WaitingFeedbackPlan
+         * @description A ticket's feedback plan while it waits on the operator (DESIGN §32), as the attention list names it.
+         */
+        WaitingFeedbackPlan: {
+            /**
+             * Id
+             * @description The plan's id, as `feedback-plan:N` names it.
+             */
+            id: number;
+            /**
+             * Items
+             * @description How many items it covers.
+             */
+            items: number;
+            /**
+             * Pr Urls
+             * @description The PRs of the units it covers, by repository: each PR's page shows the plan, where it is approved.
+             */
+            pr_urls: string[];
+            /**
+             * Stale
+             * @description Whether its PRs changed since it was written, so approving it is refused once, naming what changed.
+             */
+            stale: boolean;
         };
         /**
          * WorkerNotice
