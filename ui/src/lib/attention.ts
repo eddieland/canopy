@@ -6,9 +6,19 @@ import { codeSpans } from '@/lib/rich-text'
 /** How urgent an attention item is: the order the attention list shows it in, and its chip's color (DESIGN.md). */
 export type Severity = 'failed' | 'waiting' | 'other' | 'finding'
 
-// Reasons raised because something broke: a run, a chore, a review, the overseer's `canopy`, or the disk (§14). A
-// reason not named here or below, the overseer's phase-table reasons included, is `other`.
+// Reasons a run is refused for its model (DESIGN §13): the runtime does not list the model chosen, or its list could
+// not be read. Nothing runs on another model, so the work stays stalled until the operator chooses one or fixes the
+// runtime.
+const MODEL_REASONS = new Set(['model_missing', 'model_list_failed'])
+
+// What an item refused its model names when no ticket's menu can fix it: the runtime's list, and which of
+// `[runtime.models]` it lacks.
+const MODELS_COMMAND = 'canopy models'
+
+// Reasons raised because something broke: a run, a run refused its model, a chore, a review, the overseer's `canopy`,
+// or the disk (§14). A reason not named here or below, the overseer's phase-table reasons included, is `other`.
 const FAILED = new Set([
+    ...MODEL_REASONS,
     'crashed',
     'unpushed',
     'unknown_result',
@@ -141,8 +151,9 @@ export function breakdownText(parts: readonly BreakdownPart[]): string {
  * "The attention detail"): the ticket's latest run, for a run that broke; the PR, for one waiting on someone else; the
  * reply, for an answer; the plan's card, for a plan; the proposals or lessons memory's items name; the PR's threads,
  * for the replies a run drafted; the review's page, for a review's draft; the task's page, for a one-off task's item;
- * the command to run, for an item about nothing canopy shows that names one. `ticket` is any other ticket's item,
- * which leads with the ticket's own actions; `none`, the rest.
+ * the ticket's models, for a ticket's run refused its model; the command to run, for an item about nothing canopy
+ * shows that names one, or one refused its model about no ticket. `ticket` is any other ticket's item, which leads
+ * with the ticket's own actions; `none`, the rest.
  */
 export type Ask =
     | 'run'
@@ -153,6 +164,7 @@ export type Ask =
     | 'drafts'
     | 'review'
     | 'task'
+    | 'model'
     | 'command'
     | 'ticket'
     | 'none'
@@ -168,6 +180,10 @@ export function ask(item: AttentionItem): Ask {
     // A task's item names `canopy` commands in its detail, but its page is where it is read and answered.
     if (item.task !== null) {
         return 'task'
+    }
+    // A chore's item too: its notes cannot fix a model, and its runs and the overseer's take theirs from config alone.
+    if (modelRefused(item)) {
+        return item.ticket_key === null ? 'command' : 'model'
     }
     if (item.ticket_key === null) {
         return item.chore === null && item.pr === null && commandOf(item) !== null ? 'command' : 'none'
@@ -195,10 +211,21 @@ export function shownDetail(item: AttentionItem): string {
     return item.detail.replace(REPLY_HINT, '')
 }
 
-/** The `canopy` command an item's detail names in a code span, such as `repo_missing`'s `canopy workspace sync`. */
+/**
+ * The `canopy` command an item's detail names in a code span, such as `repo_missing`'s `canopy workspace sync`; for an
+ * item refused its model about no ticket that names none, `canopy models`, which says what the runtime lists.
+ */
 export function commandOf(item: AttentionItem): string | null {
     const command = codeSpans(item.detail).find((piece) => piece.kind === 'code' && piece.text.startsWith('canopy '))
+    if (command === undefined && modelRefused(item) && item.ticket_key === null) {
+        return MODELS_COMMAND
+    }
     return command?.text ?? null
+}
+
+/** Whether the item is a run refused its model (`model_missing`, `model_list_failed`), not a chore's finding. */
+export function modelRefused(item: AttentionItem): boolean {
+    return MODEL_REASONS.has(item.reason) && !item.finding
 }
 
 // A review run named as the harness writes one, standing as a word of its own.
