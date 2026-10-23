@@ -1,7 +1,8 @@
 """A worker's or a planner's model (DESIGN §13, Each agent's model): `runtime.models`' for its agent, written into the
 agent's definition, recorded on the run, and looked up in the runtime's list before the run starts, never fallen back
 from: a model the list lacks, or a list that cannot be read, refuses the run with an attention item, spending no attempt
-and leasing no slot. canopy's commit trailer names it, while the operator has not named the trailer themselves."""
+and leasing no slot. canopy's commit trailer names it, and a worker following an approved plan names its planner's on a
+trailer of its own, while the operator has not named the trailer themselves."""
 
 import json
 from pathlib import Path
@@ -77,6 +78,20 @@ def test_each_agents_model_reaches_its_runs_and_no_other(
     assert plan.row["model"] == OTHER
     scenario.operator("plan", KEY, "--skip")
     assert scenario.run(worker=pushes()).row["model"] is None
+
+
+def test_a_worker_following_an_approved_plan_credits_the_planners_model_and_its_own(
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    listed(opencode_state, MODEL, OTHER)
+    scenario.configures(runtime={"models": {"planner": OTHER, "worker": MODEL}})
+    scenario.run(PLAN, worker=planner_does(plan="# Plan for PROJ-1\n\nAdd the button.\n"))
+    scenario.operator("plan", KEY, "--approve")
+    prompt = scenario.run(worker=pushes()).prompt_file.read_text()
+    assert f"`Co-authored-by: {MODEL} (canopy worker) <noreply@canopy.invalid>`" in prompt
+    assert f"`Co-authored-by: {OTHER} (canopy planner) <noreply@canopy.invalid>`" in prompt
 
 
 def test_a_model_the_runtime_does_not_list_is_refused_with_an_attention_item(

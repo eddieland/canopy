@@ -1002,6 +1002,7 @@ def _spawn(
         private=plan.private,
         persona=persona,
         model=model,
+        planner_model=followed.planner_model if followed is not None else None,
     )
 
     run_id = db.insert_run(
@@ -1121,10 +1122,13 @@ def _render(
     private: bool,
     persona: personas.Persona | None,
     model: str | None,
+    planner_model: str | None,
 ) -> tuple[str, memory.Rendered | None, replies.Rendered | None]:
     """Render the worker prompt, with agent memory's part (§28), how its comments reach GitHub (§29), and its persona.
 
-    `model` is the one the run's agent runs on, which the commit trailer names (`prompts.commit_trailer`).
+    `model` is the one the run's agent runs on, which the commit trailer names (`prompts.commit_trailer`), and
+    `planner_model` that of the planner whose approved plan it follows, which a second trailer names
+    (`prompts.planner_trailer`).
 
     Returns:
         The prompt; memory's part of it for the run to record, or None when no memory tier reaches the run; and the
@@ -1153,6 +1157,7 @@ def _render(
             notice=notice.for_prompt(ctx.conn),
             persona=persona,
             model=model,
+            planner_model=planner_model,
         )
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e
