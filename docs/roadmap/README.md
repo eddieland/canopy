@@ -75,7 +75,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M36. Connectors: the world observed into the journal, in shadow](M36-connectors-in-shadow.md): in progress.
 - [M37. The overseer reads the journal](M37-the-overseer-reads-the-journal.md): in progress.
 - [M38. The harness decides what needs no judgment](M38-the-harness-decides.md): in progress.
-- [M39. A tick without the overseer](M39-a-tick-without-the-overseer.md): not started.
+- [M39. A tick without the overseer](M39-a-tick-without-the-overseer.md): in progress.
 - [M40. The overseer per decision](M40-the-overseer-per-decision.md): not started.
 - [M41. Limits and trust settings from the web UI](M41-limits-and-trust-settings-from-the-web-ui.md): done 2026-10-16.
 - [M42. Other people's PRs, reviewed on request](M42-other-peoples-prs-reviewed.md): done 2026-10-16.

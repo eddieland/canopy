@@ -262,10 +262,12 @@ def test_status_and_attention_ages(scenario: Scenario) -> None:
     conn = scenario.conn
     assert "No ticks yet." in scenario.operator("status").out
 
-    def tick(items: Iterable[tuple[str, str]], status: TickStatus = TickStatus.OK) -> int:
+    def tick(items: Iterable[tuple[str, str]], status: TickStatus = TickStatus.OK, waits: Iterable[str] = ()) -> int:
         tick_id = db.start_tick(conn, dry_run=True)
         for key, reason in items:
             db.record_decision(conn, tick_id, key, f"attention:{reason}", f"https://example.test/{key}")
+        for key in waits:
+            db.record_decision(conn, tick_id, key, "wait", "nothing to do yet")
         db.finish_tick(conn, tick_id, status, "summary")
         return tick_id
 
@@ -285,7 +287,10 @@ def test_status_and_attention_ages(scenario: Scenario) -> None:
     assert "d  https://example.test/PROJ-1" in out  # age in days
     assert "Running workers (0/2):\n  none" in out
 
+    # A tick that decides nothing about a ticket did not give the overseer it, so its items stand (DESIGN §37).
     tick([])
+    assert len(attention.current(conn)) == 2
+    tick([], waits=["PROJ-1", "PROJ-2"])
     assert attention.current(conn) == []
 
 

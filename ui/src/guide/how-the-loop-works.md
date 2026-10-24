@@ -11,6 +11,12 @@ runtime's MCP servers, and the worktree pools. For each ticket it works out wher
 next: start a worker, wait, skip, or put something on the attention list. Every one of those is a decision, recorded
 with the overseer's reasons, and the [Ticks](/ticks) page shows them all.
 
+Some of that needs no judgment, and canopy decides it in code before the overseer starts: a ticket whose worker is
+still running waits, and a chore with no `when` runs when it comes due. When that leaves the overseer nothing at all,
+no ticket to decide, no chore with a `when` due, no query to run, and no review to start, the tick doesn't run it. It
+makes canopy's own dispatches, closes `ok`, and leaves the attention list as it was. That tick costs nothing, which is
+the right price for being told nothing happened.
+
 Between ticks the loop waits `loop.interval_minutes`, 15 by default. When a tick finds nothing new, the next wait is
 longer, doubling up to `loop.idle_max_minutes`, so a quiet afternoon doesn't cost a tick every quarter hour. Anything
 you do that the loop should hear about ends the wait early: a reply, a start or stop, a grant, a notice to workers.

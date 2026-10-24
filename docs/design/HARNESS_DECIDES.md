@@ -8,10 +8,15 @@ runs, and what it leaves to the overseer's judgment. Sections are numbered acros
 
 Being built (ROADMAP M38). It waits on §35, and each row on a measurement (below). Built: the decisions the harness
 records before the overseer, each marked as its own; a ticket taken or left whole; `decided`; the duties owed only for
-the tickets left (§6); and the state block's `harness`, naming each ticket taken. The rows enabled are those read from
-the journal alone: `wait` for `running`, and for a private ticket's `needs_human`. The rest, from "Order and capacity"
-on, is designed, not built. Until it is, §7, §8, §14, §19, §21, and TRUST_MODEL describe canopy as it is; this section
-says what changes, and the PR that finishes it changes those sections and cuts this one to what is left.
+the tickets left (§6); the state block's `harness`, naming each ticket taken; and "Order and capacity", the order now
+in §7. The rows enabled are those read from the journal alone: `wait` for `running`, and for a private ticket's
+`needs_human`; and `chore run` for a due chore with no `when` (§19). No ticket's dispatch is enabled: each rests on an
+observation. Of the attention list held in code, built: the overseer's items held through a tick that does not give
+the overseer their subject, until one that does leaves them out or the ticket is done or stopped (§14), so a ticket
+with one is the harness's for a `wait`, though not for a run. The rest, from "The attention list, held in code" on, is
+designed, not built. Until it is, §8, §14, §21,
+and TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that finishes it changes those
+sections and cuts this one to what is left.
 
 Once the overseer reads the journal (§35), most of what it decides follows from the observations alone: applied by
 hand, §7's rows that are facts agreed with it on all but six of 943 decisions, and an overseer given only the tickets
@@ -59,16 +64,16 @@ measurement with PR labels and every context observed shows the derivation right
 
 ### Order and capacity
 
-§7 gains the order dispatches take across tickets, whoever decides them, which only the prompt states today: a review
-the operator requested; a human waiting (`human_replied`, `changes_requested`, `review_findings`); `conflicted` and
-`ci_red`; `pushed_no_pr`; the loop's own and the query's reviews; then `ready`, a blocker before what it blocks. Work in
-flight comes before new work, and a person waiting before a machine. Tasks start first, within their share (§36).
+§7 holds the order dispatches take across tickets, whoever decides them.
 
 The harness records its decisions before the overseer runs and makes its dispatches after, in that order, whatever the
 overseer's run ended as; a tick that closes before running it (§6 step 5) starts none, and a dry run none (D036). The
-state block names them and the capacity they hold. A dispatch of the overseer's that would leave too little for the
-harness's that rank above it is refused `reserved`: a human waiting goes ahead of a conflict, and `ready` gets what is
-left. Rejected: the harness dispatching first and reserving for the overseer, whose dispatches it cannot foresee.
+state block names them and the capacity they hold, and leaves their tickets out, as it does those decided. The plan is
+read from the journal (the tick's derivation, the attention list, the chores' runs) wherever it is needed, never kept,
+so the block, the overseer's tools, and the dispatches after it read the same. A dispatch of the overseer's that would
+leave too little for the harness's that rank above it is refused `reserved`: a human waiting goes ahead of a conflict,
+and `ready` gets what is left. Rejected: the harness dispatching first and reserving for the overseer, whose
+dispatches it cannot foresee.
 
 ### The attention list, held in code
 

@@ -107,11 +107,13 @@ Controls:
 - The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
   `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
   each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
-  these, none stale and no item the overseer holds open on it. Such a ticket's text reaches no overseer that tick, and
-  whatever the overseer records about it, a decision, dispatch, attention item, or `ticket set`, is refused `decided`,
-  through a tool and its command alike, so a steered overseer cannot overrule the harness. Residual: the harness
-  reads the absence of every other row from the derivation, so a row it misses waits until the overseer is given the
-  ticket again; it starts no run.
+  these, none stale. Such a ticket's text reaches no overseer that tick, and whatever the overseer records about it, a
+  decision, dispatch, attention item, or `ticket set`, is refused `decided`, through a tool and its command alike, so
+  a steered overseer cannot overrule the harness; an item the overseer raised on it stands until the overseer is given
+  the ticket again, or it is done or stopped. Residual: the harness reads the absence of every other row from the
+  derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
+  model-written context: today it starts only a due chore with no `when`, whose `chore run` and `chore wait` the
+  overseer is refused `decided`, and no ticket's run, since each rests on an observation.
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
@@ -426,6 +428,13 @@ Controls in code, not prompts:
   PR's review limit.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
+- The harness's dispatches (DESIGN §37): made after the overseer, by the same guards as the overseer's and counted in
+  every limit, cooldown, and capacity, and none in a dry run. An overseer's dispatch that would leave fewer workers
+  free than the harness's runs ranked above it in §7's order hold is refused `reserved`, so new work cannot take the
+  capacity of work in flight.
+- A tick whose block leaves the overseer nothing to judge runs none and spends nothing (DESIGN §39): it makes only the
+  harness's dispatches, under the guards above, and the disk check still holds them. It is paced as any tick is, by
+  `loop.min_gap_minutes` and every wake, and leaves idle pacing's count as it was.
 - Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
 - Tasks (DESIGN §36): one run per task at a time, started only by a live tick, in code; at most `capacity.max_tasks`
   task runs at once (1 by default, and the workspace file may only lower it), within `capacity.max_workers`, which

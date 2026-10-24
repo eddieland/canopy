@@ -16,9 +16,9 @@ from unittest import mock
 
 from canopy.core import config, conversation, db, pools, workspace
 from canopy.core.context import Context
-from canopy.core.vocab import Phase, RunStatus, StartStatus, TickStatus
+from canopy.core.vocab import Phase, ResumeReason, RunStatus, StartStatus, TickStatus
 from canopy.infra import procs
-from canopy.loop import duties, harness, tick
+from canopy.loop import duties, harness, harness_dispatches, phases, tick
 from canopy.runs import policy, reconcile
 from tests.canopy.helpers import chore_toml
 
@@ -35,6 +35,8 @@ NOW = datetime(2026, 10, 16, 10, 0, tzinfo=UTC)
 # What a snapshot shows in place of the workspace root, which is in a temporary directory.
 WORKSPACE = "/workspace"
 PR = "https://example.test/acme/repo/pull/7"
+#: A row the harness dispatches for, enabled here as a measurement would enable it (DESIGN §37).
+CONFLICTED = harness_dispatches.Row(ResumeReason.CONFLICT, "The PR conflicts with its base: bring it in.")
 
 
 def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
@@ -45,13 +47,15 @@ def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, markdown_snap
 
 
 def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
-    # Every section the block can have: a chore, reviews, a notice, tickets in each state the block tells apart.
-    prompt = canopy_env.home / "chores" / "build-health.md"
-    prompt.parent.mkdir()
-    prompt.write_text("# Build health\n")
+    # Every section the block can have: a chore, reviews, a notice, tickets in each state the block tells apart, and
+    # the harness's dispatches to come.
+    prompts(canopy_env, "build-health", "deps")
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{template}'\n", 1)
-    canopy_env.write_user(user + "\n[review]\nagent_prs = true\n" + chore_toml(extra='when = "Weekdays only."\n'))
+    # build-health is the overseer's to decide; deps, with no `when`, is the harness's to run (DESIGN §37).
+    canopy_env.write_user(
+        user + "\n[review]\nagent_prs = true\n" + chore_toml(extra='when = "Weekdays only."\n') + chore_toml("deps"),
+    )
     ctx = context(canopy_env)
     conn = ctx.conn
     root = str(canopy_env.root)
@@ -94,9 +98,10 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         db.set_ticket(conn, "PROJ-5", root, title="Bump the SDK", phase=Phase.MERGED, done=True)
         decide(conn, earlier, "PROJ-5", "done", "merged")
         db.record_decision(conn, earlier, None, duties.QUERIED_ACTION, duties.queried_rationale(["PROJ-1", "PROJ-5"]))
-        # PROJ-3 was started privately and stopped; PROJ-4 is private and its worker asked a question.
+        # PROJ-3 was started privately and stopped; PROJ-4 is private and its worker asked a question; PROJ-7 is
+        # private, and its PR conflicts with its base.
         with db.transaction(conn):
-            for key in ("PROJ-3", "PROJ-4"):
+            for key in ("PROJ-3", "PROJ-4", "PROJ-7"):
                 db.touch_ticket(conn, key, root)
                 db.set_start(conn, conversation.TICKET, key, status=StartStatus.STARTED, channel="cli")
             db.set_start(conn, conversation.TICKET, "PROJ-3", status=StartStatus.STOPPED, channel="cli")
@@ -177,8 +182,11 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             runs_dir=runs_dir,
         )
     with clock("10:00"):
-        # The harness decided PROJ-2 before the overseer: the block names it, and lists it no more (DESIGN §37).
+        # The harness decided PROJ-2 before the overseer: the block names it, and lists it no more (DESIGN §37). Its
+        # derivation found PROJ-7's unit conflicted, a row enabled here as a measurement would: the harness resumes it
+        # after the overseer.
         tick_id = tick_deciding(conn, root, "PROJ-2")
+        derive_conflicted(conn, tick_id, "PROJ-7")
 
     leased = [
         pools.Slot(
@@ -190,9 +198,28 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             leased_at=stamp("09:55"),
         ),
     ]
-    assert (
-        rendered(canopy_env, ctx, tick_id, dry_run=True, query_due=False, running=1, leased=leased) == markdown_snapshot
-    )
+    with mock.patch.object(harness_dispatches, "ROWS", {Phase.CONFLICTED: CONFLICTED}):
+        assert (
+            rendered(canopy_env, ctx, tick_id, dry_run=True, query_due=False, running=1, leased=leased)
+            == markdown_snapshot
+        )
+
+
+def prompts(env: CanopyEnv, *names: str) -> None:
+    """Write a prompt for each chore of `names`, where `chore_toml` names it."""
+    for name in names:
+        prompt = env.home / "chores" / f"{name}.md"
+        prompt.parent.mkdir(exist_ok=True)
+        prompt.write_text(f"# {name}\n")
+
+
+def derive_conflicted(conn: sqlite3.Connection, tick_id: int, key: str) -> None:
+    """Record that tick `tick_id` derived `key` a fresh candidate holding no row, and its unit in `repo` conflicted."""
+    conflicted = [
+        phases.Derived(key, None, (), candidate=True, closed=False),
+        phases.Derived(key, "repo", (Phase.CONFLICTED,)),
+    ]
+    phases.record(conn, tick_id, conflicted)
 
 
 def context(env: CanopyEnv) -> Context:

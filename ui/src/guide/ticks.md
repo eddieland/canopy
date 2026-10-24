@@ -12,7 +12,8 @@ overseer cost in dollars, tokens, and peak context, and its summary. A `dry run`
 
 A tick reads `running` while it works, and ends:
 
-- `ok`, the usual;
+- `ok`, the usual. Its summary starts `no overseer, nothing left to judge` when canopy's own decisions left the
+  overseer nothing, so it didn't run and cost nothing (see [How the loop works](how-the-loop-works#ticks));
 - `skipped`, when the overseer couldn't see the world, such as an MCP server that wasn't there. It still did the
   chores and whatever else needed nothing from the missing server, then left the attention list alone;
 - `overseer failed`, when the overseer didn't finish its job, such as deciding about every ticket;
@@ -109,7 +110,9 @@ rail's. Then:
   costs more than once. The filters stay put when you switch the window, so you can watch the workers' `bash` habit
   across a month without picking it again.
 - **Ticks by what they bought** and **Ticks by what woke them**: the ticks counted and costed by whether they were idle,
-  and by their cause.
+  and by their cause. The **no overseer** column counts the ones that ran no overseer, because nothing was left for it
+  or the tick halted first. They cost nothing and count as nothing, never as a run that forgot to report its cost, so
+  what idle ticks spent is only the overseer runs that bought nothing.
 - **Idle ticks**: the newest of them, to open.
 
 If a run reported no cost, the totals say how many, so a gap in the figures never passes for a quiet week.

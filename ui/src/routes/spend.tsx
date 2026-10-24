@@ -124,6 +124,10 @@ const BUDGET_FILL: Record<BudgetState, string> = {
 // columns read.
 const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'plans', 'chores', 'reviews', 'tasks', 'dry_run'] as const
 
+// What the ticks' tables' last column counts, said when the operator hovers its name.
+const NO_OVERSEER_HINT =
+    'ticks that ran no overseer: the harness left it nothing to judge, or the tick halted before it; each cost nothing'
+
 // The chart's axis names every day of up to a week, and every fifth day or hour past that, back from the latest.
 const AXIS_ALL = 7
 // The widest name the axis leaves room for at least, `Sep 30`, in characters, and the space it keeps from the next, in
@@ -1007,6 +1011,7 @@ function TickGroups({ found, span }: { found: SpendBreakdown; span: string }) {
                 hint: GROUP_HINT[g.group],
                 ticks: g.ticks,
                 usd: g.cost_usd,
+                without: g.without_overseer,
             }))}
             testId="spend-groups"
         />
@@ -1020,18 +1025,27 @@ function Woken({ found, span }: { found: SpendBreakdown; span: string }) {
     }
     return (
         <CountTable
-            rows={found.woken.map((w) => ({ key: w.by, label: w.by, ticks: w.ticks, usd: w.cost_usd }))}
+            rows={found.woken.map((w) => ({
+                key: w.by,
+                label: w.by,
+                ticks: w.ticks,
+                usd: w.cost_usd,
+                without: w.without_overseer,
+            }))}
             testId="spend-woken-table"
         />
     )
 }
 
-/** Rows of a label, a tick count, and what those ticks' overseers cost. */
+/**
+ * Rows of a label, a tick count, what those ticks' overseers cost, and how many ran no overseer: the harness left it
+ * nothing to judge, or the tick halted before it, so each cost nothing.
+ */
 function CountTable({
     rows,
     testId,
 }: {
-    rows: { key: string; label: string; hint?: string; ticks: number; usd: number | null }[]
+    rows: { key: string; label: string; hint?: string; ticks: number; usd: number | null; without: number }[]
     testId: string
 }) {
     return (
@@ -1042,6 +1056,9 @@ function CountTable({
                         <th className="panel-label pb-1.5 text-left font-normal">ticks</th>
                         <th className="panel-label pb-1.5 font-normal">count</th>
                         <th className="panel-label pb-1.5 font-normal">spent</th>
+                        <th className="panel-label pb-1.5 font-normal" title={NO_OVERSEER_HINT}>
+                            no overseer
+                        </th>
                     </tr>
                 </thead>
                 <tbody className="font-mono text-xs">
@@ -1054,6 +1071,7 @@ function CountTable({
                             <td className="readout">
                                 <Cost usd={row.usd} />
                             </td>
+                            <td className="readout">{row.without}</td>
                         </tr>
                     ))}
                 </tbody>

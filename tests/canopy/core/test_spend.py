@@ -32,11 +32,13 @@ def tick(
     dry_run: bool = False,
     idle: bool | None = None,
     woken_by: str | None = None,
+    overseer_ran: bool | None = None,
 ) -> int:
+    ran = None if overseer_ran is None else int(overseer_ran)
     cursor = conn.execute(
-        "INSERT INTO ticks (started_at, ended_at, dry_run, status, idle, woken_by, cost_usd) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (started, started, int(dry_run), status, None if idle is None else int(idle), woken_by, cost),
+        "INSERT INTO ticks (started_at, ended_at, dry_run, status, idle, woken_by, cost_usd, overseer_ran) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (started, started, int(dry_run), status, None if idle is None else int(idle), woken_by, cost, ran),
     )
     assert cursor.lastrowid is not None
     return cursor.lastrowid
@@ -310,10 +312,12 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
     assert [line.split()[0] for line in out[3:6]] == days  # a line per day, oldest first
     assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "$0.75", "$1.50", "-", "$0.30", "$7.05"]
     words = [line.split() for line in out]
-    assert ["idle", "3", "$0.50"] in words
-    assert ["not", "idle", "2", "$1.50"] in words
+    assert ["ticks", "count", "spent", "no", "overseer"] in words
+    assert ["idle", "3", "$0.50", "0"] in words
+    assert ["not", "idle", "2", "$1.50", "0"] in words
     assert "Idle ticks were 20% of the live overseer's spend." in out
-    assert ["timer", "3", "$0.50"] in words
+    assert ["woken", "by", "count", "spent", "no", "overseer"] in words
+    assert ["timer", "3", "$0.50", "0"] in words
     # A kind whose every run reported a cost is left out.
     assert out[-1] == "No cost reported: 1 of 8 overseer runs, 1 of 2 worker runs, 1 of 2 chore runs."
 
@@ -333,7 +337,33 @@ def test_canopy_spend_json_is_the_breakdown_with_each_total(
     assert data["totals"]["total"] == pytest.approx(7.05)
     assert data["per_day"][0]["costs"]["total"] is None
     assert data["idle_share"] == pytest.approx(0.2)
-    assert data["ticks"][0] == {"group": "idle", "ticks": 3, "cost_usd": 0.5}
+    assert data["ticks"][0] == {"group": "idle", "ticks": 3, "cost_usd": 0.5, "without_overseer": 0}
+
+
+def test_a_tick_that_ran_no_overseer_counts_at_nothing_and_is_split_from_those_that_did(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Two idle ticks the timer woke: one ran the overseer for a quarter, one the harness left it nothing (DESIGN §39).
+    conn = canopy_env.journal()
+    now = noon_today()
+    tick(conn, earlier(now, 0, 2), 0.25, idle=True, woken_by="timer", overseer_ran=True)
+    tick(conn, earlier(now, 0, 1), None, idle=True, woken_by="timer", overseer_ran=False)
+    tick(conn, earlier(now, 0, 3), None, idle=True, woken_by="run", overseer_ran=False)
+    found = spend.breakdown(conn, now, 1)
+    [idle] = [g for g in found.ticks if g.group == "idle"]
+    assert (idle.ticks, idle.cost_usd, idle.without_overseer) == (3, 0.25, 2)
+    assert [(w.by, w.ticks, w.cost_usd, w.without_overseer) for w in found.woken] == [
+        ("timer", 2, 0.25, 1),
+        ("run", 1, 0.0, 1),
+    ]
+    # Never among the runs that reported no cost.
+    [overseer] = [u for u in found.unpriced if u.kind == "overseer"]
+    assert (overseer.runs, overseer.unpriced) == (3, 0)
+    assert main(["spend", "--days", "1", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["woken"][1] == {"by": "run", "ticks": 1, "cost_usd": 0.0, "without_overseer": 1}
+    assert data["unpriced"][0] == {"kind": "overseer", "runs": 3, "unpriced": 0}
 
 
 def test_canopy_spend_reads_at_most_a_year(canopy_env: CanopyEnv) -> None:

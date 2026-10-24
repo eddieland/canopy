@@ -18,6 +18,7 @@ test as Tuesday, that three PRs are failing for one reason, and which of forty S
   [below](#what-a-run-knows-of-the-last-ones).
 - **Run when it's worth it.** You set how often it may run and in which hours; the overseer decides whether a due run
   is worth it, guided by a `when` line in your words, such as "skip it on weekends unless the last run found something".
+  Without a `when` there's nothing to judge, so canopy starts it itself each time it's due, right after the overseer.
 
 What it can't do is change anything. A chore edits no file, pushes no branch, posts no comment, and files no ticket;
 the agent it runs under has no write tools. Its only output is its findings, and what to do about them is yours, or

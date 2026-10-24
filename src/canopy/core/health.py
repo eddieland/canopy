@@ -53,7 +53,8 @@ _RUN_ROWS = sql.select(
 _PLAN_KINDS = (RunKind.PLAN, RunKind.NEEDS_PLAN)
 _ROWS: Mapping[Kind, sql.Select] = {
     "overseer": sql.select(
-        "id, CASE WHEN dry_run THEN 'dry run' ELSE 'live' END AS what, status, started_at, "
+        "id, CASE WHEN dry_run THEN 'dry run' WHEN overseer_ran = 0 THEN 'no overseer' ELSE 'live' END AS what, "
+        "status, started_at, "
         "NULL AS subject, summary AS note, cost_usd",
     ).from_("ticks"),
     "workers": _RUN_ROWS.where_not_in("kind", _PLAN_KINDS),
@@ -74,8 +75,8 @@ _ROWS: Mapping[Kind, sql.Select] = {
 class Outcome:
     """How many of one kind's runs that started in the window, of one sort, ended in one status, and what they cost.
 
-    `what` is the sort: `live` or `dry run` for the overseer, the run's kind for a worker (`implement`, `plan`), the
-    chore's name, or `review`. `failed` says the status is one the run did not end in as it should have.
+    `what` is the sort: `live`, `dry run`, or `no overseer` (§39) for a tick, the run's kind for a worker (`implement`,
+    `plan`), the chore's name, or `review`. `failed` says the status is one the run did not end in as it should have.
     """
 
     kind: Kind
