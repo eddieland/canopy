@@ -556,10 +556,12 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     const models = page.getByTestId('ticket-models')
     const worker = models.getByTestId('ticket-model').first()
     await models.getByRole('button', { name: 'worker model: runtime default' }).click()
-    // The mock's runtime lists the models its runs' sessions name.
-    const first = page.getByRole('menuitemradio').first()
+    // The mock's runtime lists the models its runs' sessions name, under their providers; the default is pinned
+    // above them as a state, not a choice.
+    const list = page.getByRole('listbox', { name: 'Models' })
+    await expect(list.getByRole('option', { name: 'runtime default nothing sets one' })).toBeDisabled()
+    const first = list.getByRole('option', { name: /^[\w.-]+\/[\w.:@/+-]+$/u }).first()
     const model = (await first.textContent()) ?? ''
-    expect(model).toMatch(/^[\w.-]+\/[\w.:@/+-]+$/u)
     await first.click()
     // Confirmed in the worker's row, in place.
     await expect(worker.getByRole('status')).toHaveText(
@@ -569,7 +571,14 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     await expect(chosen).toBeVisible()
     await expect(worker).toContainText("this ticket's override")
     await chosen.click()
-    await page.getByRole('menuitem', { name: 'Clear the override' }).click()
+    // Pinned at the top and checked, in a list a field narrows to what is typed.
+    await expect(list.getByRole('option', { name: `${model} this ticket's override` })).toHaveAttribute(
+        'aria-checked',
+        'true',
+    )
+    await page.getByRole('combobox', { name: 'Find a model for the worker' }).fill('no such model')
+    await expect(list.getByText('no model has that name')).toBeVisible()
+    await page.getByRole('option', { name: 'Clear the override' }).click()
     await expect(worker.getByRole('status')).toHaveText(
         "saved: ABC-104's worker runs use the runtime's default from their next run: nothing sets one.",
     )

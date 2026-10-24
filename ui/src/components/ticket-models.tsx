@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { chooseTicketModel } from '@/api/mutations'
 import { keys, modelsQuery } from '@/api/queries'
@@ -9,14 +10,15 @@ import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+    CommandSeparator,
+} from '@/components/ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { failedText, MODEL_SOURCES, modelName, modelText } from '@/lib/outcomes'
 import { cn } from '@/lib/utils'
 
@@ -96,7 +98,7 @@ export function TicketModels({
                     return (
                         <Field key={m.agent} label={`${m.agent} model`}>
                             <span className="flex flex-wrap items-baseline gap-x-2" data-testid="ticket-model">
-                                <ModelMenu
+                                <ModelPicker
                                     current={row}
                                     saving={saving?.agent === m.agent ? saving : undefined}
                                     disabled={choose.isPending}
@@ -128,7 +130,13 @@ export function TicketModels({
     )
 }
 
-function ModelMenu({
+/**
+ * The picker for one agent's model: the trigger names the model its next run goes to, and opens a list of the models
+ * the runtime lists under a field that narrows it, grouped by provider, with the model chosen now pinned at the top
+ * and checked wherever it is, whatever sets it. Picking one sets the ticket's override and closes the list; `Clear
+ * the override` at its foot, reachable whatever is typed, clears it.
+ */
+function ModelPicker({
     current,
     saving,
     disabled,
@@ -140,7 +148,7 @@ function ModelMenu({
     onChoose: (model: string | null) => void
 }) {
     const [open, setOpen] = useState(false)
-    // Read when the menu opens, not before: each read starts the runtime.
+    // Read when the list opens, not before: each read starts the runtime.
     const listed = useQuery({ ...modelsQuery, enabled: open })
     const reading = listed.isPending || listed.isFetching
     const why = listed.data?.error ?? (listed.isError ? failedText(listed.error) : null)
@@ -148,15 +156,21 @@ function ModelMenu({
     const models = why === null ? listed.data?.models : undefined
     const id = modelId(current)
     const gone = id !== null && models !== undefined && !models.includes(id)
-    // The model chosen now, when the server would refuse it as a choice: shown, checked if it is the override, never
-    // offered. One config's at a variant names it, which an override cannot; the listed model alone is the choice.
+    // The model chosen now, when the server would refuse it as a choice: shown, checked, never offered. One config's
+    // at a variant names it, which an override cannot; the listed model alone is the choice.
     const refusal = models === undefined ? null : gone ? GONE : current.variant === null ? null : VARIANT
     const shown = saving === undefined ? modelName(current.model) : `${saving.model ?? 'clearing the override'}…`
     // A model's id is data, in monospace; the runtime's default names none, so it is muted prose.
     const named = (saving === undefined ? current.model : saving.model) !== null
+
+    function choose(model: string | null) {
+        setOpen(false)
+        onChoose(model)
+    }
+
     return (
-        <DropdownMenu open={open} onOpenChange={setOpen}>
-            <DropdownMenuTrigger asChild>
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
                 <Button
                     variant="outline"
                     size="xs"
@@ -173,55 +187,142 @@ function ModelMenu({
                     {shown}
                     <ChevronDown aria-hidden />
                 </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-                <DropdownMenuItem disabled>Where it comes from: {MODEL_SOURCES[current.source]}</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {reading && <DropdownMenuItem disabled>Reading the runtime&apos;s models…</DropdownMenuItem>}
-                {why !== null && !reading && (
-                    <>
-                        <p className="px-2 py-1.5 text-sm text-status-failed">Could not read its models: {why}</p>
-                        <DropdownMenuItem
-                            onSelect={(event) => {
-                                // Kept open, to show the list read again, or why it failed again.
-                                event.preventDefault()
-                                void listed.refetch()
-                            }}
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto max-w-96 min-w-(--radix-popover-trigger-width) p-0">
+                {/* What is typed is found anywhere in an id, as the repository picker finds a name, rather than by
+                    cmdk's fuzzy match, which would find `opus` in openai/gpt-5-plus. */}
+                <Command label={`Find a model for the ${current.agent}`} filter={holds} className="min-w-72">
+                    {/* cmdk names the field by the command's label, and the list by its own. */}
+                    <CommandInput placeholder="Find a model" />
+                    <CommandList label="Models">
+                        {models !== undefined && <CommandEmpty>no model has that name</CommandEmpty>}
+                        <CommandGroup heading="Chosen now">
+                            {/* Pinned, so a long list keeps it in reach: the id, then where it comes from, or why it
+                                cannot be chosen again. The runtime's default is a state, not a choice. */}
+                            <ModelItem
+                                value="current"
+                                keywords={[current.model ?? MODEL_SOURCES.default]}
+                                checked={current.model !== null}
+                                disabled={current.model === null || refusal !== null}
+                                title={refusal ?? undefined}
+                                // An override chosen again is the same override: nothing to save.
+                                onSelect={() => (current.source === 'ticket' ? setOpen(false) : choose(id))}
+                            >
+                                <span className={cn(current.model === null && 'font-sans text-muted-foreground')}>
+                                    {modelName(current.model)}
+                                </span>
+                                <span className="font-sans text-muted-foreground">
+                                    {refusal ?? sourceOf(current.source)}
+                                </span>
+                            </ModelItem>
+                        </CommandGroup>
+                        {reading && (
+                            <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                                Reading the runtime&apos;s models…
+                            </p>
+                        )}
+                        {why !== null && !reading && (
+                            <>
+                                <p className="px-2 py-1.5 text-sm text-status-failed">
+                                    Could not read its models: {why}
+                                </p>
+                                {/* Kept open, to show the list read again, or why it failed again. */}
+                                <CommandItem forceMount value="read again" onSelect={() => void listed.refetch()}>
+                                    Read again
+                                </CommandItem>
+                            </>
+                        )}
+                        {byProvider(models ?? []).map(([provider, ids]) => (
+                            <CommandGroup key={provider} heading={provider}>
+                                {ids.map((model) => (
+                                    <ModelItem
+                                        key={model}
+                                        value={model}
+                                        checked={model === id}
+                                        onSelect={() => choose(model)}
+                                    >
+                                        {model}
+                                    </ModelItem>
+                                ))}
+                            </CommandGroup>
+                        ))}
+                        <CommandSeparator alwaysRender />
+                        <CommandItem
+                            forceMount
+                            value="clear the override"
+                            disabled={current.source !== 'ticket'}
+                            onSelect={() => choose(null)}
                         >
-                            Read again
-                        </DropdownMenuItem>
-                    </>
-                )}
-                <DropdownMenuRadioGroup
-                    value={current.source === 'ticket' && current.model !== null ? current.model : ''}
-                    onValueChange={(value) => onChoose(value)}
-                >
-                    {models?.map((model) => (
-                        <DropdownMenuRadioItem key={model} value={model} className="font-mono text-xs">
-                            {model}
-                        </DropdownMenuRadioItem>
-                    ))}
-                    {current.model !== null && refusal !== null && (
-                        <DropdownMenuRadioItem
-                            value={current.model}
-                            disabled
-                            title={refusal}
-                            className="font-mono text-xs"
-                        >
-                            <span>
-                                {current.model}
-                                <span className="font-sans text-muted-foreground">: {refusal}</span>
-                            </span>
-                        </DropdownMenuRadioItem>
-                    )}
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled={current.source !== 'ticket'} onSelect={() => onChoose(null)}>
-                    Clear the override
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+                            Clear the override
+                        </CommandItem>
+                    </CommandList>
+                </Command>
+            </PopoverContent>
+        </Popover>
     )
+}
+
+/** A model in the picker's list, with a check at its left while it is the one chosen now. */
+function ModelItem({
+    value,
+    keywords,
+    checked,
+    disabled,
+    title,
+    onSelect,
+    children,
+}: {
+    value: string
+    keywords?: string[]
+    checked: boolean
+    disabled?: boolean
+    title?: string
+    onSelect: () => void
+    children: ReactNode
+}) {
+    return (
+        <CommandItem
+            value={value}
+            keywords={keywords}
+            disabled={disabled}
+            title={title}
+            onSelect={onSelect}
+            aria-checked={checked}
+            className="font-mono text-xs"
+        >
+            <span className="flex size-4 items-center justify-center">
+                {checked && <Check aria-hidden className="size-4 text-accent" />}
+            </span>
+            <span className="flex flex-wrap gap-x-2 truncate">{children}</span>
+        </CommandItem>
+    )
+}
+
+/** Where the model chosen now comes from, after its id; for the default, the button's own word, so what sets it. */
+function sourceOf(source: AgentModel['source']): string {
+    return source === 'default' ? 'nothing sets one' : MODEL_SOURCES[source]
+}
+
+/** How an item ranks for what is typed in the field: 1 when its id, or a keyword, holds it, else 0, which hides it. */
+function holds(value: string, search: string, keywords?: string[]): number {
+    const typed = search.trim().toLowerCase()
+    return [value, ...(keywords ?? [])].some((word) => word.toLowerCase().includes(typed)) ? 1 : 0
+}
+
+/** The models by provider, the part of `provider/model` before the slash, each group in the list's own order. */
+function byProvider(models: readonly string[]): [string, string[]][] {
+    const groups = new Map<string, string[]>()
+    for (const model of models) {
+        const slash = model.indexOf('/')
+        const provider = slash === -1 ? model : model.slice(0, slash)
+        const group = groups.get(provider)
+        if (group === undefined) {
+            groups.set(provider, [model])
+        } else {
+            group.push(model)
+        }
+    }
+    return [...groups]
 }
 
 /** The model an agent runs on as the runtime's list names it, without config's variant; null for the default. */
