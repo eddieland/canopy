@@ -109,10 +109,12 @@ Controls:
   an authorized reply is, so the overseer is shown it as an instruction, a `resume` for `reply` may cite it, and that
   ticket's worker hears it as one. A comment the store marks an agent's, or carrying every comment mark (D069), is never
   authority; nor is any comment on a private ticket. Anyone else's is data that raises `untrusted_artifact_comment`
-  until the operator replies on the ticket. The ticket a comment reaches is its artifact's origin, a worker's word until
-  canopy sets it per run, so a steered worker could name another ticket the journal holds: a listed author's comment on
-  its artifact would then steer that ticket's next worker, and anyone else's would raise an item about it. Residual: a
-  listed author's account, or a Louvre that misreports authors, steers workers as an authorized replier's would.
+  until the operator replies on the ticket. The ticket a comment reaches is its artifact's origin. On the local store
+  canopy sets it, with the workspace and the run, from the environment the worker's run starts the store's server with,
+  over any pair the worker's call names. On Louvre it is the worker's word, so a steered worker could name another
+  ticket the journal holds: a listed author's comment on its artifact would then steer that ticket's next worker, and
+  anyone else's would raise an item about it. Residual: a listed author's account, or a Louvre that misreports
+  authors, steers workers as an authorized replier's would.
 - The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
   `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
   each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
@@ -767,11 +769,13 @@ With a store configured, a public worker steered by what it read can publish the
 else it reads to the store, under any title, where whoever can read canopy's namespace reads it; it can reply on or
 resolve any thread there, and comment on any artifact of the namespace. The namespace bounds where (Louvre's token,
 the local store's `--namespace`), and no tool deletes an artifact or changes who may see it, so what was published
-stays until a person removes it in the store. The skill says to publish only when asked, which no guard checks. An
-artifact's origin, which names its ticket, is the worker's word until canopy sets it per run, so a steered worker
-chooses which ticket a listed author's comment on the artifact steers (T1). A repository's OpenCode
-config naming the store's tools is not refused, as it is for the tracker's on a private run, and an example chore's
-agent, copied at install and never rendered, does not deny the store's server.
+stays until a person removes it in the store. The skill says to publish only when asked, which no guard checks. On
+Louvre an artifact's origin, which names its ticket, is the worker's word, so a steered worker chooses which ticket a
+listed author's comment on the artifact steers (T1). On the local store canopy sets it per run through the tools, but
+a worker whose shell can write the store's directory, as an unsandboxed one can, writes any origin there, and a
+repository's OpenCode config can start the store's server its own way. A repository's OpenCode config naming the
+store's server or tools is not refused, as it is for the tracker's on a private run, and an example chore's agent,
+copied at install and never rendered, does not deny the store's server.
 A private ticket's privacy rests on the tool lists: a tool listed as read that writes would write; the defaults are
 named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
 `gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs

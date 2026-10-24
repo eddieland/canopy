@@ -69,8 +69,11 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     objects = scenario.env.state_dir / "runs" / f"{run.id}.objects"
     # CANOPY_DEADLINE: the moment its timeout fires, for the clock in the snapshot (DESIGN §33).
     assert has_deadline(w, 45, before=before, after=after)
+    # CANOPY_TICKET and CANOPY_WORKSPACE: with the run's id, what an artifact's origin names (DESIGN §38).
     assert w["env"] == {
         "CANOPY_RUN_ID": str(run.id),
+        "CANOPY_TICKET": "PROJ-1",
+        "CANOPY_WORKSPACE": "acme",
         "CANOPY_GIT_OBJECTS": str(objects),
         "CANOPY_DEADLINE": w["env"]["CANOPY_DEADLINE"],
         "OPENCODE_CONFIG_DIR": str(snapshot),

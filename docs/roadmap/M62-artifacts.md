@@ -76,4 +76,9 @@ naming its authors and never its text, until the operator replies on the ticket 
 private ticket's comments are never authority, a listed author's included, and each person's raises the item; a
 comment deleted since counts for nothing; a verb's instruction, such as `canopy send`'s, sends nothing on; and a
 listed author's reply in an unlisted person's thread is authority for its own words only, §38's open question.
-Left: canopy setting an artifact's ticket per run, which is the worker's word until then.
+Built (2026-10-24): canopy sets an artifact's ticket per run on the local store. Each worker's run is given
+`CANOPY_TICKET` and `CANOPY_WORKSPACE` beside `CANOPY_RUN_ID`, and `canopy-artifacts serve`, which the runtime starts
+with the run's environment, sets `canopy.workspace`, `canopy.ticket`, and `canopy.run` from them over the caller's
+pairs and `--origin`'s; the operator's MCP config is unchanged. On Louvre, a server over the network that is not given
+the run, the ticket stays the worker's word until Louvre takes it from the run, which is Louvre's to build; the check
+that the journal holds the ticket stays for it. Left: the live Accept.
