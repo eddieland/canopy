@@ -367,6 +367,7 @@ def reply(
     channel: str,
     submission: str | None = None,
     chores: Collection[str] = (),
+    event: Callable[[int], db.Event | None] | None = None,
 ) -> Replied:
     """Record the operator's reply to a ticket canopy knows or a task, or a note to a chore in `chores` (§19, §22, §36).
 
@@ -376,7 +377,8 @@ def reply(
     to it, answering its waiting question, if any, and it queues the task's next run. A chore's is a note its next
     runs read. A channel whose form draws a submission id passes it, and it is stored as `<channel>:<id>`; without one
     the id is derived from the subject, the message it answers, and the body. Either way the same reply sent again
-    after an uncertain result records nothing new.
+    after an uncertain result records nothing new. `event` builds, from a new message's id, the event a channel tells
+    the sinks it with (§20), recorded in the same transaction.
 
     Returns:
         The message's id, the question it answers, if any, and whether it was new. A repeated submission returns the
@@ -407,7 +409,11 @@ def reply(
         raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
     with db.transaction(conn):
         check_subject(conn, ref)
-        return write_reply(conn, ref, text, channel=channel, submission=submission)
+        replied = write_reply(conn, ref, text, channel=channel, submission=submission)
+        built = event(replied.message_id) if event is not None and replied.new else None
+        if built is not None:
+            db.record_event(conn, built)
+        return replied
 
 
 def write_reply(
