@@ -9,13 +9,12 @@ operator has not named the trailer themselves.
 """
 
 import json
-from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from canopy.core import definitions
 from canopy.core.config import load
 from canopy.core.vocab import ResumeReason, RunKind
-from tests.canopy.helpers import KEY, agent_runs, planner_does, pool_statuses, trailers_on
+from tests.canopy.helpers import KEY, agent_runs, listed, planner_does, pool_statuses, trailers_on
 from tests.canopy.review_helpers import CLEAN, feature_commit, head, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool
@@ -310,11 +309,6 @@ def test_a_tickets_reviewer_override_reaches_its_reviews_alone(
     # Nor does a worker's run: the override is the reviewer's alone.
     assert scenario.run(worker=pushes()).row["model"] is None
     assert ran_on(agent_log) is None
-
-
-def listed(state: Path, *lines: str, variants: Mapping[str, Sequence[str]] | None = None) -> None:
-    """Have the fake `opencode models` print `lines`, and with `--verbose` each model's `variants`."""
-    state.write_text(json.dumps({"models": list(lines), "variants": dict(variants or {})}))
 
 
 def calls(state: Path) -> list[tuple[list[str], str]]:

@@ -119,6 +119,14 @@ It's easy to catch more bugs if you don't mind flagging a lot of non-bugs, so wa
   findings, in a persona or your docs.
 - Few dismissals at all, on a reviewer you don't trust yet, is the evidence for trusting it.
 
+Noise is half the story; the other half is what the reviewer misses, and you can only count that on bugs you already
+know about. Keep a few as `[[review.eval_cases]]` in the workspace's private config: PRs that were reverted or fixed
+forward, each with the line its bug was on, and a few you know are clean. `canopy review eval` reviews every case at
+its commit and reports how many of the bugs it found and how many alarms it raised on the clean ones; `--persona` and
+`--model` try something else on the same cases. Run it when you change the reviewer's prompt, persona, or model, before
+you decide the change helped. It's a measurement, not a gate: nothing it finds reaches the loop, and each result lands
+in `.canopy/review-evals/` with what it ran on, so the next run has a number to beat.
+
 ## Review has to converge
 
 An agent author and an agent reviewer can keep each other busy all night: each fix is a new commit, each commit a new
@@ -168,6 +176,7 @@ you're about to sign.
 ## When a review misses something
 
 Something will get through. When it does, ask what the reviewer didn't have in front of it, and put the answer where
-the next review will read it: a rule in `AGENTS.md` or `REVIEW.md`, a test, or a lint rule. A [chore](chores) can
+the next review will read it: a rule in `AGENTS.md` or `REVIEW.md`, a test, or a lint rule. Then add the PR as a bug
+case, so the next eval says whether the rule worked ([Measure the noise](#measure-the-noise)). A [chore](chores) can
 read your existing code through GitHub on a schedule, too, and report the old bugs no PR's review was ever going to
 look at.

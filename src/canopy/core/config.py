@@ -789,6 +789,79 @@ class Runtime(Section):
         return " ".join(part for part in (self.worker_cmd_prefix, template, self.worker_cmd_suffix) if part)
 
 
+#: An eval case's name, which names its files and `canopy review eval --case`.
+EVAL_CASE_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+#: A line a bug case's operator confirmed the bug on: `path:line`, or `path:first-last` for a range of lines.
+EVAL_LINE_RE = re.compile(r"(?P<path>[^\s:][^:]*):(?P<first>[1-9][0-9]{0,6})(?:-(?P<last>[1-9][0-9]{0,6}))?")
+#: A full commit, as git names one: sha-1 or sha-256.
+COMMIT_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+_MAX_EVAL_URL = 300
+
+
+def _eval_case_name(value: str) -> str:
+    if not EVAL_CASE_RE.fullmatch(value):
+        raise ValueError(f"{value!r} must match {EVAL_CASE_RE.pattern}")
+    return value
+
+
+def _commit(value: str) -> str:
+    if not COMMIT_RE.fullmatch(value):
+        raise ValueError(f"{value!r} must be a full commit: 40 or 64 lowercase hex characters")
+    return value
+
+
+def _eval_url(value: str) -> str:
+    if not contract.plain_url(value, _MAX_EVAL_URL):
+        raise ValueError(f"{value!r} must be the PR's plain https:// URL, at most {_MAX_EVAL_URL} characters")
+    return value
+
+
+def _eval_line(value: str) -> str:
+    found = EVAL_LINE_RE.fullmatch(value)
+    if found is None:
+        raise ValueError(f"{value!r} must be path:line or path:first-last")
+    if found["last"] is not None and int(found["last"]) < int(found["first"]):
+        raise ValueError(f"{value!r} ends before it starts")
+    return value
+
+
+class EvalCase(Section):
+    """One `[[review.eval_cases]]` table: a PR at a commit the reviewer is scored on (DESIGN §21, Scoring the reviewer).
+
+    A `bug` case is a change that was reverted or fixed forward, with the lines its bug is on as the operator confirmed
+    them; a `clean` case is one the operator knows is sound, so every finding on it is a false alarm.
+    """
+
+    name: Annotated[StrictStr, AfterValidator(_eval_case_name)]
+    pr: Annotated[StrictStr, AfterValidator(_eval_url)]
+    #: The repository the PR is in, by its name in the workspace's map.
+    repo: RepoName
+    #: The commit reviewed: the PR's head as it merged, or as it stood when the bug was in it.
+    sha: Annotated[StrictStr, AfterValidator(_commit)]
+    #: The commit the PR's change starts from, its merge base with its base branch: so a PR that has since merged is
+    #: reviewed as the change it was, and every eval of the case reads the same diff.
+    base: Annotated[StrictStr, AfterValidator(_commit)]
+    kind: Literal["bug", "clean"]
+    #: A bug case's confirmed lines, at least one; a clean case has none.
+    lines: tuple[Annotated[StrictStr, AfterValidator(_eval_line)], ...] = ()
+
+    @model_validator(mode="after")
+    def _lines_match_kind(self) -> EvalCase:
+        if self.kind == "bug" and not self.lines:
+            raise ValueError(f"bug case {self.name} needs lines, the path:line its bug is on")
+        if self.kind == "clean" and self.lines:
+            raise ValueError(f"clean case {self.name} has no bug, so no lines")
+        return self
+
+
+def _distinct_cases(value: tuple[EvalCase, ...]) -> tuple[EvalCase, ...]:
+    names = [case.name for case in value]
+    twice = sorted({name for name in names if names.count(name) > 1})
+    if twice:
+        raise ValueError(f"names {', '.join(twice)} more than once")
+    return value
+
+
 class Review(Section):
     """The `[review]` table: which PRs get an adversarial review (DESIGN §21). Every key is private."""
 
@@ -798,6 +871,9 @@ class Review(Section):
     query: Annotated[StrictStr, Scope.PRIVATE] = ""
     # Plain language for the reviewer: which changes it may call low impact. Without it, none.
     low_impact: Annotated[StrictStr, Scope.PRIVATE] = ""
+    #: The PRs `canopy review eval` scores the reviewer on. Private: a case may name a private repository's PR, and it
+    #: authorizes a review of it, as `query` does.
+    eval_cases: Annotated[tuple[EvalCase, ...], Scope.PRIVATE, AfterValidator(_distinct_cases)] = ()
 
 
 class Memory(Section):

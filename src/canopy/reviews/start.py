@@ -41,6 +41,7 @@ from canopy.reviews import findings, grants
 if TYPE_CHECKING:
     import sqlite3
 
+    from canopy.core.config import Config
     from canopy.core.context import Context
 
 REVIEWS_DIR = "reviews"
@@ -358,25 +359,18 @@ def _prompt(
     run = review_runs.get_review_run(ctx.conn, run_id)
     if run is None:
         raise RuntimeError(f"review run {run_id} vanished")
-    limit = grants.limit(ctx.conn, cfg, request.pr)
-    values = {
-        "PR_URL": request.pr,
-        "SHA": request.sha,
-        "CHECKOUT": str(run_dir(ctx, run_id) / CHECKOUT_LINK),
-        "BASE": run.base_branch or lease.base_branch,
-        "RUN_ID": str(run_id),
-        "TICKET": request.ticket or "none: this PR is not one of the loop's own",
-        "TRACKER_PROVIDER": cfg.tracker.provider,
-        "LOW_IMPACT": cfg.review.low_impact.strip() or "None: never report `low`.",
-        "ATTEMPT": str(attempt),
-        "MAX_ATTEMPTS": str(limit),
-        # The PR's last review before a person's, which weighs the approach over more line-level findings.
-        "LAST_ROUND": "yes" if attempt >= limit else None,
-        # The overseer's, which ticket and PR text can steer: quoted, so no line of it passes for the prompt's own.
-        "CONTEXT": quoted(context) if context else None,
-        "TIMEOUT_MINUTES": str(cfg.runtime.review_timeout_minutes),
-        "CONTRACT": result.CONTRACT,
-    }
+    values = prompt_values(
+        cfg,
+        pr=request.pr,
+        sha=request.sha,
+        checkout=run_dir(ctx, run_id) / CHECKOUT_LINK,
+        base=run.base_branch or lease.base_branch,
+        run=str(run_id),
+        ticket=request.ticket,
+        attempt=attempt,
+        limit=grants.limit(ctx.conn, cfg, request.pr),
+        context=context,
+    )
     try:
         prompt = prompts.render_reviewer(
             cfg,
@@ -391,6 +385,44 @@ def _prompt(
         review_runs.delete_review_run(ctx.conn, run_id)
         raise Refusal("bad_prompt", str(e)) from e
     return prompt
+
+
+def prompt_values(
+    cfg: Config,
+    *,
+    pr: str,
+    sha: str,
+    checkout: Path,
+    base: str,
+    run: str,
+    ticket: str | None,
+    attempt: int,
+    limit: int,
+    context: str | None,
+) -> dict[str, str | None]:
+    """The values of the reviewer's prompt's placeholders, but those `prompts.render_reviewer` fills itself.
+
+    Returns:
+        Each placeholder's value by its name; None for a section the review leaves out.
+    """
+    return {
+        "PR_URL": pr,
+        "SHA": sha,
+        "CHECKOUT": str(checkout),
+        "BASE": base,
+        "RUN_ID": run,
+        "TICKET": ticket or "none: this PR is not one of the loop's own",
+        "TRACKER_PROVIDER": cfg.tracker.provider,
+        "LOW_IMPACT": cfg.review.low_impact.strip() or "None: never report `low`.",
+        "ATTEMPT": str(attempt),
+        "MAX_ATTEMPTS": str(limit),
+        # The PR's last review before a person's, which weighs the approach over more line-level findings.
+        "LAST_ROUND": "yes" if attempt >= limit else None,
+        # The overseer's, which ticket and PR text can steer: quoted, so no line of it passes for the prompt's own.
+        "CONTEXT": quoted(context) if context else None,
+        "TIMEOUT_MINUTES": str(cfg.runtime.review_timeout_minutes),
+        "CONTRACT": result.CONTRACT,
+    }
 
 
 def spawn(ctx: Context, run_id: int, lease: pools.Lease, prompt: str) -> Started:

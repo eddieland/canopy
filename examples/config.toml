@@ -264,6 +264,19 @@ cmd = ""
 # agent_prs = true                                            # the loop's own PRs, before a human is asked
 # query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs, reviewed for you alone
 # low_impact = "Only docs, comments, or tests change."
+#
+# Cases `canopy review eval` scores the reviewer on, after you change reviewer.md, a persona, or its model; best in the
+# workspace's .canopy/config.toml, since each names one of its repositories. A bug case is a change that was reverted or
+# fixed forward, with the lines you confirmed its bug on ("path:line" or "path:first-last"); a clean one, one you know
+# is sound, counts every finding as a false alarm. sha is the commit reviewed, base the commit its change starts from.
+# [[review.eval_cases]]
+# name = "retry-forever"
+# pr = "https://github.com/acme/api/pull/412"
+# repo = "api"
+# sha = "<the PR's head, 40 hex characters>"
+# base = "<its merge base with main>"
+# kind = "bug"
+# lines = ["src/retry.py:42"]
 
 # Optional: an artifact store workers publish pages to for people to comment on (DESIGN §38), Louvre or canopy's local
 # one, `canopy-artifacts serve`, each an MCP server your runtime config names. Every agent's definition denies the
