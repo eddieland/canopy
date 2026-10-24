@@ -97,7 +97,7 @@ describe('ReviewDraftPanel', () => {
             'Also reviewed as skeptic, eddie, from the same request at this commit. Each is a draft of its own: ' +
                 'publish the one you want, and the others stay as they are.',
         )
-        expect(within(line).getByRole('link', { name: 'eddie' }).getAttribute('href')).toBe('/reviews/7')
+        expect(within(line).getByRole('link', { name: 'eddie' }).getAttribute('href')).toBe('/pull-requests/reviews/7')
         cleanup()
         await panel()
         expect(screen.queryByTestId('draft-siblings')).toBeNull()
@@ -141,9 +141,9 @@ describe('ReviewDraftPanel', () => {
             within(comments)
                 .getByRole('link', { name: /The last 503/u })
                 .getAttribute('href'),
-        ).toBe('/reviews/5#finding-1')
+        ).toBe('/pull-requests/reviews/5#finding-1')
         expect(within(comments).getByRole('link', { name: 'Why random?' }).getAttribute('href')).toBe(
-            '/reviews/5#draft-comment-2',
+            '/pull-requests/reviews/5#draft-comment-2',
         )
         // Finding 3 is in the body; 2 and 4 are in neither.
         expect(within(found).getByTestId('draft-left-out').textContent).toBe(

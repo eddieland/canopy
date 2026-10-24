@@ -195,7 +195,7 @@ test('a long review diff folded in dark', async ({ page }) => {
         dismissed: false,
     }
     await serveReview(page, files, [finding])
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     await settled(page)
     const panel = page.getByTestId('diff-file').nth(1)
     await expect(panel.getByTestId('diff-fold')).toHaveCount(2)
@@ -223,10 +223,10 @@ test.describe('in a narrow window', () => {
         await screenshotWhole(page, 'tickets-ABC-102-narrow-dark.png')
     })
 
-    for (const route of ['tickets', 'pull-requests', 'reviews', 'worktrees']) {
+    for (const route of ['tickets', 'pull-requests', 'pull-requests/reviews', 'worktrees']) {
         test(`${route} narrow`, async ({ page }) => {
             await openInDark(page, route)
-            await screenshotMain(page, `${route}-narrow-dark.png`)
+            await screenshotMain(page, `${route.replaceAll('/', '-')}-narrow-dark.png`)
         })
     }
 })

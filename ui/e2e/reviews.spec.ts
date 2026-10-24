@@ -10,8 +10,15 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await page.goto('attention')
     await settled(page)
     const nav = page.getByRole('navigation', { name: 'Main' })
-    await nav.getByRole('link', { name: 'Reviews' }).click()
+    await nav.getByRole('link', { name: /^Pull requests/u }).click()
+    await page.getByTestId('pull-requests-reviews-link').click()
+    await expect(page).toHaveURL(/\/pull-requests\/reviews$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Reviews')
+    // The reviews are under Pull requests: the trail leads back there, and the nav keeps Pull requests current.
+    await expect(
+        page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Pull requests' }),
+    ).toBeVisible()
+    await expect(nav.getByRole('link', { name: /^Pull requests/u })).toHaveAttribute('aria-current', 'page')
     // The operator's own PR, matched by review.query, has no ticket: canopy only reviews it.
     await expect(page.getByTestId('review-2').getByTitle('none: canopy only reviews it')).toHaveText('none')
     // A review of a PR the loop does not own says where its draft stands, after its verdict; the loop's own have none.
@@ -24,11 +31,11 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await expect(page.getByTestId('requested-https://github.com/acme/web/pull/95')).toContainText('dana')
 
     await page.getByTestId('review-4').getByRole('link', { name: 'review:4' }).click()
-    await expect(page).toHaveURL(/\/reviews\/4$/u)
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/4$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
         'review:4 acme/web#88 ABC-099: debounce the search box by 250 ms',
     )
-    await expect(nav.getByRole('link', { name: 'Reviews' })).toHaveAttribute('data-status', 'active')
+    await expect(nav.getByRole('link', { name: /^Pull requests/u })).toHaveAttribute('data-status', 'active')
     // The PR on GitHub is under the title, as on the PR's own page.
     const out = page.locator('main header').getByRole('navigation', { name: 'Links out' }).getByRole('link')
     await expect(out).toHaveText('on GitHub')
@@ -76,7 +83,7 @@ test('a review opens from the nav and puts each finding on its line of the diff'
 })
 
 test('a review from before diffs were kept lists its findings as their cards, once each', async ({ page }) => {
-    await page.goto('reviews/1')
+    await page.goto('pull-requests/reviews/1')
     await expect(page.getByText('no diff kept for this review')).toBeVisible()
     // The findings list is the cards: the blocking one shows once, where it is, its box on its card.
     const card = page.getByTestId('finding')
@@ -87,17 +94,17 @@ test('a review from before diffs were kept lists its findings as their cards, on
     await expect(page.getByText('not in the diff')).toHaveCount(0)
     // The PR's other review links to its newer one.
     await page.getByTestId('other-reviews').getByRole('link', { name: 'review:4' }).click()
-    await expect(page).toHaveURL(/\/reviews\/4$/u)
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/4$/u)
 })
 
 test("a review's run is a page of its own, one link from its results", async ({ page }) => {
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     const main = page.getByRole('main')
     // The results say when the run ended, not what it spent, and keep its transcript off the page.
     await expect(main.getByRole('term').filter({ hasText: 'spent' })).toHaveCount(0)
     await expect(page.getByTestId('transcript')).toHaveCount(0)
     await page.getByTestId('review-run-link').click()
-    await expect(page).toHaveURL(/\/reviews\/4\/run$/u)
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/4\/run$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run Debounce search input')
     await expect(main.getByText('done', { exact: true })).toHaveCount(1)
     await expect(main.getByRole('term').filter({ hasText: 'spent' })).toHaveCount(1)
@@ -111,11 +118,11 @@ test("a review's run is a page of its own, one link from its results", async ({ 
     await expect(page.getByTestId('review-output')).toContainText('Output')
     // The trail leads back to the results.
     await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'review:4' }).click()
-    await expect(page).toHaveURL(/\/reviews\/4$/u)
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/4$/u)
 })
 
 test("a review that ended badly says on its run's page what it ended on", async ({ page }) => {
-    await page.goto('reviews/3/run')
+    await page.goto('pull-requests/reviews/3/run')
     await settled(page)
     // The harness's note says why it is `unknown`, and `ended on` the failed call, which shows its row.
     await expect(page.getByRole('main').getByText("the reviewer's last line was not a valid result")).toBeVisible()
@@ -129,7 +136,7 @@ test("a review that ended badly says on its run's page what it ended on", async 
 for (const width of [900, 1720]) {
     test(`a draft's comments each name what they came from on one line, at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 })
-        await page.goto('reviews/5')
+        await page.goto('pull-requests/reviews/5')
         await settled(page)
         const comments = page.getByTestId('draft-comments')
         for (const from of ['finding 1', 'finding 2']) {
@@ -143,14 +150,14 @@ for (const width of [900, 1720]) {
 }
 
 test('a review that does not exist says so', async ({ page }) => {
-    await page.goto('reviews/99')
+    await page.goto('pull-requests/reviews/99')
     await expect(page.getByText('no review run 99')).toBeVisible()
 })
 
 test("a review's files fold away on their headers, and hide by type, until a finding's link wants one", async ({
     page,
 }) => {
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     const files = page.getByTestId('diff-file')
     const box = files.filter({ hasText: 'src/search/SearchBox.tsx' })
     const hook = files.filter({ hasText: 'src/search/useSearch.ts' })
@@ -197,7 +204,7 @@ test('settings prefers the personas a review request starts from, apart from the
     await expect(page.getByTestId('review-personas')).toHaveAccessibleName('Persona: skeptic')
 
     // The reviews page's form starts from it, and keeps it after a reload.
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     await settled(page)
     const form = page.getByTestId('review-request-form')
     // Folded, the form names them; opened, its menu holds them.
@@ -213,7 +220,7 @@ test('settings prefers the personas a review request starts from, apart from the
     await settled(page)
     await page.getByTestId('review-personas').click()
     await page.getByRole('menuitem', { name: 'Use the default' }).click()
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     await settled(page)
     await expect(form.getByTestId('review-request-chosen')).toHaveText('in canopy, the default')
 })
@@ -221,7 +228,7 @@ test('settings prefers the personas a review request starts from, apart from the
 test("a request's reviews in two personas sit together in the lists, the second named by its persona", async ({
     page,
 }) => {
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     await settled(page)
     // Carol's PR, asked for in canopy and skeptic: one row for each, side by side, the PR named once.
     const rows = page.getByTestId('reviews').getByRole('listitem')
@@ -235,4 +242,14 @@ test("a request's reviews in two personas sit together in the lists, the second 
     // The PR's page groups them the same way.
     await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/api/pull/14')}`)
     await expect(page.getByTestId('pull-request-review-5').getByTestId('sibling-persona')).toHaveText('as canopy')
+})
+
+test('the reviews pages where they were before Pull requests held them lead to where they are', async ({ page }) => {
+    await page.goto('reviews?q=web%2388')
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\?q=web%2388$/u)
+    await page.goto('reviews/5#finding-1')
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/5#finding-1$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('review:5')
+    await page.goto('reviews/4/run')
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/4\/run$/u)
 })

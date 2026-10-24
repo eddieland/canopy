@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 export function ReviewLink({ id, className, children }: { id: number; className?: string; children?: ReactNode }) {
     return (
         <Link
-            to="/reviews/$id"
+            to="/pull-requests/reviews/$id"
             params={{ id: String(id) }}
             className={cn('readout text-xs text-accent underline-offset-4 hover:underline', className)}
         >

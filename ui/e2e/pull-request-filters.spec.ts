@@ -73,7 +73,7 @@ test('a link to the pull requests list names its repositories in the URL, one or
 })
 
 test('the reviews list filters by repository and by words, and a request waits out a repository', async ({ page }) => {
-    await page.goto('reviews?q=web%2388')
+    await page.goto('pull-requests/reviews?q=web%2388')
     await settled(page)
     const field = page.getByRole('searchbox', { name: 'Filter reviews by PR, ticket, or commit' })
     await expect(field).toHaveValue('web#88')

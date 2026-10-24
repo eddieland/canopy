@@ -13,7 +13,8 @@ only reviews has no ticket, so it shows `none` there; hover it for why. The name
 small icon beside it opens the PR itself. A link into a PR, say to one review thread, gets the same name wherever
 an agent's text mentions it: the name still opens the PR's page, and the icon takes you to that exact thread. The PR
 column is only as wide as the longest name in the list, and in a narrow window the phase goes first, then the age, so
-the title keeps the room.
+the title keeps the room. The **Reviews** link over the list opens [the reviews page](#the-reviews-page), with your
+filter kept, and says how many results you haven't opened yet: the same count the nav shows beside Pull requests.
 
 On a PR the loop doesn't own, a chip after the verdict says where your own review of it stands: `draft` while it waits
 on you, `staged` once it's a pending review on GitHub for you to submit, `unconfirmed` while canopy doesn't know whether
@@ -256,19 +257,20 @@ between you and your coworker.
 
 ## The reviews page
 
-[Reviews](/reviews) lists every review, newest first: its verdict, its ticket, how big the change is (`low impact`,
-`normal impact`, `high impact`), the PR and its title, the commit, the persona it wrote in (`as skeptic`, where the list
-has room for it), and what it cost. The title is the PR's own, as a worker or a review reported it, else as canopy last
-read it from GitHub, else its ticket's, so you can tell which change a review is about without opening it or remembering
-what `#88` was. A coworker's PR gets its title from that read, so only one canopy has never read shows the PR's name
-alone, and on a narrow list the title is the first thing to go. A PR you had reviewed in several personas gets a row for
-each, and the persona is how you tell the skeptic from the minimalist. The reviews one request made of one commit sit
-together, with no rule between them: the first names the PR, and each after it says only `as minimalist`, since the PR
-and commit are the first's. The PR's page lists them the same way. A verdict reads `clean`, or counts the findings with
-the worst among them, such as `3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. A review of a PR the
-loop doesn't own carries its draft's chip after the verdict, as the pull requests list does. With no review yet, it
-points you to **Review a PR** above the list, which works with the defaults, and to `review.agent_prs` and
-`review.query`, which have the loop review PRs on its own. Either way, `capacity.max_reviews` must be above 0.
+**Reviews**, under [Pull requests](/pull-requests), lists every review, newest first: its verdict, its ticket, how
+big the change is (`low impact`, `normal impact`, `high impact`), the PR and its title, the commit, the persona it wrote
+in (`as skeptic`, where the list has room for it), and what it cost. The title is the PR's own, as a worker or a review
+reported it, else as canopy last read it from GitHub, else its ticket's, so you can tell which change a review is about
+without opening it or remembering what `#88` was. A coworker's PR gets its title from that read, so only one canopy has
+never read shows the PR's name alone, and on a narrow list the title is the first thing to go. A PR you had reviewed in
+several personas gets a row for each, and the persona is how you tell the skeptic from the minimalist. The reviews one
+request made of one commit sit together, with no rule between them: the first names the PR, and each after it says only
+`as minimalist`, since the PR and commit are the first's. The PR's page lists them the same way. A verdict reads
+`clean`, or counts the findings with the worst among them, such as `3 findings, 1 major`. A finding is `blocking`,
+`major`, or `minor`. A review of a PR the loop doesn't own carries its draft's chip after the verdict, as the pull
+requests list does. With no review yet, it points you to **Review a PR** above the list, which works with the defaults,
+and to `review.agent_prs` and `review.query`, which have the loop review PRs on its own. Either way,
+`capacity.max_reviews` must be above 0.
 
 A PR you asked for that no review has started on yet leads the list as `requested`, with a hollow ring: it has no
 verdict, commit, or cost because nothing has read it yet. Where a ticket would be, it names the PR's author once canopy
@@ -282,13 +284,14 @@ which one holds its PR is the next tick's to work out, not the page's to guess.
 
 A review that has finished since you last looked is new, if it has something to say: one that found anything, or
 any review you requested, clean or not. A clean review the loop started on its own stays quiet; it is in the list,
-but nobody needs a notification that nothing is wrong. A new review's row has a dot after its verdict, and **Reviews**
-in the side navigation counts the new ones on every page, in the color of the worst finding among them, so a blocking
-one stands out from a clean one you asked for. Opening a review's page marks it seen; **mark 3 seen** in the list's
-header does it for all of them at once, for the days you trust the summary. canopy keeps what you've seen in its
-journal, so your laptop, your desktop, and the terminal agree: `canopy review show` ends a new review's line with
-`new`, and `canopy review show ID` marks it seen as the page does. Only you can mark one: an agent that reads a review
-in full leaves it new, which is the point of a list of things you haven't read.
+but nobody needs a notification that nothing is wrong. A new review's row has a dot after its verdict, and **Pull
+requests** in the side navigation counts the new ones on every page, in the color of the worst finding among them, so a
+blocking one stands out from a clean one you asked for. So does the **Reviews** link over the pull requests list.
+Opening a review's page marks it seen; **mark 3 seen** in the list's header does it for all of them at once, for the
+days you trust the summary. canopy keeps what you've seen in its journal, so your laptop, your desktop, and the terminal
+agree: `canopy review show` ends a new review's line with `new`, and `canopy review show ID` marks it seen as the page
+does. Only you can mark one: an agent that reads a review in full leaves it new, which is the point of a list of things
+you haven't read.
 
 ## A review's page
 

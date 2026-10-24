@@ -114,7 +114,7 @@ describe('ReviewsTable', () => {
 
     it('opens each review’s page, and says what it found with its worst severity', async () => {
         await renderReviews([REVIEW, { ...REVIEW, id: 5, verdict: 'clean', findings: 0, worst: null, impact: null }])
-        expect(screen.getByRole('link', { name: 'review:4' }).getAttribute('href')).toBe('/reviews/4')
+        expect(screen.getByRole('link', { name: 'review:4' }).getAttribute('href')).toBe('/pull-requests/reviews/4')
         const found = within(screen.getByTestId('review-4'))
         expect(found.getByText('3 findings, 1 major')).toBeDefined()
         expect(found.getByText('high impact')).toBeDefined()

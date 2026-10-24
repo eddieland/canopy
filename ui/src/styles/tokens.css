@@ -44,7 +44,6 @@
     --section-tickets: oklch(0.52 0.12 242);
     --section-tasks: oklch(0.505 0.125 115);
     --section-pull-requests: oklch(0.54 0.21 302);
-    --section-reviews: oklch(0.55 0.2 330);
     --section-chores: oklch(0.535 0.14 50);
     --section-ticks: oklch(0.51 0.145 135);
     --section-reports: oklch(0.525 0.105 95);
@@ -139,7 +138,6 @@
     --section-tickets: oklch(0.77 0.13 242);
     --section-tasks: oklch(0.86 0.165 115);
     --section-pull-requests: oklch(0.75 0.16 302);
-    --section-reviews: oklch(0.76 0.17 330);
     --section-chores: oklch(0.8 0.14 55);
     --section-ticks: oklch(0.84 0.16 130);
     --section-reports: oklch(0.86 0.15 100);
@@ -415,7 +413,6 @@
     --color-section-tickets: var(--section-tickets);
     --color-section-tasks: var(--section-tasks);
     --color-section-pull-requests: var(--section-pull-requests);
-    --color-section-reviews: var(--section-reviews);
     --color-section-chores: var(--section-chores);
     --color-section-ticks: var(--section-ticks);
     --color-section-reports: var(--section-reports);

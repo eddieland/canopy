@@ -38,7 +38,7 @@ test('a review of as many files as a diff holds draws its findings in place, and
     ]
     expect(findings).toHaveLength(MAX_FINDINGS)
     await serveReview(page, files, findings)
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
 
     await expect(page.getByTestId('finding')).toHaveCount(MAX_FINDINGS)
     await expect(page.getByTestId('diff-file')).toHaveCount(MAX_FILES)
@@ -69,7 +69,7 @@ test("a file of as many lines as a diff holds shows them a fold's step at a time
     const files = [diffFile('src/f0.ts', MAX_LINES, (n) => (n === 15_005 ? 'w'.repeat(1000) : `line ${n}`))]
     const findings = Array.from({ length: MAX_FINDINGS }, (_, i) => finding(`line ${15_000 + i}`, 0, 15_000 + i))
     await serveReview(page, files, findings)
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
 
     await expect(page.getByTestId('finding')).toHaveCount(MAX_FINDINGS)
     await expect(page.locator('tr[data-kind]')).toHaveCount(PAGE_LINES)

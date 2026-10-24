@@ -11,7 +11,7 @@ const PAGES = [
     { page: 'tickets/ABC-105/plan', read: '**/api/tickets/ABC-105/plans' },
     { page: 'ticks/2', read: '**/api/ticks/2' },
     { page: 'chores/deps', read: '**/api/chores/deps' },
-    { page: 'reviews/4', read: '**/api/reviews/4' },
+    { page: 'pull-requests/reviews/4', read: '**/api/reviews/4' },
     { page: 'reports', read: '**/api/reports/monthly*' },
     { page: 'reports/spend', read: '**/api/spend/breakdown*' },
     { page: 'search?q=web', read: '**/api/search*' },
