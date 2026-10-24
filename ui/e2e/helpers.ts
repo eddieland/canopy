@@ -237,7 +237,9 @@ function arrayEnd(script: string, start: number): number {
 
 /**
  * Pads a ticket's decisions to `count`, cycling through the ones the mock records, as a long-lived ticket collects
- * them: the mock's are too few to fill a panel past its height.
+ * them: the mock's are too few to fill a panel past its height. A live event refetches the ticket, which can still be
+ * in the route when the page closes, failing the run outside any test, so a test that pads ends with
+ * `page.unrouteAll({ behavior: 'ignoreErrors' })`, after everything it checks. The same holds for `padMessages`.
  */
 export async function padDecisions(page: Page, ticketKey: string, count: number): Promise<void> {
     await page.route(`**/api/tickets/${ticketKey}`, async (route) => {
