@@ -77,6 +77,8 @@ The operator's choice for one run is built (2026-10-21): `canopy persona KEY NAM
 `canopy start KEY --persona`, and `canopy plan KEY --persona` choose the persona of a ticket's next worker or planner
 run alone, spent by the dispatch that records it; `canopy start URL --review --persona`, given again for a review in
 each, and `canopy persona URL` choose a review request's, in place of `[personas] reviewer`. The overseer's commands
-take none, as §31 rejects.
+take none, as §31 rejects. Checked at the operator's word (2026-10-24), `canopy review run` and `canopy chore run` stay
+without one: each runs only inside a tick, where §31 refuses a persona, so the flag could never be given; a PR's review
+for one run is `canopy start URL --review --persona`, and a chore takes no persona at all.
 The reviews page's request form chooses a request's personas, one review each, at the operator's word (2026-10-21).
 Next: the live checks in Accept. Designed 2026-10-19 (DESIGN §31).
