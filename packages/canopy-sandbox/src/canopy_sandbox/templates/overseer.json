@@ -1,0 +1,54 @@
+{
+  "#": [
+    "canopy-sandbox's template for runtime.overseer_cmd, which decides through canopy's tools and writes the journal",
+    "(DESIGN §24). canopy refuses the prefix on overseer_cmd until the tick starts every run the overseer asks for",
+    "(DESIGN §40): until then, a run would start inside the overseer's sandbox and end with it. canopy sandbox setup",
+    "copies it to ~/.config/canopy/sandbox/overseer.json; fill in your hosts there. Keys starting with # are",
+    "comments; @NAME@ strings are the paths canopy-sandbox fills in for each run."
+  ],
+  "network": {
+    "#": [
+      "Everything not listed is refused. Add your model provider's API host and your tracker's MCP endpoint. The",
+      "overseer reads GitHub through its MCP server, and pushes and fetches nothing, so github.com itself is not",
+      "listed."
+    ],
+    "allowedDomains": [
+      "api.anthropic.com",
+      "api.github.com",
+      "api.githubcopilot.com"
+    ],
+    "deniedDomains": []
+  },
+  "filesystem": {
+    "#": [
+      "The overseer starts in the workspace root. It reads the workspace and its state, and of the state writes only",
+      "the journal, its locks, and canopy's log (@JOURNAL@): not the private config, the agent definitions, or a",
+      "directory another run starts in, which canopy and its agents load later. Of canopy's own config it reads the",
+      "user file alone, never the listener's secret beside it; if XDG_CONFIG_HOME moves it, name it there instead.",
+      "canopy runs from its uv tool install, ~/.local/share/uv and ~/.local/bin: if yours is elsewhere under HOME,",
+      "add it. Caches go in @CACHE@, the overseer's own: never put one of yours in allowWrite."
+    ],
+    "denyRead": ["~"],
+    "allowRead": [
+      "@WORKSPACE@",
+      "@TMPDIR@",
+      "@READ@",
+      "~/.config/canopy/config.toml",
+      "~/.config/opencode",
+      "~/.local/share/opencode",
+      "~/.local/state/opencode",
+      "@CACHE@",
+      "~/.opencode",
+      "~/.local/bin",
+      "~/.local/share/uv"
+    ],
+    "allowWrite": [
+      "@JOURNAL@",
+      "@TMPDIR@",
+      "~/.local/share/opencode",
+      "~/.local/state/opencode",
+      "@CACHE@"
+    ],
+    "denyWrite": []
+  }
+}
