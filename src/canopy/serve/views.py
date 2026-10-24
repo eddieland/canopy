@@ -29,7 +29,7 @@ from canopy.core import (
     ticket_models,
 )
 from canopy.core.items import fingerprint
-from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunStatus
+from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunKind, RunStatus
 from canopy.serve import draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
@@ -39,6 +39,7 @@ from canopy.serve.schema import (
     Comment,
     CostTotal,
     Decision,
+    FeedbackPlanWritten,
     Limit,
     LoopState,
     Message,
@@ -192,7 +193,8 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
     root = ctx.workspace.root
     held = db.all_run_slots(ctx.conn, [run_id] if row["status"] == "running" else []).get(run_id, [])
     served = models_served(ctx.conn, "runs", run_id, ended=row["ended_at"] is not None, session_id=row["session_id"])
-    return run(row, root, [shown_path(str(s.slot_path), root) for s in held], served)
+    wrote = feedback_plan_views.written(ctx, run_id) if row["kind"] == RunKind.FEEDBACK_PLAN else None
+    return run(row, root, [shown_path(str(s.slot_path), root) for s in held], served, wrote)
 
 
 def models_served(
@@ -322,10 +324,17 @@ def shown_path(path: str, root: Path) -> str:
     return str(found.relative_to(root)) if found.is_relative_to(root) else path
 
 
-def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None, models: ModelsServed | None = None) -> Run:
+def run(
+    row: sqlite3.Row,
+    root: Path,
+    worktrees: list[str] | None = None,
+    models: ModelsServed | None = None,
+    feedback_plan: FeedbackPlanWritten | None = None,
+) -> Run:
     """One run's row, with the worktrees it holds if it is running, its paths from the workspace `root`.
 
-    On the run's own page it carries `models`, the models that served it.
+    On the run's own page it carries `models`, the models that served it, and for a `feedback-plan` run
+    `feedback_plan`, the plan it wrote.
 
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
@@ -358,6 +367,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None, models
         persona_digest=str(row["persona_digest"]) if row["persona_digest"] is not None else None,
         model=str(row["model"]) if row["model"] is not None else None,
         models=models,
+        feedback_plan=feedback_plan,
     )
 
 
