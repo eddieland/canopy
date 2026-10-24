@@ -98,6 +98,6 @@ overseer's server in `OPENCODE_CONFIG_CONTENT`, its definition allows its twelve
 commands `runtime.allow_bash` names (#1166), every other definition denies `canopy_*`, a chore's allowing its own
 tools after and the reviewer's and the planner's their git tools (#1171), and the tick checks the server answers
 `initialize`. A read of OpenCode 1.19.3's build changed one thing: a tool call to a local server times out after a
-minute unless its entry sets `timeout`, so the overseer's entry sets its own; where OpenCode 2 reads that key is
-unread, so its default applies there. Stage 2's check, a day of the operator's loop held to Stage 0's baseline, which is
+minute unless its entry sets `timeout`, so the overseer's entry sets its own; OpenCode 2's entry sets
+`timeout.execution` (2026-10-24). Stage 2's check, a day of the operator's loop held to Stage 0's baseline, which is
 still to be measured, is the operator's.
