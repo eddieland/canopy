@@ -594,9 +594,12 @@ def test_the_state_block_shows_reviewed_prs(reviewing: CanopyEnv, scenario: Scen
         "max_reviews": 1,
         "max_reviews_per_day": 20,
         "max_reviews_per_pr": 3,
+        "settle_minutes": 0,
         "started_last_24h": 1,
     }
     assert section["running"] == []
+    # With settling off, no head is recorded.
+    assert section["settling"] == []
     [reviewed] = section["prs"]
     assert (reviewed["url"], reviewed["ticket"], reviewed["review_runs"]) == (PR, "PROJ-1", 1)
     latest = reviewed["latest"]
@@ -1054,13 +1057,17 @@ def test_review_noise_counts_findings_by_severity_persona_and_model_and_why_each
             "key": "blocking",
             "findings": 2,
             "dismissed": {"wrong": 1, "unrecorded": 1},
-            "rates": {"wrong": 0.5, "intentional": 0.0, "not_worth_it": 0.0},
+            "answered": {},
+            "rebuttals": 0,
+            "rates": {"wrong": 0.5, "intentional": 0.0, "not_worth_it": 0.0, "fixed": 0.0, "declined": 0.0},
         },
         {
             "key": "minor",
             "findings": 1,
             "dismissed": {"not_worth_it": 1},
-            "rates": {"wrong": 0.0, "intentional": 0.0, "not_worth_it": 1.0},
+            "answered": {},
+            "rebuttals": 0,
+            "rates": {"wrong": 0.0, "intentional": 0.0, "not_worth_it": 1.0, "fixed": 0.0, "declined": 0.0},
         },
     ]
     assert [(g["key"], g["findings"], g["dismissed"]) for g in found["persona"]] == [
@@ -1069,9 +1076,9 @@ def test_review_noise_counts_findings_by_severity_persona_and_model_and_why_each
     assert [g["key"] for g in found["model"]] == ["anthropic/claude-x"]
     text = scenario.operator("review", "noise").out.splitlines()
     assert text[2:5] == [
-        "severity  findings  wrong  intentional  not_worth_it  unrecorded  wrong rate",
-        "blocking         2      1            0             0           1         50%",
-        "minor            1      0            0             1           0          0%",
+        "severity  findings  wrong  intentional  not_worth_it  unrecorded  fixed  declined  rebuttals  wrong rate",
+        "blocking         2      1            0             0           1      0         0          0         50%",
+        "minor            1      0            0             1           0      0         0          0          0%",
     ]
 
 
@@ -1309,6 +1316,48 @@ def test_a_later_resume_answering_one_finding_keeps_an_earlier_resumes_answer_to
     assert [(n, a.answer, a.reason) for n, a in sorted(answered.items())] == [
         (1, FindingAnswer.DECLINED, "The loop is bounded upstream."),
         (2, FindingAnswer.DECLINED, DECLINED),
+    ]
+
+
+def test_review_noise_counts_what_workers_answered_of_the_findings_not_dismissed_and_the_rebuttals(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """`canopy review noise` counts a worker's latest answer to each finding, the operator's dismissal first (§21)."""
+    conn = scenario.conn
+    three = {**TWO_FINDINGS, "findings": [*TWO_FINDINGS["findings"], {**FINDINGS["findings"][0], "title": "again"}]}
+    first = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(three)).id
+    scenario.run(worker=pushes())
+    answers = [
+        {"review": first, "finding": 1, "answer": "fixed"},
+        {"review": first, "finding": 2, "answer": "declined", "reason": DECLINED},
+        {"review": first, "finding": 3, "answer": "fixed"},
+    ]
+    scenario.run(resume(first), worker=pushes(review_answers=answers))
+    # The operator's word on finding 3 wins over the worker's.
+    scenario.operator("dismiss", f"review:{first}", "3", "--reason", "wrong")
+    # The next review rebuts the decline, and the harness holds it; released, it still counts as a rebuttal.
+    rebuttal = {**FINDINGS, "findings": [{**TWO_FINDINGS["findings"][1], "rebuts": 2}]}
+    db.set_unit(conn, "PROJ-1", str(reviewing.root), "repo", pr_url=PR)
+    sha = present(git_pool.remote_head("agent/PROJ-1-work"))
+    second = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(rebuttal)).id
+    assert set(review_runs.held(conn, second)) == {1}
+    scenario.operator("send", f"review:{second}", "1")
+    assert review_runs.held(conn, second) == {}
+
+    found = json.loads(scenario.operator("review", "noise", "--json").out)
+    assert found["reviews"] == 2
+    assert [(g["key"], g["findings"], g["dismissed"], g["answered"], g["rebuttals"]) for g in found["severity"]] == [
+        ("blocking", 2, {"wrong": 1}, {"fixed": 1}, 0),
+        # The rebuttal itself is neither dismissed nor answered: it counts in the total and as a rebuttal.
+        ("minor", 2, {}, {"declined": 1}, 1),
+    ]
+    assert found["severity"][0]["rates"]["fixed"] == 0.5
+    text = scenario.operator("review", "noise").out.splitlines()
+    assert text[3:5] == [
+        "blocking         2      1            0             0           0      1         0          0         50%",
+        "minor            2      0            0             0           0      0         1          1          0%",
     ]
 
 
