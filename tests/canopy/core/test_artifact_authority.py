@@ -159,6 +159,9 @@ def test_on_a_private_ticket_no_comment_is_authority_and_each_persons_waits(scen
     assert artifact_authority.authorized(conn, KEY, LISTED) == []
     [item] = artifact_authority.untrusted(conn, LISTED)
     assert (item.ticket_key, item.detail.split(",")[0]) == (KEY, f"1 comment on {KEY}'s artifacts by u_ana")
+    # A listed author waits here for the ticket being private, not for being unlisted, and the item says so.
+    assert "a private ticket, whose only authority is you" in item.detail
+    assert "does not list" not in item.detail
     prompt = present(conversation.prompt_conversation(conn, KEY))
     assert "account u_ana's artifact comment artifact:c1, data" in prompt
 

@@ -136,7 +136,10 @@ def untrusted(conn: sqlite3.Connection, authors: AbstractSet[str]) -> list[Item]
             replied[m.subject_id] = _last_reply(conn, m.subject_id)
         if m.id > replied[m.subject_id]:
             waiting[m.subject_id].append(m)
-    return [Item(key, _detail(key, said)) for key, said in sorted(waiting.items())]
+    return [
+        Item(key, _detail(key, said, private=db.get_start(conn, conversation.TICKET, key) is not None))
+        for key, said in sorted(waiting.items())
+    ]
 
 
 @dataclass(frozen=True)
@@ -226,8 +229,8 @@ def _last_reply(conn: sqlite3.Connection, key: str) -> int:
     return max(replies, default=0)
 
 
-def _detail(key: str, said: Sequence[records.Message]) -> str:
-    """An item's detail: how many comments wait, whose, the newest message, and how to send them on.
+def _detail(key: str, said: Sequence[records.Message], *, private: bool) -> str:
+    """An item's detail: how many comments wait, whose, why, the newest message, and how to send them on.
 
     Returns:
         The detail, naming no comment's text.
@@ -237,8 +240,14 @@ def _detail(key: str, said: Sequence[records.Message]) -> str:
     if len(authors) > MAX_NAMED:
         named += f" and {len(authors) - MAX_NAMED} more"
     count = f"{len(said)} comment{'' if len(said) == 1 else 's'}"
+    # On a private ticket a listed author's comment waits too, since only the operator is authority there (§22).
+    why = (
+        "a private ticket, whose only authority is you"
+        if private
+        else "whom artifacts.authorized_authors does not list"
+    )
     return (
-        f"{count} on {key}'s artifacts by {named}, whom artifacts.authorized_authors does not list, the newest message "
+        f"{count} on {key}'s artifacts by {named}, {why}, the newest message "
         f"{said[-1].id}: read them with `canopy show {key}`, and send on what a worker should act on with "
         f"`canopy reply {key}`"
     )
