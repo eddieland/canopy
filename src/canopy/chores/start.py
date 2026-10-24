@@ -1,7 +1,8 @@
 """`canopy chore run`: guards, the chore's prompt, and the detached `canopy _chore` (DESIGN §19).
 
 The operator's config says what a chore is and how often it may run; the overseer chooses when. The guards hold the
-limits whatever the overseer asks for. A refusal is raised as `Refusal`; the CLI records it as `refused:<guard>`.
+limits whatever the overseer asks for. A refusal is raised as `Refusal`; the CLI records it as `refused:<guard>`, and
+one only the operator can lift, a chore's model the runtime does not list (DESIGN §13), raises its attention item too.
 """
 
 from __future__ import annotations
@@ -15,8 +16,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import history
+from canopy.core import agent_models, chore_runs, conversation, db, notice, outbox, prompts
 from canopy.core import chore_result as result
-from canopy.core import chore_runs, conversation, db, notice, outbox, prompts
 from canopy.core import chore_view as view
 from canopy.core import chore_window as window
 from canopy.core.vocab import ChoreRunStatus
@@ -32,13 +33,18 @@ DISPATCH_ACTION = "dispatch:chore"
 
 
 class Refusal(Exception):  # noqa: N818  (an outcome the overseer is told about, not an error)
-    """A guard refused the chore run. `guard` names it in the `refused:<guard>` decision."""
+    """A guard refused the chore run. `guard` names it in the `refused:<guard>` decision.
 
-    def __init__(self, guard: str, reason: str) -> None:
+    `attention` is the reason of the attention item the refusal raises about the chore, for one only the operator can
+    lift; None for the rest.
+    """
+
+    def __init__(self, guard: str, reason: str, *, attention: str | None = None) -> None:
         """Name the guard and say why it refused."""
         super().__init__(f"{guard}: {reason}")
         self.guard = guard
         self.reason = reason
+        self.attention = attention
 
 
 @dataclass(frozen=True)
@@ -100,7 +106,9 @@ def check(ctx: Context, *, tick_id: int, name: str) -> Chore:
         d.chore for d in db.decisions_for_tick(ctx.conn, tick_id) if d.action == DISPATCH_ACTION and d.chore is not None
     ]
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        return _guard(ctx, name, planned=planned)
+        chore = _guard(ctx, name, planned=planned)
+        _check_model(ctx, name, chore)
+        return chore
 
 
 def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Started:
@@ -117,6 +125,8 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         chore = _guard(ctx, name)
+        # Before the run is recorded, so a model that cannot be used leaves no failed run behind it.
+        _check_model(ctx, name, chore)
         try:
             body = read_body(ctx.config, chore)
         except prompts.PromptError as e:
@@ -220,6 +230,27 @@ def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -
         planned_note = f", counting {len(planned)} this dry run ran" if planned else ""
         raise Refusal("chore_capacity", f"{busy} of {limit} chore runs are running{planned_note}")
     return chore
+
+
+def _check_model(ctx: Context, name: str, chore: Chore) -> None:
+    """Refuse a run of chore `name` whose model the runtime does not list, looked up now (DESIGN §13).
+
+    The model is the chore's own `model`, else `runtime.models`' chore, as the run renders it; a chore that runs an
+    agent of the operator's own, or none chosen, runs on what that agent or the runtime chooses and is not looked up.
+    It is never fallen back from, as a worker's dispatch is not.
+
+    Raises:
+        Refusal: `model_missing` or `model_list_failed`, with its attention item, as a worker's dispatch refuses.
+    """
+    chosen = agent_models.of_chore(ctx.config, chore)
+    if chosen.model is None:
+        return
+    where = f"in chores.{name}.model" if chosen.source == "chore" else "in runtime.models"
+    try:
+        version = ctx.config.runtime.version
+        agent_models.check(ctx.runner, ctx.workspace.root, chosen.model, version=version, chosen=where)
+    except agent_models.ModelError as e:
+        raise Refusal(e.guard, e.reason, attention=e.guard) from e
 
 
 def render(
