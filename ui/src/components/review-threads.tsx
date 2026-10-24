@@ -45,7 +45,7 @@ import {
     draftsStagedText,
     draftsStagedToast,
 } from '@/lib/outcomes'
-import { shortSha } from '@/lib/reviews'
+import { shortSha, threadAnchor } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
 /**
@@ -367,7 +367,11 @@ export function ThreadCard({
 }) {
     const where = threadWhere(thread)
     return (
-        <article className="rounded-md border bg-surface-raised p-3 text-sm" data-testid="review-thread">
+        <article
+            id={threadAnchor(thread.id)}
+            className="rounded-md border bg-surface-raised p-3 text-sm"
+            data-testid="review-thread"
+        >
             <header className="flex flex-wrap items-center gap-2">
                 {where !== null && <span className="font-mono text-xs break-all text-muted-foreground">{where}</span>}
                 {thread.outdated && <Chip>outdated</Chip>}

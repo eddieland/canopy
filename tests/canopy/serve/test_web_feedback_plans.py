@@ -76,6 +76,24 @@ def test_a_prs_threads_carry_its_waiting_feedback_plan_each_item_on_its_thread(
         (2, 502, "PRRT_2", "bob", False, "decline", "Kept, since the API needs it."),
     ]
     assert not any(i["left_out"] for i in plan["items"])
+    # Each item carries what was said, as last read, where it is on its host, and the plan's first line on it: bob's
+    # comment has no heading in FEEDBACK_TEXT, so no line.
+    assert [(i["excerpt"], i["url"], i["rationale"]) for i in plan["items"]] == [
+        ("Rename this.", f"{PR}#discussion_r501", "Rename it."),
+        ("Drop this argument.", f"{PR}#discussion_r502", None),
+    ]
+
+
+def test_a_plans_rationales_are_the_first_line_under_each_items_heading() -> None:
+    text = (
+        "# Feedback plan: PROJ-1\n\n## Items\n\n### Item 501: change\n\n```\nnot this\n```\nRename it, as\tasked.\n"
+        "More.\n\n### Item 502: leave\n\n#### Item 503: ask\n\nWhy?\n\n## Checks\n\nNone ran.\n### Item 504: decline\n"
+        + "x" * 300
+        + "\n"
+    )
+    assert feedback_plans.rationales(text) == {501: "Rename it, as asked.", 503: "Why?", 504: "x" * 199 + "…"}
+    assert feedback_plans.first_line("\n  \n\x07one\x00 two\nthree") == "one two"
+    assert feedback_plans.first_line("\n \t\n") is None
 
 
 @pytest.mark.usefixtures("git_pool")

@@ -21,6 +21,7 @@ again).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Collection, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
@@ -31,6 +32,7 @@ from canopy.core import conversation, db, feedback_items, plans, prompts, record
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
 from canopy.infra import lock
+from canopy.infra.text import printable
 
 if TYPE_CHECKING:
     import sqlite3
@@ -49,6 +51,13 @@ MAX_REPLY = replies.MAX_DRAFT_CHARS
 MAX_WORDS = conversation.MAX_OPERATOR - 1000
 #: The most refused ids a run's harness note names one by one.
 _MAX_NAMED = 10
+#: The most characters of an item's excerpt or of a plan's line on it, as the PR's page shows them.
+MAX_LINE = 200
+# An item's heading in a plan's file, at any level, and any heading, which ends the item before it; a fenced code
+# block holds no item's first line.
+_ITEM_HEADING_RE = re.compile(r"#{1,6}[ \t]+Item[ \t]+(\d{1,20})(?![\d])")
+_ANY_HEADING_RE = re.compile(r"#{1,6}(?:[ \t]|$)")
+_FENCE_RE = re.compile(r"(?:`{3,}|~{3,})")
 
 
 @dataclass(frozen=True)
@@ -274,6 +283,58 @@ def repos(conn: sqlite3.Connection, plan: records.FeedbackPlan) -> tuple[str, ..
         sql.select("repo").from_("run_slots").where("run_id = ?", plan.run_id).order_by("repo"),
     ).fetchall()
     return tuple(str(r[0]) for r in rows)
+
+
+def rationales(text: str) -> dict[int, str]:
+    """Why a plan proposes what it does for each item: the first line under its `### Item <id>` heading, as text.
+
+    The heading is the one the planner writes, at any level, and the line is the first holding anything before the
+    next heading, a fenced code block passed over; the file's words, cut as `first_line` cuts them, model text for
+    the operator to weigh, never an instruction.
+
+    Returns:
+        Each item's line by its id; an item with no heading, or nothing under it, has none.
+    """
+    found: dict[int, str] = {}
+    item: int | None = None
+    fence = ""
+    for raw in text.splitlines():
+        line = raw.strip()
+        marker = _FENCE_RE.match(line)
+        if fence:
+            if marker is not None and marker.group(0)[0] == fence[0] and len(marker.group(0)) >= len(fence):
+                fence = ""
+            continue
+        if marker is not None:
+            fence = marker.group(0)
+            continue
+        heading = _ITEM_HEADING_RE.match(line)
+        if heading is not None:
+            item = int(heading.group(1))
+            continue
+        if _ANY_HEADING_RE.match(line):
+            item = None
+            continue
+        if item is None or item in found:
+            continue
+        said = first_line(line)
+        if said is not None:
+            found[item] = said
+    return found
+
+
+def first_line(text: str) -> str | None:
+    """The first line of `text` holding anything, cut to `MAX_LINE` characters: an excerpt of what was said.
+
+    Returns:
+        That line, control characters made spaces and whitespace collapsed, with "…" at its end when cut; None when
+        no line holds anything.
+    """
+    lines = (" ".join(printable(line).split()) for line in text.splitlines())
+    line = next((line for line in lines if line), None)
+    if line is None:
+        return None
+    return line if len(line) <= MAX_LINE else line[: MAX_LINE - 1] + "…"
 
 
 def approved_text(state_dir: Path, plan: records.FeedbackPlan) -> str | None:
