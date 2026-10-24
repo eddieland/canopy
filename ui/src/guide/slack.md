@@ -120,7 +120,7 @@ posts to two channels.
 - `replies`: what came of a reply you wrote in Slack: a mention recorded on its ticket, or any reply canopy refused,
   and why ([below](#replying-from-slack)).
 - `loop`: ticks failing several in a row, and recovering; a sink failing; and the month's spend reaching its
-  budget or one of its alerts ([the spend page](ticks#the-spend-page)).
+  budget or one of its alerts ([the spend page](reports#the-spend-page)).
 
 Each sink hears of each attention item once. A sink that was down for an hour gets the net change when it's back,
 not every flicker in between: an item that came and went while it was down is news nobody needs. Events wait for it

@@ -161,7 +161,7 @@ the runtime's list is read once more, so the button shows your pick with a trail
 green **saved** beside it, in the row itself so nothing below jumps. It stays until the ticket's models change again.
 The override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
 **Clear the override**. That is the canary: one ticket on the new model, the rest on the one you trust, and
-[the spend page](ticks#the-spend-page) splits what each cost by model once they ran. Each run names the model it
+[the spend page](reports#the-spend-page) splits what each cost by model once they ran. Each run names the model it
 asked for while it works, then the model that served it, and both when they differ, on its page and in the ticket's
 Runs panel, so a canary ticket reads straight down the panel and you can check the canary actually sang.
 

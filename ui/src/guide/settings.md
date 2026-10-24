@@ -60,7 +60,7 @@ for up to a week, for outages with ambitions.
 
 **Open** takes you to a page of its own for the numbers you change most: how many workers, chores, and reviews run at
 once, each pool's slots, how many tries a ticket gets, how much you may attach to one, how often the loop ticks, and
-the monthly budget the [spend page](ticks#the-spend-page) tracks, with any alerts short of or past it. You can add and
+the monthly budget the [spend page](reports#the-spend-page) tracks, with any alerts short of or past it. You can add and
 drop alerts freely here: the 100% one isn't in the list, so dropping everything still leaves it. It also holds the
 trust settings, which from here only get stricter: you can drop a trusted reviewer or an authorized replier, never add
 one, and turn `trust.rebase` off but not on. A stolen session that could add a replier would keep steering your

@@ -77,7 +77,7 @@ Rules:
   - Reviews fuchsia, the proofreader's pen.
   - Runs indigo, the night shift: workers carry on after the operator logs off.
   - Chores orange, a hi-vis vest: scheduled maintenance.
-  - Spend gold, coins.
+  - Reports gold, coins: what canopy cost, by the month and, on the spend page under it, by the day.
   - Ticks lime, a heart monitor's trace: each tick is the loop's pulse.
   - Worktrees teal, water in the pool each repository's slots come from.
   - Memory pale azure, the forget-me-not. It shares done's hue, which costs nothing: its page shows no run state.

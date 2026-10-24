@@ -154,7 +154,11 @@ export function Buddy() {
  * view is what holds `TIPS` to the routes, so a new route fails the type check until it has tips of its own.
  */
 function viewOf(routeId: keyof FileRoutesById | undefined): View | undefined {
-    return routeId === undefined || routeId === '__root__' || routeId === '/' || routeId === '/guide/'
+    return routeId === undefined ||
+        routeId === '__root__' ||
+        routeId === '/' ||
+        routeId === '/spend' ||
+        routeId === '/guide/'
         ? undefined
         : routeId
 }

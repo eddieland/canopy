@@ -47,6 +47,12 @@ sees the merge. Spend per ticket done divides the window's whole spend, overseer
 context is measured in characters it returned, since the runtime does not attribute tokens to tool results, and is
 labeled an estimate wherever shown (MEASUREMENTS 2026-10-13).
 
+The web UI's reports page reads the same figures by local calendar month, dollars and tokens by kind and by model,
+beside what each month landed: a ticket the loop marked done as merged, with its worker runs, the comments and reviews
+people other than its PR's author left, and how long it took. The journal keeps no merge time and no phase history, so
+a ticket lands when the loop marks it done, and its review wait runs from its first worker run that ended `done`; the
+page says so, rather than pass a proxy off as GitHub's own clock. The spend page, by day, sits under it.
+
 `spend.monthly_budget_usd` is what the operator means a local calendar month of runs to cost. `canopy spend` and the
 spend page track the month so far against it, with the pace it is on once its first day is over, and a sink that takes
 `loop` hears once when the month reaches it, again only for a budget raised past it. `spend.budget_alerts` adds other

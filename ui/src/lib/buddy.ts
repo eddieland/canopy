@@ -160,7 +160,14 @@ export const TIPS = {
         'Hot take: a chore run is a worker with a routine. Very healthy. I should get one.',
         "Dear diary, read a chore's whole report. It mentioned dependencies. I mentioned my leaf.",
     ],
-    '/spend': [
+    '/reports/': [
+        "It looks like you're comparing months. I compare them too. October has more leaves.",
+        'Fun fact: a cache hit is a token you already paid for, wearing a disguise.',
+        'Hot take: the median iterations is the number of times a worker said "one more thing".',
+        'Haiku: twelve months in a row / each one cost a little more / so did my hat shelf',
+        'Unhelpful tip: to cut the review wait, review it yourself. I have reviewed this sentence.',
+    ],
+    '/reports/spend': [
         "It looks like you're counting money. I'm counting too. I got to three.",
         'Unhelpful tip: an idle tick costs money to decide nothing. I decide nothing for free.',
         'Dear diary, saw the bars go up. Asked if the hats were in there. They were not.',
