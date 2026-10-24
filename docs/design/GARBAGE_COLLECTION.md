@@ -22,6 +22,7 @@ table's third column says, and §6, §11, §12, §18, and §22 describe canopy a
 | `canopy.log` | every log line of every canopy process | rotated past `log_max_mib` | unchanged |
 | Attention items the harness raised | each open item, every tick | outside the window (below) | unchanged |
 | Connector runs and derivations (§30) | each tick, and each of M39's polls | outside the window (below) | unchanged |
+| Check runs a `vcs` source keeps (§35) | each completed check run of a PR | once off its PR's head (below) | unchanged |
 | Free pages and the WAL in the journal | deletes, and checkpoints held back by readers | checkpointed each pass; `canopy gc --vacuum` | unchanged |
 | Loose objects and packs in a primary clone | every worker's fetches and commits | never (`gc.auto=0`) | `canopy gc --git` (below) |
 | `$XDG_CACHE_HOME/canopy/sandbox/<role>/` | every sandboxed run's tool caches | never | `canopy gc --caches` |
@@ -63,7 +64,8 @@ A harness-raised attention item is deleted only once it is older than `journal_d
 window the attention list reads, so the list, its open-since, and notifications do not change. Rejected: recording
 an item only when it opens and closes, which changes how §14 derives the list and every reader with it. Connector runs
 and derivations (§30) go under the same rule, except each source's newest run and the newest that recorded the query's
-result, which `canopy status`, `connector_failed`, and the derivation read. `--vacuum`
+result, which `canopy status`, `connector_failed`, and the derivation read. A kept check run goes after `journal_days`
+once a read shows its PR at another head, merged, or closed, since `handled` reads only those at the head. `--vacuum`
 refuses while any run is live, and when the disk has less free space than the journal, since `VACUUM` writes a whole
 copy first.
 
