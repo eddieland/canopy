@@ -325,7 +325,10 @@ Controls:
   worker answered of each finding, `fixed` or `declined` with a reason in the worker's words, as data. A steered worker
   can decline a real finding; the next review then reports it again only as a rebuttal, which the harness holds for
   the operator, never for another `resume`, and holds only a finding that names a decline the journal recorded. So an
-  answer moves a finding from the worker to the operator, never out of sight, and authorizes nothing.
+  answer moves a finding from the worker to the operator, never out of sight, and authorizes nothing. A later
+  review's finding on lines unchanged since the PR's first reviewed commit is held the same way, as the harness's git
+  reads the two commits, the finding's path a literal one; a steered reviewer can only aim a finding at old code, which
+  sends it to the operator rather than a worker, and a `blocking` one is never held.
   A review's `impact` is the reviewer's judgment, which the PR's text can steer, so the harness records `high`, whatever
   the reviewer says, for a change to a high-impact path, as git names the paths: CI's workflows in every repository,
   and the paths the map lists for the PR's repository. It only raises, and `high` only ranks attention.

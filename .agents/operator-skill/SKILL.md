@@ -189,6 +189,7 @@ The overseer may record other reasons; the detail says what it wants.
 | `drafts_waiting` | A run drafted replies for you: `canopy draft list KEY`, then `edit`, `drop`, or `send` each. |
 | `review_waiting` | A review you asked for is done: `canopy review draft ID`, then edit it and `canopy review publish`, or `canopy review discard ID`. |
 | `review_unsettled` | A review you staged waits for you to submit or delete it on GitHub, or a publish's outcome is unknown. |
+| `review_rebuttal`, `review_late` | canopy holds a review's finding for you: a rebuttal of a worker's decline, or one on code unchanged since the PR's first review. `canopy send review:ID N`, or `canopy dismiss review:ID N --reason R`. |
 | `canopy_unavailable` | The server of the overseer's tools, `canopy _mcp`, did not answer where the loop runs, so the overseer did not run: fix the install. |
 | `disk_low` | `.canopy/` or the workspace has under `loop.min_free_disk_mib` free, so the overseer did not run: free space. |
 | `multi_repo` | Independent pieces in several repositories: decide, or ask for a split (below). |

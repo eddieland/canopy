@@ -192,6 +192,12 @@ and every finding you didn't dismiss, and checks whether each still holds. A fin
 and one it didn't is reported again. It still reads the whole change, though. Being told where the last reviewer
 looked is useful; being told where not to look is how a bug lives through three reviews.
 
+A later review also gets no credit for finding old news. A finding on lines nothing has changed since the PR's first
+review, which read them, is held for you the same way, under `review late`: it starts no resume, so a reviewer that
+turns up a few more old bugs each round can't keep the loop spinning. canopy holds it only when git can place it,
+never a **blocking** one, and only on the loop's own PRs. Send it if it belongs in this PR, or dismiss it if it can
+wait for one of its own.
+
 The reviewer is its own agent, so give it another model than your workers', `runtime.models.reviewer` in your config
 (not a `--model` in its command, which canopy refuses, since it would override the choice unseen): a second model
 misses different things than the first, which is the point of asking it. canopy sends the reviewer no temperature

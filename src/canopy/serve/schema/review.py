@@ -140,8 +140,8 @@ class ReviewFinding(Model):
     dismissed_reason: DismissalReasonName | None = None
     """Why they dismissed it; None when it is not dismissed, or was before canopy asked why."""
     held: bool = False
-    """Whether canopy holds it for the operator, a rebuttal of a worker's decline: no worker gets it until they send it
-    (DESIGN §21)."""
+    """Whether canopy holds it for the operator, a rebuttal of a worker's decline or a late finding: no worker gets it
+    until they send it (DESIGN §21)."""
     answer: FindingAnswerName | None = None
     """What the latest worker handed it answered: `fixed` or `declined`; None when none answered it."""
     answer_reason: str | None = None

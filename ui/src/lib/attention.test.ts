@@ -74,6 +74,8 @@ describe('severity', () => {
         expect(severity(item('a', 'plan_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'review_waiting', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'review_unsettled', '2026-10-08T12:00:00Z'))).toBe('waiting')
+        expect(severity(item('a', 'review_rebuttal', '2026-10-08T12:00:00Z'))).toBe('waiting')
+        expect(severity(item('a', 'review_late', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'needs_reviewer', '2026-10-08T12:00:00Z'))).toBe('other')
         expect(severity(item('a', 'repo_missing', '2026-10-08T12:00:00Z'))).toBe('other')
         // A finding's reason is the chore's own id, which may collide with a ticket reason: it is a finding first.
