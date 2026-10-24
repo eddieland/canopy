@@ -39,7 +39,7 @@ test('a copy the browser refuses says so in its toast', async ({ page }) => {
 })
 
 test("a review's commit copies whole, though the page shows its first 7 characters", async ({ page }) => {
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     const commit = page.getByRole('button', { name: 'Copy commit' })
     await commit.click()
     expect(await clipboard(page)).toMatch(/^[0-9a-f]{40}$/u)

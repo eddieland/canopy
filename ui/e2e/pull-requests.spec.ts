@@ -63,7 +63,7 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
 
     // A review opens its findings on its diff, and leads back to its PR's page.
     await page.getByTestId('pull-request-review-4').getByRole('link', { name: 'review:4' }).click()
-    await expect(page).toHaveURL(/\/reviews\/4$/u)
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/4$/u)
     // The URL changes before the new page replaces the old, which links to its PR too: wait for the review's title.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
         'review:4 acme/web#88 ABC-099: debounce the search box by 250 ms',
@@ -100,7 +100,7 @@ test("a PR's page leads with where it stands, and a list it cannot fill takes on
     // review 2 marks it seen, a write this journal never takes.
     const yours = page.getByRole('definition').filter({ has: page.getByRole('link', { name: 'review:2' }) })
     await expect(yours).toHaveText('publishedreview:2')
-    await expect(yours.getByRole('link', { name: 'review:2' })).toHaveAttribute('href', /\/reviews\/2$/u)
+    await expect(yours.getByRole('link', { name: 'review:2' })).toHaveAttribute('href', /\/pull-requests\/reviews\/2$/u)
     // Its request ended with that review: its foot asks for another, as `canopy start URL --review` does.
     await expect(page.getByTestId('review-request').getByRole('button', { name: 'Review again' })).toHaveAttribute(
         'title',
@@ -159,7 +159,7 @@ test('a PR named on a run, a review, a decision, or a ticket opens its page in o
 }) => {
     const where: [string, string, string][] = [
         ['runs/39', 'main', 'acme/web#88'],
-        ['reviews', 'review-4', 'acme/web#88'],
+        ['pull-requests/reviews', 'review-4', 'acme/web#88'],
         ['ticks/2', 'decisions', 'acme/api#12'],
         ['tickets/ABC-103', 'main', 'acme/web#91'],
     ]

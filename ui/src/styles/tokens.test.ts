@@ -46,7 +46,6 @@ const TEXT = [
     'section-tickets',
     'section-tasks',
     'section-pull-requests',
-    'section-reviews',
     'section-chores',
     'section-ticks',
     'section-reports',

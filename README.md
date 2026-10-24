@@ -188,7 +188,7 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | --- | --- |
 | ![A private ticket's page: its work, runs, decisions, and the worker's question waiting on your answer](ui/e2e/screenshots.spec.ts-snapshots/tickets-ABC-102-dark-root-linux.png) | ![A run's page: its summary and PR, then the transcript of the worker's tool and model calls](ui/e2e/screenshots.spec.ts-snapshots/runs-39-dark-root-linux.png) |
 | **canopy's review of a PR, its findings on the diff** | **What the overseer decided in a tick, and why** |
-| ![A review's page: its summary and verdict, then each finding at the diff lines it names](ui/e2e/screenshots.spec.ts-snapshots/reviews-4-dark-root-linux.png) | ![A tick's page: the overseer's decisions per ticket, a refusal among them, and its session's transcript](ui/e2e/screenshots.spec.ts-snapshots/ticks-2-dark-root-linux.png) |
+| ![A review's page: its summary and verdict, then each finding at the diff lines it names](ui/e2e/screenshots.spec.ts-snapshots/pull-requests-reviews-4-dark-root-linux.png) | ![A tick's page: the overseer's decisions per ticket, a refusal among them, and its session's transcript](ui/e2e/screenshots.spec.ts-snapshots/ticks-2-dark-root-linux.png) |
 
 | To | Run |
 | --- | --- |

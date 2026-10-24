@@ -96,7 +96,7 @@ export const TIPS = {
         'Did you know? A PR merged on a Friday is technically a weekend plan.',
         'Hot take: canopy never merges, and neither do I. We share a fear of commitment.',
     ],
-    '/reviews/': [
+    '/pull-requests/reviews/': [
         "It looks like you're reading a review nobody posted. Your secret's safe with me.",
         'Hot take: a review nobody posted is the kindest kind of review.',
         'Unhelpful tip: the newest review is at the top. The oldest is at the bottom, being wise.',
@@ -104,7 +104,7 @@ export const TIPS = {
         'Dear diary, canopy reviewed a PR and told nobody. Finally, someone who gets me.',
         'Riddle: when is a finding not a finding? When nobody posts it. Deep, I know.',
     ],
-    '/reviews/$id': [
+    '/pull-requests/reviews/$id': [
         "It looks like you're ticking findings. Would you like me to tick them louder?",
         'Unhelpful tip: every finding is a compliment, if you squint.',
         'Fun fact: "nit" is short for "nit". There is no longer word. I looked.',
@@ -112,7 +112,7 @@ export const TIPS = {
         'Haiku: red line, then green line / a finding sits on the seam / I sit on the rail',
         'Dear diary, a finding said "severity: high". I said "same". We have so much in common.',
     ],
-    '/reviews/$id_/run': [
+    '/pull-requests/reviews/$id_/run': [
         "It looks like you're checking the reviewer's work. Would you like me to check yours?",
         'Unhelpful tip: to speed up a review, scroll its transcript faster.',
         'Fun fact: a reviewer reads every file it reviews. I read the first line and form an opinion.',

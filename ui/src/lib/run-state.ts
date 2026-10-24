@@ -195,7 +195,7 @@ export interface RailWork {
     /** How many it leaves out. */
     more: number
     /** The page listing the ones left out: their kind's, or the runs page when they are of more than one kind. */
-    moreAt: '/runs' | '/reviews' | '/chores' | '/tasks'
+    moreAt: '/runs' | '/pull-requests/reviews' | '/chores' | '/tasks'
 }
 
 /**
@@ -223,9 +223,17 @@ export function railWork({ runs, reviews = [], chores = [], tasks = [] }: EveryR
     return {
         shown: sorted.slice(0, limit),
         more: left.length,
-        moreAt: only === 'review' ? '/reviews' : only === 'chore' ? '/chores' : only === 'task' ? '/tasks' : '/runs',
+        moreAt: only === undefined ? '/runs' : MORE_AT[only],
     }
 }
+
+// The page listing the rows left out when they are all of one kind.
+const MORE_AT = {
+    run: '/runs',
+    review: '/pull-requests/reviews',
+    chore: '/chores',
+    task: '/tasks',
+} as const satisfies Record<RailItem['kind'], RailWork['moreAt']>
 
 function rank(item: RailItem): number {
     return item.kind === 'run' && item.run.state === 'blocked' ? 1 : 0
