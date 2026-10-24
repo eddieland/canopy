@@ -90,7 +90,10 @@ The **Transcript** is the run's session, from its log, oldest first:
 - each tool call, with what it did and how long it took; click one to see its input and output. A canopy command the
   harness refused is marked `refused`, with the guard;
 - each model call, with the tokens in and out, and its cost; click one to see what it was sent and what it did. The
-  first call was sent canopy's prompt, and every later one what the tools returned since;
+  first call was sent canopy's prompt, and every later one what the tools returned since. In a run that switched
+  models, the first call names its model, and so does each call where the model changed, By call too, so you can see
+  where the switch happened. A run on one model names none: **model** already said it. A split run from before canopy
+  kept each call's model gets its names when the loop reads its session again, if the runtime still has it;
 - any runtime error, tinted red.
 
 Near the run's timeout, its tool calls' output ends with a line from canopy saying how many minutes are left, and the

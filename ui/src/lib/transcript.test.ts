@@ -14,6 +14,7 @@ import {
     foldText,
     hitsIn,
     moreLabel,
+    namedModels,
     outcome,
     pretty,
     runTokens,
@@ -90,7 +91,16 @@ describe('tally and startOf', () => {
         tool('completed'),
         tool('error'),
         shell('canopy dispatch ABC-1', 'Error: dispatch refused (capacity): 2 of 2 running'),
-        { kind: 'step', at: '2026-10-08T10:32:00Z', reason: 'stop', cost_usd: 0.1, tokens: 10, split: null, call: 1 },
+        {
+            kind: 'step',
+            at: '2026-10-08T10:32:00Z',
+            reason: 'stop',
+            cost_usd: 0.1,
+            tokens: 10,
+            split: null,
+            call: 1,
+            model: null,
+        },
         { kind: 'error', at: null, name: 'APIError', message: '', call: 1 },
     ]
 
@@ -304,7 +314,7 @@ const text = (value: string, call: number | null, reasoning = false): Transcript
     call,
 })
 
-const step = (call: number, reason = 'tool-calls'): TranscriptStep => ({
+const step = (call: number, reason = 'tool-calls', model: string | null = null): TranscriptStep => ({
     kind: 'step',
     at: null,
     reason,
@@ -312,6 +322,7 @@ const step = (call: number, reason = 'tool-calls'): TranscriptStep => ({
     tokens: 10,
     split: null,
     call,
+    model,
 })
 
 describe('byCall', () => {
@@ -342,6 +353,32 @@ describe('byCall', () => {
             [2, null],
         ])
         expect(byCall([text('no calls marked', null)]).calls).toEqual([])
+    })
+})
+
+describe('namedModels', () => {
+    it('names a split run’s first call’s model, then each call’s whose model is not the call before’s', () => {
+        const opus = 'anthropic/claude-opus-4-1'
+        const sonnet = 'anthropic/claude-sonnet-4-5'
+        const named = namedModels([
+            text('reading', 1),
+            step(1, 'tool-calls', opus),
+            step(2, 'tool-calls', opus),
+            // A call the session's record named no model for leaves the one before standing.
+            step(3),
+            step(4, 'tool-calls', sonnet),
+            step(5, 'tool-calls', sonnet),
+            step(6, 'stop', opus),
+        ])
+        expect([...named]).toEqual([
+            [1, opus],
+            [4, sonnet],
+            [6, opus],
+        ])
+    })
+
+    it('names none for a run one model served, whose calls the API names no model for', () => {
+        expect(namedModels([text('one', 1), step(1), step(2, 'stop')]).size).toBe(0)
     })
 })
 

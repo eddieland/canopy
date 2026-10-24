@@ -25,6 +25,7 @@ from canopy.core import (
     review_drafts,
     review_requests,
     review_runs,
+    run_models,
 )
 from canopy.core import review_result as result
 from canopy.core.vocab import DismissalReason, ReviewRunStatus, SeenKind
@@ -147,7 +148,8 @@ def review_transcript(ctx: Context, run_id: int) -> Transcript | None:
     if row is None:
         return None
     log = Path(row.log_path)
-    return session_transcript(log, row.session_id, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
+    removed = removed_after(ctx.conn, log, row.ended_at, "run_files_days")
+    return session_transcript(log, row.session_id, removed, run_models.replies_of(ctx.conn, "review_runs", run_id))
 
 
 def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:

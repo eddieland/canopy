@@ -11,7 +11,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import chore_result, chore_runs, chore_view, contract, conversation, db
+from canopy.core import chore_result, chore_runs, chore_view, contract, conversation, db, run_models
 from canopy.core.vocab import ChoreRunStatus
 from canopy.serve.schema.chore import (
     ChoreDetail,
@@ -250,7 +250,8 @@ def chore_run_transcript(ctx: Context, name: str, run_id: int) -> Transcript | N
     if row is None:
         return None
     log = Path(row.log_path)
-    return session_transcript(log, row.session_id, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
+    removed = removed_after(ctx.conn, log, row.ended_at, "run_files_days")
+    return session_transcript(log, row.session_id, removed, run_models.replies_of(ctx.conn, "chore_runs", run_id))
 
 
 def _chore_run_of(conn: sqlite3.Connection, name: str, run_id: int) -> records.ChoreRun | None:

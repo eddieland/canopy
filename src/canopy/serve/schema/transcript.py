@@ -87,6 +87,9 @@ class TranscriptStep(Model):
     """The tokens, each kind apart."""
     call: int | None = None
     """The model call it came from, counted from 1, or None before the runtime started the first."""
+    model: str | None = None
+    """The model that made the call, as the run's models name it (DESIGN §13), when more than one served the run; None
+    for a run one model served, which its page names, and until canopy has read its session."""
 
 
 class TranscriptError(Model):

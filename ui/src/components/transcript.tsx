@@ -46,6 +46,7 @@ import {
     foldText,
     hitsIn,
     moreLabel,
+    namedModels,
     outcome,
     sentTokens,
     shownOutput,
@@ -65,6 +66,8 @@ import { cn } from '@/lib/utils'
 const NO_WORDS: readonly string[] = []
 // The calls a row inside a call is given: none, since it holds no model call's line.
 const NO_CALLS: readonly Call[] = []
+// The models a row inside a call is given: none, for the same reason.
+const NO_MODELS: ReadonlyMap<number, string> = new Map()
 
 /**
  * A session's transcript (DESIGN §22): the agent's text, each tool call (what it did and how it ended on its line,
@@ -73,13 +76,14 @@ const NO_CALLS: readonly Call[] = []
  * of each model call's context and what grew it, whose entries show their rows; `page` is the kind of page it sits
  * on, each of which keeps the chart open or closed (src/lib/context-chart-open.ts). With two model calls or more, By
  * call, the same entries are grouped by the model call they came from, each opening to what it was sent and what it
- * did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a tool call whose
- * input or output holds it. A long transcript draws a page of its rows, or of its calls By call, and a fold after them
- * draws more (`TRANSCRIPT_BUDGET`). All of it is agent output, rendered as text. `running` says the session has not
- * ended: its events reach the log as the runtime prints them, so it is what the agent has done so far. Its header
- * names the session, on every page that shows one. With no events, it is its header alone, which says why in a few
- * words (`log gone`), the whole reason on hover. A page that shows a row from outside the panel passes the `view` it
- * holds (`useTranscriptView`).
+ * did. A run more than one model served names the model on its first call's line, and on each later call's whose
+ * model is not the call before's (`namedModels`), so the switch shows where it happened. In order, a search keeps the
+ * rows with a line that holds it, its matches marked, and opens a tool call whose input or output holds it. A long
+ * transcript draws a page of its rows, or of its calls By call, and a fold after them draws more (`TRANSCRIPT_BUDGET`).
+ * All of it is agent output, rendered as text. `running` says the session has not ended: its events reach the log as
+ * the runtime prints them, so it is what the agent has done so far. Its header names the session, on every page that
+ * shows one. With no events, it is its header alone, which says why in a few words (`log gone`), the whole reason on
+ * hover. A page that shows a row from outside the panel passes the `view` it holds (`useTranscriptView`).
  */
 export function TranscriptPanel({
     transcript,
@@ -97,6 +101,7 @@ export function TranscriptPanel({
     const entries = transcript?.entries ?? []
     const counts = tally(entries)
     const calls = byCall(entries)
+    const models = namedModels(entries)
     const shape = contextShape(entries, transcript?.prompt ?? null)
     const chartOpen = useContextChartOpen(page)
     // One model call grouped is the events in order again.
@@ -258,6 +263,7 @@ export function TranscriptPanel({
                                     <CallRow
                                         key={`${call.n}-${opened.round}`}
                                         call={call}
+                                        model={models.get(call.n) ?? null}
                                         step={shape.calls.find((c) => c.n === call.n)?.step ?? null}
                                         prompt={transcript.prompt}
                                         start={startOf(entries)}
@@ -284,6 +290,7 @@ export function TranscriptPanel({
                                         words={words}
                                         targeted={targeted}
                                         calls={calls.calls}
+                                        models={models}
                                         prompt={transcript.prompt}
                                     />
                                 )
@@ -378,7 +385,8 @@ function Find({
 
 /**
  * One event's row. In order, `calls` and `prompt` are the session's, so a model call's line opens to what that call
- * was sent and what it did; inside a call, which holds no model call's line, they are left out.
+ * was sent and what it did, and `models` the model each call's line names; inside a call, which holds no model
+ * call's line, they are left out.
  */
 function Entry({
     entry,
@@ -387,6 +395,7 @@ function Entry({
     words = NO_WORDS,
     targeted = false,
     calls = NO_CALLS,
+    models = NO_MODELS,
     prompt = null,
 }: {
     entry: TranscriptEntry
@@ -395,6 +404,7 @@ function Entry({
     words?: readonly string[]
     targeted?: boolean
     calls?: readonly Call[]
+    models?: ReadonlyMap<number, string>
     prompt?: TranscriptPrompt | null
 }) {
     switch (entry.kind) {
@@ -417,7 +427,8 @@ function Entry({
         }
         case 'step': {
             const call = calls.find((c) => c.n === entry.call) ?? null
-            return <ModelCall entry={entry} start={start} call={call} prompt={prompt} />
+            const model = entry.call === null ? null : (models.get(entry.call) ?? null)
+            return <ModelCall entry={entry} start={start} call={call} model={model} prompt={prompt} />
         }
         case 'error': {
             return (
@@ -589,19 +600,22 @@ function Tool({
 }
 
 /**
- * A model call's end: one muted line, its number, its reason, its tokens in and out as By call says them, and its
- * cost, that opens to its tokens by kind and then to what the call was sent and what it did, as By call shows them.
- * The body is built only once opened, as By call's is: a long session's calls would hold every output twice.
+ * A model call's end: one muted line, its number, the `model` that made it where the line names one, its reason,
+ * its tokens in and out as By call says them, and its cost, that opens to its tokens by kind and then to what the
+ * call was sent and what it did, as By call shows them. The body is built only once opened, as By call's is: a long
+ * session's calls would hold every output twice.
  */
 function ModelCall({
     entry,
     start,
     call,
+    model,
     prompt,
 }: {
     entry: TranscriptStep
     start: string | null
     call: Call | null
+    model: string | null
     prompt: TranscriptPrompt | null
 }) {
     const [open, setOpen] = useState(false)
@@ -609,6 +623,7 @@ function ModelCall({
         <>
             <When at={entry.at} start={start} />
             <span>model call{entry.call === null ? '' : ` ${entry.call}`}</span>
+            <CallModel model={model} />
             {/* Every call but the last ends in tool calls: only another reason says something. */}
             {entry.reason && entry.reason !== 'tool-calls' && <Chip word={entry.reason} />}
             <span className="readout ml-auto">
@@ -677,20 +692,22 @@ const TOKEN_KINDS = [
 ] as const
 
 /**
- * A model call, by call: one line, its number, what it did, and its tokens in and out and its cost, that opens to its
- * input and its output. The first call's input is the prompt canopy kept; what is new in a later call's is what its
- * tools returned to the call before it. Ahead of all of it the runtime sends the agent's definition and its own
- * system prompt and tools, which no file records. The body is built only once opened: a long session's calls would
- * hold every output twice.
+ * A model call, by call: one line, its number, the `model` that made it where the line names one, what it did, and
+ * its tokens in and out and its cost, that opens to its input and its output. The first call's input is the prompt
+ * canopy kept; what is new in a later call's is what its tools returned to the call before it. Ahead of all of it the
+ * runtime sends the agent's definition and its own system prompt and tools, which no file records. The body is built
+ * only once opened: a long session's calls would hold every output twice.
  */
 function CallRow({
     call,
+    model,
     step,
     prompt,
     start,
     open,
 }: {
     call: Call
+    model: string | null
     step: number | null
     prompt: TranscriptPrompt | null
     start: string | null
@@ -711,6 +728,7 @@ function CallRow({
                 >
                     <When at={first} start={start} />
                     <span className="w-14 shrink-0 font-mono text-xs">call {call.n}</span>
+                    <CallModel model={model} />
                     <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={callLine(call)}>
                         {callLine(call)}
                     </span>
@@ -740,6 +758,18 @@ function CallRow({
                 </CollapsibleContent>
             </li>
         </Collapsible>
+    )
+}
+
+/** The model that made a call, on its line where the transcript names it: whole on hover when cut. */
+function CallModel({ model }: { model: string | null }) {
+    if (model === null) {
+        return null
+    }
+    return (
+        <span className="max-w-56 min-w-0 shrink truncate font-mono text-xs text-foreground" title={`made by ${model}`}>
+            {model}
+        </span>
     )
 }
 

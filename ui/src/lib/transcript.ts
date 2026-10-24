@@ -193,6 +193,26 @@ export function byCall(entries: TranscriptEntry[]): ByCall {
     return { before, calls }
 }
 
+/**
+ * The model each model call's line names, by the call's number: a split run's first call's, and each later one's
+ * whose model is not the call before's, in the order the runtime made them. The API names a call's model only for a
+ * run more than one model served, so a run on one names none: its Run panel's `model` field does.
+ */
+export function namedModels(entries: readonly TranscriptEntry[]): Map<number, string> {
+    const named = new Map<number, string>()
+    let last: string | null = null
+    for (const entry of entries) {
+        if (entry.kind !== 'step' || entry.call === null || entry.model === null) {
+            continue
+        }
+        if (entry.model !== last) {
+            named.set(entry.call, entry.model)
+        }
+        last = entry.model
+    }
+    return named
+}
+
 /** How many tokens a model call was sent, from the cache or not. */
 export function sentTokens(tokens: TranscriptTokens): number {
     return tokens.input + tokens.cache_read + tokens.cache_write

@@ -8,7 +8,11 @@ import json
 from datetime import UTC, datetime
 from unittest import mock
 
-from canopy.core import gc_passes
+import pytest
+
+from canopy.core import gc_passes, run_models
+from canopy.core.run_models import Due
+from canopy.core.vocab import ModelsRead
 from canopy.runtime import transcript
 from canopy.serve.backend import Backend
 from tests.canopy.web_helpers import client
@@ -146,6 +150,43 @@ def test_each_entry_names_its_model_call_and_the_prompt_is_the_first_calls_input
     # A tick's prompt is its state block, and a chore run's is beside its log too.
     assert c.get("/api/ticks/2/transcript").json()["prompt"]["text"].startswith("## State\n")
     assert c.get("/api/chores/deps/runs/2/transcript").json()["prompt"]["text"].startswith("# canopy chore: deps\n")
+
+
+@pytest.mark.parametrize(
+    ("table", "run_id", "log", "path"),
+    [
+        ("runs", 39, "runs/39.log", "/api/runs/39/transcript"),
+        ("ticks", 2, "ticks/2.log", "/api/ticks/2/transcript"),
+        ("chore_runs", 2, "chore-runs/deps/2.log", "/api/chores/deps/runs/2/transcript"),
+        ("review_runs", 4, "reviews/4.log", "/api/reviews/4/transcript"),
+        ("task_runs", 1, "task-runs/1.log", "/api/tasks/1/runs/1/transcript"),
+    ],
+)
+def test_each_model_call_of_a_run_more_than_one_model_served_names_its_model(
+    backend: Backend,
+    table: run_models.RunTable,
+    run_id: int,
+    log: str,
+    path: str,
+) -> None:
+    c = client(None, backend)
+    session = c.get(path).json()["session_id"]
+    finished = {"type": "step_finish", "timestamp": 1, "sessionID": session}
+    calls = [
+        {**finished, "part": {"type": "step-finish", "messageID": "msg_a"}},
+        {**finished, "part": {"type": "step-finish", "messageID": "msg_b"}},
+        # A reply the session's record did not name, or one before canopy kept each reply's model.
+        {**finished, "part": {"type": "step-finish", "messageID": "msg_c"}},
+    ]
+    with backend.open() as ctx:
+        with (ctx.state_dir / log).open("a") as f:
+            f.writelines(f"{json.dumps(call)}\n" for call in calls)
+        replies = {"msg_a": "anthropic/claude-opus-4-1", "msg_b": "anthropic/claude-sonnet-4-5"}
+        run_models.record(ctx.conn, Due(table, run_id, session, 1), ModelsRead.FOUND, (), replies=replies)
+    steps = [e for e in c.get(path).json()["entries"] if e["kind"] == "step"]
+    assert [s["model"] for s in steps[-3:]] == ["anthropic/claude-opus-4-1", "anthropic/claude-sonnet-4-5", None]
+    # The mock's own calls name no message canopy kept a model for.
+    assert {s["model"] for s in steps[:-3]} == {None}
 
 
 def test_a_transcript_past_its_bounds_says_it_was_cut(backend: Backend) -> None:

@@ -811,6 +811,20 @@ class RunModel(Row):
 
 
 @dataclass(frozen=True)
+class RunReplyModel(Row):
+    """The model that wrote one reply of an agent run more than one model served (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "run_reply_models"
+
+    run_table: str
+    run_id: int
+    #: The runtime's id of the reply, which the events of the model call that wrote it name in the run's log.
+    message: str
+    #: As `run_models.model` names it.
+    model: str
+
+
+@dataclass(frozen=True)
 class RunOffer(Row):
     """canopy's ask of the runtime, as an agent run started, of what it offered the run (DESIGN §13)."""
 

@@ -222,7 +222,8 @@ def run_transcript(ctx: Context, run_id: int) -> Transcript | None:
     if row is None:
         return None
     log = Path(str(row["log_path"]))
-    return session_transcript(log, row["session_id"], removed_after(ctx.conn, log, row["ended_at"], "run_files_days"))
+    removed = removed_after(ctx.conn, log, row["ended_at"], "run_files_days")
+    return session_transcript(log, row["session_id"], removed, run_models.replies_of(ctx.conn, "runs", run_id))
 
 
 def decision(row: records.Decision) -> Decision:

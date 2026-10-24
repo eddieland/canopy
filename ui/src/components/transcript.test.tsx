@@ -58,6 +58,7 @@ const ENTRIES: TranscriptEntry[] = [
         split: tokens({ input: 1200, output: 300 }),
         tokens: 1500,
         cost_usd: 0.02,
+        model: null,
     },
     {
         kind: 'tool',
@@ -80,6 +81,7 @@ const ENTRIES: TranscriptEntry[] = [
         split: tokens({ input: 300, cache_read: 1200, output: 50, reasoning: 10 }),
         tokens: 1560,
         cost_usd: 0.01,
+        model: null,
     },
     { kind: 'text', call: 3, at: '2026-10-08T12:01:00Z', text: 'Trying again.', reasoning: false, cut: false },
 ]
@@ -100,10 +102,10 @@ function said(n: number): TranscriptEntry[] {
     }))
 }
 
-// Model call `n`'s end.
-function step(n: number): TranscriptEntry {
+// Model call `n`'s end, made by `model` when the API names it.
+function step(n: number, model: string | null = null): TranscriptEntry {
     const split = tokens({ input: 100 })
-    return { kind: 'step', call: n, at: AT, reason: 'tool-calls', split, tokens: 100, cost_usd: 0.01 }
+    return { kind: 'step', call: n, at: AT, reason: 'tool-calls', split, tokens: 100, cost_usd: 0.01, model }
 }
 
 // A page's view of the transcript, held outside the panel; the test sets its row last shown.
@@ -281,6 +283,31 @@ describe('TranscriptPanel', () => {
         fireEvent(first, new Event('toggle'))
         const sent = within(first).getByRole('region', { name: 'call 1 input' })
         expect(within(sent).getByText('Implement ABC-1: sign in with SSO.')).toBeDefined()
+    })
+
+    it('names the model of a split run’s first call, and of each call whose model is not the call before’s', () => {
+        const opus = 'anthropic/claude-opus-4-1'
+        const sonnet = 'anthropic/claude-sonnet-4-5'
+        const entries: TranscriptEntry[] = [1, 2, 3].flatMap((n): TranscriptEntry[] => [
+            { kind: 'text', call: n, at: AT, text: `said ${n}`, reasoning: false, cut: false },
+            step(n, n === 3 ? sonnet : opus),
+        ])
+        render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
+        expect(call('model call 1').textContent).toContain(opus)
+        expect(call('model call 2').textContent).not.toContain('anthropic/')
+        expect(call('model call 3').textContent).toContain(sonnet)
+        expect(screen.getByTitle(`made by ${sonnet}`)).toBeDefined()
+
+        // By call names them on the same calls.
+        fireEvent.click(screen.getByRole('button', { name: 'By call' }))
+        expect(screen.getByRole('button', { name: /call 1/u }).textContent).toContain(opus)
+        expect(screen.getByRole('button', { name: /call 2/u }).textContent).not.toContain('anthropic/')
+        expect(screen.getByRole('button', { name: /call 3/u }).textContent).toContain(sonnet)
+    })
+
+    it('names no model for a run one model served: its Run panel does', () => {
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
+        expect(screen.queryByTitle(/^made by /u)).toBeNull()
     })
 
     it('names the session in its header', () => {
