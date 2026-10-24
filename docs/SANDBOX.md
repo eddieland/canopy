@@ -102,6 +102,7 @@ Each role caches in a directory of its own, `~/.cache/canopy/sandbox/<role>/` (u
 set), which the wrapper makes, and setup in the worker's, so that what it installs is there for the worker. The
 wrapper points the command's `XDG_CACHE_HOME` there, and `npm_config_cache`, `GOCACHE`, `GOMODCACHE`, and
 `PIP_CACHE_DIR` under it, whatever you set them to. The first sandboxed run of each role fills its cache from nothing.
+Nothing empties them but `canopy gc --caches`, which skips a role's while a run of it is live.
 
 `srt` is a beta. canopy pins the version DESIGN §24 was checked against; to try another, install it on `PATH`
 and remove canopy's, and re-read DESIGN §24's claims first.
