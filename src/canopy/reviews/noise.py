@@ -1,20 +1,24 @@
 """How much of what canopy's reviewer finds the operator dismisses, and why (DESIGN §21): `canopy review noise`.
 
 Each `done` review's findings are counted by severity, by the persona the review ran in, and by the models its session
-named, beside the operator's dismissals of them by reason. A `wrong` dismissal is the reviewer's noise; an
-`intentional` or `not_worth_it` one is a finding that held and was not acted on. A dismissal from before canopy asked
-why counts as `unrecorded`. Read from the journal only.
+named, beside what became of each: the operator's dismissal by reason, or else the latest answer a worker gave it,
+`fixed` or `declined`, as the next review reads it. A `wrong` dismissal is the reviewer's noise; an `intentional` or
+`not_worth_it` one is a finding that held and was not acted on. A dismissal from before canopy asked why counts as
+`unrecorded`. The operator's dismissal wins over a worker's answer, since it is the operator's word on the finding: a
+finding both dismissed and answered counts as dismissed alone. One neither dismissed nor answered counts in the total
+only. Apart from those, a finding the harness held as a rebuttal of a worker's decline counts as one, whether the
+operator has released it or not. Read from the journal only.
 """
 
 from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, assert_never
 
+from canopy.core import review_answers, review_runs, run_models
 from canopy.core import review_result as result
-from canopy.core import review_runs, run_models
-from canopy.core.vocab import DismissalReason, ReviewRunStatus
+from canopy.core.vocab import DismissalReason, FindingAnswer, HoldKind, ReviewRunStatus
 
 if TYPE_CHECKING:
     import sqlite3
@@ -31,21 +35,37 @@ NO_PERSONA = "(no persona)"
 NO_MODEL = "(no model read)"
 #: What a dismissal from before canopy asked why is counted as.
 UNRECORDED = "unrecorded"
+#: What the text's columns mean, after its first line's count of reviews.
+LEGEND = (
+    "A `wrong` dismissal is the reviewer's noise; `fixed` and `declined` are workers' answers to the findings not "
+    "dismissed, and a rebuttal answers a decline."
+)
 
 
 @dataclass
 class Tally:
-    """The findings of one group, and what the operator dismissed of them."""
+    """The findings of one group, what the operator dismissed of them, and what workers answered of the rest."""
 
     #: What the group is: a severity, a persona's name, or the models that served its reviews.
     key: str
     findings: int = 0
     #: The dismissed findings by reason, `unrecorded` among them; a reason none was dismissed for is absent.
     dismissed: Counter[str] = field(default_factory=Counter)
+    #: The findings not dismissed, by the latest answer a worker gave them; an answer none was given is absent.
+    answered: Counter[str] = field(default_factory=Counter)
+    #: The findings the harness held as a rebuttal of a worker's decline, released since or not.
+    rebuttals: int = 0
 
-    def rate(self, reason: DismissalReason) -> float:
-        """Return the share of the group's findings the operator dismissed for `reason`, from 0 to 1."""
-        return self.dismissed[reason] / self.findings if self.findings else 0.0
+    def rate(self, outcome: DismissalReason | FindingAnswer) -> float:
+        """Return the share of the group's findings dismissed for `outcome`, or answered so, from 0 to 1."""
+        match outcome:
+            case DismissalReason():
+                count = self.dismissed[outcome]
+            case FindingAnswer():
+                count = self.answered[outcome]
+            case _:
+                assert_never(outcome)
+        return count / self.findings if self.findings else 0.0
 
 
 @dataclass(frozen=True)
@@ -62,7 +82,7 @@ class Noise:
 
         Returns:
             `since`, `reviews`, and for each dimension a list of its groups' `key`, `findings`, `dismissed` by
-            reason, and `rates` by reason.
+            reason, `answered` by answer, `rebuttals`, and `rates` by reason and answer.
         """
         return {
             "since": self.since,
@@ -73,7 +93,9 @@ class Noise:
                         "key": t.key,
                         "findings": t.findings,
                         "dismissed": dict(t.dismissed),
-                        "rates": {str(r): round(t.rate(r), 4) for r in DismissalReason},
+                        "answered": dict(t.answered),
+                        "rebuttals": t.rebuttals,
+                        "rates": {str(o): round(t.rate(o), 4) for o in (*DismissalReason, *FindingAnswer)},
                     }
                     for t in tallies
                 ]
@@ -83,7 +105,7 @@ class Noise:
 
 
 def tally(conn: sqlite3.Connection, since: str) -> Noise:
-    """Count the findings of every `done` review started at or after `since`, and the operator's dismissals of them.
+    """Count the findings of every `done` review started at or after `since`, and what became of each.
 
     Returns:
         The tallies by severity, persona, and model.
@@ -96,6 +118,9 @@ def tally(conn: sqlite3.Connection, since: str) -> Noise:
         if stored is None:
             continue
         dismissed = review_runs.review_dismissals(conn, run.id)
+        answers = review_answers.latest(conn, run.id)
+        holds = review_runs.held(conn, run.id, released=True)
+        rebuttals = {n for n, h in holds.items() if h.kind is HoldKind.REBUTTAL}
         served = "+".join(sorted(m.model for m in models[run.id])) or NO_MODEL
         for number, finding in enumerate(stored.findings, 1):
             keys: dict[Dimension, str] = {
@@ -108,6 +133,10 @@ def tally(conn: sqlite3.Connection, since: str) -> Noise:
                 group.findings += 1
                 if number in dismissed:
                     group.dismissed[str(dismissed[number] or UNRECORDED)] += 1
+                elif number in answers:
+                    group.answered[str(answers[number].answer)] += 1
+                if number in rebuttals:
+                    group.rebuttals += 1
     return Noise(
         since=since,
         reviews=len(runs),
@@ -116,7 +145,7 @@ def tally(conn: sqlite3.Connection, since: str) -> Noise:
 
 
 def lines(noise: Noise) -> list[str]:
-    """Return the tallies as text: a table per dimension, each group's findings, dismissals, and `wrong` rate.
+    """Return the tallies as text: a table per dimension, each group's findings, their outcomes, and `wrong` rate.
 
     Returns:
         The lines to print; one saying so when the reviews found nothing.
@@ -124,12 +153,14 @@ def lines(noise: Noise) -> list[str]:
     head = f"{noise.reviews} done reviews since {noise.since}"
     if not any(noise.groups.values()):
         return [f"{head}: no findings."]
-    columns = [*(str(r) for r in DismissalReason), UNRECORDED]
-    found = [f"{head}. A `wrong` dismissal is the reviewer's noise."]
+    reasons = [*(str(r) for r in DismissalReason), UNRECORDED]
+    answers = [str(a) for a in FindingAnswer]
+    found = [f"{head}. {LEGEND}"]
     for dimension, tallies in noise.groups.items():
         width = max(len(dimension), *(len(t.key) for t in tallies))
-        found += ["", f"{dimension:<{width}}  findings  {'  '.join(columns)}  wrong rate"]
+        found += ["", f"{dimension:<{width}}  findings  {'  '.join([*reasons, *answers])}  rebuttals  wrong rate"]
         for t in tallies:
-            counts = "  ".join(f"{t.dismissed[c]:>{len(c)}}" for c in columns)
-            found.append(f"{t.key:<{width}}  {t.findings:>8}  {counts}  {t.rate(DismissalReason.WRONG):>10.0%}")
+            counts = [f"{t.dismissed[c]:>{len(c)}}" for c in reasons] + [f"{t.answered[c]:>{len(c)}}" for c in answers]
+            rate = f"{t.rate(DismissalReason.WRONG):>10.0%}"
+            found.append(f"{t.key:<{width}}  {t.findings:>8}  {'  '.join(counts)}  {t.rebuttals:>9}  {rate}")
     return found
