@@ -1,7 +1,9 @@
 """What canopy keeps of its own history and caches, measured for `canopy gc --dry-run` (DESIGN §26, ROADMAP M47).
 
 `measure` reports each kind of §26's table that M47 changes: how many there are, their bytes, and what a pass with
-the configured `[retention]` would remove of them. It removes nothing, and runs nothing but `git count-objects`.
+the configured `[retention]` would remove of them, then the remote branches canopy made that nothing names any more
+(`gc_branches.py`), which no pass removes. It removes nothing, and runs nothing but `git count-objects` and
+`git for-each-ref`.
 `file_kinds` finds the files a pass removes, and `row_kinds` the journal's rows, for the pass (`gc_pass.py`) and the
 dry run alike, so the two agree.
 """
@@ -16,12 +18,14 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+import canopy_sandbox
+
 from canopy.chores import start as chore_start
 from canopy.core import db, hostgit, review_diff, sql
 from canopy.core.context import db_path
 from canopy.core.vocab import MemoryScope, MemoryStatus, TickStatus
 from canopy.infra import lock, logs, procs
-from canopy.loop import attention
+from canopy.loop import attention, gc_branches
 from canopy.reviews import start as review_start
 from canopy.runs import dispatch
 
@@ -158,6 +162,8 @@ class Report:
     kinds: Sequence[Kind]
     journal_size: int
     notes: Sequence[str]
+    #: The remote branches canopy made that nothing names any more, for the operator to delete: canopy deletes none.
+    branches: Sequence[gc_branches.Branch] = ()
 
 
 def measure(ctx: Context, now: datetime) -> Report:
@@ -179,7 +185,9 @@ def measure(ctx: Context, now: datetime) -> Report:
         _sandbox_caches(),
         _memory_text(ctx.conn, now, retention),
     ]
-    return Report(at=db.format_time(now), kinds=kinds, journal_size=_regular_size(journal) or 0, notes=notes)
+    branches = gc_branches.unnamed(ctx, notes)
+    size = _regular_size(journal) or 0
+    return Report(at=db.format_time(now), kinds=kinds, journal_size=size, notes=notes, branches=branches)
 
 
 def file_kinds(ctx: Context, now: datetime) -> list[FileKind]:
@@ -563,18 +571,29 @@ def count_objects(runner: procs.Runner, clone: Path) -> dict[str, int] | None:
     return counts
 
 
+def tree_size(root: Path) -> int:
+    """The bytes of the regular files under `root`, following no link.
+
+    Returns:
+        Their sum; a file that cannot be read counts nothing.
+    """
+    total = 0
+    for parent, _dirs, names in os.walk(root):
+        for name in names:
+            total += _regular_size(Path(parent) / name) or 0
+    return total
+
+
 def _sandbox_caches() -> Kind:
     """Each role's cache under `$XDG_CACHE_HOME/canopy/sandbox/`, which only `--caches` empties (DESIGN §24).
 
     Returns:
         The kind, counting role directories and the bytes of the regular files in them.
     """
-    xdg = Path(os.environ.get("XDG_CACHE_HOME", ""))
-    root = (xdg if xdg.is_absolute() else Path.home() / ".cache") / "canopy" / "sandbox"
     tally = _Tally()
-    for role in _listing(root):
+    for role in _listing(canopy_sandbox.cache_root()):
         if _is_dir(role):
-            tally.add(_tree_size(role), removable=False)
+            tally.add(tree_size(role), removable=False)
     return tally.kind("sandbox caches", "directories", "--caches")
 
 
@@ -641,16 +660,3 @@ def _listing(directory: Path) -> list[Path]:
         return sorted(directory.iterdir())
     except OSError:
         return []
-
-
-def _tree_size(root: Path) -> int:
-    """The bytes of the regular files under `root`, following no link.
-
-    Returns:
-        Their sum; a file that cannot be read counts nothing.
-    """
-    total = 0
-    for parent, _dirs, names in os.walk(root):
-        for name in names:
-            total += _regular_size(Path(parent) / name) or 0
-    return total

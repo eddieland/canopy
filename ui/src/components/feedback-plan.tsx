@@ -4,9 +4,11 @@ import { Check } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { SubmitEvent } from 'react'
 
+import { ApiError } from '@/api/client'
 import { approveFeedbackPlan, refreshTicket } from '@/api/mutations'
 import type { FeedbackPlan, FeedbackPlanItem, FeedbackPlanStatus } from '@/api/types'
 import { Age } from '@/components/age'
+import { ApprovedBand } from '@/components/approved-band'
 import { Disclosure } from '@/components/disclosure'
 import { Textarea } from '@/components/input'
 import { LinkOutIcon } from '@/components/link-out-icon'
@@ -21,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { feedbackPlanApprovedText } from '@/lib/outcomes'
+import { messageAnchor } from '@/lib/refs'
 import { threadAnchor } from '@/lib/reviews'
 import { useSendKeys } from '@/lib/send-key'
 import type { Tone } from '@/lib/tone'
@@ -34,16 +37,26 @@ const STATUS_TONE: Record<FeedbackPlanStatus, Tone> = {
     approved: 'running',
     spent: 'plain',
 }
+// The chip's word for each status: a waiting plan says who it waits on, as a ticket's plan chip does.
+const STATUS_WORD: Record<FeedbackPlanStatus, string> = {
+    waiting: 'waiting on you',
+    stale: 'stale',
+    approved: 'approved',
+    spent: 'spent',
+}
 // What approving a stale plan does: refused once, naming what changed, then approved as it is.
 const REFUSED_ONCE =
     'The loop plans it again once the PR goes quiet. Approving it now is refused once, naming this; approving it ' +
     'again approves it as it is.'
 const AGAIN = 'Approving it again approves it as it is; what changed waits for the next plan.'
-// The line beside the approve button, with an item ticked and with none.
+// What the stale refusal says under the button, calmly: it is the designed first step, not an error.
+const STALE_SAID = 'Refused once, as a stale plan is the first time: approve it as it is to go ahead.'
+// The line beside the approve button: with an item ticked, with none, once approved, and with no file to approve.
 const WRITES =
     'Approving writes a message on the ticket naming the items to address and to leave, by number, with your words ' +
     'after it.'
 const NONE_TICKED = 'Tick an item to approve, or reply on the ticket to ask for changes.'
+const APPROVED = 'Tick other items, or write words for its resume, to approve it again.'
 
 /**
  * The current feedback plan of the PR's ticket (DESIGN §32): where it stands, what changed on its PRs since it was
@@ -57,38 +70,43 @@ const NONE_TICKED = 'Tick an item to approve, or reply on the ticket to ask for 
 export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onChange: () => void }) {
     const [shown, setShown] = useState(false)
     const open = plan.status !== 'spent'
+    // Until it is approved, the line says what approving does; after, only where it stands.
+    const deciding = plan.status === 'waiting' || plan.status === 'stale'
     return (
         <Panel id="feedback-plan" data-testid="feedback-plan" data-status={plan.status}>
             <PanelHeader label="Feedback plan">
                 <span className="flex items-center gap-2">
                     <span className="readout text-xs text-muted-foreground">feedback-plan:{plan.id}</span>
-                    <Chip tone={STATUS_TONE[plan.status]} word={plan.status} />
+                    <Chip tone={STATUS_TONE[plan.status]} word={STATUS_WORD[plan.status]} />
                 </span>
             </PanelHeader>
             <div className="flex flex-col gap-2 p-3 text-sm">
                 <p className="text-muted-foreground">
                     <RunLink id={plan.run} /> planned this round of feedback for{' '}
-                    <TicketLink ticketKey={plan.ticket_key} /> <Age at={plan.created_at} variant="ago" />: its resume
-                    acts on the items you approve, and only those. <StatusLine plan={plan} />
+                    <TicketLink ticketKey={plan.ticket_key} /> <Age at={plan.created_at} variant="ago" />
+                    {deciding ? ': its resume acts on the items you approve, and only those.' : '.'}{' '}
+                    <StatusLine plan={plan} />
                 </p>
                 {plan.status === 'stale' && <Stale plan={plan} />}
             </div>
             {open ? <Approve key={plan.id} plan={plan} onChange={onChange} /> : <ItemRows items={plan.items} />}
-            <Collapsible open={shown} onOpenChange={setShown} className="border-t">
-                <div className="flex items-center gap-2 px-3 py-1.5">
-                    <Disclosure open={shown} what="the plan" />
-                    <span className="text-xs text-muted-foreground">
-                        {plan.text === null ? `its file is ${plan.problem ?? 'unreadable'}` : 'as its file stands now'}
-                    </span>
-                </div>
-                <CollapsibleContent>
-                    {plan.text !== null && (
+            {plan.text === null ? (
+                <p className="border-t px-3 py-1.5 text-xs text-muted-foreground" data-testid="feedback-plan-no-file">
+                    Its file is {plan.problem ?? 'unreadable'}: {plan.path}
+                </p>
+            ) : (
+                <Collapsible open={shown} onOpenChange={setShown} className="border-t">
+                    <div className="flex items-center gap-2 px-3 py-1.5">
+                        <Disclosure open={shown} what="the plan" />
+                        <span className="text-xs text-muted-foreground">as its file stands now</span>
+                    </div>
+                    <CollapsibleContent>
                         <div className="border-t px-3 py-2 font-mono text-xs" data-testid="feedback-plan-text">
                             <MemoryText text={plan.text} lines />
                         </div>
-                    )}
-                </CollapsibleContent>
-            </Collapsible>
+                    </CollapsibleContent>
+                </Collapsible>
+            )}
         </Panel>
     )
 }
@@ -120,27 +138,7 @@ function StatusLine({ plan }: { plan: FeedbackPlan }) {
             return <>It waits on you, and its PR has moved on.</>
         }
         case 'approved': {
-            return (
-                <>
-                    {plan.approved_channel === 'planner' ? 'Its planner approved it' : 'Approved'}
-                    {plan.approved_channel !== null && plan.approved_channel !== 'planner' && (
-                        <> via {plan.approved_channel}</>
-                    )}
-                    {plan.approved_at !== null && (
-                        <>
-                            {' '}
-                            <Age at={plan.approved_at} variant="ago" />
-                        </>
-                    )}
-                    {plan.approved_reason !== null && (
-                        <>
-                            , saying <MemoryText text={plan.approved_reason} />
-                        </>
-                    )}
-                    {plan.approved_message !== null && <>; message {plan.approved_message} names its items</>}. The next
-                    tick may resume {plan.ticket_key} on it, once.
-                </>
-            )
+            return <ApprovedLine plan={plan} />
         }
         case 'spent': {
             return (
@@ -151,6 +149,60 @@ function StatusLine({ plan }: { plan: FeedbackPlan }) {
             )
         }
     }
+}
+
+/**
+ * How an approved plan was approved: by the operator, from this page or the command line, or by its planner, whose
+ * reason is quoted, a model's words; the message the approval wrote links to it in the ticket's conversation.
+ */
+function ApprovedLine({ plan }: { plan: FeedbackPlan }) {
+    const reason = plan.approved_reason
+    // The quoted reason ends the sentence when it ends one itself, so no period doubles its own.
+    const period = reason !== null && plan.approved_message === null && endsSentence(reason) ? '' : '.'
+    return (
+        <>
+            {approvedBy(plan.approved_channel)}
+            {plan.approved_at !== null && (
+                <>
+                    {' '}
+                    <Age at={plan.approved_at} variant="ago" />
+                </>
+            )}
+            {reason !== null && (
+                <>
+                    , saying “<MemoryText text={reason} />”
+                </>
+            )}
+            {plan.approved_message !== null && (
+                <>
+                    ;{' '}
+                    <Link
+                        to="/tickets/$key"
+                        params={{ key: plan.ticket_key }}
+                        hash={messageAnchor(plan.approved_message)}
+                        className="text-accent underline-offset-4 hover:underline"
+                    >
+                        message {plan.approved_message}
+                    </Link>{' '}
+                    on the ticket names its items
+                </>
+            )}
+            {period} The next tick may resume {plan.ticket_key} on it, once.
+        </>
+    )
+}
+
+// Who approved the plan, by the channel the approval recorded: the planner, or the operator, wherever they were.
+function approvedBy(channel: string | null): string {
+    if (channel === 'planner') {
+        return 'Its planner approved it'
+    }
+    return channel === 'cli' ? 'Approved by you, from the command line' : 'Approved by you'
+}
+
+// Whether a reason ends a sentence of its own: a period, a question or exclamation mark, a closing quote after one.
+function endsSentence(text: string): boolean {
+    return /[.!?]["'”’)]*\s*$/u.test(text)
 }
 
 /** What changed on a stale plan's PRs since it was written, in the harness's words, and what approving it does now. */
@@ -172,8 +224,11 @@ function Stale({ plan }: { plan: FeedbackPlan }) {
 
 /**
  * The approval form: a row for each item with a box, ticked unless the last approval left it out, the operator's own
- * words, and the button that approves the ticked items, whole when all are, its command on hover. What it did, or why
- * it was refused, goes under it in the CLI's words.
+ * words, and the button that approves the ticked items, whole when all are, its command on hover. Approving a stale
+ * plan is refused once by design, so that refusal reads as the step it is, not as an error; any other refusal goes
+ * under the button in the CLI's words. An approval done is the moment it is (`ApprovedBand`), the words cleared and
+ * the button at rest as an outline `Approve again` until a box or the words change, so a second press, or the send
+ * key, cannot approve it twice by accident. Nothing can be approved with no item ticked, or with no file to approve.
  */
 function Approve({ plan, onChange }: { plan: FeedbackPlan; onChange: () => void }) {
     const id = useId()
@@ -183,20 +238,30 @@ function Approve({ plan, onChange }: { plan: FeedbackPlan; onChange: () => void 
         () => new Set(plan.items.filter((i) => !i.left_out).map((i) => i.number)),
     )
     const [words, setWords] = useState('')
-    const [said, setSaid] = useState<string | null>(null)
+    // What the last approval from this form said, numbered so each plays the band again, and whether a box or the
+    // words changed since: until one does, approving again would only be refused as the same approval.
+    const [done, setDone] = useState<{ text: string; n: number } | null>(null)
+    const [changed, setChanged] = useState(false)
     const choice = chosen(plan.items, ticked, words)
     const approve = useMutation({
         mutationFn: () => approveFeedbackPlan(plan.ticket_key, choice),
         onSuccess: (approved) => {
-            setSaid(feedbackPlanApprovedText(approved))
+            setDone((last) => ({ text: feedbackPlanApprovedText(approved), n: (last?.n ?? 0) + 1 }))
+            setChanged(false)
+            setWords('')
             onChange()
             void refreshTicket(client, plan.ticket_key)
         },
         // A stale refusal is recorded, so approving again approves it: read the plan again to say so.
         onError: onChange,
     })
+    const missing = plan.text === null
     const some = plan.items.length === 0 || ticked.size > 0
+    const again = done !== null || plan.status === 'approved'
+    const rested = done !== null && !changed
+    const can = some && !missing && !rested && !approve.isPending
     const whole = ticked.size === plan.items.length
+    const refusedStale = approve.error instanceof ApiError && approve.error.guard === 'stale'
 
     function tick(n: number, on: boolean) {
         const next = new Set(ticked)
@@ -206,12 +271,17 @@ function Approve({ plan, onChange }: { plan: FeedbackPlan; onChange: () => void 
             next.delete(n)
         }
         setTicked(next)
+        setChanged(true)
+    }
+
+    function write(value: string) {
+        setWords(value)
+        setChanged(true)
     }
 
     function submit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
-        if (some && !approve.isPending) {
-            setSaid(null)
+        if (can) {
             approve.mutate()
         }
     }
@@ -226,7 +296,7 @@ function Approve({ plan, onChange }: { plan: FeedbackPlan; onChange: () => void 
                 <Textarea
                     id={`${id}-words`}
                     value={words}
-                    onChange={(event) => setWords(event.target.value)}
+                    onChange={(event) => write(event.target.value)}
                     onKeyDown={sendKeys.onKeyDown}
                     spellCheck
                     className="min-h-16"
@@ -234,28 +304,55 @@ function Approve({ plan, onChange }: { plan: FeedbackPlan; onChange: () => void 
                 <span className="flex flex-wrap items-center gap-2">
                     <Button
                         type="submit"
-                        disabled={!some || approve.isPending}
+                        variant={again ? 'outline' : 'default'}
+                        disabled={!can}
                         title={command(plan.ticket_key, choice)}
                         aria-keyshortcuts={sendKeys.shortcut}
                     >
                         <Check />
-                        {approveLabel(approve.isPending, whole, ticked.size, plan.items.length)}
+                        {approveLabel(plan, { pending: approve.isPending, again, whole, ticked: ticked.size })}
                         <SendKeycap keys={sendKeys.shortcut} />
                     </Button>
-                    <span className="text-xs text-muted-foreground">{some ? WRITES : NONE_TICKED}</span>
+                    <span className="text-xs text-muted-foreground">{hint(plan, { some, rested })}</span>
                 </span>
-                <Notice error={approve.error}>{said}</Notice>
+                {done !== null && <ApprovedBand key={done.n} text={done.text} />}
+                <Notice error={refusedStale ? undefined : approve.error}>{refusedStale ? STALE_SAID : null}</Notice>
             </PanelFooter>
         </form>
     )
 }
 
-// The approve button's label: whole with every item ticked, else how many of them.
-function approveLabel(pending: boolean, whole: boolean, ticked: number, items: number): string {
+// The approve button's label: a stale plan's two steps by name, approving again once it is approved, else whole with
+// every item ticked, or how many of them; plain `Approve` with none, since there is nothing to count.
+function approveLabel(
+    plan: FeedbackPlan,
+    { pending, again, whole, ticked }: { pending: boolean; again: boolean; whole: boolean; ticked: number },
+): string {
     if (pending) {
         return 'Approving…'
     }
-    return whole ? 'Approve whole' : `Approve ${ticked} of ${items}`
+    if (again) {
+        return 'Approve again'
+    }
+    if (plan.status === 'stale') {
+        return plan.stale_shown ? 'Approve as it is' : 'Approve stale plan'
+    }
+    if (ticked === 0 && plan.items.length > 0) {
+        return 'Approve'
+    }
+    return whole ? 'Approve whole' : `Approve ${ticked} of ${plan.items.length}`
+}
+
+// The line beside the button: why nothing can be approved now, or what approving writes.
+function hint(plan: FeedbackPlan, { some, rested }: { some: boolean; rested: boolean }): string {
+    if (plan.text === null) {
+        const problem = plan.problem ?? 'unreadable'
+        return `Its file is ${problem}, so nothing can be approved: reply on the ticket to ask for a new plan.`
+    }
+    if (!some) {
+        return NONE_TICKED
+    }
+    return rested ? APPROVED : WRITES
 }
 
 // What an approval sends for the ticked items: none named when every one is, so it approves the plan whole; else the
@@ -296,7 +393,7 @@ function ItemRows({
     onTick?: (n: number, on: boolean) => void
 }) {
     if (items.length === 0) {
-        return <p className="border-t px-3 py-2 text-sm text-muted-foreground">It covers no review item.</p>
+        return <p className="border-t px-3 py-2 text-sm text-muted-foreground">It covers no item.</p>
     }
     return (
         <ol className="divide-y border-t" data-testid="feedback-plan-items">

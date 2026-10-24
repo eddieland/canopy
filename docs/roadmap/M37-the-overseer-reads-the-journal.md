@@ -96,7 +96,7 @@ ticket's conversation in code (`conversation.record_comment`, which another sour
 and comment id, in the transaction that first records its observation and with the same text, source `worker` when it
 carries the workers' marks (D069), else `tracker`; the `mirror` tool and command, the prompt's section and duty, the
 state block's `mirror` and `mirror` cursor, and the per-tick bound go, and the block's comments start past the `comment`
-cursor alone. Migration 0090 records each comment observed before it that the overseer had not mirrored, at the time it
+cursor alone. Migration 0091 records each comment observed before it that the overseer had not mirrored, at the time it
 was observed. Tests with the fakes: observed comments in the conversation once each across reads, marked by source, an
 edit not followed, in a private worker's prompt as data and authorizing nothing, a mirrored comment kept, and the
 migration. Chosen conservatively: a dry run records the comment, as it records the observation and as the mirror did;

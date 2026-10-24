@@ -62,8 +62,10 @@ line usually explains why. A limit of 0 reads `off`.
 The line under the title says how the run ended, its kind, and its ticket, whose key opens the ticket's page. Each
 of those is said there and nowhere else on the page, so the panels under it can get on with the rest.
 
-The **Run** panel leads with its summary, the run's own account of what it did, then, while it runs, its **last call**,
-then its PRs, then **when**: when it started and ended and how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m`
+The **Run** panel leads with its summary, the run's own account of what it did, then, for a `feedback-plan` run,
+**wrote**: the plan it wrote, `feedback-plan:7`, which opens the PR's page at the plan, with the PR and where the
+plan stands now. Then, while it runs, its **last call**, then its PRs, then **when**: when it started and ended and
+how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m`
 while it runs. **spent** gives its cost, the tokens it used, and its peak context, the most one model call was sent.
 **persona** is the voice it wrote in, with the start of its text's digest: two runs in one persona with different
 digests had it edited between them. **model** names the model that wrote its replies, as the runtime's own record of the

@@ -1,4 +1,3 @@
--- sha256 of 0089_late_review_holds.sql: 9ae8771f7eb3fceb2d8e6fd8a5a0b0d471e9043270fd24dc821d22cf835280cd
+-- sha256 of 0089_review_heads.sql: 7b7283c18e15d45be1e91eb4de7b2a65e05471d622edb75f8aaf6b8c9ec55056
 
-INSERT INTO review_holds (review_run_id, finding, kind, held_at)
-VALUES ((SELECT max(id) FROM review_runs), 2, 'late', 'x');
+INSERT INTO review_heads (pr_url, sha, seen_at) VALUES ('https://e.test/pr/7', 'abc', 'x');
