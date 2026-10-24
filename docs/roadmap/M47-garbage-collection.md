@@ -90,4 +90,6 @@ checkpoints the journal; `canopy gc --vacuum` runs between ticks while no run is
 pass and a vacuum (S62), is the operator's too, after S60. Stage 4 is started at the operator's word (2026-10-23):
 `canopy gc --git` is built against real git behind the fakes, run by hand only. git's run of both tasks at once
 refuses a clone with no pack, so each is its own run, and git skips a run whose lock another holds saying nothing, so
-canopy looks for the lock. Its check is S65; `--caches` and the dry run's remote branches are still to build.
+canopy looks for the lock. Its check is S65; `--caches` is still to build. The dry run's remote branches are built
+against the fakes (2026-10-24): those under canopy's name for a ticket or task that a run of the journal worked on and no
+open run, unit, or task not stopped names, read from each primary clone's remote-tracking refs, fetching nothing.
