@@ -39,6 +39,7 @@ _WOKEN_NOTES: dict[Woken | None, str] = {
     "grant": "a grant; next tick in ",
     "notice": "a notice to workers set or cleared; next tick in ",
     "run": "a run ended; next tick in ",
+    "poll": "a poll saw something new; next tick in ",
 }
 
 

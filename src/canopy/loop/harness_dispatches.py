@@ -163,6 +163,15 @@ def plan(ctx: Context, tick_id: int, now: datetime) -> Plan:
 def runs(ctx: Context, tick_id: int) -> list[TicketRun]:
     """The `resume` runs the harness makes after the overseer in tick `tick_id`, from that tick's derivation.
 
+    Returns:
+        Them, by rank, then key.
+    """
+    return runs_of(ctx, phases.recorded(ctx.conn, tick_id)) if ROWS else []
+
+
+def runs_of(ctx: Context, derived: Iterable[phases.Derived]) -> list[TicketRun]:
+    """The `resume` runs the harness would make from the derivation `derived`, as its journal stands now.
+
     A ticket is the harness's when its own row is a fresh, open candidate holding no row, and exactly one of its units
     holds rows, every one in `ROWS`, with none stale: one row of judgment anywhere leaves it whole to the overseer. So
     does an item the overseer holds on it, and a `resume` a feedback plan gates (§32).
@@ -173,7 +182,7 @@ def runs(ctx: Context, tick_id: int) -> list[TicketRun]:
     if not ROWS:
         return []
     by_ticket: dict[str, list[phases.Derived]] = {}
-    for d in phases.recorded(ctx.conn, tick_id):
+    for d in derived:
         by_ticket.setdefault(d.ticket_key, []).append(d)
     kept = _held(ctx.conn)
     found = [

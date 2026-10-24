@@ -82,8 +82,19 @@ above: every early tick by `loop.min_gap_minutes`; an `ok` tick that ran no over
 was (`pacing.count`), a halted one resetting it as before; and the operator's tick-now runs no overseer with nothing
 listed. Chosen conservatively, for the operator to change: a query due that no source read fresh, and every review the
 overseer starts, still leave it something, so a workspace with no `tracker` source and the query due every tick, or with
-`review.query` set, ticks with the overseer as before. Left: the second to fifth bullets, the poll's comparison among
-them, and the design folded into the sections it names. Still open for the operator: whether a `tracker` source is
-required (recommended: required), which the first bullet did not need settled, since a query no source read keeps the
-overseer running; and whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes, and
-that entry with it), the fifth bullet's.
+`review.query` set, ticks with the overseer as before. Built (2026-10-24): the second bullet, and the fourth with it.
+After a poll that read every source whole, the loop reads what a tick would record and list, recording nothing
+(`loop/outlook.py`): the harness's decisions and dispatches to come, each ticket the state block would list with the
+rows of §7 on it and its units, the comments and review items past their cursors it would show, each due chore, and the
+review query's PRs. It ends the wait when that holds a fact the latest tick did not, each named by what it is, never by
+its text, and the tick it wakes records `poll` in `woken_by`, held by `loop.min_gap_minutes`. A poll that read less than
+it was asked ends the wait once, and the tick raises `connector_failed` as any tick does; the polls after it end none
+until one reads every source whole, which ends it again. Chosen conservatively, for the operator to change: the latest
+tick is read as it ended, not as its block was rendered, so what it started, such as a run the harness then waits on,
+wakes nothing; only what is added wakes, so a ticket marked done or a comment a cursor passed does not, nor an item past
+a subject's bound until the block shows it; and a workspace with no source wakes on no poll. A run ending is seen by the
+next whole poll, since the ticket the harness waited on is then listed, so with idle pacing off it now ends the wait
+within a poll too. Left: the third and fifth bullets, and the design folded into the sections it names. Still open for
+the operator: whether a `tracker` source is required (recommended: required), which the first bullet did not need
+settled, since a query no source read keeps the overseer running; and whether `runtime.allow_bash`'s overseer entry goes
+with its MCP servers (recommended: yes, and that entry with it), the fifth bullet's.

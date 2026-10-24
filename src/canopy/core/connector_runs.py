@@ -106,6 +106,19 @@ def failures(conn: sqlite3.Connection, tick_id: int) -> list[Failure]:
     return found
 
 
+def read_whole(conn: sqlite3.Connection, tick_id: int) -> bool | None:
+    """Whether tick `tick_id` read every source whole: what the loop's polls after it go on from (DESIGN §39).
+
+    Returns:
+        True when each of its runs read everything it was asked, False when one did not, and None when it ran no
+        source: none is configured, or its reconcile failed.
+    """
+    rows = sql.execute(conn, sql.select("status").from_("connector_runs").where("tick_id = ?", tick_id)).fetchall()
+    if not rows:
+        return None
+    return all(row[0] == ConnectorRunStatus.OK for row in rows)
+
+
 @dataclass(frozen=True)
 class SourceStatus:
     """A source as `canopy status` names it: its latest run, and the oldest observation of what that run asked about."""
