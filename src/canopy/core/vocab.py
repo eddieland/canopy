@@ -209,6 +209,9 @@ class PlanItem(StrEnum):
     CHECK = "check"
     #: The PR's conflict with its base, by an id canopy gives it (`feedback_items.conflict_id`).
     CONFLICT = "conflict"
+    #: A merged blocker: the PR is stacked on another ticket's PR that merged, by an id canopy gives it
+    #: (`feedback_items.blocker_id`).
+    BLOCKER = "blocker"
 
 
 class MoveKind(StrEnum):

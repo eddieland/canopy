@@ -41,21 +41,25 @@ from tests.canopy.helpers import (
     waits,
 )
 from tests.canopy.scenario_helpers import ALICES_COMMENT as ALICE
-from tests.canopy.scenario_helpers import BOBS_COMMENT as BOB
-from tests.canopy.scenario_helpers import FEEDBACK_HEAD as HEAD
-from tests.canopy.scenario_helpers import FEEDBACK_PLANNED as PLANNED
-from tests.canopy.scenario_helpers import FEEDBACK_RED as RED
-from tests.canopy.scenario_helpers import FEEDBACK_TEXT as TEXT
 from tests.canopy.scenario_helpers import (
+    BLOCKER_BRANCH,
+    BLOCKER_PR,
     Scenario,
     dispatches,
     fails,
     feedback_planned,
     github_shows,
+    github_stacked,
     pushes,
     sends_drafts,
+    with_a_blocker,
     with_a_pr,
 )
+from tests.canopy.scenario_helpers import BOBS_COMMENT as BOB
+from tests.canopy.scenario_helpers import FEEDBACK_HEAD as HEAD
+from tests.canopy.scenario_helpers import FEEDBACK_PLANNED as PLANNED
+from tests.canopy.scenario_helpers import FEEDBACK_RED as RED
+from tests.canopy.scenario_helpers import FEEDBACK_TEXT as TEXT
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv
 
@@ -713,7 +717,7 @@ def test_a_plan_keeps_what_it_saw_and_off_leaves_every_snapshot_unchanged(
     alice = hashlib.sha256(b"Rename this.").hexdigest()
     bob = hashlib.sha256(b"Drop this argument.").hexdigest()
     assert kept == [
-        (plan.id, PR, HEAD, 0),
+        (plan.id, PR, HEAD, 0, None),
         (plan.id, PR, "build", "failure"),
         (plan.id, PR, "comment", 501, "PRRT_1", "alice", alice, None),
         (plan.id, PR, "comment", 502, "PRRT_2", "bob", bob, None),
@@ -1105,3 +1109,96 @@ def test_a_failed_check_and_a_conflict_are_items_planned_approved_and_left_by_nu
     # A check the repository's `human_checks` names waits on a person: no item.
     human = {PR: frozenset({"build"})}
     assert [r.item for r in feedback_items.raised(conn, KEY, [PR], human)] == [PlanItem.CONFLICT]
+
+
+#: `build`, a check that waits on a person here, so the items `raised` returns are the blocker's alone.
+NO_BUILD = {PR: frozenset({"build"})}
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_merged_blocker_is_an_item_planned_approved_and_handled_by_number(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    with_a_blocker(scenario)
+    github_stacked(github_state, ALICE)
+    scenario.polls()
+    build = feedback_items.check_id(PR, HEAD, "build")
+    blocker = feedback_items.blocker_id(PR, HEAD, BLOCKER_PR)
+    items = [
+        {"id": 501, "proposal": "change", "reply": "Renamed."},
+        {"id": blocker, "proposal": "change", "reply": "Retargeted."},
+    ]
+    planner = planner_does(["cat", feedback_items.ITEMS], plan=TEXT, result={**PLANNED, "items": items})
+    assert scenario.run(FEEDBACK_PLAN, worker=planner).status == RunStatus.DONE
+    # The PR still targets the branch of PROJ-9, whose PR merged: an item of its own, by an id canopy gave it.
+    [*_, [_, cat]] = commands_run(scenario.agent_log)
+    given = json.loads(cat["stdout"])
+    assert [(i["id"], i["item"]) for i in given] == [(501, "comment"), (build, "check"), (blocker, "blocker")]
+    assert given[2] == {
+        "id": blocker,
+        "pr": PR,
+        "item": "blocker",
+        "head_sha": HEAD,
+        "base_ref": BLOCKER_BRANCH,
+        "blocker": "PROJ-9",
+        "blocker_pr": BLOCKER_PR,
+    }
+    assert blocker < 0
+    assert blocker not in {build, feedback_items.blocker_id(PR, "def5678", BLOCKER_PR)}
+    [plan] = feedback_plans.history(conn, KEY)
+    # It has no author, so it keeps no reply.
+    assert [(i.number, i.item, i.item_id, i.reply) for i in feedback_plans.items(conn, plan.id)] == [
+        (1, PlanItem.COMMENT, 501, "Renamed."),
+        (2, PlanItem.BLOCKER, blocker, None),
+    ]
+    assert f"  2. id {blocker}, merged blocker {BLOCKER_PR}, change\n" in scenario.operator("show", KEY).out
+
+    scenario.operator("plan", KEY, "--approve")
+    resume = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.RETARGET]), worker=pushes())
+    assert resume.status == RunStatus.DONE
+    assert f"2. id {blocker}, the merged blocker {PR} is stacked on: change\n" in resume.prompt
+
+    # Read again before the PR is retargeted, the blocker its resume went ahead on is handled; once it targets the
+    # base, or while its blocker is still open, there is none.
+    scenario.polls()
+    assert feedback_items.raised(conn, KEY, [PR], NO_BUILD) == []
+    github_stacked(github_state, ALICE, base="main")
+    scenario.polls()
+    assert feedback_items.raised(conn, KEY, [PR], NO_BUILD) == []
+    github_stacked(github_state, ALICE, merged=False)
+    scenario.polls()
+    assert feedback_items.raised(conn, KEY, [PR], NO_BUILD) == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_blocker_that_merges_under_a_waiting_plan_marks_it_stale_and_the_next_plan_gets_it(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    with_a_blocker(scenario)
+    github_stacked(github_state, ALICE, merged=False)
+    scenario.polls()
+    planner = planner_does(["cat", feedback_items.ITEMS], plan=TEXT, result=PLANNED)
+    assert scenario.run(FEEDBACK_PLAN, worker=planner).status == RunStatus.DONE
+    assert feedback_items.raised(conn, KEY, [PR], NO_BUILD) == []
+    scenario.polls()
+    assert stale_for(scenario) == []
+
+    github_stacked(github_state, ALICE)
+    scenario.seen(KEY, "PROJ-9")
+    scenario.tick(*waits(KEY, "PROJ-9"), dry_run=True)
+    assert scenario.ticket_state()["feedback_plan"]["newest"]["stale"] is True
+    assert stale_for(scenario) == [f"{PR}'s blocker {BLOCKER_PR} merged"]
+    blocker = feedback_items.blocker_id(PR, HEAD, BLOCKER_PR)
+    assert [r.id for r in feedback_items.raised(conn, KEY, [PR], NO_BUILD)] == [blocker]
+
+    # Retargeted by hand before anyone planned it, the PR is stacked on nothing the plan did not see.
+    github_stacked(github_state, ALICE, base="main")
+    scenario.polls()
+    assert stale_for(scenario) == []
+    assert feedback_items.raised(conn, KEY, [PR], NO_BUILD) == []

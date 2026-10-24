@@ -4,10 +4,10 @@ A feedback plan is §25's plan written for what came back to a ticket's PRs, bef
 file is a plan's file (`plans.path_for`): the same operator-only directory, named for the run that wrote it, written
 once and read bounded, never through a link. The journal's `feedback_plans` row holds what canopy decides by, its
 status, the file's hash as written, and the hash the operator approved; `feedback_plan_items` holds the items its
-result line named, each a review or review comment by the id the `vcs` source observed (DESIGN §29), or a failed check
-or a conflict with the base by the id canopy gave it (`feedback_items.check_id`). The repositories a plan covers are its
-run's slots, and what it saw of its PRs is recorded with it (`feedback_items`). A ticket has at most one feedback plan
-that is not superseded.
+result line named, each a review or review comment by the id the `vcs` source observed (DESIGN §29), or a failed
+check, a conflict with the base, or a merged blocker by the id canopy gave it (`feedback_items.check_id`). The
+repositories a plan covers are its run's slots, and what it saw of its PRs is recorded with it (`feedback_items`). A
+ticket has at most one feedback plan that is not superseded.
 
 Under `policy.feedback_plan = "approve"`, every `resume` but one whose only reason is `no_pr` waits on an approved
 feedback plan that no `resume` has spent (`resume_refusal`), and the `resume` that starts on it spends it (`spend`), in
@@ -103,7 +103,8 @@ def match(offered: Sequence[Item], named: Sequence[Named]) -> Matched:
     """Check the planner's items against those it was given: an id it was not given is refused (DESIGN §32).
 
     So is an id named twice after the first, an id two items share, and every item past `MAX_ITEMS`. A reply is kept
-    only for a review item's change or decline: a failed check or a conflict has no author to answer.
+    only for a review item's change or decline: a failed check, a conflict, or a merged blocker has no author to
+    answer.
 
     Returns:
         The items kept, in the order named, and why each other one was refused.

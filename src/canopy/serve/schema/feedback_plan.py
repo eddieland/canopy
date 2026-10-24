@@ -33,13 +33,17 @@ class FeedbackPlanItem(Model):
     """Its number in the plan, from 1: what an approval names it by, as `canopy show` lists it."""
     pr_url: str
     """The PR it is on."""
-    item: Literal["review", "comment", "check", "conflict"]
-    """A review, a review thread by the comment the plan covers, a failed check at the PR's head, or its conflict."""
+    item: Literal["review", "comment", "check", "conflict", "blocker"]
+    """A review, a review thread by the comment the plan covers, a failed check at the PR's head, its conflict, or
+    its merged blocker."""
     item_id: int
-    """The one the plan's `### Item <id>` heading carries: the id the `vcs` source observed, or for a check or a
-    conflict the one canopy gives it, below zero."""
+    """The one the plan's `### Item <id>` heading carries: the id the `vcs` source observed, or for a check, a
+    conflict, or a merged blocker the one canopy gives it, below zero."""
     check: str | None = None
     """For a check, its name, as the plan's read saw it; None for any other item."""
+    blocker: str | None = None
+    """For a merged blocker, the URL of the PR it was stacked on that merged, as the plan's read saw it; None for any
+    other item."""
     proposal: ProposalName
     """What the plan proposes for it."""
     reply: str | None = None

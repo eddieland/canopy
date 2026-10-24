@@ -205,6 +205,9 @@ FEEDBACK_PLANNED = {
         {"id": 999, "proposal": "change"},
     ],
 }
+#: PROJ-9's PR in `with_a_blocker`, the blocker DRAFTS_PR is stacked on in `github_stacked`, and its branch.
+BLOCKER_PR = "https://github.com/acme/api/pull/6"
+BLOCKER_BRANCH = "agent/PROJ-9-base"
 
 #: How many lines of what a command printed to stdout its step in the story keeps; what it printed to stderr, where a
 #: refusal says why, the story keeps whole.
@@ -1115,6 +1118,22 @@ def github_shows(
     """
     shown = {"pr": {"head_sha": head, "mergeable": mergeable}, "reviews": list(reviews), "checks": list(checks)}
     state.write_text(json.dumps({"prs": {DRAFTS_PR: shown}}))
+
+
+def with_a_blocker(scenario: Scenario) -> None:
+    """PROJ-9 implemented on BLOCKER_BRANCH, BLOCKER_PR its PR: the blocker `github_stacked` stacks DRAFTS_PR on."""
+    run = scenario.run(dispatches("PROJ-9", slug="base"), worker=pushes(BLOCKER_BRANCH, prs={"repo": BLOCKER_PR}))
+    assert run.status == RunStatus.DONE, run
+
+
+def github_stacked(state: Path, *reviews: dict[str, Any], merged: bool = True, base: str = BLOCKER_BRANCH) -> None:
+    """Make the fake GitHub hold DRAFTS_PR at FEEDBACK_HEAD targeting `base`, `build` red, and BLOCKER_PR.
+
+    BLOCKER_PR is merged, or open with `merged` false; DRAFTS_PR has `reviews` on it.
+    """
+    pr = {"pr": {"head_sha": FEEDBACK_HEAD, "base_ref": base}, "reviews": list(reviews), "checks": [FEEDBACK_RED]}
+    blocker = {"pr": {"head_sha": "fed4321", "state": "merged" if merged else "open"}}
+    state.write_text(json.dumps({"prs": {DRAFTS_PR: pr, BLOCKER_PR: blocker}}))
 
 
 def feedback_planned(

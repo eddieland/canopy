@@ -9,15 +9,20 @@ from unittest import mock
 import pytest
 
 from canopy.core import db, feedback_items, feedback_plans
-from canopy.core.vocab import PlanStatus
-from tests.canopy.helpers import DRAFTS_PR, KEY, comment, context, present, waits
+from canopy.core.vocab import PlanStatus, RunKind, RunStatus
+from tests.canopy.helpers import DRAFTS_PR, KEY, comment, context, planner_does, present, waits
 from tests.canopy.scenario_helpers import (
     ALICES_COMMENT,
+    BLOCKER_PR,
     BOBS_COMMENT,
+    FEEDBACK_HEAD,
     FEEDBACK_PLANNED,
     FEEDBACK_TEXT,
+    dispatches,
     feedback_planned,
     github_shows,
+    github_stacked,
+    with_a_blocker,
     with_a_pr,
 )
 from tests.canopy.web_helpers import refused, signed_in_client
@@ -111,6 +116,26 @@ def test_a_failed_check_and_a_conflict_are_items_on_no_thread_the_check_by_its_n
     assert [
         (i["item"], i["item_id"], i["check"], i["thread_id"], i["author"], i["trusted"]) for i in plan_of(c)["items"]
     ] == [("check", build, "build", None, None, False), ("conflict", conflict, None, None, None, False)]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_merged_blocker_is_an_item_on_no_thread_by_the_pr_that_merged(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    with_a_pr(scenario)
+    with_a_blocker(scenario)
+    github_stacked(github_state)
+    scenario.polls()
+    blocker = feedback_items.blocker_id(PR, FEEDBACK_HEAD, BLOCKER_PR)
+    result = {**FEEDBACK_PLANNED, "items": [{"id": blocker, "proposal": "change", "reply": "Retargeted."}]}
+    planner = planner_does(plan=FEEDBACK_TEXT, result=result)
+    assert scenario.run(dispatches(kind=RunKind.FEEDBACK_PLAN), worker=planner).status == RunStatus.DONE
+    c, _ = signed_in_client(context(scenario.env))
+    assert [
+        (i["item"], i["item_id"], i["blocker"], i["check"], i["thread_id"], i["author"], i["reply"])
+        for i in plan_of(c)["items"]
+    ] == [("blocker", blocker, BLOCKER_PR, None, None, None, None)]
 
 
 @pytest.mark.usefixtures("git_pool")

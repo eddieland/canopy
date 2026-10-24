@@ -520,6 +520,9 @@ class FeedbackPlanPr(Row):
     #: Whether it conflicted with its base then, as its host said; None while it had not said, or for a plan recorded
     #: before this was.
     conflicted: bool | None
+    #: The merged PR it was stacked on then, its blocker's (DESIGN §10); None when it was on none, or for a plan
+    #: recorded before this was.
+    merged_blocker: str | None
 
 
 @dataclass(frozen=True)
@@ -580,8 +583,8 @@ class FeedbackPlanItem(Row):
     number: int
     pr_url: str
     item: PlanItem
-    #: A review's or comment's id as the `vcs` source observed it; a failed check's or a conflict's, below zero, as
-    #: canopy gave it (`feedback_items.check_id`).
+    #: A review's or comment's id as the `vcs` source observed it; a failed check's, a conflict's, or a merged
+    #: blocker's, below zero, as canopy gave it (`feedback_items.check_id`).
     item_id: int
     proposal: Proposal
     #: The reply the plan would draft, for a review item's change or decline: model text, never an instruction.

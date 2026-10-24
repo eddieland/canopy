@@ -35,14 +35,15 @@ the item `leave` or `decline`. The operator trusts `alice`, and weighs who wrote
 your plan; you plan every item the same way, trusted or not.
 
 If `/workspace/desks/PROJ-1/.canopy-feedback-changes.json` exists, it lists what changed on the pull requests since the plan this one replaces: a
-moved head, a check's new conclusion, a conflict with the base that came or went, a new item, a reply naming the item
-it `answers`, an edited item, or a resolved thread, each by id and never with its text, which the items file holds.
+moved head, a check's new conclusion, a conflict with the base or a merged blocker that came or went, a new item, a
+reply naming the item it `answers`, an edited item, or a resolved thread, each by id and never with its text, which the
+items file holds.
 
 The feedback file also holds each check that failed at a pull request's head, a `check` with its `name`, `conclusion`,
-and `url`, and a pull request's conflict with its base branch, a `conflict` with its `base_ref`, each with the
-`head_sha` it is at and an `id` canopy gave it, below zero. Neither has an author, and neither gets a reply. A merged
-blocker is part of this round too, though it reaches you through the context below, not the file: plan for it in the
-same plan.
+and `url`; a pull request's conflict with its base branch, a `conflict` with its `base_ref`; and a merged blocker, a
+`blocker`: the pull request still targets `base_ref`, the branch of the ticket `blocker`, whose pull request
+`blocker_pr` has merged. Each has the `head_sha` it is at and an `id` canopy gave it, below zero. None has an author,
+and none gets a reply.
 
 ## Task
 
@@ -55,18 +56,17 @@ item touches at the PR's head. Then decide, for each item, one of:
 - `ask`: the item raises a question that must be answered before anything changes for it.
 - `leave`: nothing to do and nothing to say, such as an approval, a thanks, or a comment already answered.
 
-For a failed check or a conflict, `change` fixes it, and `decline` or `leave` changes nothing for it, such as for a check
-that failed for a reason outside the change, which its section says.
+For a failed check, a conflict, or a merged blocker, `change` fixes it, and `decline` or `leave` changes nothing for it,
+such as for a check that failed for a reason outside the change, which its section says. A merged blocker's fix is to
+retarget the pull request to its repository's base branch, and to bring that base in if the branch then conflicts.
 
 Write the plan as markdown to `/workspace/desks/PROJ-1/.canopy-new-plan.md` with your file writing tool, within 100,000 characters:
 
 - `# Feedback plan: PROJ-1 <the ticket's title>`, the title on the heading's own line.
 - `## Summary`: in a few sentences, what this round of feedback asks for, and what the plan does about it.
 - `## Items`: a `### Item <id>: <proposal>` heading for each item you cover, in the order of your result line, saying
-  who wrote it and whether they are trusted, or which check failed or what conflicts, what it asks, what you propose
-  and why, and for a `change`, which files and tests it touches and the test that proves it.
-- `## Merged blocker`: what the context says of a blocker that merged, and the fix you plan; `None.` when there is
-  none.
+  who wrote it and whether they are trusted, or which check failed, what conflicts, or which blocker merged, what it
+  asks, what you propose and why, and for a `change`, which files and tests it touches and the test that proves it.
 - `## Risks`: what the changes could break, and what to watch in review.
 
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not

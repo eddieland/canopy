@@ -124,10 +124,12 @@ The [attention list](attention) holds a `drafts waiting` item while any draft fo
 ## The feedback plan
 
 With `policy.feedback_plan = "approve"` in your own config, a round of review on one of the loop's PRs is planned
-before any worker touches it: a planner reads every new item (a review, a thread, whoever wrote it) and proposes what
-to do with each, and the resume waits for you. The PR's page shows that plan under **Feedback plan**: above the
-threads' panel and its drafts while it waits on you, since it is what you came to answer, and below them once it is
-approved or spent. It stays where you found it while you approve it, so the button doesn't wander off mid-click.
+before any worker touches it: a planner reads every new item (a review, a thread, whoever wrote it, and what the PR's
+own state raises: a failed check, a conflict with its base, or the PR it was stacked on having merged out from under it)
+and proposes what to do with each, and the resume waits for you. canopy raised those last three itself, so their rows
+name the check, the conflict, or the merged PR, and no author. The PR's page shows that plan under **Feedback plan**:
+above the threads' panel and its drafts while it waits on you, since it is what you came to answer, and below them once
+it is approved or spent. It stays where you found it while you approve it, so the button doesn't wander off mid-click.
 
 The panel says which run wrote it, when, and where it stands: `waiting on you`, `stale`, `approved`, or `spent` once
 a resume has gone ahead on it. Under that, a row for each item: its number, the first line of what was said, and where
@@ -145,9 +147,9 @@ stands, as plain text, so an enthusiastic `<img>` in a coworker's comment stays 
 in the file.
 
 A plan goes `stale` when the PR moves after it was written: a new comment or reply, an edit, a resolved thread, a new
-head, or a check that changed its mind. The panel lists each change, in the same words `canopy show` uses. The loop
-plans again once the PR has been quiet for `policy.feedback_quiet_minutes`, so a reviewer typing ten comments in five
-minutes gets one new plan, not ten.
+head, a check that changed its mind, a conflict that came or went, or a blocker that merged. The panel lists each
+change, in the same words `canopy show` uses. The loop plans again once the PR has been quiet for
+`policy.feedback_quiet_minutes`, so a reviewer typing ten comments in five minutes gets one new plan, not ten.
 
 To approve, tick the items the resume should act on and press the button: **Approve whole** with every box ticked,
 **Approve 2 of 3** otherwise, and nothing at all with none ticked, or while the plan's file has gone missing, in which
