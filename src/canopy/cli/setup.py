@@ -10,6 +10,7 @@ import contextlib
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 from click.shell_completion import BashComplete, FishComplete, ShellComplete, ZshComplete
@@ -23,6 +24,9 @@ from canopy.serve import secret
 from canopy.setup import init
 from canopy.setup import sandbox as setup_sandbox
 from canopy.setup import workspace as setup_workspace
+
+if TYPE_CHECKING:
+    from canopy.runtime.implementation import Version
 
 # The shells `canopy completion` writes a script for. The script runs canopy with `_CANOPY_COMPLETE` set, which click
 # answers before any command runs.
@@ -150,9 +154,14 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
     if sandbox := init.sandbox_suggestion(cfg.runtime, user_file):
         click.echo()
         click.echo(sandbox, nl=False)
-    # A repository can carry copies of canopy's agents that an earlier single-repository init committed there.
-    report.shadowing += [path for repo in ws.repos if repo.cloned for path in project_config.shadowing(repo.path)]
-    _print_shadowing(report)
+    # The workspace, and a repository, can carry copies of canopy's agents that an earlier single-repository init
+    # committed there. Once each: the runtime may read a repository's parents too, the workspace among them.
+    version = cfg.runtime.version
+    places = [root, *(repo.path for repo in ws.repos if repo.cloned)]
+    report.shadowing = list(
+        dict.fromkeys(path for place in places for path in project_config.shadowing(place, version=version)),
+    )
+    _print_shadowing(report, version)
     cli_workspace.check_synced(synced)
     return 0
 
@@ -166,10 +175,10 @@ def _print_files(report: init.Report) -> None:
         click.echo(f"kept    {path}")
 
 
-def _print_shadowing(report: init.Report) -> None:
+def _print_shadowing(report: init.Report, version: Version) -> None:
     if report.shadowing:
         click.echo()
-        click.echo(f"Warning: {project_config.shadowing_message(report.shadowing)}")
+        click.echo(f"Warning: {project_config.shadowing_message(report.shadowing, version=version)}")
         click.echo(
             "  Earlier versions of `canopy init` put them there. Agent runs refuse to start until they are gone.",
         )

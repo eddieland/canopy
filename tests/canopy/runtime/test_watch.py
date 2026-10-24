@@ -2,6 +2,7 @@
 
 import json
 
+from canopy.runtime.implementation import Version
 from canopy.runtime.watch import Change, Watch
 
 TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
@@ -12,7 +13,7 @@ def event(kind: str, part: object, session: object = "ses_abc123") -> str:
 
 
 def test_each_line_says_what_it_changed() -> None:
-    watch = Watch()
+    watch = Watch(version=Version.ONE)
     assert watch.read("starting up\n") is None  # not an event
     assert watch.read(event("text", {"text": "hi"}, session="bad id!")) is None  # no session canopy prints yet
     started = watch.read(event("step_start", {}))
@@ -27,7 +28,7 @@ def test_each_line_says_what_it_changed() -> None:
 
 
 def test_a_model_call_that_cannot_be_read_reports_nothing_spent_from_then_on() -> None:
-    watch = Watch()
+    watch = Watch(version=Version.ONE)
     assert watch.read(event("step_finish", {"cost": -1, "tokens": TOKENS})) == Change(
         "ses_abc123",
         started=True,

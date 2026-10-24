@@ -8,6 +8,7 @@ from pathlib import Path
 from canopy.core import chore_runs, db, progress
 from canopy.core.vocab import TickStatus
 from canopy.infra import logs
+from canopy.runtime.implementation import Version
 from tests.canopy.helpers import in_tick, present
 
 TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
@@ -25,7 +26,16 @@ def test_each_line_reaches_the_log_and_a_ticks_session_and_spend_so_far_reach_th
 ) -> None:
     out = io.StringIO()
     with in_tick(conn) as tick_id:
-        watch = progress.Progress(conn, "ticks", tick_id, out, logs.for_tick(tick_id), agent="overseer", fields={})
+        watch = progress.Progress(
+            conn,
+            "ticks",
+            tick_id,
+            out,
+            logs.for_tick(tick_id),
+            agent="overseer",
+            fields={},
+            version=Version.ONE,
+        )
         watch("starting\n")
         assert present(db.get_tick(conn, tick_id)).session_id is None
         watch(event("text", {"type": "text", "text": "Reading the tickets."}))
@@ -53,6 +63,7 @@ def test_a_chore_runs_spend_so_far_reaches_its_row_and_nothing_reaches_one_that_
             logs.for_tick(tick_id),
             agent="chore",
             fields={},
+            version=Version.ONE,
         )
         watch(STEP)
         run = present(chore_runs.get_chore_run(conn, run_id))
@@ -68,6 +79,7 @@ def test_a_chore_runs_spend_so_far_reaches_its_row_and_nothing_reaches_one_that_
             logs.for_tick(tick_id),
             agent="overseer",
             fields={},
+            version=Version.ONE,
         )
         ended(STEP)
         assert present(db.get_tick(conn, tick_id)).cost_usd is None

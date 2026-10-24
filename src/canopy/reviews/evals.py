@@ -356,7 +356,7 @@ def _model(ctx: Context, model: str | None) -> tuple[str | None, dict[str, Model
     if chosen is None:
         return None, models
     try:
-        agent_models.check(ctx.runner, ctx.workspace.root, chosen, chosen=where)
+        agent_models.check(ctx.runner, ctx.workspace.root, chosen, version=ctx.config.runtime.version, chosen=where)
     except agent_models.ModelError as e:
         raise EvalError(f"{e.guard}: {e.reason}") from e
     return chosen.name, models
@@ -539,7 +539,7 @@ def _reviewed(
         OSError,
     ) as e:
         return execute.Outcome(ReviewRunStatus.CRASHED, None, f"{type(e).__name__}: {e}"), None
-    output = stdout.read(done.stdout)
+    output = stdout.read(done.stdout, version=ctx.config.runtime.version)
     # An eval scores findings alone, so it names no changed paths: its impact is the reviewer's.
     return execute.reviewed(ctx, done, output, changed=(), repo=case.repo), output.usage
 

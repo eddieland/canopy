@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from canopy.core.run_models import RunTable
+    from canopy.runtime.implementation import Version
     from canopy.runtime.report import SessionCursor, SessionPage, SessionSpend
 
 #: How many directories `spend` lists of the sessions outside canopy, the costliest first.
@@ -64,13 +65,15 @@ class SessionsSpend:
     status: SessionsRead | None
 
 
-def read_next(conn: sqlite3.Connection, *, limit: int = MAX_SESSIONS) -> SessionPage:
+def read_next(conn: sqlite3.Connection, *, version: Version, limit: int = MAX_SESSIONS) -> SessionPage:
     """Read the runtime's sessions updated after the journal's cursor, and record them.
+
+    The runtime is the one `version` runs.
 
     Returns:
         The page the runtime returned; a full one means more may wait to be read.
     """
-    page = sessions.updated_after(cursor(conn), limit=limit)
+    page = sessions.updated_after(cursor(conn), version=version, limit=limit)
     record(conn, page)
     return page
 

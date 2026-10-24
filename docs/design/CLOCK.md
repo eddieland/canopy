@@ -72,9 +72,11 @@ not even the tools (MEASUREMENTS 2026-10-19, F48). The plugin's second job cuts 
 starts (`experimental.chat.system.transform`), so the tools and the body get a breakpoint of their own and a run's
 first call can read them from the cache, if another run of the agent wrote them within the cache's lifetime. The two
 parts joined by a newline are the block as it was, and a prompt whose environment it cannot find is left as it is.
-OpenCode 2 builds its request otherwise, unmeasured, and gets no split. A sandboxed run gains nothing yet: the shell
-tool's description names the run's own `TMPDIR` (§24), and the tools come before the body, so no two sandboxed runs
-share a prefix.
+A sandboxed run gains nothing from it: the shell tool's description names the run's own `TMPDIR` (§24), and the
+tools come before the body, so no two sandboxed runs share a prefix. OpenCode 2 needs no split, so the plugin gives it
+none: it sends the body as a system block of its own, with a breakpoint after it as after the tools, and names the
+working directory and `TMPDIR` only in the environment after them, so every run of an agent, sandboxed or not, shares
+the tools and the body (MEASUREMENTS 2026-10-23, where OpenCode 2.1.4 caches).
 
 ### The snapshot, unwritable
 

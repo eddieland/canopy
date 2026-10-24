@@ -1,8 +1,9 @@
-"""Every implementation of the runtime has what the surface takes from the one bound (D009).
+"""Every implementation of the runtime has what the surface takes from either (D009).
 
-The surface reaches its implementation as `canopy.runtime.implementation`'s modules, and each name it reads of one is a
-name every implementation must have, so that binding another is a change of one import. Read from the surface's own
-source, so a name it starts to use is checked with no list to keep.
+The surface reaches an implementation as `canopy.runtime.implementation`'s `one` or `two`, the version config's
+`runtime.version` names, and each name it reads of one's module is a name every implementation's must have, so that
+either runs whatever the surface calls. Read from the surface's own source, so a name it starts to use is checked with
+no list to keep.
 """
 
 import ast
@@ -12,33 +13,41 @@ from pathlib import Path
 import pytest
 
 from canopy.runtime import implementation
+from canopy.runtime.implementation import Version, pick
 
 RUNTIME = Path(implementation.__file__).parent
-#: Each runtime canopy can run: OpenCode 1's, bound, and OpenCode 2's.
+#: Each runtime canopy can run: OpenCode 1's, the default, and OpenCode 2's.
 IMPLEMENTATIONS = ("canopy.runtime.opencode", "canopy.runtime.opencode2")
+#: The names the binding gives the implementations.
+BOUND = frozenset({"one", "two"})
 
 
 def used() -> set[tuple[str, str]]:
-    """Each module of the implementation the surface imports, with each name it reads of it."""
+    """Each module of an implementation the surface reads, with each name it reads of it."""
     found: set[tuple[str, str]] = set()
     for path in RUNTIME.glob("*.py"):
         tree = ast.parse(path.read_text(), filename=str(path))
-        aliases = {
-            alias.asname or alias.name: alias.name
-            for node in ast.walk(tree)
-            if isinstance(node, ast.ImportFrom) and node.module == implementation.__name__
-            for alias in node.names
-        }
         found |= {
-            (aliases[node.value.id], node.attr)
+            (node.value.attr, node.attr)
             for node in ast.walk(tree)
-            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in aliases
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Attribute)
+            and isinstance(node.value.value, ast.Name)
+            and node.value.value.id in BOUND
+        }
+        # A module the surface reads names of later, as `pick(version, one.models, two.models).listed(...)`.
+        found |= {
+            (arg.attr, node.attr)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Call)
+            for arg in node.value.args
+            if isinstance(arg, ast.Attribute) and isinstance(arg.value, ast.Name) and arg.value.id in BOUND
         }
     return found
 
 
-def test_the_surface_reads_names_of_every_bound_module() -> None:
-    assert {module for module, _ in used()} == set(implementation.__all__)
+def test_the_surface_reads_names_of_every_module_of_an_implementation() -> None:
+    assert {module for module, _ in used()} == set(implementation.one.__all__) == set(implementation.two.__all__)
 
 
 @pytest.mark.parametrize("package", IMPLEMENTATIONS)
@@ -49,3 +58,8 @@ def test_an_implementation_has_every_name_the_surface_reads(package: str) -> Non
         if not hasattr(importlib.import_module(f"{package}.{module}"), name)
     ]
     assert not missing, f"{package} lacks {', '.join(missing)}"
+
+
+def test_each_version_runs_its_own_implementation() -> None:
+    assert pick(Version.ONE, implementation.one, implementation.two) is implementation.one
+    assert pick(Version.TWO, implementation.one, implementation.two) is implementation.two

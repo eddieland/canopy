@@ -23,6 +23,7 @@ from canopy.core import config, db, definitions, run_models
 from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
+from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
@@ -95,7 +96,7 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
 @pytest.mark.usefixtures("git_pool")
 def test_a_worker_inherits_no_server_its_process_was_given(scenario: Scenario) -> None:
     """A server of canopy's is given to one run alone (DESIGN §27): a run started below it does not inherit it."""
-    given = servers.env({"canopy_chore": ["canopy", "_mcp", "--chore"]}, cwd=scenario.env.root)
+    given = servers.env({"canopy_chore": ["canopy", "_mcp", "--chore"]}, cwd=scenario.env.root, version=Version.ONE)
     with mock.patch.dict(os.environ, given):
         scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)

@@ -25,6 +25,7 @@ from canopy.infra import procs
 from canopy.loop import mcp
 from canopy.runs import policy
 from canopy.runtime import servers
+from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
     LABEL,
     LIST_TOOLS,
@@ -930,6 +931,7 @@ def test_the_agents_report_asks_the_runtime_without_the_servers_its_run_was_give
     given = servers.env(
         {history.SERVER: history.SERVER_COMMAND, reports.SERVER: reports.SERVER_COMMAND},
         cwd=overseen.root,
+        version=Version.ONE,
     )
     with in_run("chore-2"), mock.patch.dict(os.environ, given):
         served = mcp_session(tool_call(reports.AGENTS), reports=True)

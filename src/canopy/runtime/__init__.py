@@ -14,5 +14,5 @@ change here and to the command templates (D009):
 - The implementation, one package with a module behind each of the surface's, bound in `implementation`. Only that
   module imports it, and only the implementation names the runtime.
 
-There is still no adapter interface: one runtime at a time, chosen by the binding, not by config.
+There is still no adapter interface: one runtime at a time, the version config's `runtime.version` names.
 """

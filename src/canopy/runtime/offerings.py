@@ -15,7 +15,7 @@ import threading
 from typing import TYPE_CHECKING
 
 from canopy.runtime.agents import AgentOffer
-from canopy.runtime.implementation import offerings as implementation
+from canopy.runtime.implementation import one, pick, two
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -23,23 +23,46 @@ if TYPE_CHECKING:
 
     from canopy.infra import procs
     from canopy.runtime.agents import Offerings
+    from canopy.runtime.implementation import Version
 
 
-def offerings(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents: Sequence[str]) -> Offerings:
-    """Ask the runtime what it offers each of `agents`, started in `cwd` with canopy's definitions in `definitions_dir`.
+def offerings(
+    runner: procs.Runner,
+    *,
+    version: Version,
+    cwd: Path,
+    definitions_dir: Path,
+    agents: Sequence[str],
+) -> Offerings:
+    """Ask the runtime `version` runs what it offers each of `agents`, started in `cwd` with canopy's definitions.
+
+    The definitions are in `definitions_dir`.
 
     Returns:
         The MCP servers and skills the runtime has, and what each agent is offered of them; `error` set, and nothing
         else, when the runtime could not list them, and an agent's `error` when its rules could not be read.
     """
+    implementation = pick(version, one.offerings, two.offerings)
     return implementation.offerings(runner, cwd=cwd, definitions_dir=definitions_dir, agents=agents)
 
 
 class Probe:
     """What the runtime offers one agent run, asked on a thread of its own from when the probe is made."""
 
-    def __init__(self, runner: procs.Runner, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str]) -> None:
-        """Start asking what the agent `argv` runs is offered, started as `argv` starts it, in `cwd` with `env`."""
+    def __init__(
+        self,
+        runner: procs.Runner,
+        argv: Sequence[str],
+        *,
+        version: Version,
+        cwd: Path,
+        env: Mapping[str, str],
+    ) -> None:
+        """Start asking what the agent `argv` runs is offered, started as `argv` starts it, in `cwd` with `env`.
+
+        `version` is the runtime's that `argv` starts.
+        """
+        self._offered = pick(version, one.offerings, two.offerings).offered
         self._found = AgentOffer("", error="canopy could not ask the runtime")
         self._thread = threading.Thread(target=self._ask, args=(runner, argv, cwd, env), name="offers", daemon=True)
         self._thread.start()
@@ -57,4 +80,4 @@ class Probe:
 
     def _ask(self, runner: procs.Runner, argv: Sequence[str], cwd: Path, env: Mapping[str, str]) -> None:
         # Only this thread writes it, and `result` reads it once the thread has ended.
-        self._found = implementation.offered(runner, argv, cwd=cwd, env=env)
+        self._found = self._offered(runner, argv, cwd=cwd, env=env)

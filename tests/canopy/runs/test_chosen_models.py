@@ -157,8 +157,8 @@ def test_a_variant_its_model_does_not_list_is_refused_with_an_attention_item(
     listed(opencode_state, MODEL, variants={MODEL: ["low"]})
     scenario.configures(runtime={"models": {"worker": f"{MODEL}@high"}})
     reason = (
-        f"OpenCode lists the model {MODEL} chosen in runtime.models but not its variant high (it lists low), and would "
-        "run it at its default unseen; nothing ran. Choose a variant it lists"
+        f"OpenCode lists the model {MODEL} chosen in runtime.models but not its variant high (it lists low); nothing "
+        "ran. Choose a variant it lists"
     )
     refused = scenario.refuses(dispatches())
     assert refused == [("refused:model_missing", reason), ("attention:model_missing", reason)]
@@ -312,7 +312,7 @@ def test_an_override_whose_variant_was_dropped_refuses_the_tickets_next_dispatch
     listed(opencode_state, MODEL, variants={MODEL: ["high"]})
     reason = (
         f"OpenCode lists the model {MODEL} chosen for {KEY}'s worker runs (`canopy model {KEY}`) but not its variant "
-        "low (it lists high), and would run it at its default unseen; nothing ran. Choose a variant it lists"
+        "low (it lists high); nothing ran. Choose a variant it lists"
     )
     assert scenario.refuses(dispatches()) == [("refused:model_missing", reason), ("attention:model_missing", reason)]
     assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0

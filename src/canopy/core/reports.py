@@ -259,6 +259,7 @@ def offered(ctx: Context) -> tuple[Offerings, dict[str, tuple[str, ...]]]:
         raise Refused(f"agents: {e}") from None
     found = offerings.offerings(
         ctx.runner,
+        version=ctx.config.runtime.version,
         cwd=ctx.ws.root,
         definitions_dir=snapshot,
         agents=runtime_definitions.agent_names(),

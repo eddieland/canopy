@@ -117,7 +117,7 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, R
     # The shipped `canopy-chore` is merged with whatever runtime config its working directory has (D044), and the
     # runtime reads project config from the directories above it too.
     here = cwd.resolve()
-    refused = project_config.refusal((here, *here.parents))
+    refused = project_config.refusal((here, *here.parents), version=ctx.config.runtime.version)
     if refused is not None:
         raise SetupError(refused)
     template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
@@ -167,7 +167,17 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
     # The operator's commands refuse inside canopy's own runs (DESIGN §22); its history tool reads this chore's runs
     # from this workspace's journal, wherever `cwd` is.
     env = history.run_env(ctx, f"{history.RUN_PREFIX}{run_id}")
-    with run_offers.probing(ctx.conn, "chore_runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
+    with run_offers.probing(
+        ctx.conn,
+        "chore_runs",
+        run_id,
+        ctx.runner,
+        argv,
+        version=ctx.config.runtime.version,
+        cwd=cwd,
+        env=env,
+        log=log,
+    ):
         done = ctx.runner.run(
             argv,
             cwd=cwd,
@@ -185,12 +195,13 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
                 log,
                 agent="chore",
                 fields={"chore_run_id": run_id},
+                version=ctx.config.runtime.version,
             ),
         )
     out.write(f"\n--- chore stderr ---\n{done.stderr}\n")
     out.write(f"--- chore exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
-    output = stdout.read(done.stdout)
+    output = stdout.read(done.stdout, version=ctx.config.runtime.version)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn,

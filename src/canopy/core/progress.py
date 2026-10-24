@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from canopy.infra import logs
+    from canopy.runtime.implementation import Version
 
 
 class Progress:
@@ -37,8 +38,12 @@ class Progress:
         *,
         agent: str,
         fields: Mapping[str, object],
+        version: Version,
     ) -> None:
-        """Watch the agent of the row `row_id` in `table`; the log's lines name it `agent`, with `fields`."""
+        """Watch the agent of the row `row_id` in `table`; the log's lines name it `agent`, with `fields`.
+
+        Its lines are read as the runtime `version` runs prints them.
+        """
         self.conn = conn
         self.table: db.ProgressTable = table
         self.row_id = row_id
@@ -46,7 +51,7 @@ class Progress:
         self.log = log
         self.agent = agent
         self.fields = fields
-        self.watch = Watch()
+        self.watch = Watch(version=version)
 
     def __call__(self, line: str) -> None:
         """Write `line` to the log, and record the session at its first event and the spend at each model call's end."""

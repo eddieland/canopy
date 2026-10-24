@@ -100,7 +100,12 @@ def read(ctx: Context, run: Due, log: logs.TickAdapter) -> ModelsRead:
     Returns:
         How the read ended. A failed one is logged, and due again `RETRY_AFTER` later.
     """
-    found = session_models.read(ctx.runner, cwd=ctx.repo_root, session_id=run.session_id)
+    found = session_models.read(
+        ctx.runner,
+        version=ctx.config.runtime.version,
+        cwd=ctx.repo_root,
+        session_id=run.session_id,
+    )
     status = ModelsRead(found.outcome)
     record(ctx.conn, run, status, found.models, error=found.error, replies=found.replies)
     if status is ModelsRead.FAILED:

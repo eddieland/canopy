@@ -28,13 +28,14 @@ from typing import TYPE_CHECKING
 from canopy.infra.text import printable
 from canopy.runtime import entries
 from canopy.runtime.entries import Text, ToolCall
-from canopy.runtime.implementation import transcript
+from canopy.runtime.implementation import one, pick, two
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from pathlib import Path
 
     from canopy.runtime.entries import Entry
+    from canopy.runtime.implementation import Version
 
 #: How much of a log is read: far more than a long run prints, and little enough to read on each request.
 MAX_BYTES = 32 * 1024 * 1024
@@ -73,8 +74,10 @@ class Tail:
     truncated: bool
 
 
-def read(path: Path, session_id: str) -> Transcript | None:
+def read(path: Path, session_id: str, *, version: Version) -> Transcript | None:
     """Read `session_id`'s events from the log at `path`. None when it is missing, a symlink, or not a regular file.
+
+    The events are read as the runtime `version` runs prints them.
 
     Returns:
         The session's entries, within the bounds, and whether a bound cut any; or None for a file it refuses.
@@ -88,7 +91,8 @@ def read(path: Path, session_id: str) -> Transcript | None:
     if truncated:
         # The last line read may be cut short; it is not an event then.
         data = data[: data.rfind(b"\n", 0, MAX_BYTES) + 1]
-    return _bounded(data.decode("utf-8", errors="replace").splitlines(), session_id, truncated=truncated)
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    return _bounded(pick(version, one.transcript, two.transcript).read(lines, session_id), truncated=truncated)
 
 
 def tail(path: Path) -> Tail | None:
@@ -149,12 +153,12 @@ def _open(path: Path) -> int | None:
     return fd
 
 
-# The session's entries from `lines`, as the implementation reads them, within `MAX_ENTRIES` and `MAX_CHARS`.
-def _bounded(lines: Iterable[str], session_id: str, *, truncated: bool) -> Transcript:
+# The entries of `read`, a session's as the implementation reads them, within `MAX_ENTRIES` and `MAX_CHARS`.
+def _bounded(read: Iterable[Entry | None], *, truncated: bool) -> Transcript:
     found: list[Entry] = []
     chars = 0
     unreadable = 0
-    for entry in transcript.read(lines, session_id):
+    for entry in read:
         if entry is None:
             unreadable += 1
             continue

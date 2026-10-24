@@ -358,5 +358,13 @@ directory under `.canopy/runtime/`:
 env OPENCODE_CONFIG_DIR="$PWD/.canopy/runtime/<digest>" opencode debug agent canopy-overseer
 ```
 
+OpenCode 2 has no `debug` command: start it on canopy's definitions and ask it for its agents, each with its rules:
+
+```sh
+export OPENCODE_CONFIG_DIR="$PWD/.canopy/runtime/<digest>" OPENCODE_PASSWORD=any
+opencode serve --hostname 127.0.0.1 --port 4096 &
+opencode api --server http://127.0.0.1:4096 agent.list
+```
+
 `canopy agents` lists canopy's own agents only. For a chore's own agent, point `OPENCODE_CONFIG_DIR` at
 `.canopy/chore-agents/<chore>/` instead, and name that agent.

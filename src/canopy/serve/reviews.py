@@ -149,7 +149,13 @@ def review_transcript(ctx: Context, run_id: int) -> Transcript | None:
         return None
     log = Path(row.log_path)
     removed = removed_after(ctx.conn, log, row.ended_at, "run_files_days")
-    return session_transcript(log, row.session_id, removed, run_models.replies_of(ctx.conn, "review_runs", run_id))
+    return session_transcript(
+        log,
+        row.session_id,
+        removed,
+        run_models.replies_of(ctx.conn, "review_runs", run_id),
+        version=ctx.config.runtime.version,
+    )
 
 
 def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:

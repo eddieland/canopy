@@ -38,16 +38,19 @@ VARIANT_OPTION = "--variant"
 _AGENT_RE = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
 
 
-def default_template(agent: str, *, definitions_dir: str, title: str, prompt: str) -> str:
-    """The default template that runs `agent`, from config's placeholders for the definitions, title, and prompt.
+def default_template(agent: str, *, definitions_dir: str, title: str) -> str:
+    """The default template that runs `agent`, from config's placeholders for the definitions and title.
+
+    It places no prompt: canopy writes it on stdin, which `opencode run` reads as its message, as OpenCode 1's does, so
+    no argument limit applies.
 
     Returns:
-        A template that points OpenCode at `definitions_dir`, and runs `agent` on a private server with JSON events,
-        `title` as the session's title, and `prompt` as its message.
+        A template that points OpenCode at `definitions_dir`, and runs `agent` on a private server with JSON events and
+        `title` as the session's title.
     """
     return with_config_dir(
         definitions_dir,
-        f"opencode run {STANDALONE} --agent {agent} --format json --thinking --title={title} {prompt}",
+        f"opencode run {STANDALONE} --agent {agent} --format json --thinking --title={title}",
     )
 
 

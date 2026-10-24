@@ -19,6 +19,7 @@ from canopy.infra import resources
 from canopy.loop import mcp
 from canopy.runtime import agents, servers
 from canopy.runtime import definitions as runtime_definitions
+from canopy.runtime.implementation import Version
 from canopy.runtime.opencode import definitions as opencode_definitions
 from tests.conftest import CanopyEnv
 
@@ -50,10 +51,28 @@ def test_the_snapshot_is_unwritable_by_anyone_its_owner_included(tmp_path: Path)
     snapshot = definitions.ensure(tmp_path)
     found = [snapshot, *snapshot.rglob("*")]
     assert {p.relative_to(snapshot).as_posix() for p in found} >= {".", "plugins", "plugins/canopy.js"}
-    assert [p for p in found if p.lstat().st_mode & 0o222] == []
-    assert all(p.lstat().st_mode & stat.S_IRUSR for p in found)
+    # Its links lead to the operator's own config, which stays theirs to change; a link's own mode means nothing.
+    links = [p for p in found if p.is_symlink()]
+    assert {p.name: p.readlink() for p in links} == runtime_definitions.links(version=Version.ONE)
+    owned = [p for p in found if not p.is_symlink()]
+    assert [p for p in owned if p.lstat().st_mode & 0o222] == []
+    assert all(p.lstat().st_mode & stat.S_IRUSR for p in owned)
     # Still the operator's alone, as canopy checks before loading one.
     assert definitions.ensure(tmp_path) == snapshot
+
+
+def test_an_opencode_2_snapshot_links_the_operators_config_and_turns_its_service_off(canopy_env: CanopyEnv) -> None:
+    # OpenCode 2 reads the snapshot in place of the operator's own config directory, and 1 beside it (DESIGN §13).
+    one = definitions.ensure(canopy_env.root / "one", config.load(canopy_env.root, canopy_env.user_file))
+    assert [p for p in one.rglob("*") if p.is_symlink()] == []
+    assert not (one / "service.json").exists()
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"version": 2}})
+    two = definitions.ensure(canopy_env.root / "two", config.load(canopy_env.root, canopy_env.user_file))
+    assert {p.name: p.readlink() for p in two.iterdir() if p.is_symlink()} == runtime_definitions.links(
+        version=Version.TWO,
+    )
+    assert (two / "service.json").read_text() == '{"disabled": true}\n'
+    assert one.name != two.name
 
 
 def test_the_snapshots_digest_changes_with_its_plugins(tmp_path: Path) -> None:
@@ -122,7 +141,7 @@ def test_losing_the_race_to_create_a_snapshot_uses_the_winners(tmp_path: Path) -
     real_rename = os.rename
 
     def another_process_wins(src: Path, dst: Path) -> None:
-        shutil.copytree(src, final)
+        shutil.copytree(src, final, symlinks=True)
         final.chmod(0o700)
         (final / "winner").touch()
         final.chmod(0o500)

@@ -139,7 +139,9 @@ def call_tools(argv: list[str]) -> list[dict[str, object]]:
     keys = queried_keys(argv) if calls_tools(argv) else None
     calls: list[list[Any]] = [*([] if keys is None else [["canopy_queried", {"keys": keys}]])]
     calls += json.loads(setting(argv, "TOOLS", "[]"))
-    servers: dict[str, dict[str, Any]] = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
+    mcp: dict[str, Any] = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
+    # OpenCode 2's shape, `mcp.servers`, or 1's, the servers by name under `mcp`.
+    servers: dict[str, dict[str, Any]] = mcp["servers"] if isinstance(mcp.get("servers"), dict) else mcp
 
     def owner(call: list[Any]) -> str | None:
         # The longest server name the tool's name starts with, as `<server>_<tool>`.

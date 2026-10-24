@@ -8,7 +8,7 @@ from canopy.runtime.opencode2 import invocation
 
 
 def test_the_default_template_runs_a_private_server_pointed_at_the_definitions_and_asks_for_events() -> None:
-    template = invocation.default_template("canopy-worker", definitions_dir="{d}", title="{t}", prompt="{p}")
+    template = invocation.default_template("canopy-worker", definitions_dir="{d}", title="{t}")
     assert shlex.split(template) == [
         "env",
         f"{invocation.CONFIG_DIR_ENV}={{d}}",
@@ -21,7 +21,6 @@ def test_the_default_template_runs_a_private_server_pointed_at_the_definitions_a
         "json",
         "--thinking",
         "--title={t}",
-        "{p}",
     ]
     assert invocation.agent_of(template) == "canopy-worker"
 

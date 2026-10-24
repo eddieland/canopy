@@ -173,6 +173,15 @@ def agent_names() -> list[str]:
     return sorted(p.stem for p in resources.agents_dir().glob("*.md"))
 
 
+def links() -> dict[str, Path]:
+    """Return the files the snapshot links to rather than holds: none, since OpenCode 1 reads it beside its own config.
+
+    Returns:
+        No links.
+    """
+    return {}
+
+
 def bundled() -> dict[str, bytes]:
     """Return the bundled agents, skills, and plugins as a config directory holds them, by relative path, unrendered."""
     found: dict[str, bytes] = {}

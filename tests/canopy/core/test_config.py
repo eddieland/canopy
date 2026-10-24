@@ -13,7 +13,11 @@ from canopy.core import config, workspace
 from canopy.core.config import ConfigError, load, render_command
 from canopy.core.context import Context
 from canopy.loop import reread
+from canopy.runtime.implementation import Version
 from tests.conftest import HERMETIC_GIT, SHARED_TOML, CanopyEnv, git, user_toml
+
+#: A reviewer's command the operator set, without a private server.
+REVIEW_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer"
 
 EXAMPLES = Path(__file__).parents[3] / "examples"
 
@@ -521,6 +525,33 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         assert template.endswith(" --title={title}")
         # Events, with the model's reasoning among them, so a transcript shows why a call did what it did (DESIGN §22).
         assert " --format json --thinking " in template
+
+
+def test_runtime_version_2_runs_opencode_2_and_its_default_templates(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(
+        "\n".join(line for line in canopy_env.user_file.read_text().splitlines() if "_cmd" not in line),
+    )
+    assert load(canopy_env.root, canopy_env.user_file).runtime.version == Version.ONE
+    canopy_env.configure(
+        canopy_env.user_file,
+        {"runtime": {"version": 2, "review_cmd": REVIEW_CMD}},
+    )
+    runtime = load(canopy_env.root, canopy_env.user_file).runtime
+    assert runtime.version == Version.TWO
+    # Each on a private server of its own, but the one the operator set, which stays as they wrote it.
+    for template in (runtime.overseer_cmd, runtime.worker_cmd, runtime.private_worker_cmd, runtime.plan_cmd):
+        assert template.startswith(
+            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --standalone --agent canopy-",
+        )
+    assert runtime.chore_cmd.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --standalone ")
+    assert runtime.review_cmd == REVIEW_CMD
+
+
+@pytest.mark.parametrize("version", [3, "2", 0, True, 2.0])
+def test_a_runtime_version_canopy_does_not_run_is_refused(canopy_env: CanopyEnv, version: object) -> None:
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"version": version}})
+    with pytest.raises(ConfigError, match=r"runtime\.version"):
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_xdg_config_home(tmp_path: Path) -> None:

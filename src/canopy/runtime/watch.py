@@ -9,9 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.runtime.implementation import watch
+from canopy.runtime.implementation import one, pick, two
 
 if TYPE_CHECKING:
+    from canopy.runtime.implementation import Version
     from canopy.runtime.report import Usage
 
 
@@ -32,9 +33,9 @@ class Change:
 class Watch:
     """Reads an agent's output as it prints it, keeping what its lines have reported so far."""
 
-    def __init__(self) -> None:
-        """Start with nothing printed: no session, nothing spent."""
-        self._lines = watch.Lines()
+    def __init__(self, *, version: Version) -> None:
+        """Start with nothing printed by the runtime `version` runs: no session, nothing spent."""
+        self._lines = pick(version, one.watch, two.watch).Lines()
 
     def read(self, line: str) -> Change | None:
         """Read `line`, the next one the agent printed.

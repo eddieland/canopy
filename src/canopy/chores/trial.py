@@ -201,7 +201,7 @@ def run_unrecorded(ctx: Context, prepared: Prepared) -> execute.Outcome:
         env=history.run_env(ctx, f"{history.TRY_PREFIX}{prepared.name}"),
         timeout=prepared.chore.timeout_minutes * 60,
     )
-    return execute.outcome_of(done, stdout.read(done.stdout), prepared.chore)
+    return execute.outcome_of(done, stdout.read(done.stdout, version=ctx.config.runtime.version), prepared.chore)
 
 
 def _crash(ctx: Context, run: records.ChoreRun, e: Exception) -> str:

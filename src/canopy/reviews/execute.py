@@ -272,7 +272,7 @@ def reviewer_dir(ctx: Context, cwd: Path, slot: Path) -> None:
     cwd.mkdir(mode=0o700)
     (cwd / start.CHECKOUT_LINK).symlink_to(slot, target_is_directory=True)
     # The reviewer's own directory is canopy's, but the runtime may read config above it, as in a workspace's checkout.
-    refused = project_config.refusal((cwd, ctx.workspace.root))
+    refused = project_config.refusal((cwd, ctx.workspace.root), version=ctx.config.runtime.version)
     if refused is not None:
         raise SetupError(refused)
 
@@ -299,7 +299,11 @@ def reviewer(
     # through canopy's read-only git tools, over that checkout alone, named as its link is (DESIGN §27).
     env = {
         conversation.RUN_ID_ENV: run,
-        **git_tools.run_env({start.CHECKOUT_LINK: slot}, cwd=ctx.ws.root.absolute()),
+        **git_tools.run_env(
+            {start.CHECKOUT_LINK: slot},
+            version=ctx.config.runtime.version,
+            cwd=ctx.ws.root.absolute(),
+        ),
     }
     return Reviewer(argv, command.stdin, env, snapshot)
 
@@ -356,7 +360,17 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     )
     out.write("--- reviewer stdout ---\n")
     out.flush()
-    with run_offers.probing(ctx.conn, "review_runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
+    with run_offers.probing(
+        ctx.conn,
+        "review_runs",
+        run_id,
+        ctx.runner,
+        argv,
+        version=ctx.config.runtime.version,
+        cwd=cwd,
+        env=env,
+        log=log,
+    ):
         done = ctx.runner.run(
             argv,
             cwd=cwd,
@@ -374,13 +388,14 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
                 log,
                 agent="reviewer",
                 fields={"review_run_id": run_id},
+                version=ctx.config.runtime.version,
             ),
         )
     out.write(f"\n--- reviewer stderr ---\n{done.stderr}\n")
     out.write(f"--- reviewer exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
-    output = stdout.read(done.stdout)
+    output = stdout.read(done.stdout, version=ctx.config.runtime.version)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn,

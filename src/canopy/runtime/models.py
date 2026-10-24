@@ -10,20 +10,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.runtime.implementation import models as implementation
+from canopy.runtime.implementation import one, pick, two
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from canopy.infra import procs
+    from canopy.runtime.implementation import Version
     from canopy.runtime.report import ModelList
 
 
-def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False) -> ModelList:
-    """Ask the runtime, started in `cwd`, which models it can run an agent on, and with `variants` each one's variants.
+def listed(runner: procs.Runner, *, version: Version, cwd: Path, variants: bool = False) -> ModelList:
+    """Ask the runtime `version` runs, started in `cwd`, which models it can run an agent on, with `variants` each's.
 
     Returns:
         The models it listed, with their variants when asked for; or none, with why, when it could not be asked or
         failed.
     """
-    return implementation.listed(runner, cwd=cwd, variants=variants)
+    return pick(version, one.models, two.models).listed(runner, cwd=cwd, variants=variants)

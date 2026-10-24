@@ -53,7 +53,7 @@ class Recorder:
         status = SessionsRead.FAILED
         self.behind = False
         try:
-            page = runtime_sessions.read_next(ctx.conn)
+            page = runtime_sessions.read_next(ctx.conn, version=ctx.config.runtime.version)
             status = SessionsRead(page.outcome)
             self.behind = status is SessionsRead.FOUND and len(page.sessions) + page.skipped >= MAX_SESSIONS
             if status is SessionsRead.FAILED:

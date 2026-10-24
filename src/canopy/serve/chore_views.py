@@ -251,7 +251,13 @@ def chore_run_transcript(ctx: Context, name: str, run_id: int) -> Transcript | N
         return None
     log = Path(row.log_path)
     removed = removed_after(ctx.conn, log, row.ended_at, "run_files_days")
-    return session_transcript(log, row.session_id, removed, run_models.replies_of(ctx.conn, "chore_runs", run_id))
+    return session_transcript(
+        log,
+        row.session_id,
+        removed,
+        run_models.replies_of(ctx.conn, "chore_runs", run_id),
+        version=ctx.config.runtime.version,
+    )
 
 
 def _chore_run_of(conn: sqlite3.Connection, name: str, run_id: int) -> records.ChoreRun | None:
