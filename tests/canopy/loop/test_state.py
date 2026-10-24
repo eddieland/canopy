@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
 
-from canopy.core import config, conversation, db, pools, workspace
+from canopy.core import config, conversation, db, item_numbers, pools, workspace
 from canopy.core.context import Context
-from canopy.core.vocab import Phase, ResumeReason, RunStatus, StartStatus, TickStatus
+from canopy.core.vocab import NumberedItem, Phase, ResumeReason, RunStatus, StartStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import duties, harness, harness_dispatches, phases, tick
 from canopy.runs import policy, reconcile
@@ -72,6 +72,8 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             title="Retry flaky uploads",
             phase=Phase.CI_RUNNING,
             cursors={"comment": "10001"},
+            # No tracker source observes its tickets: its comment cursor is the tracker's id.
+            tracked=False,
         )
         implement = db.insert_run(
             conn,
@@ -136,7 +138,16 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         )
     with clock("09:40"):
         db.finish_run(conn, "runs", implement, RunStatus.DONE, None)
-        db.set_unit(conn, "PROJ-1", root, "repo", phase="ci_red", pr_url=PR, cursors={"ci": "5551"})
+        # Its ci cursor names the run a worker had, by its journal number: the block says which run that is.
+        db.set_unit(
+            conn,
+            "PROJ-1",
+            root,
+            "repo",
+            phase="ci_red",
+            pr_url=PR,
+            cursors={"ci": str(item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, 5551, at=db.now()))},
+        )
         decide(conn, earlier, "PROJ-1", "attention:needs_reviewer", "no reviewer is assigned", repo="repo")
         # The operator sent a run's reply to a review comment through canopy: the block names it by id (DESIGN §29).
         conn.execute(

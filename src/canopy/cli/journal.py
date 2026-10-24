@@ -111,8 +111,8 @@ def ticket_group() -> None:
     "cursor_pairs",
     type=CursorType(),
     multiple=True,
-    help="Advance a cursor past what you handled. comment and message are the ticket's; review and ci a unit's, "
-    "with --repo. Repeat it for several. A dry run advances none.",
+    help="Advance a cursor to the newest handled item's number. comment and message are the ticket's; review and ci "
+    "a unit's, with --repo. Repeat it for several. A dry run advances none.",
 )
 @click.option("--done", is_flag=True, help="Mark the ticket done in the journal. A dry run does not.")
 @click.option(

@@ -59,8 +59,6 @@ KEY_RE = dispatch.KEY_RE
 REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
 #: A cursor's id: it is rendered into prompts, so it is kept short and plain.
 CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
-#: A review cursor is a time, the one form every kind of review feedback shares (DESIGN §7).
-REVIEW_CURSOR_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 #: The most free text the overseer writes to the journal in one field.
 MAX_TEXT = 2000
 #: A ticket's title is a name, shown beside its key and in its runs' session titles (DESIGN §13).
@@ -107,21 +105,6 @@ def valid_key(value: str) -> bool:
         True when `value` matches `KEY_RE` in full.
     """
     return KEY_RE.fullmatch(value) is not None
-
-
-def valid_review_cursor(value: str) -> bool:
-    """A review cursor names a real moment in one fixed form, so cursors compare as strings (DESIGN §7).
-
-    Returns:
-        True when `value` is in the form `YYYY-MM-DDTHH:MM:SSZ` and names a real time.
-    """
-    if REVIEW_CURSOR_RE.fullmatch(value) is None:
-        return False
-    try:
-        db.parse_time(value)
-    except ValueError:
-        return False
-    return True
 
 
 def truncate(value: str) -> str:
@@ -192,14 +175,16 @@ def cursor(name: str, cursor_id: str) -> tuple[str, str]:
         raise ValueError(f"cursor must be NAME=ID with NAME one of {', '.join(db.CURSOR_COLUMNS)}")
     if not CURSOR_VALUE_RE.fullmatch(cursor_id):
         raise ValueError(f"invalid cursor id {cursor_id!r}")
-    # A message cursor is a journal message id (DESIGN §22).
-    if name == "message" and not (cursor_id.isascii() and cursor_id.isdigit()):
-        raise ValueError(f"a message cursor is a message id, a number; got {cursor_id!r}")
-    if name == "review" and not valid_review_cursor(cursor_id):
-        raise ValueError(
-            f"a review cursor is the newest handled item's time in UTC, as YYYY-MM-DDTHH:MM:SSZ; got {cursor_id!r}",
-        )
+    # A message cursor is a journal message id (DESIGN §22); a review or ci cursor a journal number (§35). A comment
+    # cursor is one too, but on a ticket no tracker source observes, which only the call's context can tell.
+    if name in {"message", "review", "ci"} and not _digits(cursor_id):
+        what = "a message id, a number" if name == "message" else "an item's journal number, as the state block shows"
+        raise ValueError(f"a {name} cursor is {what}; got {cursor_id!r}")
     return name, cursor_id
+
+
+def _digits(value: str) -> bool:
+    return value.isascii() and value.isdigit()
 
 
 def matching(pattern: re.Pattern[str], what: str) -> AfterValidator:
@@ -305,8 +290,8 @@ Cursors = Annotated[
     _null_left_out(dict, Mapping[CursorName, str] | None),
     AfterValidator(_cursors),
     Field(
-        description="Cursors to advance past what you handled, by name. comment and message are the ticket's; review "
-        "(a UTC time, YYYY-MM-DDTHH:MM:SSZ) and ci a unit's, one repository's.",
+        description="Cursors to advance past what you handled, by name, each the number of the newest item handled as "
+        "the state block shows it. comment and message are the ticket's; review and ci a unit's, one repository's.",
     ),
 ]
 
@@ -436,6 +421,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     current = running_tick(ctx)
     key, kind, repos, reasons = request.key, request.kind, request.repos, request.reasons
     cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
+    tracked = _comment_cursor(ctx, request.cursors)
     unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
     tick_id = current.id
     _refuse_decided(ctx, tick_id, key, "dispatch")
@@ -539,7 +525,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
         )
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     ticket_cursors = {name: value for name, value in cursor_pairs if name in db.TICKET_CURSORS}
-    db.set_ticket(ctx.conn, key, ctx.repo, cursors=ticket_cursors)
+    db.set_ticket(ctx.conn, key, ctx.repo, cursors=ticket_cursors, tracked=tracked)
     if unit_cursors:
         cursors = {name: value for name, value in cursor_pairs if name in db.UNIT_CURSORS}
         db.set_unit(ctx.conn, key, ctx.repo, repo_names[0], cursors=cursors)
@@ -806,6 +792,7 @@ def ticket_set(ctx: Context, request: TicketSet) -> Outcome[TicketUpdated]:
     unit_pairs = [(name, value) for name, value in cursor_pairs if name in db.UNIT_CURSORS]
     unit_phase = phase if phase in vocab.UNIT_PHASES else None
     unit = _unit(ctx, request.repo)
+    tracked = _comment_cursor(ctx, request.cursors)
     current = current_tick(ctx)
     if current is not None:
         _refuse_decided(ctx, current.id, key, "ticket set")
@@ -827,6 +814,7 @@ def ticket_set(ctx: Context, request: TicketSet) -> Outcome[TicketUpdated]:
         cursors=ticket_cursors,
         done=done and not dry_run,
         title=request.title,
+        tracked=tracked,
     )
     if done and not dry_run:
         # A done ticket's notes are invalidated: its work merged or was closed (DESIGN §28, Retention).
@@ -846,6 +834,24 @@ def ticket_set(ctx: Context, request: TicketSet) -> Outcome[TicketUpdated]:
             dry_run=dry_run,
         ),
     )
+
+
+def _comment_cursor(ctx: Context, cursors: Mapping[CursorName, str]) -> bool:
+    """Refuse a comment cursor that is not a journal number where a tracker source observes tickets (DESIGN §35).
+
+    Without one, a ticket's comments have no numbers, so its comment cursor is the tracker's comment id.
+
+    Returns:
+        Whether a tracker source observes tickets, which says where the comment cursor is kept.
+
+    Raises:
+        Refused: The comment cursor is not a number where it must be one; nothing is recorded.
+    """
+    tracked = ctx.config.connect.observes_tickets()
+    comment = cursors.get("comment")
+    if tracked and comment is not None and not _digits(comment):
+        raise Refused(f"a comment cursor is a comment's journal number, as the state block shows it; got {comment!r}")
+    return tracked
 
 
 def _check_cursors(ctx: Context, tick_id: int, key: str, repo: str | None, cursors: Mapping[str, str]) -> None:

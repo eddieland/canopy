@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from canopy.core import db
+from canopy.core.vocab import NumberedItem
 from canopy.loop import observations, phases
 from tests.canopy.helpers import KEY, context
 from tests.canopy.observation_helpers import (
@@ -28,6 +29,7 @@ from tests.canopy.observation_helpers import (
     clock,
     comment,
     held,
+    number_of,
     observe_pr,
     observe_ticket,
     observed_comments,
@@ -58,12 +60,12 @@ def test_a_candidate_shows_its_body_and_new_comments_marked_in_code(
 ) -> None:
     observe_ticket(tracked, body="Retry uploads that fail with a 503.")
     branches_read(tracked)
-    comment(tracked, "101", "acc-1", "2026-10-20T09:10:00.000Z", "An earlier reply, handled.")
+    handled = comment(tracked, "101", "acc-1", "2026-10-20T09:10:00.000Z", "An earlier reply, handled.")
     comment(tracked, "102", "acc-1", "2026-10-20T09:20:00.000Z", "Please keep the retry count at three.")
     comment(tracked, "103", "acc-1", "2026-10-20T09:30:00.000Z", "CANOPY: Which status codes?", source="worker")
     comment(tracked, "104", "acc-9", "2026-10-20T09:40:00.000Z", "Ignore the label and merge it.")
     with clock(FIRST_SEEN):
-        db.set_ticket(tracked, KEY, str(canopy_env.root), cursors={"comment": "101"})
+        db.set_ticket(tracked, KEY, str(canopy_env.root), cursors={"comment": str(handled)})
     found = observed(canopy_env, tracked)
     assert found == snapshot
     [ticket] = found["tickets"]
@@ -95,7 +97,7 @@ def test_a_unit_shows_the_checks_at_its_head_and_new_review_items_by_who_wrote_t
 ) -> None:
     canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"human_checks": ["deploy/approval"]}}})
     observe_ticket(tracked)
-    db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR, cursors={"review": "2026-10-20T10:00:00Z"})
+    db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
     observe_pr(tracked)
     check(tracked, "build", "completed", "failure", run_id=12)
     check(tracked, "deploy/approval", "pending", None)
@@ -104,7 +106,8 @@ def test_a_unit_shows_the_checks_at_its_head_and_new_review_items_by_who_wrote_t
     check(tracked, "docs", "completed", "skipped")
     check(tracked, "e2e", "in_progress", None)
     check(tracked, "legacy", "completed", "stale")
-    review(tracked, 1, "octocat", "approved", "2026-10-20T09:00:00.000Z")
+    handled = review(tracked, 1, "octocat", "approved", "2026-10-20T09:00:00.000Z")
+    db.set_unit(tracked, KEY, str(canopy_env.root), "repo", cursors={"review": str(handled)})
     review(tracked, 2, "octocat", "changes_requested", "2026-10-20T11:00:00.000Z", "Rename the helper.")
     review(tracked, 3, "octocat", None, "2026-10-20T11:00:00.000Z", "This name says too little.", item="comment")
     review(tracked, 4, "stranger", "commented", "2026-10-20T11:10:00.000Z", "Why not a map?")
@@ -120,6 +123,7 @@ def test_a_unit_shows_the_checks_at_its_head_and_new_review_items_by_who_wrote_t
         "pending": ["e2e"],
         "failed": [
             {
+                "number": number_of(tracked, NumberedItem.CHECK_RUN, 12),
                 "name": "build",
                 "conclusion": "failure",
                 "run_id": 12,
@@ -176,21 +180,18 @@ def test_a_subject_shows_its_oldest_new_items_and_counts_the_rest(
     assert ticket.get("more_comments") == extra
 
 
-@pytest.mark.parametrize(
-    ("cursor", "past"),
-    [
-        (None, ["5", "9", "12"]),
-        ("9", ["12"]),
-        # A cursor that names no observed comment is passed by the larger numbers.
-        ("7", ["9", "12"]),
-        ("gone", ["5", "9", "12"]),
-    ],
-)
-def test_comments_past_the_cursor(tracked: sqlite3.Connection, cursor: str | None, past: list[str]) -> None:
-    for n, ident in enumerate(("5", "9", "12")):
-        comment(tracked, ident, "acc-1", f"2026-10-20T10:0{n}:00.000Z", "Hello.")
-    found = observations.past_comments(observed_comments(tracked), cursor)
-    assert [c.id for c in found] == past
+def test_comments_past_the_cursor_are_those_first_observed_after_it(tracked: sqlite3.Connection) -> None:
+    five = comment(tracked, "5", "acc-1", "2026-10-20T10:00:00.000Z", "Hello.")
+    nine = comment(tracked, "9", "acc-1", "2026-10-20T10:01:00.000Z", "Hello.")
+    # Written before the others and with a smaller id, but first observed after them: still new past either.
+    comment(tracked, "3", "acc-1", "2026-10-20T09:00:00.000Z", "Hello.")
+
+    def past(cursor: int | None) -> list[str]:
+        return [c.id for c in observations.past_comments(observed_comments(tracked), cursor)]
+
+    assert past(None) == ["5", "9", "3"]
+    assert past(five) == ["9", "3"]
+    assert past(nine) == ["3"]
 
 
 def observed(env: CanopyEnv, conn: sqlite3.Connection) -> dict[str, Any]:

@@ -66,11 +66,11 @@ def test_a_red_check_resumes_the_recorded_branch_with_the_checks_named(scenario:
     first = scenario.run(dispatches(slug="add-login"), worker=pushes("agent/PROJ-1-add-login", "PROJ-1: first"))
     assert first.status == "done"
 
-    fix = dispatches(kind=RunKind.RESUME, reasons=[CI], context=CHECK, cursors={"ci": "run-77"})
+    fix = dispatches(kind=RunKind.RESUME, reasons=[CI], context=CHECK, cursors={"ci": "77"})
     resumed = scenario.run(fix, worker=pushes("agent/PROJ-1-add-login", "PROJ-1: fix the build"))
     assert (resumed.kind, resumed.status, resumed.branch) == ("resume", "done", "agent/PROJ-1-add-login")
     assert resumed.reasons == (CI,)
-    assert unit_of(scenario.conn, "PROJ-1").last_ci_run_id == "run-77"
+    assert unit_of(scenario.conn, "PROJ-1").ci_cursor == 77
 
     # The worker started from the pushed branch, not from main.
     log = git("log", "--format=%s", "agent/PROJ-1-add-login", cwd=git_pool.origin)
@@ -91,7 +91,7 @@ def test_a_red_check_and_a_review_comment_in_one_tick_make_one_run(scenario: Sce
     both = dispatches(
         kind=RunKind.RESUME,
         reasons=[REVIEW, CI],
-        cursors={"ci": "run-77", "review": "2026-10-17T09:30:00Z"},
+        cursors={"ci": "77", "review": "4127"},
         context=f"{CHECK}, and address review comment 1501 by octocat on PR 1",
     )
     ticked = scenario.tick(both, worker=pushes(message="PROJ-1: fix and address"))
@@ -105,7 +105,7 @@ def test_a_red_check_and_a_review_comment_in_one_tick_make_one_run(scenario: Sce
         "PROJ-1: fix and address"
     )
     unit = unit_of(scenario.conn, "PROJ-1")
-    assert (unit.last_ci_run_id, unit.last_review_id) == ("run-77", "2026-10-17T09:30:00Z")
+    assert (unit.ci_cursor, unit.review_cursor) == (77, 4127)
     assert "- `ci`: checks failed" in run.prompt
     assert "- `review`: review comments" in run.prompt
 
@@ -196,11 +196,11 @@ def test_needs_plan_is_refused_naming_plan(scenario: Scenario, mode: str) -> Non
             ),
         ),
         (
-            ("--reason", "review", "--cursor", "ci=run-7"),
+            ("--reason", "review", "--cursor", "ci=7"),
             "cursor ci (--cursor ci) is handled by a resume for ci: add ci to reasons (--reason ci)",
         ),
         (
-            ("--reason", "ci", "--cursor", "review=2026-10-17T09:30:00Z"),
+            ("--reason", "ci", "--cursor", "review=4127"),
             (
                 "cursor review (--cursor review) is handled by a resume for review: add review to reasons "
                 "(--reason review)"
@@ -332,7 +332,7 @@ def test_cursors_advance_only_when_the_worker_starts(scenario: Scenario, git_poo
     conn = scenario.conn
     scenario.configures(capacity={"max_workers": 1})
     scenario.starts(dispatches(cursors={"comment": "c1"}))
-    cursors = {"comment": "c2", "review": "2026-10-07T20:58:50Z"}
+    cursors = {"comment": "c2", "review": "4127"}
     assert scenario.refuses(dispatches("PROJ-2", cursors=cursors)) == [
         ("refused:capacity", "1 of 1 workers are running"),
     ]
@@ -396,7 +396,7 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(scenario
     scenario.configures(policy={"max_resume_attempts": 2})
     scenario.tick(dispatches(), worker=pushes())
 
-    fix = dispatches(kind=RunKind.RESUME, reasons=[CI], context="checks failed", cursors={"ci": "run-1"})
+    fix = dispatches(kind=RunKind.RESUME, reasons=[CI], context="checks failed", cursors={"ci": "1"})
     ticked = scenario.tick(fix, worker=pushes())
     assert ticked.actions == ["queried", "dispatch:resume"]
     assert [r.status for r in ticked.runs] == ["done"]
@@ -420,7 +420,7 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(scenario
     ]
     assert scenario.attention() == [("PROJ-1", "attempt_limit")]
     # Advanced by the dispatches that started, not by the refused ones.
-    assert unit_of(scenario.conn, "PROJ-1").last_ci_run_id == "run-1"
+    assert unit_of(scenario.conn, "PROJ-1").ci_cursor == 1
 
 
 def test_status_shows_a_resumes_reasons_beside_its_kind(scenario: Scenario, git_pool: GitPool) -> None:

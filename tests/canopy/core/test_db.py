@@ -295,8 +295,10 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     assert db.abandon_unfinished_ticks(conn) == [stale]
     tick = db.start_tick(conn, dry_run=True)
     db.touch_ticket(conn, "PROJ-1", "/repo")
-    db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, cursors={"comment": "c-7"})
-    db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red", cursors={"ci": "run-7"})
+    db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, cursors={"comment": "7"})
+    # With no tracker source, the comment cursor is the tracker's id, kept apart from the journal number.
+    db.set_ticket(conn, "PROJ-1", "/repo", cursors={"comment": "c-7"}, tracked=False)
+    db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red", cursors={"ci": "9"})
     db.set_ticket(conn, "PROJ-2", "/repo", done=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks pending")
     db.finish_tick(conn, tick, TickStatus.OK, "1 decision")
@@ -304,9 +306,9 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     row = present(db.get_tick(conn, stale))
     assert row.status == TickStatus.ABANDONED
     [ticket] = db.open_tickets(conn)
-    assert (ticket.key, ticket.phase, ticket.last_comment_id) == ("PROJ-1", "ci_red", "c-7")
+    assert (ticket.key, ticket.phase, ticket.comment_cursor, ticket.last_comment_id) == ("PROJ-1", "ci_red", 7, "c-7")
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit.repo, unit.phase, unit.last_ci_run_id, unit.branch) == ("api", "ci_red", "run-7", None)
+    assert (unit.repo, unit.phase, unit.ci_cursor, unit.branch) == ("api", "ci_red", 9, None)
     [decision] = db.decisions_for_tick(conn, tick)
     assert (decision.ticket_key, decision.action) == ("PROJ-1", "wait")
     last = present(db.last_tick(conn))

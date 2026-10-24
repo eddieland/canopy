@@ -239,7 +239,7 @@ def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
     )
     # The overseer records web's phase and cursor, and the ticket's own; the next tick's state block shows them.
     ws_scenario.tick(
-        sets_phase("PROJ-1", Phase.CI_RED, repo="web", cursor="ci=run-9"),
+        sets_phase("PROJ-1", Phase.CI_RED, repo="web", cursor="ci=9"),
         sets_phase("PROJ-1", Phase.RUNNING, cursor="comment=c-1"),
         *waits("PROJ-1"),
     )
@@ -267,7 +267,7 @@ def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
             "branch": BRANCH,
             "pr_url": PRS["web"],
             "phase": "ci_red",
-            "cursors": {"review": None, "ci": "run-9"},
+            "cursors": {"review": None, "ci": 9},
             "attempts": no_limit,
             "ci_cooldown_until": None,
         },
@@ -279,7 +279,7 @@ def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
     conn = ws_scenario.conn
     with ws_scenario.ticking():
         # A review or ci cursor is a unit's: in a workspace of several it needs --repo, and one repository.
-        reviewed = "2026-10-07T20:58:50Z"
+        reviewed = "4127"
         refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--cursor", f"review={reviewed}", code=2)
         assert "repo is required (--repo): a review cursor belongs to one unit" in refused.err
         ws_scenario.overseer(*dispatch("PROJ-1", "--repo", "api", "--repo", "web", "--cursor", "ci=9"), code=2)
@@ -298,10 +298,10 @@ def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
         )
         assert updated.out == "updated PROJ-1 (api)\n"
         [unit] = db.units(conn, "PROJ-1")
-        assert (unit.repo, unit.phase, unit.last_review_id, unit.branch) == (
+        assert (unit.repo, unit.phase, unit.review_cursor, unit.branch) == (
             "api",
             "ci_red",
-            reviewed,
+            int(reviewed),
             None,
         )
         ticket = present(db.get_ticket(conn, "PROJ-1"))

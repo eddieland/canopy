@@ -67,7 +67,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
           "phase": "ci_red",
           "cursors": {
             "review": null,
-            "ci": "5551"
+            "ci": 1
           },
           "attempts": {
             "implement": 1,
@@ -84,6 +84,9 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
             "reviews": [
               9000
             ]
+          },
+          "cursor_items": {
+            "ci": "check run 5551, first observed 2026-10-16T09:40:00.000Z"
           }
         }
       ],

@@ -9,10 +9,10 @@ reviews](PUBLISHED_REVIEWS.md). Next: [One-off tasks](TASKS.md).
 
 Being built (ROADMAP M37), ahead of §30's measurement at the operator's word. Built: the observations in the state
 block, the prompt's procedure that decides a fresh subject from them, the claims of a dispatch and the cursors of
-`canopy_ticket-set` checked in code, `handled`, and comments reaching the conversation in code (§22), the `mirror` tool
-gone. Cursors as journal numbers wait, and need none of the overseer's tools (§27), whose verbs the commands share.
-Until each is built, §4 principle 1, §6, §7, §8, §17, §22, and TRUST_MODEL describe canopy as it is; this section says
-what changes, and the PR that builds the last of it cuts this one to what is left.
+`canopy_ticket-set` checked in code, `handled`, comments reaching the conversation in code (§22), the `mirror` tool
+gone, and cursors as journal numbers. None of it needs the overseer's tools (§27), whose verbs the commands share.
+Until the design is folded in, §4 principle 1, §6, §7, §8, §17, §22, and TRUST_MODEL describe canopy as it is; this
+section says what changes, and the PR that folds it in cuts this one to what is left.
 
 Re-reading the tracker and GitHub every tick is most of the overseer's spend (MEASUREMENTS 2026-10-15), and §30's
 connectors already read the same facts into the journal. So the overseer decides from what they observed, and the
@@ -83,7 +83,9 @@ or no dispatch". The default keeps what step 3 read fresh through the tick's dis
 Each comment, review, review comment, and check run takes the next journal number when a source first observes it, and
 keeps it across later reads of its subject; a canopy review run takes one when it ends. A cursor is such a number, and
 "newer than the cursor" means first observed after it: one order for every kind, so the `review` cursor needs no time
-form (§7). Rejected: the source's ids, which no tracker orders, and times, which a late submission backdates.
+form (§7). Rejected: the source's ids, which no tracker orders, and times, which a late submission backdates. A
+ticket no tracker source observes has no numbers for its comments, so its `comment` cursor stays the tracker's id
+(Open). A check run is numbered once it completes: a run still going is no failure to hand a worker.
 
 CI is observed by head, context, and run, so a re-run at the same head is seen (§8). A `resume` for `ci` alone is
 refused `handled` when its only failure repeats one at the same head and context (PRIOR_ART, CI newness).

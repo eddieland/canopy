@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 PR = "https://github.com/acme/api/pull/7"
 VCS = Source(kind="vcs", cmd="connector github")
 ASKED = observe.Request(prs=[PR], repositories=[observe.Repository("repo")], branch_prefix="agent/")
+#: Every observed review item.
+REVIEWS = "SELECT * FROM observed_reviews"
 
 
 def prints(state: Path, *lines: dict[str, Any] | str, **more: object) -> None:
@@ -158,3 +160,30 @@ def test_the_request_holds_only_what_is_asked() -> None:
         "query": "q",
         "tickets": [{"key": "PROJ-1", "comments_since": "2026-10-18T09:00:00.000Z"}, {"key": "PROJ-2"}],
     }
+
+
+def test_each_item_keeps_its_journal_number_across_reads_and_a_later_one_takes_a_later_number(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    pr = {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7}
+    first = {"kind": "review", "pr": PR, "item": "review", "id": 9, "time": "2026-10-18T09:00:00Z"}
+    build = {"kind": "check", "pr": PR, "head_sha": "abc1234", "name": "build", "status": "in_progress", "run_id": 12}
+    prints(connector_state, pr, first, build)
+    run(ctx)
+    [going] = records.fetch_all(ctx.conn, records.ObservedCheck, sql.frag("SELECT * FROM observed_checks"))
+    assert going.number is None, "a run still going is numbered once it completes"
+    # Read again, the PR's rows replaced: the first review keeps its number. One submitted since, though dated before
+    # it, takes a later number, as does the run that completed.
+    late = {**first, "id": 8, "time": "2026-10-18T08:00:00Z"}
+    completed = {**build, "status": "completed", "conclusion": "failure"}
+    prints(connector_state, pr, first, late, completed)
+    run(ctx)
+    numbers = {r.id: r.number for r in records.fetch_all(ctx.conn, records.ObservedReview, sql.frag(REVIEWS))}
+    [done] = records.fetch_all(ctx.conn, records.ObservedCheck, sql.frag("SELECT * FROM observed_checks"))
+    [kept] = records.fetch_all(ctx.conn, records.ObservedCheckRun, sql.frag("SELECT * FROM observed_check_runs"))
+    assert None not in (numbers[9], numbers[8], done.number)
+    assert (numbers[9] or 0) < (numbers[8] or 0) < (done.number or 0) == kept.number
+    run(ctx)
+    again = {r.id: r.number for r in records.fetch_all(ctx.conn, records.ObservedReview, sql.frag(REVIEWS))}
+    assert again == numbers

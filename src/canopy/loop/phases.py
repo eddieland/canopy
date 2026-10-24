@@ -19,10 +19,21 @@ import json
 from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import artifact_authority, conversation, db, observe, personas, plans, records, review_runs, sql
+from canopy.core import (
+    artifact_authority,
+    conversation,
+    db,
+    item_numbers,
+    observe,
+    personas,
+    plans,
+    records,
+    review_runs,
+    sql,
+)
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
@@ -327,31 +338,6 @@ def branch_of(branches: Iterable[records.ObservedBranch], prefix: str, key: str,
         if (branch is not None and b.name == branch) or b.name == named or b.name.startswith(f"{named}-"):
             return b.name
     return None
-
-
-def review_cursor(value: str | None) -> datetime | None:
-    """Read a `review` cursor, a UTC time (DESIGN §7).
-
-    Returns:
-        The time; None when it is empty or not a time, as one an earlier canopy wrote.
-    """
-    try:
-        return datetime.fromisoformat(value).astimezone(UTC) if value else None
-    except ValueError:
-        return None
-
-
-def newer(stamp: str | None, cursor: datetime | None) -> bool:
-    """Whether an item at `stamp` is newer than `cursor`: one at the cursor's own second is handled (DESIGN §7).
-
-    Returns:
-        True when there is no cursor, or the item's second is after it; False for an item with no time.
-    """
-    if cursor is None:
-        return True
-    if stamp is None:
-        return False
-    return db.parse_time(stamp).replace(microsecond=0) > cursor.replace(microsecond=0)
 
 
 def is_feedback(review: records.ObservedReview) -> bool:
@@ -683,8 +669,8 @@ class _World:
     def _ci(self, repo: str, pr: records.ObservedPr, unit: records.TicketUnit) -> tuple[list[Phase], bool]:
         """Derive the CI rows from the PR's checks at its head, less those the repository names `human_checks` (§30).
 
-        A failure is new when its check run is newer than the unit's `ci` cursor; a commit status, which has no run,
-        only while the cursor is empty.
+        A failure is new when its check run was first observed after the unit's `ci` cursor, a journal number (§35); a
+        commit status, which has no run, only while the cursor is empty.
 
         Returns:
             The rows that hold of `ci_running` and `ci_red`, and whether every check passed, as none at all do.
@@ -695,13 +681,13 @@ class _World:
         pending = any(c.status is not CheckStatus.COMPLETED for c in ci)
         failed = [c for c in ci if c.status is CheckStatus.COMPLETED and c.conclusion in observe.FAILED]
         phases = [Phase.CI_RUNNING] if pending else []
-        cursor = ci_cursor(unit.last_ci_run_id)
-        if any(cursor is None or (c.run_id is not None and c.run_id > cursor) for c in failed):
+        cursor = unit.ci_cursor
+        if any(cursor is None or (c.number is not None and c.number > cursor) for c in failed):
             phases.append(Phase.CI_RED)
         return phases, not pending and all(c.conclusion in observe.PASSED for c in ci)
 
     def _feedback(self, key: str, pr: records.ObservedPr, unit: records.TicketUnit) -> list[Phase]:
-        """Derive the review rows (DESIGN §7, D089): feedback newer than the unit's `review` cursor, by whom it is from.
+        """Derive the review rows (DESIGN §7, D089): feedback past the unit's `review` cursor, by whom it is from.
 
         Feedback is a review that says something, or a review comment; an approval is not feedback. What the PR's own
         author writes is not either: canopy's workers post as the operator, who opens the PR.
@@ -709,7 +695,7 @@ class _World:
         Returns:
             The rows that hold of `review_findings`, `changes_requested`, and `untrusted_review`.
         """
-        cursor = review_cursor(unit.last_review_id)
+        cursor = unit.review_cursor
         trusted = {t.lower() for t in self.ctx.config.trust.trusted_reviewers}
         found: list[Phase] = []
         new = [
@@ -717,7 +703,7 @@ class _World:
             for r in self.reviews.get(pr.url, [])
             if is_feedback(r)
             and (pr.author is None or (r.author or "").lower() != pr.author.lower())
-            and newer(r.created_at, cursor)
+            and item_numbers.newer(r.number, cursor)
         ]
         if any((r.author or "").lower() in trusted for r in new):
             found.append(Phase.CHANGES_REQUESTED)
@@ -756,10 +742,10 @@ class _World:
 
     # Whether a review of the head has findings the operator did not dismiss, and ended after the `review` cursor: its
     # latest, or each persona's when several review it (§31).
-    def _findings(self, pr: records.ObservedPr, cursor: datetime | None) -> bool:
+    def _findings(self, pr: records.ObservedPr, cursor: int | None) -> bool:
         done = [r for r in self._runs_of(pr.url) if r.sha == pr.head_sha and r.status is ReviewRunStatus.DONE]
         latest = {r.persona: r for r in reversed(done)}.values()
-        return any(self._kept_findings(r) and newer(r.ended_at, cursor) for r in latest)
+        return any(self._kept_findings(r) and item_numbers.newer(r.number, cursor) for r in latest)
 
     def _kept_findings(self, run: records.ReviewRun) -> bool:
         stored = result.stored(run.result_json)
@@ -804,15 +790,3 @@ def _approved(reviews: Collection[records.ObservedReview]) -> bool:
         if r.item is ReviewItem.REVIEW and not r.bot and r.author is not None and r.state in verdicts:
             latest[r.author.lower()] = r.state
     return any(state is ReviewState.APPROVED for state in latest.values())
-
-
-def ci_cursor(value: str | None) -> int | None:
-    """Read a unit's `ci` cursor, a check run's id.
-
-    Returns:
-        The id; None when it is empty or not a number, so every failure is new.
-    """
-    try:
-        return int(value) if value else None
-    except ValueError:
-        return None
