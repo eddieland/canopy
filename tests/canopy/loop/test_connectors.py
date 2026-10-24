@@ -350,9 +350,14 @@ def test_an_artifacts_source_reads_its_feed_past_its_cursor_last_and_in_shadow(
         sql.select("*").from_("observed_artifact_comments").order_by("seq"),
     )
     assert [c.body for c in found] == ["Why shard it?", "Comment 2."]
-    # In shadow: no conversation, state block, or attention item carries a comment on an artifact (DESIGN §38).
+    # Each reaches its ticket's conversation as data, quoting its passage, but no state block or attention item yet
+    # (DESIGN §38).
     assert "Why shard it?" not in json.dumps(scenario.state())
-    assert scenario.conn.execute("SELECT count(*) FROM messages WHERE body LIKE '%shard%'").fetchone()[0] == 0
+    said = scenario.conn.execute("SELECT subject_id, source, channel, body FROM messages WHERE body LIKE '%shard%'")
+    assert [tuple(r) for r in said] == [
+        (KEYS[0], "artifact", "artifacts", "> shard it\n\nWhy shard it?"),
+        (KEYS[0], "artifact", "artifacts", "> shard it\n\nComment 2."),
+    ]
     assert scenario.attention() == []
 
     scenario.tick(*waits(*KEYS))

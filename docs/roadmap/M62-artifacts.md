@@ -57,7 +57,11 @@ source each tick and poll, reads the feed past its cursor into `observed_artifac
 with the change it has read through. Each change says whether its passage is in the latest version, so a reworded one
 reads `passage_gone`. Chosen conservatively: a refused change holds the cursor before it, so the feed waits on it with
 `connector_failed` until a run reads it, rather than skipping it; a run reads at most 1,000 changes, the next reading
-on; and a thread's `passage_gone` is seen only when a change to it is read, since a new version is no change. Left:
-each comment reaching its ticket's conversation, quoting its passage, which waits on M37's comments recorded in the
-conversation; `authorized_authors` and the comment marks deciding authority in code; an unlisted author's attention
-item; and canopy setting an artifact's ticket per run, which is the worker's word until then.
+on; and a thread's `passage_gone` is seen only when a change to it is read, since a new version is no change.
+Built (2026-10-24), on M37's comments recorded in the conversation: each comment on an artifact whose origin names a
+ticket the journal holds reaches that ticket's conversation once, as first read, quoting its passage, source
+`artifact` (or `worker` when it carries the workers' marks) on the channel `artifacts`, as data that authorizes
+nothing. Chosen conservatively: a ticket the journal lacks gets none, since the origin is the worker's word; a comment
+first read deleted is not recorded; and the passage is quoted cut to 300 characters.
+Left: `authorized_authors` and the comment marks deciding authority in code; an unlisted author's attention item; and
+canopy setting an artifact's ticket per run, which is the worker's word until then.
