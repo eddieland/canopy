@@ -7,7 +7,6 @@ import {
     ChartColumn,
     FolderTree,
     GitPullRequest,
-    History,
     Inbox,
     MessagesSquare,
     Sprout,
@@ -52,14 +51,17 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
         icon: GitPullRequest,
         hint: "Every PR canopy knows, the loop's own and the ones it reviewed, and canopy's reviews of them",
     },
-    { to: '/runs', icon: Activity, hint: 'Workers running now, then the ones that ended last' },
+    {
+        to: '/runs',
+        icon: Activity,
+        hint: "Workers running now, then the ones that ended last, and the overseer's ticks and what each decided",
+    },
     { to: '/chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
     {
         to: '/reports',
         icon: ChartColumn,
         hint: 'What canopy cost and got done month by month, and what agent runs cost each day',
     },
-    { to: '/ticks', icon: History, hint: "The overseer's latest ticks and what each decided" },
     {
         to: '/worktrees',
         icon: FolderTree,
@@ -75,7 +77,7 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
 /**
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
  * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes; a
- * ticket's page keeps Tickets active, a PR's or a review's Pull requests, a chore's Chores, and a tick's Ticks.
+ * ticket's page keeps Tickets active, a PR's or a review's Pull requests, a chore's Chores, and a tick's Runs.
  * Attention shows how many items it lists, on every page, split by severity, Pull requests how many review results the
  * operator has not opened, and Memory how many proposals wait on the operator, while proposals are on. Hovering an item
  * says what its page holds.

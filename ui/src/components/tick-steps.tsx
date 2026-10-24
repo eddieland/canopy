@@ -36,7 +36,7 @@ function Step({ id, older }: { id: number | null; older: boolean }) {
     return (
         <Button asChild variant="ghost" size="xs">
             <Link
-                to="/ticks/$id"
+                to="/runs/ticks/$id"
                 params={{ id: String(id) }}
                 title={older ? 'the tick before this one' : 'the tick after this one'}
             >
