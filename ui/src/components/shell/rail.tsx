@@ -28,7 +28,7 @@ const RAIL_ROWS = 4
 // What `+N more` says on hover, by the page it opens.
 const MORE_TITLE = {
     '/runs': 'Every run, on the runs page',
-    '/reviews': 'Every review, on the reviews page',
+    '/pull-requests/reviews': 'Every review, on the reviews page',
     '/chores': 'Every chore, on the chores page',
     '/tasks': 'Every task, on the tasks page',
 } as const
@@ -128,7 +128,7 @@ function WorkingRow({ item }: { item: RailItem }) {
             const pr = pullRequestLabel(review.pr_url)
             return (
                 <Link
-                    to="/reviews/$id"
+                    to="/pull-requests/reviews/$id"
                     params={{ id: String(review.id) }}
                     title={`${reviewRef(review.id)} of ${pr}`}
                     className={ROW}

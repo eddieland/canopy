@@ -368,7 +368,7 @@ test('an oversized notice, sent with Enter as a reply is, is refused, naming its
 })
 
 test("a review's finding is dismissed on its card for a reason, and kept again", async ({ page }) => {
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     const card = page.locator('#finding-2')
     await card.getByTestId('dismiss-finding-2').click()
     await page.getByRole('menuitem', { name: /^intentional/u }).click()
@@ -384,26 +384,26 @@ test("a review's finding is dismissed on its card for a reason, and kept again",
 
 test('a review new to the operator is counted in the nav until its page shows it', async ({ page }) => {
     // The mock operator has seen every review but review 2 (canopy/serve/mock/reviews.py).
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     const nav = page.getByRole('navigation', { name: 'Main' })
-    await expect(nav.getByRole('link', { name: 'Reviews 1 new review to read' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Pull requests 1 new review to read' })).toBeVisible()
     const row = page.getByTestId('review-2')
     await expect(row.getByText('new', { exact: true })).toHaveCount(1)
     await expect(page.getByRole('button', { name: 'mark 1 seen' })).toBeVisible()
 
     await row.getByRole('link', { name: 'review:2' }).click()
-    await expect(page).toHaveURL(/\/reviews\/2$/u)
-    await expect(nav.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible()
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/2$/u)
+    await expect(nav.getByRole('link', { name: 'Pull requests', exact: true })).toBeVisible()
 
     // Kept in the journal, not the page: it is seen after a reload too.
-    await page.goto('reviews')
-    await expect(nav.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible()
+    await page.goto('pull-requests/reviews')
+    await expect(nav.getByRole('link', { name: 'Pull requests', exact: true })).toBeVisible()
     await expect(row.getByText('new', { exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^mark \d+ seen$/u })).toHaveCount(0)
 })
 
 test("a review's findings are sent to a worker from its list, as a reply on its ticket", async ({ page }) => {
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     const send = page.getByTestId('send-findings')
     await expect(send).toBeDisabled()
     await page.getByTestId('pick-finding-3').click()
@@ -423,7 +423,7 @@ test("a coworker's PR's review is edited as a draft on its page and published, a
     page,
 }) => {
     // Review 5, of Carol's PR, is the one review with a draft no other test changes (canopy/serve/mock/reviews.py).
-    await page.goto('reviews/5')
+    await page.goto('pull-requests/reviews/5')
     // The page is the draft's record: its title names whose review it is, and its line says where the draft stands.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:5 Your review of acme/api#14 by carol')
     await expect(page.getByTestId('draft-state')).toHaveText('waitingversion 1 · posts nothing until you publish it')
@@ -720,7 +720,7 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     page,
 }) => {
     const pr = 'https://github.com/acme/web/pull/120'
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     const form = page.getByTestId('review-request-form')
     // One of the loop's own PRs is refused, as `canopy start URL --review` refuses it.
     await form.getByLabel('PR URL').fill('https://github.com/acme/web/pull/88')
@@ -746,7 +746,7 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     await expect(request).toContainText('canopy reviews its head once')
     await expect(request.getByTestId('review-request-personas')).toHaveText('Its review is written in skeptic.')
     // It is in the reviews list, waiting on a tick to start its review, and on the pull requests page too.
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     await expect(page.getByTestId('reviews').getByTestId(`requested-${pr}`)).toContainText('requested')
     await page.goto('pull-requests')
     const row = page.getByTestId('pull-requests').getByTestId('pull-request').filter({ hasText: 'acme/web#120' })
@@ -767,7 +767,7 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     await request.getByTestId('review-request-stop').click()
     await expect(request.getByRole('button', { name: 'Review again' })).toBeVisible()
     // Nothing waits on a tick for it any more.
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     await expect(page.getByTestId('reviews').getByTestId('review-4')).toBeVisible()
     await expect(page.getByTestId(`requested-${pr}`)).toHaveCount(0)
 })

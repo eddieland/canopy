@@ -132,9 +132,9 @@ export const PAGE_GUIDES = {
     '/tasks/$id_/runs/$run': 'tasks#a-tasks-run',
     '/pull-requests/': 'pull-requests',
     '/pull-requests/pr': 'pull-requests#the-pull-requests-page',
-    '/reviews/': 'pull-requests#the-reviews-page',
-    '/reviews/$id': 'pull-requests#a-reviews-page',
-    '/reviews/$id_/run': 'pull-requests#a-reviews-run',
+    '/pull-requests/reviews/': 'pull-requests#the-reviews-page',
+    '/pull-requests/reviews/$id': 'pull-requests#a-reviews-page',
+    '/pull-requests/reviews/$id_/run': 'pull-requests#a-reviews-run',
     '/runs/': 'runs',
     '/runs/$id': 'runs#a-runs-page',
     '/worktrees': 'runs#worktrees',
@@ -150,7 +150,10 @@ export const PAGE_GUIDES = {
     '/settings': 'settings',
     '/settings_/limits': 'settings#limits-and-trust',
 } as const satisfies Record<
-    Exclude<keyof FileRoutesById, '__root__' | '/' | '/spend' | '/guide/' | '/guide/$page'>,
+    Exclude<
+        keyof FileRoutesById,
+        '__root__' | '/' | '/spend' | '/reviews/' | '/reviews/$id' | '/reviews/$id_/run' | '/guide/' | '/guide/$page'
+    >,
     string
 >
 

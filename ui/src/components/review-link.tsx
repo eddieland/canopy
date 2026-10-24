@@ -11,11 +11,20 @@ import { cn } from '@/lib/utils'
 export function ReviewLink({ id, className, children }: { id: number; className?: string; children?: ReactNode }) {
     return (
         <Link
-            to="/reviews/$id"
+            to="/pull-requests/reviews/$id"
             params={{ id: String(id) }}
             className={cn('readout text-xs text-accent underline-offset-4 hover:underline', className)}
         >
             {children ?? reviewRef(id)}
+        </Link>
+    )
+}
+
+/** The trail's step from a review, or its run, up to the reviews list it is one of, under Pull requests. */
+export function ReviewsCrumb() {
+    return (
+        <Link to="/pull-requests/reviews" activeOptions={{ exact: true }}>
+            Reviews
         </Link>
     )
 }

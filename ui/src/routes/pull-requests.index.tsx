@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 
-import { pullRequestsQuery } from '@/api/queries'
+import { pullRequestsQuery, reviewsQuery } from '@/api/queries'
 import type { PullRequest } from '@/api/types'
 import { Age } from '@/components/age'
 import { OrderToggle } from '@/components/order-toggle'
@@ -20,6 +20,7 @@ import { ordered, useListOrder } from '@/lib/list-order'
 import { countText, filterWords, prQueryOf, pullRequestShown, reposOf } from '@/lib/pull-request-filter'
 import type { PullRequestFilter } from '@/lib/pull-request-filter'
 import { repoListOf } from '@/lib/repo-filter'
+import { unseenOf, unseenText } from '@/lib/seen-reviews'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { verdictText, verdictTone } from '@/lib/reviews'
 import { fitColumn } from '@/lib/rows'
@@ -29,7 +30,8 @@ import { NO_TICKET } from '@/lib/words'
 
 /**
  * Every PR the journal knows, most recent activity first, whoever's it is. `?repo=` keeps the PRs in its repositories,
- * and `?q=` those whose name, ticket, or title holds every word.
+ * and `?q=` those whose name, ticket, or title holds every word. canopy's reviews are under it, at
+ * `/pull-requests/reviews`, linked with how many results the operator has not opened, as the nav counts them.
  */
 export const Route = createFileRoute('/pull-requests/')({
     // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
@@ -46,6 +48,7 @@ function PullRequestsPage() {
     const shown = data?.filter((pr) => pullRequestShown(pr, filter))
     const filtered = filter.repo !== undefined || filter.q !== undefined
     const order = useListOrder('pull-requests')
+    const unseen = unseenOf(useQuery(reviewsQuery).data).length
     return (
         <>
             <PageHeader title="Pull requests">
@@ -56,6 +59,15 @@ function PullRequestsPage() {
             <Panel>
                 <PanelHeader label="Pull requests">
                     <span className="flex items-center gap-2">
+                        <Link
+                            to="/pull-requests/reviews"
+                            search={filter}
+                            className="text-xs text-accent underline-offset-4 hover:underline"
+                            title={unseen > 0 ? unseenText(unseen) : undefined}
+                            data-testid="pull-requests-reviews-link"
+                        >
+                            {unseen > 0 ? `Reviews, ${unseen} new` : 'Reviews'}
+                        </Link>
                         {shown !== undefined && shown.length > 1 && <OrderToggle list="pull-requests" />}
                         <span className="readout text-xs text-muted-foreground" data-testid="pull-requests-count">
                             {countText(shown?.length, data?.length, filtered)}

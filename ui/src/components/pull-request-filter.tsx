@@ -7,7 +7,7 @@ import type { PullRequestFilter } from '@/lib/pull-request-filter'
 import { repoListFrom, reposIn } from '@/lib/repo-filter'
 
 /** The pages a `PullRequestFilterBar` filters, each with `?repo=` and `?q=`. */
-type FilteredPage = '/pull-requests' | '/reviews'
+type FilteredPage = '/pull-requests' | '/pull-requests/reviews'
 
 /**
  * A PR list's filter, the pull requests page's and the reviews page's: a field for words, kept in `?q=`

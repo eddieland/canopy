@@ -811,7 +811,7 @@ function ReviewAction({ item }: { item: AttentionItem }) {
     return (
         <div className="flex flex-wrap items-center gap-2 border-b p-3" data-testid="attention-review">
             <Button asChild variant="outline">
-                <Link to="/reviews/$id" params={{ id: String(id) }}>
+                <Link to="/pull-requests/reviews/$id" params={{ id: String(id) }}>
                     <FileText />
                     {item.reason === 'review_waiting' ? 'Read the draft of' : 'See the draft of'} {reviewRef(id)}
                 </Link>

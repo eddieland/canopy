@@ -50,7 +50,7 @@ test('a list by latest activity says it runs by the most recently updated, not t
 })
 
 test("the reviews, and a PR's reviews, flip like any list in time", async ({ page }) => {
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     await settled(page)
     const reviews = page.getByTestId('reviews').locator('> li')
     const first = await testIds(reviews)

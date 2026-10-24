@@ -181,7 +181,7 @@ describe('SubjectRunsTable', () => {
         const groups = subjectRuns({ runs: [], reviews })
         await renderRouted(<SubjectRunsTable groups={groups} />, { client: client() })
         const row = within(screen.getByTestId('review-5'))
-        expect(row.getByRole('link', { name: 'review:5' }).getAttribute('href')).toBe('/reviews/5')
+        expect(row.getByRole('link', { name: 'review:5' }).getAttribute('href')).toBe('/pull-requests/reviews/5')
         expect(row.getByRole('link', { name: 'ABC-103' })).toBeDefined()
         expect(row.getByRole('link', { name: 'acme/web#91' })).toBeDefined()
         expect(row.getByText('review')).toBeDefined()

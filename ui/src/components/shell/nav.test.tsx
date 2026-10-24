@@ -76,7 +76,7 @@ describe('Nav', () => {
     it.each([
         ['a ticket', '/tickets/ABC-102', 'Tickets'],
         ['a PR', '/pull-requests/pr?url=x', 'Pull requests'],
-        ['a review', '/reviews/4', 'Reviews'],
+        ['a review', '/pull-requests/reviews/4', 'Pull requests'],
         ['a chore', '/chores/deps', 'Chores'],
         ['a tick', '/ticks/12', 'Ticks'],
         ['the runs list', '/runs', 'Runs'],
@@ -139,7 +139,7 @@ describe('Nav', () => {
         expect(screen.getByRole('link', { name: 'Memory' }).textContent).toBe('Memory')
     })
 
-    it("counts the reviews new to the operator beside Reviews, in their worst finding's color", async () => {
+    it("counts the reviews new to the operator beside Pull requests, in their worst finding's color", async () => {
         // Review 3 was seen; 6 and 7, which the operator asked for, ended since, and 8 still runs. Review 5 was clean
         // and the loop started it on its own: it has nothing to read, so it is not counted.
         const reviews = [
@@ -150,14 +150,14 @@ describe('Nav', () => {
             ended(3, { verdict: 'findings', findings: 1, worst: 'blocking', worst_count: 1, seen: true }),
         ]
         await renderNav({ at: '/runs', items: [], reviews })
-        expect(screen.getByRole('link', { name: 'Reviews 2 new reviews to read' })).toBeDefined()
+        expect(screen.getByRole('link', { name: 'Pull requests 2 new reviews to read' })).toBeDefined()
         expect(screen.getByTitle('2 new reviews to read').textContent).toBe('22 new reviews to read')
         expect(screen.getByTestId('nav-reviews-count').className).toContain('text-status-blocked')
     })
 
-    it('shows no count beside Reviews when every result is seen', async () => {
+    it('shows no count beside Pull requests when every result is seen', async () => {
         await renderNav({ items: [], reviews: [ended(6, { verdict: 'clean', seen: true })] })
-        expect(screen.getByRole('link', { name: 'Reviews' }).textContent).toBe('Reviews')
+        expect(screen.getByRole('link', { name: 'Pull requests' }).textContent).toBe('Pull requests')
     })
 
     it('names each icon in a compact nav, and gives Attention its total, said in words', async () => {

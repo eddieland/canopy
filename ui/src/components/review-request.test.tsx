@@ -134,7 +134,7 @@ describe('ReviewRequestForm', () => {
     })
 
     it("requests a review of the PR as written, trimmed, then opens the PR's page", async () => {
-        const { router } = await renderRouted(<ReviewRequestForm />, { at: '/reviews' })
+        const { router } = await renderRouted(<ReviewRequestForm />, { at: '/pull-requests/reviews' })
         fireEvent.change(field(), { target: { value: `  ${PR}  ` } })
         fireEvent.click(screen.getByRole('button', { name: 'Review' }))
 
@@ -147,7 +147,7 @@ describe('ReviewRequestForm', () => {
     })
 
     it('requests a review of the PR a link into it names, such as a thread', async () => {
-        const { router } = await renderRouted(<ReviewRequestForm />, { at: '/reviews' })
+        const { router } = await renderRouted(<ReviewRequestForm />, { at: '/pull-requests/reviews' })
         fireEvent.change(field(), { target: { value: `${PR}/files#r123` } })
         fireEvent.click(screen.getByRole('button', { name: 'Review' }))
         await waitFor(() => {
@@ -291,7 +291,7 @@ describe('ReviewRequestForm', () => {
             { detail: { guard: 'unknown_repo', reason: 'acme/web is in no repository' } },
             { status: 409 },
         )
-        const { router } = await renderRouted(<ReviewRequestForm />, { at: '/reviews' })
+        const { router } = await renderRouted(<ReviewRequestForm />, { at: '/pull-requests/reviews' })
         fireEvent.change(field(), { target: { value: PR } })
         fireEvent.click(screen.getByRole('button', { name: 'Review' }))
         expect((await screen.findByRole('alert')).textContent).toBe(
@@ -299,7 +299,7 @@ describe('ReviewRequestForm', () => {
         )
         expect(screen.queryByRole('status')).toBeNull()
         expect(field().value).toBe(PR)
-        expect(router.state.location.pathname).toBe('/reviews')
+        expect(router.state.location.pathname).toBe('/pull-requests/reviews')
     })
 })
 
