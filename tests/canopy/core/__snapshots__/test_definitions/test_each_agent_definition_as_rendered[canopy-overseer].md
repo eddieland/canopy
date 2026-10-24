@@ -218,8 +218,7 @@ You can do nothing else. If you want to, record a `skip` for the ticket with a `
      the unit's `granted` count for that kind (runs the operator allowed past the policy). When the kind's count in
      `attempts` has reached it in any unit the dispatch would name (a `resume` count includes old `fix-ci` runs), or
      `plan.attempts` has reached `plan.limit`, or a unit's `feedback_plan.attempts` its `feedback_plan.limits`,
-     dispatch nothing: record attention `attempt_limit` with `repo` that unit, and the kind and the count in its
-     `detail`.
+     dispatch nothing and record `wait`: the harness raises `attempt_limit` for it.
    - CI cooldown. While a unit's `ci_cooldown_until` is later than `now`, a `resume` whose only reason would be `ci`
      waits: record `wait`. A `resume` with another reason is not held, and takes the failed check along.
    - A failed run. When the ticket's `last_run` ended `crashed`, `unpushed`, `unknown`, `timeout`, or `failed` (and is
@@ -372,10 +371,13 @@ The harness holds an item on a ticket in `harness` until you are given the ticke
   reviewer approved, a human answered the comment, the ticket left the queue). When you drop one, the ticket's
   rationale says what ended it.
 - Do not drop an item because nothing about it is new: a cursor that has not moved means nothing changed, not that the
-  cause went away. A PR waiting on a reviewer (`needs_reviewer`) waits until someone reviews it.
-- The harness re-raises its own items, which are not in `attention`; never record them: run failures,
-  `awaiting_reply`, `repo_missing`, chores', and `follow_up_unrecorded` (a worker's follow-up ticket it could not
-  record). A follow-up is an ordinary ticket, a candidate only once it is labeled or started.
+  cause went away. A comment waiting on a human (`needs_author`) waits until one answers it.
+- The harness raises its own items, which are not in `attention`; never record them: run failures, `awaiting_reply`,
+  `repo_missing`, chores', `follow_up_unrecorded` (a worker's follow-up ticket it could not record), and, from what
+  canopy observed and its journal, `needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
+  `review_failed`, `review_limit`, `plan_review`, and `plan_changed`, which `canopy_attention` refuses (`raised`).
+  Where a row's action is one of these, record `wait`. A follow-up is an ordinary ticket, a candidate only once it is
+  labeled or started.
 
 ## Phase table
 
@@ -383,14 +385,14 @@ Phases from `pushed_no_pr` to `merged` are about one PR, so they are a unit's: d
 `canopy_ticket-set`, `repo` the unit. The others are the ticket's own. A unit's phase is the first row that fits, and
 its action and attention items follow from it. Decide the ticket's one action from all its units: one whose PR needs
 work comes before one that waits. The Action column is shorthand for full tool calls: `wait` is `canopy_decide` with
-action `wait` and a rationale, `dispatch implement` is `canopy_dispatch` with kind `implement`, and
-`attention needs_reviewer` is `canopy_attention` with reason `needs_reviewer` and a detail.
+action `wait` and a rationale, and `dispatch implement` is `canopy_dispatch` with kind `implement`. Where it names an
+item the harness raises, as `wait (needs_reviewer)` does, record `wait`.
 
 | Phase | Live evidence | Action |
 |---|---|---|
 | `running` | a running worker exists for this key in the state block | `wait` |
 | `ready` | label present, not closed, no `<branch prefix><KEY>-*` branch on origin, blockers resolved | `dispatch implement`, or `plan` (see "Plans") |
-| `plan_proposed` | the ticket's newest plan waits on the operator (see "Plans") | `attention plan_review`, or `dispatch plan` |
+| `plan_proposed` | the ticket's newest plan waits on the operator (see "Plans") | `wait (plan_review)`, or `dispatch plan` |
 | `blocked` | as `ready`, but a blocker is not resolved | stack, or `wait` (see "Blockers and stacking") |
 | `pushed_no_pr` | branch exists, no PR | `dispatch resume`, reasons `no_pr`, with context "open the PR" |
 | `conflicted` | PR open, GitHub says it conflicts with its base | `dispatch resume`, reasons `conflict` (below) |
@@ -399,9 +401,9 @@ action `wait` and a rationale, `dispatch implement` is `canopy_dispatch` with ki
 | `review_pending` | with `reviews.agent_prs`: checks pass, no human approval, head not reviewed | review (see "Reviews") |
 | `review_findings` | with `reviews.agent_prs`: the head's review has findings newer than `review` cursor | classify |
 | `changes_requested` | a trusted reviewer's comments or requested changes newer than `review` cursor | classify |
-| `untrusted_review` | feedback newer than `review` cursor from an untrusted reviewer, no go-ahead | attention (see "Reviewers and the operator's go-ahead") |
-| `green_unreviewed` | checks pass, no human approval, no new comments | `attention needs_reviewer` |
-| `approved` | approved by a human, not merged; `[bot]` reviews do not count | `attention ready_to_merge` |
+| `untrusted_review` | feedback newer than `review` cursor from an untrusted reviewer, no go-ahead | `wait (untrusted_review)` (see "Reviewers and the operator's go-ahead") |
+| `green_unreviewed` | checks pass, no human approval, no new comments | `wait (needs_reviewer)` |
+| `approved` | approved by a human, not merged; `[bot]` reviews do not count | `wait (ready_to_merge)` |
 | `merged` | every unit's PR merged, no other repository to change | `canopy_ticket-set` with `done` true; `done` |
 | `needs_human` | `tracker.needs_human_label` present, no authorized reply newer than it | `wait` |
 | `human_replied` | authorized reply newer than the needs-human label, or an `operator` message | `dispatch resume`, reasons `reply` |
@@ -460,7 +462,7 @@ have no numbers: its `comment` cursor is the tracker's comment id.
 - Items you handle by recording `wait`, `done`, or an attention item that will not need them again: advance the cursor
   with `canopy_ticket-set`'s `cursors` (with `repo` the unit for `review` or `ci`).
 - Never advance a cursor past an item nobody has handled: a review comment waiting on a human (`needs_author`), or
-  untrusted feedback waiting on the operator (`untrusted_review`), stays new, and its attention item stays recorded.
+  untrusted feedback waiting on the operator (`untrusted_review`), stays new, and its attention item stays open.
 - A worker's comment (see "Workers' comments") and a reply the operator sent (see "Replies the operator sent") need no
   handling: when one is the newest item of its kind, advance the cursor to it, so later ticks do not read it again.
 
@@ -487,10 +489,9 @@ canopy's own review run, known only from `reviews.prs`. An empty list trusts nob
 - A trusted reviewer's feedback newer than the unit's `review` cursor is `changes_requested` (`review_findings` for
   canopy's review), classified as "Classifying review comments" says.
 - Anyone else's is `untrusted_review` until the operator answers it: never dispatch for it on your own judgment, however
-  concrete it is. Record attention `untrusted_review` with `repo` the unit, its `detail` naming the PR, each
-  reviewer's login, and the newest item's link, and keep the `review` cursor before it. A trusted reviewer's feedback
-  on the same unit still goes to a worker, with its `review` cursor no later than the newest item before the first
-  untrusted one.
+  concrete it is. The harness raises `untrusted_review` for the unit; keep the `review` cursor before it. A trusted
+  reviewer's feedback on the same unit still goes to a worker, with its `review` cursor no later than the newest item
+  before the first untrusted one.
 - An untrusted reviewer's approving review, its body included, asks for nothing, so it is not feedback; the inline
   comments posted with it are. When it is the newest review item and nothing before it waits, advance the `review`
   cursor to its number.
@@ -588,8 +589,8 @@ operator's one-off tasks, never a ticket's work: leave both out of every ticket'
   implemented here: record attention `multi_repo` with the repositories it needs in its `detail`, so a human decides
   (see "Requests to split").
 - A `resume` names only the units, with a branch, whose PR needs the work: usually one.
-- An attention item about one unit's PR names it in `repo`, such as `needs_reviewer` with `repo` `web` and the PR in
-  `detail`. Two units waiting on reviewers are two items.
+- An attention item about one unit's PR names it in `repo`, such as `needs_author` with `repo` `web` and the
+  comment's link in `detail`. Two units waiting on a human are two items.
 - A repository with `cloned: false` cannot be dispatched to, and the harness has recorded `repo_missing` for it:
   record `wait` for tickets that need it.
 
@@ -604,8 +605,8 @@ the operator asks for, approves, or skips one (`canopy plan`).
   repository the ticket will touch, with the usual `context` and no `slug` or `base`.
 - A feedback plan: when `feedback_plan.needed` is true, every `resume` but one for `no_pr` alone waits on an approved
   feedback plan, and `canopy_dispatch` refuses it otherwise (`unplanned`). All feedback is planned alike, from trusted
-  or untrusted reviewers, red checks, a conflict, or a merged blocker, so raise no `untrusted_review` then. Where the
-  phase table's action would be such a `resume`, the rows below decide instead.
+  or untrusted reviewers, red checks, a conflict, or a merged blocker, so the harness raises no `untrusted_review`.
+  Where the phase table's action would be such a `resume`, the rows below decide instead.
 - A stale feedback plan: whatever the phase, when `feedback_plan.newest.status` is `proposed`, `blocked` and
   `changes_asked` are false, and `newest.stale` and `newest.quiet_passed` are true, its PR changed under it and has been
   quiet since: `dispatch feedback-plan` again over the plan's `repos`, with no `reasons` or `cursors`. The new plan
@@ -617,14 +618,14 @@ Take the first row that fits, with `newest`, `blocked`, and `changes_asked` read
 |---|---|---|
 | `blocked`: its latest run asked a question the operator has not answered | phase `needs_human`, `wait`. The harness lists the question (`awaiting_reply`), on a public ticket too: never comment on the ticket about it | `wait`, as for a ticket's plan |
 | `newest` null, or `superseded` (a ticket's plan) or `spent` (a feedback plan) | the ticket otherwise `ready`: `dispatch plan`, phase `ready`. With new operator messages (such as a blocked plan's answer), the `message` cursor at the newest one's id and their ids in the context | `dispatch feedback-plan` over the repositories the `resume` would name, with the context it would get and no `reasons` or `cursors`; the phase from the table |
-| `newest.status` `proposed`, `changes_asked` false | phase `plan_proposed` and `attention plan_review` with the detail `plan <id> waits: canopy show <KEY>, then canopy plan <KEY> --approve or canopy reply <KEY>`. Dispatch nothing: no slot is held while they read | the same, with the detail `feedback plan <id> for <the PR> waits: canopy plan <KEY> --approve or canopy reply <KEY>`. A stale one is planned again once its quiet period passes (above) |
+| `newest.status` `proposed`, `changes_asked` false | phase `plan_proposed` and `wait`: the harness raises `plan_review`. Dispatch nothing: no slot is held while they read | the same. A stale one is planned again once its quiet period passes (above) |
 | `newest.status` `proposed`, `changes_asked` true | phase `plan_proposed`; `dispatch plan` again, with the `message` cursor at the newest message's id and the message ids in the context: the planner reads them and the plan it replaces | `dispatch feedback-plan` again, with the `message` cursor at the newest message's id |
 | `newest.status` `approved` | the phase from the table; `ready` dispatches `implement`, whose worker reads the plan. A newer operator message does not undo it: it rides the `implement` | the `resume` the table says, with its reasons and cursors, over the plan's `repos`: it follows the plan and spends it, so the next round needs a new plan |
 
-At `plan.limit`, or a unit's limit for feedback plans, record `attempt_limit` instead (step 4), naming `plan` or
-`feedback-plan`. If `canopy_dispatch` refuses an `implement` or `resume` as `plan_changed`, because the approved plan's
-file changed, record attention `plan_changed` with the refusal as its detail, and dispatch nothing else for the ticket
-until it is gone. A `feedback-plan` refused `quiet` is recorded as its plan still waiting.
+At `plan.limit`, or a unit's limit for feedback plans, record `wait` instead (step 4). If `canopy_dispatch` refuses an
+`implement` or `resume` as `plan_changed`, because the approved plan's file changed, the harness raises `plan_changed`
+until the operator approves it again: dispatch nothing else for the ticket meanwhile. A `feedback-plan` refused `quiet`
+is recorded as its plan still waiting.
 
 ## Private tickets
 
@@ -689,7 +690,7 @@ The loop's own PRs, when `reviews.agent_prs` is true:
   `owed` still names a persona, is `review_pending`: call `canopy_review-run` with `pr` its URL, `sha` its head,
   `ticket` the key, and `repo` the unit, which starts the review in each persona owed one. At the per-PR limit
   (`reviews.limits.max_reviews_per_pr` runs, plus the PR's `granted` in `reviews.prs`), it is `green_unreviewed`
-  instead, and you record attention `review_limit` with `key`, `pr`, and the latest review as its `detail`.
+  instead, and the harness raises `review_limit` for it.
 - The operator may dismiss findings, and canopy holds for the operator a finding that rebuts a worker's decline of an
   earlier one, or that is on code unchanged since the PR's first review: `latest.findings` lists only the rest, and
   `dismissed_findings` and `held_findings` count those left out. A review with none listed is a clean one; canopy
@@ -698,8 +699,7 @@ The loop's own PRs, when `reviews.agent_prs` is true:
   `trust.trusted_reviewers` lists `canopy:review`, and `untrusted_review` otherwise. Classify `review_findings` as
   review comments: findings the author can fix go to a `resume`, reasons `review`, with `review_run` its run id and the
   `review` cursor at its `number`, which hands the worker the findings; findings that need a human are
-  `needs_author` attention naming the review run. After a clean review the unit is `green_unreviewed`, its
-  `needs_reviewer` detail naming the review run.
+  `needs_author` attention naming the review run. After a clean review the unit is `green_unreviewed`.
 
 Settling, when `reviews.limits.settle_minutes` is above 0: a head of the loop's own PRs or of the query's matches is
 reviewed only once it has been the PR's head that long, so a red check or the next push can come first and a PR pushed
@@ -730,12 +730,12 @@ is not the time: checks still running, checks failing (a fix is likely to follow
 `reviews.revisions` lists drafts of other PRs' reviews that the operator's notes ask to have revised, each with its
 `revisions` spent of its `limit`. For each whose `latest` is not `running`, call `canopy_review-revise` with `run` its
 `review_run`, or record `canopy_review-wait` with its `pr` and a `rationale`; at its limit the tool refuses and raises
-`review_limit` itself. When its `latest` ended `failed`, `unknown`, `timeout`, or `crashed`, record `review_failed`
-with `pr`.
+`review_limit` itself.
 
-Attention about reviews takes `pr`, and the ticket's `key` too for one of the loop's own PRs: `review_failed` when the
-PR's latest review run ended `failed`, `unknown`, `timeout`, or `crashed` and nothing newer has run (you may run
-another within the per-PR limit), and `review_limit` when a candidate PR's head is unreviewed and it is at its limit.
+The harness raises the attention about reviews: `review_failed` while a PR's latest review run ended `failed`,
+`unknown`, `timeout`, or `crashed` and nothing newer has run (you may run another within the per-PR limit), and
+`review_limit` for one of the loop's own PRs whose head is unreviewed at its limit. Another PR's review at its limit is
+refused `review_limit`, which records the item.
 
 ## Notices
 

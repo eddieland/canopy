@@ -322,7 +322,8 @@ def test_canopys_own_reader_is_asked_the_whole_request_each_tick_with_or_without
     scenario.tick(*waits("PROJ-1"))
     assert reads(github_state)[-1]["prs"] == [PR]
     assert [r.status for r in runs(scenario)] == ["ok", "ok"]
-    assert scenario.attention() == []
+    # No source failed. The PR it read is open with no checks and no approval, so it waits on a reviewer (DESIGN §14).
+    assert scenario.attention() == [("PROJ-1", "needs_reviewer")]
 
 
 def test_an_artifacts_source_reads_its_feed_past_its_cursor_last_and_in_shadow(

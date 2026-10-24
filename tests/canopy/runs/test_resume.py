@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from canopy.core import contract, db
-from canopy.core.vocab import ResumeReason, RunKind
+from canopy.core.vocab import Decider, ResumeReason, RunKind
 from tests.canopy.helpers import KEY, WORKER_DONE, canopy, in_tick, present, unit_of, waits, worker_does
 from tests.canopy.scenario_helpers import Scenario, asks, dispatches, fails, pushes
 from tests.conftest import CanopyEnv, GitPool, git
@@ -409,9 +409,12 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(scenario
     assert ticked.actions == ["queried", "dispatch:resume"]
     assert [r.status for r in ticked.runs] == ["done"]
     # That was the last attempt: the limit refuses, whether or not the window has passed, and raises attention.
-    for _ in range(2):
-        assert scenario.tick(fix).actions == ["queried", "refused:attempt_limit", "attention:attempt_limit"]
-        scenario.time_passes(minutes=31)
+    assert scenario.tick(fix).actions == ["queried", "refused:attempt_limit", "attention:attempt_limit"]
+    scenario.time_passes(minutes=31)
+    # No source reads the ticket, so the harness keeps the item, as it raises it again before the overseer runs.
+    raised = scenario.tick(fix)
+    assert raised.actions == ["attention:attempt_limit", "queried", "refused:attempt_limit", "attention:attempt_limit"]
+    assert raised.decisions[0].decider is Decider.HARNESS
 
     assert [r["kind"] for r in scenario.conn.execute("SELECT kind FROM runs ORDER BY id")] == [
         "implement",

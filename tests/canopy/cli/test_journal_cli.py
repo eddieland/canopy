@@ -24,7 +24,7 @@ REVIEWED = "review=4127"
     [
         ["dispatch", "{key}", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
         ["decide", "{key}", "wait", "--rationale", "r"],
-        ["attention", "{key}", "needs_reviewer", "--detail", "d"],
+        ["attention", "{key}", "needs_author", "--detail", "d"],
         ["ticket", "set", "{key}", "--repo", "repo", "--phase", "ready"],
     ],
 )
@@ -49,7 +49,7 @@ def test_journal_commands_need_a_running_tick(
     assert "CANOPY_TICK_ID is not set" in capsys.readouterr().err
     with in_tick(conn) as tick_id:
         db.finish_tick(conn, tick_id, TickStatus.OK, "done")
-        assert main(["attention", "PROJ-1", "needs_reviewer", "--detail", "d"]) == 1
+        assert main(["attention", "PROJ-1", "needs_author", "--detail", "d"]) == 1
         assert "does not name a running tick" in capsys.readouterr().err
         assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0
 
@@ -270,19 +270,19 @@ def test_status_and_attention_ages(scenario: Scenario) -> None:
         db.finish_tick(conn, tick_id, status, "summary")
         return tick_id
 
-    tick([("PROJ-1", "needs_reviewer")])
+    tick([("PROJ-1", "needs_author")])
     conn.execute("UPDATE decisions SET created_at = '2020-01-01T00:00:00.000Z'")
-    tick([("PROJ-1", "needs_reviewer"), ("PROJ-2", "ready_to_merge")])
+    tick([("PROJ-1", "needs_author"), ("PROJ-2", "multi_repo")])
     tick([("PROJ-9", "needs_author")], status=TickStatus.OVERSEER_FAILED)  # a failed tick does not replace the list
 
     items = attention.current(conn)
-    assert [(i.ticket_key, i.reason) for i in items] == [("PROJ-1", "needs_reviewer"), ("PROJ-2", "ready_to_merge")]
+    assert [(i.ticket_key, i.reason) for i in items] == [("PROJ-1", "needs_author"), ("PROJ-2", "multi_repo")]
     assert items[0].since == "2020-01-01T00:00:00.000Z"
 
     out = scenario.operator("status").out
     assert "Last tick: 3 overseer_failed (dry run)" in out
     assert "Attention (2):" in out
-    assert "  needs_reviewer\n    PROJ-1  " in out
+    assert "  needs_author\n    PROJ-1  " in out
     assert "d  https://example.test/PROJ-1" in out  # age in days
     assert "Running workers (0/2):\n  none" in out
 
@@ -298,6 +298,6 @@ def test_trailing_line_breaks_are_not_part_of_a_valid_key(scenario: Scenario, ke
     # `$` in a Python regex also matches before a trailing newline; validation must use the whole string.
     with scenario.ticking():
         scenario.overseer("decide", key, "wait", "--rationale", "r", code=2)
-        scenario.overseer("attention", "PROJ-1", "needs_reviewer\n", "--detail", "d", code=2)
+        scenario.overseer("attention", "PROJ-1", "needs_author\n", "--detail", "d", code=2)
         scenario.overseer("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", "comment=1\n", code=2)
     assert scenario.conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0
