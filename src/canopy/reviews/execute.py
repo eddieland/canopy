@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.context import Context
     from canopy.runtime.agents import Model
+    from canopy.runtime.report import AgentOutput
 
 _GIT_TIMEOUT_SECONDS = 300
 
@@ -64,11 +65,11 @@ class ReviewError(Exception):
     """`_review` cannot start this run at all: it does not exist or is not waiting to start."""
 
 
-class _Unreviewable(Exception):  # noqa: N818  (a run that ends `failed`, with a note)
+class Unreviewable(Exception):  # noqa: N818  (a run that ends `failed`, with a note)
     """The commit could not be checked out, so the reviewer never ran."""
 
 
-class _SetupError(Exception):
+class SetupError(Exception):
     """Something before the reviewer ran failed: the run is `crashed`."""
 
 
@@ -89,6 +90,18 @@ class Outcome:
         if self.note:
             data["harness"] = self.note
         return json.dumps(data)
+
+
+@dataclass(frozen=True)
+class Reviewer:
+    """The reviewer's process as a review starts it: argv, stdin, environment, and the definitions it loads."""
+
+    argv: Sequence[str]
+    #: The prompt, when the command template places none in `argv`.
+    stdin: str | None
+    env: Mapping[str, str]
+    #: The snapshot of canopy's agent definitions the command names (D040).
+    snapshot: Path
 
 
 def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
@@ -114,9 +127,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             outcome = _work(ctx, run, out, log)
         except stopping.Stopped as e:
             outcome = Outcome(ReviewRunStatus.CRASHED, None, str(e))
-        except _Unreviewable as e:
+        except Unreviewable as e:
             outcome = Outcome(ReviewRunStatus.FAILED, None, str(e))
-        except _SetupError as e:
+        except SetupError as e:
             outcome = Outcome(ReviewRunStatus.CRASHED, None, str(e))
             log.error("review run not started", extra={**fields, "error": str(e)})  # noqa: TRY400
         except Exception as e:
@@ -217,40 +230,96 @@ def clean_up(ctx: Context, run: records.ReviewRun, log: logs.TickAdapter) -> Non
     log.info("review slot returned", extra={**fields, "outcome": outcome.value})
 
 
+def check_out(runner: procs.Runner, slot: Path, sha: str) -> list[str]:
+    """Check `sha` out in `slot`, detached, and remove the commit's links that resolve outside the checkout.
+
+    Returns:
+        The removed links' paths, relative to the checkout.
+
+    Raises:
+        Unreviewable: git could not fetch or check out `sha`.
+        SetupError: git could not be run.
+    """
+    _check_out(runner, slot, sha)
+    return _drop_escaping_links(runner, slot)
+
+
+def reviewer_dir(ctx: Context, cwd: Path, slot: Path) -> None:
+    """Make `cwd`, the reviewer's own directory outside the checkout, private, with a link to the checkout in `slot`.
+
+    Raises:
+        SetupError: the runtime would read config of its own from `cwd` or above it, in the workspace.
+    """
+    cwd.mkdir(mode=0o700)
+    (cwd / start.CHECKOUT_LINK).symlink_to(slot, target_is_directory=True)
+    # The reviewer's own directory is canopy's, but the runtime may read config above it, as in a workspace's checkout.
+    refused = project_config.refusal((cwd, ctx.workspace.root))
+    if refused is not None:
+        raise SetupError(refused)
+
+
+def reviewer(
+    ctx: Context,
+    prompt: str,
+    slot: Path,
+    *,
+    models: Mapping[str, Model] | None,
+    title: str,
+    repo: str | None,
+    run: str,
+) -> Reviewer:
+    """The reviewer's process for a review of the checkout in `slot`, named `run` to the agent, on `models`.
+
+    Returns:
+        Its argv behind the sandbox, if `repo` is sandboxed, its stdin, its environment, and its definitions.
+    """
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config, models)
+    command = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
+    argv = sandboxing.wrap(ctx.config.runtime, [repo], "review", command.argv, snapshot)
+    # The operator's commands refuse inside canopy's own runs (DESIGN §22). The reviewer reads its checkout's history
+    # through canopy's read-only git tools, over that checkout alone, named as its link is (DESIGN §27).
+    env = {
+        conversation.RUN_ID_ENV: run,
+        **git_tools.run_env({start.CHECKOUT_LINK: slot}, cwd=ctx.ws.root.absolute()),
+    }
+    return Reviewer(argv, command.stdin, env, snapshot)
+
+
+def reviewed(ctx: Context, done: procs.Result, output: AgentOutput) -> Outcome:
+    """The outcome of a reviewer's process: timed out, no valid result line, or what `judged` makes of its result.
+
+    Returns:
+        `timeout`, `unknown`, or `judged`'s outcome.
+    """
+    if done.timed_out:
+        minutes = ctx.config.runtime.review_timeout_minutes
+        return Outcome(ReviewRunStatus.TIMEOUT, None, f"the reviewer timed out after {minutes} minutes")
+    parsed = result.parse(output.text)
+    if parsed is None:
+        return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")
+    return judged(ctx, parsed)
+
+
 def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapter) -> Outcome:
     slot = Path(str(run.slot_path))
-    sha = run.sha
-    _check_out(ctx.runner, slot, sha)
-    dropped = _drop_escaping_links(ctx.runner, slot)
+    dropped = check_out(ctx.runner, slot, run.sha)
     if dropped:
         log.warning("removed links that leave the checkout", extra={"review_run_id": run.id, "links": dropped})
     if run.revises is None:
         # A revision's comments sit on the diff its review kept, never one of its own.
         _save_diff(ctx.runner, slot, run, log)
     cwd = start.run_dir(ctx, run.id)
-    cwd.mkdir(mode=0o700)
-    (cwd / start.CHECKOUT_LINK).symlink_to(slot, target_is_directory=True)
-    # The reviewer's own directory is canopy's, but the runtime may read config above it, as in a workspace's checkout.
-    refused = project_config.refusal((cwd, ctx.workspace.root))
-    if refused is not None:
-        raise _SetupError(refused)
+    reviewer_dir(ctx, cwd, slot)
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
-    snapshot = definitions.ensure(ctx.state_dir, ctx.config, _models(ctx, run))
     title = f"{'revise' if run.revises is not None else 'review'} {run.pr_url}"
-    command = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
-    argv = sandboxing.wrap(ctx.config.runtime, [run.repo], "review", command.argv, snapshot)
+    run_id = run.id
+    process = reviewer(ctx, prompt, slot, models=_models(ctx, run), title=title, repo=run.repo, run=f"review-{run_id}")
+    argv, env, snapshot = process.argv, process.env, process.snapshot
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
         "running reviewer",
         extra={"review_run_id": run.id, "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
     )
-    run_id = run.id
-    # The operator's commands refuse inside canopy's own runs (DESIGN §22). The reviewer reads its checkout's history
-    # through canopy's read-only git tools, over that checkout alone, named as its link is (DESIGN §27).
-    env = {
-        conversation.RUN_ID_ENV: f"review-{run_id}",
-        **git_tools.run_env({start.CHECKOUT_LINK: slot}, cwd=ctx.ws.root.absolute()),
-    }
     out.write("--- reviewer stdout ---\n")
     out.flush()
     with run_offers.probing(ctx.conn, "review_runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
@@ -258,7 +327,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
             argv,
             cwd=cwd,
             env=env,
-            stdin=command.stdin,
+            stdin=process.stdin,
             timeout=timeout_minutes * 60,
             on_start=lambda pid: db.set_agent_pid(ctx.conn, "review_runs", run_id, pid),
             # Each line reaches the run log as the reviewer prints it, so a running review's transcript is what it did
@@ -290,15 +359,11 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
         )
         spent = output.usage.spent() if output.usage else {}
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
-    if done.timed_out:
-        return Outcome(ReviewRunStatus.TIMEOUT, None, f"the reviewer timed out after {timeout_minutes} minutes")
-    if run.revises is not None:
+    if run.revises is not None and not done.timed_out:
         return _revised(ctx, run, result.parse_revision(output.text))
-    parsed = result.parse(output.text)
-    if parsed is None:
-        return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")
-    outcome = judged(ctx, parsed)
-    if outcome.status is ReviewRunStatus.DONE and parsed.findings:
+    outcome = reviewed(ctx, done, output)
+    parsed = outcome.result
+    if outcome.status is ReviewRunStatus.DONE and isinstance(parsed, result.ReviewResult) and parsed.findings:
         # Read now, while the slot is at the reviewed commit: it goes back before the run closes.
         found = late.late(ctx.conn, ctx.runner, run, parsed, slot=slot, log=log)
         outcome = dataclasses.replace(outcome, late=tuple(found))
@@ -323,13 +388,13 @@ def _check_out(runner: procs.Runner, slot: Path, sha: str) -> None:
     """Fetch `sha` from origin and check it out, detached. A commit origin does not have fails the run.
 
     Raises:
-        _Unreviewable: git failed to fetch or check out `sha`, or HEAD is not `sha` afterwards.
+        Unreviewable: git failed to fetch or check out `sha`, or HEAD is not `sha` afterwards.
     """
     for args in (("fetch", "--quiet", "origin", sha), ("checkout", "--quiet", "--detach", sha)):
         _git(runner, slot, *args)
     head = _git(runner, slot, "rev-parse", "HEAD")
     if head != sha:
-        raise _Unreviewable(f"HEAD is {head} after checking out {sha}")
+        raise Unreviewable(f"HEAD is {head} after checking out {sha}")
 
 
 def _drop_escaping_links(runner: procs.Runner, slot: Path) -> list[str]:
@@ -402,9 +467,9 @@ def _git(runner: procs.Runner, slot: Path, *args: str) -> str:
     try:
         done = runner.run(hostgit.argv(*args), cwd=slot, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS)
     except procs.ProcError as e:
-        raise _SetupError(f"git {args[0]}: {e}") from e
+        raise SetupError(f"git {args[0]}: {e}") from e
     if not done.ok:
         detail = (done.stderr.strip() or done.stdout.strip())[:500]
         # A PR of another repository fails here: its commit is not on this origin (DESIGN §21).
-        raise _Unreviewable(f"git {args[0]} failed: {detail}")
+        raise Unreviewable(f"git {args[0]} failed: {detail}")
     return done.stdout.strip()

@@ -165,11 +165,16 @@ export function modelName(model: string | null): string {
     return model ?? MODEL_SOURCES.default
 }
 
-/** What choosing or clearing a ticket's model did, as `canopy model` says it. */
+/**
+ * What choosing or clearing a ticket's model did, as `canopy model` says it, naming config's variant when the override
+ * sets it aside.
+ */
 export function modelText(ticketKey: string, now: AgentModel): string {
     const source = now.source === 'default' ? 'nothing sets one' : MODEL_SOURCES[now.source]
     const model = now.model ?? "the runtime's default"
-    return `${ticketKey}'s ${now.agent} runs use ${model} from their next run: ${source}.`
+    const dropped =
+        now.dropped_variant === null ? '' : ` (config's variant \`${now.dropped_variant}\` no longer applies)`
+    return `${ticketKey}'s ${now.agent} runs use ${model} from their next run: ${source}${dropped}.`
 }
 
 /**

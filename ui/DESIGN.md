@@ -42,6 +42,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
+| `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
 
@@ -831,7 +832,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   labels do; none is stretched to its column. Its color is its `tone`, from the one map of them (`Chip` in
   `src/components/status.tsx`): its color's hairline at 40% over the same color at 10%, so it holds its edge on a
   selected row's tint; `plain` in `muted-foreground`, else the status color of the state it marks, `failed`,
-  `blocked`, or `running`. No chip is colored by classes of its own.
+  `blocked`, or `running`, or, for a feedback plan's proposal, that proposal's own hue (`ProposalTone`). No chip is
+  colored by classes of its own.
 - **A status on a detail page** (a run's, a chore run's, a tick's, a review's) is its description's first word
   alone; the identity panel's header names the panel and nothing else, so the state is said once. Of the two homes
   it had, the description was kept, as the smaller change: it is the page's line of state on every detail page, and a
@@ -1436,12 +1438,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   comes from in muted `text-xs`, beside the persona rows once the Work panel is `@3xl`, so each agent's model is level
   with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
   is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
-  `last served` names the model that served the agent's latest read run when it is not the button's. A choice saved
-  is confirmed in its row, a `saved` in `status-done`, so nothing below moves, until the ticket's models change after
-  it. The menu offers only what the server would take: the model chosen now, when it is not one, is a disabled item
-  with why in muted text after it (`no longer listed; its next run is refused`, `config's, with a variant`), and a
-  model gone from the list marks its
-  trigger in `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
+  `last served` names the model that served the agent's latest read run when it is not the button's. A variant on the
+  button follows the model's id, muted. Each model's variants are items of their own under it, indented, each
+  `@variant` to the eye and named whole for a screen reader. A choice saved is confirmed in its row, a `saved` in
+  `status-done`, so nothing below moves, until the ticket's models change after it; one that sets aside config's
+  variant says so after it in muted text. The menu offers only what the server would take: the model chosen now, when
+  it is not one, is a disabled item with why in muted text after it (`no longer listed; its next run is refused`,
+  `variant no longer listed; its next run is refused`), and a model or variant gone from the list marks its trigger in
+  `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
   `Read again` item. While a choice saves, its trigger names it with a trailing `…` and is `aria-busy`; a refusal's
   `Notice` names the agent before its guard.
 - **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, under the
@@ -1586,9 +1590,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title. Then panels: its fields (its
   ticket, a `TicketField` left out when it has none; its branch; its total cost; no repository, which its name says),
   with a grant of another review in its foot when it is at its review limit; its review threads when canopy has read
-  them or holds a draft for it (below); then its reviews (`ReviewsTable`), the runs that pushed to it (`RunsTable`), and
-  its decisions, each a `ListPanel`, so an empty one is its header alone, and no Runs at all on a PR with no ticket,
-  since runs are a ticket's.
+  them or holds a draft for it (below), led by its feedback plan while that waits on the operator; then its reviews
+  (`ReviewsTable`), the runs that pushed to it (`RunsTable`), and its decisions, each a `ListPanel`, so an empty one is
+  its header alone, and no Runs at all on a PR with no ticket, since runs are a ticket's.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
   them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
   whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`
@@ -1600,14 +1604,18 @@ sliver beside four others; and its axis names short call numbers without measuri
   `Send N waiting`, which sends every waiting draft as one comment review, its command on hover, and an outline `Start a
   review on GitHub` beside it, which stages them in a pending review instead, its reactions added at once, with a muted
   line saying what each does; while the PR holds a staged review, neither shows, and a `staged-review` line links to the
-  PR's files on GitHub to finish it. Then, while its ticket has a current feedback plan (docs/design §32), a `Feedback
-  plan` panel (`FeedbackPlanPanel`): `feedback-plan:N` and its status as a chip in its header (`waiting on you` and
-  stale in `status-blocked`, approved as running, spent plain), a muted line of who planned it and what its status
-  means, cut to the status once it is approved, a
+  PR's files on GitHub to finish it. While its ticket has a current feedback plan (docs/design §32), a `Feedback plan`
+  panel (`FeedbackPlanPanel`) comes before the `Review threads` panel while the plan waits on the operator, stale or
+  not, so its Approve is in a 1720×1440 window's first screen, and after it once approved or spent; where it sits is
+  settled as each plan is first read, so one approved meanwhile stays put, its band in view. The panel:
+  `feedback-plan:N` and its status as a chip in its header (`waiting on you` and stale in `status-blocked`, approved as
+  running, spent plain), a muted line of who planned it and what its status means, cut to the status once it is
+  approved, a
   stale plan's changes in `status-blocked`, a row per item (a `Checkbox` until a resume spends it, its number, the
   first line of what was said as `MemoryText`, and where it is: `on its thread`, a router `Link` to the thread's card
   by its `threadAnchor`, `the review`, a link out to it on its host, or the other PR it is on; under that, muted, its
-  proposal as a chip, its author, `trusted`, the plan's first line on it as `MemoryText`, and its id; and a reply no
+  proposal as a chip in its tone, its author, `trusted`, `for the next plan` on one an approval did not tick, the
+  plan's first line on it as `MemoryText`, and its id; and a reply no
   thread card shows, under `Proposed reply`, as `MemoryText`), and
   in its foot the operator's words and `Approve whole` or `Approve N of M`, its command on hover (`Approve stale
   plan` then `Approve as it is` for a stale plan's two steps, the first refusal a muted `output` rather than a
@@ -1619,8 +1627,16 @@ sliver beside four others; and its axis names short call numbers without measuri
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
   `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain,
   its line breaks and tabs kept and every other hidden character named, never Markdown or a link; a draft's text the
-  same. A thread the feedback plan covers carries its proposal above its drafts (`PlanProposal`, a dashed hairline
-  box): `Plan item N`, the proposal as a chip, `left out` once an approval left it out, and the reply as `MemoryText`.
+  same. A thread the feedback plan covers carries its proposal above its drafts (`PlanProposal`, an inset rule, a
+  hairline `border-l-2` on the thread's card, not a card of its own): `Plan item N`, the proposal as a chip in its
+  tone, `for the next plan` once an approval did not tick it, and the reply as `MemoryText`; a `change` its resume is
+  still to act on, over a waiting draft, says in `status-blocked` that the resume writes a new reply there and sending
+  the draft first answers ahead of it, the draft's `Send` left as it is. An item an approval did not tick is `for the
+  next plan` wherever the page says so (its chip, the hint beside the button), and its box is named `approve item N`,
+  never `left out` or `leave`: `leave` is a proposal, to leave the item be, which ticking it approves; the CLI's flag
+  stays `--leave`, on the button's hover.
+  Each proposal's chip has a quiet tone of its own (`proposal-*`), so `change`, the one that edits code, stands out,
+  `decline` and `ask` sit apart from it and from each other, and `leave`, which does nothing, stays plain.
   A comment's `<details>` blocks are the one thing read in it (`CommentText`, `src/lib/details.ts`): each folds,
   as on GitHub, in a hairline box under a `Collapsible` row of a chevron and its summary in `font-medium`, open when
   written `<details open>`, and a closed one that folds a hidden character carries `hides a character` in

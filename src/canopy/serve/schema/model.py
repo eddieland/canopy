@@ -25,15 +25,18 @@ class AgentModel(Model):
     agent: ModelAgent
     """The agent: `worker` for its implement and resume runs, `planner`, or `reviewer`."""
     model: str | None = None
-    """The model, as `provider/model`; None for the runtime's default, when neither the ticket nor config sets one."""
+    """The model, as `provider/model`, then `@variant` when it names one; None for the runtime's default, when neither
+    the ticket nor config sets one."""
     source: Literal["ticket", "config", "default"]
     """Where it comes from: the ticket's override, `[runtime.models]` in config, or neither, the runtime's default."""
     variant: str | None = None
-    """The variant `model` runs at, after its last `@`, as `high` in config's `provider/model@high`; None for none.
+    """The variant `model` runs at, after its last `@`, as `high` in `provider/model@high`; None for its default.
 
-    The runtime's list names the model without it, and a ticket's override names none, so a model with one is not a
-    choice the page can make: it chooses the model alone.
+    The runtime's list names the model without it, and the variant among the model's `variants` there.
     """
+    dropped_variant: str | None = None
+    """Config's variant for the agent, which the ticket's override sets aside by naming none of its own, so the agent
+    runs at the model's default; None otherwise."""
     last_served: str | None = None
     """The model that served the agent's latest run for the ticket whose session canopy has read, as `provider/model`,
     the most costly when it called several; None when none of its runs has been read.
@@ -49,7 +52,8 @@ class ModelRequest(Model):
     agent: ModelAgent = "worker"
     """The agent to choose for."""
     model: Annotated[str | None, Field(max_length=200)] = None
-    """The model, as `provider/model`, one `GET /models` lists; None clears the override, as `--clear` does."""
+    """The model, as `provider/model`, one `GET /models` lists, or `provider/model@variant` at one of its variants;
+    None clears the override, as `--clear` does."""
 
 
 class ModelList(Model):
@@ -57,6 +61,9 @@ class ModelList(Model):
 
     models: list[str] = []
     """Each model, as `provider/model`, in order; none when the list could not be read."""
+    variants: dict[str, list[str]] = {}
+    """The variants each model lists, such as reasoning efforts, by model, each list in order; a model with none is
+    left out."""
     error: str | None = None
     """Why the list could not be read, in canopy's words; None when it was."""
 
