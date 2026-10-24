@@ -29,6 +29,7 @@ import { Route as ReviewsIndexRouteImport } from './routes/reviews.index'
 import { Route as ReviewsIdRouteImport } from './routes/reviews.$id'
 import { Route as RunsIndexRouteImport } from './routes/runs.index'
 import { Route as RunsIdRouteImport } from './routes/runs.$id'
+import { Route as RunsWorktreesRouteImport } from './routes/runs.worktrees'
 import { Route as SettingsLimitsRouteImport } from './routes/settings_.limits'
 import { Route as TasksIndexRouteImport } from './routes/tasks.index'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
@@ -146,6 +147,11 @@ const RunsIdRoute = RunsIdRouteImport.update({
   path: '/runs/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RunsWorktreesRoute = RunsWorktreesRouteImport.update({
+  id: '/runs/worktrees',
+  path: '/runs/worktrees',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsLimitsRoute = SettingsLimitsRouteImport.update({
   id: '/settings_/limits',
   path: '/settings/limits',
@@ -244,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
+  '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings/limits': typeof SettingsLimitsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
@@ -282,6 +289,7 @@ export interface FileRoutesByTo {
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
+  '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings/limits': typeof SettingsLimitsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
@@ -321,6 +329,7 @@ export interface FileRoutesById {
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
+  '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings_/limits': typeof SettingsLimitsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
@@ -361,6 +370,7 @@ export interface FileRouteTypes {
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
+    | '/runs/worktrees'
     | '/settings/limits'
     | '/tasks/$id'
     | '/tickets/$key'
@@ -399,6 +409,7 @@ export interface FileRouteTypes {
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
+    | '/runs/worktrees'
     | '/settings/limits'
     | '/tasks/$id'
     | '/tickets/$key'
@@ -437,6 +448,7 @@ export interface FileRouteTypes {
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
+    | '/runs/worktrees'
     | '/settings_/limits'
     | '/tasks/$id'
     | '/tickets/$key'
@@ -476,6 +488,7 @@ export interface RootRouteChildren {
   ReportsSpendRoute: typeof ReportsSpendRoute
   ReviewsIdRoute: typeof ReviewsIdRoute
   RunsIdRoute: typeof RunsIdRoute
+  RunsWorktreesRoute: typeof RunsWorktreesRoute
   SettingsLimitsRoute: typeof SettingsLimitsRoute
   TasksIdRoute: typeof TasksIdRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
@@ -642,6 +655,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RunsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runs/worktrees': {
+      id: '/runs/worktrees'
+      path: '/runs/worktrees'
+      fullPath: '/runs/worktrees'
+      preLoaderRoute: typeof RunsWorktreesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings_/limits': {
       id: '/settings_/limits'
       path: '/settings/limits'
@@ -772,6 +792,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsSpendRoute: ReportsSpendRoute,
   ReviewsIdRoute: ReviewsIdRoute,
   RunsIdRoute: RunsIdRoute,
+  RunsWorktreesRoute: RunsWorktreesRoute,
   SettingsLimitsRoute: SettingsLimitsRoute,
   TasksIdRoute: TasksIdRoute,
   TicketsKeyRoute: TicketsKeyRoute,

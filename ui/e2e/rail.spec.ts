@@ -67,7 +67,6 @@ test('the nav lists the sections by how often the operator opens them, and the f
         'Runs',
         'Chores',
         'Reports',
-        'Worktrees',
         /^Memory/u,
     ])
 

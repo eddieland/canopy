@@ -20,7 +20,7 @@ export const ROUTES = [
     'runs',
     'runs/39',
     'runs/41',
-    'worktrees',
+    'runs/worktrees',
     'tickets',
     'tickets/ABC-102',
     'tickets/ABC-105',

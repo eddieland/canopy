@@ -15,7 +15,7 @@ const PAGES = [
     { page: 'reports', read: '**/api/reports/monthly*' },
     { page: 'reports/spend', read: '**/api/spend/breakdown*' },
     { page: 'search?q=web', read: '**/api/search*' },
-    { page: 'worktrees', read: '**/api/worktrees' },
+    { page: 'runs/worktrees', read: '**/api/worktrees' },
 ] as const
 
 test.beforeEach(async ({ page }) => {
@@ -67,6 +67,6 @@ test("a failed read's notice keeps the skeleton's height, so nothing moves", asy
 
 test('the worktrees with no pool at all say how to make them', async ({ page }) => {
     await page.route('**/api/worktrees', (route) => route.fulfill({ json: [] }))
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await expect(page.getByTestId('pools')).toContainText('no pools yet: canopy workspace sync makes one for each')
 })

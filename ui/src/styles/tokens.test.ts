@@ -42,7 +42,6 @@ const TEXT = [
     'status-failed',
     'section-attention',
     'section-runs',
-    'section-worktrees',
     'section-tickets',
     'section-tasks',
     'section-pull-requests',
