@@ -42,7 +42,8 @@ def cmd_gc(
     """Report what canopy keeps of its own history, and what a pass with your `[retention]` would remove.
 
     For each kind: how many there are and their size, then how many a pass would remove and theirs, and the rule that
-    removes them. A live tick runs the pass once a day, removing the files and the journal's rows the report counts,
+    removes them; then the remote branches canopy made that no open run, unit, or task names, for you to delete, since
+    gc deletes none. A live tick runs the pass once a day, removing the files and the journal's rows the report counts,
     and rotates canopy.log. By hand, `--dry-run` removes nothing, and `--vacuum` shrinks the journal by its free pages:
     it runs only while no tick is running and no run is live, and when the disk has room for a copy of the journal.
     `--git` packs each primary clone's loose objects and combines its small packs, pruning nothing, and skips a
@@ -104,6 +105,7 @@ def render(report: Report) -> list[str]:
     )
     lines.extend(["", f"The journal is {size_text(report.journal_size)}."])
     lines.extend(report.notes)
+    lines.extend(["", *_branches(report)])
     lines.append("Nothing was removed: this is a dry run.")
     return lines
 
@@ -121,6 +123,22 @@ def size_text(size: int) -> str:
         value /= gc.KIB
         units.pop(0)
     return f"{value:.1f} {units[0]}"
+
+
+def _branches(report: Report) -> list[str]:
+    """The remote branches canopy made that nothing names any more, which gc never deletes.
+
+    Returns:
+        A line saying so, then one line for each, or one saying there is none.
+    """
+    if not report.branches:
+        return ["No remote branch canopy made is left that no open run, unit, or task names."]
+    lines = ["Remote branches canopy made that no open run, unit, or task names, as each clone last fetched them;"]
+    lines.append("canopy deletes none, so delete those you are done with yourself:")
+    for branch in report.branches:
+        of = branch.ticket if branch.ticket is not None else f"task {branch.task}"
+        lines.append(f"  {branch.repo}: {branch.name}  ({of}, at {branch.head[:12]})")
+    return lines
 
 
 def _git(ctx: Context) -> int:
