@@ -95,6 +95,7 @@ def test_the_shipped_reviewer_prompt_carries_the_notice(canopy_env: CanopyEnv) -
         "LOW_IMPACT": "Only docs change.",
         "ATTEMPT": "1",
         "MAX_ATTEMPTS": "3",
+        "LAST_ROUND": None,
         "CONTEXT": None,
         "TIMEOUT_MINUTES": "20",
         "CONTRACT": "{}",

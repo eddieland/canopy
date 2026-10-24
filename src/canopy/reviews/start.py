@@ -358,6 +358,7 @@ def _prompt(
     run = review_runs.get_review_run(ctx.conn, run_id)
     if run is None:
         raise RuntimeError(f"review run {run_id} vanished")
+    limit = grants.limit(ctx.conn, cfg, request.pr)
     values = {
         "PR_URL": request.pr,
         "SHA": request.sha,
@@ -368,7 +369,9 @@ def _prompt(
         "TRACKER_PROVIDER": cfg.tracker.provider,
         "LOW_IMPACT": cfg.review.low_impact.strip() or "None: never report `low`.",
         "ATTEMPT": str(attempt),
-        "MAX_ATTEMPTS": str(grants.limit(ctx.conn, cfg, request.pr)),
+        "MAX_ATTEMPTS": str(limit),
+        # The PR's last review before a person's, which weighs the approach over more line-level findings.
+        "LAST_ROUND": "yes" if attempt >= limit else None,
         # The overseer's, which ticket and PR text can steer: quoted, so no line of it passes for the prompt's own.
         "CONTEXT": quoted(context) if context else None,
         "TIMEOUT_MINUTES": str(cfg.runtime.review_timeout_minutes),

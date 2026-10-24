@@ -164,9 +164,16 @@ becomes a refactor nobody asked for.
 Reviews are off while `capacity.max_reviews` is 0, and each commit is reviewed once in each persona chosen for it.
 
 A review of a new commit isn't starting from scratch: it reads canopy's last finished review of the PR, the summary
-and every finding you didn't dismiss, and checks whether each still holds. A finding the worker fixed stops coming back,
-and one it didn't is reported again. It still reads the whole change, though. Being told where the last reviewer
-looked is useful; being told where not to look is how a bug lives through three reviews.
+and every finding you didn't dismiss, and checks whether each still holds. It still reads the whole change, though.
+Being told where the last reviewer looked is useful; being told where not to look is how a bug lives through three
+reviews.
+
+The worker answers each finding it was handed, **fixed** or **declined** with its reason, and the next review reads
+the answers. A fixed finding that still holds comes back. A declined one comes back only if the reviewer can show the
+reason is wrong, and then as a rebuttal, which canopy holds for you: it starts no resume, the card says **held for
+you**, and the attention list raises `review rebuttal` on the ticket. Send it to a worker if the reviewer has the
+better of it, or dismiss it if the worker does. Two agents can disagree politely until the review limit runs out;
+this hands the disagreement to the one person who gets to settle it.
 
 The reviewer is its own agent, so give it another model than your workers', `runtime.models.reviewer` in your config
 (not a `--model` in its command, which canopy refuses, since it would override the choice unseen): a second model
