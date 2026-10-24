@@ -150,8 +150,8 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   screenshot shows how a page is drawn, not what the guide says, which most UI pull requests edit: `placeholderGuide`
   serves a guide of placeholder Latin in place of the real one, its pages and their list included, with
   `e2e/guide-specimen.md` the page taken, so a guide edit rewrites no image. `README.md` shows `attention-dark`,
-  `tickets-ABC-102-dark`, `runs-39-dark`, `pull-requests-reviews-4-dark`, and `ticks-2-dark`: rename them there too.
-  The baselines are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots
+  `tickets-ABC-102-dark`, `runs-39-dark`, `pull-requests-reviews-4-dark`, and `runs-ticks-2-dark`: rename them there
+  too. The baselines are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots
   workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It
   runs only the spec files that call `toHaveScreenshot`, `screenshotMain`, or `screenshotWhole`, so a test that takes
   one through another helper is missed until its file calls one of those. It pushes a commit with the images that

@@ -175,7 +175,7 @@ export const TIPS = {
         'Haiku: a bar for each day / stacked by who spent what on what / none of it was me',
         'Fun fact: tokens are like leaves. You never notice them until they are on the bill.',
     ],
-    '/ticks/': [
+    '/runs/ticks/': [
         "It looks like you're counting ticks. I counted one, then lost my place.",
         'Unhelpful tip: every tick has an id. I have an id too. It is Sprig.',
         'Did you know? Between two ticks there is a tock. Nobody has ever seen one.',
@@ -183,7 +183,7 @@ export const TIPS = {
         'Haiku: the wise overseer / weighs each ticket, then decides / I just lean and stare',
         'Hot take: peak context is the overseer\'s way of saying "I have a lot on my mind".',
     ],
-    '/ticks/$id': [
+    '/runs/ticks/$id': [
         "It looks like you're reading the overseer's reasons. Don't tell it I showed you.",
         "Hot take: the overseer thinks out loud so I don't have to.",
         'Dear diary, read every reason in a tick. Felt seen. Was not mentioned.',

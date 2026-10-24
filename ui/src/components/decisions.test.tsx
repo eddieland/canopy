@@ -71,7 +71,7 @@ describe('Decisions', () => {
 
     it("on a subject's page names the tick for the subject, and a PR it was about beside the action", async () => {
         await renderDecisions([decision({ subject: PR, pr: PR, action: 'review' })], { byTick: true })
-        expect(row(1).getByRole('link', { name: 'tick:3' }).getAttribute('href')).toBe('/ticks/3')
+        expect(row(1).getByRole('link', { name: 'tick:3' }).getAttribute('href')).toBe('/runs/ticks/3')
         expect(row(1).getByRole('link', { name: 'acme/web#88' })).toBeDefined()
     })
 

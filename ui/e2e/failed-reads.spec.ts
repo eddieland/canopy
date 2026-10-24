@@ -9,7 +9,7 @@ const PAGES = [
     { page: 'runs/39', read: '**/api/runs/39' },
     { page: 'tickets/ABC-102', read: '**/api/tickets/ABC-102' },
     { page: 'tickets/ABC-105/plan', read: '**/api/tickets/ABC-105/plans' },
-    { page: 'ticks/2', read: '**/api/ticks/2' },
+    { page: 'runs/ticks/2', read: '**/api/ticks/2' },
     { page: 'chores/deps', read: '**/api/chores/deps' },
     { page: 'pull-requests/reviews/4', read: '**/api/reviews/4' },
     { page: 'reports', read: '**/api/reports/monthly*' },

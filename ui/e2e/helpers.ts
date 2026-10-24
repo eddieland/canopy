@@ -38,8 +38,8 @@ export const ROUTES = [
     'chores',
     'chores/deps',
     'chores/deps/runs/2',
-    'ticks',
-    'ticks/2',
+    'runs/ticks',
+    'runs/ticks/2',
     'reports',
     'reports/spend',
     'settings',
@@ -60,7 +60,7 @@ export const WHOLE_ROUTES: readonly Route[] = [
     'tickets/ABC-102',
     'runs/39',
     'pull-requests/reviews/4',
-    'ticks/2',
+    'runs/ticks/2',
 ]
 /**
  * The pages screenshotted in light as well: the shell, a list, and a detail page. Both themes draw from the same

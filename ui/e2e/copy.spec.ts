@@ -116,7 +116,7 @@ test("a chore run's log path copies whole, from its page and from its row", asyn
 })
 
 test("a tick's output path copies whole, though the page shows it from the workspace root", async ({ page }) => {
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await page.getByRole('button', { name: 'Copy output path' }).click()
     expect(await clipboard(page)).toBe(`${await workspaceRoot(page)}/.canopy/ticks/2.log`)
 })

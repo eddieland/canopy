@@ -5,10 +5,10 @@ you find out what it was thinking. What the ticks cost is on [the spend page](re
 
 ## The ticks page
 
-[Ticks](/ticks) lists the latest 50 ticks, newest first: each one's status, how many decisions it recorded, what its
-overseer cost in dollars, tokens, and peak context, and its summary. A `dry run` chip marks a tick from
-`canopy tick --dry-run`, which plans and dispatches nothing. Before the first tick, the page says when one comes: after
-`loop.interval_minutes`, or now, with **Tick now** right there in the sentence.
+**Ticks**, under [Runs](/runs), lists the latest 50 ticks, newest first: each one's status, how many decisions it
+recorded, what its overseer cost in dollars, tokens, and peak context, and its summary. A `dry run` chip marks a tick
+from `canopy tick --dry-run`, which plans and dispatches nothing. Before the first tick, the page says when one comes:
+after `loop.interval_minutes`, or now, with **Tick now** right there in the sentence.
 
 A tick reads `running` while it works, and ends:
 

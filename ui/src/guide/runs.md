@@ -8,7 +8,8 @@ and what it cost; the worktrees page is the pools they work in.
 [Runs](/runs) lists every agent canopy runs: workers on tickets, reviews of PRs, chores, and tasks. Each gets one row
 per subject, by its latest run: a ticket's, a PR's, a chore's, a task's. The running ones come first, then the ones
 that ended most recently. A subject with earlier runs shows **Show N earlier runs** under it, so a PR reviewed at
-every push is one row and not a wall of them.
+every push is one row and not a wall of them. The overseer's ticks are not among them: the **Ticks** link in the
+page's description opens [their page](ticks#the-ticks-page), also under Runs.
 
 Each row has the run's state, its id, what it works for, its kind, what it cost, and how long it ran or how long since
 it ended:

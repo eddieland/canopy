@@ -60,7 +60,7 @@ test('the window switches from the toggle, and idle spend is its own series with
     const ticks = page.getByTestId('spend-idle-tick-list')
     await expect(ticks.getByTestId(/^tick-\d+$/u)).toHaveCount(1)
     await ticks.getByRole('link', { name: 'tick:2' }).click()
-    await expect(page).toHaveURL(/\/ticks\/2$/u)
+    await expect(page).toHaveURL(/\/runs\/ticks\/2$/u)
 })
 
 test("each series has one name in the totals, the legend, and the table, and the description is the window's", async ({

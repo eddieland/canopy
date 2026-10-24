@@ -141,8 +141,8 @@ export const PAGE_GUIDES = {
     '/chores/': 'chores',
     '/chores/$name': 'chores#a-chores-page',
     '/chores/$name_/runs/$id': 'chores#a-chores-page',
-    '/ticks/': 'ticks',
-    '/ticks/$id': 'ticks#a-ticks-page',
+    '/runs/ticks/': 'ticks',
+    '/runs/ticks/$id': 'ticks#a-ticks-page',
     '/reports/': 'reports',
     '/reports/spend': 'reports#the-spend-page',
     '/memory': 'memory',
@@ -152,7 +152,16 @@ export const PAGE_GUIDES = {
 } as const satisfies Record<
     Exclude<
         keyof FileRoutesById,
-        '__root__' | '/' | '/spend' | '/reviews/' | '/reviews/$id' | '/reviews/$id_/run' | '/guide/' | '/guide/$page'
+        | '__root__'
+        | '/'
+        | '/spend'
+        | '/reviews/'
+        | '/reviews/$id'
+        | '/reviews/$id_/run'
+        | '/ticks/'
+        | '/ticks/$id'
+        | '/guide/'
+        | '/guide/$page'
     >,
     string
 >

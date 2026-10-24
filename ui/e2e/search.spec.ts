@@ -73,7 +73,7 @@ test("a task's reference alone in the box opens the task on Enter", async ({ pag
 })
 
 test('slash focuses the box from anywhere but a text field, and Escape leaves it', async ({ page }) => {
-    await page.goto('ticks')
+    await page.goto('runs/ticks')
     await settled(page)
     const box = page.getByRole('searchbox', { name: 'Search the journal' })
     await page.keyboard.press('/')
@@ -128,12 +128,12 @@ test('deleting every character empties the search page, and elsewhere leaves the
     await expect(page).toHaveURL(/\/search$/u)
     await expect(page.getByText('type at least 2 characters in the search box')).toBeVisible()
 
-    await page.goto('ticks')
+    await page.goto('runs/ticks')
     await settled(page)
     await box.fill('web')
     await box.fill('')
     await page.clock.runFor(1_000)
-    await expect(page).toHaveURL(/\/ticks$/u)
+    await expect(page).toHaveURL(/\/runs\/ticks$/u)
 })
 
 test('a query the server would refuse asks for one, and one nothing holds says so', async ({ page }) => {
