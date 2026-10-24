@@ -1,12 +1,10 @@
 """The overseer's verbs as MCP tools (DESIGN §27): `canopy _mcp`, driven over stdio in a tick, beside its commands."""
 
 import contextlib
-import io
 import json
 import os
 import re
 import sqlite3
-import time
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,23 +16,19 @@ import pytest
 from canopy.chores import history
 from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
-from canopy.core import chore_runs, db, git_tools, reports
-from canopy.core.context import Context
+from canopy.core import chore_runs, db, git_tools, recorded_runs, reports
 from canopy.core.vocab import ChoreRunStatus, RunKind, TickStatus
 from canopy.infra import procs
-from canopy.loop import mcp
+from canopy.loop import mcp, tools
 from canopy.runs import policy
 from canopy.runtime import servers
 from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
     LABEL,
     LIST_TOOLS,
-    MCP_OPENING,
     InlineRunner,
     agent_runs,
-    ancestors,
     calls,
-    chore_reports,
     chore_toml,
     in_run,
     in_tick,
@@ -42,7 +36,6 @@ from tests.canopy.helpers import (
     operator,
     present,
     tool_call,
-    worker_does,
 )
 from tests.canopy.review_helpers import feature_commit
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
@@ -190,7 +183,7 @@ RECORDS = [
                 "key": "PROJ-1",
                 "kind": "implement",
                 "dry_run": True,
-                "run": None,
+                "recorded": None,
                 "branch": "agent/PROJ-1-add-login",
                 "repos": ["repo"],
             },
@@ -289,7 +282,7 @@ RECORDS = [
                 *("--context", "the retry loop"),
             ],
             dry_run=True,
-            result={"pr": PR, "dry_run": True, "reviews": [{"persona": None, "run": None}], "waits": None},
+            result={"pr": PR, "dry_run": True, "reviews": [{"persona": None, "recorded": None}], "waits": None},
         ),
         id="review-run",
     ),
@@ -317,7 +310,7 @@ RECORDS = [
             {"name": "build-health", "context": "job 90"},
             ["chore", "run", "build-health", "--context", "job 90"],
             dry_run=True,
-            result={"name": "build-health", "dry_run": True, "run": None},
+            result={"name": "build-health", "dry_run": True, "recorded": None},
         ),
         id="chore-run",
     ),
@@ -1056,71 +1049,48 @@ def test_the_git_server_takes_absolute_checkouts_and_serves_nothing_else() -> No
         assert main(["_mcp", "--git", "api=/a", "--git", "web=/w"], runner=procs.SubprocessRunner(unset=["S"])) == 0
     [((runner,), kwargs)] = served.call_args_list
     assert kwargs == {"checkouts": {"api": Path("/a"), "web": Path("/w")}}
-    # Nothing it starts is a run: none is reparented, and none reads the git variables it inherited.
+    # Nothing it starts reads the git variables it inherited.
     assert isinstance(runner, procs.SubprocessRunner)
-    assert not runner.reparent
     assert {"S", "GIT_DIR"} <= runner.unset
 
 
-def test_a_run_a_tool_starts_is_not_the_servers_descendant(overseen: CanopyEnv) -> None:
-    # The runtime signals every descendant of the server when the overseer's run ends (DESIGN §27, What OpenCode
-    # does). The server here is this process, so a run it started would be this process's descendant.
-    if not Path("/proc/self/stat").exists():
-        pytest.skip("needs /proc")
+def test_a_chore_run_a_tool_asks_for_is_recorded_and_the_server_starts_nothing(overseen: CanopyEnv) -> None:
+    # The tick starts it once the overseer's run ends, so no run is the server's descendant (DESIGN §40).
     conn = overseen.journal()
-    lines = [json.dumps(m).encode() for m in MCP_OPENING]
-    call = {"jsonrpc": "2.0", "id": 1, **tool_call("chore-run", name="build-health")}
-    out = io.StringIO()
-    runner = procs.SubprocessRunner(reparent=True)
-    with in_tick(conn, ends_ok=True), chore_reports(CHORE_OK, sleep=60):
-        mcp.serve([*lines, json.dumps(call).encode()], out.write, lambda: opened(overseen, runner))
-    [*_, said] = [json.loads(line) for line in out.getvalue().splitlines()]
-    assert said["result"]["isError"] is False, said
-    with stopped(conn) as pid:
-        assert os.getpid() not in ancestors(pid)
-
-
-def test_a_run_a_tool_starts_outlives_the_server(overseen: CanopyEnv) -> None:
-    conn = overseen.journal()
-    with in_tick(conn, ends_ok=True), chore_reports(CHORE_OK, sleep=60):
+    with in_tick(conn, ends_ok=True) as tick_id:
         served = mcp_session(tool_call("chore-run", name="build-health"))
-    assert served.said() == ("started chore build-health: run 1", False)
-    assert served.structured() == {"name": "build-health", "dry_run": False, "run": 1}
-    # The server has exited, and the run it started goes on: `stopped` finds it running.
-    with stopped(conn):
-        pass
+    assert served.said() == (f"recorded chore build-health as recorded run 1; {tools.STARTS_AFTER}", False)
+    assert served.structured() == {"name": "build-health", "dry_run": False, "recorded": 1}
+    assert chore_runs.get_chore_run(conn, 1) is None
+    [recorded] = recorded_runs.of_tick(conn, tick_id)
+    assert (recorded.kind, recorded.chore, recorded.status) == ("chore", "build-health", "recorded")
+    # Its decision is recorded as it starts, or with its refusal then.
+    assert db.decisions_for_tick(conn, tick_id) == []
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_worker_a_tool_dispatches_is_recorded_and_not_the_servers_descendant(overseen: CanopyEnv) -> None:
-    if not Path("/proc/self/stat").exists():
-        pytest.skip("needs /proc")
+def test_a_worker_a_tool_dispatches_is_recorded_and_its_cursors_wait_for_it_to_start(overseen: CanopyEnv) -> None:
     conn = overseen.journal()
-    lines = [json.dumps(m).encode() for m in MCP_OPENING]
     arguments = {"key": "PROJ-1", "kind": "implement", "label": LABEL, "repos": ["repo"], "cursors": {"comment": 7}}
-    call = {"jsonrpc": "2.0", "id": 1, **tool_call("dispatch", **arguments)}
-    out = io.StringIO()
-    runner = procs.SubprocessRunner(reparent=True)
-    with in_tick(conn, ends_ok=True) as tick_id, worker_does(sleep=60):
-        mcp.serve([*lines, json.dumps(call).encode()], out.write, lambda: opened(overseen, runner))
-    [*_, said] = [json.loads(line) for line in out.getvalue().splitlines()]
-    assert said["result"]["isError"] is False, said
-    [text] = [c["text"] for c in said["result"]["content"]]
-    assert text.startswith("dispatched implement for PROJ-1: run 1: ")
-    assert said["result"]["structuredContent"] == {
+    with in_tick(conn, ends_ok=True) as tick_id:
+        served = mcp_session(tool_call("dispatch", **arguments))
+    text, error = served.said()
+    assert not error, text
+    assert text.startswith("recorded dispatch implement for PROJ-1 as recorded run 1: agent/PROJ-1-work in repo; ")
+    assert text.endswith(tools.STARTS_AFTER)
+    assert served.structured() == {
         "key": "PROJ-1",
         "kind": "implement",
         "dry_run": False,
-        "run": 1,
+        "recorded": 1,
         "branch": "agent/PROJ-1-work",
         "repos": ["repo"],
     }
-    assert [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, tick_id)] == [
-        ("PROJ-1", "dispatch:implement"),
-    ]
-    assert present(db.get_ticket(conn, "PROJ-1")).last_comment_id == "7"
-    with worked(conn) as pid:
-        assert os.getpid() not in ancestors(pid)
+    assert db.get_run(conn, 1) is None
+    [recorded] = recorded_runs.of_tick(conn, tick_id)
+    assert (recorded.kind, recorded.ticket_key) == ("dispatch", "PROJ-1")
+    assert db.decisions_for_tick(conn, tick_id) == []
+    assert present(db.get_ticket(conn, "PROJ-1")).last_comment_id is None
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -1141,7 +1111,7 @@ def test_a_worker_starts_without_the_overseers_server(scenario: Scenario, door: 
     assert "CANOPY_TICK_ID" not in worker["env"]
 
 
-def test_canopy_mcp_spawns_through_an_intermediate() -> None:
+def test_canopy_mcp_runs_nothing_with_the_servers_variables() -> None:
     with mock.patch.object(mcp, "run_stdio", autospec=True, return_value=0) as served:
         assert main(["_mcp"]) == 0
         assert main(["_mcp"], runner=procs.SubprocessRunner(unset=["SECRET"])) == 0
@@ -1149,52 +1119,10 @@ def test_canopy_mcp_spawns_through_an_intermediate() -> None:
         assert main(["_mcp"], runner=inline) == 0
     [(default,), _], [(given,), _], [(fake,), _] = served.call_args_list
     assert isinstance(default, procs.SubprocessRunner)
-    # No run a tool starts inherits what names the server to the overseer (DESIGN §27).
-    assert (default.reparent, default.unset) == (True, servers.VARIABLES)
+    # Nothing the server runs inherits what names the server to the overseer (DESIGN §27).
+    assert default.unset == servers.VARIABLES
     # The runner `main` is given is kept: what it removes from a child's environment, it still removes.
     assert isinstance(given, procs.SubprocessRunner)
-    assert (given.reparent, given.unset) == (True, {"SECRET", *servers.VARIABLES})
+    assert given.unset == {"SECRET", *servers.VARIABLES}
     assert fake is inline
     assert mcp_cli.cmd_mcp.hidden
-
-
-@contextlib.contextmanager
-def opened(env: CanopyEnv, runner: procs.Runner) -> Iterator[Context]:
-    """The workspace as the server opens it for a call, with `runner`."""
-    with mcp.opened(runner, Path.cwd()) as ctx:
-        assert ctx.ws.root == env.root
-        yield ctx
-
-
-@contextlib.contextmanager
-def stopped(conn: sqlite3.Connection) -> Iterator[int]:
-    """Chore run 1 while it runs, its agent started, and then its process and its agent stopped. Yields its pid."""
-    deadline = time.monotonic() + 30
-    run = present(chore_runs.get_chore_run(conn, 1))
-    while run.agent_pid is None and time.monotonic() < deadline:
-        time.sleep(0.05)
-        run = present(chore_runs.get_chore_run(conn, 1))
-    pid, agent = present(run.pid), present(run.agent_pid)
-    try:
-        assert procs.running(Path(run.log_path), pid)
-        yield pid
-    finally:
-        procs.kill_group(agent)
-        procs.kill_group(pid)
-
-
-@contextlib.contextmanager
-def worked(conn: sqlite3.Connection) -> Iterator[int]:
-    """Run 1 while it runs, its worker started, and then its `_run` and its worker stopped. Yields its `_run`'s pid."""
-    deadline = time.monotonic() + 30
-    run = present(db.get_run(conn, 1))
-    while run["worker_pid"] is None and time.monotonic() < deadline:
-        time.sleep(0.05)
-        run = present(db.get_run(conn, 1))
-    pid, worker = int(run["pid"]), int(present(run["worker_pid"]))
-    try:
-        assert procs.running(Path(run["log_path"]), pid)
-        yield pid
-    finally:
-        procs.kill_group(worker)
-        procs.kill_group(pid)

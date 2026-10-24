@@ -178,6 +178,7 @@ from tests.canopy.helpers import (
     present,
     seen,
     state_block,
+    tick_starts,
     wait_for_run,
     worker_does,
 )
@@ -221,6 +222,8 @@ TOLD_LINES = 2
 
 #: How long a held worker, or a test waiting on one, waits before it gives up.
 HOLD_TIMEOUT = 60
+#: How long a test waits on a chore run to end.
+CHORE_SECONDS = 30
 
 #: The overseer's commands that start a review run: a review, and a revision of a review's draft (DESIGN §34).
 REVIEW_COMMANDS = (["canopy", "review", "run"], ["canopy", "review", "revise"])
@@ -624,6 +627,7 @@ class Scenario:
                 if exited != 0:
                     self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                tick_starts(runner, tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
                 exited, printed = _printing(lambda: main(["_run", str(run_id)], runner=runner))
@@ -654,6 +658,7 @@ class Scenario:
                 if exited != 0:
                     self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                tick_starts(tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
         working = self._at_work(run_id)
@@ -687,6 +692,7 @@ class Scenario:
                 if exited != 0:
                     self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                tick_starts(InlineRunner(), tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
                 exited, printed = _printing(lambda: main(["_review", str(run_id)], runner=runner or InlineRunner()))
@@ -715,6 +721,7 @@ class Scenario:
                 if exited != 0:
                     self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                tick_starts(InlineRunner(), tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 started = self.conn.execute("SELECT id FROM review_runs WHERE tick_id = ? ORDER BY id", (tick_id,))
                 ids = [int(r[0]) for r in started]
@@ -749,6 +756,7 @@ class Scenario:
                 if exited != 0:
                     self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                tick_starts(tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
         reviewing = self._reviewing(run_id)
@@ -758,7 +766,8 @@ class Scenario:
     def refuses(self, command: list[str], *, dry_run: bool = False) -> Refused:
         """Dispatch or start the review `command` in a tick of its own, which canopy must refuse, starting no run.
 
-        `command` is a `dispatches(...)`, or a `reviews(...)` or a `revises(...)`.
+        `command` is a `dispatches(...)`, or a `reviews(...)` or a `revises(...)`. canopy refuses it at the ask, the
+        command exiting 1, or at the spawn, when the tick starts what it recorded (DESIGN §40).
 
         Returns:
             The tick's decisions, as (action, rationale): the refusal, and the attention it raised, if any; the tick,
@@ -768,9 +777,16 @@ class Scenario:
         assert review or command[:2] == ["canopy", "dispatch"], command
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
             exited, printed = _printing(lambda: main(command[1:], runner=InlineRunner()))
-        refused = Refused(tick=tick_id, made=db.decisions_for_tick(self.conn, tick_id), printed=printed)
-        self._tell(f"tick {tick_id} {'refuses' if exited == 1 else 'does not refuse'} {shlex.join(command)}", tick_id)
-        assert exited == 1, f"{shlex.join(command[:3])} exited {exited}, not refused: {list(refused)} {printed.err}"
+            if exited == 0:
+                tick_starts(InlineRunner(), tick_id=tick_id)
+        made = db.decisions_for_tick(self.conn, tick_id)
+        refused = Refused(tick=tick_id, made=made, printed=printed)
+        at_spawn = exited == 0 and any(d.action.startswith("refused:") for d in made)
+        said = "refuses" if exited == 1 else "refuses at the spawn" if at_spawn else "does not refuse"
+        self._tell(f"tick {tick_id} {said} {shlex.join(command)}", tick_id)
+        assert exited == 1 or at_spawn, (
+            f"{shlex.join(command[:3])} exited {exited}, not refused: {list(refused)} {printed.err}"
+        )
         # The table's name is one of two literals.
         runs = "review_runs" if review else "runs"
         started = self.conn.execute(f"SELECT count(*) FROM {runs} WHERE tick_id = ?", (tick_id,)).fetchone()[0]  # noqa: S608
@@ -836,6 +852,9 @@ class Scenario:
             else:
                 assert not dry_run, "a command in the tick `ticking` holds open runs as that tick does"
             exited, printed = _printing(lambda: main(list(args)))
+            if self.open_tick is None:
+                # Its tick ends here, so it starts what the command recorded, as a tick does after its overseer.
+                tick_starts(tick_id=tick_id)
         said = f"the overseer runs {command} in tick {tick_id}, which exits {exited}"
         self.story.append("\n".join([said, *printed.told()]))
         assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
@@ -860,6 +879,8 @@ class Scenario:
                 yield tick_id
             finally:
                 self.open_tick = None
+            # It ends as one whose overseer finished: the runs its commands recorded start now.
+            tick_starts(tick_id=tick_id)
         self.story.append(f"tick {tick_id} ends ok")
 
     def configures(self, file: ConfigFile = "user", /, **tables: Mapping[str, object]) -> None:
@@ -1210,6 +1231,32 @@ def github_shows(
     """
     shown = {"pr": {"head_sha": head, "mergeable": mergeable}, "reviews": list(reviews), "checks": list(checks)}
     state.write_text(json.dumps({"prs": {DRAFTS_PR: shown}}))
+
+
+def due_chore(scenario: Scenario, name: str, *, when: str | None = None) -> None:
+    """Configure chore `name`, due as it has never run, its command the fake agent, and its `when` if given.
+
+    One with no `when` is the harness's, which it runs after the overseer (DESIGN §37).
+    """
+    prompt = scenario.env.home / "chores" / f"{name}.md"
+    prompt.parent.mkdir(exist_ok=True)
+    prompt.write_text(f"# {name}\n")
+    table: dict[str, Any] = {
+        "prompt": str(prompt),
+        "cmd": "agent run --agent canopy-chore {prompt}",
+        "every_minutes": 120,
+    }
+    if when is not None:
+        table["when"] = when
+    scenario.configures(chores={name: table})
+
+
+def chores_ended(conn: sqlite3.Connection) -> None:
+    """Wait for every chore run to end, so none outlives the test."""
+    deadline = time.monotonic() + CHORE_SECONDS
+    while conn.execute("SELECT count(*) FROM chore_runs WHERE status = 'running'").fetchone()[0]:
+        assert time.monotonic() < deadline, "a chore run did not end"
+        time.sleep(0.05)
 
 
 def with_a_blocker(scenario: Scenario) -> None:

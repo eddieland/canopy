@@ -25,6 +25,7 @@ from tests.canopy.helpers import (
     chore_reports,
     in_tick,
     messages,
+    tick_starts,
     waits,
     with_events,
     worker_does,
@@ -608,6 +609,7 @@ def test_chore_runs_reach_a_sink_that_takes_chores(scenario: Scenario, sink_scri
     with chore_reports(chore):
         with in_tick(scenario.conn, ends_ok=True):
             assert main(["chore", "run", "check"], runner=InlineRunner()) == 0
+            tick_starts(InlineRunner())
             assert main(["_chore", "1"], runner=InlineRunner()) == 0
         scenario.tick()
     [message] = messages(out)

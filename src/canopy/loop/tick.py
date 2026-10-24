@@ -1,6 +1,8 @@
 """One tick of the loop (DESIGN §6): lock, migrate, reconcile, check the overseer's tools, run and check it, publish.
 
-A live tick starts the operator's queued one-off tasks after reconcile, in code, before the overseer (DESIGN §36). A
+A live tick starts the operator's queued one-off tasks after reconcile, in code, before the overseer (DESIGN §36). The
+runs the overseer asks for are recorded, and the tick starts them once its run has ended, with the harness's own
+(`spawns.py`, DESIGN §40); one it did not start is closed unstarted as it closes, or by the next tick if it died. A
 tick that closes `ok` notes, on each ticket, what it did about the operator's messages it read (`acknowledge.py`).
 """
 
@@ -32,6 +34,7 @@ from canopy.core import (
     plans,
     pools,
     progress,
+    recorded_runs,
     run_models,
     run_offers,
 )
@@ -51,6 +54,7 @@ from canopy.loop import (
     mcp,
     observations,
     phases,
+    spawns,
     state,
 )
 from canopy.memory import attention as memory_attention
@@ -369,14 +373,20 @@ def _feedback_plans(
 def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome:
     applied = db.migrate(ctx.conn, resources.migrations_dir())
     abandoned = db.abandon_unfinished_ticks(ctx.conn)
+    # A run a dead tick recorded and did not start is never started: this tick decides again (DESIGN §40).
+    unstarted = recorded_runs.close_unstarted(ctx.conn)
     tick_id = db.start_tick(ctx.conn, dry_run=dry_run)
     log = logs.for_tick(tick_id)
     log.info("tick started", extra={"dry_run": dry_run, "repo": ctx.repo, "migrations_applied": applied})
     if abandoned:
         log.warning("closed ticks left running by a dead tick process", extra={"abandoned_ticks": abandoned})
+    if unstarted:
+        log.warning("closed runs a dead tick recorded and never started", extra={"unstarted": unstarted})
 
     def finish(status: TickStatus, summary: str, usage: Usage | None = None) -> Outcome:
         _record_overseer(ctx, tick_id, log)
+        # Whatever the tick did not start, because it ended early, belongs to it alone.
+        recorded_runs.close_unstarted(ctx.conn, tick_id=tick_id)
         db.finish_tick(ctx.conn, tick_id, status, summary)
         spent = usage.spent() if usage is not None else {}
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
@@ -462,8 +472,9 @@ def _steps(
     if halted is not None:
         return finish(*halted)
     failure, usage = _overseer(ctx, tick_id, rendered, dry_run=dry_run, log=log)
-    # After the overseer, whatever its run ended as; a tick halted before it starts none (DESIGN §37).
-    _harness_dispatches(ctx, tick_id, log)
+    # After the overseer, whatever its run ended as, every run it recorded and the harness's own; a tick halted before
+    # it starts none (DESIGN §37, §40).
+    _spawn(ctx, tick_id, log)
     if failure is not None:
         return finish(TickStatus.OVERSEER_FAILED, failure, usage)
     owed = rendered.owed
@@ -547,16 +558,16 @@ def _harness_decides(ctx: Context, tick_id: int, derived: Iterable[phases.Derive
         log.info("harness decided", extra={"tickets": [d.key for d in decided]})
 
 
-def _harness_dispatches(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
-    """Make the harness's dispatches, after the overseer, in §7's order, each under every guard (DESIGN §37).
+def _spawn(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+    """Start the runs the overseer recorded and the harness's, after the overseer, in §7's order (DESIGN §37, §40).
 
-    What it raises is logged, never the tick's outcome: what it started stands, and what it did not waits for a later
-    tick.
+    Each is checked against every guard again. What it raises is logged, never the tick's outcome: what it started
+    stands, and what it did not is closed unstarted with the tick, and waits for a later tick to decide again.
     """
     try:
-        harness_dispatches.make(ctx, tick_id, log)
+        spawns.make(ctx, tick_id, log)
     except Exception as e:
-        log.exception("the harness's dispatches raised", extra={"error": str(e)})
+        log.exception("starting the runs after the overseer raised", extra={"error": str(e)})
 
 
 def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:

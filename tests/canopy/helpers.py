@@ -21,11 +21,11 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, plans, prompts, records, replies, sql, workspace
+from canopy.core import config, db, plans, prompts, recorded_runs, records, replies, sql, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
-from canopy.loop import connectors
+from canopy.loop import connectors, mcp, spawns
 from canopy.runs import drafted
 from tests.conftest import CanopyEnv, Journals, git
 
@@ -124,6 +124,19 @@ def in_tick(conn: sqlite3.Connection, *, dry_run: bool = False, ends_ok: bool = 
         yield tick_id
         if ends_ok:
             db.finish_tick(conn, tick_id, TickStatus.OK, "test")
+
+
+def tick_starts(runner: procs.Runner | None = None, *, tick_id: int | None = None) -> None:
+    """Start the runs a tick recorded, as the tick does once its overseer's run has ended (DESIGN §40).
+
+    The tick is `tick_id`, or the one `in_tick` holds open if None. Only the overseer's runs: the harness's own
+    dispatches are the tick's to make. `runner` starts them, a real one if None.
+    """
+    if tick_id is None:
+        tick_id = int(os.environ["CANOPY_TICK_ID"])
+    with mcp.opened(runner or procs.SubprocessRunner(), Path.cwd()) as ctx:
+        for recorded in recorded_runs.of_tick(ctx.conn, tick_id):
+            spawns.start(ctx, recorded)
 
 
 @contextmanager
@@ -383,8 +396,10 @@ def dispatch_in_tick(
     runner: procs.Runner | None = None,
 ) -> Dispatched:
     """In a tick of its own, run `canopy dispatch` of `key` in `repo` with `args`; the run it starts does not run."""
+    runner = runner or InlineRunner()
     with in_tick(conn) as tick_id:
-        code = main(["dispatch", key, "--repo", "repo", *args], runner=runner or InlineRunner())
+        code = main(["dispatch", key, "--repo", "repo", *args], runner=runner)
+        tick_starts(runner, tick_id=tick_id)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         return Dispatched(code, decisions(conn, tick_id))
 
@@ -403,6 +418,7 @@ def dispatch_and_run(
     runner = runner or InlineRunner()
     with in_tick(conn) as tick_id:
         assert main(["dispatch", key, "--repo", "repo", *args], runner=runner) == 0, decisions(conn, tick_id)
+        tick_starts(runner, tick_id=tick_id)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         run_id = int(last_run(conn)["id"])
         assert main(["_run", str(run_id)], runner=runner) == 0
@@ -410,13 +426,13 @@ def dispatch_and_run(
 
 
 def dispatch_refused(conn: sqlite3.Connection, *args: str, key: str = KEY) -> list[tuple[str, str]]:
-    """Dispatch as `dispatch_in_tick` does, expecting a refusal.
+    """Dispatch as `dispatch_in_tick` does, expecting a refusal, at the ask or as the tick starts the run (DESIGN §40).
 
     Returns:
         The tick's decisions, as (action, rationale).
     """
     code, made = dispatch_in_tick(conn, *args, key=key)
-    assert code == 1, made
+    assert code == 1 or any(action.startswith("refused:") for action, _ in made), made
     return made
 
 

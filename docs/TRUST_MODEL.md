@@ -427,6 +427,11 @@ Controls in code, not prompts:
   holds a `resume` whose only reason is `ci`, so a PR that keeps going red still gets one run per cooldown window; one
   with review feedback or a reply is not held, and fixes the build along the way.
 - One running worker per ticket.
+- Runs the overseer asks for (DESIGN §40), a dispatch, review, revision, or chore's run: each is recorded at the ask
+  under every guard, and holds its ticket and its capacity in every guard's count from the ask until the tick starts
+  it, after the overseer's run, under every guard again. One its tick did not start, because the tick ended early or
+  its process died, is closed unstarted as that tick closes or by the next tick, counts toward no limit, and is never
+  started by a later tick. A dry run records none.
 - Workers exit when their work is pushed. They may push again for a fix found after a push (D116), but do not poll
   CI or retry a rejected push; the run timeout bounds the rest.
 - The clock (DESIGN §33) is advice, not a limit: near its timeout an agent hears the minutes left, from the same clock
@@ -533,6 +538,9 @@ Controls now:
   every hidden character named. Residual: they read any commit the checkout's git directory holds, which a pool's
   slots share, so a branch another run left there unpushed too; the GitHub tools already read what is pushed. Every
   other definition denies the tools.
+- The overseer starts no run. Each one it asks for is recorded, and the tick starts it once the overseer's run has
+  ended (DESIGN §40), so no run, its setup, or the harness's git and treehouse calls is the overseer's descendant, and
+  a sandbox around `overseer_cmd` would confine the overseer alone; wrapping it is a change of its own (DESIGN §24).
 - Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
   operator prefixes `worker_cmd`, `private_worker_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
   each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
