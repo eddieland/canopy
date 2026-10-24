@@ -100,10 +100,13 @@ Controls:
   private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual: the
   guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
 - An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own,
-  apart from every conversation, cut as a tracker comment is, with the store's id for each author and whether the
-  comment is an agent's or carries every comment mark. In shadow (ROADMAP M62), no prompt, state block, attention
-  item, or guard reads them, so a comment steers nothing. The ticket one names is its artifact's origin, a worker's
-  word until canopy sets it per run.
+  cut as a tracker comment is, with the store's id for each author and whether the comment is an agent's or carries
+  every comment mark. A comment on an artifact whose origin names a ticket the journal holds is also recorded once in
+  that ticket's conversation, quoting its passage, as a tracker comment is (DESIGN §35): data, whoever wrote it, read
+  only by the operator's views, a private ticket's own worker, and the plan archive's conversations when they are on.
+  No state block, attention item, or guard reads them yet (ROADMAP M62), so a comment steers nothing. The ticket one
+  names is its artifact's origin, a worker's word until canopy sets it per run, so a steered worker could name another
+  ticket the journal holds; comments then reach that ticket's conversation as data, as anyone's tracker comment does.
 - The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
   `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
   each read from the journal, and only when every row the derivation finds for the ticket and its units is one of

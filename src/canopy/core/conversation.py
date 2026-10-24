@@ -69,6 +69,8 @@ SUBMISSION_RE = re.compile(r"[A-Za-z0-9_-]{8,64}")
 INSTRUCTION = "instruction/"
 #: A tracker comment's body is cut to this where a source records it, and marked truncated (DESIGN §22, §35).
 MAX_COMMENT = 2000
+#: The channel of a comment on an artifact a source observed (DESIGN §38), apart from a tracker comment's `tracker`.
+ARTIFACTS = "artifacts"
 #: The decision each `mirror` recorded, before M37 retired the overseer's mirror of tracker comments: a copy of one,
 #: which decided nothing. Older ticks hold them.
 MIRROR_ACTION = "mirror"
@@ -1131,9 +1133,11 @@ def _prompt_message(m: records.Message) -> str:
     if m.source == "operator":
         what = "the operator's reply" + (f" to message {m.answers}" if m.answers else "")
     elif m.comment_id is not None:
-        # A tracker comment a source observed, or the overseer mirrored before M37: data, whoever wrote it (§22).
+        # A tracker or artifact comment a source observed, or the overseer mirrored before M37: data, whoever wrote it
+        # (§22, §38).
         whose = "an earlier worker's" if m.source == "worker" else f"account {m.author}'s"
-        what = f"{whose} tracker comment {m.comment_id}, data"
+        where = "artifact" if m.channel == ARTIFACTS else "tracker"
+        what = f"{whose} {where} comment {m.comment_id}, data"
     else:
         run = m.run_id or m.task_run_id
         what = f"an earlier worker's {m.kind}" + (f", run {run}" if run else "")
