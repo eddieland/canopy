@@ -58,7 +58,7 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     # Handled, the message moves the cursor past it, and the ticket has nothing new from the operator.
     scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={message}")
     ticket = present(db.get_ticket(conn, KEY))
-    assert conversation.operator_section(conn, ticket) is None
+    assert conversation.operator_section(conn, ticket, authorized=()) is None
 
 
 def test_a_started_tickets_messages_stay_in_its_private_section(scenario: Scenario) -> None:
@@ -66,7 +66,7 @@ def test_a_started_tickets_messages_stay_in_its_private_section(scenario: Scenar
     scenario.operator("start", KEY)
     reply(scenario, GO_AHEAD)
     ticket = present(db.get_ticket(conn, KEY))
-    assert conversation.operator_section(conn, ticket) is None
+    assert conversation.operator_section(conn, ticket, authorized=()) is None
     private = present(conversation.state_section(conn, ticket))
     assert [m["body"] for m in private["new_operator_messages"]] == [GO_AHEAD]
 
@@ -98,7 +98,7 @@ def test_a_public_resume_hears_the_operator_and_knows_whom_to_trust(scenario: Sc
     # The dispatch carried the message cursor, so the next tick does not read the go-ahead again.
     ticket = present(db.get_ticket(scenario.conn, KEY))
     assert ticket.last_message_id == message
-    assert conversation.operator_section(scenario.conn, ticket) is None
+    assert conversation.operator_section(scenario.conn, ticket, authorized=()) is None
 
 
 def test_with_nobody_trusted_the_resume_worker_is_told_so(scenario: Scenario, git_pool: GitPool) -> None:
@@ -175,4 +175,4 @@ def test_forgetting_a_ticket_leaves_its_operator_messages_behind(scenario: Scena
     assert conversation.has_operator_messages(scenario.conn, KEY)
     scenario.operator("forget", KEY)
     assert not conversation.has_operator_messages(scenario.conn, KEY)
-    assert conversation.prompt_operator_messages(scenario.conn, KEY) is None
+    assert conversation.prompt_operator_messages(scenario.conn, KEY, authorized=()) is None

@@ -20,7 +20,7 @@ export const ROUTES = [
     'runs',
     'runs/39',
     'runs/41',
-    'worktrees',
+    'runs/worktrees',
     'tickets',
     'tickets/ABC-102',
     'tickets/ABC-105',
@@ -31,15 +31,15 @@ export const ROUTES = [
     'tasks/1/runs/1',
     'pull-requests',
     `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
-    'reviews',
-    'reviews/4',
-    'reviews/4/run',
-    'reviews/5',
+    'pull-requests/reviews',
+    'pull-requests/reviews/4',
+    'pull-requests/reviews/4/run',
+    'pull-requests/reviews/5',
     'chores',
     'chores/deps',
     'chores/deps/runs/2',
-    'ticks',
-    'ticks/2',
+    'runs/ticks',
+    'runs/ticks/2',
     'reports',
     'reports/spend',
     'settings',
@@ -55,7 +55,13 @@ export type Route = (typeof ROUTES)[number]
  * The pages screenshotted whole, the shell included: the ones README.md shows. The rest show their main pane alone, so
  * a change to the header or the rail rewrites these images and not every one.
  */
-export const WHOLE_ROUTES: readonly Route[] = ['attention', 'tickets/ABC-102', 'runs/39', 'reviews/4', 'ticks/2']
+export const WHOLE_ROUTES: readonly Route[] = [
+    'attention',
+    'tickets/ABC-102',
+    'runs/39',
+    'pull-requests/reviews/4',
+    'runs/ticks/2',
+]
 /**
  * The pages screenshotted in light as well: the shell, a list, and a detail page. Both themes draw from the same
  * tokens, so a few pages in light catch a light token gone wrong without doubling every image.

@@ -129,7 +129,7 @@ describe('railWork', () => {
         expect(railWork({ runs: runs.slice(0, 2) }, 4).more).toBe(0)
 
         const reviews = [review(8, 'running', '2026-10-08T13:00:00Z'), review(9, 'running', '2026-10-08T13:01:00Z')]
-        expect(railWork({ runs: runs.slice(0, 4), reviews }, 4).moreAt).toBe('/reviews')
+        expect(railWork({ runs: runs.slice(0, 4), reviews }, 4).moreAt).toBe('/pull-requests/reviews')
         const chores = [chore('deps', 3, '2026-10-08T13:00:00Z')]
         expect(railWork({ runs: runs.slice(0, 4), chores }, 4).moreAt).toBe('/chores')
         expect(railWork({ runs: runs.slice(0, 4), reviews, chores }, 4).moreAt).toBe('/runs')

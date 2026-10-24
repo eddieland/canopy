@@ -36,20 +36,19 @@ The nav on the left lists them, most used first. If you learn only one, learn At
   It's the home page.
 - [Tickets](/tickets): every ticket canopy has worked on, and a form to start a new one.
 - [Pull requests](/pull-requests): every PR canopy knows about, the ones it opened and the ones it reviewed, with their
-  runs and reviews.
-- [Reviews](/reviews): canopy's PR reviews, kept in the journal, with their findings pinned to the diff. One of a
-  coworker's PR is also a draft you may publish as your own; nothing posts until you do.
+  runs and reviews. Under it, [Reviews](pull-requests#the-reviews-page) has canopy's PR reviews, kept in the journal,
+  with their findings pinned to the diff. One of a coworker's PR is also a draft you may publish as your own; nothing
+  posts until you do.
 - [Runs](/runs): every agent canopy runs, workers, reviews, chores, and tasks alike, the ones running now first, and
   how full each limit is. A worker run's page has its session's transcript. When you want to know what an agent was
-  thinking, this is the receipt.
+  thinking, this is the receipt. Under it, [Ticks](ticks#the-ticks-page) has the overseer's latest ticks, and what
+  each one decided, and [Worktrees](runs#worktrees) each repository's pool, its slots, and what's holding them.
 - [Chores](/chores): scheduled agents that look at your CI, PRs, tracker, or anything else they can read, and report
   what needs you. Each chore's runs and findings are here, and Try now on its page runs it at once, whatever its
   schedule.
 - [Reports](/reports): what canopy cost and got done month by month, in dollars and tokens, and under it the spend
   page: what agent runs cost each day, and what idle ticks spent deciding there was nothing to do. Some of the
   priciest answers are "no".
-- [Ticks](/ticks): the overseer's latest ticks, and what each one decided.
-- [Worktrees](/worktrees): each repository's pool, its slots, and what's holding them.
 - [Memory](/memory): what workers remember, the ticket notes and the lessons, and which runs read them. The header's
   `memory:` readout opens it too.
 
@@ -57,8 +56,8 @@ The nav on the left lists them, most used first. If you learn only one, learn At
 to workers, reloading your config, the fun, and your session, lives at the rail's foot.
 
 The nav counts what waits for you beside three of its pages: Attention's items, by how bad they are; the
-[reviews](pull-requests#the-reviews-page) you haven't opened yet; and the [proposals](memory#the-memory-page) workers
-made for memory.
+[reviews](pull-requests#the-reviews-page) you haven't opened yet, beside Pull requests; and the
+[proposals](memory#the-memory-page) workers made for memory.
 
 A list in time order with more than one row has a toggle for its order, newest or oldest first, and this browser
 remembers your choice for each list. Tickets, pull requests, and runs are sorted by their latest activity, so theirs

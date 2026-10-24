@@ -7,9 +7,9 @@ overseer](WITHOUT_THE_OVERSEER.md).
 
 ## 38. Artifacts and Louvre
 
-The local store and publishing from runs are built, and the `artifacts` source reads comments into the journal and
-each into its ticket's conversation, as data; whose comment counts, and the overseer judging them, are designed, not
-built (ROADMAP M62). Until they are, a comment on an artifact steers a worker only as the operator passes it on.
+The local store, publishing from runs, and comments back to the ticket are built; canopy setting an artifact's ticket
+per run is designed, not built (ROADMAP M62). Until it is, the ticket a comment reaches is the publishing worker's
+word.
 
 An **artifact** is a page a worker publishes for people to read: a report, a design, an HTML mock-up. People comment
 on its passages, and the comments come back to the ticket that produced it, where they count as review feedback does.
@@ -78,9 +78,12 @@ each quoting its passage. The overseer judges each as it judges review feedback;
 a new version, replies on the threads it addressed, and resolves them.
 
 - **Whose comment counts.** Louvre authors the operator lists, in private config (TRUST_MODEL T7), are authority, as an
-  authorized replier's comment is. Anyone else's is untrusted feedback that waits on the attention list until the
-  operator sends it on (D089). A comment marked as an agent's, or carrying every comment mark (D069), is never
-  authority. On the local store, comments are the operator's, behind the listener secret (T8).
+  authorized replier's comment is: shown to the overseer with the operator's messages, citable by a `resume` for
+  `reply`, and heard by the worker. Anyone else's is untrusted feedback that waits on the attention list until the
+  operator sends it on in a reply (D089). A comment marked as an agent's, or carrying every comment mark (D069), is
+  never authority, nor is any comment on a private ticket, which only the operator authorizes (§22). Each comment
+  counts by its own author, decided in code from the store's id. On the local store, comments are the operator's,
+  behind the listener secret (T8).
 - **Which runs publish.** Only the agents the operator names in private config hold the tools, each by its exact
   name, and every other definition denies the store's server whole. Never the planner or a private ticket's worker,
   so nothing of a private ticket reaches a store (§22).
@@ -92,6 +95,7 @@ a new version, replies on the threads it addressed, and resolves them.
 - Louvre's design system: public, so the web UI depends on it from npm, or internal, so canopy copies its components
   in. An install from git must still build without the organization's registry (D046, D079).
 - A listed author's reply in a thread an unlisted person opened: authority for the thread, or only for its own words.
+  Until settled, only its own words.
 - What Louvre keeps of an artifact whose ticket canopy forgets (`canopy forget`).
 - Whether Louvre is the name.
 - Whether a private ticket may publish to the local store alone, which needs a second server in config.

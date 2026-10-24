@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
+    agent_models,
+    artifact_authority,
     chore_view,
     commit_hooks,
     connector_runs,
@@ -213,7 +215,13 @@ def _render(
     decided = frozenset([*(str(d.ticket_key) for d in by_harness), *(r.key for r in to_come.runs)])
     tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in decided]
     private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
-    operator = {t.key: found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None}
+    # A public ticket's comments on artifacts that are authority are shown with its operator messages (DESIGN §38).
+    authors = frozenset(ctx.config.artifacts.authorized_authors)
+    operator: dict[str, conversation.OperatorSection] = {}
+    for t in tickets:
+        authorized = artifact_authority.authorized(ctx.conn, t.key, authors)
+        if (found := conversation.operator_section(ctx.conn, t, authorized=authorized)) is not None:
+            operator[t.key] = found
     planned = _plans(ctx, tickets)
     # Only those the query still finds open: one a human closed will not come back from it (DESIGN §7).
     found = duties.last_queried(ctx.conn)
@@ -610,6 +618,9 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
         _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail)
     for remembered in memory_attention.items(ctx.conn, ctx.config):
         _harness_item(ctx, tick_id, remembered.ticket_key, remembered.reason, remembered.detail)
+    # A comment on an artifact by an author the operator does not list waits for them to send it on (DESIGN §38).
+    for untrusted in artifact_authority.untrusted(ctx.conn, frozenset(ctx.config.artifacts.authorized_authors)):
+        _harness_item(ctx, tick_id, untrusted.ticket_key, artifact_authority.REASON, untrusted.detail)
     _record_drafts(ctx, tick_id)
     for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
         _harness_item(ctx, tick_id, None, chore_view.FAILED_REASON, failed.detail, chore=failed.chore)
@@ -680,23 +691,27 @@ def _record_connector_failed(ctx: Context, tick_id: int) -> None:
 
 
 def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter, *, overseer: bool) -> tuple[TickStatus, str] | None:
-    """Check what the overseer needs before paying for it: free disk, then its tools' server (DESIGN §6 step 5).
+    """Check what the overseer needs before paying for it: free disk, its tools' server, its model (DESIGN §6 step 5).
 
-    The server check is the overseer's, made only with `overseer`, for a tick that runs it (DESIGN §39). A check
-    that fails records the attention item named for the status the tick closes with.
+    The server and model checks are the overseer's, made only with `overseer`, for a tick that runs it (DESIGN §39).
+    A check that fails records the attention item named for the status the tick closes with.
 
     Returns:
-        That status and the tick's summary, or None when both checks pass.
+        That status and the tick's summary, or None when every check passes.
     """
     low = _check_disk(ctx, log)
     if low is not None:
         status, summary, then = TickStatus.DISK_LOW, low, "Free space there, and the next tick runs it"
-    else:
-        unavailable = _check_server(ctx, tick_id, log) if overseer else None
-        if unavailable is None:
-            return None
+    elif not overseer:
+        return None
+    elif (unavailable := _check_server(ctx, tick_id, log)) is not None:
         status, summary = TickStatus.CANOPY_UNAVAILABLE, unavailable
         then = "Make `canopy _mcp` start where the loop runs"
+    elif (refused := _check_model(ctx, log)) is not None:
+        status, summary = refused
+        then = "The next tick looks it up again"
+    else:
+        return None
     _harness_item(ctx, tick_id, None, status, f"{summary}; the overseer did not run. {then}")
     return status, summary
 
@@ -768,6 +783,31 @@ def _check_server(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | No
             return None
     log.error("overseer not started", extra={"reason": failure})
     return failure
+
+
+def _check_model(ctx: Context, log: logs.TickAdapter) -> tuple[TickStatus, str] | None:
+    """Look the overseer's chosen model up in the runtime's list, as a worker's dispatch does (DESIGN §13).
+
+    The model is the one `runtime.models` chooses for the agent `runtime.overseer_cmd` runs; the overseer works on no
+    one ticket, so no override reaches it. It is never fallen back from: an overseer on a model nobody chose would
+    decide for the loop unseen.
+
+    Returns:
+        The status the tick closes with, `model_missing` or `model_list_failed`, and why, or None when no model is
+        chosen or the runtime lists it.
+    """
+    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.overseer_cmd)
+    if model is None:
+        return None
+    try:
+        agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version)
+    except agent_models.ModelError as e:
+        refused = e
+    else:
+        return None
+    log.error("overseer not started", extra={"reason": refused.reason})
+    missing = refused.guard == agent_models.MISSING
+    return TickStatus.MODEL_MISSING if missing else TickStatus.MODEL_LIST_FAILED, refused.reason
 
 
 def _initialized(out: str) -> bool:

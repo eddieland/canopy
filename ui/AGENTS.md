@@ -150,18 +150,18 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   screenshot shows how a page is drawn, not what the guide says, which most UI pull requests edit: `placeholderGuide`
   serves a guide of placeholder Latin in place of the real one, its pages and their list included, with
   `e2e/guide-specimen.md` the page taken, so a guide edit rewrites no image. `README.md` shows `attention-dark`,
-  `tickets-ABC-102-dark`, `runs-39-dark`, `reviews-4-dark`, and `ticks-2-dark`: rename them there too. The baselines are
-  CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots workflow on it (`gh
-  workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It runs only the spec
-  files that call `toHaveScreenshot`, `screenshotMain`, or `screenshotWhole`, so a test that takes one through another
-  helper is missed until its file calls one of those. It pushes a commit with the images that changed, recompressed
-  losslessly with oxipng, and starts CI on it, which runs the whole suite; pull before going on. It rewrites only the
-  images that fail the comparison, so a change subtle enough to pass within the threshold (a token's small shift) leaves
-  the old images in place: run it with `update` set to `all` (`-f update=all`) to rewrite every one. The workflow stays
-  CI's way. `make screenshots` renders the same images locally in Docker (it needs Docker), from Playwright's Ubuntu
-  image at the pinned version, with the same spec files and oxipng, and writes only the images that changed into the
-  checkout; `UPDATE=all` rewrites every one and `UPDATE=check` only compares. `npx playwright test
-  --update-snapshots=changed` outside Docker runs on a machine whose rendering may not match.
+  `tickets-ABC-102-dark`, `runs-39-dark`, `pull-requests-reviews-4-dark`, and `runs-ticks-2-dark`: rename them there
+  too. The baselines are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots
+  workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It
+  runs only the spec files that call `toHaveScreenshot`, `screenshotMain`, or `screenshotWhole`, so a test that takes
+  one through another helper is missed until its file calls one of those. It pushes a commit with the images that
+  changed, recompressed losslessly with oxipng, and starts CI on it, which runs the whole suite; pull before going on.
+  It rewrites only the images that fail the comparison, so a change subtle enough to pass within the threshold (a
+  token's small shift) leaves the old images in place: run it with `update` set to `all` (`-f update=all`) to rewrite
+  every one. The workflow stays CI's way. `make screenshots` renders the same images locally in Docker (it needs
+  Docker), from Playwright's Ubuntu image at the pinned version, with the same spec files and oxipng, and writes only
+  the images that changed into the checkout; `UPDATE=all` rewrites every one and `UPDATE=check` only compares. `npx
+  playwright test --update-snapshots=changed` outside Docker runs on a machine whose rendering may not match.
 - On CI, Playwright runs a failed test once more, and one that passes then still fails the run, named flaky in the
   report: fix it, as a broken one is. The lint holds `e2e/` to eslint-plugin-playwright's recommended rules, which
   refuse most of what makes a browser test flaky.

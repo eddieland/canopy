@@ -73,19 +73,16 @@ Rules:
   - Tickets sky, a message bubble: a ticket is a conversation with the operator.
   - Tasks chartreuse, a new shoot: a task seeds the tickets that follow it, and a shoot is yellow-green before it
     is emerald, which is `status-running`'s hue and would read as a running task on its own page.
-  - Pull requests violet, the purple a merged PR turns, where every PR is headed.
-  - Reviews fuchsia, the proofreader's pen.
+  - Pull requests violet, the purple a merged PR turns, where every PR is headed. The reviews are under it.
   - Runs indigo, the night shift: workers carry on after the operator logs off.
   - Chores orange, a hi-vis vest: scheduled maintenance.
   - Reports gold, coins: what canopy cost, by the month and, on the spend page under it, by the day.
-  - Ticks lime, a heart monitor's trace: each tick is the loop's pulse.
-  - Worktrees teal, water in the pool each repository's slots come from.
   - Memory pale azure, the forget-me-not. It shares done's hue, which costs nothing: its page shows no run state.
   - Settings slate, the machinery. It is in the rail's footer rather than the nav, so it needs no hue of its own and
     wears its color on its trail alone.
 
   A new section takes a color the same way, from what its page holds, and stays apart from its neighbours in the nav
-  and from the status colors on its own page. Eleven nav hues, five statuses, and the accent leave the wheel full, so a
+  and from the status colors on its own page. Eight nav hues, five statuses, and the accent leave the wheel full, so a
   new one may mean moving another. They go on the nav's icons and highlight, the first step of the page header's trail,
   and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no
   section (the 404) takes the accent.
@@ -154,7 +151,7 @@ Rules:
   by script: `#main` under the base path would be another page's address.
 - **The rail** holds, top to bottom: the search box, the nav, what is working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
-  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Tasks, Pull requests, Reviews), then what they
+  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Tasks, Pull requests), then what they
   check now and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav item
   is height the sticky part has none to spare of in an 800px window. Each nav item says on hover what its page holds,
   and each spend window what it covers, as a native `title`; a spend window opens the spend page over its week or
@@ -434,9 +431,9 @@ Rules:
   A ticket whose plan waits on the operator (proposed, no planner running) leads with the card, above its Work panel,
   since the plan is what they came to answer; otherwise the card follows the lists. Where it sits is settled as the
   page opens, so a plan approved meanwhile leaves its card where it was read. A review's run is on a page of its own
-  too, `/reviews/$id/run`, under the review in the trail, with a run's skeleton: its Run panel, its transcript, its
-  prompt, and its output. The review's page is its results, so it says only when the run ended and links there from a
-  `run` field.
+  too, `/pull-requests/reviews/$id/run`, under the review in the trail, with a run's skeleton: its Run panel, its
+  transcript, its prompt, and its output. The review's page is its results, so it says only when the run ended and links
+  there from a `run` field.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
@@ -468,7 +465,7 @@ Rules:
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
 - **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Pull
-  requests' violet to Worktrees' teal. It is static.
+  requests' violet to Tickets' sky. It is static.
 
 ## Fun
 
@@ -1480,14 +1477,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   has no line. What either button did goes under it (`Notice`). Until its review starts, the reviews list has a
   `requested` row for it, whose ticket's place names the PR's author in muted monospace once canopy has read the PR,
   since it has no ticket.
-- **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop does not
-  own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page holds the
-  review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Its header has
-  the PR's link out, as the PR's page does (`PullRequestLinksOut`), with or without a draft. Each fact is said
-  once. The description is the run's status alone (`done`), and the Review panel's header has no dot. The panel leads
-  with the reviewer's summary, the answer the operator came for, then the `harness` line when the harness decided the
-  status, then the verdict, in its worst finding's color with its impact chip (its one home, since the description is
-  plain words and could carry neither), the PR, with the PR's other reviews on a muted line under it (`also review:1,
+- **A review** (`/pull-requests/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop
+  does not own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page
+  holds the review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Its
+  header has the PR's link out, as the PR's page does (`PullRequestLinksOut`), with or without a draft. Each fact is
+  said once. The description is the run's status alone (`done`), and the Review panel's header has no dot. The panel
+  leads with the reviewer's summary, the answer the operator came for, then the `harness` line when the harness decided
+  the status, then the verdict, in its worst finding's color with its impact chip (its one home, since the description
+  is plain words and could carry neither), the PR, with the PR's other reviews on a muted line under it (`also review:1,
   1 blocking finding`, each verdict in its color), the ticket, the commit, when it ended, and what it spent. A diff is a
   monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
   that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel, while a

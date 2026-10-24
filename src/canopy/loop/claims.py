@@ -8,7 +8,8 @@ a decision, as every guard's is:
 - `stale`: a subject the dispatch rests on was not observed within `connect.max_age_minutes`: a public ticket, the PR of
   each unit a `resume` names, and the PRs of the ticket a stacked dispatch's `base` is the branch of.
 - `unauthorized`: the label was not observed on the ticket; a `resume` for `reply` carries no cursor to a new comment
-  by an authorized replier that is not a worker's, nor to a new operator message; a `resume` for `review` covers no
+  by an authorized replier that is not a worker's, nor to a new operator message or comment on one of the ticket's
+  artifacts that is authority (DESIGN §38); a `resume` for `review` covers no
   feedback by a trusted reviewer, nor the canopy review it names with `canopy:review` trusted, or covers someone else's
   feedback with no operator message after it among those it carries (D089). With feedback plans on, the approval of
   the plan is the gate instead (§32), so the review check is not made; nor is it on a joint `resume`, which carries
@@ -36,7 +37,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, item_numbers, observe, records, review_runs, sql
+from canopy.core import artifact_authority, conversation, db, item_numbers, observe, records, review_runs, sql
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
 from canopy.loop import observations, phases
@@ -337,7 +338,8 @@ def _check_reply(ctx: Context, reader: observations.Reader, record: records.Tick
     """Refuse a `resume` for `reply` that carries neither a new authorized reply nor a new operator message (§7).
 
     An authorized reply is a comment by an account in `trust.authorized_repliers`, by its number, that is not a worker's
-    (D069), past the ticket's `comment` cursor. An operator message is past its `message` cursor, up to the one carried.
+    (D069), past the ticket's `comment` cursor. An operator message is past its `message` cursor, up to the one carried,
+    and so is a comment on one of its artifacts that is authority (`artifact_authority`, §38).
 
     Raises:
         Refusal: `unauthorized`.
@@ -348,12 +350,13 @@ def _check_reply(ctx: Context, reader: observations.Reader, record: records.Tick
         new = observations.past_comments(reader.comments.get(record.key, []), record.comment_cursor)
         if any(c.number == comment and c.author in repliers and c.source != "worker" for c in new):
             return
-    if _operator_messages(ctx, record, cursors.get("message")):
+    message = cursors.get("message")
+    if _operator_messages(ctx, record, message) or _artifact_comments(ctx, record, message):
         return
     raise Refusal(
         "unauthorized",
         f"a resume for reply needs a cursor to what authorizes it: comment= at a new comment on {record.key} by an "
-        "authorized replier that is not a worker's, or message= at a new operator message",
+        "authorized replier that is not a worker's, or message= at a new operator message or artifact comment",
     )
 
 
@@ -367,6 +370,19 @@ def _operator_messages(ctx: Context, record: records.Ticket, cursor: str | None)
         return []
     after = max(record.last_message_id or 0, record.forgotten_message_id or 0)
     found = conversation.operator_messages_after(ctx.conn, record.key, after)
+    return [m for m in found if m.id <= int(cursor)]
+
+
+def _artifact_comments(ctx: Context, record: records.Ticket, cursor: str | None) -> list[records.Message]:
+    """The messages of the ticket's comments on artifacts that are authority, past its `message` cursor, up to `cursor`.
+
+    Returns:
+        The messages, oldest first; none without a cursor.
+    """
+    if cursor is None or not cursor.isdigit():
+        return []
+    authors = frozenset(ctx.config.artifacts.authorized_authors)
+    found = artifact_authority.authorized(ctx.conn, record.key, authors, after=record.last_message_id or 0)
     return [m for m in found if m.id <= int(cursor)]
 
 

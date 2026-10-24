@@ -27,6 +27,7 @@ from tests.canopy.helpers import (
     canopy,
     has_deadline,
     in_tick,
+    listed,
     only_tick,
     overseer_titles,
     present,
@@ -620,6 +621,45 @@ def test_too_little_free_disk_closes_the_tick_without_the_overseer(scenario: Sce
 
     # `0` turns the check off: the next tick runs the overseer, and the item is gone.
     scenario.configures(loop={"min_free_disk_mib": 0})
+    scenario.tick(dry_run=True)
+    assert len(agent_runs(scenario.agent_log)) == 2
+    assert scenario.attention() == []
+
+
+def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it(
+    scenario: Scenario,
+    opencode_state: Path,
+) -> None:
+    """The overseer's model is looked up before it runs, as a worker's is, and never fallen back from (DESIGN §13)."""
+    model = "acme/fake-model-1"
+    scenario.tick(dry_run=True)  # an `ok` tick, whose list the halted one leaves standing
+    listed(opencode_state, "acme/fake-model-2")
+    scenario.configures(runtime={"models": {"overseer": model}})
+    halted = [scenario.tick(dry_run=True, code=1) for _ in range(2)]
+    assert len(agent_runs(scenario.agent_log)) == 1  # the overseer ran for the first tick alone
+
+    missing = (
+        f"OpenCode does not list the model {model} chosen in runtime.models, so a run on it would fail before its "
+        "first call; nothing ran on another model. Choose a model it lists, or set up its provider"
+    )
+    assert [(t.tick.status, t.tick.summary) for t in halted] == [(TickStatus.MODEL_MISSING, missing)] * 2
+    assert scenario.attention() == [(None, "model_missing")]
+    [item] = attention.current(scenario.conn)
+    assert item.detail == f"{missing}; the overseer did not run. The next tick looks it up again"
+    assert item.since == halted[0].decisions[0].created_at  # open since the first tick of the streak
+
+    # A list that cannot be read halts it too, with a status of its own.
+    opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
+    failed = scenario.tick(dry_run=True, code=1)
+    assert failed.tick.status == TickStatus.MODEL_LIST_FAILED
+    assert failed.tick.summary == (
+        f"could not look up the model {model} chosen in runtime.models: `opencode models` exited 1. Nothing ran on "
+        "another model; the work resumes once the list can be read"
+    )
+    assert scenario.attention() == [(None, "model_list_failed")]
+
+    # Once the runtime lists it, the next tick runs the overseer, and the item is gone.
+    listed(opencode_state, "acme/fake-model-2", model)
     scenario.tick(dry_run=True)
     assert len(agent_runs(scenario.agent_log)) == 2
     assert scenario.attention() == []
