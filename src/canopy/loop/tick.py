@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
     agent_models,
+    artifact_authority,
     chore_view,
     commit_hooks,
     connector_runs,
@@ -213,7 +214,13 @@ def _render(
     decided = frozenset([*(str(d.ticket_key) for d in by_harness), *(r.key for r in to_come.runs)])
     tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in decided]
     private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
-    operator = {t.key: found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None}
+    # A public ticket's comments on artifacts that are authority are shown with its operator messages (DESIGN §38).
+    authors = frozenset(ctx.config.artifacts.authorized_authors)
+    operator: dict[str, conversation.OperatorSection] = {}
+    for t in tickets:
+        authorized = artifact_authority.authorized(ctx.conn, t.key, authors)
+        if (found := conversation.operator_section(ctx.conn, t, authorized=authorized)) is not None:
+            operator[t.key] = found
     planned = _plans(ctx, tickets)
     # Only those the query still finds open: one a human closed will not come back from it (DESIGN §7).
     found = duties.last_queried(ctx.conn)
@@ -603,6 +610,9 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
         _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail)
     for remembered in memory_attention.items(ctx.conn, ctx.config):
         _harness_item(ctx, tick_id, remembered.ticket_key, remembered.reason, remembered.detail)
+    # A comment on an artifact by an author the operator does not list waits for them to send it on (DESIGN §38).
+    for untrusted in artifact_authority.untrusted(ctx.conn, frozenset(ctx.config.artifacts.authorized_authors)):
+        _harness_item(ctx, tick_id, untrusted.ticket_key, artifact_authority.REASON, untrusted.detail)
     _record_drafts(ctx, tick_id)
     for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
         _harness_item(ctx, tick_id, None, chore_view.FAILED_REASON, failed.detail, chore=failed.chore)
