@@ -69,6 +69,11 @@ def review(conn: sqlite3.Connection, tick_id: int, started: str, session: str, t
     return cursor.lastrowid
 
 
+def cost_of(conn: sqlite3.Connection, run_id: int) -> object:
+    """The cost worker run `run_id`'s row records."""
+    return conn.execute("SELECT cost_usd FROM runs WHERE id = ?", (run_id,)).fetchone()[0]
+
+
 def due(conn: sqlite3.Connection, limit: int = 10, now: datetime = NOW) -> list[tuple[str, int, str, int]]:
     return [(d.run_table, d.run_id, d.session_id, d.attempts) for d in run_models.due(conn, limit=limit, now=now)]
 
@@ -211,3 +216,22 @@ def test_0088_reads_again_only_the_runs_more_than_one_model_served(tmp_path: Pat
     assert due(conn) == [("runs", w, "ses_w", 0)]
     # Its models are shown till a read replaces them.
     assert [m.model for m in run_models.of_run(conn, "runs", w)] == ["a/x", "a/y"]
+
+
+def test_a_run_its_events_left_unpriced_takes_the_cost_its_session_s_record_gives(conn: sqlite3.Connection) -> None:
+    unpriced, priced = worker(conn, tick(conn, at(5), None), at(4), "ses_u"), worker(conn, 1, at(3), "ses_p")
+    conn.execute("UPDATE runs SET cost_usd = 0.5 WHERE id = ?", (priced,))
+    used = [ModelUse("a/x", 3, 1.25), ModelUse("a/y", 1, 0.25)]
+    for run, session in ((unpriced, "ses_u"), (priced, "ses_p")):
+        run_models.record(conn, Due("runs", run, session, 0), ModelsRead.FOUND, used)
+    # Its events' own figure is kept, as is the first record's: one read again later never changes it.
+    assert (cost_of(conn, unpriced), cost_of(conn, priced)) == (1.5, 0.5)
+    run_models.record(conn, Due("runs", unpriced, "ses_u", 1), ModelsRead.FOUND, [ModelUse("a/x", 1, 9.0)])
+    assert cost_of(conn, unpriced) == 1.5
+
+
+@pytest.mark.parametrize("status", [ModelsRead.MISSING, ModelsRead.FAILED])
+def test_a_read_that_did_not_find_the_session_prices_no_run(conn: sqlite3.Connection, status: ModelsRead) -> None:
+    w = worker(conn, tick(conn, at(5), None), at(4), "ses_w")
+    run_models.record(conn, Due("runs", w, "ses_w", 0), status, error="exited 1")
+    assert cost_of(conn, w) is None

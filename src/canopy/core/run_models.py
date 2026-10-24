@@ -129,6 +129,9 @@ def record(
 
     `replies` is the model of each reply, by its message, of a session more than one model served.
 
+    A run that recorded no cost of its own takes the models' total as its cost, so what it spent is counted wherever a
+    run's cost is (`canopy.core.spend`).
+
     Only a read that found the session replaces the models a read before found, and their replies'. One that finds it
     missing keeps them, as found, since the runtime dropped what canopy read; one that fails keeps them till a read
     again finds it.
@@ -150,6 +153,12 @@ def record(
                 sql.insert_rows("run_reply_models", ("run_table", "run_id", "message", "model")),
                 [(run.run_table, run.run_id, message, model) for message, model in replies.items()],
             )
+        if status is ModelsRead.FOUND and models:
+            # A run whose events left its cost unread takes what its session's record priced its replies at: every
+            # OpenCode 2 run's do, since its last call's cost is never printed. One its events priced keeps theirs.
+            cost = sum(m.cost_usd for m in models)
+            filled = sql.update(run.run_table).set(cost_usd=cost).where("id = ? AND cost_usd IS NULL", run.run_id)
+            sql.execute(conn, filled)
         sql.execute(
             conn,
             sql.insert(

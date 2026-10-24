@@ -280,6 +280,8 @@ From the events the harness also reads, each validated (D026), the session id, t
 tool calls by tool, a skill's by the skill it loaded, and records them on the tick or run (§11) with the digest of the
 definitions it loaded, so a prompt or definition change splits runs into before and after. Figures that do not
 validate make the run report no cost rather than too little, and a template that asks for no events records no cost.
+Either takes the cost its session's record gives once that is read (Each agent's model), as every OpenCode 2 run does,
+since 2 never prints its last call's.
 
 What the run was offered is recorded beside them: MCP servers, with the rules that leave it only some of one's tools,
 skills, and the runtime's own tools. The runtime is asked as `canopy agents` asks it, while the agent starts, by the
