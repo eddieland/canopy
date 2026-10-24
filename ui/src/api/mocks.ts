@@ -350,6 +350,7 @@ export function draft(fields: Partial<Draft> = {}): Draft {
         sent_url: null,
         reacted: null,
         created_at: '2026-10-08T11:38:00Z',
+        from_plan: null,
         ...fields,
     }
 }
@@ -466,6 +467,7 @@ export function feedbackPlanItem(fields: Partial<FeedbackPlanItem> = {}): Feedba
         excerpt: 'Can it move into a `finally`?',
         rationale: 'Move it into a `finally`.',
         url: 'https://github.com/acme/web/pull/88#discussion_r2468013579',
+        check: null,
         ...fields,
     }
 }

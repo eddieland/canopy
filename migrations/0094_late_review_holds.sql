@@ -3,7 +3,7 @@
 --
 -- SQLite cannot change a CHECK in place, so `review_holds` is rebuilt with every row it had. No table references it.
 
-CREATE TEMP TABLE review_holds_0090 AS SELECT * FROM review_holds;
+CREATE TEMP TABLE review_holds_0094 AS SELECT * FROM review_holds;
 DROP TABLE review_holds;
 
 CREATE TABLE review_holds (
@@ -25,5 +25,5 @@ INSERT INTO review_holds (
     review_run_id, finding, kind, rebuts_run_id, rebuts_finding, held_at, released_at, released_channel
 )
 SELECT review_run_id, finding, kind, rebuts_run_id, rebuts_finding, held_at, released_at, released_channel
-FROM temp.review_holds_0090;
-DROP TABLE temp.review_holds_0090;
+FROM temp.review_holds_0094;
+DROP TABLE temp.review_holds_0094;

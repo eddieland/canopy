@@ -3320,6 +3320,8 @@ export type components = {
              * @description Whether the operator edited it.
              */
             edited: boolean;
+            /** @description For a thread's draft whose run followed a feedback plan covering its thread, the item it started from. */
+            from_plan: components["schemas"]["DraftFromPlan"] | null;
             /**
              * Hash
              * @description The name of that text and reaction, which a send carries so what posts is what the operator read.
@@ -3419,6 +3421,39 @@ export type components = {
              * @description Why nothing was posted, in the harness's words.
              */
             why: string;
+        };
+        /**
+         * DraftFromPlan
+         * @description The feedback plan item a thread's draft started from (DESIGN §32), compared in code with what the run wrote.
+         */
+        DraftFromPlan: {
+            /**
+             * Departs
+             * @description Whether the run's own text, or what it says it did, is other than the plan proposed: the operator rereads it.
+             */
+            departs: boolean;
+            /**
+             * Item Id
+             * @description The review comment's id canopy observed for the item.
+             */
+            item_id: number;
+            /**
+             * Left Out
+             * @description Whether the operator's approval left the item out.
+             */
+            left_out: boolean;
+            /**
+             * Number
+             * @description The item's number in its plan, which the operator names it by.
+             */
+            number: number;
+            /** @description What the plan proposed for it. */
+            proposal: components["schemas"]["ProposalName"];
+            /**
+             * Reply
+             * @description The reply the plan proposed, model text: plain text, never Markdown, here. None when it proposed none.
+             */
+            reply: string | null;
         };
         /**
          * @description Where a draft goes: a reply on a review thread, its PR's one comment, or the ticket's.
@@ -3659,6 +3694,11 @@ export type components = {
              */
             author: string | null;
             /**
+             * Check
+             * @description For a check, its name, as the plan's read saw it; None for any other item.
+             */
+            check: string | null;
+            /**
              * Excerpt
              * @description The first line of what was said, cut short, as the `vcs` source last read it: plain text here, whoever wrote
              *     it. None once no read holds it, or for a review that said nothing.
@@ -3666,13 +3706,14 @@ export type components = {
             excerpt: string | null;
             /**
              * Item
-             * @description A review, or a review thread by the comment the plan covers.
+             * @description A review, a review thread by the comment the plan covers, a failed check at the PR's head, or its conflict.
              * @enum {string}
              */
-            item: "review" | "comment";
+            item: "review" | "comment" | "check" | "conflict";
             /**
              * Item Id
-             * @description The id the `vcs` source observed: the one the plan's `### Item <id>` heading carries.
+             * @description The one the plan's `### Item <id>` heading carries: the id the `vcs` source observed, or for a check or a
+             *     conflict the one canopy gives it, below zero.
              */
             item_id: number;
             /**
@@ -7179,6 +7220,13 @@ export type components = {
              * @description How many ticks.
              */
             ticks: number;
+            /**
+             * Without Overseer
+             * @description How many of them ran no overseer, the harness having left it nothing to judge or the tick halting before it
+             *     (DESIGN §39): each counted at nothing, never as a run that reported no cost.
+             * @default 0
+             */
+            without_overseer: number;
         };
         /**
          * SpendTool
@@ -7294,6 +7342,13 @@ export type components = {
              * @description How many ticks.
              */
             ticks: number;
+            /**
+             * Without Overseer
+             * @description How many of them ran no overseer, the harness having left it nothing to judge or the tick halting before it
+             *     (DESIGN §39): each counted at nothing, never as a run that reported no cost.
+             * @default 0
+             */
+            without_overseer: number;
         };
         /**
          * Started
