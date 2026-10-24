@@ -3,7 +3,7 @@
 REQUIREMENTS R26, DESIGN §38, §22, §25, §30, and §35, TRUST_MODEL T1, T6, T7, and T8, D003, D069, D089. Asked for by
 the operator (2026-10-17): workers publish artifacts people comment on, to Louvre, a hosted platform that is its own
 program, or to a local store canopy ships, through the same MCP tools, and the comments come back to the ticket.
-Stages 1 and 2 need nothing; stage 3 needs M36 and M37. Four stages, in order, each in its own PRs.
+Stages 1 and 2 need nothing; stage 3 needs M36 and M37. Three stages, in order, each in its own PRs.
 
 - **Stage 1, the local store.** A workspace member under `packages/` serving the tools below over stdio, with versions,
   anchors, and the comment feed, its artifacts under the state directory and out of the journal. Louvre builds the
@@ -16,8 +16,11 @@ Stages 1 and 2 need nothing; stage 3 needs M36 and M37. Four stages, in order, e
   line. Each comment reaches its ticket's conversation in code as a tracker comment does (§35), quoting its passage;
   `authorized_authors` and the comment marks decide authority in code, and an unlisted author's comment is an
   attention item until the operator sends it on. TRUST_MODEL T1.
-- **Stage 4, plans as artifacts.** A plan is an artifact in the local store, and the plan editor's threads are artifact
-  threads.
+- **Plans stay canopy's.** A fourth stage, plans as artifacts, was dropped at the operator's word (2026-10-24). A plan
+  stays §25's Markdown file, its threads in the journal, for operators who use no store and those who prefer canopy's
+  editor. Buy-in from others comes after the plan: an artifact a worker publishes when the operator asks for one, the
+  worker then ending `blocked` until they reply. Whether buy-in holds the `implement` in code, or is asked as a Louvre
+  decision, waits on that being tried on a real ticket.
 - Rendering the local store's HTML in the web UI, from a second loopback origin in a sandboxed frame: TRUST_MODEL T8,
   in whichever stage first shows an artifact.
 - Tests with the fakes: a new version keeps a thread's anchor, and a reworded passage reads `passage_gone`; the feed's
