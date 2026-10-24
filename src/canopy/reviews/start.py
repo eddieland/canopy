@@ -2,7 +2,8 @@
 
 A review is keyed by its PR and commit, and by its persona when the operator chose several for the PR (`due`, §31).
 The guards hold one `done` review per commit, a per-PR limit (the policy's plus the operator's grants, `grants.py`),
-which each review counts against, a daily limit, and `max_reviews` within `max_workers`, whatever the overseer asks for.
+which each review counts against, a commit's settle time (`settle.py`), a daily limit, and `max_reviews` within
+`max_workers`, whatever the overseer asks for.
 A refusal is raised as `Refusal`; the CLI records it as `refused:<guard>`.
 """
 
@@ -36,7 +37,7 @@ from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
 from canopy.infra.text import quoted
-from canopy.reviews import findings, grants
+from canopy.reviews import findings, grants, settle
 
 if TYPE_CHECKING:
     import sqlite3
@@ -199,7 +200,7 @@ def check(ctx: Context, *, tick_id: int, request: Request) -> str:
     """
     planned = db.decisions_for_tick(ctx.conn, tick_id)
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        repo = _guard(ctx, request, planned=planned)
+        repo = _guard(ctx, request, planned=planned, dry_run=True)
         _persona(ctx, request)
         return repo
 
@@ -470,16 +471,24 @@ def _notes(conn: sqlite3.Connection, run: records.ReviewRun) -> str | None:
     return found.notes if found is not None else None
 
 
-def _guard(ctx: Context, request: Request, *, planned: Collection[records.Decision] | None = None) -> str:
+def _guard(
+    ctx: Context,
+    request: Request,
+    *,
+    planned: Collection[records.Decision] | None = None,
+    dry_run: bool = False,
+) -> str:
     """Refuse unless a review of `request` may start now. Returns the repository it leases in.
 
-    `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running.
+    `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running. A dry run
+    records no head as seen (D036).
 
     Returns:
         The name of the repository the review leases in.
 
     Raises:
-        Refusal: reviews are off, or one of the shape, repository, ownership, running, and limit checks refused.
+        Refusal: reviews are off, or one of the shape, repository, ownership, running, limit, and settle checks
+            refused.
     """
     if not review_requests.reviews_on(ctx.conn, ctx.config):
         raise Refusal(
@@ -491,7 +500,7 @@ def _guard(ctx: Context, request: Request, *, planned: Collection[records.Decisi
     _check_ours(ctx, request, repo)
     planned_reviews, planned_runs = split_planned(planned or [])
     _check_running(ctx, request, planned_reviews, planned_runs)
-    _check_limits(ctx, request, planned_reviews, planned_runs)
+    _check_limits(ctx, request, planned_reviews, planned_runs, record=not dry_run)
     return repo
 
 
@@ -563,12 +572,17 @@ def _check_limits(
     request: Request,
     planned_reviews: Collection[records.Decision],
     planned_runs: Collection[records.Decision],
+    *,
+    record: bool,
 ) -> None:
-    """`reviewed` and `review_limit`, then `check_room`'s, in that order.
+    """`reviewed`, `review_limit`, and `settling`, then `check_room`'s, in that order.
+
+    `record` records the head as seen, if it is new, before checking that it has settled.
 
     Raises:
-        Refusal: the commit already has a `done` review, the PR has used its reviews, the day's reviews are used, or
-            the review runs or the workers and reviews together fill their capacity.
+        Refusal: the commit already has a `done` review, the PR has used its reviews, the commit has not been seen for
+            its settle time, the day's reviews are used, or the review runs or the workers and reviews together fill
+            their capacity.
     """
     cfg = ctx.config
     runs = review_runs.review_runs_of(ctx.conn, request.pr)
@@ -594,7 +608,30 @@ def _check_limits(
     limit = grants.limit(ctx.conn, cfg, request.pr)
     if len(runs) >= limit:
         raise Refusal("review_limit", f"this PR has had {len(runs)} review runs and the limit is {limit}")
+    _check_settled(ctx, request, record=record, now=datetime.now(UTC))
     check_room(ctx, planned_reviews, planned_runs)
+
+
+def _check_settled(ctx: Context, request: Request, *, record: bool, now: datetime) -> None:
+    """`settling`: the commit must have been the PR's head, as the overseer saw it, for `review.settle_minutes`.
+
+    A PR the operator asked to have reviewed (`canopy start URL --review`) does not wait: the ask is for a review now.
+
+    Raises:
+        Refusal: (`settling`) the commit was first seen less than the settle time ago, or is first seen now.
+    """
+    if _purpose(ctx.conn, request) == REQUEST:
+        return
+    head = settle.see(ctx.conn, ctx.config, request.pr, request.sha, record=record, now=now)
+    if head is None or head.settles_at <= now:
+        return
+    seen_at = db.format_time(head.seen_at)
+    seen = "now" if seen_at == db.format_time(now) else f"at {seen_at}"
+    raise Refusal(
+        "settling",
+        f"{request.sha[:12]} was first seen {seen} and settles at {db.format_time(head.settles_at)} "
+        f"(review.settle_minutes = {ctx.config.review.settle_minutes}); a newer push starts over",
+    )
 
 
 def check_room(

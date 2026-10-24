@@ -113,11 +113,15 @@ leaving a finding out of your draft dismisses it ([Publishing your review](pull-
 
 It's easy to catch more bugs if you don't mind flagging a lot of non-bugs, so watch what you do with the findings.
 `canopy review noise` counts the last 90 days' findings by severity, persona, and model, and why you dismissed each.
+The ones you didn't dismiss count by what the worker last said of them, `fixed` or `declined`, beside how many came
+back as rebuttals. Your dismissal outranks the worker's answer: a finding the worker called fixed and you called wrong
+counts as wrong.
 
 - A high `wrong` rate is a reviewer worth retuning: another model, another persona, or a sharper `REVIEW.md`.
 - A high `not worth it` rate is a reviewer that's right about things you've chosen to live with. Ask for fewer minor
   findings, in a persona or your docs.
 - Few dismissals at all, on a reviewer you don't trust yet, is the evidence for trusting it.
+- A pile of rebuttals is an author and a reviewer that disagree on purpose. Read a few: one of them is usually right.
 
 Noise is half the story; the other half is what the reviewer misses, and you can only count that on bugs you already
 know about. Keep a few as `[[review.eval_cases]]` in the workspace's private config: PRs that were reverted or fixed

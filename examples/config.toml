@@ -264,6 +264,7 @@ cmd = ""
 # agent_prs = true                                            # the loop's own PRs, before a human is asked
 # query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs, reviewed for you alone
 # low_impact = "Only docs, comments, or tests change."
+# settle_minutes = 30   # review a head once it has been the head this long; a push starts over. 0 to 10080
 #
 # Cases `canopy review eval` scores the reviewer on, after you change reviewer.md, a persona, or its model; best in the
 # workspace's .canopy/config.toml, since each names one of its repositories. A bug case is a change that was reverted or
