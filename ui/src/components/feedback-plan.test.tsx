@@ -55,10 +55,19 @@ describe('FeedbackPlanPanel', () => {
         expect(within(panel).getByText('waiting')).toBeTruthy()
         expect(within(panel).getByRole('link', { name: 'run:46' })).toBeTruthy()
         const rows = within(panel).getAllByTestId('feedback-plan-item')
+        // Each row leads with what was said, then where it is, then the proposal, who said it, why, and its id.
         expect(rows.map((row) => row.textContent)).toEqual([
-            '1. id 4102337001leavealicetrustedthe review 4102337001',
-            '2. id 2468013579changealicetrustedon its thread',
+            '1.Two small things, then good to go.the reviewleavealicetrustedid 4102337001',
+            '2.Can it move into a `finally`?on its threadchangealicetrustedMove it into a `finally`.id 2468013579',
         ])
+        // The review opens on its host, in a new tab; the thread's card is on this page, under its anchor.
+        const review = within(panel).getByRole<HTMLAnchorElement>('link', { name: 'the review' })
+        expect(review.href).toBe('https://github.com/acme/web/pull/88#pullrequestreview-4102337001')
+        expect(review.target).toBe('_blank')
+        const thread = within(panel).getByRole<HTMLAnchorElement>('link', { name: 'on its thread' })
+        expect(thread.getAttribute('href')).toBe(
+            '/pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88#thread-PRRT_1',
+        )
         for (const n of [1, 2]) {
             expect(screen.getByRole('checkbox', { name: `address item ${n}` }).getAttribute('aria-checked')).toBe(
                 'true',
@@ -140,6 +149,26 @@ describe('FeedbackPlanPanel', () => {
         expect(screen.getByRole('button', { name: 'Approve 1 of 2' })).toBeTruthy()
     })
 
+    it('says when an item said nothing, or is no longer on the PR as read', async () => {
+        const plan = feedbackPlan({
+            items: [
+                feedbackPlanItem({
+                    number: 1,
+                    item: 'review',
+                    thread_id: null,
+                    excerpt: null,
+                    rationale: null,
+                    url: null,
+                }),
+                feedbackPlanItem({ number: 2, excerpt: null, rationale: null }),
+            ],
+        })
+        await renderRouted(<FeedbackPlanPanel plan={plan} onChange={changed} />)
+        const said = screen.getAllByTestId('feedback-plan-said').map((s) => s.textContent)
+        expect(said).toEqual(['a review with no words', 'no longer on the PR as read'])
+        expect(screen.queryByTestId('feedback-plan-why')).toBeNull()
+    })
+
     it('offers nothing to approve once a resume spent the plan', async () => {
         await renderRouted(
             <FeedbackPlanPanel plan={feedbackPlan({ status: 'spent', spent_run: 47 })} onChange={changed} />,
@@ -160,10 +189,20 @@ describe('FeedbackPlanPanel', () => {
             proposal: 'decline',
             reply: 'Kept <b>250</b> ms.',
             thread_id: null,
+            excerpt: '<script>alert(1)</script> Why 250?',
+            rationale: 'The ticket asks for **250**.',
+            url: null,
         })
         const text = '# Plan\n\n<img src=x onerror=alert(1)> **not bold**\n'
         await renderRouted(<FeedbackPlanPanel plan={feedbackPlan({ items: [review], text })} onChange={changed} />)
-        expect(screen.getByTestId('feedback-plan-item').textContent).toContain('Kept <b>250</b> ms.')
+        const row = screen.getByTestId('feedback-plan-item')
+        expect(within(row).getByTestId('feedback-plan-reply').textContent).toBe('Proposed replyKept <b>250</b> ms.')
+        // What was said and why stay characters: no script, no bold, and no link out for a review with no URL.
+        expect(within(row).getByTestId('feedback-plan-said').textContent).toBe('<script>alert(1)</script> Why 250?')
+        expect(within(row).getByTestId('feedback-plan-why').textContent).toBe('The ticket asks for **250**.')
+        expect(row.querySelector('script, strong')).toBeNull()
+        expect(within(row).queryByRole('link')).toBeNull()
+        expect(row.textContent).toContain('the review 4102337001')
         fireEvent.click(screen.getByRole('button', { name: 'Show the plan' }))
         const shown = screen.getByTestId('feedback-plan-text')
         // Its HTML stays its characters, and Markdown is not drawn.
@@ -179,6 +218,8 @@ describe("ThreadCard's proposal", () => {
         await renderRouted(<ThreadCard thread={reviewThread()} item={item} onChange={changed} />)
         const proposal = screen.getByTestId('plan-proposal')
         expect(proposal.textContent).toBe('Plan item 2changeleft outMoved it into a `finally`.')
+        // The card is what the plan's row links to, under the thread's anchor.
+        expect(screen.getByTestId('review-thread').id).toBe('thread-PRRT_1')
         // Above the drafts, which answer it.
         const following = proposal.compareDocumentPosition(screen.getByTestId('draft'))
         expect(following & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

@@ -122,12 +122,15 @@ to do with each, and the resume waits for you. The PR's page shows that plan und
 threads' panel.
 
 The panel says which run wrote it, when, and where it stands: `waiting` on you, `stale`, `approved`, or `spent` once a
-resume has gone ahead on it. Under that, a row for each item: its number, its id on GitHub, what the plan proposes
-(`change`, `decline`, `ask`, or `leave`), who wrote it, `trusted` if `trust.trusted_reviewers` names them, and where
-it is. On a thread, the thread's card carries the proposal too, as **Plan item N** above the drafts, with the reply
-the planner would draft. A review, or an item with no thread on this page, shows its proposed reply in its row
+resume has gone ahead on it. Under that, a row for each item: its number, the first line of what was said, and where
+it is, which is a link: **on its thread** jumps to the thread's card on this page, and **the review** opens the review
+on GitHub. Under that line, what the plan proposes (`change`, `decline`, `ask`, or `leave`), who wrote the item,
+`trusted` if `trust.trusted_reviewers` names them, the plan's first line on it, which is why it proposes that, and
+the item's id on GitHub. Enough to decide each row without leaving the panel; the full thread is one click away when
+it is not. On a thread, the thread's card carries the proposal too, as **Plan item N** above the drafts, with the
+reply the planner would draft. A review, or an item with no thread on this page, shows its proposed reply in its row
 instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it stands, as plain text, so an
-enthusiastic `<img>` in a coworker's comment stays a string of characters.
+enthusiastic `<img>` in a coworker's comment stays a string of characters, in the rows as in the file.
 
 A plan goes `stale` when the PR moves after it was written: a new comment or reply, an edit, a resolved thread, a new
 head, or a check that changed its mind. The panel lists each change, in the same words `canopy show` uses. The loop
