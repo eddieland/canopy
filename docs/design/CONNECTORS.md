@@ -6,41 +6,36 @@ has the map. Previous: [Review replies](REVIEW_REPLIES.md). Next: [Personas](PER
 
 ## 30. Connectors
 
-D003, D008. The overseer reads the tracker and GitHub again every tick, through MCP, and most of what it reads has not
-changed since the tick before; once the queue settles, that watching is most of canopy's spend (MEASUREMENTS
-2026-10-15). So each tick is to run from journal state, read into it by deterministic programs. This section is the
-first step: canopy reads the world into the journal and derives in code what §7 and §14 derive, beside the overseer,
-which sees and does nothing different.
+D003, D008. An overseer that reads the tracker and GitHub again every tick, through MCP, mostly reads what has not
+changed, and once the queue settles that watching is most of canopy's spend (MEASUREMENTS 2026-10-15). So
+deterministic programs read the world into the journal, the overseer decides from what they read, and the harness
+checks against it what was the overseer's word (§7) and derives in code what §7 and §14 derive.
 
 A **connector** is a deterministic program that reads one source and prints what it saw as JSON lines. canopy runs it
 through `procs`, validates and bounds each line, and records it as an **observation**: a dated copy of a fact about the
 world. Authority stays with the source (§4 principle 1, §22): an observation says what a connector saw and when, never
-what is true now. Nothing yet reads an observation to decide anything but the derivation, which only the operator and
-the measurement read.
+what is true now.
 
 ### Sources
 
 There is at most one source of each kind, `tracker`, `vcs`, `artifacts` (an artifact store's comment feed, §38), and
 `slack` (the operator's replies in the Slack sink's threads and mentions of its bot, §20), each a command run with
-no shell (§20) under a timeout.
-Every `connect.*` key is private (§12, TRUST_MODEL T7), since each runs a command with the operator's credentials. The
-`vcs` source defaults to canopy's own programs (§29), so PRs are observed with nothing configured. There is no default
-`tracker` source, since the harness never branches on `tracker.provider` (§17); without one, tickets are not observed,
-and the derivation says so. An observation past `connect.max_age_minutes` is stale; the default keeps what a tick
-observed fresh through its dispatches. Between ticks, `canopy loop` polls every source every `connect.every_minutes`,
-whatever its pace for ticks (§6, Ticks and polls).
+no shell (§20) under a timeout. Every `connect.*` key is private (§12, TRUST_MODEL T7), since each runs a command with
+the operator's credentials. The `vcs` source defaults to canopy's own programs (§29), so PRs are observed with nothing
+configured. There is no default `tracker` source, since the harness never branches on `tracker.provider` (§17);
+without one, tickets are unobserved (below).
 
 ### The contract
 
 On stdin, one JSON object naming what to observe, and a connector reads only what it is given: a `tracker` source the
 tracker query and every ticket the state block lists (§6 step 4); a `vcs` source every PR of a ticket not marked done,
-with a draft waiting (§29), or last observed open, so no observation stays open unread, the repositories, the branch
-prefix, and the review query; an `artifacts` source its feed's cursor; a `slack` source the workspace, which names
-the sink's threads, and its `operators`, whose replies alone it prints. On stdout, one JSON line per observation, naming
-its kind (tickets and comments; PRs, branches, checks, and reviews; a feed's changes to comments and threads), and last
-an `end` line naming what the run read whole, or for a feed the cursor its next run reads from; the exit code is not
-read. A connector of the operator's own speaks this contract and nothing else: it is all the harness knows of any of
-them.
+with a draft or a review waiting on it (§21, §29), or last observed open, so no observation stays open unread, the
+repositories, the branch prefix, and the review query; an `artifacts` source its feed's cursor; a `slack` source the
+workspace, which names the sink's threads, and its `operators`, whose replies alone it prints. On stdout, one JSON line
+per observation, naming its kind (tickets and comments; PRs, branches, checks, and reviews; a feed's changes to comments
+and threads), and last an `end` line naming what the run read whole, or for a feed the cursor its next run reads from;
+the exit code is not read. A connector of the operator's own speaks this contract and nothing else: it is all the
+harness knows of any of them.
 
 - Ids, states, times, and bounded text; never logs, diffs, PR descriptions, or a credential.
 - A connector pages everything before `end` names it: the tracker query to its last page (REQUIREMENTS R1), a PR's
@@ -62,37 +57,51 @@ whole: each change is read once, past the cursor the last run's `end` line named
 thread or comment. A refused change holds the cursor before it, so the next run reads it again and none is missed.
 
 Comments are observed once each, cut and marked, the workers' marks (D069) read in code, and each is recorded in its
-ticket's conversation when first observed, in the same transaction and with the same text (§22, §35). The connector
-moves no cursor and records no decision. Each tick's run of a source is recorded with what it was asked and what it
-read; §29's reads after a run and before a send are validated the same way but are not a tick's runs.
+ticket's conversation when first observed (§22). The connector moves no cursor and records no decision. Each tick's
+run of a source is recorded with what it was asked and what it read; §29's reads after a run and before a send are
+validated the same way but are not a tick's runs.
 
 ### In the tick, and between ticks
 
 In §6 step 3, after the reconciles, the tick runs the `tracker` source, then the `vcs` source, which is also §29's
 reconcile read, then the `artifacts` source, then the `slack` source; a tick whose reconcile failed runs none, and a
-dry run observes as a live tick does. A source that
-fails, or reads less than it was asked, keeps its previous observations and raises the harness's `connector_failed`
-(§14), naming what was not read, each tick until a run reads everything; the overseer's view of the list leaves it
-out. It is one item about the workspace, its detail naming each failing source, since the attention list has no
-subject for a source. The tick goes on and loses nothing, since the overseer still reads live. The derivation
-follows. The loop's polls between ticks run the same sources the same way, record their runs with no tick, and raise
-nothing (§6).
+dry run observes as a live tick does. A source that fails, or reads less than it was asked, keeps its previous
+observations and raises the harness's `connector_failed` (§14), naming what was not read, each tick until a run reads
+everything; the overseer's view of the list leaves it out. The tick goes on: what was not read ages until it is stale
+(below), when the overseer reads it live and no dispatch rests on it (§7). The derivation follows. The loop's polls
+between ticks run the same sources the same way, record their runs with no tick, and raise nothing (§6).
 
-### The derivation, in shadow
+### What the overseer is shown
+
+- Each subject the state block shows (§6 step 4), a ticket or one of its units, is `fresh`, read whole within
+  `connect.max_age_minutes`, whose default keeps what a tick read fresh through its dispatches; `stale`, past it or
+  never read, naming what; or `unobserved`, when no source covers it, as every ticket is without a `tracker` source.
+  The overseer reads the tracker or GitHub only about one stale or unobserved: the prompt's rule, not a guard, but
+  spend by tool (§11) counts each call, and no dispatch rests on a stale subject (§7).
+- Every ticket the block lists or the query returned is a candidate or not by its observed labels and state, decided
+  in code (§17); one that is not is shown by key and why, with none of its text (TRUST_MODEL T7).
+- A candidate shows what the overseer decides from, its body only until its first unit and its items only past their
+  cursors (§7). The harness marks in code whether each comment's author is an authorized replier and whether it is a
+  worker's (D069), and whether each review item's author is trusted (D089).
+- Each subject shows the rows of §7 the derivation found holding (below), the harness's reading, which the overseer
+  may overrule; and the queries show their results as their sources last read them whole (§7, §21).
+- Text is the observation's, cut and marked, and labeled by source and author in code, never by a model. A subject
+  shows a fixed number of new items, oldest first, and counts the rest, which stay new (§35).
+
+### The derivation
 
 D008 moves a rule from the prompt into code one at a time, each checked against the `decisions` corpus first; applied
-by hand, §7's table disagreed with the overseer on `ci_red` (MEASUREMENTS 2026-10-15). So the derivation runs in
-shadow, and a measurement says which rows code may take.
+by hand, §7's table disagreed with the overseer on `ci_red` (MEASUREMENTS 2026-10-15). So the derivation is the
+harness's reading beside the overseer's, and a measurement says which rows code may take (§37).
 
 - Each tick the harness derives, from the observations and the journal, what §7 and §14 derive: the candidates (§17),
   each ticket's and unit's phase, its next action and the actions a choice allows, and the attention reasons. A ticket
   that depends on a stale or missing observation is derived as stale and counted apart, never as a disagreement.
 - The derivation is recorded beside `decisions`, every row of §7 that held, as §7 has no order yet, and with it the
-  phase the overseer left each subject at when the tick closed. It writes no decision, and changes no state block,
-  attention item, cursor, phase, or guard.
+  phase the overseer left each subject at when the tick closed. The overseer is shown it (above); by itself it changes
+  no attention item, cursor, phase, or guard.
 - It agrees with the overseer when the phase the overseer set is one of the rows that held and its decision one that
-  row allows. Agreement is computed, never stored, so a fix to the comparison reads every tick already recorded; the
-  rows themselves go under §26's window, and the measurement in `MEASUREMENTS.md` outlives them.
+  row allows. Agreement is computed, never stored, so a fix to the comparison reads every tick already recorded.
 
 ### Checks that are not CI
 
@@ -108,13 +117,12 @@ CI: it does not hold a unit at `ci_running`, make it `ci_red`, or have to pass.
 
 ### canopy's connectors
 
-Each is a uv workspace member importing nothing from canopy, as §29's programs are (§5), and speaks the whole
-contract. `canopy-connect-github`, §29's reader, is the `vcs` connector, and given a repository, a `tracker` connector
-for GitHub Issues, with `gh`'s token for the host a PR's URL or a repository's clone URL names. It reads every watched
-PR many to a GraphQL query, not a call per PR, which would cost many times the overseer's reads (MEASUREMENTS
-2026-10-15). `canopy-connect-jira` reads Jira Cloud with credentials from an operator-only file held to the Slack
-sink's checks (§20), sent only to the site the operator names, and never in config, argv, journal, or logs.
-`canopy-connect-slack`, beside the Slack sink, is the `slack` connector, with the sink's own bot token file.
+Each is a uv workspace member importing nothing from canopy, as §29's programs are (§5), and speaks the whole contract.
+`canopy-connect-github`, §29's reader, is the `vcs` connector, and given a repository, a `tracker` connector for GitHub
+Issues, with `gh`'s token for the host a PR's URL or a repository's clone URL names. `canopy-connect-jira` reads Jira
+Cloud with credentials from an operator-only file held to the Slack sink's checks (§20), sent only to the site the
+operator names, and never in config, argv, journal, or logs. `canopy-connect-slack`, beside the Slack sink, is the
+`slack` connector, with the sink's own bot token file.
 
 What a `slack` source reads is no observation: a reply from one of its `operators`, on a ticket canopy knows, is the
 operator's message, recorded as `canopy reply` records one, once per Slack message (§22, TRUST_MODEL T1); the harness

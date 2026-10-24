@@ -40,16 +40,19 @@ What the loop needs from a tracker, as capabilities, each used by the role in pa
 | When a label was added (overseer, optional) | `human_replied` |
 | Create a ticket linked to a parent (worker, optional) | follow-ups |
 
-"Label" means the tracker's tagging primitive, whatever it is called. Without blocker relations, tickets are treated as
-unblocked. Without label history, the worker's question comment is the reference point for `human_replied`. If a tracker
-cannot do a required row, the overseer records `skip` with rationale `tracker_unsupported: <capability>`.
+"Label" means the tracker's tagging primitive, whatever it is called. A `tracker` source (§30) reads the overseer's rows
+into the journal, so the overseer reads them there, and the tracker itself only about a ticket the observations leave
+stale or unobserved. Without blocker relations, tickets are treated as unblocked. Without label history, the worker's
+question comment is the reference point for `human_replied`. If a tracker cannot do a required row, the overseer records
+`skip` with rationale `tracker_unsupported: <capability>`.
 
 ### Authorization is the same everywhere
 
 The query only finds tickets. A ticket is a candidate only if reading it shows one of `tracker.labels` present and the
-ticket not closed, so a sloppy query can waste a tick but cannot authorize work. Replies are authorized only by
-`trust.authorized_repliers`, compared against the author's stable account id (Jira `accountId`, GitHub login), never a
-display name.
+ticket not closed, so a sloppy query can waste a tick but cannot authorize work. Where a tracker source observes it,
+that is decided in code, and a ticket that is not a candidate reaches the overseer by key and why alone, none of its
+text (§30). Replies are authorized only by `trust.authorized_repliers`, compared against the author's stable account id
+(Jira `accountId`, GitHub login), never a display name, and marked in code on each comment a source observes (§7).
 
 ### Ticket keys
 

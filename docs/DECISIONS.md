@@ -48,14 +48,14 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Kept: worktrees are ephemeral and the pushed branch is the checkpoint; reuse and return keep ignored files.
 - Rejected: changing treehouse upstream (still a second toolchain and a second store of leases).
 
-## D003. Connectivity through the agent runtime's MCP, not harness code
+## D003. Connectivity through the agent runtime's MCP and separate programs, not harness code
 
 - The harness imports no tracker or VCS client and holds no token. Agents reach trackers and GitHub through MCP.
-- Consequence: the harness cannot verify anything the tracker says, such as who wrote a comment.
-- Settled by the operator (2026-10-17, REQUIREMENTS C7): canopy ships separate programs, run as commands with `gh`'s
-  token, that read GitHub and post what the operator approved word for word: `canopy-connect-github` and
-  `canopy-post-github` (DESIGN §29), whose reader ROADMAP M36 grows into the whole connector.
-- Revisit: if the overseer's token cost for reading state dominates; then move polling into Python.
+- Settled by the operator (2026-10-17, REQUIREMENTS C7): canopy ships separate programs, run as commands with their own
+  credentials, that read the tracker and GitHub into the journal (DESIGN §30) and post what the operator approved word
+  for word (§29); the harness itself polls nothing.
+- Consequence: the harness can check what a connector observed, such as who wrote a comment (DESIGN §7), never more;
+  a subject no source observes stays the agents' word.
 
 ## D004. SQLite journal plus flock, not a stateless overseer
 
@@ -258,7 +258,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D051. A dispatch names the queue label it relies on, and the worker checks it again
 
 - Where a `tracker` source observes the ticket, the label must be one it observed, checked in code (`unauthorized`,
-  DESIGN §35); without one, `--label` stays a claim. Either way the worker re-reads the labels and fails without changes.
+  DESIGN §7); without one, `--label` stays a claim. Either way the worker re-reads the labels and fails without changes.
 
 ## D053. State directories and snapshots must be private to the operator
 
@@ -367,7 +367,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - `trust.trusted_reviewers` (private, empty by default; `canopy:review` for canopy's reviewer). Anyone else's
   feedback is `untrusted_review` attention until the operator answers with `canopy reply` or the web UI.
-- Checked in code where the `vcs` source observes the PR fresh (DESIGN §35): a `resume` for `review` must cover a
+- Checked in code where the `vcs` source observes the PR fresh (DESIGN §7): a `resume` for `review` must cover a
   trusted reviewer's item or a trusted canopy review, and anyone else's only with an operator message after it among
   those it carries; else `unauthorized`. Unobserved, it is the prompt's. With `policy.feedback_plan = "approve"`
   (DESIGN §32) the go-ahead is the approval of a feedback plan instead, in code, and trust only informs the operator.
