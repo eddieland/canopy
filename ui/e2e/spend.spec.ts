@@ -289,8 +289,8 @@ test("a model's row opens the runs page on the runs it served", async ({ page })
     await settled(page)
     await page.getByTestId('spend-model-table').getByRole('link', { name: 'anthropic/claude-opus-4-1' }).click()
     await expect(page).toHaveURL(/\/runs\?model=anthropic(%2F|\/)claude-opus-4-1$/u)
-    // Run 39 switched from opus to sonnet partway: the one run opus served.
-    await expect(page.getByTestId('runs-count')).toHaveText('1')
+    // Run 39, which switched from opus to sonnet partway, and the seven opus served in the spring (history.py).
+    await expect(page.getByTestId('runs-count')).toHaveText('8')
     await expect(page.getByTestId('run-39')).toBeVisible()
     await page.getByRole('navigation', { name: 'Filter by model' }).getByRole('link', { name: 'all' }).click()
     await expect(page).toHaveURL(/\/runs$/u)

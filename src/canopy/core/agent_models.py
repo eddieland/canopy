@@ -15,9 +15,10 @@ model, since one definition holds one model; every other chore runs the chore's 
 
 Before a worker run on a chosen model starts, the model is looked up in the list the runtime would look it up in,
 read in the workspace root, since a repository's own runtime config could change the list; with a variant, the
-model's variants too, since the runtime drops a variant the model lacks without a word. A model or variant the list
-lacks refuses the run as `model_missing`, and a list that cannot be read as `model_list_failed`: never the runtime's
-default instead, since a canary's run on a model nobody chose would read as the canary's.
+model's variants too, since a runtime may drop a variant the model lacks without a word, or fail the run on it. A
+model or variant the list lacks refuses the run as `model_missing`, and a list that cannot be read as
+`model_list_failed`: never the runtime's default instead, since a canary's run on a model nobody chose would read as
+the canary's.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Chore, Config
     from canopy.infra import procs
+    from canopy.runtime.implementation import Version
     from canopy.runtime.report import ModelList
 
 #: A key of `[runtime.models]`: the role of canopy's it chooses a model for.
@@ -189,8 +191,17 @@ def of_run(config: Config, template: str, model: str | None) -> dict[str, Model]
     return found | ({agent: parse(model)} if model is not None else {})
 
 
-def check(runner: procs.Runner, root: Path, model: Model, *, chosen: str = "in runtime.models") -> None:
+def check(
+    runner: procs.Runner,
+    root: Path,
+    model: Model,
+    *,
+    version: Version,
+    chosen: str = "in runtime.models",
+) -> None:
     """Refuse `model` unless the runtime, started in the workspace root `root`, lists it, and its variant if it has one.
+
+    The runtime is the one `version` runs.
 
     `chosen` says where the model was chosen, to name it in a refusal: in `runtime.models`, or by a ticket's override.
 
@@ -198,7 +209,7 @@ def check(runner: procs.Runner, root: Path, model: Model, *, chosen: str = "in r
         ModelError: (`MISSING`) the runtime does not list the model or its variant, or (`LIST_FAILED`) its list could
             not be read.
     """
-    found = runtime_models.listed(runner, cwd=root, variants=model.variant is not None)
+    found = runtime_models.listed(runner, version=version, cwd=root, variants=model.variant is not None)
     if found.error is not None:
         raise ModelError(
             LIST_FAILED,
@@ -215,8 +226,7 @@ def check(runner: procs.Runner, root: Path, model: Model, *, chosen: str = "in r
         raise ModelError(
             MISSING,
             f"{invocation.NAME} lists the model {model.id} chosen {chosen} but not its variant "
-            f"{model.variant} ({variants_listed(found, model.id)}), and would run it at its default unseen; nothing "
-            "ran. Choose a variant it lists",
+            f"{model.variant} ({variants_listed(found, model.id)}); nothing ran. Choose a variant it lists",
         )
 
 

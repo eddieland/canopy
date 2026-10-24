@@ -77,6 +77,19 @@ def test_a_live_tick_reads_which_models_served_its_overseer_once(scenario: Scena
     assert len(exports(opencode_state)) == 2
 
 
+def test_opencode_2_is_asked_for_its_session_by_its_own_command(scenario: Scenario, opencode_state: Path) -> None:
+    with_events(scenario.env, "canopy-overseer")
+    scenario.configures(runtime={"version": 2})
+    sessions(opencode_state, **{SESSION: [("anthropic", "claude-x", 0.25)]})
+    ticked = scenario.tick()
+    assert [(m.model, m.replies) for m in run_models.of_run(scenario.conn, "ticks", ticked.tick.id)] == [
+        ("anthropic/claude-x", 1),
+    ]
+    assert exports(opencode_state) == [
+        (["session", "export", "--standalone", "--sanitize", SESSION], str(scenario.env.root)),
+    ]
+
+
 def test_a_dry_run_reads_no_session(scenario: Scenario, opencode_state: Path) -> None:
     with_events(scenario.env, "canopy-overseer")
     scenario.tick(dry_run=True)

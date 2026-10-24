@@ -9,20 +9,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.runtime.implementation import session_models as implementation
+from canopy.runtime.implementation import one, pick, two
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from canopy.infra import procs
+    from canopy.runtime.implementation import Version
     from canopy.runtime.report import SessionModels
 
 
-def read(runner: procs.Runner, *, cwd: Path, session_id: str) -> SessionModels:
-    """Ask the runtime, started in `cwd`, which models served session `session_id`.
+def read(runner: procs.Runner, *, version: Version, cwd: Path, session_id: str) -> SessionModels:
+    """Ask the runtime `version` runs, started in `cwd`, which models served session `session_id`.
 
     Returns:
         Its models, the most costly first; `missing` when the runtime keeps no such session; `failed`, with why, when
         it could not be asked or its answer could not be read.
     """
-    return implementation.read(runner, cwd=cwd, session_id=session_id)
+    return pick(version, one.session_models, two.session_models).read(runner, cwd=cwd, session_id=session_id)

@@ -939,3 +939,63 @@ The three largest things worth cutting, by tokens a run saves:
 
 Smaller: the chore's unnamed GitHub tools (1.8k, F56); the workers' `todowrite` (0.7k); and GitHub's server
 instructions (0.5k on every agent), which name write tools only the workers may call.
+
+## 2026-10-23: canopy's runs on OpenCode 2.1.4
+
+What binding OpenCode 2 changes in a run, checked before binding it (#1220 was checked against 2.1.2). Cited by M58's
+Status line, for the model list.
+
+### Setup
+
+- OpenCode 2.1.2 and 2.1.4 from npm (`@opencode/cli`), 1.19.3 (`opencode-ai`) for comparison, each with a home of its
+  own. A stand-in OpenAI-compatible model on loopback, declared as a provider in the operator's
+  `~/.config/opencode/opencode.json` or in a project's, logging each request it was sent; scripted, as one check needed,
+  to call a tool on its first request. A stand-in MCP server over stdio with one tool.
+- canopy from the binding branch, its default templates, and a dry tick of a workspace `canopy init --provider github`
+  made, its overseer on the stand-in through `[runtime.models]`.
+
+### Findings
+
+- 2.1.2 runs a primary agent on the default model whatever its definition's `model:` names, even in a session created
+  with that agent; 2.1.4 runs it on the definition's model and `variant:`, sending the variant's settings.
+- 2.1.4 refuses a variant the model lacks before the first call (`provider.no-route`), but tries a model its list lacks
+  on the provider, retrying, so canopy's lookup before a run still guards it. `opencode models` prints
+  `model.list` as `providerID/id`, with no option for the variants; `opencode api --standalone model.list` gives each
+  model's, and its settings, a provider's key among them.
+- `OPENCODE_CONFIG_DIR` replaces the operator's config directory, `~/.config/opencode`, where 1 read both: with
+  canopy's snapshot named, a run lost the operator's providers and MCP servers. A link in the snapshot to their
+  `opencode.json` is read in its place, an `agent` block in OpenCode 1's shape included; a link that leads nowhere is
+  passed over.
+- A session's first model call is sent no MCP tool, in code mode or out of it, even on a server started and connected
+  beforehand: a server's tools are registered after a 100 ms debounce once it connects, and the first call is built
+  before. A plugin's `prompt` hook that waits until they are registered, about 110 ms here, has them sent on the first
+  call, three runs of three.
+- `agent.list` lists OpenCode's own agents before its plugins load canopy's; 2.1.2 listed none until then.
+- `run` reads a piped prompt, and appends a message argument to it, as 1 did. Every server is in code mode unless its
+  entry says `codemode: false`, and `execute`'s code can make HTTP requests; a definition's `execute: deny` keeps the
+  tool from the model, and 1.19.3 keeps the rule as an inert one.
+- The run's last `step_finish` is still not printed, as in 2.1.2, so a run's cost comes from its session's export.
+- With the snapshot's links and the plugin's wait, the dry tick ended `ok`: the overseer ran on the stand-in, its first
+  call was sent canopy's tools and the operator's server's, and it recorded the query through `canopy_queried`.
+
+## 2026-10-23: where OpenCode 2.1.4 caches an agent's request
+
+Whether OpenCode 2 needs the split canopy's plugin makes under OpenCode 1 (§33), which cuts the system prompt after
+the agent's body so that runs of one agent in different directories share a cached prefix. Cited by DESIGN §33.
+
+### Setup
+
+- OpenCode 2.1.4, canopy's snapshot of its definitions with the plugin as OpenCode 2 runs it, and a stand-in for
+  Anthropic's Messages API on loopback, declared as a provider through `@ai-sdk/anthropic` in the operator's config,
+  logging each request it was sent.
+- `canopy-reviewer` and `canopy-worker`, each run twice with `opencode run --standalone` in two directories; the
+  worker twice more, each with a `TMPDIR` of its own, as a sandboxed run has.
+
+### Findings
+
+- A request sends the tools, a `cache_control` breakpoint on the last of them, then the system blocks: the agent's
+  body alone, with a breakpoint; the model's name; the skills and the environment, which names the working
+  directory, the date, and the temporary directory; and OpenCode's own note on worktrees, with a breakpoint.
+- Between the two directories, and between the two `TMPDIR`s, the tools, the body, and every block but the
+  environment were identical. So every run of an agent, sandboxed or not, shares the tools and the body as a prefix
+  with breakpoints of its own, which the split gives OpenCode 1's unsandboxed runs alone, and OpenCode 2 needs none.

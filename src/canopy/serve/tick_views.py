@@ -123,7 +123,13 @@ def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
         return None
     output = tick_output(ctx, tick_id)
     removed = removed_after(ctx.conn, output, row.ended_at, _tick_rule(row))
-    return session_transcript(output, row.session_id, removed, run_models.replies_of(ctx.conn, "ticks", tick_id))
+    return session_transcript(
+        output,
+        row.session_id,
+        removed,
+        run_models.replies_of(ctx.conn, "ticks", tick_id),
+        version=ctx.config.runtime.version,
+    )
 
 
 def tick_raw_output(ctx: Context, tick_id: int) -> RawOutput | None:
