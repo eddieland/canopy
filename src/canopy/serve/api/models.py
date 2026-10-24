@@ -17,11 +17,12 @@ router = APIRouter(tags=[TAG])
 
 @router.get("/models", operation_id="listModels", summary="List the models")
 def model_list(backend: BackendDep) -> ModelList:
-    """Every model the runtime lists, read from it now in the workspace root, or why the list could not be read.
+    """Every model the runtime lists, with each one's variants, read from it now in the workspace root, or why not.
 
     Read when the operator opens a ticket's Model panel, not on the stream: each read starts the runtime, for up to 30
     seconds. A model on the list can still fail when called, since the runtime reads it from its cache or its catalog.
     """
     with backend.open() as ctx:
         found = backend.models(ctx)
-    return ModelList(models=sorted(found.models), error=found.error)
+    variants = {model: sorted(found.variants[model]) for model in sorted(found.variants) if found.variants[model]}
+    return ModelList(models=sorted(found.models), variants=variants, error=found.error)

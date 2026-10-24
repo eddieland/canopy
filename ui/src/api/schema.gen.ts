@@ -698,7 +698,7 @@ export type paths = {
         };
         /**
          * List the models
-         * @description Every model the runtime lists, read from it now in the workspace root, or why the list could not be read.
+         * @description Every model the runtime lists, with each one's variants, read from it now in the workspace root, or why not.
          *
          *     Read when the operator opens a ticket's Model panel, not on the stream: each read starts the runtime, for up to 30
          *     seconds. A model on the list can still fail when called, since the runtime reads it from its cache or its catalog.
@@ -1830,8 +1830,8 @@ export type paths = {
          * Choose a model for one of a ticket's agents
          * @description `canopy model KEY MODEL --agent AGENT`, or with no `model` `--clear` (DESIGN §13).
          *
-         *     It covers every run of that agent for the ticket, from its next, until cleared. A model the runtime does not list is
-         *     refused `unknown_model`, and a list that cannot be read `model_list_failed`.
+         *     It covers every run of that agent for the ticket, from its next, until cleared. A model the runtime does not list,
+         *     or a variant the model does not, is refused `unknown_model`, and a list that cannot be read `model_list_failed`.
          */
         post: operations["chooseTicketModel"];
         delete?: never;
@@ -2188,6 +2188,12 @@ export type components = {
             /** @description The agent: `worker` for its implement and resume runs, `planner`, or `reviewer`. */
             agent: components["schemas"]["ModelAgent"];
             /**
+             * Dropped Variant
+             * @description Config's variant for the agent, which the ticket's override sets aside by naming none of its own, so the agent
+             *     runs at the model's default; None otherwise.
+             */
+            dropped_variant: string | null;
+            /**
              * Last Served
              * @description The model that served the agent's latest run for the ticket whose session canopy has read, as `provider/model`,
              *     the most costly when it called several; None when none of its runs has been read.
@@ -2198,7 +2204,8 @@ export type components = {
             last_served: string | null;
             /**
              * Model
-             * @description The model, as `provider/model`; None for the runtime's default, when neither the ticket nor config sets one.
+             * @description The model, as `provider/model`, then `@variant` when it names one; None for the runtime's default, when neither
+             *     the ticket nor config sets one.
              */
             model: string | null;
             /**
@@ -2209,10 +2216,9 @@ export type components = {
             source: "ticket" | "config" | "default";
             /**
              * Variant
-             * @description The variant `model` runs at, after its last `@`, as `high` in config's `provider/model@high`; None for none.
+             * @description The variant `model` runs at, after its last `@`, as `high` in `provider/model@high`; None for its default.
              *
-             *     The runtime's list names the model without it, and a ticket's override names none, so a model with one is not a
-             *     choice the page can make: it chooses the model alone.
+             *     The runtime's list names the model without it, and the variant among the model's `variants` there.
              */
             variant: string | null;
         };
@@ -4599,6 +4605,15 @@ export type components = {
              * @default []
              */
             models: string[];
+            /**
+             * Variants
+             * @description The variants each model lists, such as reasoning efforts, by model, each list in order; a model with none is
+             *     left out.
+             * @default {}
+             */
+            variants: {
+                [key: string]: string[];
+            };
         };
         /**
          * ModelRequest
@@ -4612,7 +4627,8 @@ export type components = {
             agent: components["schemas"]["ModelAgent"];
             /**
              * Model
-             * @description The model, as `provider/model`, one `GET /models` lists; None clears the override, as `--clear` does.
+             * @description The model, as `provider/model`, one `GET /models` lists, or `provider/model@variant` at one of its variants;
+             *     None clears the override, as `--clear` does.
              */
             model?: string | null;
         };

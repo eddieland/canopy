@@ -646,6 +646,7 @@ def agent_model(found: ticket_models.Next, served: Mapping[ticket_models.Agent, 
         model=found.model,
         source=found.source,
         variant=variant,
+        dropped_variant=found.dropped_variant,
         last_served=served.get(found.agent) if served is not None else None,
     )
 

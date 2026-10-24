@@ -431,19 +431,38 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
     ctx: Context,
     opencode_state: Path,
 ) -> None:
-    opencode_state.write_text(json.dumps({"models": ["acme/fake-model-2", "a plugin says hello", "acme/fake-model-1"]}))
+    listed = ["acme/fake-model-2", "a plugin says hello", "acme/fake-model-1"]
+    opencode_state.write_text(json.dumps({"models": listed, "variants": {"acme/fake-model-1": ["low", "high"]}}))
     c, headers = signed_in_client(ctx)
 
     def choose(body: dict[str, str | None]) -> httpx2.Response:
         return c.post(f"/api/tickets/{KEY}/models", json=body, headers=headers)
 
-    # The Model panel's choices, read from the runtime when it opens, in the workspace root.
-    assert c.get("/api/models").json() == {"models": ["acme/fake-model-1", "acme/fake-model-2"], "error": None}
+    # The Model panel's choices, read from the runtime when it opens, in the workspace root, each model's variants
+    # with them.
+    assert c.get("/api/models").json() == {
+        "models": ["acme/fake-model-1", "acme/fake-model-2"],
+        "variants": {"acme/fake-model-1": ["high", "low"]},
+        "error": None,
+    }
     # The CLI's guards hold, and a ticket canopy has not seen may have one.
     assert refused(choose({"model": "acme/nope"})) == (
         "unknown_model: OpenCode does not list the model acme/nope: name one `canopy models` lists, or set up its "
         "provider"
     )
+    assert refused(choose({"model": "acme/fake-model-2@high"})) == (
+        "unknown_model: OpenCode lists the model acme/fake-model-2 but not its variant high (it lists none for it): "
+        "name one it lists, or the model alone"
+    )
+    assert choose({"agent": "reviewer", "model": "acme/fake-model-1@high"}).json() == {
+        "agent": "reviewer",
+        "model": "acme/fake-model-1@high",
+        "source": "ticket",
+        "variant": "high",
+        "dropped_variant": None,
+        "last_served": None,
+    }
+    assert choose({"agent": "reviewer"}).json()["source"] == "default"
     assert choose({"agent": "overseer", "model": "acme/fake-model-1"}).status_code == 422
     assert choose({"model": "acme/" + "x" * 200}).status_code == 422
     assert c.post(f"/api/tickets/{KEY}/models", json={}, headers={"origin": ORIGIN}).status_code == 403
@@ -454,6 +473,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         "model": "acme/fake-model-2",
         "source": "ticket",
         "variant": None,
+        "dropped_variant": None,
         "last_served": None,
     }
     ended_run(ctx, KEY, "implement")
@@ -470,12 +490,17 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         "model": None,
         "source": "default",
         "variant": None,
+        "dropped_variant": None,
         "last_served": None,
     }
     assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
     # A list that cannot be read says why, and refuses a choice as the CLI does.
     opencode_state.write_text(json.dumps({"exit": 1}))
-    assert c.get("/api/models").json() == {"models": [], "error": "`opencode models` exited 1"}
+    assert c.get("/api/models").json() == {
+        "models": [],
+        "variants": {},
+        "error": "`opencode models --verbose` exited 1",
+    }
     assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")
 
 
@@ -538,18 +563,27 @@ def test_the_mocks_settings_page_names_a_model_for_the_overseer_and_the_chores(b
     assert got["models_file"] == got["chores_file"] == str(backend.user_file)
 
 
-def test_a_configured_model_with_a_variant_is_sent_with_it_so_the_page_offers_it_as_no_choice(ctx: Context) -> None:
-    """Config's model at a variant names the variant, which an override cannot, so the menu offers the model alone."""
+def test_a_configured_model_with_a_variant_is_sent_with_it_and_an_override_naming_none_says_it_drops_it(
+    ctx: Context,
+    opencode_state: Path,
+) -> None:
+    """Config's model at a variant names it; an override naming none runs at the model's default, and says so."""
+    listed = {"models": ["acme/fake-model-1"], "variants": {"acme/fake-model-1": ["high"]}}
+    opencode_state.write_text(json.dumps(listed))
     runtime = ctx.config.runtime.model_copy(update={"models": {"worker": "acme/fake-model-1@high"}})
-    c, _ = signed_in_client(dataclasses.replace(ctx, config=ctx.config.model_copy(update={"runtime": runtime})))
+    c, headers = signed_in_client(dataclasses.replace(ctx, config=ctx.config.model_copy(update={"runtime": runtime})))
     ended_run(ctx, KEY, "implement")
     assert c.get(f"/api/tickets/{KEY}").json()["models"][0] == {
         "agent": "worker",
         "model": "acme/fake-model-1@high",
         "source": "config",
         "variant": "high",
+        "dropped_variant": None,
         "last_served": None,
     }
+    chosen = c.post(f"/api/tickets/{KEY}/models", json={"model": "acme/fake-model-1"}, headers=headers).json()
+    assert (chosen["model"], chosen["variant"], chosen["dropped_variant"]) == ("acme/fake-model-1", None, "high")
+    assert c.get(f"/api/tickets/{KEY}").json()["models"][0]["dropped_variant"] == "high"
 
 
 def test_each_agent_names_the_model_that_served_its_latest_read_run_beside_the_one_its_next_runs_on(

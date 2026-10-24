@@ -47,10 +47,12 @@ def cmd_model(
     """Choose the model MODEL for the ticket KEY's workers, or with --agent its planner or reviewer.
 
     It covers every run of that agent for the ticket, from its next, until you clear it with --clear, and may be set
-    before canopy has seen the ticket; `canopy forget` keeps it. MODEL is `provider/model`, one `canopy models` lists;
-    a run whose model is no longer listed by then is refused, never run on another. Without MODEL or --clear, prints
-    each agent's next model and where it comes from. Only from your shell or the web UI: never inside one of canopy's
-    runs. The overseer and chores take only their model in [runtime.models].
+    before canopy has seen the ticket; `canopy forget` keeps it. MODEL is `provider/model`, one `canopy models` lists,
+    or `provider/model@variant` to run it at one of its variants, such as a reasoning effort; one naming no variant
+    runs at the model's default, whatever variant [runtime.models] gives the agent. A run whose model or variant is no
+    longer listed by then is refused, never run on another. Without MODEL or --clear, prints each agent's next model
+    and where it comes from. Only from your shell or the web UI: never inside one of canopy's runs. The overseer and
+    chores take only their model in [runtime.models].
     """
     try:
         ref = conversation.parse_ref(key)
@@ -73,7 +75,7 @@ def cmd_model(
             ref.id,
             chosen_for,
             model,
-            listing=lambda: runtime_models.listed(ctx.runner, cwd=ctx.workspace.root),
+            listing=lambda variants: runtime_models.listed(ctx.runner, cwd=ctx.workspace.root, variants=variants),
             channel=CLI,
         )
     except conversation.Refused as r:
@@ -82,7 +84,7 @@ def cmd_model(
         "model chosen" if model is not None else "model cleared",
         extra={"ticket": ref.id, "agent": chosen_for, "model": model, "channel": CLI},
     )
-    click.echo(f"{ref.id}'s {chosen_for} runs use {named(now.model)} from their next run: {SOURCES[now.source]}.")
+    click.echo(said(ref.id, now))
     return 0
 
 
@@ -109,6 +111,19 @@ def named(model: str | None) -> str:
         The words.
     """
     return model if model is not None else f"{invocation.NAME}'s default"
+
+
+def said(key: str, now: ticket_models.Next) -> str:
+    """What choosing or clearing ticket `key`'s model did, as `canopy model` confirms it.
+
+    Returns:
+        The line, without its end: the agent's model now and where it comes from, and config's variant when the
+        override sets it aside.
+    """
+    dropped = (
+        f" (config's variant `{now.dropped_variant}` no longer applies)" if now.dropped_variant is not None else ""
+    )
+    return f"{key}'s {now.agent} runs use {named(now.model)} from their next run: {SOURCES[now.source]}{dropped}."
 
 
 def show(key: str, found: Sequence[ticket_models.Next]) -> list[str]:

@@ -145,6 +145,12 @@ definition's model and variant; 2.1.4 refuses a variant the model lacks before i
 list lacks on the provider, so the lookup still guards the run.
 Built (2026-10-23): the settings page's read-only Models panel, each agent's model in `[runtime.models]` and each
 chore's, with the file to edit and the runtime's list on demand.
+Built (2026-10-24, issue #1410, the operator's choice of an override that names a variant): a ticket's override may
+be `provider/model@variant`, stored as config spells it (no migration), checked when set against the variants the
+runtime lists for the model, `unknown_model` for one it lacks, and again when the run starts as before; it replaces
+config's whole model, so one naming no variant runs at the model's default, and `canopy model` and the ticket page's
+confirmation say when that sets config's variant aside. `GET /api/models` sends each model's variants, read as a run's
+are, and the ticket page's picker offers them under their model and shows a variant on its button.
 Not built yet: the check before a review, a chore, a task's run,
 and a tick's overseer, with its tick status, so a reviewer override whose model has gone fails as the review starts;
 and `canopy status` naming the models that served a run.

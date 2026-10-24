@@ -177,8 +177,8 @@ def persona(key: TicketKey, body: PersonaRequest, backend: BackendDep) -> AgentP
 def model(key: TicketKey, body: ModelRequest, backend: BackendDep) -> AgentModel:
     """`canopy model KEY MODEL --agent AGENT`, or with no `model` `--clear` (DESIGN §13).
 
-    It covers every run of that agent for the ticket, from its next, until cleared. A model the runtime does not list is
-    refused `unknown_model`, and a list that cannot be read `model_list_failed`.
+    It covers every run of that agent for the ticket, from its next, until cleared. A model the runtime does not list,
+    or a variant the model does not, is refused `unknown_model`, and a list that cannot be read `model_list_failed`.
     """
     ref = ticket_ref(key, "model")
     with backend.open() as ctx:
@@ -189,7 +189,8 @@ def model(key: TicketKey, body: ModelRequest, backend: BackendDep) -> AgentModel
                 ref.id,
                 body.agent,
                 body.model,
-                listing=lambda: backend.models(ctx),
+                # The backend's list carries the variants whether or not the model names one.
+                listing=lambda _variants: backend.models(ctx),
                 channel=WEB,
             )
         except conversation.Refused as r:

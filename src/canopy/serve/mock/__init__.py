@@ -132,6 +132,8 @@ every_minutes = 120
 CHORE = "deps"
 # Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
 _POOLS = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
+# The variants the mock's runtime lists for each provider's models, which a ticket's page may choose one at.
+_VARIANTS = {"anthropic": frozenset({"high", "max"}), "openai": frozenset({"minimal", "low", "medium", "high"})}
 
 
 def at(minutes: int) -> str:
@@ -486,11 +488,14 @@ def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> 
 def _models_listed(ctx: Context) -> ModelList:
     """The models the mock's runtime lists: those its journal says served its runs, so a ticket's page may choose one.
 
+    Each lists the variants `_VARIANTS` gives its provider, as OpenCode derives them for a reasoning model.
+
     Returns:
-        Each model a run's session names, once.
+        Each model a run's session names, once, with its variants.
     """
     served = records.fetch_all(ctx.conn, records.RunModel, sql.select("*").from_("run_models"))
-    return ModelList(frozenset(m.model for m in served))
+    models = frozenset(m.model for m in served)
+    return ModelList(models, {m: _VARIANTS.get(m.partition("/")[0], frozenset()) for m in models})
 
 
 def _try_chore(ctx: Context, name: str) -> int:
