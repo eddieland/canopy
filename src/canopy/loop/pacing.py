@@ -3,10 +3,9 @@
 A tick is idle when it dispatched nothing and nothing reached the journal after the tick before read it (`idle`).
 After the n-th idle tick in a row the wait is `base * 2^n`, up to the cap and never below `base`; the CI cooldown's end
 or a chore's `due_at` still ahead, a PR head's settle time, or the lapse of the operator's notice to workers, ends it
-sooner (`gate`). While the
-loop waits, a run that ends after the tick read the journal (`read_at`) wakes it, as the operator's own acts do. With
-the cap not above `base`, idle pacing is off: the wait is `base`, no gate shortens it, and only the operator's acts
-wake it: a message, a start or stop, a grant, or a notice set or cleared.
+sooner (`gate`). While the loop waits, a run that ends after the tick read the journal (`read_at`) wakes it, as the
+operator's own acts do. With the cap not above `base`, idle pacing is off: the wait is `base`, no gate shortens it,
+and only the operator's acts wake it: a message, a start or stop, a grant, or a notice set or cleared.
 
 The count lives in the loop, not the journal, so a restarted loop starts at `base`.
 """
