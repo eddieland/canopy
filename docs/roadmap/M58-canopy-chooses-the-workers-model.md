@@ -151,6 +151,7 @@ runtime lists for the model, `unknown_model` for one it lacks, and again when th
 config's whole model, so one naming no variant runs at the model's default, and `canopy model` and the ticket page's
 confirmation say when that sets config's variant aside. `GET /api/models` sends each model's variants, read as a run's
 are, and the ticket page's picker offers them under their model and shows a variant on its button.
-Not built yet: the check before a review, a chore, a task's run,
-and a tick's overseer, with its tick status, so a reviewer override whose model has gone fails as the review starts;
-and `canopy status` naming the models that served a run.
+Built (2026-10-24): `canopy status` names the models a recent run's session says served it, each with its cost when
+there are several, beside the model canopy asked for.
+Not built yet: the check before a review, a chore, a task's run, and a tick's overseer, with its tick status, so a
+reviewer override whose model has gone fails as the review starts.
