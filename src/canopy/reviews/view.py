@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, NotRequired, TypedDict
 from canopy.core import db, personas, review_requests, review_revisions, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
-from canopy.reviews import grants
+from canopy.reviews import grants, settle
 from canopy.reviews import start as review_start
 
 if TYPE_CHECKING:
@@ -29,6 +29,7 @@ class Limits(TypedDict):
     max_reviews: int
     max_reviews_per_day: int
     max_reviews_per_pr: int
+    settle_minutes: int
     started_last_24h: int
 
 
@@ -63,6 +64,15 @@ class LatestReview(TypedDict):
     started_at: str
     ended_at: str | None
     reviewed_at: str | None
+
+
+class SettlingHead(TypedDict):
+    """A PR's head commit the overseer asked to review, still settling, and when a review of it may start."""
+
+    pr: str
+    sha: str
+    seen_at: str
+    settles_at: str
 
 
 class ReviewedPR(TypedDict):
@@ -122,6 +132,7 @@ class ReviewsSection(TypedDict):
     low_impact: bool
     limits: Limits
     running: list[RunningReview]
+    settling: list[SettlingHead]
     prs: list[ReviewedPR]
     requests: list[RequestedPR]
     #: Only when a note asks for one: the drafts to revise.
@@ -151,6 +162,7 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
             "max_reviews": config.capacity.max_reviews,
             "max_reviews_per_day": config.capacity.max_reviews_per_day,
             "max_reviews_per_pr": config.policy.max_reviews_per_pr,
+            "settle_minutes": config.review.settle_minutes,
             "started_last_24h": started_today,
         },
         "running": [
@@ -162,6 +174,16 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
                 "started_at": r["started_at"],
             }
             for r in db.running_runs(conn, "review_runs")
+        ],
+        # Empty with settling off: no head is recorded then (DESIGN §21, Settling).
+        "settling": [
+            {
+                "pr": h.pr,
+                "sha": h.sha,
+                "seen_at": db.format_time(h.seen_at),
+                "settles_at": db.format_time(h.settles_at),
+            }
+            for h in settle.settling(conn, config, now)
         ],
         "prs": prs,
         "requests": [_requested(conn, r) for r in review_requests.open_requests(conn)],

@@ -121,8 +121,8 @@ before any worker touches it: a planner reads every new item (a review, a thread
 to do with each, and the resume waits for you. The PR's page shows that plan under **Feedback plan**, after the
 threads' panel.
 
-The panel says which run wrote it, when, and where it stands: `waiting` on you, `stale`, `approved`, or `spent` once a
-resume has gone ahead on it. Under that, a row for each item: its number, the first line of what was said, and where
+The panel says which run wrote it, when, and where it stands: `waiting on you`, `stale`, `approved`, or `spent` once
+a resume has gone ahead on it. Under that, a row for each item: its number, the first line of what was said, and where
 it is, which is a link: **on its thread** jumps to the thread's card on this page, and **the review** opens the review
 on GitHub. Under that line, what the plan proposes (`change`, `decline`, `ask`, or `leave`), who wrote the item,
 `trusted` if `trust.trusted_reviewers` names them, the plan's first line on it, which is why it proposes that, and
@@ -138,12 +138,17 @@ plans again once the PR has been quiet for `policy.feedback_quiet_minutes`, so a
 minutes gets one new plan, not ten.
 
 To approve, tick the items the resume should address and press the button: **Approve whole** with every box ticked,
-**Approve 2 of 3** otherwise. Hover it for the command it is, `canopy plan KEY --approve`, with `--item` or `--leave`
-for the ones you picked. Anything you write in **Your words, for its resume** goes after the message the approval
-writes on the ticket, which names the items to address and to leave by number, never by quoting them. Approving a
-stale plan is refused once, naming what changed, so you approve it knowing; press again and it's approved as it is,
-and the new feedback waits for the next plan. An approved plan can be approved again, with other boxes or other
-words, until its resume starts. To send the planner back instead, reply on the ticket.
+**Approve 2 of 3** otherwise, and nothing at all with none ticked, or while the plan's file has gone missing, in which
+case the panel says so and the way out is a reply on the ticket asking for a new plan. Hover the button for the
+command it is, `canopy plan KEY --approve`, with `--item` or `--leave` for the ones you picked. Anything you write in
+**Your words, for its resume** goes after the message the approval writes on the ticket, which names the items to
+address and to leave by number, never by quoting them. A stale plan's button reads **Approve stale plan**, and the
+first press is refused by design, so you approve it knowing what changed: the panel says so calmly, not in red, and
+the button becomes **Approve as it is**. Press it and the plan is approved as it stands, and the new feedback waits for
+the next plan. An approval done gets the band an approved ticket plan gets, with its leaf and the way back to
+Attention, and clears your words; the button rests as **Approve again** until you tick other boxes or write other
+words, so the send key cannot approve it twice by accident. Approving again is allowed until its resume starts. To
+send the planner back instead, reply on the ticket.
 
 ## When canopy reviews
 
@@ -167,16 +172,9 @@ becomes a refactor nobody asked for.
 Reviews are off while `capacity.max_reviews` is 0, and each commit is reviewed once in each persona chosen for it.
 
 A review of a new commit isn't starting from scratch: it reads canopy's last finished review of the PR, the summary
-and every finding you didn't dismiss, and checks whether each still holds. It still reads the whole change, though.
-Being told where the last reviewer looked is useful; being told where not to look is how a bug lives through three
-reviews.
-
-The worker answers each finding it was handed, **fixed** or **declined** with its reason, and the next review reads
-the answers. A fixed finding that still holds comes back. A declined one comes back only if the reviewer can show the
-reason is wrong, and then as a rebuttal, which canopy holds for you: it starts no resume, the card says **held for
-you**, and the attention list raises `review rebuttal` on the ticket. Send it to a worker if the reviewer has the
-better of it, or dismiss it if the worker does. Two agents can disagree politely until the review limit runs out;
-this hands the disagreement to the one person who gets to settle it.
+and every finding you didn't dismiss, and checks whether each still holds. A finding the worker fixed stops coming back,
+and one it didn't is reported again. It still reads the whole change, though. Being told where the last reviewer
+looked is useful; being told where not to look is how a bug lives through three reviews.
 
 A later review also gets no credit for finding old news. A finding on lines nothing has changed since the PR's first
 review, which read them, is held for you the same way, under `review late`: it starts no resume, so a reviewer that

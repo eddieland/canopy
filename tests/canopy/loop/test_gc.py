@@ -229,7 +229,7 @@ def test_a_ticks_derivations_go_outside_the_window_after_journal_days(
 
 
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
-@pytest.mark.parametrize("flag", ["--dry-run", "--vacuum", "--git"])
+@pytest.mark.parametrize("flag", ["--dry-run", "--vacuum", "--git", "--caches"])
 def test_an_agent_cannot_run_gc(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
@@ -241,14 +241,14 @@ def test_an_agent_cannot_run_gc(
     assert "gc refused (inside_run)" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("flags", [[], ["--dry-run", "--vacuum"], ["--vacuum", "--git"]])
-def test_gc_takes_one_of_dry_run_vacuum_and_git(
+@pytest.mark.parametrize("flags", [[], ["--dry-run", "--vacuum"], ["--vacuum", "--git"], ["--git", "--caches"]])
+def test_gc_takes_one_of_dry_run_vacuum_git_and_caches(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
     flags: list[str],
 ) -> None:
     assert main(["gc", *flags]) == 2
-    assert "give one of `--dry-run`, `--vacuum`, and `--git`" in capsys.readouterr().err
+    assert "give one of `--dry-run`, `--vacuum`, `--git`, and `--caches`" in capsys.readouterr().err
 
 
 def test_the_text_report(snapshot: SnapshotAssertion) -> None:
