@@ -63,7 +63,14 @@ of MEASUREMENTS: every overseer run given one subject, no decision in any about 
 reading its prefix from the cache; overseer spend per day below M39's re-measurement for the same queue; and no action
 missed, checked against the derivation as in M36.
 
-Status: in progress. Designed 2026-10-24 (DESIGN §40); stage 2's build waits on M39 and is still taken only if M39's
+Status: in progress. Stage 1 built against the fakes 2026-10-24, at the operator's word ahead of M39 (DESIGN §8, The
+tick starts every run): every run the overseer asks for is a row of `recorded_runs` until the tick starts it, `canopy
+_mcp` spawns nothing, and the spawn through an intermediate is gone; its live check, a day of `canopy loop` (Accept), is
+the operator's. Chosen conservatively, for the operator to change: the claims (§35) are checked at the ask only, since
+the observations cannot change while the tick holds its lock; within a rank the overseer's runs start ahead of the
+harness's, as their guards counted them first; the dispatch, review, or chore run is recorded as a decision when it
+starts, so a tick's decisions list it after the overseer's other decisions. Designed 2026-10-24 (DESIGN §40); stage 2's
+build waits on M39 and is still taken only if M39's
 re-measurement shows the state block's size dominating what the overseer spends. The design settles what the sketch
 left open: one run per subject, a PR whose review is left to the overseer among them, and the due chores with a `when`
 in one run of their own; the prefix kept cacheable by a shared part rendered once a tick ahead of the subject; no run

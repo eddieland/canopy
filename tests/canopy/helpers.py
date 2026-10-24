@@ -21,11 +21,12 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, plans, prompts, records, replies, sql, workspace
+from canopy.core import config, db, plans, prompts, recorded_runs, records, replies, sql, workspace
+from canopy.core import context as context_module
 from canopy.core.context import Context
-from canopy.core.vocab import TickStatus
+from canopy.core.vocab import Phase, ResumeReason, TickStatus
 from canopy.infra import logs, procs, resources
-from canopy.loop import connectors
+from canopy.loop import connectors, harness_dispatches, phases, spawns
 from canopy.runs import drafted
 from tests.conftest import CanopyEnv, Journals, git
 
@@ -118,10 +119,12 @@ def in_tick(conn: sqlite3.Connection, *, dry_run: bool = False, ends_ok: bool = 
     """Start a tick and act inside it, as the overseer does: CANOPY_TICK_ID names it until the block ends.
 
     With `ends_ok`, the tick ends ok as the block does, as one whose overseer finished; without it, it is still running.
+    Either way, a run the block recorded and did not start (`tick_starts`) is closed unstarted, as a tick's close does.
     """
     tick_id = db.start_tick(conn, dry_run=dry_run)
     with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": str(tick_id)}):
         yield tick_id
+        recorded_runs.close_unstarted(conn, tick_id=tick_id)
         if ends_ok:
             db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
@@ -131,6 +134,47 @@ def in_run(run_id: int | str) -> Iterator[None]:
     """Act inside run `run_id`, as its agent does: CANOPY_RUN_ID names it until the block ends."""
     with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": str(run_id)}):
         yield
+
+
+#: Two rows of the harness's a measurement might enable, each with its fixed context (DESIGN §37).
+ENABLED: Mapping[Phase, harness_dispatches.Row] = {
+    Phase.CONFLICTED: harness_dispatches.Row(ResumeReason.CONFLICT, "The PR conflicts with its base: bring it in."),
+    Phase.PUSHED_NO_PR: harness_dispatches.Row(ResumeReason.NO_PR, "The branch has no PR: open one."),
+}
+
+
+@contextmanager
+def enabled() -> Iterator[None]:
+    """Until the block ends, the harness dispatches for ENABLED's rows."""
+    with mock.patch.object(harness_dispatches, "ROWS", ENABLED):
+        yield
+
+
+@contextmanager
+def derived(*subjects: phases.Derived) -> Iterator[None]:
+    """Until the block ends, every tick derives `subjects`, a derivation written by hand."""
+    with mock.patch.object(phases, "derive", autospec=True, return_value=list(subjects)):
+        yield
+
+
+def unit_at(key: str, phase: Phase) -> list[phases.Derived]:
+    """A fresh, open candidate holding no row of its own, its unit in `repo` holding `phase` alone."""
+    return [phases.Derived(key, None, (), candidate=True, closed=False), phases.Derived(key, "repo", (phase,))]
+
+
+def tick_starts(tick_id: int, runner: procs.Runner | None = None) -> None:
+    """Start the runs tick `tick_id` recorded, as the tick does once its overseer's run ends (DESIGN §8).
+
+    The overseer's commands and tools record the runs they ask for. A test that runs them in a tick of its own, with no
+    overseer, starts what they recorded with this before it ends the tick: through `runner`, or an `InlineRunner`,
+    which starts no process, if None.
+    """
+    ctx = context_module.open_at(Path.cwd(), runner or InlineRunner(), migrate=False)
+    try:
+        for asked in recorded_runs.of_tick(ctx.conn, tick_id):
+            spawns.start_recorded(ctx, asked)
+    finally:
+        ctx.conn.close()
 
 
 def seen(conn: sqlite3.Connection, env: CanopyEnv, *keys: str) -> None:
@@ -382,9 +426,14 @@ def dispatch_in_tick(
     key: str = KEY,
     runner: procs.Runner | None = None,
 ) -> Dispatched:
-    """In a tick of its own, run `canopy dispatch` of `key` in `repo` with `args`; the run it starts does not run."""
+    """In a tick of its own, run `canopy dispatch` of `key` in `repo` with `args`; the run it starts does not run.
+
+    The tick starts what the dispatch recorded before it ends, as it does once its overseer's run ends (DESIGN §8).
+    """
+    runner = runner or InlineRunner()
     with in_tick(conn) as tick_id:
-        code = main(["dispatch", key, "--repo", "repo", *args], runner=runner or InlineRunner())
+        code = main(["dispatch", key, "--repo", "repo", *args], runner=runner)
+        tick_starts(tick_id, runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         return Dispatched(code, decisions(conn, tick_id))
 
@@ -403,6 +452,7 @@ def dispatch_and_run(
     runner = runner or InlineRunner()
     with in_tick(conn) as tick_id:
         assert main(["dispatch", key, "--repo", "repo", *args], runner=runner) == 0, decisions(conn, tick_id)
+        tick_starts(tick_id, runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         run_id = int(last_run(conn)["id"])
         assert main(["_run", str(run_id)], runner=runner) == 0
@@ -410,13 +460,17 @@ def dispatch_and_run(
 
 
 def dispatch_refused(conn: sqlite3.Connection, *args: str, key: str = KEY) -> list[tuple[str, str]]:
-    """Dispatch as `dispatch_in_tick` does, expecting a refusal.
+    """Dispatch as `dispatch_in_tick` does, expecting a refusal: at the ask, or at the spawn for what only it checks.
+
+    A slot that cannot be leased, a prompt that does not render, and a worker that does not start are refused when the
+    tick starts the run it recorded (DESIGN §8), so the command exits 0 and the refusal is the tick's.
 
     Returns:
         The tick's decisions, as (action, rationale).
     """
     code, made = dispatch_in_tick(conn, *args, key=key)
-    assert code == 1, made
+    assert code == 1 or [action for action, _ in made if action.startswith("refused:")], made
+    assert not [action for action, _ in made if action.startswith("dispatch:")], made
     return made
 
 

@@ -182,7 +182,8 @@ def test_a_tick_wide_skip_keeps_what_the_overseer_started_before_it(scenario: Sc
         code=1,
     )
     assert skipped.tick.status == "skipped"
-    assert skipped.actions == ["dispatch:implement", "skip"]
+    # Asked for before the skip, it is started, and recorded, once the overseer's run ends (DESIGN §8).
+    assert skipped.actions == ["skip", "dispatch:implement"]
     assert [r.row["status"] for r in skipped.runs] == ["done"]
     assert git_pool.remote_head("agent/PROJ-1-work") is not None
 

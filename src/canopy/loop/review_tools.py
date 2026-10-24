@@ -2,7 +2,8 @@
 
 A revision is of a review's draft, which the operator's note asks for. Each verb is a request (`loop.tools.Request`) and
 a function, which the `canopy review` commands and the MCP server (`loop.mcp`) both call, as they do the overseer's
-other verbs.
+other verbs. A review or a revision asked for is recorded, and the tick starts it once the overseer's run ends
+(`start_review`, `start_revision`, DESIGN §8).
 """
 
 from __future__ import annotations
@@ -11,9 +12,10 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import ConfigDict, Field, StrictInt, WithJsonSchema
 
-from canopy.core import conversation, db, review_requests, review_revisions, review_runs
+from canopy.core import conversation, db, recorded_runs, review_requests, review_revisions, review_runs
+from canopy.core.vocab import RecordedStatus
 from canopy.infra import logs
-from canopy.loop import attention
+from canopy.loop import attention, harness_dispatches
 from canopy.loop.tools import (
     Key,
     Outcome,
@@ -64,12 +66,15 @@ class ReviewRun(Request):
 
 
 class StartedReview(Result):
-    """One review started, or in a dry run, one its guards would start."""
+    """One review recorded for the tick to start, or in a dry run, one its guards would start."""
 
     #: The persona it is written in; none for the reviewer's own.
     persona: Annotated[str | None, Field(description="The persona it is written in; none for the reviewer's own.")]
-    #: The review run that started; none in a dry run.
-    run: Annotated[int | None, Field(description="The review run that started; none in a dry run.")]
+    #: The recorded run, which the tick starts once the overseer's run ends; none in a dry run.
+    recorded: Annotated[
+        int | None,
+        Field(description="The recorded run, which the tick starts once your run ends; none in a dry run."),
+    ]
 
 
 class WaitingReview(Result):
@@ -82,14 +87,14 @@ class WaitingReview(Result):
 
 
 class ReviewsStarted(Result):
-    """The reviews of a PR started, one in each persona still owed one, or in a dry run, those its guards would."""
+    """The reviews of a PR recorded, one in each persona still owed one, or in a dry run, those its guards would."""
 
     #: The PR.
     pr: Annotated[str, Field(description="The PR.")]
     #: Whether this was a dry run, which started nothing.
     dry_run: Annotated[bool, Field(description="Whether this was a dry run, which started nothing.")]
-    #: Each review started, in order.
-    reviews: Annotated[tuple[StartedReview, ...], Field(description="Each review started, in order.")]
+    #: Each review recorded, in order.
+    reviews: Annotated[tuple[StartedReview, ...], Field(description="Each review recorded, in order.")]
     #: The first review held off, if one was; it and those after it wait on a later tick.
     waits: Annotated[
         WaitingReview | None,
@@ -98,10 +103,11 @@ class ReviewsStarted(Result):
 
 
 def review_run(ctx: Context, request: ReviewRun) -> Outcome[ReviewsStarted]:
-    """Start a review of a PR at a commit, if its guards allow one now; in a dry run, check them and start nothing.
+    """Record a review of a PR at a commit for the tick to start, if its guards allow one now; a dry run records none.
 
     A PR the operator chose several personas for gets a review in each still owed one, side by side (DESIGN §31): a
-    guard that refuses one after the first leaves it and the rest to a later tick.
+    guard that refuses one after the first leaves it and the rest to a later tick. The tick starts each once the
+    overseer's run ends, under every guard again (`start_review`), and records the review then (DESIGN §8).
 
     Returns:
         What the command prints, and the same as fields.
@@ -139,13 +145,69 @@ def review_run(ctx: Context, request: ReviewRun) -> Outcome[ReviewsStarted]:
     )
 
 
+class RecordedReview(Request):
+    """What a recorded review starts from: one review `review_run` asked for, in its persona, and its context."""
+
+    #: The PR's URL.
+    pr: str
+    #: The head commit to review.
+    sha: str
+    #: The ticket of one of the loop's own PRs.
+    ticket: str | None
+    #: The PR's repository, by its name in the map.
+    repo: str | None
+    #: The persona it is written in, one of those the operator chose for the PR; none for the reviewer's own.
+    persona: str | None
+    #: Every persona the operator chose for the PR.
+    among: tuple[str, ...]
+    #: What the reviewer should look at first.
+    context: str | None
+
+
+def start_review(ctx: Context, asked: records.RecordedRun) -> None:
+    """Start the review `asked` recorded, as its tick does once the overseer's run ends (DESIGN §8).
+
+    Every guard is checked again; a refusal is recorded as one at the ask is, and a review that starts is recorded then.
+
+    Raises:
+        RuntimeError: The tick that recorded it is gone, which nothing but a broken journal does.
+    """
+    tick = db.get_tick(ctx.conn, asked.tick_id)
+    if tick is None:
+        raise RuntimeError(f"recorded run {asked.id}'s tick {asked.tick_id} is gone")
+    saved = RecordedReview.model_validate_json(asked.request)
+    one = review_start.Request(
+        pr=saved.pr,
+        sha=saved.sha,
+        ticket=saved.ticket,
+        repo=saved.repo,
+        persona=saved.persona,
+        among=frozenset(saved.among),
+    )
+    try:
+        started = review_start.start(ctx, tick_id=tick.id, request=one, context=saved.context, recorded=asked.id)
+    except review_start.Refusal as r:
+        _record_refused(ctx, tick, one, r)
+        recorded_runs.close(ctx.conn, asked.id, RecordedStatus.REFUSED)
+        return
+    in_persona = f" in {one.persona}" if one.persona is not None else ""
+    on_context = f"; context={saved.context}" if saved.context else ""
+    rationale = truncate(f"review run {started.run_id}: {one.sha} in {started.slot}{in_persona}{on_context}")
+    db.record_decision(ctx.conn, tick.id, one.ticket, review_start.DISPATCH_ACTION, rationale, pr=one.pr)
+    recorded_runs.close(ctx.conn, asked.id, RecordedStatus.STARTED, run_id=started.run_id)
+    logs.for_tick(tick.id).info(
+        "review started",
+        extra={"pr": one.pr, "review_run_id": started.run_id, "pid": started.pid, "persona": one.persona},
+    )
+
+
 def _review_one(
     ctx: Context,
     current: records.Tick,
     one: review_start.Request,
     context: str | None,
 ) -> Outcome[StartedReview]:
-    """Start one review, or in a dry run check its guards, and record the decision.
+    """Record one review for the tick to start, or in a dry run check its guards and record the decision.
 
     Returns:
         What the command prints of it, and the same as fields.
@@ -162,18 +224,29 @@ def _review_one(
         db.record_decision(ctx.conn, tick_id, one.ticket, review_start.DISPATCH_ACTION, rationale, pr=one.pr)
         return Outcome(
             f"dry run: recorded review of {one.pr}{in_persona}; nothing was started",
-            StartedReview(persona=one.persona, run=None),
+            StartedReview(persona=one.persona, recorded=None),
         )
-    started = review_start.start(ctx, tick_id=tick_id, request=one, context=context)
-    rationale = truncate(f"review run {started.run_id}: {one.sha} in {started.slot}{in_persona}{on_context}")
-    db.record_decision(ctx.conn, tick_id, one.ticket, review_start.DISPATCH_ACTION, rationale, pr=one.pr)
+    saved = RecordedReview(
+        pr=one.pr,
+        sha=one.sha,
+        ticket=one.ticket,
+        repo=one.repo,
+        persona=one.persona,
+        among=tuple(sorted(one.among)),
+        context=context,
+    )
+    # A review the operator requested goes first in §7's order; the loop's own and the query's with the reviews.
+    requested = review_start.purpose(ctx.conn, one) == review_start.REQUEST
+    rank = harness_dispatches.Rank.REQUESTED if requested else harness_dispatches.Rank.REVIEW
+    recorded = review_start.record(ctx, tick_id=tick_id, request=one, rank=rank, asked=saved.model_dump_json())
     logs.for_tick(tick_id).info(
-        "review started",
-        extra={"pr": one.pr, "review_run_id": started.run_id, "pid": started.pid, "persona": one.persona},
+        "review recorded",
+        extra={"pr": one.pr, "recorded_run_id": recorded, "persona": one.persona},
     )
     return Outcome(
-        f"started review of {one.pr}{in_persona}: run {started.run_id}",
-        StartedReview(persona=one.persona, run=started.run_id),
+        f"recorded review of {one.pr}{in_persona} as recorded run {recorded}; the tick starts it once your run "
+        "ends, or records why not",
+        StartedReview(persona=one.persona, recorded=recorded),
     )
 
 
@@ -296,18 +369,24 @@ class ReviewRevise(Request):
 
 
 class RevisionStarted(Result):
-    """A revision of a review's draft started, or in a dry run, one its guards would start."""
+    """A revision of a review's draft recorded for the tick to start, or in a dry run, one its guards would start."""
 
     #: The review run whose draft it revises.
     review_run: Annotated[int, Field(description="The review run whose draft it revises.")]
     #: Whether this was a dry run, which started nothing.
     dry_run: Annotated[bool, Field(description="Whether this was a dry run, which started nothing.")]
-    #: The revision's run; none in a dry run.
-    run: Annotated[int | None, Field(description="The revision's run; none in a dry run.")]
+    #: The recorded run, which the tick starts once the overseer's run ends; none in a dry run.
+    recorded: Annotated[
+        int | None,
+        Field(description="The recorded run, which the tick starts once your run ends; none in a dry run."),
+    ]
 
 
 def review_revise(ctx: Context, request: ReviewRevise) -> Outcome[RevisionStarted]:
-    """Start a revision of a review's draft, if its guards allow one now; in a dry run, check them and start nothing.
+    """Record a revision of a review's draft for the tick to start, if its guards allow one now; in a dry run, none.
+
+    The tick starts it once the overseer's run ends, under every guard again (`start_revision`), and records the
+    revision then (DESIGN §8). A dry run checks the guards, records the revision it would have made, and starts nothing.
 
     Returns:
         What the command prints, and the same as fields.
@@ -326,27 +405,58 @@ def review_revise(ctx: Context, request: ReviewRevise) -> Outcome[RevisionStarte
             db.record_decision(ctx.conn, tick_id, None, review_start.DISPATCH_ACTION, truncate(said), pr=pr)
             return Outcome(
                 f"dry run: recorded a revision of review run {run_id}'s draft; nothing was started",
-                RevisionStarted(review_run=run_id, dry_run=True, run=None),
+                RevisionStarted(review_run=run_id, dry_run=True, recorded=None),
             )
-        started = revise.begin(ctx, tick_id=tick_id, run_id=run_id)
+        # The operator's note asks for it, as a request does a review: it goes first in §7's order.
+        rank = harness_dispatches.Rank.REQUESTED
+        _, recorded = revise.record(ctx, tick_id=tick_id, run_id=run_id, rank=rank, asked=request.model_dump_json())
     except review_start.Refusal as r:
-        db.record_decision(ctx.conn, tick_id, None, f"refused:{r.guard}", r.reason, pr=pr)
-        if r.guard == "revision_limit" and pr is not None:
-            # The operator's note asks for what the limit forbids: a human has to look (DESIGN §34).
-            hint = review_revisions.hint(run_id)
-            action = f"{attention.ACTION_PREFIX}review_limit"
-            db.record_decision(ctx.conn, tick_id, None, action, f"{r.reason}; {hint}", pr=pr)
-        if r.attention is not None:
-            db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, pr=pr)
-        logs.for_tick(tick_id).info("revision refused", extra={"review_run_id": run_id, "guard": r.guard})
+        _revision_refused(ctx, tick_id, run_id, pr, r)
         raise Refused(f"revision refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+    logs.for_tick(tick_id).info(
+        "revision recorded",
+        extra={"pr": pr, "review_run_id": run_id, "recorded_run_id": recorded},
+    )
+    return Outcome(
+        f"recorded a revision of review run {run_id}'s draft as recorded run {recorded}; the tick starts it once "
+        "your run ends, or records why not",
+        RevisionStarted(review_run=run_id, dry_run=False, recorded=recorded),
+    )
+
+
+def start_revision(ctx: Context, asked: records.RecordedRun) -> None:
+    """Start the revision `asked` recorded, as its tick does once the overseer's run ends (DESIGN §8).
+
+    Every guard is checked again; a refusal is recorded as one at the ask is, and a revision that starts is recorded
+    then.
+    """
+    tick_id = asked.tick_id
+    run_id = ReviewRevise.model_validate_json(asked.request).run
+    pr = asked.pr
+    try:
+        started = revise.begin(ctx, tick_id=tick_id, run_id=run_id, recorded=asked.id)
+    except review_start.Refusal as r:
+        _revision_refused(ctx, tick_id, run_id, pr, r)
+        recorded_runs.close(ctx.conn, asked.id, RecordedStatus.REFUSED)
+        return
     rationale = truncate(f"revision run {started.run_id} of review run {run_id}'s draft in {started.slot}")
     db.record_decision(ctx.conn, tick_id, None, review_start.DISPATCH_ACTION, rationale, pr=pr)
+    recorded_runs.close(ctx.conn, asked.id, RecordedStatus.STARTED, run_id=started.run_id)
     logs.for_tick(tick_id).info(
         "revision started",
         extra={"pr": pr, "review_run_id": run_id, "revision_run_id": started.run_id, "pid": started.pid},
     )
-    return Outcome(
-        f"started a revision of review run {run_id}'s draft: run {started.run_id}",
-        RevisionStarted(review_run=run_id, dry_run=False, run=started.run_id),
-    )
+
+
+def _revision_refused(ctx: Context, tick_id: int, run_id: int, pr: str | None, refusal: review_start.Refusal) -> None:
+    """Record a revision a guard refused, at the ask or at the spawn, and what it leaves for the operator."""
+    db.record_decision(ctx.conn, tick_id, None, f"refused:{refusal.guard}", refusal.reason, pr=pr)
+    if refusal.guard == "revision_limit" and pr is not None:
+        # The operator's note asks for what the limit forbids: a human has to look (DESIGN §34).
+        hint = review_revisions.hint(run_id)
+        action = f"{attention.ACTION_PREFIX}review_limit"
+        db.record_decision(ctx.conn, tick_id, None, action, f"{refusal.reason}; {hint}", pr=pr)
+    if refusal.attention is not None:
+        action = f"{attention.ACTION_PREFIX}{refusal.attention}"
+        db.record_decision(ctx.conn, tick_id, None, action, refusal.reason, pr=pr)
+    logs.for_tick(tick_id).info("revision refused", extra={"review_run_id": run_id, "guard": refusal.guard})

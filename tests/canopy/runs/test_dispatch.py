@@ -15,7 +15,17 @@ from canopy.core.context import Context
 from canopy.core.vocab import ResumeReason, RunKind, RunStatus
 from canopy.infra import procs
 from canopy.runs import dispatch
-from tests.canopy.helpers import LABEL, InlineRunner, decisions, in_tick, lifelock_left, pool, present, slot_of
+from tests.canopy.helpers import (
+    LABEL,
+    InlineRunner,
+    decisions,
+    in_tick,
+    lifelock_left,
+    pool,
+    present,
+    slot_of,
+    tick_starts,
+)
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, pool_state
 
@@ -46,6 +56,10 @@ def test_dispatch_leases_records_and_spawns(
             )
             == 0
         )
+        # Recorded, and started only by the tick once the overseer's run ends (DESIGN §8).
+        assert runner.spawned == []
+        assert db.get_run(conn, 1) is None
+        tick_starts(tick_id, runner)
 
         run = present(db.get_run(conn, 1))
         assert (run["ticket_key"], run["kind"], run["status"]) == ("PROJ-1", "implement", "running")
@@ -262,8 +276,10 @@ def test_spawn_failure_returns_the_slot_and_closes_the_run(
                 ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
                 runner=runner,
             )
-            == 1
+            == 0
         )
+        # The tick starts it once the overseer's run ends, and records why it could not (DESIGN §8).
+        tick_starts(tick_id, runner)
         assert decisions(conn, tick_id) == [("refused:spawn_failed", "no processes left")]
         run = present(db.get_run(conn, 1))
         assert run["status"] == "crashed"

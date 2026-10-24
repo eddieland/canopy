@@ -46,13 +46,13 @@ def cmd_mcp(
     nothing else.
     With --git, serve a review's or a plan's run read-only git in the checkouts it names, and nothing else.
 
-    A run a tool starts is spawned through an intermediate, so it is never the server's descendant: the runtime stops
-    those when the overseer's run ends, and the run outlives the tick, as one `canopy dispatch` starts does.
+    A tool that asks for a run starts none: it records it, and the tick starts it once the overseer's run ends, so no
+    run is the server's descendant, which the runtime stops when the overseer's run ends (DESIGN §8, §27).
     """
     if chore + serve_reports + bool(checkouts) > 1:
         raise click.UsageError("--chore, --reports, and --git each name what the server serves: give one")
     runner = runner_of(click_ctx)
-    # A test's fake runner is used as it is: it starts no process to reparent.
+    # A test's fake runner is used as it is.
     if isinstance(runner, procs.SubprocessRunner):
         if checkouts:
             # git reads no variable the runtime passed down, such as one naming another repository or config.
@@ -64,7 +64,7 @@ def cmd_mcp(
             # The runtime `agents` starts to ask what it offers is asked as a run would be, without the servers this
             # process's run was given in its inline config.
             return mcp.run_stdio(procs.SubprocessRunner(unset={*runner.unset, *servers.VARIABLES}), serve_reports=True)
-        # Every run a tool starts is spawned by this runner. The runtime started the server with the agent's whole
-        # environment, which names this server, so none of those runs inherits it (DESIGN §27).
-        runner = procs.SubprocessRunner(unset={*runner.unset, *servers.VARIABLES}, reparent=True)
+        # The runtime started the server with the agent's whole environment, which names this server, so no process it
+        # runs, such as the runtime asked for its models, inherits it (DESIGN §27).
+        runner = procs.SubprocessRunner(unset={*runner.unset, *servers.VARIABLES})
     return mcp.run_stdio(runner, chore=chore, checkouts=dict(checkouts))

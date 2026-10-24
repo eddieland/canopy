@@ -35,8 +35,8 @@ runtime dependency with its own async stack and HTTP transports, for the few met
 - A guard's refusal or an invalid input is a tool error with the text the CLI prints, which the model reads and goes
   on. It never logs an argument's free text, which may echo a tracker's or a reviewer's.
 - It writes nothing to stderr, which OpenCode never reads, so output there cannot block it mid-call.
-- A run a tool starts is never the server's descendant, since OpenCode kills those when the overseer's run ends; it is
-  reparented, as a `canopy dispatch` run is today.
+- A tool that asks for a run starts none: it records it, and the tick starts it once the overseer's run ends (§8), so
+  no run is the server's descendant, which OpenCode kills when that run ends. Its result is the recorded run's id.
 
 A chore trials it first (ROADMAP M48, stage 1b). `canopy _mcp --chore`, a server named `canopy_chore` in a chore run's
 inline config, serves that run one tool, `history`, which the chore sees as `canopy_chore_history`: its own chore's
@@ -91,8 +91,8 @@ it is listed with. A refusal carries the text alone.
   add servers under other names, and plugins.
 - The entry runs canopy's interpreter with the workspace root off its import path, so no file the workspace holds can
   stand in for canopy's modules (TRUST_MODEL T7).
-- Each request the runtime makes of the server, a tool call included, may take as long as the overseer's run may: a
-  dispatch can wait on the dispatch lock and a pool's lease, and the server answers one call at a time, so a call the
+- Each request the runtime makes of the server, a tool call included, may take as long as the overseer's run may: an
+  ask can wait on the dispatch lock, and the server answers one call at a time, so a call the
   runtime gave up on would still hold up the calls after it.
 - Code mode offers no MCP tool by name: the harness turns OpenCode 1's off in the overseer's environment, and the
   server's entry takes it out of OpenCode 2's (`codemode: false`), which offers tools only through `execute`, which

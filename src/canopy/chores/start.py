@@ -9,21 +9,22 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import history
-from canopy.core import agent_models, chore_runs, conversation, db, notice, outbox, prompts
+from canopy.core import agent_models, chore_runs, conversation, db, notice, outbox, prompts, recorded_runs
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core import chore_window as window
-from canopy.core.vocab import ChoreRunStatus
+from canopy.core.vocab import ChoreRunStatus, RecordedKind
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
+    from canopy.core import records
     from canopy.core.config import Chore, Config
     from canopy.core.context import Context
 
@@ -111,10 +112,42 @@ def check(ctx: Context, *, tick_id: int, name: str) -> Chore:
         return chore
 
 
-def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Started:
+def record(ctx: Context, *, tick_id: int, name: str, rank: int, asked: str) -> int:
+    """Check the guards a chore run the overseer asks for passes, and record it for its tick to start (DESIGN §8).
+
+    Nothing is spawned: the tick starts it, by `start`, once the overseer's run ends, under every guard again. Until
+    then it counts as running: a second run of the chore is refused `running`, and it holds its place within
+    `max_chores`. `asked` is the overseer's request as JSON, which the tick starts it from, and `rank` its place in
+    the tick's order, after every worker's and review's.
+
+    Returns:
+        The recorded run's id.
+
+    Raises:
+        Refusal: a guard refused.
+    """
+    with lock.hold(ctx.dispatch_lock_path, wait=True):
+        chore = _guard(ctx, name, held=recorded_runs.held(ctx.conn))
+        _check_model(ctx, name, chore)
+        try:
+            read_body(ctx.config, chore)
+        except prompts.PromptError as e:
+            raise Refusal("bad_prompt", str(e)) from e
+        return recorded_runs.record(
+            ctx.conn,
+            tick_id=tick_id,
+            kind=RecordedKind.CHORE,
+            rank=rank,
+            request=asked,
+            chore=name,
+        )
+
+
+def start(ctx: Context, *, tick_id: int, name: str, context: str | None, recorded: int | None = None) -> Started:
     """Check the guards, record the chore run, render its prompt, and spawn `canopy _chore` for it.
 
-    Serialized with dispatches by the dispatch lock, so two cannot both pass the capacity check.
+    Serialized with dispatches by the dispatch lock, so two cannot both pass the capacity check. `recorded` is the run
+    the overseer asked for that this starts (`record`): every other run recorded and not yet started counts as running.
 
     Returns:
         The new chore run's id and the pid of its `canopy _chore`.
@@ -124,7 +157,7 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
         RuntimeError: the chore run's row was gone right after it was inserted.
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        chore = _guard(ctx, name)
+        chore = _guard(ctx, name, held=recorded_runs.held(ctx.conn, but=recorded))
         # Before the run is recorded, so a model that cannot be used leaves no failed run behind it.
         _check_model(ctx, name, chore)
         try:
@@ -192,8 +225,16 @@ def read_body(config: Config, chore: Chore) -> str:
     return body + prompts.standing_section(prompts.chore_instructions(config), "chore")
 
 
-def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -> Chore:
+def _guard(
+    ctx: Context,
+    name: str,
+    *,
+    planned: Collection[str] | None = None,
+    held: Sequence[records.RecordedRun] = (),
+) -> Chore:
     """Refuse unless chore `name` may run now. `planned` holds the chores a dry run already ran this tick.
+
+    A chore run recorded and not yet started, in `held`, counts as running (DESIGN §8).
 
     Returns:
         The configured chore.
@@ -213,6 +254,10 @@ def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -
         raise Refusal("running", f"chore run {mine['id']} of {name} is running")
     if name in planned:
         raise Refusal("running", f"this dry run already ran {name}")
+    asked = [r for r in held if r.kind is RecordedKind.CHORE]
+    recorded = next((r for r in asked if r.chore == name), None)
+    if recorded is not None:
+        raise Refusal("running", f"recorded run {recorded.id} of {name} starts once the overseer's run ends")
     [state] = [s for s in view.states(ctx.conn, ctx.config, ctx.workspace) if s.name == name]
     now = datetime.now(UTC)
     earliest = state.earliest()
@@ -225,9 +270,10 @@ def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -
         opens = window.next_open(chore, now)
         raise Refusal("outside_hours", f"{name} starts only {window.describe(chore)}; next at {db.format_time(opens)}")
     limit = ctx.config.capacity.max_chores
-    busy = len(running) + len(planned)
+    busy = len(running) + len(planned) + len(asked)
     if busy >= limit:
         planned_note = f", counting {len(planned)} this dry run ran" if planned else ""
+        planned_note += f", counting {len(asked)} recorded to start once the overseer's run ends" if asked else ""
         raise Refusal("chore_capacity", f"{busy} of {limit} chore runs are running{planned_note}")
     return chore
 

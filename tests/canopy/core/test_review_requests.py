@@ -230,9 +230,10 @@ def test_a_persona_is_reviewed_once_per_commit_and_waits_on_room_for_its_review(
     sha = head(git_pool)
     first = scenario.review(reviews(sha, PR), reviewer=reviewer_reports(CLEAN))
     assert first.row.persona == "skeptic"
-    # One slot: explainer's review waits, and the request with it.
+    # One slot: explainer's review waits, and the request with it. It is refused as it is asked for, since skeptic's,
+    # recorded first, holds the slot; skeptic's is recorded once the tick starts it (DESIGN §8).
     actions = [d.action for d in db.decisions_for_tick(scenario.conn, first.row.tick_id)]
-    assert actions == ["dispatch:review", "refused:review_capacity"]
+    assert actions == ["refused:review_capacity", "dispatch:review"]
     assert requests_of(scenario.conn) == [(PR, "cli", None)]
     # At the same commit, skeptic's review is done: the next starts explainer's alone, and that ends the request.
     second = scenario.review(reviews(sha, PR), reviewer=reviewer_reports(CLEAN))
@@ -265,7 +266,7 @@ def test_each_personas_review_counts_against_the_prs_limit(
     [one] = scenario.reviews_each(reviews(head(git_pool), PR), reviewer=reviewer_reports(CLEAN))
     assert one.row.persona == "skeptic"
     actions = [d.action for d in db.decisions_for_tick(scenario.conn, one.row.tick_id)]
-    assert actions == ["dispatch:review", "refused:review_limit"]
+    assert actions == ["refused:review_limit", "dispatch:review"]
     assert (
         "several are for a PR's reviews"
         in scenario.operator("start", "PROJ-1", "--persona", "skeptic", "--persona", "explainer", code=2).err

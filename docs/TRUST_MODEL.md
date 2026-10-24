@@ -449,6 +449,11 @@ Controls in code, not prompts:
   every limit, cooldown, and capacity, and none in a dry run. An overseer's dispatch that would leave fewer workers
   free than the harness's runs ranked above it in §7's order hold is refused `reserved`, so new work cannot take the
   capacity of work in flight.
+- Runs the overseer asks for (DESIGN §8): each dispatch, review, revision, or chore run is checked against every guard
+  at the ask and recorded, never spawned from the overseer's process tree. A recorded run holds its ticket, its PR or
+  chore, and its capacity, `reserved`'s too, from the ask until the tick starts it once the overseer's run ends, under
+  every guard again, or closes it unstarted with the tick; one closed unstarted counts toward no limit, and no later
+  tick starts it.
 - A tick whose block leaves the overseer nothing to judge runs none and spends nothing (DESIGN §39): it makes only the
   harness's dispatches, under the guards above, and the disk check still holds them. It is paced as any tick is, by
   `loop.min_gap_minutes` and every wake, and leaves idle pacing's count as it was.
@@ -545,6 +550,10 @@ Controls now:
   data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on the host later
   reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
+- No run canopy starts is the overseer's descendant (DESIGN §8): the tick starts each run the overseer asked for once
+  the overseer's run has ended, so nothing it asked for dies with it, and no run, its setup, or the harness's own calls
+  inherit what wraps `overseer_cmd`. A sandbox around the overseer would confine the overseer alone; wrapping it is a
+  change of its own (DESIGN §24).
 - The prefix and `runtime.sandbox_repos` are in the user file or the workspace's private file, which no repository or
   workspace file can set (T7) and no sandboxed run can write, so neither removes them. Beyond adding the wrapper for
   the repositories that key names, the harness never learns whether a run is sandboxed: it runs the template (D023,

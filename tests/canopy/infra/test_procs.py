@@ -14,7 +14,6 @@ import pytest
 
 from canopy.infra import lock, procs
 from canopy.infra.procs import CommandNotFoundError, ProcError, SubprocessRunner
-from tests.canopy.helpers import ancestors
 from tests.conftest import executable
 
 
@@ -392,10 +391,10 @@ def test_a_removed_variable_reaches_no_child_whatever_gives_it(tmp_path: Path) -
                 SubprocessRunner(unset={"CANOPY_GONE"}).run(["env"], env=env).stdout
                 for env in (None, {"CANOPY_GONE": "x"})
             ),
-            *(spawned_output(SubprocessRunner(unset={"CANOPY_GONE"}, reparent=r), tmp_path) for r in (False, True)),
+            spawned_output(SubprocessRunner(unset={"CANOPY_GONE"}), tmp_path),
         ]
         # Without it, the variable is inherited as ever.
-        kept = spawned_output(SubprocessRunner(reparent=True), tmp_path)
+        kept = spawned_output(SubprocessRunner(), tmp_path)
     for output in printed:
         lines = output.splitlines()
         assert "CANOPY_KEPT=1" in lines
@@ -421,39 +420,10 @@ def test_a_child_without_a_timeout_gets_no_deadline_not_even_its_parents(tmp_pat
         printed = [
             SubprocessRunner().run(["env"]).stdout,
             SubprocessRunner().run(["env"], env={procs.DEADLINE_ENV: "2"}).stdout,
-            *(spawned_output(SubprocessRunner(reparent=r), tmp_path) for r in (False, True)),
+            spawned_output(SubprocessRunner(), tmp_path),
         ]
     for output in printed:
         assert not [line for line in output.splitlines() if line.startswith("CANOPY_DEADLINE=")]
-
-
-def test_a_reparented_child_is_never_the_spawners_descendant(tmp_path: Path) -> None:
-    # What stops a process's descendants when it ends, as the agent runtime does a local MCP server's, leaves it be.
-    if not Path("/proc/self/stat").exists():
-        pytest.skip("needs /proc")
-    log = tmp_path / "7.log"
-    pid = SubprocessRunner(reparent=True).spawn(["sleep", "30"], cwd=tmp_path, log_path=log)
-    try:
-        assert os.getpid() not in ancestors(pid)
-        assert os.getpgid(pid) == pid  # its own session, as any spawned child's
-        assert procs.running(log, None)  # holding its lifelock, through the intermediate
-    finally:
-        procs.kill_group(pid)
-    # Spawned as ever, a child is this process's until it exits.
-    direct = SubprocessRunner().spawn(["sleep", "30"], cwd=tmp_path, log_path=tmp_path / "8.log")
-    try:
-        assert ancestors(direct)[0] == os.getpid()
-    finally:
-        procs.kill_group(direct)
-        with contextlib.suppress(ChildProcessError):
-            os.waitpid(direct, 0)
-
-
-def test_a_reparented_spawn_reports_a_missing_command_and_leaves_no_lifelock(tmp_path: Path) -> None:
-    log = tmp_path / "7.log"
-    with pytest.raises(CommandNotFoundError, match="command not found: canopy-no-such-command"):
-        SubprocessRunner(reparent=True).spawn(["canopy-no-such-command"], cwd=tmp_path, log_path=log)
-    assert not procs.lifelock(log).exists()
 
 
 def spawned_output(runner: SubprocessRunner, tmp_path: Path) -> str:

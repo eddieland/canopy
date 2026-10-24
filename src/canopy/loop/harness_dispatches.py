@@ -3,10 +3,11 @@
 Before the overseer runs, the harness plans what it dispatches this tick: each due chore with no `when` (§19), and,
 for a ticket every row of whose derivation is one it dispatches for, a `resume` of its unit with those rows' fixed
 context. The state block names them and the workers they hold, and the overseer records nothing about one: a ticket's
-verbs and a chore's are refused `decided`. After the overseer's run, whatever it ended as, the harness makes them, runs
-first and in §7's order, each under every guard an overseer's dispatch passes (§8, §19) and recorded as its own; a dry
-run checks the guards and starts none (D036). A dispatch of the overseer's that would leave fewer workers free than
-the harness's runs ranked above it hold is refused `reserved` (`reserved`).
+verbs and a chore's are refused `decided`. After the overseer's run, whatever it ended as, the tick makes them with the
+runs the overseer recorded (`loop.spawns`), in §7's order, chores last, each under every guard an overseer's dispatch
+passes (§8, §19) and recorded as its own; a dry run checks the guards and starts none (D036). A dispatch of the
+overseer's that would leave fewer workers free than the harness's runs ranked above it hold is refused `reserved`
+(`reserved`).
 
 The plan is read from the journal each time, never kept: the tick's derivation (`phases.recorded`), the attention list,
 and the chores' runs, so the state block, the overseer's tools, and the dispatches after it read the same plan. A chore
@@ -20,7 +21,7 @@ config and the journal alone.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import IntEnum
 from typing import TYPE_CHECKING, TypedDict, assert_never
 
@@ -54,6 +55,8 @@ class Rank(IntEnum):
     REVIEW = 4
     #: `ready`, new work: a blocker before what it blocks.
     READY = 5
+    #: A chore's run, which holds no worker: after every ticket's and review's.
+    CHORE = 6
 
 
 #: The rank of each row of §7 that dispatches.
@@ -269,19 +272,69 @@ def section(planned: Plan) -> ToCome | None:
     }
 
 
-def make(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
-    """Make the harness's dispatches in tick `tick_id`, after the overseer: runs in order, then chores.
+def make_resume(ctx: Context, tick_id: int, run: TicketRun, *, dry_run: bool, log: logs.TickAdapter) -> None:
+    """Dispatch `run` in tick `tick_id`, after the overseer, or in a dry run check its guards (D036).
 
-    Each passes every guard an overseer's would, and is recorded as the harness's, its refusal too. A dry run checks
-    the guards and records what it would have started, and starts nothing (D036).
+    It passes every guard an overseer's would, and is recorded as the harness's, its refusal too.
     """
-    tick = db.get_tick(ctx.conn, tick_id)
-    dry_run = tick is not None and tick.dry_run
-    planned = plan(ctx, tick_id, datetime.now(UTC))
-    for run in planned.runs:
-        _resume(ctx, tick_id, run, dry_run=dry_run, log=log)
-    for name in planned.chores:
-        _chore(ctx, tick_id, name, dry_run=dry_run, log=log)
+    key, repos, kind = run.key, (run.repo,), RunKind.RESUME
+    db.touch_ticket(ctx.conn, key, ctx.repo)
+    rows = ", ".join(run.phases)
+    try:
+        if dry_run:
+            dispatch.check(
+                ctx,
+                tick_id=tick_id,
+                key=key,
+                kind=kind,
+                label=run.label,
+                slug=None,
+                base=None,
+                repos=repos,
+                reasons=run.reasons,
+            )
+            rationale = f"dry run: not dispatched; resume {key} in {run.repo}, for {rows}"
+        else:
+            started = dispatch.start(
+                ctx,
+                tick_id=tick_id,
+                key=key,
+                kind=kind,
+                label=run.label,
+                slug=None,
+                base=None,
+                context=run.context,
+                repos=repos,
+                reasons=run.reasons,
+            )
+            rationale = f"run {started.run_id}: resume {key} in {run.repo}, for {rows}"
+    except dispatch.Refusal as r:
+        _record(ctx, tick_id, key, f"refused:{r.guard}", r.reason)
+        if r.attention is not None:
+            _record(ctx, tick_id, key, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, repo=r.repo)
+        log.info("harness dispatch refused", extra={"ticket": key, "guard": r.guard, "reason": r.reason})
+        return
+    _record(ctx, tick_id, key, f"dispatch:{kind}", rationale)
+    log.info("harness dispatched", extra={"ticket": key, "kind": kind, "dry_run": dry_run})
+
+
+def make_chore(ctx: Context, tick_id: int, name: str, *, dry_run: bool, log: logs.TickAdapter) -> None:
+    """Start chore `name` in tick `tick_id` with no context, or in a dry run check its guards, as the harness's."""
+    try:
+        if dry_run:
+            chore_start.check(ctx, tick_id=tick_id, name=name)
+            rationale = f"dry run: not dispatched; {CHORE_WHY}"
+        else:
+            started = chore_start.start(ctx, tick_id=tick_id, name=name, context=None)
+            rationale = f"chore run {started.run_id}; {CHORE_WHY}"
+    except chore_start.Refusal as r:
+        _record(ctx, tick_id, None, f"refused:{r.guard}", r.reason, chore=name)
+        if r.attention is not None:
+            _record(ctx, tick_id, None, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, chore=name)
+        log.info("harness chore run refused", extra={"chore": name, "guard": r.guard, "reason": r.reason})
+        return
+    _record(ctx, tick_id, None, chore_start.DISPATCH_ACTION, rationale, chore=name)
+    log.info("harness started a chore", extra={"chore": name, "dry_run": dry_run})
 
 
 def _held(conn: sqlite3.Connection) -> set[str]:
@@ -340,68 +393,6 @@ def _label(ctx: Context, key: str) -> str | None:
         return None
     names = {label["name"] for label in phases.labels_of(seen)}
     return next((label for label in ctx.config.tracker.labels if label in names), None)
-
-
-def _resume(ctx: Context, tick_id: int, run: TicketRun, *, dry_run: bool, log: logs.TickAdapter) -> None:
-    """Dispatch `run`, or in a dry run check its guards, and record the dispatch or its refusal as the harness's."""
-    key, repos, kind = run.key, (run.repo,), RunKind.RESUME
-    db.touch_ticket(ctx.conn, key, ctx.repo)
-    rows = ", ".join(run.phases)
-    try:
-        if dry_run:
-            dispatch.check(
-                ctx,
-                tick_id=tick_id,
-                key=key,
-                kind=kind,
-                label=run.label,
-                slug=None,
-                base=None,
-                repos=repos,
-                reasons=run.reasons,
-            )
-            rationale = f"dry run: not dispatched; resume {key} in {run.repo}, for {rows}"
-        else:
-            started = dispatch.start(
-                ctx,
-                tick_id=tick_id,
-                key=key,
-                kind=kind,
-                label=run.label,
-                slug=None,
-                base=None,
-                context=run.context,
-                repos=repos,
-                reasons=run.reasons,
-            )
-            rationale = f"run {started.run_id}: resume {key} in {run.repo}, for {rows}"
-    except dispatch.Refusal as r:
-        _record(ctx, tick_id, key, f"refused:{r.guard}", r.reason)
-        if r.attention is not None:
-            _record(ctx, tick_id, key, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, repo=r.repo)
-        log.info("harness dispatch refused", extra={"ticket": key, "guard": r.guard, "reason": r.reason})
-        return
-    _record(ctx, tick_id, key, f"dispatch:{kind}", rationale)
-    log.info("harness dispatched", extra={"ticket": key, "kind": kind, "dry_run": dry_run})
-
-
-def _chore(ctx: Context, tick_id: int, name: str, *, dry_run: bool, log: logs.TickAdapter) -> None:
-    """Start chore `name` with no context, or in a dry run check its guards, and record it as the harness's."""
-    try:
-        if dry_run:
-            chore_start.check(ctx, tick_id=tick_id, name=name)
-            rationale = f"dry run: not dispatched; {CHORE_WHY}"
-        else:
-            started = chore_start.start(ctx, tick_id=tick_id, name=name, context=None)
-            rationale = f"chore run {started.run_id}; {CHORE_WHY}"
-    except chore_start.Refusal as r:
-        _record(ctx, tick_id, None, f"refused:{r.guard}", r.reason, chore=name)
-        if r.attention is not None:
-            _record(ctx, tick_id, None, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, chore=name)
-        log.info("harness chore run refused", extra={"chore": name, "guard": r.guard, "reason": r.reason})
-        return
-    _record(ctx, tick_id, None, chore_start.DISPATCH_ACTION, rationale, chore=name)
-    log.info("harness started a chore", extra={"chore": name, "dry_run": dry_run})
 
 
 def _record(

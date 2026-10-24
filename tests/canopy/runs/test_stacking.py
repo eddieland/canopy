@@ -215,8 +215,9 @@ def test_two_linked_tickets_are_worked_in_order(scenario: Scenario, git_pool: Gi
     assert (second.status, slot_of(scenario.conn, second.id).base_branch) == ("done", FIRST)
 
     ticks = [int(r["id"]) for r in scenario.conn.execute("SELECT id FROM ticks ORDER BY id")]
+    # Each dispatch is recorded as the tick starts its run, once the overseer's run ends (DESIGN §8).
     assert [[a for a, _ in decisions(scenario.conn, t)] for t in ticks] == [
-        ["queried", "dispatch:implement", "wait"],
+        ["queried", "wait", "dispatch:implement"],
         ["queried", "wait", "dispatch:implement"],
     ]
     assert git("merge-base", "--is-ancestor", FIRST, "agent/PROJ-2-second", cwd=git_pool.origin) == ""

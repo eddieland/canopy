@@ -27,6 +27,7 @@ from tests.canopy.helpers import (
     in_tick,
     present,
     running_run,
+    tick_starts,
     worker_does,
 )
 from tests.canopy.helpers import context as loop_context
@@ -89,6 +90,7 @@ def test_under_canopy_a_run_leases_from_canopy_s_pool_and_its_slot_goes_back_the
     runner = InlineRunner()
     with worker_does(*commit_and_push(BRANCH)), in_tick(conn) as tick_id:
         assert main(implement("api"), runner=runner) == 0
+        tick_starts(tick_id, runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         [slot] = db.run_slots(conn, 1)
         assert slot.pool == PoolKind.CANOPY
@@ -114,6 +116,7 @@ def test_a_lease_goes_back_to_the_pool_that_made_it_after_a_switch(
     runner = InlineRunner()
     with worker_does(*commit_and_push(BRANCH)), in_tick(conn) as tick_id:
         assert main(implement("api"), runner=runner) == 0
+        tick_starts(tick_id, runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         [slot] = db.run_slots(conn, 1)
         assert slot.pool == PoolKind.TREEHOUSE

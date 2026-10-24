@@ -47,6 +47,7 @@ from tests.canopy.helpers import (
     personas_dir,
     pool_statuses,
     present,
+    tick_starts,
     tools_of,
     waits,
     with_events,
@@ -93,6 +94,7 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
     ):
         before = time.time()
         assert main(reviews(sha, ticket="PROJ-1", context="Start with src/retry.py")[1:]) == 0
+        tick_starts(tick_id, procs.SubprocessRunner())
         deadline = time.monotonic() + 30
         row = review_runs.get_review_run(conn, 1)
         while row is not None and row.status == "running" and time.monotonic() < deadline:
@@ -266,8 +268,9 @@ def test_the_reviewer_prompt(
         scenario.operator("notice", "CI is down.")
         reviewer_instructions(scenario, "A migration without a test that applies it is a finding.\n")
         command = reviews("b" * 40, ticket="PROJ-1", context="Start with src/retry.py")
-    with in_tick(scenario.conn):
+    with in_tick(scenario.conn) as tick_id:
         assert main(command[1:], runner=InlineRunner()) == 0
+        tick_starts(tick_id, InlineRunner())
     prompt = (reviewing.state_dir / "reviews" / "1.prompt").read_text()
     assert prompt.replace(str(reviewing.state_dir), "/state") == markdown_snapshot
 
@@ -1510,7 +1513,8 @@ def test_a_commit_waits_on_each_reviewer_and_counts_each_review_against_the_limi
     # One review slot: explainer's waits, and the overseer sees the commit still owed it. Its overseer, played
     # whole, decides nothing, so the tick leaves PROJ-1's duty undone.
     actions = [d.action for d in db.decisions_for_tick(scenario.conn, first.row.tick_id)]
-    assert actions == ["dispatch:review", "refused:review_capacity"]
+    # Refused as it was asked for, since the review asked first holds the slot; started once the tick starts it.
+    assert actions == ["refused:review_capacity", "dispatch:review"]
     scenario.tick(dry_run=True, code=1)
     [pr] = scenario.state()["reviews"]["prs"]
     assert (pr["latest"]["run_id"], pr["owed"]) == (first.id, ["explainer"])

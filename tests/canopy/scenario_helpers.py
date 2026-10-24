@@ -169,7 +169,6 @@ from tests.canopy.helpers import (
     commit_and_push,
     context,
     in_tick,
-    last_run,
     last_tick,
     log_file,
     operator,
@@ -178,6 +177,7 @@ from tests.canopy.helpers import (
     present,
     seen,
     state_block,
+    tick_starts,
     wait_for_run,
     worker_does,
 )
@@ -621,11 +621,8 @@ class Scenario:
                 stack.enter_context(_made_for(worker, command[2]))
             with in_tick(self.conn) as tick_id:
                 exited = main(command[1:], runner=runner)
-                if exited != 0:
-                    self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
-                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
-                db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
-                run_id = int(last_run(self.conn)["id"])
+                tick_starts(tick_id, runner)
+                run_id = self._started(tick_id, exited, command)
                 exited, printed = _printing(lambda: main(["_run", str(run_id)], runner=runner))
         ran = replace(self.ran(present(db.get_run(self.conn, run_id))), printed=printed)
         self.story.append(str(ran) if exited == 0 else f"{ran}, and `canopy _run` exits {exited}")
@@ -651,11 +648,8 @@ class Scenario:
             stack.enter_context(self._held())
             with in_tick(self.conn) as tick_id:
                 exited = main(command[1:])
-                if exited != 0:
-                    self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
-                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
-                db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
-                run_id = int(last_run(self.conn)["id"])
+                tick_starts(tick_id, procs.SubprocessRunner())
+                run_id = self._started(tick_id, exited, command)
         working = self._at_work(run_id)
         self.story.append(str(working))
         return working
@@ -684,11 +678,8 @@ class Scenario:
                 stack.enter_context(reviewer)
             with in_tick(self.conn) as tick_id:
                 exited = main(command[1:], runner=InlineRunner())
-                if exited != 0:
-                    self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
-                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
-                db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
-                run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
+                tick_starts(tick_id)
+                [run_id] = self._reviews_started(tick_id, exited, command)
                 exited, printed = _printing(lambda: main(["_review", str(run_id)], runner=runner or InlineRunner()))
         row = present(review_runs.get_review_run(self.conn, run_id))
         reviewed = Reviewed(row, self.env.state_dir / "reviews" / f"{run_id}.prompt", printed)
@@ -712,12 +703,8 @@ class Scenario:
                 stack.enter_context(reviewer)
             with in_tick(self.conn) as tick_id:
                 exited = main(command[1:], runner=InlineRunner())
-                if exited != 0:
-                    self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
-                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
-                db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
-                started = self.conn.execute("SELECT id FROM review_runs WHERE tick_id = ? ORDER BY id", (tick_id,))
-                ids = [int(r[0]) for r in started]
+                tick_starts(tick_id)
+                ids = self._reviews_started(tick_id, exited, command)
             for run_id in ids:
                 argv = ["_review", str(run_id)]
                 exited, printed = _printing(lambda argv=argv: main(argv, runner=InlineRunner()))
@@ -746,11 +733,8 @@ class Scenario:
             stack.enter_context(self._held())
             with in_tick(self.conn) as tick_id:
                 exited = main(command[1:])
-                if exited != 0:
-                    self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
-                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
-                db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
-                run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
+                tick_starts(tick_id, procs.SubprocessRunner())
+                [run_id] = self._reviews_started(tick_id, exited, command)
         reviewing = self._reviewing(run_id)
         self.story.append(str(reviewing))
         return reviewing
@@ -768,9 +752,18 @@ class Scenario:
         assert review or command[:2] == ["canopy", "dispatch"], command
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
             exited, printed = _printing(lambda: main(command[1:], runner=InlineRunner()))
-        refused = Refused(tick=tick_id, made=db.decisions_for_tick(self.conn, tick_id), printed=printed)
-        self._tell(f"tick {tick_id} {'refuses' if exited == 1 else 'does not refuse'} {shlex.join(command)}", tick_id)
-        assert exited == 1, f"{shlex.join(command[:3])} exited {exited}, not refused: {list(refused)} {printed.err}"
+            # What only the start checks, a slot, the prompt, the spawn, refuses once the tick starts it (DESIGN §8).
+            tick_starts(tick_id)
+        made = db.decisions_for_tick(self.conn, tick_id)
+        refused = Refused(tick=tick_id, made=made, printed=printed)
+        at_start = exited == 0 and any(d.action.startswith("refused:") for d in made)
+        self._tell(
+            f"tick {tick_id} {'refuses' if exited == 1 or at_start else 'does not refuse'} {shlex.join(command)}",
+            tick_id,
+        )
+        assert exited == 1 or at_start, (
+            f"{shlex.join(command[:3])} exited {exited}, not refused: {list(refused)} {printed.err}"
+        )
         # The table's name is one of two literals.
         runs = "review_runs" if review else "runs"
         started = self.conn.execute(f"SELECT count(*) FROM {runs} WHERE tick_id = ?", (tick_id,)).fetchone()[0]  # noqa: S608
@@ -942,6 +935,26 @@ class Scenario:
                 for pid in (review.pid, review.agent_pid):
                     if pid is not None:
                         procs.kill_group(pid)
+
+    def _started(self, tick_id: int, exited: int, command: list[str]) -> int:
+        """The run tick `tick_id` started for the dispatch `command`, which exited `exited`, as the tick ends ok."""
+        started = self.conn.execute("SELECT id FROM runs WHERE tick_id = ? ORDER BY id", (tick_id,)).fetchall()
+        if exited != 0 or not started:
+            self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
+        assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+        assert started, db.decisions_for_tick(self.conn, tick_id)
+        db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
+        return int(started[-1]["id"])
+
+    def _reviews_started(self, tick_id: int, exited: int, command: list[str]) -> list[int]:
+        """The review runs tick `tick_id` started for `command`, which exited `exited`, as the tick ends ok."""
+        started = self.conn.execute("SELECT id FROM review_runs WHERE tick_id = ? ORDER BY id", (tick_id,)).fetchall()
+        if exited != 0 or not started:
+            self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
+        assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+        assert started, db.decisions_for_tick(self.conn, tick_id)
+        db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
+        return [int(r[0]) for r in started]
 
     def _tell(self, step: str, tick_id: int) -> None:
         self.story.append("\n".join([step, *map(_decided, db.decisions_for_tick(self.conn, tick_id))]))

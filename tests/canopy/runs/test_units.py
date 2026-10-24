@@ -120,10 +120,10 @@ def test_leases_are_all_or_nothing(ws_scenario: Scenario, ws: Ws, treehouse_stat
     state["pools"][str(ws.clone("web"))].update(max_trees=1, slots=[{"name": "1", "path": "/busy", "status": "in-use"}])
     treehouse_state.write_text(json.dumps(state))
 
-    # Refused, the dispatch starts no run.
+    # Refused as the tick starts it, the dispatch starts no run.
     refused = ws_scenario.refuses(dispatches(repo=("api", "web")))
     assert [a for a, _ in refused] == ["refused:no_slot"]
-    assert "dispatch refused (no_slot): web: treehouse get exited 1: " in refused.printed.err
+    assert refused[0][1].startswith("web: treehouse get exited 1: ")
     # api's slot was leased first, and returned before the refusal was recorded.
     assert pool_statuses(treehouse_state) == ["available", "in-use"]
     calls: list[list[str]] = json.loads(treehouse_state.read_text())["calls"]

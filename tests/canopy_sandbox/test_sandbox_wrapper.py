@@ -36,6 +36,7 @@ from tests.canopy.helpers import (
     present,
     private_worker_does,
     slot_of,
+    tick_starts,
     worker_does,
 )
 from tests.canopy.review_helpers import CLEAN, PR, reviewer_reports, run_inline
@@ -648,9 +649,10 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
     with worker_does(commit):
         runner = InlineRunner()
-        with in_tick(conn, ends_ok=True):
+        with in_tick(conn, ends_ok=True) as tick_id:
             args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
             assert main([*args, "--slug", "work"], runner=runner) == 0
+            tick_starts(tick_id, runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 
@@ -716,9 +718,10 @@ def test_a_sandboxed_repositorys_worker_and_setup_run_in_the_wrapper_canopy_adds
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
     with worker_does(commit):
         runner = InlineRunner()
-        with in_tick(conn, ends_ok=True):
+        with in_tick(conn, ends_ok=True) as tick_id:
             args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
             assert main([*args, "--slug", "work"], runner=runner) == 0
+            tick_starts(tick_id, runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 
@@ -745,9 +748,10 @@ def test_a_repository_sandbox_repos_does_not_name_runs_unwrapped(
     conn: sqlite3.Connection = canopy_env.journal()
     with worker_does():
         runner = InlineRunner()
-        with in_tick(conn, ends_ok=True):
+        with in_tick(conn, ends_ok=True) as tick_id:
             args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
             assert main([*args, "--slug", "work"], runner=runner) == 0
+            tick_starts(tick_id, runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 
