@@ -11,21 +11,33 @@ from typing import Any
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.core import conversation, db, feedback_items, feedback_plans, plans
+from canopy.core import conversation, db, drafts, feedback_items, feedback_plans, plans
 from canopy.core.config import load
-from canopy.core.vocab import PlanEffort, PlanItem, PlanStatus, Proposal, ResumeReason, RunKind, RunStatus
+from canopy.core.vocab import (
+    DraftStatus,
+    PlanEffort,
+    PlanItem,
+    PlanStatus,
+    Proposal,
+    ResumeReason,
+    RunKind,
+    RunStatus,
+)
+from canopy.infra import resources
 from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,
     agent_runs,
     commands_run,
     comment,
+    context,
     github_has,
     personas_dir,
     plan_file,
     planner_does,
     present,
     reads,
+    thread,
     waits,
 )
 from tests.canopy.scenario_helpers import ALICES_COMMENT as ALICE
@@ -41,13 +53,17 @@ from tests.canopy.scenario_helpers import (
     feedback_planned,
     github_shows,
     pushes,
+    sends_drafts,
     with_a_pr,
 )
+from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv
 
 PR = DRAFTS_PR
 FEEDBACK_PLAN = dispatches(kind=RunKind.FEEDBACK_PLAN)
 RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
+#: The reply the planner proposes for bob's comment, as FEEDBACK_PLANNED has it.
+PLANNED_REPLY = "Kept, since the API needs it."
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -133,6 +149,92 @@ def test_a_resume_that_fails_hands_its_items_back_to_the_next_plan(scenario: Sce
     assert resume.status == RunStatus.FAILED
     trust = load(scenario.env.root, scenario.env.user_file).trust
     assert [o.id for o in feedback_items.offered(conn, trust, KEY, [PR])] == [501, 502]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_resume_starts_its_drafts_from_the_plan_and_canopy_marks_those_that_depart(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    feedback_planned(scenario, github_state)
+    scenario.operator("plan", KEY, "--approve")
+    # alice's draft is the plan's reply but for a trailing space, naming a later comment on her thread, which matches
+    # it to her item; bob's departs, its text the run's own.
+    github_shows(github_state, ALICE, comment(503, author="me", body="On it."), BOB)
+    entries = [thread(503, text="Renamed. "), thread(502, did="declined", text="Kept: the CLI needs it.")]
+    resume = scenario.run(RESUME, worker=sends_drafts(entries))
+    assert resume.status == RunStatus.DONE
+    # The prompt gave each approved item's proposed reply, as data, to start its draft from.
+    assert "Start the item's draft on its thread from it" in resume.prompt
+    assert "Item 1 (id 501):\n\n```text\nRenamed.\n```" in resume.prompt
+    assert "Item 2 (id 502):\n\n```text\nKept, since the API needs it.\n```" in resume.prompt
+    found = drafts.of_run(conn, resume.id)
+    assert [(d.comment_id, d.plan_item, d.status) for d in found] == [
+        (503, 1, DraftStatus.WAITING),
+        (502, 2, DraftStatus.WAITING),
+    ]
+    same, departs = (present(drafts.from_plan(conn, d)) for d in found)
+    assert (same.number, same.item_id, same.proposal, same.departs) == (1, 501, Proposal.CHANGE, False)
+    assert (departs.number, departs.reply, departs.departs) == (2, "Kept, since the API needs it.", True)
+
+    shown = scenario.operator("draft", "show", f"run:{resume.id}").out
+    assert "as feedback plan item 1 (id 501), change proposed it" in shown
+    assert (
+        "changed from the plan: feedback plan item 2 (id 502), decline, proposed this reply:\n"
+        "    | Kept, since the API needs it."
+    ) in shown
+    ctx = context(scenario.env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    c, _ = signed_in_client(ctx)
+    response = c.get("/api/pull-request/threads", params={"url": PR})
+    assert response.status_code == 200, response.text
+    plans_of = [[d["from_plan"] for d in t["drafts"]] for t in response.json()["threads"]]
+    assert plans_of == [
+        [{"number": 1, "item_id": 501, "proposal": "change", "reply": "Renamed.", "left_out": False, "departs": False}],
+        [
+            {
+                "number": 2,
+                "item_id": 502,
+                "proposal": "decline",
+                "reply": "Kept, since the API needs it.",
+                "left_out": False,
+                "departs": True,
+            },
+        ],
+    ]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_draft_departs_from_the_plan_by_what_it_did_and_for_an_item_the_approval_left_out(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    feedback_planned(scenario, github_state)
+    scenario.operator("plan", KEY, "--approve", "--leave", "2")
+    entries = [thread(501, did="declined", text="Renamed."), thread(502, did="declined", text=PLANNED_REPLY)]
+    resume = scenario.run(RESUME, worker=sends_drafts(entries))
+    # Only the item approved has its reply in the prompt.
+    assert "Item 1 (id 501):" in resume.prompt
+    assert "Item 2 (id 502):" not in resume.prompt
+    said, left = (present(drafts.from_plan(conn, d)) for d in drafts.of_run(conn, resume.id))
+    assert (said.departs, left.left_out, left.departs) == (True, True, True)
+    shown = scenario.operator("draft", "show", f"run:{resume.id}").out
+    assert "feedback plan item 2 (id 502), decline, which your approval left out, proposed this reply:" in shown
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_resume_that_posts_its_replies_is_given_none_of_the_plans(scenario: Scenario, github_state: Path) -> None:
+    with_a_pr(scenario)
+    scenario.configures("private", trust={"review_replies": "post"})
+    feedback_planned(scenario, github_state)
+    scenario.operator("plan", KEY, "--approve")
+    resume = scenario.run(RESUME, worker=pushes())
+    assert "1. id 501, on" in resume.prompt
+    assert "The plan proposed a reply" not in resume.prompt
 
 
 @pytest.mark.usefixtures("git_pool")
