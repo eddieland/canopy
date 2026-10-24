@@ -322,7 +322,10 @@ Controls:
   worker answered of each finding, `fixed` or `declined` with a reason in the worker's words, as data. A steered worker
   can decline a real finding; the next review then reports it again only as a rebuttal, which the harness holds for
   the operator, never for another `resume`, and holds only a finding that names a decline the journal recorded. So an
-  answer moves a finding from the worker to the operator, never out of sight, and authorizes nothing.
+  answer moves a finding from the worker to the operator, never out of sight, and authorizes nothing. A later
+  review's finding on lines unchanged since the PR's first reviewed commit is held the same way, as the harness's git
+  reads the two commits, the finding's path a literal one; a steered reviewer can only aim a finding at old code, which
+  sends it to the operator rather than a worker, and a `blocking` one is never held.
   A revision of a review's draft (DESIGN §34) runs as the reviewer does and reads the same PR, its draft, and its
   review, all data; the operator's notes since the draft's newest version are its only instructions. Its version is
   untrusted like the reviewer's until the operator publishes it, and the state block names the draft, never its text

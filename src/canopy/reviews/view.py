@@ -57,7 +57,8 @@ class LatestReview(TypedDict):
     impact: str | None
     findings: list[str]
     dismissed_findings: int
-    #: The findings canopy holds for the operator, rebuttals of a worker's decline, which no `resume` addresses.
+    #: The findings canopy holds for the operator, rebuttals of a worker's decline and late ones, which no `resume`
+    #: addresses.
     held_findings: int
     started_at: str
     ended_at: str | None
@@ -241,7 +242,7 @@ def _latest(
     for run in reviews:
         stored = result.stored(run.result_json)
         # The operator's dismissals hold a finding back from workers and from the overseer alike, and so does canopy's
-        # hold on a rebuttal, until the operator sends it (DESIGN §21).
+        # hold on a rebuttal or a late finding, until the operator sends it (DESIGN §21).
         dismissed = review_runs.review_dismissals(conn, run.id)
         withheld = review_runs.withheld(conn, run.id)
         findings: list[result.Finding] = stored.findings if stored is not None else []

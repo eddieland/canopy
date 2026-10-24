@@ -5,6 +5,9 @@ result, and always returns the slot with `--force`, which discards anything the 
 code the loop did not write, and an agent runtime reads its configuration from its working directory, so the reviewer
 works in `<state_dir>/reviews/<id>/`, where a link leads to the checkout. The harness runs nothing from the checkout.
 
+A `done` review of one of the loop's own PRs holds for the operator, as its run closes, each finding that rebuts a
+worker's decline and each that is late (`late`), which is read while the slot is still at the reviewed commit.
+
 A revision runs the same way, as the reviewer does, and its `done` result becomes the newest version of the draft it
 revises (`review_revisions.revised`) before its run closes, so a publish waiting on the revision sees that version.
 """
@@ -12,11 +15,12 @@ revises (`review_revisions.revised`) before its run closes, so a publish waiting
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import functools
 import json
 import os
 import shutil
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
@@ -45,7 +49,7 @@ from canopy.core import review_result as result
 from canopy.core.config import render_command
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import logs, procs, stopping
-from canopy.reviews import start
+from canopy.reviews import late, start
 from canopy.runtime import project_config, stdout
 
 if TYPE_CHECKING:
@@ -76,6 +80,8 @@ class Outcome:
     #: The reviewer's validated result, or a reviser's.
     result: result.ReviewResult | result.RevisionResult | None
     note: str = ""
+    #: The numbers, from 1, of a review's late findings, to hold for the operator as the run closes (DESIGN §21).
+    late: Sequence[int] = ()
 
     def result_json(self) -> str:
         """Return what `review_runs.result_json` stores: the validated result and the harness's note."""
@@ -121,7 +127,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             clean_up(ctx, run, log)
             stored = outcome.result_json()
             ended = outbox.review_ended(ctx.config, run, outcome.status, stored)
-            hold = functools.partial(_hold_rebuttals, ctx, run, outcome, log)
+            hold = functools.partial(_hold, ctx, run, outcome, log)
             if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended, then=hold):
                 log.warning("review run was already closed; its outcome is not recorded", extra=fields)
             else:
@@ -142,12 +148,21 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     return outcome
 
 
-def _hold_rebuttals(ctx: Context, run: records.ReviewRun, outcome: Outcome, log: logs.TickAdapter) -> None:
-    """Hold for the operator a `done` review's rebuttals of findings a worker declined, as the run closes (§21)."""
-    if outcome.status is ReviewRunStatus.DONE and isinstance(outcome.result, result.ReviewResult):
-        held = review_answers.hold_rebuttals(ctx.conn, run, outcome.result)
-        if held:
-            log.info("rebuttals held for the operator", extra={"review_run_id": run.id, "findings": held})
+def _hold(ctx: Context, run: records.ReviewRun, outcome: Outcome, log: logs.TickAdapter) -> None:
+    """Hold for the operator a `done` review's rebuttals of a worker's declines, then its late findings (§21).
+
+    A late finding that is also a rebuttal keeps the rebuttal's hold. Called as the run closes, in its transaction.
+    """
+    if outcome.status is not ReviewRunStatus.DONE or not isinstance(outcome.result, result.ReviewResult):
+        return
+    rebuttals = review_answers.hold_rebuttals(ctx.conn, run, outcome.result)
+    if rebuttals:
+        log.info("rebuttals held for the operator", extra={"review_run_id": run.id, "findings": rebuttals})
+    held = [n for n in outcome.late if n not in rebuttals]
+    for number in held:
+        review_runs.hold(ctx.conn, run.id, number, rebuts=None)
+    if held:
+        log.info("late findings held for the operator", extra={"review_run_id": run.id, "findings": held})
 
 
 def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
@@ -282,7 +297,12 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     parsed = result.parse(output.text)
     if parsed is None:
         return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")
-    return judged(ctx, parsed)
+    outcome = judged(ctx, parsed)
+    if outcome.status is ReviewRunStatus.DONE and parsed.findings:
+        # Read now, while the slot is at the reviewed commit: it goes back before the run closes.
+        found = late.late(ctx.conn, ctx.runner, run, parsed, slot=slot, log=log)
+        outcome = dataclasses.replace(outcome, late=tuple(found))
+    return outcome
 
 
 def _models(ctx: Context, run: records.ReviewRun) -> dict[str, Model] | None:

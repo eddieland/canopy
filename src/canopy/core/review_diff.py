@@ -15,7 +15,7 @@ import re
 import stat
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from canopy.infra import logs
 
@@ -29,9 +29,20 @@ MAX_LINE_CHARS = 1000
 _SHA_RE = re.compile(r"[0-9a-f]{7,64}")
 _MAX_HEAD = 80
 _HUNK_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$")
-_LOCATION_RE = re.compile(r"^(?P<path>.+?)(?::L?(?P<line>\d+)(?:[-:]\d+)?)?$")
+# `path`, `path:12`, `path:L12`, `path:12:4` (a column), or `path:12-20` (a range of lines).
+_LOCATION_RE = re.compile(r"^(?P<path>.+?)(?::L?(?P<line>\d+)(?:-L?(?P<last>\d+)|:\d+)?)?$")
 
 type LineKind = Literal["add", "del", "ctx"]
+
+
+class Location(NamedTuple):
+    """A finding's `location` as the reviewer wrote it: a path, and the lines it names."""
+
+    path: str
+    #: The line, or the first of a range; None when the location names none.
+    line: int | None
+    #: The last line of a range, or `line` for one line.
+    last: int | None
 
 
 @dataclass(frozen=True)
@@ -180,21 +191,34 @@ def anchor(diff: Diff, location: str) -> tuple[int | None, int | None]:
     Returns:
         The index of the matching file in `diff.files` and the line in the new file, each None when not found.
     """
-    found = _LOCATION_RE.match(location.strip())
+    found = located(location)
     if found is None:
         return None, None
-    path = found["path"].strip().strip("`")
+    path, line, _ = found
     for prefix in ("./", "a/", "b/"):
         if path.startswith(prefix) and not any(f.path == path for f in diff.files):
             path = path.removeprefix(prefix)
     index = _file_index(diff, path)
     if index is None:
         return None, None
-    if found["line"] is None:
+    if line is None:
         return index, None
-    line = int(found["line"])
     shown = any(ln.new == line for h in diff.files[index].hunks for ln in h.lines)
     return index, line if shown else None
+
+
+def located(location: str) -> Location | None:
+    """Read a finding's `path:line` as the reviewer wrote it, a line range or a column after it, backticks around it.
+
+    Returns:
+        Its path and lines; None for a location with no path.
+    """
+    found = _LOCATION_RE.match(location.strip().strip("`"))
+    path = found["path"].strip().strip("`") if found is not None else ""
+    if found is None or not path:
+        return None
+    line = int(found["line"]) if found["line"] is not None else None
+    return Location(path, line, int(found["last"]) if found["last"] is not None else line)
 
 
 class _Parser:

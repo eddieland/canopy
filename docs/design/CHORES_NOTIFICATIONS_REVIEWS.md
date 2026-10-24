@@ -309,8 +309,13 @@ that ended `done` or `blocked`. The next review reads them, so a declined findin
 names the declined finding in `rebuts`. The harness holds a rebuttal for the operator when the decline is in the
 journal: it reaches no worker and starts no `resume`, `review_rebuttal` raises attention about the ticket, and the
 operator settles it by sending it, which releases it, or dismissing it. So an author and a reviewer that disagree
-reach a person instead of the per-PR limit. Rejected: following findings across commits to refuse repeats in code
-(Open); a later finding on code unchanged since the first review is not yet held, and waits on that.
+reach a person instead of the per-PR limit.
+
+A later review's finding that is not `blocking` and whose `path:line` is on lines no change since the PR's first
+reviewed commit touched, by `git diff` of the two in the review's own repository, is late, and held the same way under
+`review_late`: the first review read that code, so a reviewer finding more of it each round would never converge.
+Whatever git cannot place is not late, and goes to the worker. Rejected: following findings across commits to refuse
+repeats (Open).
 
 ### The overseer's part
 

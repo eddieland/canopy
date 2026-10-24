@@ -548,7 +548,7 @@ def _record_drafts(ctx: Context, tick_id: int) -> None:
     for draft in drafted.waiting(ctx.conn):
         _harness_item(ctx, tick_id, draft.ticket_key, drafted.WAITING_REASON, draft.detail, repo=draft.repo)
     # A review the operator asked for, and a draft staged or of unknown outcome, are about a PR no ticket owns; a held
-    # rebuttal is about its ticket's own PR (§21).
+    # finding is about its ticket's own PR (§21).
     for review in review_waiting.items(ctx.conn):
         _harness_item(ctx, tick_id, review.ticket, review.reason, review.detail, pr=review.pr)
 

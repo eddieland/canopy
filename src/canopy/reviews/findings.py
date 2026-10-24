@@ -5,11 +5,11 @@ They come from the journal, since nothing is posted but what the operator publis
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import contract, db, review_answers, review_requests, review_runs
 from canopy.core import review_result as result
-from canopy.core.vocab import ReviewRunStatus, SeenKind
+from canopy.core.vocab import HoldKind, ReviewRunStatus, SeenKind
 from canopy.infra.text import printable, quoted
 
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[
     if len(withheld) >= len(stored.findings):
         raise Unusable(
             f"every finding of review run {run_id} the operator did not dismiss is held for them, a rebuttal of a "
-            "worker's decline: none is left to address until they send one",
+            "worker's decline or a late one: none is left to address until they send one",
         )
     beside = [(r, result.stored(r.result_json), review_runs.withheld(conn, r.id)) for r in _beside(conn, run)]
     kept = [(r, found, left) for r, found, left in beside if found is not None and len(left) < len(found.findings)]
@@ -221,11 +221,22 @@ def _findings(
         reason = dismissed.get(i)
         mark = f" (dismissed: {reason})" if reason is not None else " (dismissed)" if i in dismissed else ""
         if (hold := held.get(i)) is not None:
-            rebuts = f"finding {hold.rebuts_finding} of review run {hold.rebuts_run_id}"
-            mark += f" (held for the operator: it rebuts the author's decline of {rebuts})"
+            mark += f" (held for the operator: {_held_for(hold)})"
         lines.append(f"{i}. **{f.severity}**{where}: {printable(f.title)}{mark}")
         lines.extend(f"   > {line}" for line in printable(f.detail).splitlines())
         if (answer := answers.get(i)) is not None:
             lines.append(f"   The author's answer: {answer.answer}{':' if answer.reason else '.'}")
             lines.extend(f"   > {line}" for line in printable(answer.reason or "").splitlines())
     return lines
+
+
+def _held_for(hold: records.ReviewHold) -> str:
+    # Why canopy holds a finding, as its mark says it.
+    match hold.kind:
+        case HoldKind.REBUTTAL:
+            rebuts = f"finding {hold.rebuts_finding} of review run {hold.rebuts_run_id}"
+            return f"it rebuts the author's decline of {rebuts}"
+        case HoldKind.LATE:
+            return "it is on code unchanged since the PR's first reviewed commit"
+        case _:
+            assert_never(hold.kind)

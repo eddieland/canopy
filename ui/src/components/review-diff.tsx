@@ -521,7 +521,10 @@ export function FindingCard({
     )
 }
 
-/** A held finding's chip: canopy holds a rebuttal of a worker's decline for the operator (DESIGN §21). */
+/**
+ * A held finding's chip: canopy holds a rebuttal of a worker's decline, or a late finding, for the operator (DESIGN
+ * §21).
+ */
 export const HELD = 'held for you'
 
 /**
