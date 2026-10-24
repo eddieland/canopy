@@ -2,7 +2,8 @@
 
 Part of the canopy design, normative like all of it: the tick that runs no overseer when the harness has left it
 nothing to judge, and the loop that ticks when the connectors see something change. Sections are numbered across the
-whole design; the [README](README.md) has the map. Previous: [Artifacts](ARTIFACTS.md).
+whole design; the [README](README.md) has the map. Previous: [Artifacts](ARTIFACTS.md). Next: [The overseer per
+decision](OVERSEER_PER_DECISION.md).
 
 ## 39. A tick without the overseer
 
@@ -79,8 +80,7 @@ not read, and the loop ticks on today's pacing. The poll that reads every source
 tick that resolves the item comes within a poll.
 
 Runs that come rarely come cold: the provider's cache that holds the overseer's prompt (§6 step 4) lasts minutes, and
-a quiet queue now runs the overseer hours apart. Whether that makes a run per ticket worth it is ROADMAP M40's
-question.
+a quiet queue now runs the overseer hours apart. A run per subject, each paying for one ticket when cold, is §40.
 
 ### If the derivation is not trusted
 
