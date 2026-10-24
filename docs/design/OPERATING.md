@@ -373,8 +373,9 @@ too, with the loop's state and the running and recent runs.
 Reasons are the phase table's attention rows (§7), the run reasons below, `attempt_limit`, and those the sections that
 raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`,
 `auto_maintenance_on`, `multi_repo`, and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
-`review_failed`, `review_limit`, and `review_rebuttal` (§21), `awaiting_reply` (§22, §25), `flaky_rerun` (§23), `plan_review`,
-`plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28),
+`review_failed`, `review_limit`, `review_rebuttal`, and `review_late` (§21), `awaiting_reply` (§22, §25),
+`flaky_rerun` (§23), `plan_review`, `plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`,
+and `lesson_wrong` (§28),
 `drafts_waiting` (§29), `connector_failed` (§30), `persona_missing` and `bad_persona` (§31), `model_missing` and
 `model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34), and
 `task_ticket_unrecorded` (§36). An item

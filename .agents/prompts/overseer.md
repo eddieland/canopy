@@ -576,8 +576,9 @@ The loop's own PRs, when `reviews.agent_prs` is true:
   (`reviews.limits.max_reviews_per_pr` runs, plus the PR's `granted` in `reviews.prs`), it is `green_unreviewed`
   instead, and you record attention `review_limit` with `key`, `pr`, and the latest review as its `detail`.
 - The operator may dismiss findings, and canopy holds for the operator a finding that rebuts a worker's decline of an
-  earlier one: `latest.findings` lists only the rest, and `dismissed_findings` and `held_findings` count those left
-  out. A review with none listed is a clean one; canopy raises the attention for a held one itself.
+  earlier one, or that is on code unchanged since the PR's first review: `latest.findings` lists only the rest, and
+  `dismissed_findings` and `held_findings` count those left out. A review with none listed is a clean one; canopy
+  raises the attention for a held one itself.
 - When the head's `done` review has findings newer than the unit's `review` cursor, the unit is `review_findings` if
   `trust.trusted_reviewers` lists `canopy:review`, and `untrusted_review` otherwise. Classify `review_findings` as
   review comments: findings the author can fix go to a `resume`, reasons `review`, with `review_run` its run id and the

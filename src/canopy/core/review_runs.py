@@ -141,10 +141,11 @@ def withheld(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
     return frozenset(review_dismissals(conn, run_id)) | frozenset(held(conn, run_id))
 
 
-def hold(conn: sqlite3.Connection, run_id: int, finding: int, *, rebuts: tuple[int, int]) -> None:
-    """Hold review run `run_id`'s finding number `finding` for the operator: a rebuttal of `rebuts`'s finding.
+def hold(conn: sqlite3.Connection, run_id: int, finding: int, *, rebuts: tuple[int, int] | None) -> None:
+    """Hold review run `run_id`'s finding number `finding` for the operator: a rebuttal of `rebuts`'s finding, or late.
 
-    `rebuts` is the earlier review run, and its finding, that the worker declined.
+    `rebuts` is the earlier review run, and its finding, that the worker declined; None holds the finding as `late`, on
+    code unchanged since the PR's first reviewed commit. A finding already held keeps its first hold.
     """
     sql.execute(
         conn,
@@ -152,9 +153,9 @@ def hold(conn: sqlite3.Connection, run_id: int, finding: int, *, rebuts: tuple[i
             "review_holds",
             review_run_id=run_id,
             finding=finding,
-            kind=HoldKind.REBUTTAL,
-            rebuts_run_id=rebuts[0],
-            rebuts_finding=rebuts[1],
+            kind=HoldKind.LATE if rebuts is None else HoldKind.REBUTTAL,
+            rebuts_run_id=rebuts[0] if rebuts is not None else None,
+            rebuts_finding=rebuts[1] if rebuts is not None else None,
             held_at=db.now(),
         ).on_conflict("(review_run_id, finding) DO NOTHING"),
     )

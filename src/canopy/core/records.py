@@ -1553,7 +1553,7 @@ class ReviewHold(Row):
     review_run_id: int
     finding: int
     kind: HoldKind
-    #: The earlier review run, and its finding, that a rebuttal answers.
+    #: The earlier review run, and its finding, that a rebuttal answers; None for a `late` hold.
     rebuts_run_id: int | None
     rebuts_finding: int | None
     held_at: str

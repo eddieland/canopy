@@ -6090,8 +6090,8 @@ export type components = {
             file: number | null;
             /**
              * Held
-             * @description Whether canopy holds it for the operator, a rebuttal of a worker's decline: no worker gets it until they send it
-             *     (DESIGN §21).
+             * @description Whether canopy holds it for the operator, a rebuttal of a worker's decline or a late finding: no worker gets it
+             *     until they send it (DESIGN §21).
              * @default false
              */
             held: boolean;

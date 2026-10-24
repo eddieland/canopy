@@ -407,6 +407,8 @@ class HoldKind(StrEnum):
 
     #: A later review's answer to a finding the worker declined: the operator settles it, never another `resume`.
     REBUTTAL = "rebuttal"
+    #: A later review's finding on a line unchanged since the PR's first reviewed commit, which the first review read.
+    LATE = "late"
 
 
 class Reaction(StrEnum):

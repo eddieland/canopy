@@ -647,7 +647,8 @@ def send(
     the ones it leaves alone. The message is the instruction, as any reply is: the next tick reads it as the operator's
     go-ahead (DESIGN §7, D089) and resumes a worker with the run's findings, which addresses the ones it names. It names
     them and never quotes them, since a finding is the reviewer's text and the message is the operator's. A finding
-    canopy held for the operator, a rebuttal of a worker's decline, is released, so the resume hands it on.
+    canopy held for the operator, a rebuttal of a worker's decline or a late one, is released, so the resume hands it
+    on.
 
     Returns:
         The ticket, and the reply it recorded.
@@ -682,7 +683,7 @@ def send(
     if left:
         body += f" Leave its {_numbered(left, verb=False)} alone."
     replied = reply(conn, Ref(TICKET, key), body, channel=channel, submission=submission)
-    # A finding canopy held for the operator, a rebuttal, is theirs to send: sent, it reaches a worker (DESIGN §21).
+    # A finding canopy held for the operator is theirs to send: sent, it reaches a worker (DESIGN §21).
     review_runs.release_holds(conn, run_id, numbers, channel=channel)
     return Sent(ticket=key, replied=replied)
 
