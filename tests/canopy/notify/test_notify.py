@@ -597,7 +597,9 @@ def test_chore_runs_reach_a_sink_that_takes_chores(scenario: Scenario, sink_scri
     prompt = scenario.env.home / "chore.md"
     prompt.write_text("Check.\n")
     chore_cmd = "agent run --agent canopy-chore {prompt}"
-    scenario.configures(chores={"check": {"prompt": str(prompt), "every_minutes": 60, "cmd": chore_cmd}})
+    # With a `when`, the overseer's to run or hold off (DESIGN §37).
+    check = {"prompt": str(prompt), "every_minutes": 60, "cmd": chore_cmd, "when": "Weekdays only."}
+    scenario.configures(chores={"check": check})
     out = tmp_path / "chores.txt"
     add_sink(scenario, sink_script, "s", out, format="text", events=["chores"])
     scenario.tick(canopy("chore", "wait", "check", "--rationale", "not needed yet"))

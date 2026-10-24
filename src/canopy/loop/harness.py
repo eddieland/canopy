@@ -4,8 +4,8 @@ Each tick, after the derivation (§30), the harness takes a ticket whole when ev
 each of its units is one it decides, and none rests on a stale observation. It records the ticket's decision, marked as
 its own (`decisions.decider`), and the phase that row names, and the state block names it instead of listing the
 ticket. One row it does not decide, anywhere on the ticket, leaves the ticket whole to the overseer, which reads the
-derivation's rows beside the observations. So does a ticket that is not a fresh, open candidate, and one with an item
-the overseer holds open on the attention list, which it keeps only by recording it again each tick (D020).
+derivation's rows beside the observations. So does a ticket that is not a fresh, open candidate. An item the overseer
+holds open on a ticket the harness takes stands while the overseer is not given the ticket (`attention.current`).
 
 The rows it decides are `ROWS`: only those it reads from its own journal alone, which need no measurement (§37, The
 evidence gate). A row that rests on what a connector observed joins them only by a PR citing the measurement that shows
@@ -80,12 +80,8 @@ def decide(ctx: Context, derived: Iterable[Derived]) -> list[Decision]:
     by_ticket: dict[str, list[Derived]] = {}
     for d in derived:
         by_ticket.setdefault(d.ticket_key, []).append(d)
-    # An item the overseer recorded stays open only while it records it again (D020): its ticket stays its own.
-    held = {i.ticket_key for i in attention.current(ctx.conn) if i.reason not in attention.HARNESS_REASONS}
     found: list[Decision] = []
     for key in sorted(by_ticket):
-        if key in held:
-            continue
         decision = _decided(ctx.conn, key, by_ticket[key])
         if decision is not None:
             found.append(decision)
