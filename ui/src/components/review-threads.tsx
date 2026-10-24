@@ -54,8 +54,9 @@ import { cn } from '@/lib/utils'
  * file when the diff does not show the line or it is outdated, or in a Not in the diff panel. Its comments and every
  * draft are plain text, every hidden character named, a comment's `<details>` blocks folded. A draft is edited,
  * dropped, or sent where it sits; the head panel lists every draft with a link to its card, and sends every waiting one
- * together, as one comment review. The current feedback plan of the PR's ticket, when it has one, follows the head
- * panel, where it is approved, and each thread it covers carries its proposal above the drafts (DESIGN §32).
+ * together, as one comment review. The current feedback plan of the PR's ticket, when it has one, is where it is
+ * approved: ahead of the head panel while it waits on the operator, what they came to answer, after it once approved
+ * or spent. Each thread it covers carries its proposal above the drafts (DESIGN §32).
  */
 export function ReviewThreads({ url }: { url: string }) {
     const client = useQueryClient()
@@ -64,6 +65,13 @@ export function ReviewThreads({ url }: { url: string }) {
     const [wanted, setWanted] = useState<Wanted | null>(null)
     const changed = () => void refreshThreads(client, url)
     const { data } = query
+    // Whether the plan leads the drafts, settled as each plan is first read, as a ticket's page settles its plan's
+    // card: one approved meanwhile stays where it was read, its band in view, rather than move from under the button.
+    const plan = data?.feedback_plan ?? null
+    const [settled, setSettled] = useState<{ id: number; leads: boolean } | null>(null)
+    if (plan !== null && settled?.id !== plan.id) {
+        setSettled({ id: plan.id, leads: plan.status === 'waiting' || plan.status === 'stale' })
+    }
     if (data === undefined) {
         return (
             <Panel>
@@ -74,10 +82,15 @@ export function ReviewThreads({ url }: { url: string }) {
     }
     const placed = placeThreads(data)
     const proposals = new Map((data.feedback_plan?.items ?? []).map((i) => [i.thread_id, i]))
+    const planPanel = plan === null ? null : <FeedbackPlanPanel plan={plan} onChange={changed} />
+    const leads = settled?.leads === true && settled.id === plan?.id
+    // A spent plan's resume has gone ahead, so a draft beside its proposal no longer answers ahead of anything.
+    const resumes = plan !== null && plan.status !== 'spent'
     return (
         <>
+            {leads && planPanel}
             <RepliesPanel threads={data} placed={placed} onChange={changed} onFollow={(file) => setWanted({ file })} />
-            {data.feedback_plan !== null && <FeedbackPlanPanel plan={data.feedback_plan} onChange={changed} />}
+            {!leads && planPanel}
             {data.diff !== null && (
                 <DiffPanels
                     diff={data.diff}
@@ -85,7 +98,13 @@ export function ReviewThreads({ url }: { url: string }) {
                     wanted={wanted}
                     cards={['thread', 'threads']}
                     renderCard={(t) => (
-                        <ThreadCard key={t.id} thread={t} item={proposals.get(t.id)} onChange={changed} />
+                        <ThreadCard
+                            key={t.id}
+                            thread={t}
+                            item={proposals.get(t.id)}
+                            resumes={resumes}
+                            onChange={changed}
+                        />
                     )}
                 />
             )}
@@ -96,7 +115,13 @@ export function ReviewThreads({ url }: { url: string }) {
                     </PanelHeader>
                     <div className="flex flex-col gap-2 p-3">
                         {placed.elsewhere.map((t) => (
-                            <ThreadCard key={t.id} thread={t} item={proposals.get(t.id)} onChange={changed} />
+                            <ThreadCard
+                                key={t.id}
+                                thread={t}
+                                item={proposals.get(t.id)}
+                                resumes={resumes}
+                                onChange={changed}
+                            />
                         ))}
                     </div>
                 </Panel>
@@ -354,18 +379,23 @@ function sendRefs(drafts: Draft[]): string {
  * One review thread: where it is, whether GitHub says it is outdated or resolved, its comments as their authors wrote
  * them, plain text with each `<details>` block folded (`CommentText`), with a link to each on its host, then the
  * feedback plan's proposal for it, `item`, when the plan covers it, then the drafts that answer it. One the operator
- * sent wears `sent by you`. A thread no draft answers shows as it is.
+ * sent wears `sent by you`. A thread no draft answers shows as it is. While the plan's resume is still to come
+ * (`resumes`), a `change` it acts on says so over a waiting draft, which answers first if sent.
  */
 export function ThreadCard({
     thread,
     item,
+    resumes = false,
     onChange,
 }: {
     thread: ReviewThread
     item?: FeedbackPlanItem | undefined
+    resumes?: boolean
     onChange: () => void
 }) {
     const where = threadWhere(thread)
+    const ahead =
+        resumes && item?.proposal === 'change' && !item.left_out && thread.drafts.some((d) => d.status === 'waiting')
     return (
         <article
             id={threadAnchor(thread.id)}
@@ -391,7 +421,7 @@ export function ThreadCard({
                     </li>
                 ))}
             </ol>
-            {item !== undefined && <PlanProposal item={item} />}
+            {item !== undefined && <PlanProposal item={item} ahead={ahead} />}
             {thread.drafts.length > 0 && (
                 <div className="mt-2 flex flex-col gap-2">
                     {thread.drafts.map((d) => (

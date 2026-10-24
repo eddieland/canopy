@@ -60,6 +60,8 @@ const APPROVED = 'Tick other items, or write words for its resume, to approve it
 // The chip on an item the last approval did not tick: its resume does not act on it, and the next plan is offered it.
 // Never `left out` or `leave`, which is a proposal of its own: a ticked `leave` item approves leaving it be.
 const NEXT_PLAN = 'for the next plan'
+// The note on a `change` over a waiting draft, which the plan and the draft would each answer in their own way.
+const AHEAD = "The plan's resume writes a new reply here; sending this draft first answers ahead of it."
 
 /**
  * The current feedback plan of the PR's ticket (DESIGN §32): where it stands, what changed on its PRs since it was
@@ -117,17 +119,23 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
 /**
  * One item's proposal on its thread's card: its number in the plan, what it proposes, whether an approval put it off
  * for the next plan, and the reply it would draft, plain text, a model's words until a worker drafts and the operator
- * sends them.
+ * sends them. Drawn as an inset rule on the thread's card rather than a card of its own. `ahead` says the thread
+ * has a waiting draft the plan's resume would answer again, as a `change`, so sending it first answers ahead of it.
  */
-export function PlanProposal({ item }: { item: FeedbackPlanItem }) {
+export function PlanProposal({ item, ahead = false }: { item: FeedbackPlanItem; ahead?: boolean }) {
     return (
-        <div className="mt-2 rounded-md border border-dashed p-2" data-testid="plan-proposal">
+        <div className="mt-2 border-l-2 py-0.5 pl-2.5" data-testid="plan-proposal">
             <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="panel-label">Plan item {item.number}</span>
                 <Chip tone={item.proposal} word={item.proposal} />
                 {item.left_out && <Chip>{NEXT_PLAN}</Chip>}
             </span>
             {item.reply !== null && <MemoryText text={item.reply} lines className="mt-1 block" />}
+            {ahead && (
+                <p className="mt-1 text-xs text-status-blocked" data-testid="plan-proposal-ahead">
+                    {AHEAD}
+                </p>
+            )}
         </div>
     )
 }
