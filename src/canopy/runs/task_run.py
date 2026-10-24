@@ -417,7 +417,11 @@ def _run_agent(
     """
     slot = Path(run.slot_path)
     tools = ctx.config.tracker.tools()
-    refused = project_config.refusal([slot], tracker_server=tools.server if tools is not None else None)
+    refused = project_config.refusal(
+        [slot],
+        version=ctx.config.runtime.version,
+        tracker_server=tools.server if tools is not None else None,
+    )
     if refused is not None:
         raise SetupError(refused)
     prompt = starts.prompt_file(Path(run.log_path)).read_text(encoding="utf-8")
@@ -450,13 +454,14 @@ def _run_agent(
             log,
             agent="task",
             fields={"task_run_id": run.id},
+            version=ctx.config.runtime.version,
         ),
     )
     out.write(f"\n--- worker stderr ---\n{done.stderr}\n")
     out.write(f"--- worker exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
-    output = stdout.read(done.stdout)
+    output = stdout.read(done.stdout, version=ctx.config.runtime.version)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn,

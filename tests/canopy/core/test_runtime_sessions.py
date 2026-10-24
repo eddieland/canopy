@@ -8,6 +8,7 @@ from unittest import mock
 from canopy.core import db, runtime_sessions, sql
 from canopy.core.vocab import SessionsRead
 from canopy.runtime import sessions
+from canopy.runtime.implementation import Version
 from canopy.runtime.report import ModelUse, SessionPage, SessionSpend
 
 if TYPE_CHECKING:
@@ -100,9 +101,9 @@ def test_a_read_that_fails_keeps_the_cursor_and_says_why(conn: sqlite3.Connectio
 def test_read_next_starts_after_the_cursor(conn: sqlite3.Connection) -> None:
     runtime_sessions.record(conn, found(session("ses_1")))
     with mock.patch.object(sessions, "updated_after", autospec=True, return_value=found(session("ses_2"))) as read:
-        page = runtime_sessions.read_next(conn, limit=10)
+        page = runtime_sessions.read_next(conn, limit=10, version=Version.ONE)
 
-    read.assert_called_once_with((NOON_MS, "ses_1"), limit=10)
+    read.assert_called_once_with((NOON_MS, "ses_1"), version=Version.ONE, limit=10)
     assert [s.session_id for s in page.sessions] == ["ses_2"]
     assert runtime_sessions.cursor(conn) == (NOON_MS, "ses_2")
 

@@ -134,7 +134,8 @@ def opencode_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
     Each run appends its argv, cwd, and OPENCODE_* variables' names to `opencode.jsonl` beside it. See
     tests/fakes/opencode for its keys.
     """
-    state = tmp_path / "opencode.json"
+    # Not `opencode.json`, which OpenCode would read as config of a directory the workspace is in.
+    state = tmp_path / "opencode-state.json"
     with mock.patch.dict(
         os.environ,
         {"FAKE_OPENCODE_STATE": str(state), "FAKE_OPENCODE_LOG": str(tmp_path / "opencode.jsonl")},

@@ -26,6 +26,7 @@ from canopy.core.vocab import ChoreRunStatus, TickStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runtime import servers
+from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
@@ -157,6 +158,7 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         given = servers.env(
             {history.SERVER: history.SERVER_COMMAND, reports.SERVER: reports.SERVER_COMMAND},
             cwd=canopy_env.root.absolute(),
+            version=Version.ONE,
         )
         assert {name: agent["env"].get(name) for name in given} == given
         prompt = agent["argv"][3]

@@ -123,7 +123,7 @@ def _model_usable(ctx: Context, tick_id: int, log: logs.TickAdapter) -> bool:
     if model is None:
         return True
     try:
-        agent_models.check(ctx.runner, ctx.workspace.root, model)
+        agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version)
     except agent_models.ModelError as e:
         detail = f"queued tasks wait: {e.reason}"
         # An attention item's action, as `loop.attention` reads it; that layer is above this one.
