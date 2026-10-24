@@ -26,22 +26,18 @@ INLINE_CONFIG_ENV = "OPENCODE_CONFIG_CONTENT"
 VARIABLES = frozenset({INLINE_CONFIG_ENV})
 
 
-def env(
-    commands: Mapping[str, Sequence[str]],
-    *,
-    cwd: Path,
-    timeout_seconds: int | None = None,  # noqa: ARG001  (see the docstring)
-) -> dict[str, str]:
+def env(commands: Mapping[str, Sequence[str]], *, cwd: Path, timeout_seconds: int | None = None) -> dict[str, str]:
     """The environment that gives a run each local MCP server `commands` names, each run as its command in `cwd`.
 
-    `timeout_seconds` is taken for the surface's sake and not written: where OpenCode 2 reads a local server's request
-    timeout has not been read from its source, so its own default applies.
+    `timeout_seconds`, when given, bounds each tool call OpenCode makes of it (`timeout.execution`, in milliseconds);
+    OpenCode 2.1.4's own default is twelve hours, and its 30 seconds to start the server and list its tools stay.
 
     Returns:
         The variables to set on the run's process: the servers in its inline config, outside code mode.
     """
+    limit = {} if timeout_seconds is None else {"timeout": {"execution": timeout_seconds * 1000}}
     entries = {
-        server: {"type": "local", "command": list(command), "cwd": str(cwd), "codemode": False}
+        server: {"type": "local", "command": list(command), "cwd": str(cwd), "codemode": False, **limit}
         for server, command in commands.items()
     }
     return {INLINE_CONFIG_ENV: json.dumps({"mcp": {"servers": entries}})}
