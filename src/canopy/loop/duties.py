@@ -135,10 +135,10 @@ def undone(conn: sqlite3.Connection, tick_id: int, duties: Duties) -> list[str]:
     """Each duty the overseer left undone this tick, in the procedure's order.
 
     A ticket's decision is any the overseer recorded about it: a `decide`, a dispatch or review and their refusals, or
-    an attention item. A mirror is not one: it copies a comment and decides nothing. The query is done by a `queried`
-    the overseer recorded or the harness did, and each ticket either names is owed a decision. A ticket stopped while
-    the overseer ran is owed nothing, as one stopped before it. A ticket that came into the journal any other way while
-    it ran, such as one the operator started, is not owed one: the next tick's block carries it.
+    an attention item. The query is done by a `queried` the overseer recorded or the harness did, and each ticket
+    either names is owed a decision. A ticket stopped while the overseer ran is owed nothing, as one stopped before it.
+    A ticket that came into the journal any other way while it ran, such as one the operator started, is not owed one:
+    the next tick's block carries it.
 
     Returns:
         One phrase per kind of duty left undone, empty when the overseer did every one.
@@ -150,7 +150,7 @@ def undone(conn: sqlite3.Connection, tick_id: int, duties: Duties) -> list[str]:
     if duties.query_due and not queried:
         missing.append("the tracker query was due and no `canopy queried` recorded it")
     found = {key for d in queried for key in queried_keys(d.rationale)}
-    decided = {d.ticket_key for d in recorded if d.ticket_key is not None and d.action != conversation.MIRROR_ACTION}
+    decided = {d.ticket_key for d in recorded if d.ticket_key is not None}
     exempt = duties.exempt | set(conversation.stopped(conn))
     tickets = sorted((duties.tickets | found) - exempt - decided)
     if tickets:

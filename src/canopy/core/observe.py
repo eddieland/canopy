@@ -9,7 +9,8 @@ A subject read whole has its rows replaced in one transaction; one not read whol
 a cut-off read never looks like a check, review, or branch gone. A run with no `end` line records nothing.
 
 An observation is a dated copy of what a connector saw, never authority (DESIGN §22): in M36 it decides which thread a
-draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do.
+draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do. Each comment is also
+recorded in its ticket's conversation when first observed, as data (§35).
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ MAX_STDERR = 300
 MAX_OUTPUT = 16 * 1024 * 1024
 #: A line longer than this is refused unread.
 MAX_LINE = 1024 * 1024
-#: A title is cut to this, on one line; a body to `conversation.MAX_MIRRORED`, as a mirrored comment's is.
+#: A title is cut to this, on one line; a body, as a comment's is, to `conversation.MAX_COMMENT`.
 MAX_TITLE = 200
 #: More labels or blockers than this refuse the line: a list cut short would read as one removed.
 MAX_LIST = 100
@@ -396,7 +397,7 @@ _Login = Annotated[str, text_of(MAX_NAME, _LOGIN_RE)]
 _Sha = Annotated[str, text_of(64, _SHA_RE)]
 _Name = Annotated[str, text_of(MAX_NAME)]
 _Title = Annotated[str, contract.one_line, contract.bounded(MAX_TITLE)]
-_Body = Annotated[str, contract.bounded(conversation.MAX_MIRRORED)]
+_Body = Annotated[str, contract.bounded(conversation.MAX_COMMENT)]
 
 
 class _Line(BaseModel):
@@ -429,7 +430,7 @@ class _Comment(_Line):
     id: Annotated[str, text_of(200, conversation.COMMENT_ID_RE)]
     author: Annotated[str, text_of(conversation.MAX_AUTHOR, re.compile(r"\S+"))]
     time: Time
-    # Cut where it is recorded, and marked truncated there, as a mirrored comment is.
+    # Cut where it is recorded, and marked truncated there.
     body: str = ""
 
     @property
@@ -731,13 +732,15 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
 def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, now: str) -> bool:
     """Record a comment the tracker connector read in `observed_comments`, once per ticket and comment id.
 
-    Not in `messages`: in M36 the observations are in shadow, so no worker's prompt or overseer's state block carries
-    a comment the overseer did not mirror. It is cut and marked as `mirror` cuts one, and an edit after is not followed.
+    One new to the journal is recorded in its ticket's conversation too, in the same transaction and with the same text,
+    source `worker` when it carries the workers' marks, else `tracker` (DESIGN §35). Its body is cut and marked, and an
+    edit after is not followed, here or in the conversation.
 
     Returns:
         True if the comment was new to the journal.
     """
     text = line.body.strip() or "(no text)"
+    body, truncated = text[: conversation.MAX_COMMENT], len(text) > conversation.MAX_COMMENT
     source = (
         "worker"
         if conversation.worker_marked(line.body, config.trust.comment_prefix, config.trust.comment_suffix)
@@ -751,13 +754,17 @@ def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, no
             id=line.id,
             author=line.author,
             commented_at=line.time,
-            body=text[: conversation.MAX_MIRRORED],
-            truncated=len(text) > conversation.MAX_MIRRORED,
+            body=body,
+            truncated=truncated,
             source=source,
             observed_at=now,
         ).or_ignore(),
     )
-    return cursor.rowcount == 1
+    if cursor.rowcount != 1:
+        return False
+    comment = db.Comment(id=line.id, author=line.author, at=line.time, truncated=truncated)
+    conversation.record_comment(conn, line.ticket, comment, source=source, body=body, channel="tracker")
+    return True
 
 
 def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:

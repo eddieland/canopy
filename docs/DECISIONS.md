@@ -297,7 +297,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D072. The journal holds every ticket's conversation; authority stays with its source
 
 - Private tickets (`canopy start`) never touch the tracker; only operator messages authorize them.
-- On public tickets the mirror authorizes nothing; replies are read live.
+- On public tickets a tracker comment in the journal authorizes nothing; replies are read live.
 - Rejected: a shadow ticket in a private tracker; the journal as source for public tickets (forgeable).
 
 ## D073. `canopy loop` serves the web UI from a thread, behind an off switch

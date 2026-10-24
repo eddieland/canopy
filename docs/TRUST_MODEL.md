@@ -91,7 +91,7 @@ Controls:
   not in code from its observed labels and state, a non-candidate by key and why with none of its text, and a
   candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a
   trusted reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from
-  it, and reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut as a mirror cuts it.
+  it, and reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut and marked.
   `canopy dispatch` checks the overseer's claims against them in code, before its other guards: the label must be one
   observed on the ticket, a `resume` for `reply` must point at a new comment by an authorized replier that is not a
   worker's or at a new operator message, a `resume` for `review` must cover a trusted reviewer's item, or anyone
@@ -100,7 +100,7 @@ Controls:
   private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual: the
   guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
 - An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own,
-  apart from every conversation, cut as a mirror cuts them, with the store's id for each author and whether the
+  apart from every conversation, cut as a tracker comment is, with the store's id for each author and whether the
   comment is an agent's or carries every comment mark. In shadow (ROADMAP M62), no prompt, state block, attention
   item, or guard reads them, so a comment steers nothing. The ticket one names is its artifact's origin, a worker's
   word until canopy sets it per run.
@@ -277,12 +277,12 @@ Controls:
   variant is a config error, as is a chore's command that does while it runs canopy's chore agent, so no agent's
   command line overrides it unseen. A worker run whose model or variant the runtime does not list, or whose list cannot
   be read, is refused with an attention item, never run on config's model or the runtime's default instead.
-- Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like a
-  dispatch's `label`, and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds
-  the workers' marks (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages
-  only. A private worker's prompt labels a mirrored comment as data, with its author. The overseer passes a comment's
-  text as a field of its `mirror` tool's JSON arguments, which no shell reads, so there is nothing in it to expand,
-  quote, or end early (DESIGN §27).
+- Tracker comments in a ticket's conversation (DESIGN §22, §35) are what the tracker source observed, each recorded
+  once in code, as the connector printed it, when first observed, and authorize nothing. They are recorded with source
+  `tracker`, or `worker` when the harness finds the workers' marks (D069), never `operator`, and phases,
+  `awaiting_reply`, and the loop's wake read operator messages only. A private worker's prompt labels one as data,
+  with its author. The overseer has no tool that writes one. Residual: the comments the overseer mirrored before M37
+  stay as it recorded them, and a later observation of the same comment does not replace one.
 - The overseer has no edit or write tools, and can act only through canopy's own MCP tools, whose guards are code
   (D020, DESIGN §27), and the commands the operator names for it in `runtime.allow_bash`, such as a tracker's CLI while
   its MCP server is down. The server is named in the overseer process's environment alone, from which the harness
@@ -367,9 +367,8 @@ give a ticket's runs a file, in the operator's name, or write the journal file d
 follows injected text naively, not one that works around it. The operator accepted this (D076); a forged `canopy reply`
 on a public ticket, a go-ahead on untrusted review feedback, is the same exposure. A steered overseer can dispatch a
 `resume` for an untrusted reviewer's comments without a go-ahead; the worker's own check and human review of the PR
-remain, and those comments were never instructions to it. A steered overseer can mirror text that was never on the
-ticket, or name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the
-tracker stays its source.
+remain, and those comments were never instructions to it. The journal's copy of a public ticket's conversation is
+what a connector printed, and the tracker stays its source.
 
 ### T2. Credential misuse or leakage
 
@@ -421,7 +420,7 @@ Controls in code, not prompts:
   PR's review limit.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
-- Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
+- Tracker comments: each body cut at 2000 characters where the tracker source records it (DESIGN §30).
 - Tasks (DESIGN §36): one run per task at a time, started only by a live tick, in code; at most `capacity.max_tasks`
   task runs at once (1 by default, and the workspace file may only lower it), within `capacity.max_workers`, which
   counts task runs with workers' and reviews'; each with the worker's timeout. A task the guards hold waits for a
@@ -621,7 +620,7 @@ Controls:
   runs that followed its plans with their statuses and its PRs' URLs and states. So do the operator's comments on
   each ticket's plans, with the passages they quote, unless `paths.plan_archive_comments`, private and on by default,
   is off. With `paths.plan_archive_conversations`, private and off by default, so does each planned ticket's
-  conversation: workers' reports and questions, the operator's replies, and mirrored tracker comments. A private ticket's
+  conversation: workers' reports and questions, the operator's replies, and tracker comments. A private ticket's
   conversation still never reaches the tracker (DESIGN §22); it reaches this remote only when the operator turns that
   on. The keys are private, so a shared workspace file can neither name a remote nor change what goes there (T7). The
   harness, never an agent, does it: no agent runs git there, and `canopy archive` refuses inside a tick or run. It uses
@@ -672,9 +671,10 @@ Controls:
   question, branch, head, PR, and recorded keys leave the machine only as a `task.ended` event, to a sink whose events
   list `tasks`, which none does unless the operator adds it; its report never does. Its `awaiting_reply` and
   `task_ticket_unrecorded` items, on every attention sink, name the task and never the question or the keys.
-- The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
-  the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
-  notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
+- The journal also holds the tracker comments the tracker source observes (DESIGN §22, §35), each cut at 2000
+  characters, in the same operator-only state directory, for every ticket it reads, public, private, or not a
+  candidate. Nothing sends them anywhere: no notification event carries one, and only a private ticket's own worker
+  reads them, in its prompt.
 - With `[artifacts]` set (DESIGN §38), the agents `artifacts.publish_roles` names may call the artifact store's
   tools by exact name: publish an artifact or a new version of one, read and list them, and reply, comment, and resolve
   threads on them, never the comment feed. The public worker is the one agent config lets it name, and its definition

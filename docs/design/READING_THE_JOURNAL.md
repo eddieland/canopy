@@ -8,9 +8,10 @@ reviews](PUBLISHED_REVIEWS.md). Next: [One-off tasks](TASKS.md).
 ## 35. The overseer reads the journal
 
 Being built (ROADMAP M37), ahead of §30's measurement at the operator's word. Built: the observations in the state
-block, the prompt's procedure that decides a fresh subject from them, and the claims of a dispatch and the cursors of
-`canopy_ticket-set` checked in code. `handled`, cursors as journal numbers, and comments reaching the conversation wait,
-and none needs the overseer's tools (§27), whose verbs the commands share.
+block, the prompt's procedure that decides a fresh subject from them, the claims of a dispatch and the cursors of
+`canopy_ticket-set` checked in code, and comments reaching the conversation in code (§22), the `mirror` tool gone.
+`handled` and cursors as journal numbers wait, and neither needs the overseer's tools (§27), whose verbs the commands
+share.
 Until each is built, §4 principle 1, §6, §7, §8, §17, §22, and TRUST_MODEL describe canopy as it is; this section says
 what changes, and the PR that builds the last of it cuts this one to what is left.
 
@@ -27,8 +28,7 @@ Judgment stays the overseer's: which repository, a slug and a title, a worker's 
 - A candidate carries its title, state, labels, and blockers; its body until its first unit exists, since the
   repository and slug are chosen from it; and its comments past its `comment` cursor, each with its id, author, time,
   and body, and two marks set in code: whether the author is an authorized replier, and whether it is a worker's
-  (D069). While the mirror stays, the comments start past the earlier of its `comment` and `mirror` cursors, so what
-  it has yet to copy is there too.
+  (D069).
 - A unit carries its PR's state, head, base, draft, and mergeable state; each named check at the head, a human check
   marked (§30); each person's latest verdict, since an approval before the cursor still approves; and the reviews and
   review comments past its `review` cursor, each marked trusted or not in code (D089).
@@ -49,8 +49,8 @@ derivation does; or `unobserved`, when no source covers it, such as every ticket
 ### The overseer stops reading
 
 The prompt's procedure drops its reads: no tracker search, no ticket, PR, check, or review read, no mirroring, and no
-provider skill. Built so far: those reads, for a fresh subject; the mirror and the skill stay until comments reach the
-conversation in code (below). The overseer calls the tracker's or GitHub's MCP only about a subject marked `stale` or
+provider skill. Built so far: those reads, for a fresh subject, and mirroring for every subject; the skill stays for the
+stale and unobserved ones. The overseer calls the tracker's or GitHub's MCP only about a subject marked `stale` or
 `unobserved`. That is the prompt's rule, not a guard, but spend by tool (§11) counts each call. A stale subject's live
 read can mark a closed ticket done or raise an attention item, never start a run (below). An unobserved subject keeps
 today's procedure, provider skill and claims included (Open). A later step takes the MCP servers away (ROADMAP M39).
@@ -89,20 +89,12 @@ form (§7). Rejected: the source's ids, which no tracker orders, and times, whic
 CI is observed by head, context, and run, so a re-run at the same head is seen (§8). A `resume` for `ci` alone is
 refused `handled` when its only failure repeats one at the same head and context (PRIOR_ART, CI newness).
 
-### Comments reach the conversation in code
-
-The `mirror` tool is retired (§27). Each comment the tracker source observes is recorded once in its ticket's
-conversation, as a mirrored comment was (§22): source `tracker`, or `worker` when it carries the marks. The operator
-then reads every comment, as the connector saw it, rather than the ones the overseer chose to copy. It still authorizes
-nothing: phases, `awaiting_reply`, and the loop's wake read operator messages only, and a private worker's prompt
-carries it as data with its author. Without a tracker source no comment reaches it, unless the mirror stays (Open).
-
 ### Trust model changes, when built
 
 - T1: labels, authorized repliers, and trusted reviewers are checked in code against observations, before the worker's
   own check, so a steered overseer cannot start a run on one never observed; its MCP is narrowed, by prompt, to stale
   and unobserved subjects. Residual: the guards trust what a connector printed, and a label removed since its read
-  authorizes until the worker's check. The mirror's residual, text never on the ticket, goes.
+  authorizes until the worker's check.
 - T2: `canopy-connect-jira`'s credentials (§30) join the GitHub programs' line.
 - T7: `connect.*` joins the private keys: a source runs a command with the operator's credentials, and
   `connect.max_age_minutes` decides when a dispatch is refused. The widened query's residual closes.
@@ -111,7 +103,7 @@ carries it as data with its author. Without a tracker source no comment reaches 
 
 ### Open
 
-- Whether a tracker with no connector keeps the live-read procedure, with its provider skill, mirror, and label claim,
+- Whether a tracker with no connector keeps the live-read procedure, with its provider skill and label claim,
   or a `tracker` source is required. Recommended: required. The two shipped cover the operator's trackers, and the
   contract is a page of Python for another. Required, it changes §3's and principle 5's "any tracker with an MCP
   server", and §17. Until it is settled, such a tracker keeps the live reads: its tickets are `unobserved`.

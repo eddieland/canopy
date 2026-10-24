@@ -117,7 +117,7 @@ If a run reported no cost, the totals say how many, so a gap in the figures neve
 ## Idle ticks
 
 A tick is idle when it started no work: it closed ok, dispatched no worker, review, or chore, and nothing reached the
-journal since the tick before, no run ending and nothing from you. Waits, refusals, a ticket marked done, a comment
-copied, or a new attention item don't count. The loop waits longer after each idle tick, so a quiet day costs little,
+journal since the tick before, no run ending and nothing from you. Waits, refusals, a ticket marked done, or a new
+attention item don't count. The loop waits longer after each idle tick, so a quiet day costs little,
 but a tick that starts nothing still pays for the overseer to read everything. The share of the overseer's spend that
 went on idle ticks is the line under the totals. If it's high, a longer `loop.idle_max_minutes` is the knob.

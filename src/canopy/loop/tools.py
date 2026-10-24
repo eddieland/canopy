@@ -11,7 +11,7 @@ guard's refusal, or a call outside a running tick, is `Refused`, exit 1. Either 
 
 This module holds what every verb shares, the bounds, the `Request` and `Result` bases, and the running tick, and the
 ticket's verbs:
-dispatch, decide, queried, attention, ticket set, and mirror. A feature's own verbs are in a module of their own, the
+dispatch, decide, queried, attention, and ticket set. A feature's own verbs are in a module of their own, the
 reviews' in `loop.review_tools` and the chores' in `loop.chore_tools`.
 """
 
@@ -83,7 +83,7 @@ def explain(error: ValidationError) -> str:
     """Say what was wrong with a request, as the overseer reads it from a tool's error or a command's usage error.
 
     It names each field and what was wrong with it, never pydantic's copy of the input; a check echoes a value only for
-    short, bounded fields, never a body: a mirrored comment's body is the tracker's.
+    short, bounded fields, never free text, which may be a tracker's or a reviewer's.
 
     Returns:
         One line per problem: a rule across fields as its own sentence, a field's as `field: problem`.
@@ -859,85 +859,6 @@ def _check_cursors(ctx: Context, tick_id: int, key: str, repo: str | None, curso
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
         logs.for_tick(tick_id).info("ticket set refused", extra={"ticket": key, "guard": r.guard, "reason": r.reason})
         raise Refused(f"ticket set refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-
-
-class Mirror(Request):
-    """A tracker comment, copied into a ticket's conversation in the journal for the operator to read."""
-
-    #: What the comment is on: a ticket key, REPO#N, or a PR's URL.
-    ref: Annotated[str, Field(description="What the comment is on: a ticket key, REPO#N, or a PR's URL.")]
-    #: The tracker's id of the comment.
-    comment: Annotated[str, Field(description="The tracker's id of the comment.")]
-    #: Its author's account id on the tracker.
-    author: Annotated[str, Field(description="Its author's account id on the tracker.")]
-    #: When the tracker says it was written.
-    at: Annotated[str, Field(description="When the tracker says it was written, ISO 8601.")]
-    #: Its text, cut to `conversation.MAX_MIRRORED` characters and marked truncated.
-    body: Annotated[
-        str,
-        Field(description=f"Its text; cut to {conversation.MAX_MIRRORED} characters, and marked truncated."),
-    ]
-
-
-class CommentMirrored(Result):
-    """A tracker comment, as the ticket's conversation in the journal holds it."""
-
-    #: The journal's message that holds it.
-    message: Annotated[int, Field(description="The journal's message that holds it.")]
-    #: Whether this call recorded it, rather than finding it already recorded.
-    new: Annotated[bool, Field(description="Whether this call recorded it, rather than finding it already recorded.")]
-    #: Whether its body was cut.
-    truncated: Annotated[bool, Field(description="Whether its body was cut.")]
-
-
-def mirror(ctx: Context, request: Mirror) -> Outcome[CommentMirrored]:
-    """Record a tracker comment in a ticket's conversation. Recording it again records nothing new.
-
-    A mirrored comment is a copy for the operator to read, and authorizes nothing.
-
-    Returns:
-        What the command prints, and the same as fields.
-
-    Raises:
-        Refused: Outside a running tick, or a guard refused the comment, which is recorded.
-    """
-    current = running_tick(ctx)
-    tick_id = current.id
-    log = logs.for_tick(tick_id)
-    ref, comment_id = request.ref, request.comment
-    key: str | None = None
-    try:
-        subject = conversation.parse_ref(ref)
-        key = subject.id if subject.kind == conversation.TICKET else None
-        mirrored = conversation.mirror(
-            ctx.conn,
-            ctx.config,
-            subject,
-            tick_id=tick_id,
-            dry_run=current.dry_run,
-            repo=ctx.repo,
-            comment_id=comment_id,
-            author=request.author,
-            at=request.at,
-            body=request.body,
-        )
-    except conversation.Refused as r:
-        if key is not None:
-            db.touch_ticket(ctx.conn, key, ctx.repo)
-        db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
-        log.info("mirror refused", extra={"ticket": key, "comment": comment_id[:100], "guard": r.guard})
-        raise Refused(f"mirror refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    log.info(
-        "comment mirrored",
-        extra={"ticket": key, "comment": comment_id, "message_id": mirrored.message_id, "new": mirrored.new},
-    )
-    result = CommentMirrored(message=mirrored.message_id, new=mirrored.new, truncated=mirrored.truncated)
-    if mirrored.new:
-        cut = ", truncated" if mirrored.truncated else ""
-        text = f"mirrored comment {comment_id} on {ref} as message {mirrored.message_id} ({mirrored.source}{cut})"
-        return Outcome(text, result)
-    text = f"comment {comment_id} on {ref} is already message {mirrored.message_id}; nothing new recorded"
-    return Outcome(text, result)
 
 
 # The running tick, which every verb but `ticket set` needs (D020).

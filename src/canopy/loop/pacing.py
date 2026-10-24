@@ -78,7 +78,7 @@ def idle(ctx: Context, outcome: tick.Outcome) -> bool:
 
     It closed `ok`, dispatched no run, and no run started or ended, and the operator recorded no message, started or
     stopped no ticket, granted nothing, and set or cleared no notice, after the previous tick read the journal. What it
-    recorded besides (waits, refusals, `done`, mirrors, attention items, phases) does not count: none of it starts work.
+    recorded besides (waits, refusals, `done`, attention items, phases) does not count: none of it starts work.
     Without a previous tick that read it, not idle.
 
     Returns:

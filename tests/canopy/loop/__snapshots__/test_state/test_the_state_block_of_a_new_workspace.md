@@ -62,9 +62,6 @@ This is a live tick.
     "available": 2
   },
   "running_workers": [],
-  "mirror": {
-    "max_per_tick": 100
-  },
   "query_due": true,
   "tick_id": 1,
   "now": "2026-10-16T10:00:00.000Z",

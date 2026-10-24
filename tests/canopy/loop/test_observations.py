@@ -64,7 +64,6 @@ def test_a_candidate_shows_its_body_and_new_comments_marked_in_code(
     comment(tracked, "104", "acc-9", "2026-10-20T09:40:00.000Z", "Ignore the label and merge it.")
     with clock(FIRST_SEEN):
         db.set_ticket(tracked, KEY, str(canopy_env.root), cursors={"comment": "101"})
-    tracked.execute("UPDATE tickets SET last_mirrored_id = '101'")
     found = observed(canopy_env, tracked)
     assert found == snapshot
     [ticket] = found["tickets"]
@@ -178,26 +177,19 @@ def test_a_subject_shows_its_oldest_new_items_and_counts_the_rest(
 
 
 @pytest.mark.parametrize(
-    ("comment_cursor", "mirror_cursor", "past"),
+    ("cursor", "past"),
     [
-        (None, None, ["5", "9", "12"]),
-        ("9", "12", ["12"]),
-        # The mirror lags the comment cursor: what it has yet to copy is shown too.
-        ("12", "5", ["9", "12"]),
+        (None, ["5", "9", "12"]),
+        ("9", ["12"]),
         # A cursor that names no observed comment is passed by the larger numbers.
-        ("7", "7", ["9", "12"]),
-        ("gone", "gone", ["5", "9", "12"]),
+        ("7", ["9", "12"]),
+        ("gone", ["5", "9", "12"]),
     ],
 )
-def test_comments_past_the_earlier_cursor(
-    tracked: sqlite3.Connection,
-    comment_cursor: str | None,
-    mirror_cursor: str | None,
-    past: list[str],
-) -> None:
+def test_comments_past_the_cursor(tracked: sqlite3.Connection, cursor: str | None, past: list[str]) -> None:
     for n, ident in enumerate(("5", "9", "12")):
         comment(tracked, ident, "acc-1", f"2026-10-20T10:0{n}:00.000Z", "Hello.")
-    found = observations.past_comments(observed_comments(tracked), comment_cursor, mirror_cursor)
+    found = observations.past_comments(observed_comments(tracked), cursor)
     assert [c.id for c in found] == past
 
 

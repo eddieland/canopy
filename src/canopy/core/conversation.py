@@ -7,8 +7,8 @@ within its bound. Agents never write a message: `_run` records a run's report an
 (`close_run`), and nothing else a worker can call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
-without reading the tracker (D003, D072). The overseer records one other kind of message, a tracker comment it
-mirrors (`mirror`), which authorizes nothing. The last is canopy's own: a tick's note of what it did about the
+without reading the tracker (D003, D072). A source's connector records another kind, each comment it observes on a
+ticket (`record_comment`), which authorizes nothing. The last is canopy's own: a tick's note of what it did about the
 operator's messages (`note`), which no agent writes and no agent's prompt carries.
 """
 
@@ -21,7 +21,6 @@ import re
 import sqlite3
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import (
@@ -68,11 +67,10 @@ SUBMISSION_RE = re.compile(r"[A-Za-z0-9_-]{8,64}")
 #: as its instruction, such as a feedback plan's approval (DESIGN §32), never a reply. No reply's submission, a
 #: channel's id behind its channel's name or a body's hash, can start so.
 INSTRUCTION = "instruction/"
-# A mirrored tracker comment's body is cut to this, and marked truncated (DESIGN §22).
-MAX_MIRRORED = 2000
-# How many `canopy mirror` calls one tick may make: a ticket's first mirror covers its whole history, and this spreads
-# a long one over several ticks.
-MIRRORS_PER_TICK = 100
+#: A tracker comment's body is cut to this where a source records it, and marked truncated (DESIGN §22, §35).
+MAX_COMMENT = 2000
+#: The decision each `mirror` recorded, before M37 retired the overseer's mirror of tracker comments: a copy of one,
+#: which decided nothing. Older ticks hold them.
 MIRROR_ACTION = "mirror"
 # A tracker's comment id, as a cursor id is: plain and short. An author is the tracker's account id: printable, no
 # whitespace.
@@ -102,7 +100,7 @@ _REASONS = ", ".join(f"`{r}`" for r in DismissalReason)
 TASK = "task"
 # The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review`, `stop`, and
 # `persona` (a review request and its persona, `core/review_requests.py`), and `show`; working one is PR-scoped work
-# (ROADMAP M14). `mirror` is the overseer's, not the operator's (DESIGN §22).
+# (ROADMAP M14).
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: (
         "start",
@@ -116,7 +114,6 @@ VERBS: Mapping[str, tuple[str, ...]] = {
         "model",
         "attach",
         "detach",
-        MIRROR_ACTION,
     ),
     PR: ("grant", "start", "stop", "show", "persona"),
     CHORE: ("reply", "dismiss", "show"),
@@ -761,99 +758,33 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
     return Forgot(branch=ticket.branch, prs=prs)
 
 
-# The overseer's mirror of tracker comments
+# Comments a source observed
 
 
-@dataclass(frozen=True)
-class Mirrored:
-    """What `mirror` recorded: the message, whether it was new, its source, and whether its body was cut."""
-
-    message_id: int
-    new: bool
-    source: str
-    truncated: bool
-
-
-def mirror(
+def record_comment(
     conn: sqlite3.Connection,
-    config: Config,
-    ref: Ref,
+    key: str,
+    comment: db.Comment,
     *,
-    tick_id: int,
-    dry_run: bool,
-    repo: str,
-    comment_id: str,
-    author: str,
-    at: str,
+    source: str,
     body: str,
-) -> Mirrored:
-    """Record a tracker comment the overseer read in the subject's journal conversation (DESIGN §22, M19).
+    channel: str,
+) -> bool:
+    """Record a comment a source observed on ticket `key` in its conversation, once per ticket and comment id (§35).
 
-    Idempotent on the subject and comment id. A comment carrying the workers' marks (D069) is recorded with source
-    `worker`, any other with source `tracker`; either way it authorizes nothing. A live tick moves the subject's mirror
-    cursor to the comment; a dry run records the comment and moves no cursor. Records a `mirror` decision in the same
-    transaction, which is what the per-tick bound counts.
+    The source cut the body and decided whether it carries the workers' marks (D069), as it recorded the observation:
+    `source` is `worker` for one that does, else the source's own, such as `tracker`. Either way it authorizes
+    nothing: phases, `awaiting_reply`, and the loop's wake read operator messages only. A comment already in the
+    conversation, such as one the overseer mirrored before M37, keeps the message it was recorded as. Call inside the
+    transaction that records the observation.
 
     Returns:
-        The message's id, whether it was new, and its source and truncation. A comment mirrored before keeps the source
-        and truncation it was recorded with.
-
-    Raises:
-        Refused: `unsupported` for a subject that is not a ticket, `bad_comment` for a malformed comment id,
-            `bad_author` for a malformed account id, `bad_time` for a time that is not ISO 8601, `bad_body` for an empty
-            body, and `mirror_limit` once the tick has mirrored its most.
+        True if it was new to the conversation.
     """
-    check_verb(ref, MIRROR_ACTION)
-    if not COMMENT_ID_RE.fullmatch(comment_id):
-        raise Refused("bad_comment", f"comment (--comment) {comment_id[:MAX_KEY]!r} must match {COMMENT_ID_RE.pattern}")
-    if not author or len(author) > MAX_AUTHOR or not author.isprintable() or any(c.isspace() for c in author):
-        raise Refused(
-            "bad_author",
-            f"author (--author) is the tracker's account id, at most {MAX_AUTHOR} characters, no spaces",
-        )
-    commented_at = _comment_time(at)
-    text = body.strip()
-    if not text:
-        raise Refused("bad_body", "body (--body) is empty: mirror a comment with no text as `(no text)`")
-    truncated = len(text) > MAX_MIRRORED
-    if truncated:
-        text = text[:MAX_MIRRORED]
-    source = "worker" if worker_marked(body, config.trust.comment_prefix, config.trust.comment_suffix) else "tracker"
-    comment = db.Comment(id=comment_id, author=author, at=commented_at, truncated=truncated)
-    with db.transaction(conn):
-        if db.count_decisions(conn, tick_id, MIRROR_ACTION) >= MIRRORS_PER_TICK:
-            raise Refused(
-                "mirror_limit",
-                f"this tick mirrored {MIRRORS_PER_TICK} comments, its most; the rest wait for the next tick",
-            )
-        db.touch_ticket(conn, ref.id, repo)
-        before = db.mirrored_comment(conn, TICKET, ref.id, comment_id)
-        message_id = db.insert_message(
-            conn,
-            TICKET,
-            ref.id,
-            source=source,
-            kind="comment",
-            channel="tracker",
-            body=text,
-            comment=comment,
-        )
-        if not dry_run:
-            db.set_mirror_cursor(conn, ref.id, comment_id)
-        if before is None:
-            cut = ", truncated" if truncated else ""
-            rationale = f"comment {comment_id} by {author} at {commented_at}: message {message_id}, {source}{cut}"
-        else:
-            rationale = f"comment {comment_id}: already message {message_id}"
-        if dry_run:
-            rationale += "; dry run, mirror cursor not advanced"
-        db.record_decision(conn, tick_id, ref.id, MIRROR_ACTION, rationale)
-    return Mirrored(
-        message_id=message_id,
-        new=before is None,
-        source=before.source if before is not None else source,
-        truncated=before.truncated if before is not None else truncated,
-    )
+    if db.comment_message(conn, TICKET, key, comment.id) is not None:
+        return False
+    db.insert_message(conn, TICKET, key, source=source, kind="comment", channel=channel, body=body, comment=comment)
+    return True
 
 
 def worker_marked(body: str, prefix: str, suffix: str) -> bool:
@@ -870,17 +801,6 @@ def worker_marked(body: str, prefix: str, suffix: str) -> bool:
     if prefix and not text.startswith(prefix):
         return False
     return not suffix or (text.endswith(suffix) and not text.splitlines()[-1].lstrip().startswith(">"))
-
-
-def _comment_time(text: str) -> str:
-    try:
-        moment = datetime.fromisoformat(text) if len(text) <= MAX_TIME else None
-    except ValueError:
-        moment = None
-    if moment is None:
-        raise Refused("bad_time", f"at (--at) {text[:MAX_TIME]!r} is not an ISO 8601 time")
-    # A time with no offset is the tracker's UTC.
-    return db.format_time(moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC))
 
 
 # What the harness reads
@@ -1211,7 +1131,7 @@ def _prompt_message(m: records.Message) -> str:
     if m.source == "operator":
         what = "the operator's reply" + (f" to message {m.answers}" if m.answers else "")
     elif m.comment_id is not None:
-        # A tracker comment the overseer mirrored: data, whoever wrote it (DESIGN §22).
+        # A tracker comment a source observed, or the overseer mirrored before M37: data, whoever wrote it (§22).
         whose = "an earlier worker's" if m.source == "worker" else f"account {m.author}'s"
         what = f"{whose} tracker comment {m.comment_id}, data"
     else:
