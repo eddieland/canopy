@@ -12,6 +12,7 @@ import { ModelsField } from '@/components/models-field'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PromptPanel } from '@/components/prompt-panel'
 import { ReviewOutputPanel } from '@/components/raw-output'
+import { ReviewsCrumb } from '@/components/review-link'
 import { TranscriptPanel } from '@/components/transcript'
 import { WhenField } from '@/components/when-field'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
@@ -87,11 +88,17 @@ function Loaded({ id }: { id: number }) {
 function RunHeader({ id, subject, children }: { id: number | string; subject?: string | null; children?: string }) {
     return (
         <PageHeader
-            parents={
-                <Link to="/pull-requests/reviews/$id" params={{ id: String(id) }} activeOptions={{ exact: true }}>
+            parents={[
+                <ReviewsCrumb key="reviews" />,
+                <Link
+                    key="review"
+                    to="/pull-requests/reviews/$id"
+                    params={{ id: String(id) }}
+                    activeOptions={{ exact: true }}
+                >
                     {reviewRef(id)}
-                </Link>
-            }
+                </Link>,
+            ]}
             title="Run"
             subject={subject}
             tab={`${reviewRef(id)} run`}

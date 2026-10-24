@@ -21,7 +21,7 @@ import { FindingCard, HELD, ReviewDiffPanels } from '@/components/review-diff'
 import type { Wanted } from '@/components/review-diff'
 import { ReviewDraftPanel, ReviewDraftState, ReviewPointCard } from '@/components/review-draft'
 import { RichText } from '@/components/rich-text'
-import { ReviewLink } from '@/components/review-link'
+import { ReviewLink, ReviewsCrumb } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { TicketField } from '@/components/ticket-field'
@@ -83,7 +83,7 @@ function Loaded({ id }: { id: number }) {
     if (data === undefined) {
         return (
             <>
-                <PageHeader title={reviewRef(id)} />
+                <PageHeader parents={<ReviewsCrumb />} title={reviewRef(id)} />
                 <Panel>
                     <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
@@ -100,6 +100,7 @@ function Loaded({ id }: { id: number }) {
             {/* With a draft, the page is the draft's record: the operator's review leads, its state the line. */}
             {draft === null ? (
                 <PageHeader
+                    parents={<ReviewsCrumb />}
                     title={`${reviewRef(data.review.id)} ${pullRequestLabel(data.review.pr_url)}`}
                     subject={data.review.title}
                     help={HELP}
@@ -109,6 +110,7 @@ function Loaded({ id }: { id: number }) {
                 </PageHeader>
             ) : (
                 <PageHeader
+                    parents={<ReviewsCrumb />}
                     title={reviewRef(data.review.id)}
                     subject={reviewDraftTitle(data.review.pr_url, draft)}
                     help={HELP}
@@ -183,7 +185,7 @@ function Loaded({ id }: { id: number }) {
 function NoReview({ title, children }: { title: string; children: string }) {
     return (
         <>
-            <PageHeader title={title} />
+            <PageHeader parents={<ReviewsCrumb />} title={title} />
             <Panel>
                 <Empty size="panel">{children}</Empty>
             </Panel>
