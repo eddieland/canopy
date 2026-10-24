@@ -8279,7 +8279,8 @@ export type components = {
             started_at: string;
             /**
              * Status
-             * @description running, ok, skipped, canopy_unavailable, disk_low, overseer_failed, reconcile_failed, error, or abandoned
+             * @description running, ok, skipped, canopy_unavailable, disk_low, model_missing, model_list_failed, overseer_failed,
+             *     reconcile_failed, error, or abandoned
              */
             status: string;
             /**

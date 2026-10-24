@@ -6,8 +6,8 @@ current list is therefore the items of the latest `ok` tick; an item disappears 
 the overseer recorded is held through a tick that did not give the overseer its subject, such as a ticket the harness
 decided, or any subject in a tick that ran no overseer, and goes once its ticket is done or stopped (`current`, DESIGN
 §37, §39). A tick that could not
-run the overseer because `canopy` does not work for it adds one item of its own to that list, while it is the latest
-tick.
+run the overseer because `canopy` does not work for it, or its model cannot be used (§13), adds one item of its own to
+that list, while it is the latest tick.
 
 A chore's open findings are on the list too, from its latest `ok` run, and a chore whose latest run failed has a
 `chore_failed` item the harness records each tick (DESIGN §19). Both are about a chore, named `chore:<name>` where a
@@ -99,6 +99,10 @@ UNAVAILABLE: str = TickStatus.CANOPY_UNAVAILABLE
 DISK_LOW: str = TickStatus.DISK_LOW
 #: The statuses of a tick that did not run the overseer for a cause of canopy's own, each raising an item of its name.
 HALTS = frozenset({UNAVAILABLE, DISK_LOW})
+#: The statuses of a tick that did not run the overseer because its chosen model cannot be used (DESIGN §13), each
+#: raising an item of its name. Kept out of `HALTS` and `HARNESS_REASONS`: a dispatch's refusal raises an item of the
+#: same name about its ticket, which the overseer recorded.
+MODEL_HALTS: frozenset[str] = frozenset({TickStatus.MODEL_MISSING, TickStatus.MODEL_LIST_FAILED})
 #: A primary clone whose own config leaves git's automatic maintenance on, which sync turns off (DESIGN §18).
 MAINTENANCE_ON = "auto_maintenance_on"
 #: A git on `PATH` too old to put canopy's marks on a worker's commits (TRUST_MODEL T5).
@@ -205,12 +209,15 @@ def current(conn: sqlite3.Connection) -> list[Item]:
                 now[item_id] = r
         open_items = now
     ended = _ended(conn, {i[0] for i, r in open_items.items() if r.held and i[0] is not None})
+    halted = _halted(conn, ticks[0])
+    # A halt's item stands in for the same item the latest `ok` tick recorded, such as tasks waiting on the same model.
+    shadowed = keys(halted)
     items = [
         Item(i[0], i[1], r.detail, r.since, i[2])
         for i, r in sorted(open_items.items(), key=lambda found: _sort_key(found[0]))
-        if not (r.held and i[0] in ended)
+        if not (r.held and i[0] in ended) and i not in shadowed
     ]
-    return items + _halted(conn, ticks[0])
+    return items + halted
 
 
 @dataclass(frozen=True)
@@ -322,7 +329,7 @@ def _ended(conn: sqlite3.Connection, keys: Collection[str]) -> set[str]:
 
 
 def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
-    """The item of a `HALTS` status while the latest ended tick closed with it (DESIGN §6 step 5).
+    """The item of a `HALTS` or `MODEL_HALTS` status while the latest ended tick closed with it (DESIGN §6 step 5).
 
     That tick ran no overseer, so it leaves the list standing as a failed tick does, and adds this one item: the cause
     is canopy's own, and the operator hears of it at once rather than after `loop.failing`'s streak. It is gone at the
@@ -335,14 +342,16 @@ def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
         conn,
         sql.select("status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1),
     ).fetchone()
-    if latest is None or latest[0] not in HALTS:
+    if latest is None or latest[0] not in HALTS | MODEL_HALTS:
         return []
     reason = str(latest[0])
+    # Only the halted ticks' own items: a refusal in another tick may raise an item of the same name.
     rows = sql.execute(
         conn,
         sql.select("rationale, created_at")
         .from_("decisions")
         .where("action = ? AND tick_id > ?", f"{ACTION_PREFIX}{reason}", last_ok or 0)
+        .where("tick_id IN (SELECT id FROM ticks WHERE status = ?)", reason)
         .order_by("id"),
     ).fetchall()
     if not rows:
@@ -365,9 +374,10 @@ def for_overseer(conn: sqlite3.Connection, *, decided: AbstractSet[str] = frozen
 
     An item stays open only while each tick that gives the overseer its subject records it again, so the overseer is
     shown what it would drop by leaving one out. Items the harness raises itself, and chores', are left out: the
-    overseer never records those. So are those about `decided`, the tickets the harness decided this tick, which the
-    block does not list and which hold their items until the overseer is given them again (`current`). So is every
-    detail, which may quote a comment: the item's subject, reason, and age say which one it is.
+    overseer never records those, nor one about no ticket and no PR, such as the item of a model tasks wait on. So
+    are those about `decided`, the tickets the harness decided this tick, which the block does not list and which hold
+    their items until the overseer is given them again (`current`). So is every detail, which may quote a comment: the
+    item's subject, reason, and age say which one it is.
 
     Returns:
         One object per item: its ticket, or its PR when it has no ticket; its repository when it has one; its reason;
@@ -376,7 +386,7 @@ def for_overseer(conn: sqlite3.Connection, *, decided: AbstractSet[str] = frozen
     found: list[OpenItem] = []
     for item in current(conn):
         key = item.ticket_key
-        if item.reason in HARNESS_REASONS or (key is not None and key.startswith(CHORE_PREFIX)) or key in decided:
+        if key is None or item.reason in HARNESS_REASONS or key.startswith(CHORE_PREFIX) or key in decided:
             continue
         found.append(
             {

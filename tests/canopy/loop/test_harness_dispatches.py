@@ -21,7 +21,7 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import Decider, Phase, ResumeReason, RunKind, TickStatus
 from canopy.infra import procs
-from canopy.loop import harness_dispatches, mcp, phases
+from canopy.loop import attention, harness_dispatches, mcp, phases
 from tests.canopy.helpers import (
     KEY,
     LABEL,
@@ -125,6 +125,30 @@ def test_a_dry_run_records_the_harnesss_chore_and_starts_none(canopy_env: Canopy
         (MINE, "dispatch:chore", f"dry run: not dispatched; {harness_dispatches.CHORE_WHY}"),
     ]
     assert started(conn) == []
+
+
+@pytest.mark.usefixtures("two_chores")
+def test_the_harnesss_chore_on_a_model_it_cannot_look_up_is_refused_with_an_attention_item(
+    canopy_env: CanopyEnv,
+    opencode_state: Path,
+) -> None:
+    """The harness's chore is looked up as the overseer's is (DESIGN §13), the refusal and its item the harness's."""
+    opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"chore": "acme/fake-model-1"}}})
+    reason = (
+        "could not look up the model acme/fake-model-1 chosen in runtime.models: `opencode models` exited 1. Nothing "
+        "ran on another model; the work resumes once the list can be read"
+    )
+    conn = canopy_env.journal()
+    with overseer_does(canopy("chore", "wait", THEIRS, "--rationale", "not a weekday")):
+        assert main(["tick"], runner=InlineRunner()) == 0
+    tick = last_tick(conn)
+    assert [(d.action, d.rationale, d.decider) for d in db.decisions_for_tick(conn, tick.id) if d.chore == MINE] == [
+        ("refused:model_list_failed", reason, Decider.HARNESS),
+        ("attention:model_list_failed", reason, Decider.HARNESS),
+    ]
+    assert started(conn) == []
+    assert (f"chore:{MINE}", "model_list_failed") in [(i.ticket_key, i.reason) for i in attention.current(conn)]
 
 
 @pytest.mark.usefixtures("two_chores")

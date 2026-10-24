@@ -3,9 +3,11 @@
 The operator's submission, or their reply to it, authorized each run, and the overseer never sees one. Guards in code
 hold them, whatever any agent asks: one run per task, at most `capacity.max_tasks` task runs at once, and every run
 that holds a slot, a worker's, a review's, or a task's, within `capacity.max_workers`. A task the guards hold waits for
-a later tick rather than being refused, and a dry tick starts none (D036). Each start leases a slot in the task's
-repository's pool as `canopy:task:<id>`, records the run, renders its prompt, and spawns the detached `canopy _task`
-(`task_run.py`).
+a later tick rather than being refused, and a dry tick starts none (D036). So do the tasks while the runtime does not
+list the private worker's chosen model, or its list cannot be read (DESIGN §13): the tick raises the attention item of
+that name, about the workspace, since the model is config's, and no task spends a run on it. Each start leases a slot in
+the task's repository's pool as `canopy:task:<id>`, records the run, renders its prompt, and spawns the detached
+`canopy _task` (`task_run.py`).
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import agent_models, attachments, conversation, db, notice, pools, prompts, tasks
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import Decider, RunStatus
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
@@ -45,18 +47,25 @@ def start_queued(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[Star
 
     A task whose repository has no clone, or whose pool has no slot free, waits for a later tick, and the tasks after
     it are still tried; once the task runs fill `capacity.max_tasks`, or every run that holds a slot fills
-    `capacity.max_workers`, the rest wait. The caller starts none on a dry tick.
+    `capacity.max_workers`, the rest wait. Every task waits while the private worker's model cannot be used, looked up
+    once, before the first would start, and the tick records the attention item that says why. The caller starts none
+    on a dry tick.
 
     Returns:
         The runs it started, in the order it started them.
     """
     started: list[Started] = []
     with lock.hold(ctx.dispatch_lock_path, wait=True):
+        looked_up = False
         for task in tasks.queued(ctx.conn):
             held = _held(ctx)
             if held is not None:
                 log.info("tasks wait", extra={"task": task.id, "reason": held})
                 break
+            if not looked_up:
+                looked_up = True
+                if not _model_usable(ctx, tick_id, log):
+                    break
             found = _start(ctx, task, tick_id, log)
             if found is not None:
                 started.append(found)
@@ -98,6 +107,31 @@ def _held(ctx: Context) -> str | None:
     if busy >= capacity.max_workers:
         return f"{busy} of {capacity.max_workers} workers, reviews, and tasks are running"
     return None
+
+
+def _model_usable(ctx: Context, tick_id: int, log: logs.TickAdapter) -> bool:
+    """Look the private worker's chosen model up in the runtime's list, as a worker's dispatch does (DESIGN §13).
+
+    A task's run is the private worker's, on the model `runtime.models.worker` chooses; no ticket's override reaches
+    it. One that cannot be used is never fallen back from: the tick records the item of its guard's name about the
+    workspace, marked as the harness's, and every task waits, its slot unleased, until the model is back.
+
+    Returns:
+        True when no model is chosen, or the runtime lists it.
+    """
+    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.private_worker_cmd)
+    if model is None:
+        return True
+    try:
+        agent_models.check(ctx.runner, ctx.workspace.root, model)
+    except agent_models.ModelError as e:
+        detail = f"queued tasks wait: {e.reason}"
+        # An attention item's action, as `loop.attention` reads it; that layer is above this one.
+        action = f"attention:{e.guard}"
+        db.record_decision(ctx.conn, tick_id, None, action, detail, decider=Decider.HARNESS)
+        log.warning("tasks wait: their model cannot be used", extra={"guard": e.guard, "reason": e.reason})
+        return False
+    return True
 
 
 def _start(ctx: Context, task: records.Task, tick_id: int, log: logs.TickAdapter) -> Started | None:
