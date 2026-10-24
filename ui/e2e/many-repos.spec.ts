@@ -27,7 +27,7 @@ test('a workspace of many pools keeps every slot strip inside the panel, and fol
     // About the narrowest window the UI holds up in (DESIGN.md).
     await page.setViewportSize({ width: 820, height: 800 })
     await manyPools(page)
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     const panel = page.getByTestId('pools')
     await expect(panel.getByRole('region')).toHaveCount(POOLS)
@@ -59,10 +59,10 @@ test('a workspace of many pools keeps every slot strip inside the panel, and fol
 
 test('the worktrees filter keeps the slots in a state, and the pools that have one', async ({ page }) => {
     await manyPools(page)
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     await page.getByRole('navigation', { name: 'Filter by state' }).getByRole('link', { name: 'broken' }).click()
-    await expect(page).toHaveURL(/\/worktrees\?state=broken$/u)
+    await expect(page).toHaveURL(/\/runs\/worktrees\?state=broken$/u)
 
     const panel = page.getByTestId('pools')
     // Every busy pool has broken slots; the idle ones are gone.
@@ -77,7 +77,7 @@ test('the worktrees filter keeps the slots in a state, and the pools that have o
     // A pool's header still counts every slot.
     await expect(page.getByTestId('pool-repo-01').getByTestId('slot-strip').locator('span')).toHaveCount(SLOTS)
 
-    await page.goto('worktrees?state=dirty')
+    await page.goto('runs/worktrees?state=dirty')
     await settled(page)
     await expect(panel).toContainText('no dirty slots now')
 })

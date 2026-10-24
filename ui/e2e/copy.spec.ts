@@ -46,7 +46,7 @@ test("a review's commit copies whole, though the page shows its first 7 characte
 })
 
 test("a slot's copy buttons show only while its row is hovered, and copy its path and branch", async ({ page }) => {
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     const slot = page.getByTestId('pool-web').getByTestId('worktree-1')
     const branch = slot.getByRole('button', { name: 'Copy branch' })

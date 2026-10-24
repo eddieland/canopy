@@ -64,7 +64,7 @@ test.describe('in a narrow window', () => {
     test('the worktrees list lets what holds a slot go before its branch is cut, and keeps its age', async ({
         page,
     }) => {
-        await page.goto('worktrees')
+        await page.goto('runs/worktrees')
         await settled(page)
         const row = page.getByTestId('worktree-1').first()
         const branch = row.getByText('agent/ABC-104-retry-queue', { exact: true })
@@ -214,7 +214,7 @@ for (const width of [HALF.width, 1024]) {
 test("the worktrees counters stand four across or two by two, by the pane's width, never three and one", async ({
     page,
 }) => {
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     const counters = page.getByTestId('pool-counters').locator(':scope > *')
     await expect(counters).toHaveCount(4)
@@ -235,7 +235,7 @@ test("the worktrees counters stand four across or two by two, by the pane's widt
 })
 
 test("a slot's ticket and run stay whole beside a long run kind, which is cut instead", async ({ page }) => {
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     const row = page.getByTestId('pool-web').getByTestId('worktree-2')
     const ticket = row.getByRole('link', { name: 'ABC-104', exact: true })

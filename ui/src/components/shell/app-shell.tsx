@@ -126,7 +126,7 @@ export function AppShell() {
                             aria-hidden
                             className={cn(
                                 'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90',
-                                'bg-linear-to-r from-section-attention via-section-pull-requests to-section-worktrees',
+                                'bg-linear-to-r from-section-attention via-section-pull-requests to-section-tickets',
                             )}
                         />
                         <div className="flex items-center gap-2.5">

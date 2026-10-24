@@ -137,7 +137,7 @@ export const PAGE_GUIDES = {
     '/pull-requests/reviews/$id_/run': 'pull-requests#a-reviews-run',
     '/runs/': 'runs',
     '/runs/$id': 'runs#a-runs-page',
-    '/worktrees': 'runs#worktrees',
+    '/runs/worktrees': 'runs#worktrees',
     '/chores/': 'chores',
     '/chores/$name': 'chores#a-chores-page',
     '/chores/$name_/runs/$id': 'chores#a-chores-page',
@@ -160,6 +160,7 @@ export const PAGE_GUIDES = {
         | '/reviews/$id_/run'
         | '/ticks/'
         | '/ticks/$id'
+        | '/worktrees'
         | '/guide/'
         | '/guide/$page'
     >,

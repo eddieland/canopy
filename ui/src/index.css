@@ -406,7 +406,7 @@
         90deg,
         var(--accent),
         var(--section-pull-requests) 25%,
-        var(--section-worktrees) 50%,
+        var(--section-tickets) 50%,
         var(--section-pull-requests) 75%,
         var(--accent)
     );

@@ -13,7 +13,6 @@ export const SECTIONS = [
     '/runs',
     '/chores',
     '/reports',
-    '/worktrees',
     '/memory',
     '/settings',
 ] as const
@@ -25,7 +24,6 @@ export type Section = (typeof SECTIONS)[number]
 export const SECTION_LABEL: Record<Section, string> = {
     '/attention': 'Attention',
     '/runs': 'Runs',
-    '/worktrees': 'Worktrees',
     '/tickets': 'Tickets',
     '/tasks': 'Tasks',
     '/pull-requests': 'Pull requests',
@@ -41,7 +39,6 @@ export const SECTION_LABEL: Record<Section, string> = {
 export const SECTION_TEXT: Record<Section, string> = {
     '/attention': 'text-section-attention',
     '/runs': 'text-section-runs',
-    '/worktrees': 'text-section-worktrees',
     '/tickets': 'text-section-tickets',
     '/tasks': 'text-section-tasks',
     '/pull-requests': 'text-section-pull-requests',
@@ -55,7 +52,6 @@ export const SECTION_TEXT: Record<Section, string> = {
 export const SECTION_TINT: Record<Section, string> = {
     '/attention': 'bg-section-attention/16',
     '/runs': 'bg-section-runs/16',
-    '/worktrees': 'bg-section-worktrees/16',
     '/tickets': 'bg-section-tickets/16',
     '/tasks': 'bg-section-tasks/16',
     '/pull-requests': 'bg-section-pull-requests/16',
@@ -69,7 +65,6 @@ export const SECTION_TINT: Record<Section, string> = {
 export const SECTION_FILL: Record<Section, string> = {
     '/attention': 'bg-section-attention',
     '/runs': 'bg-section-runs',
-    '/worktrees': 'bg-section-worktrees',
     '/tickets': 'bg-section-tickets',
     '/tasks': 'bg-section-tasks',
     '/pull-requests': 'bg-section-pull-requests',
