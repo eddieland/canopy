@@ -30,7 +30,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, cast, get_args
+from typing import TYPE_CHECKING, Annotated, Literal, get_args
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -43,7 +43,6 @@ from pydantic import (
     StrictFloat,
     StrictInt,
     StrictStr,
-    TypeAdapter,
     ValidationError,
     model_validator,
 )
@@ -117,14 +116,12 @@ class Scope(Enum):
 
 
 class Tighten(Enum):
-    """For a shared key the workspace file may only tighten: which direction is stricter than the default."""
+    """For the workspace file's policy: which direction is stricter than the default."""
 
     LOWER = "lower"
     HIGHER = "higher"
     # For a field typed as a Literal of choices listed from loosest to strictest: a later choice is stricter.
     LATER = "later"
-    #: For a tuple: the workspace file's entries join the operator's files' value, or the default, and replace none.
-    ADD = "add"
 
 
 def _non_blank(value: str) -> str:
@@ -794,27 +791,8 @@ class Runtime(Section):
         return " ".join(part for part in (self.worker_cmd_prefix, template, self.worker_cmd_suffix) if part)
 
 
-#: The paths whose change makes a review `high` by default: CI's workflows, and the files that define what the loop may
-#: do, its agents and prompts and its trust model (DESIGN §21).
-HIGH_IMPACT_PATHS = (".github/workflows/", ".agents/", "docs/TRUST_MODEL.md")
-
-
-def _impact_path(value: str) -> str:
-    # Compared with the paths git names, which are from the root, by whole components (`canopy.reviews.impact`).
-    parts = value.removesuffix("/").split("/")
-    if not value.isprintable() or value.startswith("/") or any(p in {"", ".", ".."} for p in parts):
-        raise ValueError(
-            "must be a path from the repository's root, such as '.github/workflows/' or 'docs/TRUST_MODEL.md', with "
-            "no leading '/', empty part, '.', or '..'",
-        )
-    return value
-
-
 class Review(Section):
-    """The `[review]` table: which PRs get an adversarial review, and what holds a review's impact (DESIGN §21).
-
-    Every key is private but `high_impact_paths`, to which the workspace file may only add.
-    """
+    """The `[review]` table: which PRs get an adversarial review (DESIGN §21). Every key is private."""
 
     # The loop's own PRs, before a human is asked to review them.
     agent_prs: Annotated[StrictBool, Scope.PRIVATE] = False
@@ -822,14 +800,6 @@ class Review(Section):
     query: Annotated[StrictStr, Scope.PRIVATE] = ""
     # Plain language for the reviewer: which changes it may call low impact. Without it, none.
     low_impact: Annotated[StrictStr, Scope.PRIVATE] = ""
-    #: Paths from a repository's root whose change makes a review `high` impact whatever the reviewer says, each
-    #: covering the path it names and everything under it, with no glob; a trailing `/` marks a directory for the
-    #: reader. It only tightens, so the workspace file's entries join the operator's (TRUST_MODEL T1, T7).
-    high_impact_paths: Annotated[
-        tuple[Annotated[StrictStr, AfterValidator(_impact_path)], ...],
-        Scope.SHARED,
-        Tighten.ADD,
-    ] = HIGH_IMPACT_PATHS
     # How long a PR's head commit must have been seen before it is reviewed; a new push starts over. 0 reviews at once.
     # At most a week: a longer wait is a reason to turn the review off, and the clock's arithmetic stays in range.
     settle_minutes: Annotated[StrictInt, Field(ge=0, le=MAX_SETTLE_MINUTES), Scope.PRIVATE] = 0
@@ -1678,22 +1648,13 @@ def _merge(
 
     Returns:
         The merged keys by section, and the file each key's value came from by `section.key` name. A workspace file's
-        policy value that does not tighten the default is left out of both, and its entries of a key it may only add
-        to join the value the other files leave, after it.
-
-    Raises:
-        ConfigError: the workspace file's entries of a key it may only add to do not validate.
+        policy value that does not tighten the default is left out of both.
     """
     merged: dict[str, dict[str, object]] = {section: {} for section in (*SECTIONS, *TABLE_SECTIONS)}
     origin: dict[str, Path] = {}
-    added: dict[str, tuple[object, ...]] = {}
     for source, values in layers:
         for name, value in values.items():
             spec = SPECS[name]
-            if source == shared_file and spec.tighten is Tighten.ADD:
-                added[name] = _entries(source, spec, value)
-                origin[name] = source
-                continue
             if source == shared_file and spec.tighten is not None and not _stricter(spec, value):
                 continue
             origin[name] = source
@@ -1703,33 +1664,7 @@ def _merge(
                 continue
             section, key = name.split(".", 1)
             merged[section][key] = value
-    for name, extra in added.items():
-        section, key = name.split(".", 1)
-        # Every key that only adds is a tuple, which a file sets as a list. One the operator's file sets as anything
-        # else is left for validation to report against that file.
-        base = merged[section].get(key, list(SPECS[name].field.default))
-        if isinstance(base, list):
-            kept = cast("list[object]", base)
-            merged[section][key] = [*kept, *(entry for entry in extra if entry not in kept)]
     return merged, origin
-
-
-def _entries(path: Path, spec: KeySpec, value: object) -> tuple[object, ...]:
-    """Validate the workspace file's entries of a key it may only add to on their own, so an error names their place.
-
-    Returns:
-        The entries, validated.
-
-    Raises:
-        ConfigError: they do not validate.
-    """
-    # Each such key is a tuple, so its adapter gives one.
-    adapter = cast("TypeAdapter[tuple[object, ...]]", TypeAdapter(spec.field.annotation))
-    try:
-        return adapter.validate_python(value)
-    except ValidationError as e:
-        found = [f"{path}: {spec.name}{''.join(f'[{p}]' for p in err['loc'])}: {err['msg']}" for err in e.errors()]
-        raise ConfigError("\n".join(found)) from e
 
 
 def _read(path: Path, *, skip: Collection[str] = ()) -> dict[str, object]:

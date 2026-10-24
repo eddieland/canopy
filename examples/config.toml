@@ -264,9 +264,6 @@ cmd = ""
 # agent_prs = true                                            # the loop's own PRs, before a human is asked
 # query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs, reviewed for you alone
 # low_impact = "Only docs, comments, or tests change."
-# A change to one of these, from the repository's root, is high impact whatever the reviewer says, and its items come
-# first on the attention list. An entry covers itself and everything under it; no globs. The workspace file may add.
-# high_impact_paths = [".github/workflows/", ".agents/", "docs/TRUST_MODEL.md"]   # the default
 # settle_minutes = 30   # review a head once it has been the head this long; a push starts over. 0 to 10080
 
 # Optional: an artifact store workers publish pages to for people to comment on (DESIGN §38), Louvre or canopy's local

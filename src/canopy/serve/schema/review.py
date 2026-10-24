@@ -20,7 +20,8 @@ type ReviewImpact = Annotated[
     Field(
         description=(
             "A change's impact, as the reviewer calls it: `low` as `review.low_impact` allows, and `high` for a change "
-            "to a path `review.high_impact_paths` covers, whatever it says (DESIGN §21)."
+            "to `.github/workflows/` or a path its repository's `high_impact_paths` lists, whatever it says "
+            "(DESIGN §21)."
         ),
     ),
 ]

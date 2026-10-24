@@ -1,9 +1,10 @@
 """A review's impact as the harness holds it (DESIGN §21), and what it ranks (§14).
 
-The reviewer judges a change's impact from the PR's text, which its author wrote (TRUST_MODEL T1), so a change to a path
-in `review.high_impact_paths` is `high` whatever the reviewer says: the harness reads the paths from git, over the
-range the review's kept diff covers, and raises the impact, never lowers it. `high` ranks attention only: an item
-about a PR, or its ticket, whose latest reviewed commit has a `high` review comes first.
+The reviewer judges a change's impact from the PR's text, which its author wrote (TRUST_MODEL T1), so a change to a
+high-impact path is `high` whatever the reviewer says: CI's workflows in every repository, and the paths the map lists
+for the PR's repository. The harness reads the paths from git, over the range the review's kept diff covers, and raises
+the impact, never lowers it. `high` ranks attention only: an item about a PR, or its ticket, whose latest reviewed
+commit has a `high` review comes first.
 """
 
 from __future__ import annotations
@@ -21,16 +22,23 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Set as AbstractSet
 
+    from canopy.core.workspace import Repo
 
+
+#: The paths whose change makes a review of every repository `high`: CI's workflows. A repository's entry in the map
+#: adds to them and cannot remove them, so a commit to the shared workspace file cannot take CI off (TRUST_MODEL T7).
+ALWAYS = (".github/workflows/",)
 #: How much of a matched path a note shows: its name is the PR author's text.
 MAX_SHOWN_PATH = 200
 
 
 @dataclass(frozen=True)
 class Match:
-    """A path a change touches that an entry of `review.high_impact_paths` covers."""
+    """A path a change touches that a high-impact path covers."""
 
+    #: The path the change touches, as git names it.
     path: str
+    #: The high-impact path that covers it, as `paths_for` gives it.
     entry: str
 
     def note(self, reported: str) -> str:
@@ -41,8 +49,8 @@ class Match:
         """
         shown = printable(self.path).replace("\n", " ")[:MAX_SHOWN_PATH]
         return (
-            f"reported {reported} impact, but the change touches {shown}, which review.high_impact_paths covers as "
-            f"{self.entry}; recorded as high"
+            f"reported {reported} impact, but the change touches {shown}, which the high-impact path {self.entry} "
+            "covers; recorded as high"
         )
 
 
@@ -52,6 +60,16 @@ class High:
 
     prs: AbstractSet[str]
     tickets: AbstractSet[str]
+
+
+def paths_for(repo: Repo | None) -> tuple[str, ...]:
+    """The high-impact paths of a review of a PR in `repo`: `ALWAYS`, then the repository's own `high_impact_paths`.
+
+    Returns:
+        The paths, each once; only `ALWAYS` for a PR in no repository the map lists.
+    """
+    own = () if repo is None else repo.high_impact_paths
+    return (*ALWAYS, *(entry for entry in own if entry not in ALWAYS))
 
 
 def matched(entries: Iterable[str], changed: Iterable[str]) -> Match | None:

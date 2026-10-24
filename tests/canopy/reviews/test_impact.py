@@ -1,4 +1,4 @@
-"""A review's impact as the harness holds it: `high` for a change to a path `review.high_impact_paths` covers (§21)."""
+"""A review's impact as the harness holds it: `high` for a change to a high-impact path of its repository (§21)."""
 
 import json
 from collections.abc import Mapping
@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from canopy.core import review_result as result
+from canopy.core.workspace import Repo
 from canopy.reviews import impact
 from tests.canopy.helpers import present
 from tests.canopy.review_helpers import CLEAN, FINDINGS, reviewer_reports
@@ -15,8 +16,8 @@ from tests.conftest import CanopyEnv, GitPool, git
 
 #: The note on a review the harness raised for a change to CI's workflow.
 RAISED = (
-    "reported {impact} impact, but the change touches .github/workflows/ci.yml, which review.high_impact_paths covers "
-    "as .github/workflows/; recorded as high"
+    "reported {impact} impact, but the change touches .github/workflows/ci.yml, which the high-impact path "
+    ".github/workflows/ covers; recorded as high"
 )
 
 
@@ -40,6 +41,22 @@ def test_an_entry_covers_the_path_it_names_and_everything_under_it(
 ) -> None:
     match = impact.matched(entries, changed)
     assert (None if match is None else (match.path, match.entry)) == found
+
+
+@pytest.mark.parametrize(
+    ("own", "paths"),
+    [
+        (None, (".github/workflows/",)),
+        ((), (".github/workflows/",)),
+        ((".agents/", "docs/TRUST_MODEL.md"), (".github/workflows/", ".agents/", "docs/TRUST_MODEL.md")),
+        # Listed again, CI's workflows are still there once.
+        (("infra/", ".github/workflows/"), (".github/workflows/", "infra/")),
+    ],
+)
+def test_a_repositorys_paths_add_to_ci_s_workflows(own: tuple[str, ...] | None, paths: tuple[str, ...]) -> None:
+    """A PR in no repository the map lists, or in one that lists none, has CI's workflows alone."""
+    repo = None if own is None else Repo(name="api", path=Path("repos/api"), high_impact_paths=own)
+    assert impact.paths_for(repo) == paths
 
 
 def changes(git_pool: GitPool, tmp_path: Path, files: Mapping[str, str]) -> str:
@@ -71,7 +88,7 @@ def test_a_change_to_ci_is_high_impact_whatever_the_reviewer_says(
     tmp_path: Path,
     reported: str,
 ) -> None:
-    """A PR's text cannot talk the reviewer down on a change to a default path, not even with `review.low_impact`."""
+    """A PR's text cannot talk the reviewer down on a change to CI, not even with `review.low_impact`."""
     scenario.configures(review={"low_impact": "A change to CI or docs only."})
     sha = changes(git_pool, tmp_path, {".github/workflows/ci.yml": "on: push\n", "retry.py": "call()\n"})
     found, note = stored(scenario, sha, {**FINDINGS, "impact": reported})
@@ -87,7 +104,7 @@ def test_the_reviewers_own_high_on_such_a_change_stands_without_a_note(
     git_pool: GitPool,
     tmp_path: Path,
 ) -> None:
-    sha = changes(git_pool, tmp_path, {".agents/prompts/overseer.md": "Be careful.\n"})
+    sha = changes(git_pool, tmp_path, {".github/workflows/ci.yml": "on: push\n"})
     found, note = stored(scenario, sha, {**FINDINGS, "impact": "high"})
     assert (found.impact, note) == ("high", "")
 
@@ -98,26 +115,53 @@ def test_a_change_elsewhere_keeps_the_reviewers_impact(
     git_pool: GitPool,
     tmp_path: Path,
 ) -> None:
-    """The harness only raises: `low`, as `review.low_impact` allows it, stands on a change no entry covers."""
-    scenario.configures(review={"low_impact": "A change to docs only."})
-    sha = changes(git_pool, tmp_path, {"docs/guide.md": "Hello.\n"})
+    """The harness only raises: `low` stands on a change to a repository that lists no paths but CI's workflows."""
+    scenario.configures(review={"low_impact": "A change to docs or prompts only."})
+    sha = changes(git_pool, tmp_path, {"docs/guide.md": "Hello.\n", ".agents/prompts/overseer.md": "Be careful.\n"})
     found, note = stored(scenario, sha, CLEAN)
     assert (found.impact, note) == ("low", "")
 
 
-def test_the_workspace_file_adds_paths_and_the_operator_chooses_the_rest(
+def test_a_repositorys_own_paths_make_a_review_of_it_high(
     reviewing: CanopyEnv,
     scenario: Scenario,
     git_pool: GitPool,
     tmp_path: Path,
 ) -> None:
-    """A shared file only adds: the operator may drop the defaults, and the workspace's entry still holds."""
-    scenario.configures(review={"high_impact_paths": ["deploy/"]})
-    scenario.configures("workspace", review={"high_impact_paths": ["infra/"]})
-    sha = changes(git_pool, tmp_path, {".github/workflows/ci.yml": "on: push\n", "infra/main.tf": "x = 1\n"})
+    """The map's entry for the PR's repository adds to CI's workflows, which it does not list and cannot drop."""
+    scenario.configures("workspace", repos={"repo": {"high_impact_paths": ["infra/"]}})
+    sha = changes(git_pool, tmp_path, {"infra/main.tf": "x = 1\n"})
     found, note = stored(scenario, sha, FINDINGS)
     assert found.impact == "high"
-    assert note.startswith("reported normal impact, but the change touches infra/main.tf, which review.high_impact")
+    assert note == (
+        "reported normal impact, but the change touches infra/main.tf, which the high-impact path infra/ covers; "
+        "recorded as high"
+    )
+
+
+def test_a_repository_that_lists_paths_keeps_ci_s_workflows(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    scenario.configures("workspace", repos={"repo": {"high_impact_paths": ["infra/"]}})
+    sha = changes(git_pool, tmp_path, {".github/workflows/ci.yml": "on: push\n"})
+    found, note = stored(scenario, sha, FINDINGS)
+    assert (found.impact, note) == ("high", RAISED.format(impact="normal"))
+
+
+def test_another_repositorys_paths_do_not_apply(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    other = {"url": "https://x.test/other.git", "high_impact_paths": ["infra/"]}
+    scenario.configures("workspace", repos={"other": other})
+    sha = changes(git_pool, tmp_path, {"infra/main.tf": "x = 1\n"})
+    found, note = stored(scenario, sha, FINDINGS)
+    assert (found.impact, note) == ("normal", "")
 
 
 def test_a_review_whose_paths_git_could_not_name_says_they_went_unchecked(
@@ -131,4 +175,4 @@ def test_a_review_whose_paths_git_could_not_name_says_they_went_unchecked(
     git("update-ref", "-d", "refs/heads/main", cwd=git_pool.origin)
     found, note = stored(scenario, sha, FINDINGS)
     assert found.impact == "normal"
-    assert note == "the change's paths could not be read, so review.high_impact_paths went unchecked"
+    assert note == "the change's paths could not be read, so its high-impact paths went unchecked"

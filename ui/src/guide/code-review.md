@@ -148,12 +148,13 @@ A docs fix and a change to the auto-updater don't deserve the same review. Each 
 The reviewer may call a change `low` only under your rule for it, `review.low_impact`, written in plain language; with
 none, nothing is low.
 
-Some changes are `high` whatever the reviewer thinks. A PR that touches a path in `review.high_impact_paths`, by default
-`.github/workflows/`, `.agents/`, and `docs/TRUST_MODEL.md`, is recorded `high`, and the review's `harness` line names
-the path that did it. The reviewer reads the PR's description, and a description is exactly where someone would write
-"trivial CI tweak, nothing to see". An entry covers the path it names and everything under it; there are no globs. Your
-own config may replace the list; a workspace file may only add to it. `high` puts the PR's items first in
-`canopy status`, `attention.md`, and your notifications. It doesn't buy a longer review.
+Some changes are `high` whatever the reviewer thinks. A PR that touches `.github/workflows/`, in any repository, is
+recorded `high`, and the review's `harness` line names the path that did it. The reviewer reads the PR's description,
+and a description is exactly where someone would write "trivial CI tweak, nothing to see". Each repository can add its
+own paths in the workspace file, as `high_impact_paths` in its `[repos.NAME]` table: canopy's own lists `.agents/` and
+`docs/TRUST_MODEL.md`. An entry covers the path it names and everything under it; there are no globs. A repository's
+list only adds, so nobody can take CI's workflows off it. `high` puts the PR's items first in `canopy status`,
+`attention.md`, and your notifications. It doesn't buy a longer review.
 
 Spend review where a missed bug is expensive. For a PR that worries you, ask for a review in two or three personas
 ([Asking for a review](pull-requests#asking-for-a-review)), and give the reviewer a stronger model than the one that

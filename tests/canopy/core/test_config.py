@@ -1,5 +1,4 @@
 import contextlib
-import json
 import os
 import re
 import tomllib
@@ -232,38 +231,6 @@ def test_user_policy_may_loosen(canopy_env: CanopyEnv) -> None:
     canopy_env.append_shared("[policy]\nmax_resume_attempts = 1\n")
     canopy_env.append_user("\n[policy]\nmax_resume_attempts = 9\n")
     assert load(canopy_env.root, canopy_env.user_file).policy.max_resume_attempts == 9
-
-
-def test_high_impact_paths_cover_ci_and_what_the_loop_may_do_by_default(canopy_env: CanopyEnv) -> None:
-    paths = load(canopy_env.root, canopy_env.user_file).review.high_impact_paths
-    assert paths == (".github/workflows/", ".agents/", "docs/TRUST_MODEL.md")
-
-
-def test_the_workspace_file_only_adds_high_impact_paths(canopy_env: CanopyEnv) -> None:
-    """It only tightens, so a shared file's entries join the default, or what the operator chose instead (T7)."""
-    canopy_env.append_shared('[review]\nhigh_impact_paths = ["infra/", ".agents/"]\n')
-    review = load(canopy_env.root, canopy_env.user_file).review
-    assert review.high_impact_paths == (*config.HIGH_IMPACT_PATHS, "infra/")
-    canopy_env.append_user('\n[review]\nhigh_impact_paths = ["deploy/"]\n')
-    assert load(canopy_env.root, canopy_env.user_file).review.high_impact_paths == ("deploy/", "infra/", ".agents/")
-    files = config.origins(canopy_env.root, canopy_env.user_file)
-    assert files["review.high_impact_paths"] == canopy_env.user_file
-
-
-@pytest.mark.parametrize("entry", ["", "/etc/", "a/../b", "./a", "a//b", "a\nb"])
-def test_a_high_impact_path_is_a_path_from_the_root(canopy_env: CanopyEnv, entry: str) -> None:
-    canopy_env.append_shared(f"[review]\nhigh_impact_paths = [{json.dumps(entry)}]\n")
-    with pytest.raises(
-        ConfigError,
-        match=r"workspace\.toml: review\.high_impact_paths\[0\]: .*from the repository's",
-    ):
-        load(canopy_env.root, canopy_env.user_file)
-
-
-def test_a_workspace_file_high_impact_paths_of_the_wrong_type_names_it(canopy_env: CanopyEnv) -> None:
-    canopy_env.append_shared('[review]\nhigh_impact_paths = "infra/"\n')
-    with pytest.raises(ConfigError, match=r"canopy-workspace\.toml: review\.high_impact_paths: "):
-        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_stacking_defaults_to_auto(canopy_env: CanopyEnv) -> None:

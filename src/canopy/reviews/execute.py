@@ -150,30 +150,31 @@ def _hold_rebuttals(ctx: Context, run: records.ReviewRun, outcome: Outcome, log:
             log.info("rebuttals held for the operator", extra={"review_run_id": run.id, "findings": held})
 
 
-def judged(ctx: Context, parsed: result.ReviewResult, changed: Collection[str] | None) -> Outcome:
+def judged(ctx: Context, parsed: result.ReviewResult, changed: Collection[str] | None, repo: str | None) -> Outcome:
     """The outcome of a valid result, after the checks the harness can make itself (DESIGN §21).
 
     Args:
-        ctx: The workspace's context, whose config holds `review.high_impact_paths` and `review.low_impact`.
+        ctx: The workspace's context, whose map holds the repository's `high_impact_paths` and whose config holds
+            `review.low_impact`.
         parsed: The reviewer's validated result.
         changed: The paths the reviewed change touches, or None when git could not name them.
+        repo: The repository of the PR reviewed, as its run names it.
 
     Returns:
-        `failed` for a result that is not `done`, else `done`. A change to a path `review.high_impact_paths` covers is
-        recorded as high impact, before `review.low_impact` is read, and a low impact with `review.low_impact` unset
-        as normal, each with a note saying so; a change whose paths could not be read keeps the reviewer's impact,
-        with a note saying the paths went unchecked.
+        `failed` for a result that is not `done`, else `done`. A change to a high-impact path of `repo`
+        (`impact.paths_for`) is recorded as high impact, before `review.low_impact` is read, and a low impact with
+        `review.low_impact` unset as normal, each with a note saying so; a change whose paths could not be read keeps
+        the reviewer's impact, with a note saying the paths went unchecked.
     """
     if parsed.status != "done":
         return Outcome(ReviewRunStatus.FAILED, parsed)
-    entries = ctx.config.review.high_impact_paths
-    found = impact.matched(entries, changed or ())
+    found = impact.matched(impact.paths_for(ctx.workspace.repo(repo)), changed or ())
     if found is not None and parsed.impact != "high":
         raised = parsed.model_copy(update={"impact": "high"})
         return Outcome(ReviewRunStatus.DONE, raised, found.note(str(parsed.impact)))
     unchecked = (
-        "the change's paths could not be read, so review.high_impact_paths went unchecked"
-        if changed is None and entries and parsed.impact != "high"
+        "the change's paths could not be read, so its high-impact paths went unchecked"
+        if changed is None and parsed.impact != "high"
         else ""
     )
     if parsed.impact == "low" and not ctx.config.review.low_impact.strip():
@@ -301,7 +302,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     parsed = result.parse(output.text)
     if parsed is None:
         return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")
-    return judged(ctx, parsed, changed)
+    return judged(ctx, parsed, changed, run.repo)
 
 
 def _models(ctx: Context, run: records.ReviewRun) -> dict[str, Model] | None:
@@ -365,7 +366,7 @@ def _save_diff(
     textconv filters are off, since the commit's `.gitattributes` can name them.
 
     Returns:
-        Every path the diff touches, as git names them, for `review.high_impact_paths`; None when git could not.
+        Every path the diff touches, as git names them, for its high-impact paths; None when git could not.
     """
     base = run.base_branch
     if not base:

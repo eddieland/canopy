@@ -6079,7 +6079,7 @@ export type components = {
             started_at: string;
         };
         /**
-         * @description A change's impact, as the reviewer calls it: `low` as `review.low_impact` allows, and `high` for a change to a path `review.high_impact_paths` covers, whatever it says (DESIGN §21).
+         * @description A change's impact, as the reviewer calls it: `low` as `review.low_impact` allows, and `high` for a change to `.github/workflows/` or a path its repository's `high_impact_paths` lists, whatever it says (DESIGN §21).
          * @enum {string}
          */
         ReviewImpact: "low" | "normal" | "high";
