@@ -223,7 +223,7 @@ test.describe('in a narrow window', () => {
         await screenshotWhole(page, 'tickets-ABC-102-narrow-dark.png')
     })
 
-    for (const route of ['tickets', 'pull-requests', 'pull-requests/reviews', 'worktrees']) {
+    for (const route of ['tickets', 'pull-requests', 'pull-requests/reviews', 'runs/worktrees']) {
         test(`${route} narrow`, async ({ page }) => {
             await openInDark(page, route)
             await screenshotMain(page, `${route.replaceAll('/', '-')}-narrow-dark.png`)

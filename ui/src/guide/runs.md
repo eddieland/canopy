@@ -9,7 +9,8 @@ and what it cost; the worktrees page is the pools they work in.
 per subject, by its latest run: a ticket's, a PR's, a chore's, a task's. The running ones come first, then the ones
 that ended most recently. A subject with earlier runs shows **Show N earlier runs** under it, so a PR reviewed at
 every push is one row and not a wall of them. The overseer's ticks are not among them: the **Ticks** link in the
-page's description opens [their page](ticks#the-ticks-page), also under Runs.
+page's description opens [their page](ticks#the-ticks-page), also under Runs, and **Worktrees** beside it opens the
+[pools](#worktrees) the runs work in.
 
 Each row has the run's state, its id, what it works for, its kind, what it cost, and how long it ran or how long since
 it ended:
@@ -170,10 +171,10 @@ a private ticket's run at once. [Tickets](tickets#acting-on-a-ticket) covers it.
 
 ## Worktrees
 
-[Worktrees](/worktrees) shows every slot in canopy's pools, a pool per repository: what holds each slot, what it has
-checked out, and what processes run in it. The line under the title says how many pools and slots there are, and how
-long ago they were read. In a narrow window, what holds a slot goes before its branch is cut: the branch names the
-ticket anyway. The counters add them up: slots working, held (and by what), needing a look, and free.
+**Worktrees**, under [Runs](/runs), shows every slot in canopy's pools, a pool per repository: what holds each slot,
+what it has checked out, and what processes run in it. The line under the title says how many pools and slots there are,
+and how long ago they were read. In a narrow window, what holds a slot goes before its branch is cut: the branch names
+the ticket anyway. The counters add them up: slots working, held (and by what), needing a look, and free.
 Needing a look counts dirty slots, broken ones, and any pool that couldn't be read at all.
 
 Each pool's header has a strip of squares, a slot each in its state's color, so a pool that's full or sick shows at a

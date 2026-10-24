@@ -191,7 +191,7 @@ export const TIPS = {
         'Fun fact: the overseer has never once decided to dispatch me. I keep checking.',
         'Riddle: what decides everything and remembers nothing? A tick. I am the other way round.',
     ],
-    '/worktrees': [
+    '/runs/worktrees': [
         "It looks like you're counting worktrees. I can count to three. Please keep it to three.",
         'Unhelpful tip: a held worktree is not a free worktree. I came up with that myself.',
         'Fun fact: a worktree is a tree that works. I am a sprig that does not.',

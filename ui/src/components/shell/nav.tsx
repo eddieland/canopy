@@ -5,7 +5,6 @@ import {
     Brain,
     CalendarClock,
     ChartColumn,
-    FolderTree,
     GitPullRequest,
     Inbox,
     MessagesSquare,
@@ -54,18 +53,15 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
     {
         to: '/runs',
         icon: Activity,
-        hint: "Workers running now, then the ones that ended last, and the overseer's ticks and what each decided",
+        hint:
+            "Workers running now, then the ones that ended last; the overseer's ticks, and each repository's pool " +
+            'of worktrees',
     },
     { to: '/chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
     {
         to: '/reports',
         icon: ChartColumn,
         hint: 'What canopy cost and got done month by month, and what agent runs cost each day',
-    },
-    {
-        to: '/worktrees',
-        icon: FolderTree,
-        hint: "Each repository's pool: its slots and what holds them",
     },
     {
         to: '/memory',

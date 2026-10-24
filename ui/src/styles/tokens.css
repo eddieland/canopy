@@ -40,7 +40,6 @@
     /* The nav's sections: identity, never state, each from what its page is about (ui/DESIGN.md, "Tokens"). */
     --section-attention: oklch(0.55 0.2 2);
     --section-runs: oklch(0.45 0.15 272);
-    --section-worktrees: oklch(0.515 0.09 182);
     --section-tickets: oklch(0.52 0.12 242);
     --section-tasks: oklch(0.505 0.125 115);
     --section-pull-requests: oklch(0.54 0.21 302);
@@ -133,7 +132,6 @@
 
     --section-attention: oklch(0.75 0.17 2);
     --section-runs: oklch(0.66 0.12 272);
-    --section-worktrees: oklch(0.8 0.12 182);
     --section-tickets: oklch(0.77 0.13 242);
     --section-tasks: oklch(0.86 0.165 115);
     --section-pull-requests: oklch(0.75 0.16 302);
@@ -407,7 +405,6 @@
 
     --color-section-attention: var(--section-attention);
     --color-section-runs: var(--section-runs);
-    --color-section-worktrees: var(--section-worktrees);
     --color-section-tickets: var(--section-tickets);
     --color-section-tasks: var(--section-tasks);
     --color-section-pull-requests: var(--section-pull-requests);
