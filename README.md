@@ -203,6 +203,7 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`), or the ticket's page |
 | Allow one more review past a `review_limit` | `canopy grant PR_URL review`, or the PR's page |
 | Have canopy review a coworker's PR | `canopy start PR_URL --review`, or the reviews page |
+| Score the reviewer on PRs whose bugs you know, after changing its prompt, persona, or model | `canopy review eval [--persona NAME] [--model MODEL]`, cases under `[[review.eval_cases]]` |
 | See what a tick decided and what it cost | `canopy decisions [TICK] [--ticket KEY]` |
 | See what the last days cost, how much of it idle ticks spent, and what each ticket done cost | `canopy spend [--days N]`, or the web UI's spend page |
 | See which ticks and runs failed lately, and what the guards refused | `canopy health [--days N]` |

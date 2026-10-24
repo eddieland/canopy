@@ -356,6 +356,11 @@ def pool(treehouse_state: Path) -> list[dict[str, object]]:
     return slots
 
 
+def listed(state: Path, *lines: str, variants: Mapping[str, Sequence[str]] | None = None) -> None:
+    """Have the fake `opencode models`, whose state file is `state`, print `lines`, and with `--verbose` `variants`."""
+    state.write_text(json.dumps({"models": list(lines), "variants": dict(variants or {})}))
+
+
 def pool_statuses(treehouse_state: Path) -> list[str]:
     """The status of every slot the fake treehouse holds, in `pool`'s order."""
     return [str(s["status"]) for s in pool(treehouse_state)]
