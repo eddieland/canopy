@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import (
+    agent_models,
     contract,
     db,
     notice,
@@ -32,6 +33,7 @@ from canopy.core import (
     review_requests,
     review_runs,
     sql,
+    ticket_models,
 )
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
@@ -202,6 +204,7 @@ def check(ctx: Context, *, tick_id: int, request: Request) -> str:
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         repo = _guard(ctx, request, planned=planned, dry_run=True)
         _persona(ctx, request)
+        _check_model(ctx, request)
         return repo
 
 
@@ -217,8 +220,9 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         repo = _guard(ctx, request)
-        # Fixed before the run is recorded, so a persona that cannot be used costs the PR none of its reviews.
+        # Fixed before the run is recorded, so a persona or model that cannot be used costs the PR none of its reviews.
         persona = _persona(ctx, request)
+        _check_model(ctx, request)
         attempt = len(review_runs.review_runs_of(ctx.conn, request.pr)) + 1
         run_id = review_runs.insert_review_run(
             ctx.conn,
@@ -308,6 +312,32 @@ def _persona(ctx: Context, request: Request) -> personas.Persona:
             return _reviewers_persona(ctx, request.persona)
         return personas.for_run(ctx.conn, ctx.config, "reviewer", request.ticket)
     except personas.PersonaError as e:
+        raise Refusal(e.guard, e.reason, attention=e.guard) from e
+
+
+def _check_model(ctx: Context, request: Request) -> None:
+    """Refuse a review whose reviewer's model the runtime does not list, looked up now (DESIGN §13).
+
+    The model is the review's ticket's override for the reviewer, else the one `runtime.models` chooses for the agent
+    `runtime.review_cmd` runs, as the review renders it; a PR with no ticket takes config's. It is never fallen back
+    from, as a worker's dispatch is not.
+
+    Raises:
+        Refusal: `model_missing` or `model_list_failed`, with its attention item, as a worker's dispatch refuses.
+    """
+    key = request.ticket
+    models = ctx.config.runtime.models
+    if key is not None:
+        models = ticket_models.models_for(ctx.conn, ctx.config, key, "reviewer")
+    model = agent_models.of_template(models, ctx.config.runtime.review_cmd)
+    if model is None:
+        return
+    chosen = "in runtime.models"
+    if key is not None and ticket_models.override(ctx.conn, key, "reviewer") == model.name:
+        chosen = f"for {key}'s reviewer runs (`canopy model {key} --agent reviewer`)"
+    try:
+        agent_models.check(ctx.runner, ctx.workspace.root, model, chosen=chosen)
+    except agent_models.ModelError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
 
 
