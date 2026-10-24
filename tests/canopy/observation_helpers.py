@@ -121,12 +121,18 @@ def check(
     run_id: int = 11,
     head: str = HEAD,
 ) -> None:
-    """Record a check of PR at `head`."""
+    """Record a check of PR at `head` as a read does: the newest run of its context, and the run kept once it ends."""
     conn.execute(
-        "INSERT INTO observed_checks (pr_url, name, head_sha, status, conclusion, run_id, url, observed_at) "
+        "INSERT OR REPLACE INTO observed_checks (pr_url, name, head_sha, status, conclusion, run_id, url, observed_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (PR, name, head, status, conclusion, run_id, f"https://github.com/acme/repo/actions/runs/{run_id}", FRESH),
     )
+    if status == "completed" and conclusion is not None:
+        conn.execute(
+            "INSERT OR IGNORE INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (PR, run_id, name, head, conclusion, FRESH),
+        )
 
 
 def review(
