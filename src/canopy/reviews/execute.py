@@ -16,7 +16,7 @@ import functools
 import json
 import os
 import shutil
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
@@ -45,7 +45,7 @@ from canopy.core import review_result as result
 from canopy.core.config import render_command
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import logs, procs, stopping
-from canopy.reviews import start
+from canopy.reviews import impact, start
 from canopy.runtime import project_config, stdout
 
 if TYPE_CHECKING:
@@ -163,19 +163,38 @@ def _hold_rebuttals(ctx: Context, run: records.ReviewRun, outcome: Outcome, log:
             log.info("rebuttals held for the operator", extra={"review_run_id": run.id, "findings": held})
 
 
-def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
+def judged(ctx: Context, parsed: result.ReviewResult, changed: Collection[str] | None, repo: str | None) -> Outcome:
     """The outcome of a valid result, after the checks the harness can make itself (DESIGN §21).
 
+    Args:
+        ctx: The workspace's context, whose map holds the repository's `high_impact_paths` and whose config holds
+            `review.low_impact`.
+        parsed: The reviewer's validated result.
+        changed: The paths the reviewed change touches, or None when git could not name them.
+        repo: The repository of the PR reviewed, as its run names it.
+
     Returns:
-        `failed` for a result that is not `done`, else `done`. A low impact with `review.low_impact` unset is recorded
-        as normal, with a note saying so.
+        `failed` for a result that is not `done`, else `done`. A change to a high-impact path of `repo`
+        (`impact.paths_for`) is recorded as high impact, before `review.low_impact` is read, and a low impact with
+        `review.low_impact` unset as normal, each with a note saying so; a change whose paths could not be read keeps
+        the reviewer's impact, with a note saying the paths went unchecked.
     """
     if parsed.status != "done":
         return Outcome(ReviewRunStatus.FAILED, parsed)
+    found = impact.matched(impact.paths_for(ctx.workspace.repo(repo)), changed or ())
+    if found is not None and parsed.impact != "high":
+        raised = parsed.model_copy(update={"impact": "high"})
+        return Outcome(ReviewRunStatus.DONE, raised, found.note(str(parsed.impact)))
+    unchecked = (
+        "the change's paths could not be read, so its high-impact paths went unchecked"
+        if changed is None and parsed.impact != "high"
+        else ""
+    )
     if parsed.impact == "low" and not ctx.config.review.low_impact.strip():
         note = "reported low impact, but review.low_impact is not set; recorded as normal"
-        return Outcome(ReviewRunStatus.DONE, parsed.model_copy(update={"impact": "normal"}), note)
-    return Outcome(ReviewRunStatus.DONE, parsed)
+        lowered = parsed.model_copy(update={"impact": "normal"})
+        return Outcome(ReviewRunStatus.DONE, lowered, "; ".join(n for n in (note, unchecked) if n))
+    return Outcome(ReviewRunStatus.DONE, parsed, unchecked)
 
 
 def _revised(ctx: Context, run: records.ReviewRun, parsed: result.RevisionResult | None) -> Outcome:
@@ -270,8 +289,22 @@ def reviewer(
     return Reviewer(argv, command.stdin, env, snapshot)
 
 
-def reviewed(ctx: Context, done: procs.Result, output: AgentOutput) -> Outcome:
+def reviewed(
+    ctx: Context,
+    done: procs.Result,
+    output: AgentOutput,
+    *,
+    changed: Collection[str] | None,
+    repo: str | None,
+) -> Outcome:
     """The outcome of a reviewer's process: timed out, no valid result line, or what `judged` makes of its result.
+
+    Args:
+        ctx: The workspace's context.
+        done: The reviewer's finished process.
+        output: What it printed, read.
+        changed: The paths the reviewed change touches, as `judged` takes them.
+        repo: The repository reviewed, whose high-impact paths apply.
 
     Returns:
         `timeout`, `unknown`, or `judged`'s outcome.
@@ -282,7 +315,7 @@ def reviewed(ctx: Context, done: procs.Result, output: AgentOutput) -> Outcome:
     parsed = result.parse(output.text)
     if parsed is None:
         return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")
-    return judged(ctx, parsed)
+    return judged(ctx, parsed, changed, repo)
 
 
 def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapter) -> Outcome:
@@ -290,9 +323,10 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     dropped = check_out(ctx.runner, slot, run.sha)
     if dropped:
         log.warning("removed links that leave the checkout", extra={"review_run_id": run.id, "links": dropped})
+    changed = None
     if run.revises is None:
         # A revision's comments sit on the diff its review kept, never one of its own.
-        _save_diff(ctx.runner, slot, run, log)
+        changed = _save_diff(ctx.runner, slot, run, log)
     cwd = start.run_dir(ctx, run.id)
     reviewer_dir(ctx, cwd, slot)
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
@@ -346,7 +380,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
     if run.revises is not None and not done.timed_out:
         return _revised(ctx, run, result.parse_revision(output.text))
-    return reviewed(ctx, done, output)
+    return reviewed(ctx, done, output, changed=changed, repo=run.repo)
 
 
 def _models(ctx: Context, run: records.ReviewRun) -> dict[str, Model] | None:
@@ -397,26 +431,37 @@ def _drop_escaping_links(runner: procs.Runner, slot: Path) -> list[str]:
     return dropped
 
 
-def _save_diff(runner: procs.Runner, slot: Path, run: records.ReviewRun, log: logs.TickAdapter) -> None:
+def _save_diff(
+    runner: procs.Runner,
+    slot: Path,
+    run: records.ReviewRun,
+    log: logs.TickAdapter,
+) -> frozenset[str] | None:
     """Write the commit's diff against where it leaves its base branch beside the run's log, for the web UI.
 
     The base is the branch the PR merges into, fetched to `origin/<base>`, where the reviewer's git tools read it too.
     Best effort: the review does not need it, so a failure is logged and the page shows no diff. Diff drivers and
     textconv filters are off, since the commit's `.gitattributes` can name them.
+
+    Returns:
+        Every path the diff touches, as git names them, for its high-impact paths; None when git could not.
     """
     base = run.base_branch
     if not base:
-        return
+        return None
     fields: dict[str, object] = {"review_run_id": run.id, "base": base}
     sha = run.sha
     tracking = f"refs/remotes/origin/{base}"
     fetched = _git_or_none(runner, slot, log, fields, "fetch", "--quiet", "origin", f"+refs/heads/{base}:{tracking}")
     fork = None if fetched is None else _git_or_none(runner, slot, log, fields, "merge-base", tracking, sha)
     if fork is None:
-        return
+        return None
     diff = _git_or_none(runner, slot, log, fields, *review_diff.diff_args(fork.strip(), sha))
     if diff is not None:
         review_diff.keep(review_diff.path_for(run.log_path), diff)
+    # Named apart from the kept diff, which is cut at a bound and quotes unusual names.
+    names = _git_or_none(runner, slot, log, fields, *review_diff.names_args(fork.strip(), sha))
+    return None if names is None else frozenset(name for name in names.split("\0") if name)
 
 
 def _git_or_none(

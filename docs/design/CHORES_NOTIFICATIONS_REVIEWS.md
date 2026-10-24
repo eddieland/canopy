@@ -298,8 +298,14 @@ Result contract, the last line of the reviewer's text (§13), validated (D026); 
 ```
 
 `verdict` is `findings` exactly when there are findings, and `low` without `review.low_impact` is recorded as `normal`.
-`pr_title` is the PR author's text, for display only (§8). `summary` is for the operator; `body` is for the PR's author,
-and only a draft (§34) uses it. `rebuts` is set only on a rebuttal (Answers and rebuttals).
+The reviewer judges impact from the PR's text, which can talk it down (T1), so a change to a high-impact path, as git
+names the paths of the range the review keeps a diff of, is recorded `high` before `review.low_impact` applies, with a
+note naming the path. The high-impact paths are `.github/workflows/` in every repository, plus those the PR's
+repository lists as `high_impact_paths` in the map (§18; whole-component prefixes, no globs), which add to it and
+cannot remove it (TRUST_MODEL T7). The harness only raises. `high` ranks attention (§14), and
+changes nothing else about the review. `pr_title` is the PR author's text, for display only (§8). `summary` is for
+the operator; `body` is for the PR's author, and only a draft (§34) uses it. `rebuts` is set only on a rebuttal
+(Answers and rebuttals).
 
 ### Answers and rebuttals
 
