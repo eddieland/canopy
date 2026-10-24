@@ -6,13 +6,13 @@ notifications, and reviews](CHORES_NOTIFICATIONS_REVIEWS.md). Next: [Flaky CI](F
 
 ## 22. Conversations
 
-The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied,
-and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
-Slack. Each proves the operator its own way: the tracker by `trust.authorized_repliers`, read by agents; the CLI by
-the operator's shell (T1); the web UI by the listener secret (TRUST_MODEL T8); Slack by the user ids a `slack` source
-lists, checked in code, for replies in the sink's ticket threads and mentions of canopy's bot in its channel (§20).
-Outbound, every channel uses §20's events. The overseer and workers never see which channel a message came from, so
-adding one changes no prompt.
+The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied, and
+where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and Slack.
+Each proves the operator its own way: the tracker by `trust.authorized_repliers`, matched in code on what a tracker
+source observed (§7), else by agents; the CLI by the operator's shell (T1); the web UI by the listener secret
+(TRUST_MODEL T8); Slack by the user ids a `slack` source lists, checked in code, for replies in the sink's ticket
+threads and mentions of canopy's bot in its channel (§20). Outbound, every channel uses §20's events. The overseer and
+workers never see which channel a message came from, so adding one changes no prompt.
 
 A ticket is **public** when one of `tracker.labels` authorizes it, and **private** when the operator starts it in
 canopy, or, with `tracker.private` set, when its label brings it in (below). A started ticket is private whatever labels
@@ -33,9 +33,9 @@ has one.
 
 ### Authority stays with the source
 
-- **Public ticket.** Authorization and replies are the overseer's live read of the tracker (§7, §17); a tracker
-  comment in the journal is only a copy. The operator may also reply in canopy (D089), which is how they answer an untrusted
-  reviewer (§7); the message is canopy's own fact and stays in the journal.
+- **Public ticket.** Authorization and replies are the tracker's, as its source observed them, checked in code, or as
+  the overseer read them live (§7, §17); a comment's message is a copy. The operator may also reply in canopy (D089),
+  which is how they answer an untrusted reviewer (§7); the message is canopy's own fact and stays in the journal.
 - **Private ticket.** The journal is the source. Its start record and the operator's messages are canopy's own facts,
   written after a channel authenticated the operator, so the harness checks them in code without reading the tracker
   (D003). Tracker comments on a private ticket are data, whoever wrote them.

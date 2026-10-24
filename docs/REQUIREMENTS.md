@@ -172,7 +172,7 @@ label brings it in, and the label stays visible on the ticket.
 Built in M19, live acceptance pending. Every ticket's conversation, public or private, in one place canopy owns, so the
 web UI (N1) can show it as one inbox and later channels such as Slack join it rather than keeping their own (§22, D072).
 For a public ticket the tracker stays the authority and the journal holds a copy: each comment the tracker source
-observes is recorded in the ticket's conversation in code (§35), and `canopy show` lists them with workers' reports and
+observes is recorded in the ticket's conversation in code (§22), and `canopy show` lists them with workers' reports and
 the operator's replies. Gap: PR review comments, which would join with PR subjects (M14, closed unbuilt).
 
 ### R13. Trusted and untrusted reviewers
@@ -185,8 +185,8 @@ Shape (§7, D089): `trust.trusted_reviewers` lists the trusted, empty by default
 reviewer. Untrusted feedback is `untrusted_review` on the attention list. The operator answers with `canopy reply` or
 the web UI, on a public ticket too; the reply is the worker's instruction and never reaches the ticket. Every public
 worker hears it, an `implement` as well as a `resume` (D093); keeping it off the ticket is the worker
-prompt's, not a guard (TRUST_MODEL T6). The gate is the
-overseer's judgment, checked again by the worker; the harness cannot see who wrote a review comment (D003).
+prompt's, not a guard (TRUST_MODEL T6). Where the `vcs` source observes the PR, the harness checks the gate in code
+(§7); elsewhere it is the overseer's judgment, checked again by the worker.
 
 ### R14. Flaky CI is rerun, not fixed
 
