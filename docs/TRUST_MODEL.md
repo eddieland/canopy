@@ -271,12 +271,13 @@ Controls:
   a run in canopy's own voice.
 - Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
   and a chore's `model`, both private (T7), which canopy writes into the agent's definition, or for one ticket's worker,
-  planner, or reviewer an override of the model alone, set with `canopy model` or the ticket's page (T8), which refuses
-  inside a tick or a run and refuses a model the runtime does not list. The overseer, a dispatch, ticket text, and
-  labels choose none, the overseer's own included, and a `runtime` template, prefix, or suffix that passes a model or a
-  variant is a config error, as is a chore's command that does while it runs canopy's chore agent, so no agent's
-  command line overrides it unseen. A worker run whose model or variant the runtime does not list, or whose list cannot
-  be read, is refused with an attention item, never run on config's model or the runtime's default instead.
+  planner, or reviewer an override of the model, at one of its variants or none, set with `canopy model` or the
+  ticket's page (T8), which refuses inside a tick or a run and refuses a model the runtime does not list, or a variant
+  the model lacks. The overseer, a dispatch, ticket text, and labels choose none, the overseer's own included, and a
+  `runtime` template, prefix, or suffix that passes a model or a variant is a config error, as is a chore's command
+  that does while it runs canopy's chore agent, so no agent's command line overrides it unseen. A worker run whose
+  model or variant the runtime does not list, or whose list cannot be read, is refused with an attention item, never
+  run on config's model or the runtime's default instead.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like a
   dispatch's `label`, and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds
   the workers' marks (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages
@@ -337,6 +338,10 @@ Controls:
   another PR. The overseer names the repository the review runs in, as it does for `review.query`'s matches, and can end
   a request, as `merged`, `closed`, or `unknown_repo`, and nothing else: a wrong repository fails that review, and a
   steered overseer ending a request early costs a review, never adds one; the PR's page shows who ended it and why.
+  An eval case (`review.eval_cases`, private, T7) authorizes a review of its PR at its commit too, which only
+  `canopy review eval` starts, in the operator's shell, refused as `inside_run` as a request is. An eval records
+  nothing in the journal, so what its reviewer writes reaches no worker, draft, overseer, or notification, only the
+  operator's terminal and the result file in the state directory, made printable.
   Reviews live in the journal (D114): nothing on a PR is one but a version of a review of someone else's PR the operator
   published (DESIGN §34), which the loop reads as no review of its own.
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
