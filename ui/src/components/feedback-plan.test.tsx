@@ -3,7 +3,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
-import { feedbackPlan, feedbackPlanItem, reviewThread } from '@/api/mocks'
+import { draft, feedbackPlan, feedbackPlanItem, reviewThread } from '@/api/mocks'
 import type { FeedbackPlanApproved } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
@@ -354,5 +354,27 @@ describe("ThreadCard's proposal", () => {
         // Above the drafts, which answer it.
         const following = proposal.compareDocumentPosition(screen.getByTestId('draft'))
         expect(following & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('says a change its resume acts on answers a waiting draft again, which sent first answers ahead', async () => {
+        await renderRouted(<ThreadCard thread={reviewThread()} item={feedbackPlanItem()} resumes onChange={changed} />)
+        expect(within(screen.getByTestId('plan-proposal')).getByTestId('plan-proposal-ahead').textContent).toBe(
+            "The plan's resume writes a new reply here; sending this draft first answers ahead of it.",
+        )
+        // The draft keeps its primary Send: the note says which answers first, and leaves the choice to the operator.
+        expect(within(screen.getByTestId('draft')).getByRole('button', { name: 'Send' })).toBeTruthy()
+    })
+
+    // A proposal that writes no reply of its own, one its approval put off for the next plan, a thread no draft waits
+    // on, and a plan whose resume has gone ahead already.
+    it.each([
+        ['a leave', reviewThread(), feedbackPlanItem({ proposal: 'leave' }), true],
+        ['a change for the next plan', reviewThread(), feedbackPlanItem({ left_out: true }), true],
+        ['no waiting draft', reviewThread({ drafts: [draft({ status: 'sent' })] }), feedbackPlanItem(), true],
+        ['a spent plan', reviewThread(), feedbackPlanItem(), false],
+    ] as const)('says nothing of a draft the plan does not answer again: %s', async (_, thread, item, resumes) => {
+        await renderRouted(<ThreadCard thread={thread} item={item} resumes={resumes} onChange={changed} />)
+        expect(screen.getByTestId('plan-proposal')).toBeTruthy()
+        expect(screen.queryByTestId('plan-proposal-ahead')).toBeNull()
     })
 })

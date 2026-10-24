@@ -1588,9 +1588,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title. Then panels: its fields (its
   ticket, a `TicketField` left out when it has none; its branch; its total cost; no repository, which its name says),
   with a grant of another review in its foot when it is at its review limit; its review threads when canopy has read
-  them or holds a draft for it (below); then its reviews (`ReviewsTable`), the runs that pushed to it (`RunsTable`), and
-  its decisions, each a `ListPanel`, so an empty one is its header alone, and no Runs at all on a PR with no ticket,
-  since runs are a ticket's.
+  them or holds a draft for it (below), led by its feedback plan while that waits on the operator; then its reviews
+  (`ReviewsTable`), the runs that pushed to it (`RunsTable`), and its decisions, each a `ListPanel`, so an empty one is
+  its header alone, and no Runs at all on a PR with no ticket, since runs are a ticket's.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
   them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
   whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`
@@ -1602,10 +1602,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   `Send N waiting`, which sends every waiting draft as one comment review, its command on hover, and an outline `Start a
   review on GitHub` beside it, which stages them in a pending review instead, its reactions added at once, with a muted
   line saying what each does; while the PR holds a staged review, neither shows, and a `staged-review` line links to the
-  PR's files on GitHub to finish it. Then, while its ticket has a current feedback plan (docs/design §32), a `Feedback
-  plan` panel (`FeedbackPlanPanel`): `feedback-plan:N` and its status as a chip in its header (`waiting on you` and
-  stale in `status-blocked`, approved as running, spent plain), a muted line of who planned it and what its status
-  means, cut to the status once it is approved, a
+  PR's files on GitHub to finish it. While its ticket has a current feedback plan (docs/design §32), a `Feedback plan`
+  panel (`FeedbackPlanPanel`) comes before the `Review threads` panel while the plan waits on the operator, stale or
+  not, so its Approve is in a 1720×1440 window's first screen, and after it once approved or spent; where it sits is
+  settled as each plan is first read, so one approved meanwhile stays put, its band in view. The panel:
+  `feedback-plan:N` and its status as a chip in its header (`waiting on you` and stale in `status-blocked`, approved as
+  running, spent plain), a muted line of who planned it and what its status means, cut to the status once it is
+  approved, a
   stale plan's changes in `status-blocked`, a row per item (a `Checkbox` until a resume spends it, its number, the
   first line of what was said as `MemoryText`, and where it is: `on its thread`, a router `Link` to the thread's card
   by its `threadAnchor`, `the review`, a link out to it on its host, or the other PR it is on; under that, muted, its
@@ -1622,11 +1625,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
   `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain,
   its line breaks and tabs kept and every other hidden character named, never Markdown or a link; a draft's text the
-  same. A thread the feedback plan covers carries its proposal above its drafts (`PlanProposal`, a dashed hairline
-  box): `Plan item N`, the proposal as a chip in its tone, `for the next plan` once an approval did not tick it, and
-  the reply as `MemoryText`. An item an approval did not tick is `for the next plan` wherever the page says so (its
-  chip, the hint beside the button), and its box is named `approve item N`, never `left out` or `leave`: `leave` is a
-  proposal, to leave the item be, which ticking it approves; the CLI's flag stays `--leave`, on the button's hover.
+  same. A thread the feedback plan covers carries its proposal above its drafts (`PlanProposal`, an inset rule, a
+  hairline `border-l-2` on the thread's card, not a card of its own): `Plan item N`, the proposal as a chip in its
+  tone, `for the next plan` once an approval did not tick it, and the reply as `MemoryText`; a `change` its resume is
+  still to act on, over a waiting draft, says in `status-blocked` that the resume writes a new reply there and sending
+  the draft first answers ahead of it, the draft's `Send` left as it is. An item an approval did not tick is `for the
+  next plan` wherever the page says so (its chip, the hint beside the button), and its box is named `approve item N`,
+  never `left out` or `leave`: `leave` is a proposal, to leave the item be, which ticking it approves; the CLI's flag
+  stays `--leave`, on the button's hover.
   Each proposal's chip has a quiet tone of its own (`proposal-*`), so `change`, the one that edits code, stands out,
   `decline` and `ask` sit apart from it and from each other, and `leave`, which does nothing, stays plain.
   A comment's `<details>` blocks are the one thing read in it (`CommentText`, `src/lib/details.ts`): each folds,
