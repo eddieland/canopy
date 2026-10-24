@@ -554,6 +554,17 @@ class ModelsRead(StrEnum):
     FAILED = "failed"
 
 
+class SessionsRead(StrEnum):
+    """How canopy's last read of the runtime's sessions ended, `runtime_session_reads.status` (DESIGN §13)."""
+
+    #: The record was read: what it held after the cursor is in `runtime_sessions`.
+    FOUND = "found"
+    #: The runtime has kept no session yet.
+    MISSING = "missing"
+    #: The record could not be read; read again later.
+    FAILED = "failed"
+
+
 class SeenKind(StrEnum):
     """What kind of subject the operator saw, `seen.kind` (DESIGN §22): the kind its reference names."""
 
