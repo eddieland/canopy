@@ -62,7 +62,8 @@ _TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
     "reviews": ("review_runs", _EVERY),
     "tasks": ("task_runs", _EVERY),
 }
-_ALL_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
+#: Every kind of agent run by its table and the condition on the table's rows, the overseer's ticks included.
+KIND_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
 #: The budget whole, as a percentage of it: the alert always sent.
 FULL = 100
 # About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
@@ -491,7 +492,7 @@ def _breakdown(
             for day, cost in sql.execute(conn, costs):
                 by_day.setdefault(str(day), {})[kind] = cost
         unpriced = _unpriced(conn, since, until, rows)
-        done = _done(conn, since, until)
+        done = done_in(conn, since, until)
         tickets = _tickets(conn, since, until, done)
         pull_requests = _pull_requests(conn, since, until)
         first_calls = _first_calls(conn, since, until)
@@ -686,10 +687,16 @@ def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: Iterable[_
     return found
 
 
-# The tickets marked done in the window, each with how and when: its newest `done` decision, as `recently_done` reads
-# it (§7), but `closed` ones too, since a tracker that closes a ticket when its PR merges closes most that landed. Not
-# one marked done before the operator last forgot it, nor one reopened since, which is no longer done.
-def _done(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple[Done, str]]:
+def done_in(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple[Done, str]]:
+    """The tickets marked done in `[since, until)`, each a journal time, with how and when.
+
+    A ticket's newest `done` decision, as `recently_done` reads it (§7), but `closed` ones too, since a tracker that
+    closes a ticket when its PR merges closes most that landed. Not one marked done before the operator last forgot
+    it, nor one reopened since, which is no longer done.
+
+    Returns:
+        Each ticket's key, with `merged` or `closed` and when the decision was made.
+    """
     marked = (
         sql.select("t.key, d.rationale, d.created_at")
         .from_("tickets t")
@@ -797,7 +804,7 @@ def _first_key(named: Iterable[tuple[str | None, float | None]]) -> str | None:
 def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[FirstCalls]:
     found: list[FirstCalls] = []
     for kind in KINDS:
-        table, which = _ALL_TABLES[kind]
+        table, which = KIND_TABLES[kind]
         by_digest: dict[str | None, list[tuple[int, bool, str]]] = {}
         first = (
             sql.select(_FIRST_CALL)
@@ -849,7 +856,7 @@ def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
 # reordering them, which with no statistics it would, reading every `run_tools` row of the kind ever recorded. The
 # kind's condition names only the run table's columns, which `run_tools` shares none of.
 def _tools_of(kind: Kind, since: str, until: str) -> sql.Select:
-    table, which = _ALL_TABLES[kind]
+    table, which = KIND_TABLES[kind]
     return (
         sql.select("t.tool, count(*), SUM(t.calls), SUM(t.errors), SUM(t.result_chars)")
         .from_("{} r CROSS JOIN run_tools t ON t.run_table = ? AND t.run_id = r.id", sql.name(table), table)
@@ -877,7 +884,7 @@ def _models(conn: sqlite3.Connection, since: str, until: str) -> list[ModelSpend
 # One kind's spend by model in a window, read as `_tools_of` reads `run_tools`: the run table leads, by its `_spent`
 # index, and `run_models` is read by its key's prefix.
 def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
-    table, which = _ALL_TABLES[kind]
+    table, which = KIND_TABLES[kind]
     return (
         sql.select("m.model, count(*), SUM(m.replies), SUM(m.cost_usd)")
         .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
@@ -890,7 +897,7 @@ def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
 
 # One kind's runs in a window that no session named a model for, and what they reported they cost.
 def _unnamed_models(kind: Kind, since: str, until: str) -> sql.Select:
-    table, which = _ALL_TABLES[kind]
+    table, which = KIND_TABLES[kind]
     return (
         sql.select("count(*), SUM(r.cost_usd)")
         .from_("{} r", sql.name(table))

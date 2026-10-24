@@ -4,7 +4,7 @@ import {
     Activity,
     Brain,
     CalendarClock,
-    Coins,
+    ChartColumn,
     FileSearch,
     FolderTree,
     GitPullRequest,
@@ -60,7 +60,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
     },
     { to: '/runs', icon: Activity, hint: 'Workers running now, then the ones that ended last' },
     { to: '/chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
-    { to: '/spend', icon: Coins, hint: 'What agent runs cost each day, and what idle ticks spent for nothing' },
+    {
+        to: '/reports',
+        icon: ChartColumn,
+        hint: 'What canopy cost and got done month by month, and what agent runs cost each day',
+    },
     { to: '/ticks', icon: History, hint: "The overseer's latest ticks and what each decided" },
     {
         to: '/worktrees',

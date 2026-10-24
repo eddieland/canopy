@@ -870,6 +870,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the report by month
+         * @description What each month cost by kind and by model, its tokens, and the tickets it landed with what each took.
+         */
+        get: operations["getMonthlyReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/review-requests": {
         parameters: {
             query?: never;
@@ -4699,6 +4719,17 @@ export type components = {
             status: "running" | "no_session" | "unread" | "found" | "missing" | "failed";
         };
         /**
+         * MonthlyReport
+         * @description The last months, the current one so far included, as the reports page shows them.
+         */
+        MonthlyReport: {
+            /**
+             * Months
+             * @description Every month, oldest first, those with nothing in them included.
+             */
+            months: components["schemas"]["ReportMonth"][];
+        };
+        /**
          * NoticeChanged
          * @description What setting or clearing a notice did, and the state it left.
          */
@@ -5510,10 +5541,242 @@ export type components = {
             submission: string;
         };
         /**
+         * ReportKind
+         * @description What one kind of run cost in a month.
+         */
+        ReportKind: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /** @description The kind of run; the overseer's include dry runs. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Runs
+             * @description How many of its runs started in the month: for the overseer, its ticks.
+             */
+            runs: number;
+            /** @description Their tokens. */
+            tokens: components["schemas"]["ReportTokens"];
+        };
+        /**
+         * ReportModel
+         * @description What one model's replies cost in a month, over every kind of run, as each run's session says (DESIGN §13).
+         */
+        ReportModel: {
+            /**
+             * Cost Usd
+             * @description What the sessions priced those replies at, in US dollars; for the runs no session named a model for, what the
+             *     runs reported, None when none did.
+             */
+            cost_usd: number | null;
+            /**
+             * Model
+             * @description As `provider/model`, as the runtime names it; None for the runs no session named a model for.
+             */
+            model: string | null;
+            /**
+             * Replies
+             * @description How many replies it wrote; 0 for the runs no session named a model for.
+             */
+            replies: number;
+            /**
+             * Runs
+             * @description How many runs it wrote a reply of: a run on two models counts under each.
+             */
+            runs: number;
+        };
+        /**
+         * ReportMonth
+         * @description One local calendar month: what each kind of run cost, by model, and the tickets it landed.
+         */
+        ReportMonth: {
+            /**
+             * Closed
+             * @description How many tickets the loop marked done as closed in it, without a merge.
+             */
+            closed: number;
+            /**
+             * Cost Usd
+             * @description What every kind cost, dry runs included, as the budget counts a month, in US dollars; None when none reported.
+             */
+            cost_usd: number | null;
+            /**
+             * Kinds
+             * @description A row per kind of run, in a fixed order: overseer, workers, plans, chores, reviews, tasks.
+             */
+            kinds: components["schemas"]["ReportKind"][];
+            /**
+             * Landed
+             * @description The tickets the loop marked done as merged in it, the latest first.
+             */
+            landed: components["schemas"]["ReportTicket"][];
+            /**
+             * Median Hours To Land
+             * @description The median of its landed tickets' hours to land; None with none known.
+             */
+            median_hours_to_land: number | null;
+            /**
+             * Median Iterations
+             * @description The median of its landed tickets' iterations; None with none landed.
+             */
+            median_iterations: number | null;
+            /**
+             * Median Pr Comments
+             * @description The median of its landed tickets' PR comments; None with none landed.
+             */
+            median_pr_comments: number | null;
+            /**
+             * Median Review Wait Hours
+             * @description The median of its landed tickets' waits for a first review, in hours; None with none known.
+             */
+            median_review_wait_hours: number | null;
+            /**
+             * Models
+             * @description The costliest first, the runs no session named a model for last.
+             */
+            models: components["schemas"]["ReportModel"][];
+            /**
+             * Month
+             * @description The month, `YYYY-MM`, in the local time of the machine canopy runs on.
+             */
+            month: string;
+            /**
+             * Per Landed Usd
+             * @description The month's whole cost over the tickets it landed, in US dollars; None with none landed, or no cost.
+             */
+            per_landed_usd: number | null;
+            /**
+             * Pull Requests
+             * @description How many PRs a run first named in it.
+             */
+            pull_requests: number;
+            /**
+             * Runs
+             * @description How many runs of every kind started in it, a tick each for the overseer.
+             */
+            runs: number;
+            /**
+             * Since
+             * Format: date-time
+             * @description When it starts: local midnight on its first day.
+             */
+            since: string;
+            /** @description Every kind's tokens, summed. */
+            tokens: components["schemas"]["ReportTokens"];
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: local midnight on the next month's first day.
+             */
+            until: string;
+        };
+        /**
          * @description Why a kept report's file is not a report any more, as a plan's is read (DESIGN §25, §36).
          * @enum {string}
          */
         ReportProblem: "missing" | "not a regular file" | "unreadable" | "not UTF-8" | "empty" | "over the bound";
+        /**
+         * ReportTicket
+         * @description A ticket the loop marked done as merged in a month, and what getting there took.
+         */
+        ReportTicket: {
+            /**
+             * Changes Requested
+             * @description How many of those asked for changes.
+             */
+            changes_requested: number;
+            /**
+             * Cost Usd
+             * @description What its runs and review runs that started before it landed cost, in US dollars; None when none reported.
+             */
+            cost_usd: number | null;
+            /**
+             * Hours To Land
+             * @description From its first worker run's start to its landing, in hours; None with no worker run.
+             */
+            hours_to_land: number | null;
+            /**
+             * Iterations
+             * @description Its worker runs, implement and resume, that started before it landed.
+             */
+            iterations: number;
+            /**
+             * Key
+             * @description The ticket.
+             */
+            key: string;
+            /**
+             * Landed At
+             * Format: date-time
+             * @description When the loop marked it done: the journal keeps no merge time of its own.
+             */
+            landed_at: string;
+            /**
+             * Pr Comments
+             * @description The comments on its PRs from people other than each PR's author, bots' apart: canopy posts as the author.
+             */
+            pr_comments: number;
+            /**
+             * Review Wait Hours
+             * @description From the end of its first worker run that ended `done`, when its PR was ready, to the first review after it, in
+             *     hours; None with no such run or no such review.
+             */
+            review_wait_hours: number | null;
+            /**
+             * Reviews
+             * @description The reviews of its PRs from people other than each PR's author, bots' apart.
+             */
+            reviews: number;
+            /**
+             * Started At
+             * @description When its first worker run started; None for a ticket that landed with none.
+             */
+            started_at: string | null;
+            /**
+             * Title
+             * @description Its title, as the overseer named it; None before it did.
+             */
+            title: string | null;
+        };
+        /**
+         * ReportTokens
+         * @description The tokens a month's runs reported, by kind, summed over their model calls; 0 where none reported any.
+         */
+        ReportTokens: {
+            /**
+             * Cache Hit
+             * @description The share of what was sent, input and the cache's both, that was read from the cache, from 0 to 1; None when
+             *     nothing was sent.
+             */
+            cache_hit: number | null;
+            /**
+             * Cache Read
+             * @description Sent to a model and read from the cache.
+             */
+            cache_read: number;
+            /**
+             * Cache Write
+             * @description Sent to a model and written to the cache.
+             */
+            cache_write: number;
+            /**
+             * Input
+             * @description Sent to a model and not read from the cache.
+             */
+            input: number;
+            /**
+             * Output
+             * @description Written by a model, its reasoning apart.
+             */
+            output: number;
+            /**
+             * Reasoning
+             * @description A model's reasoning.
+             */
+            reasoning: number;
+        };
         /**
          * RequestedReview
          * @description A PR the operator asked canopy to review that no review of is running yet: it waits on a tick (DESIGN §21).
@@ -12009,6 +12272,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getMonthlyReport: {
+        parameters: {
+            query?: {
+                /** @description How many local calendar months to read, the current one so far included: 1 to 24. */
+                months?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthlyReport"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */

@@ -100,10 +100,10 @@ describe('Nav', () => {
     it('opens the page of the section followed', async () => {
         const { router } = await renderNav({ items: [] })
         await act(async () => {
-            fireEvent.click(screen.getByRole('link', { name: 'Spend' }))
+            fireEvent.click(screen.getByRole('link', { name: 'Reports' }))
             await Promise.resolve()
         })
-        expect(router.state.location.pathname).toBe('/spend')
+        expect(router.state.location.pathname).toBe('/reports')
     })
 
     it("splits Attention's count as its counter does, in words for a screen reader and on hover", async () => {

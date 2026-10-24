@@ -51,6 +51,9 @@ export const keys = {
     // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale.
     spendBreakdown: (range: SpendBreakdownRange) =>
         ['spend', 'breakdown', range.hours === undefined ? `${range.days}d` : `${range.hours}h`] as const,
+    // Under the breakdowns' key too, so whatever marks them stale (a cost, a run's start or end, a tick's decisions)
+    // marks the months stale with them.
+    monthlyReport: (months: number) => ['spend', 'breakdown', 'months', months] as const,
     tick: ['tick'] as const,
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
@@ -204,6 +207,18 @@ export function spendBreakdownQuery(range: SpendBreakdownRange) {
         queryKey: keys.spendBreakdown(range),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/spend/breakdown', { params: { query: range }, signal })),
+    })
+}
+
+/**
+ * What each of the last `months` local calendar months cost, by kind and by model, in dollars and tokens, and the
+ * tickets it landed with what each took. Marked stale with the spend breakdowns.
+ */
+export function monthlyReportQuery(months: number) {
+    return queryOptions({
+        queryKey: keys.monthlyReport(months),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/monthly', { params: { query: { months } }, signal })),
     })
 }
 

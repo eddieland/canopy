@@ -16,6 +16,7 @@ import overview from '@/guide/overview.md?raw'
 import philosophy from '@/guide/philosophy.md?raw'
 import plans from '@/guide/plans.md?raw'
 import pullRequests from '@/guide/pull-requests.md?raw'
+import reports from '@/guide/reports.md?raw'
 import runs from '@/guide/runs.md?raw'
 import settings from '@/guide/settings.md?raw'
 import signingIn from '@/guide/signing-in.md?raw'
@@ -98,6 +99,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
         pages: [
             ['runs', runs],
             ['ticks', ticks],
+            ['reports', reports],
             ['chores', chores],
             ['memory', memory],
             ['slack', slack],
@@ -141,12 +143,16 @@ export const PAGE_GUIDES = {
     '/chores/$name_/runs/$id': 'chores#a-chores-page',
     '/ticks/': 'ticks',
     '/ticks/$id': 'ticks#a-ticks-page',
-    '/spend': 'ticks#the-spend-page',
+    '/reports/': 'reports',
+    '/reports/spend': 'reports#the-spend-page',
     '/memory': 'memory',
     '/search': 'overview#search',
     '/settings': 'settings',
     '/settings_/limits': 'settings#limits-and-trust',
-} as const satisfies Record<Exclude<keyof FileRoutesById, '__root__' | '/' | '/guide/' | '/guide/$page'>, string>
+} as const satisfies Record<
+    Exclude<keyof FileRoutesById, '__root__' | '/' | '/spend' | '/guide/' | '/guide/$page'>,
+    string
+>
 
 /**
  * The files a page of the guide shows whole, by the path its fence names after the language: the repository's own

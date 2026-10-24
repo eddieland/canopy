@@ -12,7 +12,8 @@ const PAGES = [
     { page: 'ticks/2', read: '**/api/ticks/2' },
     { page: 'chores/deps', read: '**/api/chores/deps' },
     { page: 'reviews/4', read: '**/api/reviews/4' },
-    { page: 'spend', read: '**/api/spend/breakdown*' },
+    { page: 'reports', read: '**/api/reports/monthly*' },
+    { page: 'reports/spend', read: '**/api/spend/breakdown*' },
     { page: 'search?q=web', read: '**/api/search*' },
     { page: 'worktrees', read: '**/api/worktrees' },
 ] as const

@@ -49,7 +49,7 @@ const TEXT = [
     'section-reviews',
     'section-chores',
     'section-ticks',
-    'section-spend',
+    'section-reports',
     'section-memory',
     'section-settings',
     'diff-add',

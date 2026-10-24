@@ -36,7 +36,7 @@ and a few more. No prompt talks its way past one, and a refusal names it. See
 ### Idle tick
 
 A tick that started no work: it dispatched no run, and nothing new reached the journal since the tick before. The loop
-waits longer after each one, up to `loop.idle_max_minutes`. See [Ticks and spend](ticks#idle-ticks).
+waits longer after each one, up to `loop.idle_max_minutes`. See [Ticks](ticks#idle-ticks).
 
 ### Journal
 

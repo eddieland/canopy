@@ -18,7 +18,7 @@ test("the rail's counters open the spend page over their own windows, whose tota
     const month = await page.getByTestId('rail-spend-30d').textContent()
 
     await page.getByTestId('rail-spend-link-24h').click()
-    await expect(page).toHaveURL(/\/spend\?hours=24$/u)
+    await expect(page).toHaveURL(/\/reports\/spend\?hours=24$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Spend')
     await expect(page.getByTestId('spend-window-24h')).toHaveAttribute('data-state', 'on')
     await expect(page.getByTestId('spend-chart').getByTestId(/^spend-bar-/u)).toHaveCount(24)
@@ -27,7 +27,7 @@ test("the rail's counters open the spend page over their own windows, whose tota
 
     await page.goto('attention')
     await page.getByTestId('rail-spend-link-30d').click()
-    await expect(page).toHaveURL(/\/spend\?days=30$/u)
+    await expect(page).toHaveURL(/\/reports\/spend\?days=30$/u)
     await expect(page.getByTestId('spend-window-30')).toHaveAttribute('data-state', 'on')
     await expect(page.getByTestId('spend-chart').getByTestId(/^spend-bar-/u)).toHaveCount(30)
     // Every run in the mock journal started within the 30 days, so the window's total is the rail's.
@@ -37,10 +37,10 @@ test("the rail's counters open the spend page over their own windows, whose tota
 test('the window switches from the toggle, and idle spend is its own series with its ticks linked', async ({
     page,
 }) => {
-    await page.goto('spend?days=30')
+    await page.goto('reports/spend?days=30')
     await settled(page)
     await page.getByTestId('spend-window-7').click()
-    await expect(page).toHaveURL(/\/spend$/u)
+    await expect(page).toHaveURL(/\/reports\/spend$/u)
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
 
     // The mock's second tick was idle: its overseer's cost is the idle series, and the share of the overseer's.
@@ -66,7 +66,7 @@ test('the window switches from the toggle, and idle spend is its own series with
 test("each series has one name in the totals, the legend, and the table, and the description is the window's", async ({
     page,
 }) => {
-    await page.goto('spend')
+    await page.goto('reports/spend')
     await settled(page)
     // The window's state, with what the page holds on the title's hover.
     const total = await page.getByTestId('spend-total-total').textContent()
@@ -95,10 +95,10 @@ test("each series has one name in the totals, the legend, and the table, and the
 })
 
 test('24 hours read by the hour, each named by its time and in full in the table', async ({ page }) => {
-    await page.goto('spend')
+    await page.goto('reports/spend')
     await settled(page)
     await page.getByTestId('spend-window-24h').click()
-    await expect(page).toHaveURL(/\/spend\?hours=24$/u)
+    await expect(page).toHaveURL(/\/reports\/spend\?hours=24$/u)
     await expect(page.getByTestId('spend-by-day').getByText('By hour')).toBeVisible()
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(24)
     await expect(page.getByTestId('spend-table').locator('thead th').first()).toHaveText('hour')
@@ -115,30 +115,31 @@ test('24 hours read by the hour, each named by its time and in full in the table
     await expectSpendAxisWhole(page, 5)
 
     await page.getByTestId('spend-window-7').click()
-    await expect(page).toHaveURL(/\/spend$/u)
+    await expect(page).toHaveURL(/\/reports\/spend$/u)
     await expect(page.getByTestId('spend-by-day').getByText('By day')).toBeVisible()
 })
 
 test('a window the page does not offer reads as the week', async ({ page }) => {
-    await page.goto('spend?days=9')
+    await page.goto('reports/spend?days=9')
     await settled(page)
     await expect(page.getByTestId('spend-window-7')).toHaveAttribute('data-state', 'on')
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
 })
 
-test('the nav opens the spend page on the week, its item marked', async ({ page }) => {
+test("Reports opens the spend page on the week, Reports' item marked", async ({ page }) => {
     await page.goto('attention')
     await settled(page)
     const nav = page.getByRole('navigation', { name: 'Main' })
-    await nav.getByRole('link', { name: 'Spend' }).click()
-    await expect(page).toHaveURL(/\/spend$/u)
+    await nav.getByRole('link', { name: 'Reports' }).click()
+    await page.getByTestId('reports-spend-link').click()
+    await expect(page).toHaveURL(/\/reports\/spend$/u)
     await expect(page.getByTestId('spend-window-7')).toHaveAttribute('data-state', 'on')
-    await expect(nav.getByRole('link', { name: 'Spend' })).toHaveAttribute('data-status', 'active')
-    await expect(page.getByTestId('nav-highlight')).toHaveClass(/\bbg-section-spend\/16\b/u)
+    await expect(nav.getByRole('link', { name: 'Reports' })).toHaveAttribute('data-status', 'active')
+    await expect(page.getByTestId('nav-highlight')).toHaveClass(/\bbg-section-reports\/16\b/u)
 })
 
 test("30 days' table scrolls in its panel under its column names, and a week's shows whole", async ({ page }) => {
-    await page.goto('spend?days=30')
+    await page.goto('reports/spend?days=30')
     await settled(page)
     const region = page.getByTestId('spend-table-scroll')
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(30)
@@ -164,7 +165,7 @@ test("30 days' table scrolls in its panel under its column names, and a week's s
 test("the ticket, PR, model, and tool tables scroll under their column names, flush with the panel's title", async ({
     page,
 }) => {
-    await page.goto('spend')
+    await page.goto('reports/spend')
     await settled(page)
     for (const id of ['spend-ticket-table', 'spend-pull-request-table', 'spend-model-table', 'spend-tool-table']) {
         const table = page.getByTestId(id)
@@ -193,7 +194,7 @@ test('a long list of idle ticks scrolls in its panel', async ({ page }) => {
         found.idle_ticks = Array.from({ length: 40 }, (_, i) => ({ ...tick, id: 1000 + i }))
         await route.fulfill({ response, json: found })
     })
-    await page.goto('spend')
+    await page.goto('reports/spend')
     await settled(page)
     const list = page.getByTestId('spend-idle-tick-list')
     await expect(list.getByTestId(/^tick-\d+$/u)).toHaveCount(40)
@@ -206,7 +207,7 @@ test('a long list of idle ticks scrolls in its panel', async ({ page }) => {
 test("each ticket's and PR's own runs, the costliest first, open their pages beside the tickets done", async ({
     page,
 }) => {
-    await page.goto('spend')
+    await page.goto('reports/spend')
     await settled(page)
     // The mock journal marks no ticket done, so there is nothing to divide the spend by.
     await expect(page.getByTestId('spend-done')).toHaveText('0')
@@ -229,7 +230,7 @@ test("each ticket's and PR's own runs, the costliest first, open their pages bes
 test("the tools whose calls returned the most, every kind's summed, or one kind's from the header", async ({
     page,
 }) => {
-    await page.goto('spend')
+    await page.goto('reports/spend')
     await settled(page)
     const tools = page.getByTestId('spend-tool-table').getByTestId('spend-tool')
     // Five tools, each once whatever kinds called it.
@@ -245,7 +246,7 @@ test("the tools whose calls returned the most, every kind's summed, or one kind'
     )
 
     await page.getByTestId('spend-tool_kind').getByRole('link', { name: 'workers' }).click()
-    await expect(page).toHaveURL(/\/spend\?tool_kind=workers$/u)
+    await expect(page).toHaveURL(/\/reports\/spend\?tool_kind=workers$/u)
     await expect(tools.first().getByRole('rowheader')).toHaveText('bash')
     await expect(tools.first().getByRole('cell')).toHaveText(['119', '11', '279.0k', '69.8k'])
     // The other filter, and the window, keep what they show.
@@ -254,12 +255,12 @@ test("the tools whose calls returned the most, every kind's summed, or one kind'
         'true',
     )
     await page.getByTestId('spend-window-30').click()
-    await expect(page).toHaveURL(/\/spend\?.*tool_kind=workers/u)
+    await expect(page).toHaveURL(/\/reports\/spend\?.*tool_kind=workers/u)
     await expect(tools.first().getByRole('rowheader')).toHaveText('bash')
 })
 
 test("what the runs spent on each model, every kind's summed, or one kind's from the header", async ({ page }) => {
-    await page.goto('spend')
+    await page.goto('reports/spend')
     await settled(page)
     // Four models, each counted once whatever kinds it served.
     await expect(page.getByTestId('spend-model-count')).toHaveText('4')
@@ -271,7 +272,7 @@ test("what the runs spent on each model, every kind's summed, or one kind's from
     await expect(models.last().getByRole('rowheader')).toHaveText('none: no session named one')
 
     await page.getByTestId('spend-model_kind').getByRole('link', { name: 'workers' }).click()
-    await expect(page).toHaveURL(/\/spend\?model_kind=workers$/u)
+    await expect(page).toHaveURL(/\/reports\/spend\?model_kind=workers$/u)
     await expect(models).toHaveCount(3)
     await expect(models.nth(1).getByRole('rowheader')).toHaveText('anthropic/claude-opus-4-1')
     // Spent, then per run: one run, so the same.
@@ -284,7 +285,7 @@ test("what the runs spent on each model, every kind's summed, or one kind's from
 })
 
 test("a model's row opens the runs page on the runs it served", async ({ page }) => {
-    await page.goto('spend?model_kind=workers')
+    await page.goto('reports/spend?model_kind=workers')
     await settled(page)
     await page.getByTestId('spend-model-table').getByRole('link', { name: 'anthropic/claude-opus-4-1' }).click()
     await expect(page).toHaveURL(/\/runs\?model=anthropic(%2F|\/)claude-opus-4-1$/u)
@@ -300,7 +301,7 @@ test.describe('on a wide monitor', () => {
     test.use({ viewport: { width: 1440, height: 900 } })
 
     test('30 days name every fifth day whole, centered under its bar, and a week every day', async ({ page }) => {
-        await page.goto('spend?days=30')
+        await page.goto('reports/spend?days=30')
         await settled(page)
         await expectSpendAxisWhole(page, 6)
         await page.getByTestId('spend-window-7').click()
@@ -310,7 +311,7 @@ test.describe('on a wide monitor', () => {
 })
 
 test("the dearest day's total is over its bar, which stops short of the chart's top", async ({ page }) => {
-    await page.goto('spend?days=30')
+    await page.goto('reports/spend?days=30')
     await settled(page)
     // The mock prices today alone: its total is the dearest.
     const total = await page.getByTestId('spend-day-2026-10-08').locator('td').nth(8).textContent()
@@ -336,7 +337,7 @@ test("the dearest day's total is over its bar, which stops short of the chart's 
 test('a week of one priced day draws one narrow bar, its segments apart, and the days without cost as stubs', async ({
     page,
 }) => {
-    await page.goto('spend')
+    await page.goto('reports/spend')
     await settled(page)
     const chart = page.getByTestId('spend-chart')
     const bar = chart.getByTestId('spend-bar-2026-10-08')
@@ -417,7 +418,7 @@ test('a window where nothing reported a cost says so once in By day, and claims 
         }
         await route.fulfill({ response, json })
     })
-    await page.goto('spend')
+    await page.goto('reports/spend')
     await settled(page)
     const byDay = page.getByTestId('spend-by-day')
     await expect(byDay.getByText('no run reported a cost in these 7 days')).toBeVisible()
@@ -438,7 +439,7 @@ function nothing(costs: Costs): Costs {
 }
 
 test('this month reads against the budget whatever the window, and is headed over at its pace', async ({ page }) => {
-    await page.goto('spend?hours=24')
+    await page.goto('reports/spend?hours=24')
     await settled(page)
     // The mock's budget is $40, and every run in its journal started in October.
     const budget = page.getByTestId('spend-budget')

@@ -23,6 +23,8 @@ import { Route as GuideIndexRouteImport } from './routes/guide.index'
 import { Route as GuidePageRouteImport } from './routes/guide.$page'
 import { Route as PullRequestsIndexRouteImport } from './routes/pull-requests.index'
 import { Route as PullRequestsPrRouteImport } from './routes/pull-requests.pr'
+import { Route as ReportsIndexRouteImport } from './routes/reports.index'
+import { Route as ReportsSpendRouteImport } from './routes/reports.spend'
 import { Route as ReviewsIndexRouteImport } from './routes/reviews.index'
 import { Route as ReviewsIdRouteImport } from './routes/reviews.$id'
 import { Route as RunsIndexRouteImport } from './routes/runs.index'
@@ -107,6 +109,16 @@ const PullRequestsIndexRoute = PullRequestsIndexRouteImport.update({
 const PullRequestsPrRoute = PullRequestsPrRouteImport.update({
   id: '/pull-requests/pr',
   path: '/pull-requests/pr',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsIndexRoute = ReportsIndexRouteImport.update({
+  id: '/reports/',
+  path: '/reports/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsSpendRoute = ReportsSpendRouteImport.update({
+  id: '/reports/spend',
+  path: '/reports/spend',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReviewsIndexRoute = ReviewsIndexRouteImport.update({
@@ -197,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
+  '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
   '/settings/limits': typeof SettingsLimitsRoute
@@ -206,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/chores/': typeof ChoresIndexRoute
   '/guide/': typeof GuideIndexRoute
   '/pull-requests/': typeof PullRequestsIndexRoute
+  '/reports/': typeof ReportsIndexRoute
   '/reviews/': typeof ReviewsIndexRoute
   '/runs/': typeof RunsIndexRoute
   '/tasks/': typeof TasksIndexRoute
@@ -228,6 +242,7 @@ export interface FileRoutesByTo {
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
+  '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
   '/settings/limits': typeof SettingsLimitsRoute
@@ -237,6 +252,7 @@ export interface FileRoutesByTo {
   '/chores': typeof ChoresIndexRoute
   '/guide': typeof GuideIndexRoute
   '/pull-requests': typeof PullRequestsIndexRoute
+  '/reports': typeof ReportsIndexRoute
   '/reviews': typeof ReviewsIndexRoute
   '/runs': typeof RunsIndexRoute
   '/tasks': typeof TasksIndexRoute
@@ -260,6 +276,7 @@ export interface FileRoutesById {
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
+  '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
   '/settings_/limits': typeof SettingsLimitsRoute
@@ -269,6 +286,7 @@ export interface FileRoutesById {
   '/chores/': typeof ChoresIndexRoute
   '/guide/': typeof GuideIndexRoute
   '/pull-requests/': typeof PullRequestsIndexRoute
+  '/reports/': typeof ReportsIndexRoute
   '/reviews/': typeof ReviewsIndexRoute
   '/runs/': typeof RunsIndexRoute
   '/tasks/': typeof TasksIndexRoute
@@ -293,6 +311,7 @@ export interface FileRouteTypes {
     | '/chores/$name'
     | '/guide/$page'
     | '/pull-requests/pr'
+    | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
     | '/settings/limits'
@@ -302,6 +321,7 @@ export interface FileRouteTypes {
     | '/chores/'
     | '/guide/'
     | '/pull-requests/'
+    | '/reports/'
     | '/reviews/'
     | '/runs/'
     | '/tasks/'
@@ -324,6 +344,7 @@ export interface FileRouteTypes {
     | '/chores/$name'
     | '/guide/$page'
     | '/pull-requests/pr'
+    | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
     | '/settings/limits'
@@ -333,6 +354,7 @@ export interface FileRouteTypes {
     | '/chores'
     | '/guide'
     | '/pull-requests'
+    | '/reports'
     | '/reviews'
     | '/runs'
     | '/tasks'
@@ -355,6 +377,7 @@ export interface FileRouteTypes {
     | '/chores/$name'
     | '/guide/$page'
     | '/pull-requests/pr'
+    | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
     | '/settings_/limits'
@@ -364,6 +387,7 @@ export interface FileRouteTypes {
     | '/chores/'
     | '/guide/'
     | '/pull-requests/'
+    | '/reports/'
     | '/reviews/'
     | '/runs/'
     | '/tasks/'
@@ -387,6 +411,7 @@ export interface RootRouteChildren {
   ChoresNameRoute: typeof ChoresNameRoute
   GuidePageRoute: typeof GuidePageRoute
   PullRequestsPrRoute: typeof PullRequestsPrRoute
+  ReportsSpendRoute: typeof ReportsSpendRoute
   ReviewsIdRoute: typeof ReviewsIdRoute
   RunsIdRoute: typeof RunsIdRoute
   SettingsLimitsRoute: typeof SettingsLimitsRoute
@@ -396,6 +421,7 @@ export interface RootRouteChildren {
   ChoresIndexRoute: typeof ChoresIndexRoute
   GuideIndexRoute: typeof GuideIndexRoute
   PullRequestsIndexRoute: typeof PullRequestsIndexRoute
+  ReportsIndexRoute: typeof ReportsIndexRoute
   ReviewsIndexRoute: typeof ReviewsIndexRoute
   RunsIndexRoute: typeof RunsIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
@@ -505,6 +531,20 @@ declare module '@tanstack/react-router' {
       path: '/pull-requests/pr'
       fullPath: '/pull-requests/pr'
       preLoaderRoute: typeof PullRequestsPrRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports/': {
+      id: '/reports/'
+      path: '/reports'
+      fullPath: '/reports/'
+      preLoaderRoute: typeof ReportsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports/spend': {
+      id: '/reports/spend'
+      path: '/reports/spend'
+      fullPath: '/reports/spend'
+      preLoaderRoute: typeof ReportsSpendRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reviews/': {
@@ -627,6 +667,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChoresNameRoute: ChoresNameRoute,
   GuidePageRoute: GuidePageRoute,
   PullRequestsPrRoute: PullRequestsPrRoute,
+  ReportsSpendRoute: ReportsSpendRoute,
   ReviewsIdRoute: ReviewsIdRoute,
   RunsIdRoute: RunsIdRoute,
   SettingsLimitsRoute: SettingsLimitsRoute,
@@ -636,6 +677,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChoresIndexRoute: ChoresIndexRoute,
   GuideIndexRoute: GuideIndexRoute,
   PullRequestsIndexRoute: PullRequestsIndexRoute,
+  ReportsIndexRoute: ReportsIndexRoute,
   ReviewsIndexRoute: ReviewsIndexRoute,
   RunsIndexRoute: RunsIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
