@@ -50,6 +50,7 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
     reading = plans.read(path)
     who = feedback_plans.authors(conn, plan.id)
     checks = feedback_items.check_names(conn, plan.id)
+    blockers = feedback_items.blockers(conn, plan.id)
     trusted = ctx.config.trust.trusted_reviewers
     why = feedback_plans.rationales(reading.text) if reading.text is not None else {}
     items: list[FeedbackPlanItem] = []
@@ -73,6 +74,7 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
                 rationale=why.get(i.item_id),
                 url=said.url if said is not None else None,
                 check=checks.get((i.pr_url, i.item_id)) if i.item is PlanItem.CHECK else None,
+                blocker=blockers.get((i.pr_url, i.item_id)) if i.item is PlanItem.BLOCKER else None,
             ),
         )
     return FeedbackPlan(

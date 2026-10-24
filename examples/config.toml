@@ -37,6 +37,10 @@ max_chores = 1
 # api = 4
 
 [runtime]
+# The major version of OpenCode canopy runs: 1, the default, or 2 for OpenCode 2.1.4 or later, whose MCP servers each
+# need `"codemode": false` (D077). A template you leave out is the version's default; OpenCode 2's start a private
+# server of their own (`--standalone`).
+# version = 1
 # {definitions_dir} is the directory canopy's agent definitions and skills are in (D040). Every template that runs one
 # of canopy's agents must contain it. OpenCode reads it as OPENCODE_CONFIG_DIR, after the repository's own config.
 # {title}, optional, is the session's title: `<KEY> <kind>: <the ticket's title>` for a worker (DESIGN §13).

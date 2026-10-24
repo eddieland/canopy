@@ -336,7 +336,7 @@ def _check_model(ctx: Context, request: Request) -> None:
     if key is not None and ticket_models.override(ctx.conn, key, "reviewer") == model.name:
         chosen = f"for {key}'s reviewer runs (`canopy model {key} --agent reviewer`)"
     try:
-        agent_models.check(ctx.runner, ctx.workspace.root, model, chosen=chosen)
+        agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version, chosen=chosen)
     except agent_models.ModelError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
 

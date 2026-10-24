@@ -342,7 +342,7 @@ describe('FeedbackPlanPanel', () => {
         expect(shown.querySelector('strong')).toBeNull()
     })
 
-    it('names a failed check and a conflict by what they are, with no author', async () => {
+    it('names a failed check, a conflict, and a merged blocker by what they are, with no author', async () => {
         const check = feedbackPlanItem({
             number: 1,
             item: 'check',
@@ -358,9 +358,22 @@ describe('FeedbackPlanPanel', () => {
             url: null,
         })
         const conflict = feedbackPlanItem({ ...check, number: 2, item: 'conflict', item_id: -91234567, check: null })
-        await renderRouted(<FeedbackPlanPanel plan={feedbackPlan({ items: [check, conflict] })} onChange={changed} />)
+        const blocker = feedbackPlanItem({
+            ...check,
+            number: 3,
+            item: 'blocker',
+            item_id: -71234567,
+            check: null,
+            blocker: 'https://github.com/acme/web/pull/87',
+        })
+        const items = [check, conflict, blocker]
+        await renderRouted(<FeedbackPlanPanel plan={feedbackPlan({ items })} onChange={changed} />)
         const said = screen.getAllByTestId('feedback-plan-said').map((row) => row.textContent)
-        expect(said).toEqual(['the check build failed at its head', 'it conflicts with its base'])
+        expect(said).toEqual([
+            'the check build failed at its head',
+            'it conflicts with its base',
+            'the PR it is stacked on merged: https://github.com/acme/web/pull/87',
+        ])
         for (const row of screen.getAllByTestId('feedback-plan-item')) {
             expect(row.textContent).toContain('on https://github.com/acme/web/pull/88')
         }

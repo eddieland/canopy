@@ -468,6 +468,7 @@ export function feedbackPlanItem(fields: Partial<FeedbackPlanItem> = {}): Feedba
         rationale: 'Move it into a `finally`.',
         url: 'https://github.com/acme/web/pull/88#discussion_r2468013579',
         check: null,
+        blocker: null,
         ...fields,
     }
 }

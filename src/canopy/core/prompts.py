@@ -498,8 +498,8 @@ def feedback_plan_note(
             "",
             (
                 "The items approved, each by its number and the id its section's `### Item <id>` heading carries: the "
-                "review or comment id canopy observed on its PR, or the id canopy gave a failed check or a conflict "
-                "with the base:"
+                "review or comment id canopy observed on its PR, or the id canopy gave a failed check, a conflict "
+                "with the base, or a merged blocker:"
             ),
             "",
         ]
@@ -554,7 +554,8 @@ def _item_on(kind: PlanItem, pr: str) -> str:
     """Where a feedback plan's item is, in the harness's words: a review item by its PR, the others by what they are.
 
     Returns:
-        `on <pr>`, `a failed check on <pr>`, or `the conflict with its base on <pr>`.
+        `on <pr>`, `a failed check on <pr>`, `the conflict with its base on <pr>`, or `the merged blocker <pr>
+        is stacked on`.
     """
     match kind:
         case PlanItem.REVIEW | PlanItem.COMMENT:
@@ -563,6 +564,8 @@ def _item_on(kind: PlanItem, pr: str) -> str:
             return f"a failed check on {pr}"
         case PlanItem.CONFLICT:
             return f"the conflict with its base on {pr}"
+        case PlanItem.BLOCKER:
+            return f"the merged blocker {pr} is stacked on"
         case _:
             assert_never(kind)
 

@@ -3714,6 +3714,12 @@ export type components = {
              */
             author: string | null;
             /**
+             * Blocker
+             * @description For a merged blocker, the URL of the PR it was stacked on that merged, as the plan's read saw it; None for any
+             *     other item.
+             */
+            blocker: string | null;
+            /**
              * Check
              * @description For a check, its name, as the plan's read saw it; None for any other item.
              */
@@ -3726,14 +3732,15 @@ export type components = {
             excerpt: string | null;
             /**
              * Item
-             * @description A review, a review thread by the comment the plan covers, a failed check at the PR's head, or its conflict.
+             * @description A review, a review thread by the comment the plan covers, a failed check at the PR's head, its conflict, or
+             *     its merged blocker.
              * @enum {string}
              */
-            item: "review" | "comment" | "check" | "conflict";
+            item: "review" | "comment" | "check" | "conflict" | "blocker";
             /**
              * Item Id
-             * @description The one the plan's `### Item <id>` heading carries: the id the `vcs` source observed, or for a check or a
-             *     conflict the one canopy gives it, below zero.
+             * @description The one the plan's `### Item <id>` heading carries: the id the `vcs` source observed, or for a check, a
+             *     conflict, or a merged blocker the one canopy gives it, below zero.
              */
             item_id: number;
             /**
