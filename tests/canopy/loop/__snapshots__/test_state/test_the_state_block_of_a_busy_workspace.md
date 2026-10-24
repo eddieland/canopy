@@ -236,9 +236,11 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "max_reviews": 1,
       "max_reviews_per_day": 20,
       "max_reviews_per_pr": 3,
+      "settle_minutes": 0,
       "started_last_24h": 0
     },
     "running": [],
+    "settling": [],
     "prs": [],
     "requests": []
   },

@@ -126,11 +126,11 @@ idle as a tick that changed nothing, since records that repeat on unchanging sta
 (MEASUREMENTS 2026-10-14).
 
 After each idle tick in a row the wait doubles, up to `loop.idle_max_minutes` and never below the base wait. Whatever
-pacing chose, the wait ends at the earliest harness gate ahead: the CI cooldown's end (§8), a chore coming due (§19),
-or a notice lapsing (§8); a gate already open sets no deadline, so it cannot make the loop spin. A run ending ends the
-wait, so a long wait never sits on canopy's own work. The world, such as a review or CI going red, is seen up to
-`loop.idle_max_minutes` late: that is the trade, and the operator's knob. Each tick records whether it was idle and
-what ended the wait before it, for spend (§11).
+pacing chose, the wait ends at the earliest harness gate ahead: the CI cooldown's end (§8), a chore coming due (§19), a
+PR head settling (§21), or a notice lapsing (§8); a gate already open sets no deadline, so it cannot make the loop spin.
+A run ending ends the wait, so a long wait never sits on canopy's own work. The world, such as a review or CI going red,
+is seen up to `loop.idle_max_minutes` late: that is the trade, and the operator's knob. Each tick records whether it was
+idle and what ended the wait before it, for spend (§11).
 
 ## 7. Ticket phases and next actions
 

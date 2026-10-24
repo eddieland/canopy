@@ -405,6 +405,8 @@ ATTACHMENTS_TOTAL_KIB_CEILING = 4096
 NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
 Minutes = Annotated[StrictInt, Field(ge=1)]
+#: The longest `review.settle_minutes`: a week (DESIGN §21).
+MAX_SETTLE_MINUTES = 7 * 24 * 60
 #: An agent's sampling temperature, or `NO_TEMPERATURE`. TOML has no null, so a sentinel says "set none".
 Temperature = Annotated[StrictFloat, AfterValidator(_temperature)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
@@ -798,6 +800,9 @@ class Review(Section):
     query: Annotated[StrictStr, Scope.PRIVATE] = ""
     # Plain language for the reviewer: which changes it may call low impact. Without it, none.
     low_impact: Annotated[StrictStr, Scope.PRIVATE] = ""
+    # How long a PR's head commit must have been seen before it is reviewed; a new push starts over. 0 reviews at once.
+    # At most a week: a longer wait is a reason to turn the review off, and the clock's arithmetic stays in range.
+    settle_minutes: Annotated[StrictInt, Field(ge=0, le=MAX_SETTLE_MINUTES), Scope.PRIVATE] = 0
 
 
 class Memory(Section):
