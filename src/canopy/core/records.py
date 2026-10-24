@@ -422,6 +422,17 @@ class ReviewRequestPersona(Row):
 
 
 @dataclass(frozen=True)
+class ReviewHead(Row):
+    """A PR's head commit as canopy last saw it, and since when (DESIGN §21): the clock a review's settle time reads."""
+
+    TABLE: ClassVar[str] = "review_heads"
+
+    pr_url: str
+    sha: str
+    seen_at: str
+
+
+@dataclass(frozen=True)
 class PoolSlot(Row):
     """A slot of one of canopy's own pools (DESIGN §18): where it is, and its lease while it has one."""
 

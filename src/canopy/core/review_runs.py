@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from canopy.core import db, records, sql
-from canopy.core.vocab import DismissalReason, HoldKind
+from canopy.core.vocab import DismissalReason, HoldKind, ReviewRunStatus
 
 if TYPE_CHECKING:
     import sqlite3
@@ -238,3 +238,43 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
     for run in records.fetch_all(conn, records.ReviewRun, query):
         found.setdefault(run.pr_url, []).append(run)
     return found
+
+
+def see_review_head(conn: sqlite3.Connection, pr_url: str, sha: str, at: str) -> str:
+    """Record that `sha` was the PR's head at `at`, unless it already was the head canopy last saw (DESIGN §21).
+
+    A different commit replaces the PR's row, so its wait starts at `at`: a push, or a force push back to an earlier
+    commit, starts over.
+
+    Returns:
+        Since when `sha` has been the head: `at`, or the time it was first seen if it still was the head.
+    """
+    seen = sql.insert("review_heads", pr_url=pr_url, sha=sha, seen_at=at).on_conflict(
+        "(pr_url) DO UPDATE SET sha = excluded.sha, seen_at = excluded.seen_at WHERE review_heads.sha != excluded.sha",
+    )
+    sql.execute(conn, seen)
+    return review_head_seen_at(conn, pr_url, sha) or at
+
+
+def review_head_seen_at(conn: sqlite3.Connection, pr_url: str, sha: str) -> str | None:
+    """Return since when `sha` has been the PR's head canopy last saw, or None if that head is another commit."""
+    query = sql.select("*").from_("review_heads").where("pr_url = ? AND sha = ?", pr_url, sha)
+    head = records.fetch_one(conn, records.ReviewHead, query)
+    return None if head is None else head.seen_at
+
+
+def review_heads_seen_after(conn: sqlite3.Connection, since: str) -> list[records.ReviewHead]:
+    """Return the PR heads seen after `since` with no `done` review of them, newest first."""
+    reviewed = (
+        sql.select("1")
+        .from_("review_runs r")
+        .where("r.pr_url = h.pr_url AND r.sha = h.sha AND r.revises IS NULL AND r.status = ?", ReviewRunStatus.DONE)
+    )
+    query = (
+        sql.select("h.*")
+        .from_("review_heads h")
+        .where("h.seen_at > ?", since)
+        .where("NOT EXISTS ({})", reviewed)
+        .order_by("h.seen_at DESC, h.pr_url")
+    )
+    return records.fetch_all(conn, records.ReviewHead, query)
