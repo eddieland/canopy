@@ -51,9 +51,12 @@ RUNTIME_NAME = re.compile(r"opencode", re.IGNORECASE)
 IMPLEMENTATIONS = (PACKAGE / RUNTIME / "opencode", PACKAGE / RUNTIME / "opencode2")
 BINDING = PACKAGE / RUNTIME / "implementation.py"
 NEUTRAL = frozenset({"canopy.runtime.report", "canopy.runtime.entries", "canopy.runtime.agents"})
-# The one module an implementation may take from another: OpenCode 2 reads OpenCode 1's agent format through its
-# compatibility layer, so canopy's definitions, and how config is rendered into them, are one for both.
-SHARED = {"canopy.runtime.opencode2": frozenset({"canopy.runtime.opencode.definitions"})}
+# The modules an implementation may take from another: OpenCode 2 reads OpenCode 1's agent format through its
+# compatibility layer, so canopy's definitions, and how config is rendered into them, are one for both; and it keeps its
+# sessions in the same database, read by the same reader with queries of its own.
+SHARED = {
+    "canopy.runtime.opencode2": frozenset({"canopy.runtime.opencode.definitions", "canopy.runtime.opencode.sessions"}),
+}
 # Modules outside it allowed to name the runtime, with why: none knows how it behaves.
 NAMES_RUNTIME = {
     # The web UI's demo: its made-up pools' slots run the runtime's process, and its made-up runs' transcripts print

@@ -10,8 +10,8 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, spend, sql
-from canopy.runtime.report import ToolUse, Usage
+from canopy.core import db, runtime_sessions, spend, sql
+from canopy.runtime.report import SessionPage, SessionSpend, ToolUse, Usage
 from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
 
@@ -908,3 +908,77 @@ def test_a_month_s_percent_is_floored_in_whole_cents(tmp_path: Path, journals: J
     assert (spend.month(conn, NOW, 1).percent, spend.month(conn, NOW, 1).over) == (99, False)
     tick(conn, "2026-10-02T12:00:00.000Z", 0.01)
     assert (spend.month(conn, NOW, 1).percent, spend.month(conn, NOW, 1).over) == (100, True)
+
+
+def journal_of_sessions(conn: sqlite3.Connection, now: datetime) -> None:
+    """A tick whose overseer ran in `ses_overseer`, and the runtime's record of it, its subagent's, and two others."""
+    started = earlier(now, 0)
+    conn.execute(
+        "INSERT INTO ticks (started_at, ended_at, dry_run, status, session_id) VALUES (?, ?, 0, 'ok', 'ses_overseer')",
+        (started, started),
+    )
+    ms = int(now.timestamp() * 1000)
+
+    def session(session_id: str, cost: float, directory: str, parent: str | None = None) -> SessionSpend:
+        return SessionSpend(session_id, parent, directory, ms, ms, cost, 1, 1, 0, 0, 0)
+
+    runtime_sessions.record(
+        conn,
+        SessionPage(
+            "found",
+            (
+                session("ses_overseer", 1.0, "/work/ws"),
+                session("ses_sub", 0.5, "/work/ws", parent="ses_overseer"),
+                session("ses_notes", 2.0, "/home/me/notes"),
+                session("ses_web", 0.25, "/work/web"),
+            ),
+            cursor=(ms, "ses_web"),
+        ),
+        now=db.format_time(now),
+    )
+
+
+def test_canopy_spend_prints_every_runtime_session_canopys_apart(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    now = noon_today()
+    journal_of_sessions(canopy_env.journal(), now)
+    assert main(["spend", "--days", "1"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    start = out.index(f"Every runtime session, as its record says (read {now:%Y-%m-%d}):")
+    assert [line.split() for line in out[start + 1 : start + 6]] == [
+        ["sessions", "count", "spent"],
+        ["canopy's", "runs", "2", "$1.50"],
+        ["outside", "canopy", "2", "$2.25"],
+        ["1", "$2.00", "/home/me/notes"],
+        ["1", "$0.25", "/work/web"],
+    ]
+    assert (
+        out[start + 6]
+        == "A subagent's session counts with the session it ran for; another workspace's runs are outside."
+    )
+
+
+def test_canopy_spend_json_has_every_runtime_session_canopys_apart(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    journal_of_sessions(canopy_env.journal(), noon_today())
+    assert main(["spend", "--days", "1", "--json"]) == 0
+    found = json.loads(capsys.readouterr().out)["sessions"]
+    assert found["canopy"] == {"sessions": 2, "cost_usd": 1.5}
+    assert found["outside"] == {"sessions": 2, "cost_usd": 2.25}
+    assert found["directories"][0] == {"directory": "/home/me/notes", "sessions": 1, "cost_usd": 2.0}
+    assert found["status"] == "found"
+
+
+def test_canopy_spend_says_when_the_runtimes_sessions_were_never_read(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    journal_of_a_week(canopy_env.journal(), noon_today())
+    assert main(["spend"]) == 0
+    assert "The runtime's sessions were never read: canopy loop reads them, canopy's and not, between ticks." in (
+        capsys.readouterr().out.splitlines()
+    )

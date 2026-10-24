@@ -55,7 +55,7 @@ from rich.text import Text
 
 from canopy.core import config, db, notice, pause, tasks
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import loop_view, models, pacing, phases, poll, reread, tick, tick_now, tick_report
+from canopy.loop import loop_view, models, pacing, phases, poll, reread, sessions, tick, tick_now, tick_report
 
 if TYPE_CHECKING:
     import sqlite3
@@ -332,7 +332,8 @@ class _Settings:
 class _Polls:
     """When the wait after a tick polls the connectors (`poll.run`): `connect.every_minutes` after the last read.
 
-    The wait also reads which models served the runs left unread, through `backlog`, between its polls.
+    The wait also reads which models served the runs left unread, through `backlog`, and records every session the
+    runtime keeps, through `recorder`, between its polls.
     """
 
     settings: _Settings
@@ -340,6 +341,8 @@ class _Polls:
     log: logs.TickAdapter
     #: The runs' sessions left unread; None in a dry run, which reads none.
     backlog: models.Backlog | None
+    #: The runtime's sessions, canopy's and not; None in a dry run, which records none.
+    recorder: sessions.Recorder | None = None
     #: Whether the loop is a dry run, whose polls record no operator message (D036).
     dry_run: bool = False
     #: When the connectors last ran, a tick's or a poll's, on `clock`.
@@ -359,12 +362,15 @@ class _Polls:
     def step(self) -> None:
         """Read the config again if asked to, as every step of a wait does, then poll if one is due and not paused.
 
-        Before the poll, read a run's session if one is due (`models.Backlog.step`).
+        Before the poll, read a run's session if one is due (`models.Backlog.step`), and the runtime's sessions if
+        their read is due (`sessions.Recorder.step`).
         """
         self.settings.apply()
         ctx = self.settings.ctx
         if self.backlog is not None:
             self.backlog.step(ctx)
+        if self.recorder is not None:
+            self.recorder.step(ctx)
         if self.clock() - self.last < ctx.config.connect.every_minutes * 60 or pause.paused(ctx.conn) is not None:
             return
         self.last = self.clock()
@@ -417,7 +423,14 @@ def _ticks(
         woken_by = woken or "start"
     idle_count = 0
     # A dry run reads no session, as its tick reads none.
-    polls = _Polls(settings, clock, log, None if dry_run else models.Backlog(clock, log), dry_run=dry_run)
+    polls = _Polls(
+        settings,
+        clock,
+        log,
+        None if dry_run else models.Backlog(clock, log),
+        recorder=None if dry_run else sessions.Recorder(clock, log),
+        dry_run=dry_run,
+    )
     while not stop.requested:
         settings.apply()
         ctx, pace = settings.ctx, settings.pace

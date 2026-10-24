@@ -362,6 +362,18 @@ The PR that builds the choosing proposes T1, T5, T7, and T8 to match. Rejected: 
 ticket labels (T1); a list of models shipped with canopy; one override for all of a ticket's agents; recording only the
 model asked for, which leaves every run on the default unattributed and splits no run's cost between models.
 
+### Every session's spend
+
+The operator wants spend tracked in canopy and out of it: what canopy's runs cost beside what the same runtime cost in
+the operator's own sessions. While it waits between live ticks, `canopy loop` records every session the runtime keeps,
+in every directory, subagents' included, from the runtime's own record: read-only, a page at a time from where the last
+read stopped, so a session updated since is read again and its row replaced. Each keeps its cost and tokens, as the
+runtime summed them, each model's share, its directory, and the session it ran for. What the record holds is not
+canopy's to trust, since a run can write the runtime's data, so a session canopy cannot read is passed over and
+counted. `canopy spend` splits the window's sessions into canopy's, a session one of the journal's runs names and its
+subagents', and the rest, by directory; another workspace's runs are outside, since its journal is another. Rejected:
+listing sessions through the runtime's commands, which list one project's top-level sessions only.
+
 ### The operator's skill
 
 `canopy skill` prints a skill that teaches an agent in the operator's own session the canopy CLI and how to read the

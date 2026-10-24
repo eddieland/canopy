@@ -9,7 +9,8 @@ cost, what it got done: the tickets marked done in it, and what each ticket and 
 And what each kind of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and
 how often it started cold. And what each kind's tool calls put into its context, by tool: the reads that each later
 model call reads again. And what each kind spent on each model, as the runs' own sessions say (§13). And the local
-calendar month so far against the operator's monthly budget, which nothing enforces.
+calendar month so far against the operator's monthly budget, which nothing enforces. And what every session the runtime
+keeps cost, canopy's apart from the rest, as the runtime's record says (`runtime_sessions`).
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Literal, LiteralString
 
-from canopy.core import contract, db, records, sql
+from canopy.core import contract, db, records, runtime_sessions, sql
 from canopy.core.vocab import RunKind
 
 if TYPE_CHECKING:
@@ -250,7 +251,7 @@ class Breakdown:
     whose first call is a live tick's. `tools` is what each kind's tool calls returned, by tool, the most characters
     first; the overseer's include dry runs too. `models` is what each kind spent on each model, the kinds in `KINDS`
     order and each kind's models the most costly first, its runs no session named a model for last; the overseer's
-    include dry runs too.
+    include dry runs too. `sessions` is what every session the runtime keeps cost, canopy's apart from the rest.
     """
 
     since: str
@@ -270,6 +271,7 @@ class Breakdown:
     tools: Sequence[ToolSpend] = ()
     hours: int | None = None
     models: Sequence[ModelSpend] = ()
+    sessions: runtime_sessions.SessionsSpend | None = None
 
 
 @dataclass(frozen=True)
@@ -498,6 +500,7 @@ def _breakdown(
         first_calls = _first_calls(conn, since, until)
         tools = _tools(conn, since, until)
         models = _models(conn, since, until)
+        sessions = runtime_sessions.spend(conn, since, until)
     for row in rows:
         day = by_day.setdefault(row.day, {})
         for name in _SERIES:
@@ -527,6 +530,7 @@ def _breakdown(
         tools=tools,
         hours=hours,
         models=models,
+        sessions=sessions,
     )
 
 

@@ -69,6 +69,7 @@ from canopy.core.vocab import (
     RunKind,
     RunStatus,
     SeenKind,
+    SessionsRead,
     SourceKind,
     StartStatus,
     ThreadState,
@@ -829,6 +830,61 @@ class RunModel(Row):
     model: str
     replies: int
     cost_usd: float
+
+
+@dataclass(frozen=True)
+class RuntimeSession(Row):
+    """A session the agent runtime keeps, canopy's or not, as the runtime last recorded it (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "runtime_sessions"
+
+    session_id: str
+    #: The session it ran for as a subagent; None for a session of its own.
+    parent_id: str | None
+    directory: str
+    started_at: str
+    updated_at: str
+    #: The runtime's own stamp of the update, in milliseconds since the epoch.
+    updated_ms: int
+    cost_usd: float
+    tokens_input: int
+    tokens_output: int
+    tokens_reasoning: int
+    tokens_cache_read: int
+    tokens_cache_write: int
+    read_at: str
+
+
+@dataclass(frozen=True)
+class RuntimeSessionModel(Row):
+    """One model a runtime session's replies name, and what they cost (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "runtime_session_models"
+
+    session_id: str
+    #: As `provider/model`.
+    model: str
+    replies: int
+    cost_usd: float
+
+
+@dataclass(frozen=True)
+class RuntimeSessionRead(Row):
+    """How reading the runtime's sessions stands (DESIGN §13): where the next read starts, and how the last ended."""
+
+    TABLE: ClassVar[str] = "runtime_session_reads"
+
+    #: Always 1: the table holds one row.
+    id: int
+    #: The last session read's update, in the runtime's milliseconds, and its id; both None before the first.
+    cursor_updated_ms: int | None
+    cursor_session_id: str | None
+    status: SessionsRead
+    #: canopy's words for why it failed; None unless `failed`.
+    error: str | None
+    #: How many sessions every read so far passed over as ones canopy cannot read.
+    skipped: int
+    read_at: str
 
 
 @dataclass(frozen=True)
