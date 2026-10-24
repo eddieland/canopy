@@ -27,10 +27,8 @@ from canopy.loop.tools import (
     MAX_TEXT,
     MAX_TITLE,
     REASON_RE,
-    REVIEW_CURSOR_RE,
     truncate,
     valid_key,
-    valid_review_cursor,
 )
 from canopy.runs import dispatch
 
@@ -46,10 +44,8 @@ __all__ = [
     "MAX_TEXT",
     "MAX_TITLE",
     "REASON_RE",
-    "REVIEW_CURSOR_RE",
     "truncate",
     "valid_key",
-    "valid_review_cursor",
 ]
 
 

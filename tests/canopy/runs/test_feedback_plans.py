@@ -40,6 +40,7 @@ from tests.canopy.helpers import (
     thread,
     waits,
 )
+from tests.canopy.observation_helpers import review_number
 from tests.canopy.scenario_helpers import ALICES_COMMENT as ALICE
 from tests.canopy.scenario_helpers import BOBS_COMMENT as BOB
 from tests.canopy.scenario_helpers import FEEDBACK_HEAD as HEAD
@@ -256,7 +257,7 @@ def test_off_plans_no_feedback_and_resumes_as_before(scenario: Scenario, github_
     scenario.configures("private", trust={"trusted_reviewers": ["alice"]})
     github_has(github_state, comment(501))
     scenario.polls()
-    covered = {"review": comment(501)["time"]}
+    covered = {"review": review_number(scenario.conn, 501)}
     run = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW], cursors=covered), worker=pushes())
     assert run.status == RunStatus.DONE
     assert run.row["feedback_plan_id"] is None
@@ -726,7 +727,7 @@ def test_a_plan_keeps_what_it_saw_and_off_leaves_every_snapshot_unchanged(
     scenario.tick(*waits(KEY), dry_run=True)
     # Off, alice's comment, observed, is what authorizes the resume, as before plans (D089).
     scenario.polls()
-    covered = {"review": comment(501)["time"]}
+    covered = {"review": review_number(scenario.conn, 501)}
     resume = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW], cursors=covered)
     assert scenario.run(resume, worker=pushes()).status == RunStatus.DONE
     assert snapshots(conn) == kept

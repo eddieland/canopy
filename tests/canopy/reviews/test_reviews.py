@@ -605,9 +605,9 @@ def test_the_state_block_shows_reviewed_prs(reviewing: CanopyEnv, scenario: Scen
     latest = reviewed["latest"]
     assert (latest["status"], latest["verdict"], latest["impact"]) == ("done", "findings", "normal")
     assert latest["findings"] == ["retry never stops"]
-    assert latest["reviewed_at"] == f"{latest['ended_at'][:19]}Z"
-    # The overseer passes it as the unit's review cursor, which takes whole seconds only.
-    scenario.overseer("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", f"review={latest['reviewed_at']}")
+    # The run took its journal number when it ended: the overseer passes it as the unit's review cursor.
+    assert latest["number"] is not None
+    scenario.overseer("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", f"review={latest['number']}")
     assert "comment" not in latest
 
 

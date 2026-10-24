@@ -1308,6 +1308,14 @@ class Connect(Section):
         found = self._of("vcs")
         return found or Source(kind="vcs", cmd=GITHUB_READER, post_cmd=GITHUB_POSTER)
 
+    def observes_tickets(self) -> bool:
+        """Whether a `tracker` source reads tickets: without one, a ticket's comments have no journal numbers (§35).
+
+        Returns:
+            True if one does.
+        """
+        return any(s.kind == "tracker" for s in self.named().values())
+
     def tracker(self) -> Source | None:
         """The `tracker` source, if the operator configured one; canopy configures none of its own.
 

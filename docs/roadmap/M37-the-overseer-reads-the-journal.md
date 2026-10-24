@@ -115,7 +115,21 @@ first read is not followed; the mirror cursor's column stays, unread, since no m
 with no connector records no comment, since its tool is gone.
 Built (2026-10-24): `observed_check_runs` pruned by M47's pass, a run going after `journal_days` once a read shows its
 PR at another head, merged, or closed; one of a PR no read recorded stays.
-Left: journal-numbered cursors and their migration, the design folded into the sections it names, and the live
-re-measurement.
+Built (2026-10-24): journal-numbered cursors. Each comment, review, review comment, and completed check run takes the
+next number in `item_numbers` when a source first observes it, and keeps it across reads that replace its row; a canopy
+review run takes one when it ends. The `comment`, `review`, and `ci` cursors are those numbers, in new columns, and
+"newer" is a larger number everywhere the derivation, the block, and the claims read it; the block shows each item's
+`number`, the latest review run's in place of `reviewed_at`, and what each cursor names (`cursor_items`), so a live read
+of a stale subject can tell what it passed; the `review` cursor's time form is gone. Migration 0098 numbers what the
+journal holds in the order each old cursor read it and converts each cursor to the number of the item it names, a
+`review` time to the newest item at or before it to the second. Tests with the fakes: the migration over a journal with
+each old form, a review submitted after a later comment still new, and the claims and derivation on numbers.
+Chosen conservatively: a check run is numbered once observed completed, not while it runs, since only a failure is
+handed to a worker; a ticket no tracker source observes keeps its `comment` cursor as the tracker's id
+(`last_comment_id`), since its comments have no numbers, until "required" is settled; a cursor whose old form passed
+nothing observed becomes 0, so a set `ci` cursor still passes a commit status, and one in no old form the readers read
+stays empty; the old `review` and `ci` columns stay, unread; `item_numbers` is not pruned, its rows being small and a
+pruned number able to come back as a new one.
+Left: the design folded into the sections it names, and the live re-measurement.
 Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker` source is
 required (recommended: required), and how many new items a subject shows before the rest are counted.

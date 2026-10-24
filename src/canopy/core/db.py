@@ -17,8 +17,18 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, LiteralString, assert_never
 
-from canopy.core import records, sql
-from canopy.core.vocab import Decider, Phase, PlanStatus, PoolKind, ResumeReason, SeenKind, StartStatus, TickStatus
+from canopy.core import item_numbers, records, sql
+from canopy.core.vocab import (
+    Decider,
+    NumberedItem,
+    Phase,
+    PlanStatus,
+    PoolKind,
+    ResumeReason,
+    SeenKind,
+    StartStatus,
+    TickStatus,
+)
 from canopy.infra import procs
 from canopy.runtime.report import ToolUse, Usage
 
@@ -37,11 +47,13 @@ CLOSED_RATIONALE = "closed"
 CANOPY_VERSION = version("canopy")
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
-# review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a private
-# ticket's, over journal message ids (DESIGN §22).
-TICKET_CURSORS: Mapping[str, LiteralString] = {"comment": "last_comment_id", "message": "last_message_id"}
-UNIT_CURSORS: Mapping[str, LiteralString] = {"review": "last_review_id", "ci": "last_ci_run_id"}
+# review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a ticket's,
+# over journal message ids (DESIGN §22); the rest are journal numbers (§35), but for the comment cursor of a ticket no
+# tracker source observes, which has none to name: it is the tracker's comment id, in `UNTRACKED_COMMENT`.
+TICKET_CURSORS: Mapping[str, LiteralString] = {"comment": "comment_cursor", "message": "last_message_id"}
+UNIT_CURSORS: Mapping[str, LiteralString] = {"review": "review_cursor", "ci": "ci_cursor"}
 CURSOR_COLUMNS: Mapping[str, LiteralString] = {**TICKET_CURSORS, **UNIT_CURSORS}
+UNTRACKED_COMMENT: LiteralString = "last_comment_id"
 #: The columns of a ticket whose change is activity, as `change_ticket` sets them. A column name in SQL comes from
 #: here, never from input.
 type TicketChange = Literal["phase", "title", "done", "plan_setting"]
@@ -519,8 +531,12 @@ def set_ticket(
     cursors: Mapping[str, str] | None = None,
     done: bool = False,
     title: str | None = None,
+    tracked: bool = True,
 ) -> None:
-    """Record a ticket's own phase, its comment cursor, its done flag, or its title in one transaction."""
+    """Record a ticket's own phase, its cursors, its done flag, or its title in one transaction.
+
+    With `tracked` False, no tracker source observes the ticket, so its comment cursor is the tracker's id.
+    """
     with transaction(conn):
         touch_ticket(conn, key, repo)
         if phase is not None:
@@ -528,10 +544,19 @@ def set_ticket(
         if title is not None:
             change_ticket(conn, key, "title", title)
         for name, value in (cursors or {}).items():
-            cursor = sql.name(TICKET_CURSORS[name])
+            cursor = sql.name(ticket_cursor(name, tracked=tracked))
             sql.execute(conn, sql.update("tickets").set_to("{} = ?", cursor, value).where("key = ?", key))
         if done:
             change_ticket(conn, key, "done", 1)
+
+
+def ticket_cursor(name: str, *, tracked: bool) -> LiteralString:
+    """The column a ticket's cursor `name` is in: the comment cursor's is the tracker's id where `tracked` is False.
+
+    Returns:
+        The column's name.
+    """
+    return UNTRACKED_COMMENT if name == "comment" and not tracked else TICKET_CURSORS[name]
 
 
 def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str) -> None:
@@ -740,6 +765,8 @@ def finish_run(
     """
     with transaction(conn):
         closed = _close_run(conn, table, run_id, status, result_json)
+        if closed and table == "review_runs":
+            _number_review_run(conn, run_id)
         if closed and table == "review_runs" and status == "done":
             # A revision of a review's draft is no review: it answers no request (DESIGN §34).
             its_pr = sql.select("pr_url").from_("review_runs").where("id = ? AND revises IS NULL", run_id)
@@ -761,6 +788,13 @@ def finish_run(
         if closed and then is not None:
             then()
     return closed
+
+
+def _number_review_run(conn: sqlite3.Connection, run_id: int) -> None:
+    """Give a review run that just ended its journal number, what a `review` cursor names of it (DESIGN §35)."""
+    run = sql.execute(conn, sql.select("pr_url, ended_at").from_("review_runs").where("id = ?", run_id)).fetchone()
+    number = item_numbers.take(conn, NumberedItem.REVIEW_RUN, str(run[0]), run_id, at=str(run[1]))
+    sql.execute(conn, sql.update("review_runs").set(number=number).where("id = ?", run_id))
 
 
 def _close_run(

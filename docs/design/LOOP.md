@@ -204,8 +204,8 @@ Cursors (`comment`, `review`, `ci`, and a private ticket's `message`) hold the n
 handled; "newer than cursor" means not handled yet. The comment cursor is the ticket's; the review and ci cursors are
 each unit's, so a dispatch that carries one names exactly one repository. A dispatch carries the cursors of what it
 handles (§8), so they advance only if the worker starts; items handled otherwise advance with `canopy ticket set`. A
-review comment waiting on a human is not advanced past. The `review` cursor is a UTC time, since no single id orders
-reviews, review comments, and canopy's review runs.
+review comment waiting on a human is not advanced past. A cursor but `message` is a journal number, one order for
+every kind (§35), but the `comment` cursor of a ticket no tracker source observes, which is the tracker's comment id.
 
 The overseer runs the configured query every tick it is due, before it reads any ticket: the block holds only tickets
 the loop has seen, so the query is the only way a newly labeled ticket becomes a candidate. `canopy queried [KEY]...`

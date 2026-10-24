@@ -16,8 +16,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.core import conversation, db, records, sql
+from canopy.core import conversation, db, item_numbers, records, sql
 from canopy.core.config import CANOPY_REVIEWER
+from canopy.core.vocab import NumberedItem
 from canopy.loop import phases
 from tests.canopy.helpers import KEY, canopy, context, in_tick, seen
 
@@ -110,22 +111,36 @@ def check(
     name: str = "build",
     status: str = "completed",
     conclusion: str | None = "success",
-) -> None:
-    """Record a check at PR's head, its run 11."""
+) -> int | None:
+    """Record a check at PR's head, its run 11.
+
+    Returns:
+        The run's journal number once it completed, what the `ci` cursor names; None while it runs.
+    """
+    done = status == "completed" and conclusion is not None
+    number = item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, 11, at=FRESH) if done else None
     conn.execute(
-        "INSERT INTO observed_checks (pr_url, name, head_sha, status, conclusion, run_id, url, observed_at) "
-        "VALUES (?, ?, ?, ?, ?, 11, NULL, ?)",
-        (PR, name, HEAD, status, conclusion, FRESH),
+        "INSERT INTO observed_checks (pr_url, name, head_sha, status, conclusion, run_id, url, observed_at, number) "
+        "VALUES (?, ?, ?, ?, ?, 11, NULL, ?, ?)",
+        (PR, name, HEAD, status, conclusion, FRESH, number),
     )
+    return number
 
 
-def review(conn: sqlite3.Connection, author: str, state: str, *, at: str = FRESH, body: str = "") -> None:
-    """Record a review of PR by `author`."""
+def review(conn: sqlite3.Connection, author: str, state: str, *, at: str = FRESH, body: str = "") -> int:
+    """Record a review of PR by `author`.
+
+    Returns:
+        Its journal number, what the `review` cursor names.
+    """
+    ident = conn.execute("SELECT count(*) + 1 FROM observed_reviews").fetchone()[0]
+    number = item_numbers.take(conn, NumberedItem.REVIEW, PR, ident, at=FRESH)
     conn.execute(
-        "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, observed_at) "
-        "VALUES (?, 'review', (SELECT count(*) + 1 FROM observed_reviews), ?, 0, ?, ?, ?, ?)",
-        (PR, author, state, at, body, FRESH),
+        "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, observed_at, number) "
+        "VALUES (?, 'review', ?, ?, 0, ?, ?, ?, ?, ?)",
+        (PR, ident, author, state, at, body, FRESH, number),
     )
+    return number
 
 
 def a_tick(conn: sqlite3.Connection) -> int:
@@ -202,7 +217,8 @@ def case_ci_running(env: CanopyEnv, conn: sqlite3.Connection) -> None:
 
 
 def case_ci_red(env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    unit(env, conn, ci="10")
+    # A cursor that passed no run, as one the migration found passing nothing observed: the failure is newer.
+    unit(env, conn, ci="0")
     observe_pr(conn)
     check(conn, conclusion="failure")
 
@@ -378,9 +394,8 @@ def test_a_check_the_repository_names_human_is_not_ci(canopy_env: CanopyEnv, obs
 
 
 def test_a_failure_the_ci_cursor_has_passed_is_not_ci_red(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
-    unit(canopy_env, observed, ci="11")
     observe_pr(observed)
-    check(observed, conclusion="failure")
+    unit(canopy_env, observed, ci=str(check(observed, conclusion="failure")))
     observed.commit()
     assert derived(canopy_env)[1].phases == ()
 
@@ -389,10 +404,9 @@ def test_a_bot_approval_is_no_approval_and_feedback_at_the_cursor_is_handled(
     canopy_env: CanopyEnv,
     observed: sqlite3.Connection,
 ) -> None:
-    unit(canopy_env, observed, review="2026-10-20T11:59:00Z")
     observe_pr(observed)
     check(observed)
-    review(observed, "stranger", "commented", body="Why?")
+    unit(canopy_env, observed, review=str(review(observed, "stranger", "commented", body="Why?")))
     observed.execute("UPDATE observed_reviews SET bot = 1, state = 'approved'")
     observed.commit()
     assert derived(canopy_env)[1].phases == (phases.Phase.GREEN_UNREVIEWED,)

@@ -442,6 +442,16 @@ class ReviewItem(StrEnum):
     COMMENT = "comment"
 
 
+class NumberedItem(StrEnum):
+    """What a journal number names, `item_numbers.kind` (DESIGN §35): what a cursor passes."""
+
+    COMMENT = "comment"
+    REVIEW = "review"
+    REVIEW_COMMENT = "review_comment"
+    CHECK_RUN = "check_run"
+    REVIEW_RUN = "review_run"
+
+
 class ReviewState(StrEnum):
     """A review's state as GitHub reports it, `observed_reviews.state` (DESIGN §29)."""
 

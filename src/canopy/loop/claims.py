@@ -24,8 +24,9 @@ items, so a cursor on one may move no further than the items it already passed. 
 no source reads checks or reviews but a PR's.
 
 A private ticket, which its start record authorizes (§22), is not checked; nor is a subject no source covers, such as
-every ticket without a `tracker` source: its claims stay claims, checked again by the worker (D051). Cursors are still
-the source's ids and times (§7), so a `review` cursor names an item by its time, to the second.
+every ticket without a `tracker` source: its claims stay claims, checked again by the worker (D051). A cursor is a
+journal number (§35): it names an item by the number it took when first observed, or a review run by the one it took
+when it ended.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, observe, records, review_runs, sql
+from canopy.core import conversation, db, item_numbers, observe, records, review_runs, sql
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
 from canopy.loop import observations, phases
@@ -110,7 +111,7 @@ def check_cursors(
     """Refuse a `ticket set` whose cursors name no item observed, or pass one the block left out, at `now`.
 
     `cursors` are the ones it moves, by name; a unit's (`review`, `ci`) is of `repo`. A `review` cursor may name the end
-    of any canopy review run of the PR, as the block's `reviewed_at` shows the latest.
+    of any canopy review run of the PR, as the block's `reviews` shows the latest's number.
 
     Raises:
         Refusal: `unobserved`, as the module says.
@@ -239,7 +240,7 @@ def _fresh_pr(unit: observations.UnitObservation | None) -> observations.PrObser
 
 
 def _check_comment(reader: observations.Reader, record: records.Ticket, cursor: str | None) -> None:
-    """Refuse a `comment` cursor that names no observed comment, or one past what the block showed.
+    """Refuse a `comment` cursor that is the number of no observed comment, or of one past what the block showed.
 
     The block shows a ticket's comments past its `comment` cursor, up to its bound; a non-candidate's, none. A cursor
     at or before the `comment` cursor passes nothing new.
@@ -250,11 +251,16 @@ def _check_comment(reader: observations.Reader, record: records.Ticket, cursor: 
     if cursor is None:
         return
     comments = reader.comments.get(record.key, [])
-    if all(c.id != cursor for c in comments):
-        raise Refusal("unobserved", f"comment cursor {cursor} names no comment observed on {record.key}")
-    shown = {c["id"] for c in reader.ticket(record.key).get("comments", [])}
-    new = {c.id for c in observations.past_comments(comments, record.last_comment_id)}
-    if cursor in new and cursor not in shown:
+    named = _number(cursor)
+    if named is None or all(c.number != named for c in comments):
+        raise Refusal(
+            "unobserved",
+            f"comment cursor {cursor} is the number of no comment observed on {record.key}; take it from a comment's "
+            "number in the state block",
+        )
+    shown = {c["number"] for c in reader.ticket(record.key).get("comments", [])}
+    new = {c.number for c in observations.past_comments(comments, record.comment_cursor)}
+    if named in new and named not in shown:
         raise Refusal(
             "unobserved",
             f"comment cursor {cursor} passes comments on {record.key} the state block left out; advance it no "
@@ -263,16 +269,20 @@ def _check_comment(reader: observations.Reader, record: records.Ticket, cursor: 
 
 
 def _check_ci(reader: observations.Reader, pr: observations.PrObservation, cursor: str | None) -> None:
-    """Refuse a `ci` cursor that names no check run observed at the PR's head, as the block shows its checks.
+    """Refuse a `ci` cursor that is the number of no check run observed at the PR's head, as the block shows its checks.
 
     Raises:
         Refusal: `unobserved`.
     """
     if cursor is None:
         return
-    runs = {str(c.run_id) for c in reader.checks.get(pr["url"], []) if c.head_sha == pr["head"] and c.run_id}
-    if cursor not in runs:
-        raise Refusal("unobserved", f"ci cursor {cursor} names no check run observed at the head of {pr['url']}")
+    runs = {c.number for c in reader.checks.get(pr["url"], []) if c.head_sha == pr["head"] and c.number is not None}
+    if _number(cursor) not in runs:
+        raise Refusal(
+            "unobserved",
+            f"ci cursor {cursor} is the number of no check run observed at the head of {pr['url']}; take it from a "
+            "failed check's number in the state block",
+        )
 
 
 def _check_handled(
@@ -283,17 +293,17 @@ def _check_handled(
 ) -> None:
     """Refuse a `resume` for CI alone when every failure at the PR's head is one a worker already had (DESIGN §35).
 
-    A failure was had when its run is at or behind the unit's `ci` cursor, or when a failure of the same context at the
-    same head is, as `observed_check_runs` keeps them: a re-run that went red again. Every failure is new while the
-    cursor is empty or not a number, as the derivation reads them. One with no run, a commit status, is new here too,
-    though the derivation shows it only while the cursor is empty: with no run id to compare, the guard lets it through
+    A failure was had when its run is at or behind the unit's `ci` cursor, a journal number, or when a failure of the
+    same context at the same head is, as `observed_check_runs` keeps them: a re-run that went red again. Every failure
+    is new while the cursor is empty, as the derivation reads them. One with no run, a commit status, is new here too,
+    though the derivation shows it only while the cursor is empty: with no run to compare, the guard lets it through
     rather than refuse what it cannot tell had. A check the repository's `human_checks` names is not CI, and a head with
     no failure is not refused here.
 
     Raises:
         Refusal: `handled`.
     """
-    cursor = phases.ci_cursor(unit.last_ci_run_id)
+    cursor = unit.ci_cursor
     if cursor is None:
         return
     found = ctx.workspace.repo(unit.repo)
@@ -309,11 +319,11 @@ def _check_handled(
     query = (
         sql.select("*")
         .from_("observed_check_runs")
-        .where("pr_url = ? AND head_sha = ? AND run_id <= ?", pr["url"], pr["head"], cursor)
+        .where("pr_url = ? AND head_sha = ? AND number <= ?", pr["url"], pr["head"], cursor)
     )
     runs = records.fetch_all(ctx.conn, records.ObservedCheckRun, query)
     behind = {r.name for r in runs if r.conclusion in observe.FAILED}
-    if not failed or any(c.run_id is None or (c.run_id > cursor and c.name not in behind) for c in failed):
+    if not failed or any(c.number is None or (c.number > cursor and c.name not in behind) for c in failed):
         return
     names = ", ".join(sorted({c.name for c in failed}))
     raise Refusal(
@@ -326,17 +336,17 @@ def _check_handled(
 def _check_reply(ctx: Context, reader: observations.Reader, record: records.Ticket, cursors: Mapping[str, str]) -> None:
     """Refuse a `resume` for `reply` that carries neither a new authorized reply nor a new operator message (§7).
 
-    An authorized reply is a comment by an account in `trust.authorized_repliers`, by its id, that is not a worker's
+    An authorized reply is a comment by an account in `trust.authorized_repliers`, by its number, that is not a worker's
     (D069), past the ticket's `comment` cursor. An operator message is past its `message` cursor, up to the one carried.
 
     Raises:
         Refusal: `unauthorized`.
     """
-    comment = cursors.get("comment")
+    comment = _number(cursors.get("comment") or "")
     if comment is not None:
         repliers = set(ctx.config.trust.authorized_repliers)
-        new = observations.past_comments(reader.comments.get(record.key, []), record.last_comment_id)
-        if any(c.id == comment and c.author in repliers and c.source != "worker" for c in new):
+        new = observations.past_comments(reader.comments.get(record.key, []), record.comment_cursor)
+        if any(c.number == comment and c.author in repliers and c.source != "worker" for c in new):
             return
     if _operator_messages(ctx, record, cursors.get("message")):
         return
@@ -377,8 +387,9 @@ class _Review:
     shown: AbstractSet[tuple[str, int]]
     #: The canopy review run the dispatch names, if the journal has it.
     run: records.ReviewRun | None
-    #: When each canopy review run the cursor may name ended: the one named, or with `any_run` every run of the PR.
-    ends: Sequence[str]
+    #: The number each canopy review run the cursor may name took when it ended: the one named, or with `any_run` every
+    #: run of the PR.
+    ends: AbstractSet[int]
 
     @classmethod
     def read(
@@ -402,16 +413,24 @@ class _Review:
         conn = reader.ctx.conn
         run = None if review_run is None else review_runs.get_review_run(conn, review_run)
         if pr is None or unit is None:
-            return cls(subject=None, pr=None, cursor=None, items=(), covered=(), shown=frozenset(), run=run, ends=())
+            return cls(
+                subject=None,
+                pr=None,
+                cursor=None,
+                items=(),
+                covered=(),
+                shown=frozenset(),
+                run=run,
+                ends=frozenset(),
+            )
         runs: Sequence[records.ReviewRun] = (
             review_runs.review_runs_of(conn, pr["url"]) if any_run else [run] if run else []
         )
-        ends = [r.ended_at for r in runs if r.ended_at is not None]
+        ends = frozenset(r.number for r in runs if r.number is not None)
         items = reader.reviews.get(pr["url"], [])
-        since = phases.review_cursor(unit.last_review_id)
-        new = [r for r in items if phases.newer(r.created_at, since)]
-        upto = phases.review_cursor(cursor)
-        covered = [r for r in new if upto is not None and not phases.newer(r.created_at, upto)]
+        new = observations.new_reviews(items, unit.review_cursor)
+        upto = _number(cursor or "")
+        covered = [r for r in new if upto is not None and not item_numbers.newer(r.number, upto)]
         shown = frozenset((r.item.value, r.id) for r in new[: observations.MAX_NEW_ITEMS])
         subject = f"{unit.ticket_key} in {unit.repo}"
         return cls(
@@ -426,22 +445,21 @@ class _Review:
         )
 
     def check_named(self) -> None:
-        """Refuse a `review` cursor that is no observed item's time, or passes an item the block left out.
+        """Refuse a `review` cursor that is no observed item's number, or passes an item the block left out.
 
-        A review run's end it may name is an item's time too, as the block's `reviewed_at`.
+        The number a review run it may name took when it ended is an item's number too, as the block's `reviews` shows.
 
         Raises:
             Refusal: `unobserved`.
         """
         if self.pr is None or self.cursor is None:
             return
-        at = phases.review_cursor(self.cursor)
-        stamps = [r.created_at for r in self.items] + list(self.ends)
-        if at is None or not any(s is not None and _second(s) == at.replace(microsecond=0) for s in stamps):
+        numbers = {r.number for r in self.items if r.number is not None} | self.ends
+        if _number(self.cursor) not in numbers:
             raise Refusal(
                 "unobserved",
-                f"review cursor {self.cursor} is the time of no review item observed on {self.pr['url']}, nor of a "
-                "review run's end it may name; take it from an item the state block shows",
+                f"review cursor {self.cursor} is the number of no review item observed on {self.pr['url']}, nor of a "
+                "review run it may name; take it from an item the state block shows",
             )
         left_out = [r for r in self.covered if (r.item.value, r.id) not in self.shown]
         if left_out:
@@ -490,8 +508,13 @@ class _Review:
         )
 
 
-def _second(stamp: str) -> datetime:
-    return db.parse_time(stamp).replace(microsecond=0)
+def _number(cursor: str) -> int | None:
+    """Read a cursor the overseer passed as a journal number.
+
+    Returns:
+        The number; None when it is not one, which names nothing.
+    """
+    return int(cursor) if cursor.isascii() and cursor.isdigit() else None
 
 
 def _after_any(said: Collection[datetime], stamp: str | None) -> bool:

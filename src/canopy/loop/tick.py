@@ -25,6 +25,7 @@ from canopy.core import (
     feedback_plans,
     follow_ups,
     hostgit,
+    item_numbers,
     notice,
     plans,
     pools,
@@ -224,6 +225,12 @@ def _render(
     ]
     shown = [*(int(r["id"]) for r in running), *(r.id for r in last_runs.values())]
     reviews = review_view.state_section(ctx.conn, ctx.config, now)
+    units = db.all_units(ctx.conn)
+    # What each cursor names, so a live read of a stale subject can tell what it passed (DESIGN §35).
+    cursors = [
+        *(t.comment_cursor for t in tickets),
+        *(c for us in units.values() for u in us for c in (u.review_cursor, u.ci_cursor)),
+    ]
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
@@ -238,7 +245,7 @@ def _render(
         recently_done=recently_done,
         harness=harness.section(by_harness),
         dispatches_to_come=harness_dispatches.section(to_come),
-        units=db.all_units(ctx.conn),
+        units=units,
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, shown),
         run_reasons=db.run_reasons(ctx.conn, shown),
@@ -257,6 +264,7 @@ def _render(
         query_due=query_due,
         operator_sent=drafts.sent_by_pr(ctx.conn),
         observations=observations.section(ctx, tick_id, now, tickets, decided=decided),
+        numbered=item_numbers.named(ctx.conn, [c for c in cursors if c is not None]),
     )
     owed = duties.owed(
         ctx.conn,
