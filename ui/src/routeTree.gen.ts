@@ -39,6 +39,8 @@ import { Route as TicksIdRouteImport } from './routes/ticks.$id'
 import { Route as PullRequestsReviewsIndexRouteImport } from './routes/pull-requests.reviews.index'
 import { Route as PullRequestsReviewsIdRouteImport } from './routes/pull-requests.reviews.$id'
 import { Route as ReviewsIdRunRouteImport } from './routes/reviews.$id_.run'
+import { Route as RunsTicksIndexRouteImport } from './routes/runs.ticks.index'
+import { Route as RunsTicksIdRouteImport } from './routes/runs.ticks.$id'
 import { Route as TicketsKeyPlanRouteImport } from './routes/tickets.$key_.plan'
 import { Route as ChoresNameRunsIdRouteImport } from './routes/chores.$name_.runs.$id'
 import { Route as PullRequestsReviewsIdRunRouteImport } from './routes/pull-requests.reviews.$id_.run'
@@ -195,6 +197,16 @@ const ReviewsIdRunRoute = ReviewsIdRunRouteImport.update({
   path: '/reviews/$id/run',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RunsTicksIndexRoute = RunsTicksIndexRouteImport.update({
+  id: '/runs/ticks/',
+  path: '/runs/ticks/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RunsTicksIdRoute = RunsTicksIdRouteImport.update({
+  id: '/runs/ticks/$id',
+  path: '/runs/ticks/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TicketsKeyPlanRoute = TicketsKeyPlanRouteImport.update({
   id: '/tickets/$key_/plan',
   path: '/tickets/$key/plan',
@@ -247,8 +259,10 @@ export interface FileRoutesByFullPath {
   '/ticks/': typeof TicksIndexRoute
   '/pull-requests/reviews/$id': typeof PullRequestsReviewsIdRoute
   '/reviews/$id/run': typeof ReviewsIdRunRoute
+  '/runs/ticks/$id': typeof RunsTicksIdRoute
   '/tickets/$key/plan': typeof TicketsKeyPlanRoute
   '/pull-requests/reviews/': typeof PullRequestsReviewsIndexRoute
+  '/runs/ticks/': typeof RunsTicksIndexRoute
   '/chores/$name/runs/$id': typeof ChoresNameRunsIdRoute
   '/pull-requests/reviews/$id/run': typeof PullRequestsReviewsIdRunRoute
   '/tasks/$id/runs/$run': typeof TasksIdRunsRunRoute
@@ -283,8 +297,10 @@ export interface FileRoutesByTo {
   '/ticks': typeof TicksIndexRoute
   '/pull-requests/reviews/$id': typeof PullRequestsReviewsIdRoute
   '/reviews/$id/run': typeof ReviewsIdRunRoute
+  '/runs/ticks/$id': typeof RunsTicksIdRoute
   '/tickets/$key/plan': typeof TicketsKeyPlanRoute
   '/pull-requests/reviews': typeof PullRequestsReviewsIndexRoute
+  '/runs/ticks': typeof RunsTicksIndexRoute
   '/chores/$name/runs/$id': typeof ChoresNameRunsIdRoute
   '/pull-requests/reviews/$id/run': typeof PullRequestsReviewsIdRunRoute
   '/tasks/$id/runs/$run': typeof TasksIdRunsRunRoute
@@ -320,8 +336,10 @@ export interface FileRoutesById {
   '/ticks/': typeof TicksIndexRoute
   '/pull-requests/reviews/$id': typeof PullRequestsReviewsIdRoute
   '/reviews/$id_/run': typeof ReviewsIdRunRoute
+  '/runs/ticks/$id': typeof RunsTicksIdRoute
   '/tickets/$key_/plan': typeof TicketsKeyPlanRoute
   '/pull-requests/reviews/': typeof PullRequestsReviewsIndexRoute
+  '/runs/ticks/': typeof RunsTicksIndexRoute
   '/chores/$name_/runs/$id': typeof ChoresNameRunsIdRoute
   '/pull-requests/reviews/$id_/run': typeof PullRequestsReviewsIdRunRoute
   '/tasks/$id_/runs/$run': typeof TasksIdRunsRunRoute
@@ -358,8 +376,10 @@ export interface FileRouteTypes {
     | '/ticks/'
     | '/pull-requests/reviews/$id'
     | '/reviews/$id/run'
+    | '/runs/ticks/$id'
     | '/tickets/$key/plan'
     | '/pull-requests/reviews/'
+    | '/runs/ticks/'
     | '/chores/$name/runs/$id'
     | '/pull-requests/reviews/$id/run'
     | '/tasks/$id/runs/$run'
@@ -394,8 +414,10 @@ export interface FileRouteTypes {
     | '/ticks'
     | '/pull-requests/reviews/$id'
     | '/reviews/$id/run'
+    | '/runs/ticks/$id'
     | '/tickets/$key/plan'
     | '/pull-requests/reviews'
+    | '/runs/ticks'
     | '/chores/$name/runs/$id'
     | '/pull-requests/reviews/$id/run'
     | '/tasks/$id/runs/$run'
@@ -430,8 +452,10 @@ export interface FileRouteTypes {
     | '/ticks/'
     | '/pull-requests/reviews/$id'
     | '/reviews/$id_/run'
+    | '/runs/ticks/$id'
     | '/tickets/$key_/plan'
     | '/pull-requests/reviews/'
+    | '/runs/ticks/'
     | '/chores/$name_/runs/$id'
     | '/pull-requests/reviews/$id_/run'
     | '/tasks/$id_/runs/$run'
@@ -467,8 +491,10 @@ export interface RootRouteChildren {
   TicksIndexRoute: typeof TicksIndexRoute
   PullRequestsReviewsIdRoute: typeof PullRequestsReviewsIdRoute
   ReviewsIdRunRoute: typeof ReviewsIdRunRoute
+  RunsTicksIdRoute: typeof RunsTicksIdRoute
   TicketsKeyPlanRoute: typeof TicketsKeyPlanRoute
   PullRequestsReviewsIndexRoute: typeof PullRequestsReviewsIndexRoute
+  RunsTicksIndexRoute: typeof RunsTicksIndexRoute
   ChoresNameRunsIdRoute: typeof ChoresNameRunsIdRoute
   PullRequestsReviewsIdRunRoute: typeof PullRequestsReviewsIdRunRoute
   TasksIdRunsRunRoute: typeof TasksIdRunsRunRoute
@@ -686,6 +712,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReviewsIdRunRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runs/ticks/': {
+      id: '/runs/ticks/'
+      path: '/runs/ticks'
+      fullPath: '/runs/ticks/'
+      preLoaderRoute: typeof RunsTicksIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runs/ticks/$id': {
+      id: '/runs/ticks/$id'
+      path: '/runs/ticks/$id'
+      fullPath: '/runs/ticks/$id'
+      preLoaderRoute: typeof RunsTicksIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tickets/$key_/plan': {
       id: '/tickets/$key_/plan'
       path: '/tickets/$key/plan'
@@ -747,8 +787,10 @@ const rootRouteChildren: RootRouteChildren = {
   TicksIndexRoute: TicksIndexRoute,
   PullRequestsReviewsIdRoute: PullRequestsReviewsIdRoute,
   ReviewsIdRunRoute: ReviewsIdRunRoute,
+  RunsTicksIdRoute: RunsTicksIdRoute,
   TicketsKeyPlanRoute: TicketsKeyPlanRoute,
   PullRequestsReviewsIndexRoute: PullRequestsReviewsIndexRoute,
+  RunsTicksIndexRoute: RunsTicksIndexRoute,
   ChoresNameRunsIdRoute: ChoresNameRunsIdRoute,
   PullRequestsReviewsIdRunRoute: PullRequestsReviewsIdRunRoute,
   TasksIdRunsRunRoute: TasksIdRunsRunRoute,

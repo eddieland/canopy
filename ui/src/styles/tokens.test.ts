@@ -47,7 +47,6 @@ const TEXT = [
     'section-tasks',
     'section-pull-requests',
     'section-chores',
-    'section-ticks',
     'section-reports',
     'section-memory',
     'section-settings',

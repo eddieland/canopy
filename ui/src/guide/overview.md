@@ -41,14 +41,14 @@ The nav on the left lists them, most used first. If you learn only one, learn At
   posts until you do.
 - [Runs](/runs): every agent canopy runs, workers, reviews, chores, and tasks alike, the ones running now first, and
   how full each limit is. A worker run's page has its session's transcript. When you want to know what an agent was
-  thinking, this is the receipt.
+  thinking, this is the receipt. Under it, [Ticks](ticks#the-ticks-page) has the overseer's latest ticks, and what
+  each one decided.
 - [Chores](/chores): scheduled agents that look at your CI, PRs, tracker, or anything else they can read, and report
   what needs you. Each chore's runs and findings are here, and Try now on its page runs it at once, whatever its
   schedule.
 - [Reports](/reports): what canopy cost and got done month by month, in dollars and tokens, and under it the spend
   page: what agent runs cost each day, and what idle ticks spent deciding there was nothing to do. Some of the
   priciest answers are "no".
-- [Ticks](/ticks): the overseer's latest ticks, and what each one decided.
 - [Worktrees](/worktrees): each repository's pool, its slots, and what's holding them.
 - [Memory](/memory): what workers remember, the ticket notes and the lessons, and which runs read them. The header's
   `memory:` readout opens it too.

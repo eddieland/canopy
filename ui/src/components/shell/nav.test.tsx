@@ -78,7 +78,7 @@ describe('Nav', () => {
         ['a PR', '/pull-requests/pr?url=x', 'Pull requests'],
         ['a review', '/pull-requests/reviews/4', 'Pull requests'],
         ['a chore', '/chores/deps', 'Chores'],
-        ['a tick', '/ticks/12', 'Ticks'],
+        ['a tick', '/runs/ticks/12', 'Runs'],
         ['the runs list', '/runs', 'Runs'],
         ['the memory page', '/memory', 'Memory'],
     ] as const)("keeps its section current on %s's page", async (_, at, section) => {

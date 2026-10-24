@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 export function TickLink({ id, className }: { id: number; className?: string }) {
     return (
         <Link
-            to="/ticks/$id"
+            to="/runs/ticks/$id"
             params={{ id: String(id) }}
             className={cn('readout text-xs text-accent underline-offset-4 hover:underline', className)}
         >

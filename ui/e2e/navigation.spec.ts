@@ -602,9 +602,9 @@ test("the header's tick opens its decisions, each about its subject, the oversee
     await page.goto('runs')
     await settled(page)
     await page.getByTestId('last-tick').getByRole('link', { name: 'tick:2' }).click()
-    await expect(page).toHaveURL(/\/ticks\/2$/u)
+    await expect(page).toHaveURL(/\/runs\/ticks\/2$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick:2')
-    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Ticks' })).toHaveAttribute(
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' })).toHaveAttribute(
         'data-status',
         'active',
     )
@@ -625,7 +625,7 @@ test("the header's tick opens its decisions, each about its subject, the oversee
 test('the ticks page lists the latest ticks, and a ticket page why the loop did or did not work it', async ({
     page,
 }) => {
-    await page.goto('ticks')
+    await page.goto('runs/ticks')
     await settled(page)
     await expect(page.getByTestId('ticks').locator(':scope > li')).toHaveCount(2)
     await expect(page.getByTestId('tick-1').getByTestId('tick-decisions')).toHaveText('5 decisions')
@@ -641,7 +641,7 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
     await expect(decisions.nth(0)).toContainText('tick:2')
     await expect(decisions.nth(1)).toContainText('dispatch: implement')
     await decisions.nth(1).getByRole('link', { name: 'tick:1' }).click()
-    await expect(page).toHaveURL(/\/ticks\/1$/u)
+    await expect(page).toHaveURL(/\/runs\/ticks\/1$/u)
     await expect(page.getByTestId('decisions')).toContainText('chore:deps')
 })
 
@@ -676,10 +676,22 @@ test("a run's summary keeps its lines and lists, its first four shown until the 
     await expect(run).not.toContainText('ABC-112 owns it')
 })
 
+test('the ticks pages where they were before Runs held them lead to where they are', async ({ page }) => {
+    await page.goto('ticks')
+    await expect(page).toHaveURL(/\/runs\/ticks$/u)
+    await page.goto('ticks/2')
+    await expect(page).toHaveURL(/\/runs\/ticks\/2$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick:2')
+    // Under Runs, the trail goes back through the ticks.
+    const trail = page.getByRole('navigation', { name: 'Breadcrumb' })
+    await expect(trail.getByRole('link', { name: 'Runs' })).toBeVisible()
+    await expect(trail.getByRole('link', { name: 'Ticks' })).toHaveAttribute('href', /\/runs\/ticks$/u)
+})
+
 test('a tick that does not exist, or a path that names none, says so', async ({ page }) => {
-    await page.goto('ticks/99')
+    await page.goto('runs/ticks/99')
     await expect(page.getByText('no tick 99')).toBeVisible()
-    await page.goto('ticks/two')
+    await page.goto('runs/ticks/two')
     await expect(page.getByText("not a tick: a tick's id is a positive number")).toBeVisible()
 })
 

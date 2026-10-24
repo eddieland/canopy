@@ -314,13 +314,13 @@ test("a transcript's context chart folds to its line, which still shows the larg
     await settled(page)
     await expect(calls.getByRole('radio')).toHaveCount(3)
     await expect(context.getByRole('button', { name: 'Hide chart' })).toHaveAttribute('aria-expanded', 'true')
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     await expect(page.getByTestId('transcript-context')).toContainText('peak 9.3k at call 1')
 })
 
 test("a session of one model call has its context's line alone, and no By call", async ({ page }) => {
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const context = transcript.getByTestId('transcript-context')
@@ -343,7 +343,7 @@ test("a session of one model call has its context's line alone, and no By call",
 })
 
 test("a tick's page shows its overseer's session under its decisions", async ({ page }) => {
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const tools = transcript.getByTestId('transcript-tool')
@@ -387,7 +387,7 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
 test("a tool call's name takes its own width, so its command keeps the rest on either side of the rail's step", async ({
     page,
 }) => {
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     await windowWidth(page, 820)
     const transcript = page.getByTestId('transcript')
@@ -417,7 +417,7 @@ test("a tool call's name takes its own width, so its command keeps the rest on e
 test("a tick's output shows as written when asked, stderr included, and a tick that kept none says so once", async ({
     page,
 }) => {
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     const output = page.getByTestId('tick-output')
     await expect(output).toContainText('.canopy/ticks/2.log as written: stdout, then stderr')
@@ -443,7 +443,7 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
 
     // With no file, there is no Output panel: the transcript, read from the same file, says why in its header, and
     // is that header alone.
-    await page.goto('ticks/1')
+    await page.goto('runs/ticks/1')
     await settled(page)
     await expect(page.getByTestId('tick-output')).toHaveCount(0)
     const transcript = page.getByTestId('transcript')
@@ -457,7 +457,7 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
 })
 
 test("a tick's output lays its JSON out when asked, and that tick's panel remembers it", async ({ page }) => {
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     const output = page.getByTestId('tick-output')
     await output.getByRole('button', { name: 'Show output' }).click()

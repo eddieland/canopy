@@ -77,14 +77,13 @@ Rules:
   - Runs indigo, the night shift: workers carry on after the operator logs off.
   - Chores orange, a hi-vis vest: scheduled maintenance.
   - Reports gold, coins: what canopy cost, by the month and, on the spend page under it, by the day.
-  - Ticks lime, a heart monitor's trace: each tick is the loop's pulse.
   - Worktrees teal, water in the pool each repository's slots come from.
   - Memory pale azure, the forget-me-not. It shares done's hue, which costs nothing: its page shows no run state.
   - Settings slate, the machinery. It is in the rail's footer rather than the nav, so it needs no hue of its own and
     wears its color on its trail alone.
 
   A new section takes a color the same way, from what its page holds, and stays apart from its neighbours in the nav
-  and from the status colors on its own page. Ten nav hues, five statuses, and the accent leave the wheel full, so a
+  and from the status colors on its own page. Nine nav hues, five statuses, and the accent leave the wheel full, so a
   new one may mean moving another. They go on the nav's icons and highlight, the first step of the page header's trail,
   and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no
   section (the 404) takes the accent.

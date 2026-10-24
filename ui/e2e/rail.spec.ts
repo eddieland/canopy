@@ -67,7 +67,6 @@ test('the nav lists the sections by how often the operator opens them, and the f
         'Runs',
         'Chores',
         'Reports',
-        'Ticks',
         'Worktrees',
         /^Memory/u,
     ])
@@ -80,7 +79,7 @@ test('the nav lists the sections by how often the operator opens them, and the f
 
 test('the rail shows the spend of the last day and the last 30, and the version at its foot', async ({ page }) => {
     const spend = (await (await page.request.get('api/spend')).json()) as { day: { cost_usd: number } }
-    await page.goto('ticks')
+    await page.goto('runs/ticks')
     await settled(page)
     await expect(page.getByTestId('rail-spend-24h')).toHaveText(`$${spend.day.cost_usd.toFixed(2)}`)
     await expect(page.getByTestId('rail-spend-30d')).toHaveText(/^\$\d+\.\d\d$/u)

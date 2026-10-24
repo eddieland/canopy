@@ -144,7 +144,7 @@ test('a PR the journal does not know says so, and a decision about a PR opens it
     await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/404')}`)
     await expect(page.getByText('canopy has no record of https://github.com/acme/web/pull/404')).toBeVisible()
 
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     await page.getByTestId('decisions').getByRole('link', { name: 'acme/api#12', exact: true }).first().click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
@@ -159,7 +159,7 @@ test('a PR named on a run, a review, a decision, or a ticket opens its page in o
     const where: [string, string, string][] = [
         ['runs/39', 'main', 'acme/web#88'],
         ['pull-requests/reviews', 'review-4', 'acme/web#88'],
-        ['ticks/2', 'decisions', 'acme/api#12'],
+        ['runs/ticks/2', 'decisions', 'acme/api#12'],
         ['tickets/ABC-103', 'main', 'acme/web#91'],
     ]
     for (const [path, within, name] of where) {
