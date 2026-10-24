@@ -42,6 +42,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
+| `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
 
@@ -831,7 +832,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   labels do; none is stretched to its column. Its color is its `tone`, from the one map of them (`Chip` in
   `src/components/status.tsx`): its color's hairline at 40% over the same color at 10%, so it holds its edge on a
   selected row's tint; `plain` in `muted-foreground`, else the status color of the state it marks, `failed`,
-  `blocked`, or `running`. No chip is colored by classes of its own.
+  `blocked`, or `running`, or, for a feedback plan's proposal, that proposal's own hue (`ProposalTone`). No chip is
+  colored by classes of its own.
 - **A status on a detail page** (a run's, a chore run's, a tick's, a review's) is its description's first word
   alone; the identity panel's header names the panel and nothing else, so the state is said once. Of the two homes
   it had, the description was kept, as the smaller change: it is the page's line of state on every detail page, and a
@@ -1609,7 +1611,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   stale plan's changes in `status-blocked`, a row per item (a `Checkbox` until a resume spends it, its number, the
   first line of what was said as `MemoryText`, and where it is: `on its thread`, a router `Link` to the thread's card
   by its `threadAnchor`, `the review`, a link out to it on its host, or the other PR it is on; under that, muted, its
-  proposal as a chip, its author, `trusted`, the plan's first line on it as `MemoryText`, and its id; and a reply no
+  proposal as a chip in its tone, its author, `trusted`, `for the next plan` on one an approval did not tick, the
+  plan's first line on it as `MemoryText`, and its id; and a reply no
   thread card shows, under `Proposed reply`, as `MemoryText`), and
   in its foot the operator's words and `Approve whole` or `Approve N of M`, its command on hover (`Approve stale
   plan` then `Approve as it is` for a stale plan's two steps, the first refusal a muted `output` rather than a
@@ -1622,7 +1625,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain,
   its line breaks and tabs kept and every other hidden character named, never Markdown or a link; a draft's text the
   same. A thread the feedback plan covers carries its proposal above its drafts (`PlanProposal`, a dashed hairline
-  box): `Plan item N`, the proposal as a chip, `left out` once an approval left it out, and the reply as `MemoryText`.
+  box): `Plan item N`, the proposal as a chip in its tone, `for the next plan` once an approval did not tick it, and
+  the reply as `MemoryText`. An item an approval did not tick is `for the next plan` wherever the page says so (its
+  chip, the hint beside the button), and its box is named `approve item N`, never `left out` or `leave`: `leave` is a
+  proposal, to leave the item be, which ticking it approves; the CLI's flag stays `--leave`, on the button's hover.
+  Each proposal's chip has a quiet tone of its own (`proposal-*`), so `change`, the one that edits code, stands out,
+  `decline` and `ask` sit apart from it and from each other, and `leave`, which does nothing, stays plain.
   A comment's `<details>` blocks are the one thing read in it (`CommentText`, `src/lib/details.ts`): each folds,
   as on GitHub, in a hairline box under a `Collapsible` row of a chevron and its summary in `font-medium`, open when
   written `<details open>`, and a closed one that folds a hidden character carries `hides a character` in

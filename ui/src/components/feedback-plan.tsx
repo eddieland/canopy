@@ -53,19 +53,22 @@ const AGAIN = 'Approving it again approves it as it is; what changed waits for t
 const STALE_SAID = 'Refused once, as a stale plan is the first time: approve it as it is to go ahead.'
 // The line beside the approve button: with an item ticked, with none, once approved, and with no file to approve.
 const WRITES =
-    'Approving writes a message on the ticket naming the items to address and to leave, by number, with your words ' +
-    'after it.'
+    'Approving writes a message on the ticket naming, by number, the items to address and those for the next plan, ' +
+    'with your words after it.'
 const NONE_TICKED = 'Tick an item to approve, or reply on the ticket to ask for changes.'
 const APPROVED = 'Tick other items, or write words for its resume, to approve it again.'
+// The chip on an item the last approval did not tick: its resume does not act on it, and the next plan is offered it.
+// Never `left out` or `leave`, which is a proposal of its own: a ticked `leave` item approves leaving it be.
+const NEXT_PLAN = 'for the next plan'
 
 /**
  * The current feedback plan of the PR's ticket (DESIGN §32): where it stands, what changed on its PRs since it was
  * written while it is stale, each item it covers in a row, its number, what it proposes, its author and whether they
  * are trusted, and where it is, with the reply it would draft for one no thread card on the page shows, and the plan's
- * file as plain text under a disclosure. Until a resume spends it, each row has a box, ticked unless an approval left
- * the item out, and the foot approves the ticked ones, whole when all are, with the operator's own words after the
- * message the approval writes, as `canopy plan KEY --approve` does. `onChange` hears an approval done or refused, to
- * read again what shows the plan.
+ * file as plain text under a disclosure. Until a resume spends it, each row has a box, ticked unless an approval put
+ * the item off for the next plan, and the foot approves the ticked ones, whole when all are, with the operator's own
+ * words after the message the approval writes, as `canopy plan KEY --approve` does. `onChange` hears an approval done
+ * or refused, to read again what shows the plan.
  */
 export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onChange: () => void }) {
     const [shown, setShown] = useState(false)
@@ -112,16 +115,17 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
 }
 
 /**
- * One item's proposal on its thread's card: its number in the plan, what it proposes, whether an approval left it out,
- * and the reply it would draft, plain text, a model's words until a worker drafts and the operator sends them.
+ * One item's proposal on its thread's card: its number in the plan, what it proposes, whether an approval put it off
+ * for the next plan, and the reply it would draft, plain text, a model's words until a worker drafts and the operator
+ * sends them.
  */
 export function PlanProposal({ item }: { item: FeedbackPlanItem }) {
     return (
         <div className="mt-2 rounded-md border border-dashed p-2" data-testid="plan-proposal">
             <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="panel-label">Plan item {item.number}</span>
-                <Chip word={item.proposal} />
-                {item.left_out && <Chip>left out</Chip>}
+                <Chip tone={item.proposal} word={item.proposal} />
+                {item.left_out && <Chip>{NEXT_PLAN}</Chip>}
             </span>
             {item.reply !== null && <MemoryText text={item.reply} lines className="mt-1 block" />}
         </div>
@@ -223,12 +227,13 @@ function Stale({ plan }: { plan: FeedbackPlan }) {
 }
 
 /**
- * The approval form: a row for each item with a box, ticked unless the last approval left it out, the operator's own
- * words, and the button that approves the ticked items, whole when all are, its command on hover. Approving a stale
- * plan is refused once by design, so that refusal reads as the step it is, not as an error; any other refusal goes
- * under the button in the CLI's words. An approval done is the moment it is (`ApprovedBand`), the words cleared and
- * the button at rest as an outline `Approve again` until a box or the words change, so a second press, or the send
- * key, cannot approve it twice by accident. Nothing can be approved with no item ticked, or with no file to approve.
+ * The approval form: a row for each item with a box, ticked unless the last approval put it off for the next plan,
+ * the operator's own words, and the button that approves the ticked items, whole when all are, its command on hover.
+ * Approving a stale plan is refused once by design, so that refusal reads as the step it is, not as an error; any
+ * other refusal goes under the button in the CLI's words. An approval done is the moment it is (`ApprovedBand`), the
+ * words cleared and the button at rest as an outline `Approve again` until a box or the words change, so a second
+ * press, or the send key, cannot approve it twice by accident. Nothing can be approved with no item ticked, or with
+ * no file to approve.
  */
 function Approve({ plan, onChange }: { plan: FeedbackPlan; onChange: () => void }) {
     const id = useId()
@@ -356,7 +361,7 @@ function hint(plan: FeedbackPlan, { some, rested }: { some: boolean; rested: boo
 }
 
 // What an approval sends for the ticked items: none named when every one is, so it approves the plan whole; else the
-// shorter of the items to approve and those to leave, as `--item` or `--leave` would name them.
+// shorter of the items to approve and those for the next plan, as `--item` or `--leave` would name them.
 function chosen(
     items: readonly FeedbackPlanItem[],
     ticked: ReadonlySet<number>,
@@ -380,7 +385,8 @@ function command(key: string, choice: { items: number[]; leave: number[]; messag
 /**
  * The plan's items, a row each: its box when `onTick` is given, its number, the first line of what was said, plain
  * text, and where it is, a link to its thread's card, to the review on its host, or the other PR it is on; under
- * that, what it proposes, its author and whether they are trusted, the plan's first line on it, and its id, muted.
+ * that, muted, what it proposes in its own hue, its author and whether they are trusted, `for the next plan` on one an
+ * approval put off, the plan's first line on it, and its id.
  * An item no thread card on the page shows carries its proposed reply, labelled as one, under the row.
  */
 function ItemRows({
@@ -406,7 +412,7 @@ function ItemRows({
                     <span className="flex items-start gap-2">
                         {onTick !== undefined && (
                             <Checkbox
-                                aria-label={`address item ${item.number}`}
+                                aria-label={`approve item ${item.number}`}
                                 checked={ticked?.has(item.number) ?? false}
                                 onCheckedChange={(checked) => onTick(item.number, checked === true)}
                                 className="mt-0.5"
@@ -425,10 +431,10 @@ function ItemRows({
                         <Where item={item} />
                     </span>
                     <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <Chip word={item.proposal} />
+                        <Chip tone={item.proposal} word={item.proposal} />
                         <span className="font-medium text-foreground">{item.author ?? 'no author recorded'}</span>
                         {item.trusted && <Chip>trusted</Chip>}
-                        {item.left_out && <Chip>left out</Chip>}
+                        {item.left_out && <Chip>{NEXT_PLAN}</Chip>}
                         {item.rationale !== null && (
                             <span className="min-w-0" data-testid="feedback-plan-why">
                                 <MemoryText text={item.rationale} />

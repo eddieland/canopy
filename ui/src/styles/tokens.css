@@ -62,6 +62,12 @@
     --syntax-number: oklch(0.515 0.11 70);
     --syntax-literal: oklch(0.52 0.17 315);
 
+    /* A feedback plan's proposals (src/components/status.tsx): what each would do to its item, quiet hues no status
+     * wears, so `change`, the one that edits code, stands out; `leave`, which does nothing, stays plain. */
+    --proposal-change: oklch(0.48 0.15 345);
+    --proposal-decline: oklch(0.46 0.06 115);
+    --proposal-ask: oklch(0.465 0.065 245);
+
     /* The spend page's chart (src/lib/spend.ts): a series per kind of agent run, as fills, never text and never state.
      * Idle overseer spend is the overseer's own hue, lighter, so it reads as a part of it. */
     --spend-overseer: oklch(0.45 0.15 265);
@@ -147,6 +153,10 @@
     --syntax-string: oklch(0.8 0.12 135);
     --syntax-number: oklch(0.82 0.12 75);
     --syntax-literal: oklch(0.76 0.14 315);
+
+    --proposal-change: oklch(0.77 0.13 345);
+    --proposal-decline: oklch(0.76 0.06 115);
+    --proposal-ask: oklch(0.75 0.065 245);
 
     --spend-overseer: oklch(0.62 0.15 265);
     --spend-idle: oklch(0.82 0.08 265);
@@ -419,6 +429,10 @@
     --color-syntax-string: var(--syntax-string);
     --color-syntax-number: var(--syntax-number);
     --color-syntax-literal: var(--syntax-literal);
+
+    --color-proposal-change: var(--proposal-change);
+    --color-proposal-decline: var(--proposal-decline);
+    --color-proposal-ask: var(--proposal-ask);
 
     --color-spend-overseer: var(--spend-overseer);
     --color-spend-idle: var(--spend-idle);
