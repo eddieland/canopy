@@ -241,8 +241,8 @@ def _fresh_pr(unit: observations.UnitObservation | None) -> observations.PrObser
 def _check_comment(reader: observations.Reader, record: records.Ticket, cursor: str | None) -> None:
     """Refuse a `comment` cursor that names no observed comment, or one past what the block showed.
 
-    The block shows a ticket's comments past the earlier of its `comment` and `mirror` cursors, up to its bound; a
-    non-candidate's, none. A cursor at or before the `comment` cursor passes nothing new.
+    The block shows a ticket's comments past its `comment` cursor, up to its bound; a non-candidate's, none. A cursor
+    at or before the `comment` cursor passes nothing new.
 
     Raises:
         Refusal: `unobserved`.

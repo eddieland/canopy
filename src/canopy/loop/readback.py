@@ -198,7 +198,7 @@ def message_lines(m: records.Message) -> list[str]:
 def _message_head(m: records.Message) -> str:
     who = {"worker": "worker", "operator": "you", "tracker": "tracker"}.get(m.source, m.source)
     if m.comment_id is not None:
-        # A tracker comment the overseer mirrored: a copy, which authorizes nothing (DESIGN §22).
+        # A tracker comment a source observed, or the overseer mirrored before M37: authorizes nothing (§22).
         cut = ", truncated" if m.truncated else ""
         return (
             f"  #{m.id}  {attention.age(m.at)} ago  {who} comment {m.comment_id} by {m.author}, "

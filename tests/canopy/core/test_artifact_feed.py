@@ -189,14 +189,14 @@ def test_an_edit_or_deletion_replaces_the_comment_and_keeps_who_wrote_it(ctx: Co
 def test_text_is_cut_and_marked_and_the_workers_marks_read(ctx: Context, connector_state: Path) -> None:
     trust = ctx.config.trust
     marked = f"{trust.comment_prefix} Done. {trust.comment_suffix}".strip()
-    long = "word " * conversation.MAX_MIRRORED
+    long = "word " * conversation.MAX_COMMENT
     agent = {"id": "agent:implement", "kind": "agent", "on_behalf_of": "operator"}
     on = {"anchor": {"exact": long}, "origin": {"canopy.ticket": "not a key"}}
     feeds(connector_state, change(1, body=long, **on), change(2, body=marked, author=agent, **on))
     run(ctx)
     found = comments(ctx)
     assert (len(found["c1"].body), found["c1"].truncated, found["c1"].marked) == (
-        conversation.MAX_MIRRORED,
+        conversation.MAX_COMMENT,
         True,
         False,
     )

@@ -64,7 +64,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "decide": ("journal", "cmd_decide"),
     "queried": ("journal", "cmd_queried"),
     "attention": ("journal", "cmd_attention"),
-    "mirror": ("journal", "cmd_mirror"),
     "ticket": ("journal", "ticket_group"),
     "workspace": ("workspace", "workspace_group"),
     "chore": ("chores", "chore_group"),

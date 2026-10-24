@@ -90,7 +90,7 @@ class Offered:
     path: str | None
     line: int | None
     outdated: bool | None
-    #: Its text, cut as a mirrored comment's is: model or human text, data to the planner, whoever wrote it.
+    #: Its text, cut as a tracker comment's is: model or human text, data to the planner, whoever wrote it.
     body: str
     #: An item's thread's other comments, oldest first, each given beside it as a reply: none for a reply or a review.
     replies: Sequence[Offered] = ()

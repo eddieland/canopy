@@ -58,7 +58,6 @@ TOOL_NAMES = [
     "queried",
     "attention",
     "ticket-set",
-    "mirror",
     "review-run",
     "review-wait",
     "review-end",
@@ -282,18 +281,6 @@ RECORDS = [
     ),
     pytest.param(
         Verb(
-            "mirror",
-            {"ref": "PROJ-1", "comment": 10, "author": "acct-1", "at": "2026-10-15T10:00:00Z", "body": "Looks good."},
-            [
-                *("mirror", "PROJ-1", "--comment", "10", "--author", "acct-1", "--at", "2026-10-15T10:00:00Z"),
-                *("--body", "Looks good."),
-            ],
-            result={"message": 1, "new": True, "truncated": False},
-        ),
-        id="mirror",
-    ),
-    pytest.param(
-        Verb(
             "review-run",
             {"pr": PR, "sha": "a" * 40, "ticket": "PROJ-1", "repo": "repo", "context": "the retry loop"},
             [
@@ -507,27 +494,6 @@ REFUSALS = [
         "dispatch refused (unknown_repo): repos is required (--repo)",
         1,
         id="dispatch-in-no-repository",
-    ),
-    pytest.param(
-        Verb(
-            "mirror",
-            {"ref": "PROJ-1", "comment": "a b", "author": "acct-1", "at": "2026-10-15T10:00:00Z", "body": "Hi."},
-            [
-                "mirror",
-                "PROJ-1",
-                "--comment",
-                "a b",
-                "--author",
-                "acct-1",
-                "--at",
-                "2026-10-15T10:00:00Z",
-                "--body",
-                "Hi.",
-            ],
-        ),
-        "mirror refused (bad_comment): comment (--comment) 'a b' must match",
-        1,
-        id="mirror",
     ),
     pytest.param(
         Verb(

@@ -99,8 +99,22 @@ the same head. Chosen conservatively, for the operator to change: a failure with
 cursor empty or not a number refuses nothing, nor does a head whose only failures are `human_checks` or that has none;
 and the prompt has the overseer record `flaky_rerun` on a `handled` refusal, a new head or an operator message starting
 the next.
-Left: journal-numbered cursors and their migration, the mirror's retirement with comments recorded in the
-conversation, the design folded into the sections it names, pruning `observed_check_runs`, which nothing prunes yet
-(M47's garbage-collection pass would name it), and the live re-measurement.
+Built (2026-10-24): the fourth bullet's mirror retired. Each comment the tracker source observes is recorded in its
+ticket's conversation in code (`conversation.record_comment`, which another source's comments can reuse), once per ticket
+and comment id, in the transaction that first records its observation and with the same text, source `worker` when it
+carries the workers' marks (D069), else `tracker`; the `mirror` tool and command, the prompt's section and duty, the
+state block's `mirror` and `mirror` cursor, and the per-tick bound go, and the block's comments start past the `comment`
+cursor alone. Migration 0095 records each comment observed before it that the overseer had not mirrored, at the time it
+was observed. Tests with the fakes: observed comments in the conversation once each across reads, marked by source, an
+edit not followed, in a private worker's prompt as data and authorizing nothing, a mirrored comment kept, and the
+migration. Chosen conservatively: a dry run records the comment, as it records the observation and as the mirror did;
+a comment is recorded for every ticket the source reads, a candidate or not, private or public, since only the
+operator's views and a private ticket's own worker read the conversation; a comment the overseer mirrored keeps its
+message, text, and source, found by its comment id, so the mirror's residual stays for those alone; an edit after the
+first read is not followed; the mirror cursor's column stays, unread, since no migration drops a column; and a tracker
+with no connector records no comment, since its tool is gone.
+Left: journal-numbered cursors and their migration, the design folded into the sections it names, pruning
+`observed_check_runs`, which nothing prunes yet (M47's garbage-collection pass would name it), and the live
+re-measurement.
 Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker` source is
 required (recommended: required), and how many new items a subject shows before the rest are counted.
