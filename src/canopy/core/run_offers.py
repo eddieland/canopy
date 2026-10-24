@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from canopy.core.run_models import RunTable
     from canopy.infra import logs, procs
     from canopy.runtime.agents import AgentOffer
+    from canopy.runtime.implementation import Version
 
 #: How long a run that has ended waits for the runtime to say what it was offered: the ask started with the run, so
 #: only a run shorter than the ask waits at all.
@@ -50,18 +51,19 @@ def probing(
     runner: procs.Runner,
     argv: Sequence[str],
     *,
+    version: Version,
     cwd: Path,
     env: Mapping[str, str],
     log: logs.TickAdapter,
 ) -> Iterator[None]:
     """Ask the runtime what the agent `argv` starts is offered while the block runs it, and record the answer after.
 
-    The runtime is asked on a thread of its own, started as `argv` starts it, in `cwd` with `env`, so the agent does not
-    wait on it. Leaving the block, also by raising, waits for the answer at most `WAIT_SECONDS` and records it on the
-    run. The record is the run's least concern: a journal write that fails is logged, never raised over the run's own
-    outcome.
+    The runtime `version` runs is asked on a thread of its own, started as `argv` starts it, in `cwd` with `env`, so
+    the agent does not wait on it. Leaving the block, also by raising, waits for the answer at most `WAIT_SECONDS` and
+    records it on the run. The record is the run's least concern: a journal write that fails is logged, never raised
+    over the run's own outcome.
     """
-    probe = offerings.Probe(runner, argv, cwd=cwd, env=env)
+    probe = offerings.Probe(runner, argv, version=version, cwd=cwd, env=env)
     try:
         yield
     finally:

@@ -807,7 +807,7 @@ def _run_overseer(
         the runtime reported it.
     """
     # The runtime reads the repository's config too: it must not define an agent of canopy's (D044).
-    failure = project_config.refusal([ctx.repo_root])
+    failure = project_config.refusal([ctx.repo_root], version=ctx.config.runtime.version)
     if failure is not None:
         log.error("overseer not started", extra={"reason": failure, "dry_run": dry_run})
         return failure, None
@@ -821,17 +821,41 @@ def _run_overseer(
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     # Its tools, in its process's environment alone (DESIGN §27). A call may take as long as the overseer may: a
     # dispatch can wait on a lease, and one the runtime gave up on would still be served, holding up each call after.
-    served = servers.env({mcp.SERVER: mcp.COMMAND}, cwd=ctx.repo_root, timeout_seconds=timeout_minutes * 60)
+    served = servers.env(
+        {mcp.SERVER: mcp.COMMAND},
+        version=ctx.config.runtime.version,
+        cwd=ctx.repo_root,
+        timeout_seconds=timeout_minutes * 60,
+    )
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     out_dir = ctx.state_dir / "ticks"
     out_dir.mkdir(parents=True, exist_ok=True)
     logs.write_private(out_dir / f"{tick_id}.prompt", block)
     out_path = out_dir / f"{tick_id}.log"
     with logs.open_private(out_path) as out:
-        watch = progress.Progress(ctx.conn, "ticks", tick_id, out, log, agent="overseer", fields={})
+        watch = progress.Progress(
+            ctx.conn,
+            "ticks",
+            tick_id,
+            out,
+            log,
+            agent="overseer",
+            fields={},
+            version=ctx.config.runtime.version,
+        )
         env = {TICK_ID_ENV: str(tick_id), **served}
         try:
-            with run_offers.probing(ctx.conn, "ticks", tick_id, ctx.runner, argv, cwd=ctx.repo_root, env=env, log=log):
+            with run_offers.probing(
+                ctx.conn,
+                "ticks",
+                tick_id,
+                ctx.runner,
+                argv,
+                version=ctx.config.runtime.version,
+                cwd=ctx.repo_root,
+                env=env,
+                log=log,
+            ):
                 result = ctx.runner.run(
                     argv,
                     cwd=ctx.repo_root,
@@ -847,7 +871,7 @@ def _run_overseer(
             return str(e), None
         out.write(f"\n--- stderr ---\n{result.stderr}")
 
-    output = stdout.read(result.stdout)
+    output = stdout.read(result.stdout, version=ctx.config.runtime.version)
     db.set_tick_report(
         ctx.conn,
         tick_id,

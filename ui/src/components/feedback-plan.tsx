@@ -480,6 +480,9 @@ function nothingSaid(item: FeedbackPlanItem): string {
         case 'conflict': {
             return 'it conflicts with its base'
         }
+        case 'blocker': {
+            return `the PR it is stacked on merged: ${item.blocker ?? 'no recorded PR'}`
+        }
     }
 }
 
@@ -523,7 +526,8 @@ function Where({ item }: { item: FeedbackPlanItem }) {
     )
 }
 
-// Whether canopy raised the item from the PR's state, a failed check or a conflict, so it has no author.
+// Whether canopy raised the item from the PR's state, a failed check, a conflict, or a merged blocker, so it has no
+// author.
 function raisedByCanopy(item: FeedbackPlanItem): boolean {
-    return item.item === 'check' || item.item === 'conflict'
+    return item.item === 'check' || item.item === 'conflict' || item.item === 'blocker'
 }

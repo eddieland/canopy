@@ -4,6 +4,7 @@ import pytest
 
 from canopy.core import monthly
 from canopy.serve.backend import Backend
+from canopy.serve.mock import history
 from tests.canopy.web_helpers import client
 
 
@@ -21,8 +22,14 @@ def test_the_monthly_report_reads_local_months_oldest_first(backend: Backend) ->
     assert october["tokens"]["cache_read"] == sum(k["tokens"]["cache_read"] for k in october["kinds"])
     assert 0 < october["tokens"]["cache_hit"] < 1
     assert october["models"]
-    assert found[0]["runs"] == 0
-    assert found[0]["cost_usd"] is None
-    assert len(c.get("/api/reports/monthly").json()["months"]) == monthly.DEFAULT_MONTHS
+    # The months before hold the history's worker runs and the tickets they landed, the latest first.
+    august = found[0]
+    assert [k["kind"] for k in august["kinds"] if k["runs"]] == ["workers"]
+    landed = [t for t in history.TICKETS if t.done_at.month == 8 and not t.closed]
+    assert [t["key"] for t in august["landed"]] == [t.key for t in reversed(landed)]
+    year = c.get("/api/reports/monthly").json()["months"]
+    assert len(year) == monthly.DEFAULT_MONTHS
+    # The workspace took canopy up in April: nothing before.
+    assert (year[0]["month"], year[0]["runs"], year[0]["cost_usd"]) == ("2025-11", 0, None)
     assert c.get("/api/reports/monthly", params={"months": monthly.MAX_MONTHS + 1}).status_code == 422
     assert c.get("/api/reports/monthly", params={"months": 0}).status_code == 422

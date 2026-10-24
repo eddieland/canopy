@@ -3,7 +3,8 @@
 // agent the minutes left before canopy stops the run, so it keeps its work before the kill. Its second is the split
 // (§33): it cuts the system prompt after the agent's body, so that the tools and the body are a prefix the provider
 // caches for the agent's unsandboxed runs, whatever directory each starts in; a sandboxed run's tools name its own
-// temporary directory, so they share none.
+// temporary directory, so they share none. It is OpenCode 1's alone: 2 already caches the tools and the body apart from
+// the environment, a sandboxed run's included.
 //
 // The agent runtime loads it from canopy's snapshot of its definitions, inside every agent process, sandboxed or not
 // (TRUST_MODEL T4). So it is plain JavaScript with no imports, which loads with no network, and each job does as
