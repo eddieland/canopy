@@ -11,19 +11,26 @@ import pytest
 
 from canopy.infra import procs
 from canopy.runtime.opencode import session_models
-from canopy.runtime.report import MAX_MODELS, OTHER_MODELS, ModelUse, SessionModels
+from canopy.runtime.report import MAX_MODELS, MAX_REPLIES, OTHER_MODELS, ModelUse, SessionModels
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
 
-def assistant(provider: str, model: str, cost: float, *, variant: str | None = None) -> dict[str, object]:
+def assistant(
+    provider: str,
+    model: str,
+    cost: float,
+    *,
+    variant: str | None = None,
+    message: str = "msg_2",
+) -> dict[str, object]:
     """An assistant message as `opencode export --sanitize` prints it, its parts redacted.
 
     OpenCode leaves `variant` out for the model's default.
     """
     info: dict[str, object] = {
-        "id": "msg_2",
+        "id": message,
         "role": "assistant",
         "providerID": provider,
         "modelID": model,
@@ -85,13 +92,14 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first() -> Non
     export = printing(
         exported(
             USER,
-            assistant("anthropic", "claude-haiku", 0.125),
-            assistant("openrouter", "anthropic/claude-sonnet", 0.25),
-            assistant("anthropic", "claude-haiku", 0.25),
+            assistant("anthropic", "claude-haiku", 0.125, message="msg_2"),
+            assistant("openrouter", "anthropic/claude-sonnet", 0.25, message="msg_3"),
+            assistant("anthropic", "claude-haiku", 0.25, message="msg_4"),
             # OpenCode prints a cost of 0 as an integer.
-            assistant("local", "free", 0),
+            assistant("local", "free", 0, message="msg_5"),
         ),
     )
+    # Each reply's model by its message, as the models are named, so a transcript names each call's.
     assert read(export) == SessionModels(
         "found",
         (
@@ -99,6 +107,12 @@ def test_each_model_s_replies_and_cost_are_summed_the_most_costly_first() -> Non
             ModelUse("openrouter/anthropic/claude-sonnet", 1, 0.25),
             ModelUse("local/free", 1, 0.0),
         ),
+        replies={
+            "msg_2": "anthropic/claude-haiku",
+            "msg_3": "openrouter/anthropic/claude-sonnet",
+            "msg_4": "anthropic/claude-haiku",
+            "msg_5": "local/free",
+        },
     )
     # Sanitized, so canopy reads no transcript text; started where the caller says, bounded in time, and its stdout
     # read from a file, as OpenCode cuts what it prints to a pipe short.
@@ -119,15 +133,54 @@ def test_each_variant_of_a_model_is_counted_on_its_own() -> None:
     export = printing(
         exported(
             user,
-            assistant("anthropic", "claude-opus", 0.5, variant="high"),
-            assistant("anthropic", "claude-opus", 0.25),
-            assistant("anthropic", "claude-opus", 0.5, variant="high"),
+            assistant("anthropic", "claude-opus", 0.5, variant="high", message="msg_2"),
+            assistant("anthropic", "claude-opus", 0.25, message="msg_3"),
+            assistant("anthropic", "claude-opus", 0.5, variant="high", message="msg_4"),
         ),
     )
     assert read(export) == SessionModels(
         "found",
         (ModelUse("anthropic/claude-opus@high", 2, 1.0), ModelUse("anthropic/claude-opus", 1, 0.25)),
+        replies={
+            "msg_2": "anthropic/claude-opus@high",
+            "msg_3": "anthropic/claude-opus",
+            "msg_4": "anthropic/claude-opus@high",
+        },
     )
+
+
+def test_a_session_one_model_served_keeps_no_reply_s_model() -> None:
+    export = printing(
+        exported(
+            USER,
+            assistant("anthropic", "claude-haiku", 0.125, message="msg_2"),
+            assistant("anthropic", "claude-haiku", 0.25, message="msg_3"),
+        ),
+    )
+    # Its models name them all.
+    assert read(export) == SessionModels("found", (ModelUse("anthropic/claude-haiku", 2, 0.375),))
+
+
+def test_a_reply_whose_message_canopy_would_not_keep_counts_without_its_model() -> None:
+    export = printing(
+        exported(
+            assistant("anthropic", "claude-haiku", 0.25, message="msg_2"),
+            assistant("anthropic", "claude-opus", 0.5, message="msg 3; rm -rf /"),
+            assistant("anthropic", "claude-opus", 0.5, message="m" * 101),
+        ),
+    )
+    found = read(export)
+    assert found.models == (ModelUse("anthropic/claude-opus", 2, 1.0), ModelUse("anthropic/claude-haiku", 1, 0.25))
+    assert found.replies == {"msg_2": "anthropic/claude-haiku"}
+
+
+def test_past_the_limit_a_reply_s_model_is_not_kept() -> None:
+    replies = [assistant("p", "a" if i % 2 else "b", 0.0, message=f"msg_{i}") for i in range(MAX_REPLIES + 3)]
+    found = read(printing(exported(*replies)))
+    assert sum(m.replies for m in found.models) == MAX_REPLIES + 3
+    assert len(found.replies) == MAX_REPLIES
+    assert "msg_0" in found.replies
+    assert f"msg_{MAX_REPLIES}" not in found.replies
 
 
 def test_a_session_that_made_no_model_call_has_no_models() -> None:

@@ -41,6 +41,11 @@ SKILL_PREFIX = "skill:"
 MAX_MODELS = 20
 MAX_MODEL_NAME = 200
 OTHER_MODELS = "(other models)"
+#: A message the runtime names in a session's record and on each event of a model call: the reply the call wrote, the
+#: key that joins a call in the run's log to the model the record names for it. As a session id is shaped.
+MESSAGE_ID_RE = SESSION_ID_RE
+#: How many replies' models one session's record keeps, each by its message: far more calls than a transcript shows.
+MAX_REPLIES = 10_000
 
 #: How reading a session's models ended: they were read; the runtime keeps no session of that id, which reading again
 #: would not change; or the runtime could not be asked, or said what canopy cannot read.
@@ -163,6 +168,9 @@ class SessionModels:
     models: Sequence[ModelUse] = ()
     #: Why it `failed`, in canopy's words, never what the runtime printed.
     error: str | None = None
+    #: The model that wrote each reply, as `models` names it, by the reply's message (`MESSAGE_ID_RE`), in order, at
+    #: most `MAX_REPLIES`; empty unless more than one model wrote the session's replies, since one names them all.
+    replies: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

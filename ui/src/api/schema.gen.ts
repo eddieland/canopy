@@ -8406,6 +8406,12 @@ export type components = {
              */
             kind: "step";
             /**
+             * Model
+             * @description The model that made the call, as the run's models name it (DESIGN §13), when more than one served the run; None
+             *     for a run one model served, which its page names, and until canopy has read its session.
+             */
+            model: string | null;
+            /**
              * Reason
              * @description Why the call ended, in the runtime's word.
              */

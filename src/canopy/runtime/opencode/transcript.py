@@ -3,9 +3,10 @@
 A template with OpenCode's `--format json` prints one event per line, and canopy writes them, as printed, to the run's
 log or the tick's output file. This reads the events of one session, in the order they were printed, as entries: the
 agent's text, its reasoning, each tool call with its input and output, each model call's cost, and the runtime's
-errors, each numbered by the `step_start` event of the model call it came from. A line that is not an event, or is
-another session's, is left out, so stderr, a setup command's output, and the harness's own lines never show as the
-agent's. Each event is validated (D026), and each text cut to its bound (`canopy.runtime.entries`).
+errors, each numbered by the `step_start` event of the model call it came from. A call's end names the message the
+call wrote, by which the session's record names its model (`canopy.runtime.opencode.session_models`). A line that is
+not an event, or is another session's, is left out, so stderr, a setup command's output, and the harness's own lines
+never show as the agent's. Each event is validated (D026), and each text cut to its bound (`canopy.runtime.entries`).
 
 `canopy.runtime.transcript` reads the file and bounds the transcript as a whole.
 """
@@ -22,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, Stric
 from canopy.runtime import entries
 from canopy.runtime.entries import MAX_INPUT, MAX_TEXT, Entry, Error, Step, Text, Tokens, ToolCall
 from canopy.runtime.opencode import events
-from canopy.runtime.report import MAX_COST_USD, Count
+from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Count
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
@@ -74,6 +75,7 @@ class _Tokens(_Part):
 
 
 class _Step(_Part):
+    message: StrictStr | None = Field(default=None, alias="messageID")
     reason: StrictStr | None = None
     cost: Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)] | None = None
     tokens: _Tokens | None = None
@@ -161,7 +163,8 @@ def _entry(event: Mapping[str, object]) -> Entry | None:
         t = step.tokens
         tokens = Tokens(t.input, t.output, t.reasoning, t.cache.read, t.cache.write) if t is not None else None
         cost = float(step.cost) if step.cost is not None else None
-        return Step(at, entries.line(step.reason or "") or None, cost, tokens)
+        message = step.message if step.message is not None and MESSAGE_ID_RE.fullmatch(step.message) else None
+        return Step(at, entries.line(step.reason or "") or None, cost, tokens, message=message)
     if kind == events.ERROR:
         error = events.SessionError.model_validate(event.get("error"))
         message = error.data.message if error.data is not None and error.data.message else ""
