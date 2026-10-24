@@ -128,6 +128,29 @@ def test_a_dry_run_records_the_harnesss_chore_and_starts_none(canopy_env: Canopy
 
 
 @pytest.mark.usefixtures("two_chores")
+def test_the_harnesss_chore_on_a_model_the_runtime_does_not_list_is_refused_with_an_attention_item(
+    canopy_env: CanopyEnv,
+    opencode_state: Path,
+) -> None:
+    opencode_state.write_text(json.dumps({"models": ["acme/fake-model-2"]}))
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"chore": "acme/fake-model-1"}}})
+    conn = canopy_env.journal()
+    with overseer_does(canopy("chore", "wait", THEIRS, "--rationale", "not a weekday")):
+        assert main(["tick"], runner=InlineRunner()) == 0
+    tick = last_tick(conn)
+    reason = (
+        "OpenCode does not list the model acme/fake-model-1 chosen for chores in runtime.models, so a run on it would "
+        "fail before its first call; nothing ran on another model. Choose a model it lists, or set up its provider"
+    )
+    mine = [(d.action, d.rationale, d.decider) for d in db.decisions_for_tick(conn, tick.id) if d.chore == MINE]
+    assert mine == [
+        ("refused:model_missing", reason, Decider.HARNESS),
+        ("attention:model_missing", reason, Decider.HARNESS),
+    ]
+    assert started(conn) == []
+
+
+@pytest.mark.usefixtures("two_chores")
 def test_a_tick_halted_before_the_overseer_starts_none(canopy_env: CanopyEnv) -> None:
     canopy_env.configure(canopy_env.user_file, {"loop": {"min_free_disk_mib": 2**40}})
     conn = canopy_env.journal()

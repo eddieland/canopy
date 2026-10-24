@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
+    agent_models,
     chore_view,
     commit_hooks,
     connector_runs,
@@ -407,13 +408,12 @@ def _steps(
         return finish(TickStatus.RECONCILE_FAILED, str(e))
     chore_reconcile.run(ctx, log)
     memory_reconcile.run(ctx, log)
-    if not dry_run:
-        # The operator's tasks start in code, before the overseer, which never sees one: it plans around the slots
-        # their runs hold (DESIGN §36). A dry tick starts none (D036).
-        started = task_starts.start_queued(ctx, tick_id, log)
-        if started:
-            running = reconciled.capacity.running + len(started)
-            reconciled = replace(reconciled, capacity=replace(reconciled.capacity, running=running))
+    # The operator's tasks start in code, before the overseer, which never sees one: it plans around the slots their
+    # runs hold (DESIGN §36). A dry tick starts none (D036).
+    started = _start_tasks(ctx, tick_id, log, dry_run=dry_run)
+    if started:
+        running = reconciled.capacity.running + len(started)
+        reconciled = replace(reconciled, capacity=replace(reconciled.capacity, running=running))
     archive_unpushed = archive.run(ctx, log, dry_run=dry_run)
     # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
     drafted.reconcile(ctx, connectors.run(ctx, tick_id, log, dry_run=dry_run).read, log)
@@ -473,6 +473,28 @@ def _steps(
         if not dry_run:
             acknowledge.note(ctx.conn, tick_id)
         return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
+
+
+def _start_tasks(ctx: Context, tick_id: int, log: logs.TickAdapter, *, dry_run: bool) -> list[task_starts.Started]:
+    """Start the queued tasks the guards let start (DESIGN §36), or raise the item that says why none could.
+
+    A dry tick starts none, but looks their model up as a live one would, so its list keeps the item a live tick
+    raises.
+
+    Returns:
+        The runs started.
+    """
+    try:
+        if dry_run:
+            task_starts.check(ctx)
+            return []
+        return task_starts.start_queued(ctx, tick_id, log)
+    except task_starts.ModelRefused as e:
+        log.error("tasks wait for their model", extra={"guard": e.guard, "waiting": e.waiting})  # noqa: TRY400
+        # About the workspace: the model is config's, the same for every task, and fixed where the overseer's is (§13).
+        waits = f"{e.waiting} queued task waits" if e.waiting == 1 else f"{e.waiting} queued tasks wait"
+        _harness_item(ctx, tick_id, None, e.guard, f"{e.reason}. {waits} for it")
+        return []
 
 
 def _overseer(
@@ -672,24 +694,29 @@ def _record_connector_failed(ctx: Context, tick_id: int) -> None:
 
 
 def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter, *, overseer: bool) -> tuple[TickStatus, str] | None:
-    """Check what the overseer needs before paying for it: free disk, then its tools' server (DESIGN §6 step 5).
+    """Check what the overseer needs before paying for it: free disk, then its tools' server, then its model (§6).
 
-    The server check is the overseer's, made only with `overseer`, for a tick that runs it (DESIGN §39). A check
-    that fails records the attention item named for the status the tick closes with.
+    The server and model checks are the overseer's, made only with `overseer`, for a tick that runs it (DESIGN §39). A
+    check that fails records the attention item named for the status the tick closes with.
 
     Returns:
-        That status and the tick's summary, or None when both checks pass.
+        That status and the tick's summary, or None when every check passes.
     """
     low = _check_disk(ctx, log)
     if low is not None:
-        status, summary, then = TickStatus.DISK_LOW, low, "Free space there, and the next tick runs it"
-    else:
-        unavailable = _check_server(ctx, tick_id, log) if overseer else None
-        if unavailable is None:
-            return None
+        status, summary = TickStatus.DISK_LOW, low
+        then = "; the overseer did not run. Free space there, and the next tick runs it"
+    elif not overseer:
+        return None
+    elif (unavailable := _check_server(ctx, tick_id, log)) is not None:
         status, summary = TickStatus.CANOPY_UNAVAILABLE, unavailable
-        then = "Make `canopy _mcp` start where the loop runs"
-    _harness_item(ctx, tick_id, None, status, f"{summary}; the overseer did not run. {then}")
+        then = "; the overseer did not run. Make `canopy _mcp` start where the loop runs"
+    elif (refused := _check_model(ctx, log)) is not None:
+        # The refusal says nothing ran, and what to do.
+        (status, summary), then = refused, ". The next tick looks it up again"
+    else:
+        return None
+    _harness_item(ctx, tick_id, None, status, f"{summary}{then}")
     return status, summary
 
 
@@ -760,6 +787,33 @@ def _check_server(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | No
             return None
     log.error("overseer not started", extra={"reason": failure})
     return failure
+
+
+def _check_model(ctx: Context, log: logs.TickAdapter) -> tuple[TickStatus, str] | None:
+    """Look the overseer's model up in the list the runtime would look it up in, as a worker's dispatch does (§13).
+
+    The model is the one `runtime.models` chooses for the agent `overseer_cmd` runs; none chosen is the runtime's
+    default, which needs no check. It is never fallen back from.
+
+    Returns:
+        The status the tick closes with, `model_missing` or `model_list_failed`, and why; None when the runtime lists
+        the model, or none is chosen.
+    """
+    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.overseer_cmd)
+    if model is None:
+        return None
+    try:
+        agent_models.check(
+            ctx.runner,
+            ctx.workspace.root,
+            model,
+            version=ctx.config.runtime.version,
+            chosen="for the overseer in runtime.models",
+        )
+    except agent_models.ModelError as e:
+        log.error("overseer not started", extra={"reason": e.reason})  # noqa: TRY400
+        return TickStatus(e.guard), e.reason
+    return None
 
 
 def _initialized(out: str) -> bool:

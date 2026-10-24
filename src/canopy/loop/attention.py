@@ -99,6 +99,10 @@ UNAVAILABLE: str = TickStatus.CANOPY_UNAVAILABLE
 DISK_LOW: str = TickStatus.DISK_LOW
 #: The statuses of a tick that did not run the overseer for a cause of canopy's own, each raising an item of its name.
 HALTS = frozenset({UNAVAILABLE, DISK_LOW})
+#: The statuses of a tick that did not run the overseer because its model cannot be used (DESIGN §13), each raising an
+#: item of its name about the workspace. A run refused its model raises an item of the same name about its subject,
+#: recorded by the overseer's verb that asked for the run, so these stay out of `HARNESS_REASONS`.
+MODEL_HALTS = frozenset({TickStatus.MODEL_MISSING.value, TickStatus.MODEL_LIST_FAILED.value})
 #: A primary clone whose own config leaves git's automatic maintenance on, which sync turns off (DESIGN §18).
 MAINTENANCE_ON = "auto_maintenance_on"
 #: A git on `PATH` too old to put canopy's marks on a worker's commits (TRUST_MODEL T5).
@@ -322,7 +326,7 @@ def _ended(conn: sqlite3.Connection, keys: Collection[str]) -> set[str]:
 
 
 def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
-    """The item of a `HALTS` status while the latest ended tick closed with it (DESIGN §6 step 5).
+    """The item of a `HALTS` or `MODEL_HALTS` status while the latest ended tick closed with it (DESIGN §6 step 5).
 
     That tick ran no overseer, so it leaves the list standing as a failed tick does, and adds this one item: the cause
     is canopy's own, and the operator hears of it at once rather than after `loop.failing`'s streak. It is gone at the
@@ -335,7 +339,7 @@ def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
         conn,
         sql.select("status").from_("ticks").where("status != 'running'").order_by("id DESC").limit(1),
     ).fetchone()
-    if latest is None or latest[0] not in HALTS:
+    if latest is None or latest[0] not in HALTS | MODEL_HALTS:
         return []
     reason = str(latest[0])
     rows = sql.execute(
@@ -343,6 +347,8 @@ def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
         sql.select("rationale, created_at")
         .from_("decisions")
         .where("action = ? AND tick_id > ?", f"{ACTION_PREFIX}{reason}", last_ok or 0)
+        # The workspace's: a refused run's item of a model's reason is about its ticket, chore, or PR.
+        .where("ticket_key IS NULL AND chore IS NULL AND pr IS NULL AND repo IS NULL")
         .order_by("id"),
     ).fetchall()
     if not rows:

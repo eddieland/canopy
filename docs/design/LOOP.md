@@ -37,14 +37,16 @@ in order:
    quote a comment: an item stays open only while every tick that gives the overseer its subject records it again
    (MEASUREMENTS 2026-10-13, §14). Rejected: a harness that keeps an item until the overseer resolves it, which leaves
    an item standing whenever the overseer forgets one.
-5. **Check the disk and the overseer's tools, then run the overseer.** If the state directory's or the workspace's
-   filesystem has less than `loop.min_free_disk_mib` free, the tick records `attention:disk_low` and closes
-   `disk_low`: the overseer and the runs it would start are what fill a disk, and a full one can kill the loop
+5. **Check the disk, the overseer's tools, and its model, then run the overseer.** If the state directory's or the
+   workspace's filesystem has less than `loop.min_free_disk_mib` free, the tick records `attention:disk_low` and
+   closes `disk_low`: the overseer and the runs it would start are what fill a disk, and a full one can kill the loop
    mid-write. Reconcile has run, so what frees space still does. If the server of the overseer's tools (§27), started
    as the runtime would start it, does not answer `initialize`, the tick records `attention:canopy_unavailable` and
-   closes `canopy_unavailable` without running an overseer that could record nothing (MEASUREMENTS 2026-10-12). A tick
-   whose block leaves the overseer nothing to judge runs none (§39): it skips that check, owes no duty, makes the
-   harness's dispatches, and closes `ok`.
+   closes `canopy_unavailable` without running an overseer that could record nothing (MEASUREMENTS 2026-10-12). If the
+   runtime does not list the overseer's model, or its list cannot be read, the tick closes `model_missing` or
+   `model_list_failed` with the item of that name, rather than run it on another (§13). A tick whose block leaves the
+   overseer nothing to judge runs none (§39): it skips the last two checks, owes no duty, makes the harness's
+   dispatches, and closes `ok`.
 
    Then run `overseer_cmd` in the workspace root (§18), with `CANOPY_TICK_ID` set and its tools named in its
    environment alone (§27); they refuse unless it names a running tick (D020). Its output goes to a log only the

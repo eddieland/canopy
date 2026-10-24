@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import history
+from canopy.core import agent_models, chore_runs, conversation, db, notice, outbox, prompts
 from canopy.core import chore_result as result
-from canopy.core import chore_runs, conversation, db, notice, outbox, prompts
 from canopy.core import chore_view as view
 from canopy.core import chore_window as window
 from canopy.core.vocab import ChoreRunStatus
@@ -32,13 +32,17 @@ DISPATCH_ACTION = "dispatch:chore"
 
 
 class Refusal(Exception):  # noqa: N818  (an outcome the overseer is told about, not an error)
-    """A guard refused the chore run. `guard` names it in the `refused:<guard>` decision."""
+    """A guard refused the chore run. `guard` names it in the `refused:<guard>` decision.
 
-    def __init__(self, guard: str, reason: str) -> None:
-        """Name the guard and say why it refused."""
+    `attention` names the attention item the refusal raises, if any: one only the operator can clear.
+    """
+
+    def __init__(self, guard: str, reason: str, *, attention: str | None = None) -> None:
+        """Name the guard and say why it refused, and the attention item the refusal raises, if any."""
         super().__init__(f"{guard}: {reason}")
         self.guard = guard
         self.reason = reason
+        self.attention = attention
 
 
 @dataclass(frozen=True)
@@ -100,7 +104,9 @@ def check(ctx: Context, *, tick_id: int, name: str) -> Chore:
         d.chore for d in db.decisions_for_tick(ctx.conn, tick_id) if d.action == DISPATCH_ACTION and d.chore is not None
     ]
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        return _guard(ctx, name, planned=planned)
+        chore = _guard(ctx, name, planned=planned)
+        check_model(ctx, name, chore)
+        return chore
 
 
 def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Started:
@@ -117,6 +123,8 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         chore = _guard(ctx, name)
+        # Before the run is recorded, so a model that cannot be used leaves the chore as due as it was.
+        check_model(ctx, name, chore)
         try:
             body = read_body(ctx.config, chore)
         except prompts.PromptError as e:
@@ -163,6 +171,32 @@ def launch(ctx: Context, *, tick_id: int | None, state: view.ChoreState, body: s
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "chore_runs", run_id, pid)
     return Started(run_id, pid)
+
+
+def check_model(ctx: Context, name: str, chore: Chore) -> None:
+    """Refuse a run of chore `name` whose model the runtime does not list, looked up now (DESIGN §13, §19).
+
+    The model is the chore's own, else `runtime.models`' for the chore's agent; a chore that runs an agent of the
+    operator's own takes the model its definition names, which canopy neither writes nor checks. The list is read in
+    the workspace root, as a worker's dispatch reads it, and the model is never fallen back from.
+
+    Raises:
+        Refusal: `model_missing` or `model_list_failed`, with its attention item, as a worker's dispatch refuses.
+    """
+    chosen = agent_models.of_chore(ctx.config, chore)
+    if chosen.model is None:
+        return
+    where = f"for {name} in its `model`" if chosen.source == "chore" else "for chores in runtime.models"
+    try:
+        agent_models.check(
+            ctx.runner,
+            ctx.workspace.root,
+            chosen.model,
+            version=ctx.config.runtime.version,
+            chosen=where,
+        )
+    except agent_models.ModelError as e:
+        raise Refusal(e.guard, e.reason, attention=e.guard) from e
 
 
 def read_body(config: Config, chore: Chore) -> str:

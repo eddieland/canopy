@@ -328,11 +328,9 @@ registered; they, and what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 
-Built as far as each agent's default in `[runtime.models]`, a chore's own model, variants, the ticket's override
-from `canopy model` or the ticket's page, the check of a model and its variant before a worker, plan, or review run,
-and recording what served (REQUIREMENTS R23). The check before a chore or a tick's overseer is still to come; until
-then such a run on an unlisted model fails as it starts, and one at an unlisted variant may run at the model's
-default.
+Built: each agent's default in `[runtime.models]`, a chore's own model, variants, the ticket's override from
+`canopy model` or the ticket's page, the check of a model and its variant before every run, and recording what served
+(REQUIREMENTS R23).
 
 The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
@@ -362,8 +360,9 @@ promises:
 - **No silent fallback.** Before a run starts, canopy checks its model against the list OpenCode would look it up in,
   and its variant against the model's, since OpenCode drops an unlisted variant without a word. An unlisted model or
   variant, or a list that cannot be read, refuses the run with an attention item, spending no attempt and leasing no
-  slot, so the work resumes once the model is back. It never falls back to the default, since a canary's run
-  on a model nobody chose would read as the canary's.
+  slot, so the work resumes once the model is back. The overseer's closes its tick with a status of the item's name
+  (§6 step 5), and the model every task's run takes holds every queued task, with one item. It never falls back to
+  the default, since a canary's run on a model nobody chose would read as the canary's.
 
 The PR that builds the choosing proposes T1, T5, T7, and T8 to match. Rejected: a model chosen by the overseer or
 ticket labels (T1); a list of models shipped with canopy; one override for all of a ticket's agents; recording only the
@@ -415,8 +414,9 @@ raises `awaiting_reply` for a started ticket's, a planner's, or a task's unanswe
 `repo_missing` for a mapped repository with no clone and `auto_maintenance_on` for a clone whose config leaves git's
 automatic maintenance on (§18), `git_too_old` while the git on `PATH` is too old for canopy's commit hooks (§8),
 `connector_failed` about the workspace, one item naming
-every source whose run that tick read less than it was asked (§30), and `canopy_unavailable` or `disk_low` for a tick
-whose check of the overseer's tools or free disk failed (§6 step 5). Follow-ups a run filed are an event, not an item:
+every source whose run that tick read less than it was asked (§30), and `canopy_unavailable`, `disk_low`,
+`model_missing`, or `model_list_failed` for a tick whose check of the overseer's tools, free disk, or model failed (§6
+step 5). Follow-ups a run filed are an event, not an item:
 the sinks hear of them once, as `follow_ups.filed` (§20), since nothing canopy watches tells when the operator has
 decided on one. It raises `follow_up_unrecorded` about a ticket whose runs reported tickets the journal did not
 record, until the ticket is done or forgotten (§18).
@@ -424,10 +424,11 @@ record, until the ticket is done or forgotten (§18).
 **Recorded by the overseer.** The overseer records an item with its `attention` tool (§27), with a reason and a detail,
 every tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention
 decisions of the latest `ok` tick, so an item disappears the first tick that does not record it, and a failed or
-`skipped` tick leaves the previous list standing; `canopy_unavailable` or `disk_low` is added to it while it is the
-latest tick's. The harness holds the overseer's item through a tick that did not give the overseer its subject, such as
-a ticket the harness decided (§37), since the overseer cannot record again what it was not shown; the item goes the
-first tick that gives the overseer its subject and leaves it out, or once its ticket is done or stopped. The state
+`skipped` tick leaves the previous list standing; the item of a tick that closed `canopy_unavailable`, `disk_low`,
+`model_missing`, or `model_list_failed` is added to it while it is the latest tick's. The harness holds the
+overseer's item through a tick that did not give the overseer its subject, such as a ticket the harness decided (§37),
+since the overseer cannot record again what it was not shown; the item goes the first tick that gives the overseer its
+subject and leaves it out, or once its ticket is done or stopped. The state
 block lists the overseer's open items on what it is given (§6 step 4), so it records each again until it sees the
 cause gone. An item's age runs from the first tick of its unbroken run. `attempt_limit` is recorded by the overseer when
 the state block shows a ticket at its limit, and by `canopy dispatch` with an `attempt_limit` refusal, and lasts while
@@ -451,6 +452,8 @@ open item is never notified twice, and an item that returns after going away is 
   does not run, and the item of that name stays until a tick ends otherwise (§6 step 5).
 - Too little free disk: the tick closes `disk_low` the same way. Runs already going keep going; none starts until a
   tick finds the space.
+- The overseer's model is not in the runtime's list, or the list cannot be read: the tick closes `model_missing` or
+  `model_list_failed` the same way (§13).
 - Overseer timeout or bad output: the tick closes `overseer_failed`; nothing is dispatched; the next tick retries.
   Three consecutive ticks not `ok` send a `loop.failing` notification once per streak, and `loop.recovered` at the next
   `ok` (§20); no attention item, since a failing loop cannot add to the latest `ok` tick's list.

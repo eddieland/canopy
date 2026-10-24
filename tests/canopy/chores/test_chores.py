@@ -41,6 +41,7 @@ from tests.canopy.helpers import (
     in_tick,
     json_block,
     lifelock_left,
+    listed,
     messages,
     overseer_does,
     present,
@@ -539,8 +540,14 @@ def own_model(canopy_env: CanopyEnv, model: str) -> None:
     (canopy_env.home / "chores" / "triage.md").write_text("# Triage\n\nLook at the errors.\n")
 
 
-def test_a_chore_with_a_model_of_its_own_runs_on_it(canopy_env: CanopyEnv, chores: Path, agent_log: Path) -> None:
+def test_a_chore_with_a_model_of_its_own_runs_on_it(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    opencode_state: Path,
+) -> None:
     """One definition holds one model, so the chore runs a copy of the chore's agent made for it (DESIGN §19, §13)."""
+    listed(opencode_state, "acme/fake-model-1", "acme/fake-model-2", variants={"acme/fake-model-2": ["high"]})
     canopy_env.append_user('\n[runtime.models]\nchore = "acme/fake-model-1"\n')
     own_model(canopy_env, "acme/fake-model-2@high")
     conn = canopy_env.journal()
@@ -568,14 +575,79 @@ def test_a_chore_with_a_model_of_its_own_runs_on_it(canopy_env: CanopyEnv, chore
     assert definitions.digest(other) != snapshot.name
 
 
+def test_a_chores_model_the_runtime_does_not_list_refuses_the_run_with_an_attention_item(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    opencode_state: Path,
+    agent_log: Path,
+) -> None:
+    """Looked up as a worker's dispatch looks its model up, before the run is recorded, and never fallen back from."""
+    own_model(canopy_env, "acme/fake-model-2")
+    listed(opencode_state, "acme/fake-model-1")
+    reason = (
+        "OpenCode does not list the model acme/fake-model-2 chosen for triage in its `model`, so a run on it would "
+        "fail before its first call; nothing ran on another model. Choose a model it lists, or set up its provider"
+    )
+    conn = canopy_env.journal()
+    # A dry run refuses it as a live tick would.
+    for dry_run in (True, False):
+        with in_tick(conn, dry_run=dry_run, ends_ok=True) as tick_id:
+            assert main(["chore", "run", "triage"], runner=InlineRunner()) == 1
+            assert chore_decisions(conn, tick_id) == [
+                ("triage", "refused:model_missing", reason),
+                ("triage", "attention:model_missing", reason),
+            ]
+    # No run recorded, so the chore stays as due as it was.
+    assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
+    assert [(i.ticket_key, i.reason) for i in attention.current(conn)] == [("chore:triage", "model_missing")]
+    # The chore's agent's model in `runtime.models` is looked up for every other chore.
+    canopy_env.append_user('\n[runtime.models]\nchore = "acme/fake-model-3"\n')
+    with in_tick(conn) as tick_id:
+        assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
+        [(_, action, said), _] = chore_decisions(conn, tick_id)
+    assert action == "refused:model_missing"
+    assert said.startswith("OpenCode does not list the model acme/fake-model-3 chosen for chores in runtime.models,")
+    listed(opencode_state, "acme/fake-model-2", "acme/fake-model-3")
+    with in_tick(conn, ends_ok=True), chore_reports(OK):
+        assert main(["chore", "run", "triage"], runner=InlineRunner()) == 0
+        assert main(["_chore", "1"], runner=InlineRunner()) == 0
+    assert present(chore_runs.get_chore_run(conn, 1)).status == "ok"
+    assert attention.current(conn) == []
+    assert len(agent_runs(agent_log)) == 1
+
+
+def test_a_try_on_a_model_the_runtime_does_not_list_is_refused_and_records_nothing(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    opencode_state: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    own_model(canopy_env, "acme/fake-model-2")
+    opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
+    for args in ((), ("--no-record",)):
+        assert main(["chore", "try", "triage", *args]) == 1
+        assert (
+            capsys.readouterr()
+            .err.rstrip()
+            .endswith(
+                "chore try refused: could not look up the model acme/fake-model-2 chosen for triage in its `model`: "
+                "`opencode models` exited 1. Nothing ran on another model; the work resumes once the list can be read "
+                "(model_list_failed)",
+            )
+        )
+    assert canopy_env.journal().execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
+
+
 def test_a_project_agent_named_for_a_chores_copy_stops_the_chore(
     canopy_env: CanopyEnv,
     chores: Path,
     agent_log: Path,
+    opencode_state: Path,
 ) -> None:
     project = canopy_env.home / "project"
     (project / ".opencode" / "agent").mkdir(parents=True)
     (project / ".opencode" / "agent" / "canopy-chore-triage.md").write_text("---\npermission:\n  bash: allow\n---\n")
+    listed(opencode_state, "acme/fake-model-2")
     own_model(canopy_env, "acme/fake-model-2")
     canopy_env.append_user(f"cwd = {json.dumps(str(project))}\n")
     conn = canopy_env.journal()

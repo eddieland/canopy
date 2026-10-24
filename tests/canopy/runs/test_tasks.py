@@ -35,6 +35,7 @@ from tests.canopy.helpers import (
     in_tick,
     inline_context,
     json_block,
+    listed,
     messages,
     operator,
     pool_statuses,
@@ -198,6 +199,39 @@ def test_a_queued_task_starts_on_the_next_live_tick_and_not_a_dry_one(scenario: 
     assert TEXT not in overseer["argv"][-1]
 
 
+def test_a_model_the_runtime_does_not_list_holds_every_queued_task_with_one_item(
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    """Every task's run takes the private worker's model, so one lookup holds them all (DESIGN §13, §36)."""
+    listed(opencode_state, "acme/fake-model-2")
+    scenario.configures(runtime={"models": {"worker": "acme/fake-model-1"}})
+    submit("first")
+    submit("second")
+    scenario.tick()
+    # None started, and no slot leased: each waits, as for a slot.
+    assert every_run(scenario.conn) == []
+    assert [t.text for t in tasks.queued(scenario.conn)] == ["first", "second"]
+    [item] = attention.current(scenario.conn)
+    assert (item.ticket_key, item.reason) == (None, "model_missing")
+    assert item.detail == (
+        "OpenCode does not list the model acme/fake-model-1 chosen for tasks' runs in runtime.models, so a run on it "
+        "would fail before its first call; nothing ran on another model. Choose a model it lists, or set up its "
+        "provider. 2 queued tasks wait for it"
+    )
+    # A dry tick starts none, but keeps the item a live tick raises.
+    scenario.tick(dry_run=True)
+    assert every_run(scenario.conn) == []
+    assert [(i.ticket_key, i.reason) for i in attention.current(scenario.conn)] == [(None, "model_missing")]
+    listed(opencode_state, "acme/fake-model-1")
+    with private_worker_does(result={"status": "done", "summary": "nothing to change"}):
+        scenario.tick()
+        [run] = every_run(scenario.conn)
+        wait_for_task_run(scenario.conn, run.id)
+    assert attention.current(scenario.conn) == []
+
+
 def test_a_task_waits_for_max_tasks_and_starts_once_a_slot_frees(inline: Context) -> None:
     submit("first")
     submit("second")
@@ -257,11 +291,13 @@ def test_the_commit_trailer_names_the_private_workers_chosen_model(
     canopy_env: CanopyEnv,
     agent_log: Path,
     git_pool: GitPool,
+    opencode_state: Path,
 ) -> None:
     """A task's run is the private worker's, on the model `runtime.models.worker` chooses (DESIGN §13).
 
     git adds the trailer that names it to the task's commits (TRUST_MODEL T5).
     """
+    listed(opencode_state, "provider/model-a")
     canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"worker": "provider/model-a"}}})
     ctx = inline_context(canopy_env)
     submit()
