@@ -63,7 +63,9 @@ class LatestReview(TypedDict):
     held_findings: int
     started_at: str
     ended_at: str | None
-    reviewed_at: str | None
+    #: The journal number the last of them took when it ended, which the `review` cursor names (DESIGN §35); None
+    #: while it runs.
+    number: int | None
 
 
 class SettlingHead(TypedDict):
@@ -276,6 +278,7 @@ def _latest(
         if stored is not None and stored.impact is not None:
             impacts.append(stored.impact)
     ended = max((r.ended_at for r in reviews if r.ended_at is not None), default=None)
+    numbers = [r.number for r in reviews if r.number is not None]
     return {
         "run_id": latest.id,
         "sha": latest.sha,
@@ -287,15 +290,5 @@ def _latest(
         "held_findings": held_count,
         "started_at": latest.started_at,
         "ended_at": ended,
-        # The review's time for the `review` cursor, which takes whole seconds only (DESIGN §7).
-        "reviewed_at": _to_second(ended),
+        "number": max(numbers, default=None),
     }
-
-
-def _to_second(stamp: str | None) -> str | None:
-    """A time the journal wrote, `...T12:00:00.123Z`, as the `review` cursor's `...T12:00:00Z`.
-
-    Returns:
-        `stamp` cut to whole seconds, or None when there is no `stamp`.
-    """
-    return f"{stamp[:19]}Z" if stamp else None

@@ -7,8 +7,9 @@ bounded here before anything is written. A line of a kind its source does not ow
 skipped; one that does not validate is refused and counted, and its subject is not whole this run, whatever `end` says.
 A subject read whole has its rows replaced in one transaction; one not read whole keeps its old rows and their age, so
 a cut-off read never looks like a check, review, or branch gone. Each completed check run is also kept by its run id
-across reads, so a re-run at the same head is told from the run it repeats (§35). A run with no `end` line records
-nothing.
+across reads, so a re-run at the same head is told from the run it repeats (§35). Each comment, review, review
+comment, and completed check run takes its journal number when first observed, and keeps it across reads
+(`item_numbers`): what a cursor passes. A run with no `end` line records nothing.
 
 An observation is a dated copy of what a connector saw, never authority (DESIGN §22): in M36 it decides which thread a
 draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do. Each comment is also
@@ -28,13 +29,14 @@ from typing import TYPE_CHECKING, Annotated, Literal, assert_never, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from canopy.core import contract, conversation, db, sql
+from canopy.core import contract, conversation, db, item_numbers, sql
 from canopy.core.config import REPO_NAME_RE, notify_words
 from canopy.core.vocab import (
     CheckConclusion,
     CheckStatus,
     ConnectorRunStatus,
     MergeState,
+    NumberedItem,
     PrState,
     ReviewItem,
     ReviewState,
@@ -735,6 +737,7 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
         case _Review():
             _insert_review(conn, line, now)
         case _Check():
+            number = _keep_check_run(conn, line, now)
             sql.execute(
                 conn,
                 sql.insert(
@@ -747,9 +750,9 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
                     run_id=line.run_id,
                     url=line.url,
                     observed_at=now,
+                    number=number,
                 ).or_replace(),
             )
-            _keep_check_run(conn, line, now)
         case _Branch():
             sql.execute(
                 conn,
@@ -797,6 +800,9 @@ def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, no
     )
     if cursor.rowcount != 1:
         return False
+    number = item_numbers.take(conn, NumberedItem.COMMENT, line.ticket, line.id, at=now)
+    the_comment = sql.update("observed_comments").where("ticket = ? AND id = ?", line.ticket, line.id)
+    sql.execute(conn, the_comment.set(number=number))
     comment = db.Comment(id=line.id, author=line.author, at=line.time, truncated=truncated)
     conversation.record_comment(conn, line.ticket, comment, source=source, body=body, channel="tracker")
     return True
@@ -804,6 +810,7 @@ def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, no
 
 def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
     thread = line.thread if line.item is ReviewItem.COMMENT else None
+    kind = NumberedItem.REVIEW if line.item is ReviewItem.REVIEW else NumberedItem.REVIEW_COMMENT
     sql.execute(
         conn,
         sql.insert(
@@ -825,18 +832,25 @@ def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
             outdated=None if thread is None else thread.outdated,
             resolved=None if thread is None else thread.resolved,
             observed_at=now,
+            # Kept across reads, which replace the row: what is newer than the `review` cursor (DESIGN §35).
+            number=item_numbers.take(conn, kind, line.pr, line.id, at=now),
         ).or_replace(),
     )
 
 
-def _keep_check_run(conn: sqlite3.Connection, line: _Check, now: str) -> None:
+def _keep_check_run(conn: sqlite3.Connection, line: _Check, now: str) -> int | None:
     """Keep a completed check run in `observed_check_runs`, once per run id, as it was first observed (DESIGN §35).
 
     A later read replaces the PR's `observed_checks` with the newest run of each context, so this is what tells a
-    re-run at the same head from the run it repeats. A commit status has no run to keep.
+    re-run at the same head from the run it repeats. A commit status has no run to keep. The run takes its journal
+    number when first observed completed, what a `ci` cursor passes: a run still going is no failure to hand a worker.
+
+    Returns:
+        The run's number; None for a run still going, or a commit status.
     """
     if line.status is not CheckStatus.COMPLETED or line.run_id is None or line.conclusion is None:
-        return
+        return None
+    number = item_numbers.take(conn, NumberedItem.CHECK_RUN, line.pr, line.run_id, at=now)
     sql.execute(
         conn,
         sql.insert(
@@ -847,8 +861,10 @@ def _keep_check_run(conn: sqlite3.Connection, line: _Check, now: str) -> None:
             head_sha=line.head_sha,
             conclusion=line.conclusion,
             observed_at=now,
+            number=number,
         ).or_ignore(),
     )
+    return number
 
 
 # How many subjects a run's `missed` names before it counts the rest.

@@ -49,6 +49,7 @@ from canopy.core.vocab import (
     MergeState,
     ModelsRead,
     MoveKind,
+    NumberedItem,
     OverrideKind,
     Phase,
     PlanEffort,
@@ -164,6 +165,9 @@ class Ticket(Row):
     plan_setting: PlanSetting | None
     #: When it last changed: made, or its phase, title, done flag, plan setting, or a unit's phase or PR set anew.
     changed_at: str
+    #: The comment cursor, a journal number (DESIGN §35); `last_comment_id` holds it, a tracker's id, instead for a
+    #: ticket no tracker source observes.
+    comment_cursor: int | None
 
 
 @dataclass(frozen=True)
@@ -277,6 +281,8 @@ class ReviewRun(Row):
     #: A revision's draft, by its id, and the version of it the revision read (DESIGN §34); None for a review.
     revises: int | None
     revises_version: int | None
+    #: Its journal number, taken when it ended (DESIGN §35); None while it runs.
+    number: int | None
 
 
 @dataclass(frozen=True)
@@ -1015,6 +1021,23 @@ class ObservedReview(Row):
     outdated: bool | None
     resolved: bool | None
     observed_at: str
+    #: Its journal number, taken when a source first observed it (DESIGN §35).
+    number: int | None
+
+
+@dataclass(frozen=True)
+class ItemNumber(Row):
+    """An item's journal number (DESIGN §35): taken when a source first observed it, or a review run ended."""
+
+    TABLE: ClassVar[str] = "item_numbers"
+
+    number: int
+    kind: NumberedItem
+    #: A ticket's key for a comment; a PR's URL for the rest.
+    subject: str
+    #: The source's id for it, or canopy's own for a review run.
+    id: str
+    numbered_at: str
 
 
 @dataclass(frozen=True)
@@ -1051,6 +1074,8 @@ class ObservedComment(Row):
     #: `worker` when it carries the workers' marks (D069), else `tracker`.
     source: str
     observed_at: str
+    #: Its journal number, taken when a source first observed it (DESIGN §35).
+    number: int | None
 
 
 @dataclass(frozen=True)
@@ -1079,6 +1104,8 @@ class ObservedCheck(Row):
     run_id: int | None
     url: str | None
     observed_at: str
+    #: Its completed run's journal number (DESIGN §35); None while it runs, and for a commit status, which has no run.
+    number: int | None
 
 
 @dataclass(frozen=True)
@@ -1095,6 +1122,8 @@ class ObservedCheckRun(Row):
     conclusion: CheckConclusion
     #: When a source first observed it completed.
     observed_at: str
+    #: Its journal number, taken when a source first observed it completed (DESIGN §35).
+    number: int | None
 
 
 @dataclass(frozen=True)
@@ -1461,8 +1490,13 @@ class TicketUnit(Row):
     branch: str | None
     pr_url: str | None
     phase: Phase | None
+    #: The `review` and `ci` cursors as an earlier canopy wrote them, a time and a check run's id; unread since they
+    #: became journal numbers (DESIGN §35), kept, since no migration drops a column.
     last_review_id: str | None
     last_ci_run_id: str | None
+    #: The `review` and `ci` cursors, journal numbers (DESIGN §35).
+    review_cursor: int | None
+    ci_cursor: int | None
 
 
 @dataclass(frozen=True)

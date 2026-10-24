@@ -15,8 +15,8 @@ from tests.canopy.helpers import agent_runs, canopy, in_tick, waits
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool
 
-#: A review cursor as canopy keeps one: the newest handled item's time, in UTC.
-REVIEWED = "review=2026-10-07T20:58:50Z"
+#: A review cursor as canopy keeps one: the newest handled item's journal number (DESIGN §35).
+REVIEWED = "review=4127"
 
 
 @pytest.mark.parametrize(
@@ -112,7 +112,7 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(scenario: Scenario)
         "dry run: not dispatched; would work on agent/PROJ-3-add-login in repo; label agent-ready-tester",
     ]
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-2'").fetchone()
-    assert ticket["last_comment_id"] is None  # a dry run never advances cursors
+    assert (ticket["comment_cursor"], ticket["last_comment_id"]) == (None, None)  # a dry run never advances cursors
     assert ticket["branch"] is None  # nor records a branch
 
 
@@ -127,7 +127,7 @@ def test_dry_run_ticket_set_records_the_phase_only(scenario: Scenario) -> None:
     assert (row["phase"], row["done"]) == (None, 0)
     # A phase about the PR is the unit's, implied in a single repository; its review cursor was not advanced.
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit.phase, unit.last_review_id) == ("merged", None)
+    assert (unit.phase, unit.review_cursor) == ("merged", None)
     assert [t.key for t in db.open_tickets(conn)] == ["PROJ-1"]  # the first live tick still sees it
 
 
@@ -209,7 +209,7 @@ def test_ticket_set_outside_a_tick_advances_cursors(scenario: Scenario) -> None:
     assert (row["last_comment_id"], row["done"]) == ("10001", 1)
     # In a single repository, the review cursor goes to the ticket's one unit without naming it.
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit.repo, unit.last_review_id) == ("repo", "2026-10-07T20:58:50Z")
+    assert (unit.repo, unit.review_cursor) == ("repo", 4127)
 
 
 def test_a_ticket_is_named_on_one_line_and_renamed(scenario: Scenario, git_pool: GitPool) -> None:
@@ -243,19 +243,18 @@ def test_bad_cursors_are_rejected(canopy_env: CanopyEnv, value: str) -> None:
 @pytest.mark.parametrize(
     "value",
     [
-        "5448282907",  # a review's id: review comments and review runs are numbered apart from reviews
         "run:12",
         "PRR_kw1",
-        "2026-10-07T20:58:50.000Z",  # one form only, so cursors compare as strings
-        "2026-02-30T00:00:00Z",  # not a moment at all
+        "2026-10-07T20:58:50Z",  # the time form an earlier canopy kept, gone with journal numbers
+        "1.5",
     ],
 )
-def test_a_review_cursor_is_a_time(scenario: Scenario, value: str) -> None:
+def test_a_review_cursor_is_a_journal_number(scenario: Scenario, value: str) -> None:
     refused = scenario.operator("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", f"review={value}", code=2)
-    assert "a review cursor is the newest handled item's time in UTC" in refused.err
+    assert "a review cursor is an item's journal number" in refused.err
     scenario.operator("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", REVIEWED)
     [unit] = db.units(scenario.conn, "PROJ-1")
-    assert unit.last_review_id == "2026-10-07T20:58:50Z"
+    assert unit.review_cursor == 4127
 
 
 def test_status_and_attention_ages(scenario: Scenario) -> None:

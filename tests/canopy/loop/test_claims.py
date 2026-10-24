@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation, db
+from canopy.core import conversation, db, review_runs
+from canopy.core.vocab import NumberedItem, ReviewRunStatus
 from canopy.loop import observations
 from tests.canopy.helpers import KEY, LABEL, decisions, in_tick, mcp_session, operator, present, tool_call
 from tests.canopy.observation_helpers import (
@@ -27,6 +28,7 @@ from tests.canopy.observation_helpers import (
     check,
     comment,
     held,
+    number_of,
     observe_pr,
     observe_ticket,
     review,
@@ -125,14 +127,13 @@ def test_a_resume_for_reply_needs_a_new_authorized_reply_not_a_workers(
     source: str,
     action: str,
 ) -> None:
-    comment(observed, "101", author, EARLIER, "Go ahead.", source=source)
-    found = dispatched(observed, kind="resume", label=LABEL, reasons=["reply"], cursors={"comment": "101"})
+    number = comment(observed, "101", author, EARLIER, "Go ahead.", source=source)
+    found = dispatched(observed, kind="resume", label=LABEL, reasons=["reply"], cursors={"comment": str(number)})
     assert found[0] == action
 
 
 def test_a_resume_for_reply_may_rest_on_an_operator_message_instead(observed: sqlite3.Connection) -> None:
-    comment(observed, "101", "acc-9", EARLIER, "Go ahead.")
-    reply = {"comment": "101"}
+    reply = {"comment": str(comment(observed, "101", "acc-9", EARLIER, "Go ahead."))}
     assert dispatched(observed, kind="resume", label=LABEL, reasons=["reply"], cursors=reply)[0] == (
         "refused:unauthorized"
     )
@@ -168,15 +169,25 @@ def test_a_resume_for_reply_may_rest_on_a_comment_on_an_artifact_that_is_authori
 
 
 def test_a_resume_for_review_covers_a_trusted_reviewers_item(observed: sqlite3.Connection) -> None:
-    review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
-    found = dispatched(observed, kind="resume", label=LABEL, reasons=["review"], cursors={"review": EARLIER})
+    number = review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    found = dispatched(observed, kind="resume", label=LABEL, reasons=["review"], cursors={"review": str(number)})
+    assert found[0] == "dispatch:resume"
+
+
+def test_a_review_submitted_after_a_later_comment_is_still_new(observed: sqlite3.Connection) -> None:
+    # A review dated before a comment the cursor passed, but first observed after it: its number is newer, so a resume
+    # for review covers it, where a time cursor would have taken it as handled.
+    passed = review(observed, 2, "octocat", None, LATER, "Use a map.", item="comment")
+    observed.execute("UPDATE ticket_units SET review_cursor = ?", (passed,))
+    late = review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    assert late > passed
+    found = dispatched(observed, kind="resume", label=LABEL, reasons=["review"], cursors={"review": str(late)})
     assert found[0] == "dispatch:resume"
 
 
 def test_untrusted_review_items_need_an_operator_message_after_them(observed: sqlite3.Connection) -> None:
     review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
-    review(observed, 2, "stranger", None, LATER, "Why not a map?", item="comment")
-    covered = {"review": LATER}
+    covered = {"review": str(review(observed, 2, "stranger", None, LATER, "Why not a map?", item="comment"))}
     action, reason = dispatched(observed, kind="resume", label=LABEL, reasons=["review"], cursors=covered)
     assert action == "refused:unauthorized"
     assert reason.startswith(f"review comment 2 on {KEY} in repo is not a trusted reviewer's")
@@ -211,14 +222,24 @@ def test_a_joint_resume_for_review_keeps_its_claim(ws_scenario: Scenario, ws: Ws
 @pytest.mark.parametrize(
     ("cursors", "reasons", "why"),
     [
-        pytest.param({"comment": "999"}, ["reply"], "comment cursor 999 names no comment observed", id="a-comment"),
         pytest.param(
-            {"review": LATER},
-            ["review"],
-            f"review cursor {LATER} is the time of no review item",
-            id="a-time",
+            {"comment": "999"},
+            ["reply"],
+            "comment cursor 999 is the number of no comment observed",
+            id="a-comment",
         ),
-        pytest.param({"ci": "77"}, ["ci"], f"ci cursor 77 names no check run observed at the head of {PR}", id="ci"),
+        pytest.param(
+            {"review": "999"},
+            ["review"],
+            "review cursor 999 is the number of no review item",
+            id="a-review",
+        ),
+        pytest.param(
+            {"ci": "77"},
+            ["ci"],
+            f"ci cursor 77 is the number of no check run observed at the head of {PR}",
+            id="ci",
+        ),
     ],
 )
 def test_a_cursor_naming_nothing_observed_is_unobserved(
@@ -236,17 +257,18 @@ def test_a_cursor_naming_nothing_observed_is_unobserved(
 
 
 def test_a_cursor_past_what_the_block_left_out_is_unobserved(observed: sqlite3.Connection) -> None:
-    count = observations.MAX_NEW_ITEMS + 1
-    for n in range(count):
+    numbers = [
         comment(observed, f"{200 + n}", "acc-1", f"2026-10-01T10:{n:02}:00Z", f"Comment {n}.")
-    shown = {"comment": str(200 + count - 2)}
+        for n in range(observations.MAX_NEW_ITEMS + 1)
+    ]
+    shown = {"comment": str(numbers[-2])}
     assert dispatched(observed, kind="resume", label=LABEL, reasons=["reply"], cursors=shown)[0] == "dispatch:resume"
     action, reason = dispatched(
         observed,
         kind="resume",
         label=LABEL,
         reasons=["reply"],
-        cursors={"comment": str(200 + count - 1)},
+        cursors={"comment": str(numbers[-1])},
     )
     assert action == "refused:unobserved"
     assert "passes comments on PROJ-1 the state block left out" in reason
@@ -271,8 +293,9 @@ def test_a_resume_for_ci_alone_needs_a_failure_no_worker_had(
     for name, head in before:
         check(observed, name, "completed", "failure", run_id=11, head=head)
     check(observed, "build", "completed", "failure", run_id=newest)
-    observed.execute("UPDATE ticket_units SET last_ci_run_id = '11'")
-    found = dispatched(observed, kind="resume", label=LABEL, reasons=["ci"], cursors={"ci": str(newest)})
+    observed.execute("UPDATE ticket_units SET ci_cursor = ?", (number_of(observed, NumberedItem.CHECK_RUN, 11),))
+    cursor = number_of(observed, NumberedItem.CHECK_RUN, newest)
+    found = dispatched(observed, kind="resume", label=LABEL, reasons=["ci"], cursors={"ci": str(cursor)})
     assert found[0] == action
     if action == "refused:handled":
         assert found[1].startswith(f"every failed check at the head of {PR} (build) failed at that head at or behind")
@@ -281,20 +304,22 @@ def test_a_resume_for_ci_alone_needs_a_failure_no_worker_had(
 @pytest.mark.parametrize(
     ("reasons", "cursor"),
     [
-        pytest.param(["ci", "conflict"], "11", id="not-for-ci-alone"),
+        pytest.param(["ci", "conflict"], 11, id="not-for-ci-alone"),
         pytest.param(["ci"], None, id="with-the-ci-cursor-empty"),
-        pytest.param(["ci"], "run-11", id="with-a-ci-cursor-not-a-number"),
     ],
 )
 def test_a_re_run_red_again_is_not_handled(
     observed: sqlite3.Connection,
     reasons: Sequence[str],
-    cursor: str | None,
+    cursor: int | None,
 ) -> None:
     check(observed, "build", "completed", "failure", run_id=11)
     check(observed, "build", "completed", "failure", run_id=12)
-    observed.execute("UPDATE ticket_units SET last_ci_run_id = ?", (cursor,))
-    found = dispatched(observed, kind="resume", label=LABEL, reasons=reasons, cursors={"ci": "12"})
+    # The unit's ci cursor at the run it names, or empty.
+    first = None if cursor is None else number_of(observed, NumberedItem.CHECK_RUN, cursor)
+    observed.execute("UPDATE ticket_units SET ci_cursor = ?", (first,))
+    again = str(number_of(observed, NumberedItem.CHECK_RUN, 12))
+    found = dispatched(observed, kind="resume", label=LABEL, reasons=reasons, cursors={"ci": again})
     assert found[0] == "dispatch:resume"
 
 
@@ -309,15 +334,16 @@ def test_a_private_tickets_re_run_red_again_is_not_handled(observed: sqlite3.Con
     assert operator("start", KEY) == 0
     check(observed, "build", "completed", "failure", run_id=11)
     check(observed, "build", "completed", "failure", run_id=12)
-    observed.execute("UPDATE ticket_units SET last_ci_run_id = '11'")
-    assert dispatched(observed, kind="resume", reasons=["ci"], cursors={"ci": "12"})[0] == "dispatch:resume"
+    observed.execute("UPDATE ticket_units SET ci_cursor = ?", (number_of(observed, NumberedItem.CHECK_RUN, 11),))
+    again = str(number_of(observed, NumberedItem.CHECK_RUN, 12))
+    assert dispatched(observed, kind="resume", reasons=["ci"], cursors={"ci": again})[0] == "dispatch:resume"
 
 
 def test_an_unobserved_pr_keeps_its_ci_claim(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     # No source reads a PR of another host: what failed there, and whether a worker had it, stays the overseer's word.
     held(canopy_env, conn, KEY, at=ago(hours=1))
     with_unit(canopy_env, conn, KEY, pr="https://git.example.com/acme/repo/-/merge_requests/7")
-    conn.execute("UPDATE ticket_units SET last_ci_run_id = '11'")
+    conn.execute("UPDATE ticket_units SET ci_cursor = 11")
     assert dispatched(conn, kind="resume", label=LABEL, reasons=["ci"], cursors={"ci": "12"})[0] == "dispatch:resume"
 
 
@@ -332,9 +358,9 @@ def test_an_unobserved_ticket_keeps_its_claims(canopy_env: CanopyEnv, conn: sqli
 @pytest.mark.parametrize(
     ("cursors", "why"),
     [
-        pytest.param({"comment": "999"}, "comment cursor 999 names no comment observed", id="a-comment"),
-        pytest.param({"review": LATER}, f"review cursor {LATER} is the time of no review item", id="a-time"),
-        pytest.param({"ci": "77"}, f"ci cursor 77 names no check run observed at the head of {PR}", id="ci"),
+        pytest.param({"comment": "999"}, "comment cursor 999 is the number of no comment observed", id="a-comment"),
+        pytest.param({"review": "999"}, "review cursor 999 is the number of no review item", id="a-review"),
+        pytest.param({"ci": "77"}, f"ci cursor 77 is the number of no check run observed at the head of {PR}", id="ci"),
     ],
 )
 def test_a_ticket_set_cursor_naming_nothing_observed_is_unobserved(
@@ -342,41 +368,46 @@ def test_a_ticket_set_cursor_naming_nothing_observed_is_unobserved(
     cursors: Mapping[str, str],
     why: str,
 ) -> None:
-    comment(observed, "101", "acc-1", EARLIER, "Go ahead.")
-    review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    said = comment(observed, "101", "acc-1", EARLIER, "Go ahead.")
+    reviewed = review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
     check(observed, "build", "completed", "failure", run_id=12)
     [(action, reason)] = ticket_set(observed, cursors)
     assert action == "refused:unobserved"
     assert reason.startswith(why)
-    assert ticket_set(observed, {"comment": "101", "review": EARLIER, "ci": "12"}) == []
+    ran = number_of(observed, NumberedItem.CHECK_RUN, 12)
+    assert ticket_set(observed, {"comment": str(said), "review": str(reviewed), "ci": str(ran)}) == []
 
 
 def test_a_ticket_set_cursor_past_what_the_block_left_out_is_unobserved(observed: sqlite3.Connection) -> None:
-    count = observations.MAX_NEW_ITEMS + 1
-    for n in range(count):
+    numbers = [
         comment(observed, f"{200 + n}", "acc-1", f"2026-10-01T10:{n:02}:00Z", f"Comment {n}.")
-    assert ticket_set(observed, {"comment": str(200 + count - 2)}) == []
-    [(action, reason)] = ticket_set(observed, {"comment": str(200 + count - 1)})
+        for n in range(observations.MAX_NEW_ITEMS + 1)
+    ]
+    assert ticket_set(observed, {"comment": str(numbers[-2])}) == []
+    [(action, reason)] = ticket_set(observed, {"comment": str(numbers[-1])})
     assert action == "refused:unobserved"
     assert "passes comments on PROJ-1 the state block left out" in reason
 
 
 def test_a_review_cursor_may_name_a_review_runs_end(observed: sqlite3.Connection) -> None:
-    # The block shows the PR's latest review run's end as `reviewed_at`, which the overseer passes as the cursor.
+    # A review run takes its number when it ends, which the block shows and the overseer passes as the cursor.
     tick_id = db.start_tick(observed, dry_run=False)
-    observed.execute(
-        "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, started_at, ended_at, status, log_path) "
-        "VALUES (?, ?, 'abc1234', ?, ?, ?, 'done', 'x')",
-        (tick_id, PR, KEY, "2026-10-01T11:59:00.000Z", "2026-10-01T12:00:00.250Z"),
-    )
-    assert ticket_set(observed, {"review": "2026-10-01T12:00:00Z"}) == []
+    run = observed.execute(
+        "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, started_at, status, log_path) "
+        "VALUES (?, ?, 'abc1234', ?, ?, 'running', 'x')",
+        (tick_id, PR, KEY, "2026-10-01T11:59:00.000Z"),
+    ).lastrowid
+    assert run is not None
+    assert db.finish_run(observed, "review_runs", run, ReviewRunStatus.DONE, None)
+    number = present(review_runs.get_review_run(observed, run)).number
+    assert ticket_set(observed, {"review": str(number)}) == []
 
 
 @pytest.mark.parametrize(
     ("stale", "cursors", "why"),
     [
-        pytest.param("ticket", {"comment": "101"}, "comment cursor 101 passes comments on PROJ-1", id="the-ticket"),
-        pytest.param("pr", {"review": EARLIER}, f"review cursor {EARLIER}: {KEY} in repo is stale", id="its-units-pr"),
+        pytest.param("ticket", {"comment": "1"}, "comment cursor 1 passes comments on PROJ-1", id="the-ticket"),
+        pytest.param("pr", {"review": "2"}, f"review cursor 2: {KEY} in repo is stale", id="its-units-pr"),
     ],
 )
 def test_a_ticket_set_cursor_on_a_stale_subject_passes_nothing_new(
@@ -416,9 +447,10 @@ def test_a_ticket_set_on_a_private_or_unobserved_ticket_is_not_refused(
 
 
 def test_the_operators_ticket_set_is_not_checked(observed: sqlite3.Connection) -> None:
-    # Outside a tick it is the operator's, not a claim of the overseer's.
+    # Outside a tick it is the operator's, not a claim of the overseer's; with a tracker source, still a number.
     assert operator("ticket", "set", KEY, "--cursor", "comment=999") == 0
-    assert present(db.get_ticket(observed, KEY)).last_comment_id == "999"
+    assert present(db.get_ticket(observed, KEY)).comment_cursor == 999
+    assert operator("ticket", "set", KEY, "--cursor", "comment=c-999") == 1
 
 
 def dispatched(

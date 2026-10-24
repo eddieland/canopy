@@ -436,8 +436,8 @@ REFUSALS = [
     pytest.param(
         Verb(
             "ticket-set",
-            {"key": "PROJ-1", "cursors": {"review": "2026-10-07T20:58:50Z"}},
-            ["ticket", "set", "PROJ-1", "--cursor", "review=2026-10-07T20:58:50Z"],
+            {"key": "PROJ-1", "cursors": {"review": "41"}},
+            ["ticket", "set", "PROJ-1", "--cursor", "review=41"],
         ),
         "repo is required (--repo): a review cursor belongs to one unit",
         2,
@@ -459,7 +459,7 @@ REFUSALS = [
             {"key": "PROJ-1", "repo": "repo", "cursors": {"review": "yesterday"}},
             ["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", "review=yesterday"],
         ),
-        "a review cursor is the newest handled item's time in UTC, as YYYY-MM-DDTHH:MM:SSZ; got 'yesterday'",
+        "a review cursor is an item's journal number, as the state block shows; got 'yesterday'",
         2,
         id="ticket-set-a-bad-cursor",
     ),

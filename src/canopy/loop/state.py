@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import contract, conversation, db, feedback_plans, plans, pools, tasks
+from canopy.core import contract, conversation, db, feedback_plans, item_numbers, plans, pools, tasks
 from canopy.core.vocab import ResumeReason
 from canopy.runs import policy
 
@@ -61,13 +61,17 @@ class OverseerState(TypedDict):
 
 
 class TicketState(TypedDict):
-    """A ticket the loop knows. `private` is a private ticket's conversation, `operator` a public one's new messages."""
+    """A ticket the loop knows. `private` is a private ticket's conversation, `operator` a public one's new messages.
+
+    `cursor_items` says what each cursor that is a journal number names, only when one does (DESIGN §35).
+    """
 
     key: str
     title: str | None
     phase: str | None
     branch: str | None
     cursors: dict[str, str | int | None]
+    cursor_items: NotRequired[dict[str, str]]
     units: list[UnitState]
     needs_human_since: str | None
     last_seen_at: str
@@ -79,13 +83,17 @@ class TicketState(TypedDict):
 
 
 class UnitState(TypedDict):
-    """One of a ticket's units: a repository's branch and PR. `granted` only when the operator granted it runs."""
+    """One of a ticket's units: a repository's branch and PR. `granted` only when the operator granted it runs.
+
+    `cursor_items` says what each cursor names, only when one does (DESIGN §35).
+    """
 
     repo: str
     branch: str | None
     pr_url: str | None
     phase: str | None
     cursors: dict[str, str | int | None]
+    cursor_items: NotRequired[dict[str, str]]
     attempts: dict[str, int]
     ci_cooldown_until: str | None
     granted: NotRequired[dict[str, int]]
@@ -240,6 +248,7 @@ def state_block(
     query_due: bool,
     operator_sent: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
     observations: ObservationsState,
+    numbered: Mapping[int, records.ItemNumber] | None = None,
 ) -> str:
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
@@ -265,7 +274,8 @@ def state_block(
     works the tickets the block lists alone (DESIGN §7, Spacing the query). `operator_sent` holds, by PR, the comments
     and reviews the operator sent through canopy (`drafts.sent_by_pr`); a unit whose PR has none has no
     `operator_sent` key (DESIGN §29). `observations` is what the connectors last read of every ticket the block lists
-    or the query returned, each subject fresh, stale, or unobserved (`observations.section`, DESIGN §35).
+    or the query returned, each subject fresh, stale, or unobserved (`observations.section`, DESIGN §35). `numbered`
+    holds the items the cursors name, by journal number, so a live read of a stale subject can tell what they passed.
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -277,6 +287,7 @@ def state_block(
     run_reasons = run_reasons or {}
     operator_sent = operator_sent or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
+    tracked = config.connect.observes_tickets()
 
     def unit_summary(key: str, u: records.TicketUnit) -> UnitState:
         name = str(u.repo)
@@ -304,7 +315,7 @@ def state_block(
             "title": t.title,
             "phase": t.phase,
             "branch": t.branch,
-            "cursors": {name: getattr(t, column) for name, column in db.TICKET_CURSORS.items()},
+            "cursors": {name: getattr(t, db.ticket_cursor(name, tracked=tracked)) for name in db.TICKET_CURSORS},
             "units": [unit_summary(key, u) for u in units.get(key, [])],
             "needs_human_since": t.needs_human_since,
             "last_seen_at": t.last_seen_at,
@@ -364,7 +375,7 @@ def state_block(
             }
             for r in workspace.repos
         ],
-        "tickets": [ticket_summary(t) for t in tickets],
+        "tickets": _name_cursors([ticket_summary(t) for t in tickets], numbered or {}, tracked=tracked),
         # Tickets the operator stopped: not candidates, whatever their labels, and owed no decision (DESIGN §22).
         "stopped": list(stopped),
         # Tickets marked done lately that the query still finds: owed no decision while the tracker shows them open
@@ -421,6 +432,35 @@ def state_block(
             "",
         ],
     )
+
+
+def _name_cursors(
+    tickets: list[TicketState],
+    numbered: Mapping[int, records.ItemNumber],
+    *,
+    tracked: bool,
+) -> list[TicketState]:
+    """Say, in each ticket's and unit's `cursor_items`, what each of its cursors that is a journal number names.
+
+    A live read of a stale subject has no numbers, so it compares what it reads with these (DESIGN §35). The message
+    cursor is a message's id, whose message the conversation holds, and the comment cursor of a ticket no tracker source
+    observes the tracker's own id.
+
+    Returns:
+        `tickets`, each given its key only where a cursor names an item.
+    """
+
+    def items(cursors: Mapping[str, str | int | None], names: Iterable[str]) -> dict[str, str]:
+        found = {name: numbered.get(value) for name in names if isinstance(value := cursors[name], int)}
+        return {name: item_numbers.describe(item) for name, item in found.items() if item is not None}
+
+    for ticket in tickets:
+        if named := items(ticket["cursors"], ["comment"] if tracked else []):
+            ticket["cursor_items"] = named
+        for unit in ticket["units"]:
+            if named := items(unit["cursors"], db.UNIT_CURSORS):
+                unit["cursor_items"] = named
+    return tickets
 
 
 def _run_summary(

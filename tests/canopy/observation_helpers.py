@@ -1,7 +1,8 @@
 """Helpers the tests of the connectors' observations share: rows written by hand, as a source would (DESIGN §30, §35).
 
-Each writes one observation straight into the journal. The times default to fixed ones around `NOW`; a test that
-dispatches, which reads the observations at the real time, passes its own.
+Each writes one observation straight into the journal, with the journal number a source would give it (DESIGN §35):
+the next one, the first time it is written. The times default to fixed ones around `NOW`; a test that dispatches, which
+reads the observations at the real time, passes its own.
 """
 
 from __future__ import annotations
@@ -12,7 +13,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from unittest import mock
 
-from canopy.core import artifact_feed, conversation, db, records, sql
+from canopy.core import artifact_feed, conversation, db, item_numbers, records, sql
+from canopy.core.vocab import NumberedItem
 from tests.canopy.helpers import KEY, LABEL, present
 
 if TYPE_CHECKING:
@@ -66,21 +68,58 @@ def observe_ticket(
     )
 
 
-def comment(conn: sqlite3.Connection, ident: str, author: str, at: str, body: str, *, source: str = "tracker") -> None:
-    """Record a tracker comment on KEY."""
+def comment(
+    conn: sqlite3.Connection,
+    ident: str,
+    author: str,
+    at: str,
+    body: str,
+    *,
+    source: str = "tracker",
+) -> int:
+    """Record a tracker comment on KEY.
+
+    Returns:
+        Its journal number, what a `comment` cursor names.
+    """
+    number = item_numbers.take(conn, NumberedItem.COMMENT, KEY, ident, at=FRESH)
     conn.execute(
-        "INSERT INTO observed_comments (ticket, id, author, commented_at, body, truncated, source, observed_at) "
-        "VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
-        (KEY, ident, author, at, body, source, FRESH),
+        "INSERT INTO observed_comments (ticket, id, author, commented_at, body, truncated, source, observed_at, "
+        "number) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)",
+        (KEY, ident, author, at, body, source, FRESH, number),
     )
+    return number
+
+
+def number_of(conn: sqlite3.Connection, kind: NumberedItem, ident: str | int, *, subject: str | None = None) -> int:
+    """The journal number of an item the helpers recorded: a comment on KEY, or another kind on PR by default.
+
+    Returns:
+        Its number.
+    """
+    return item_numbers.take(conn, kind, subject or (KEY if kind is NumberedItem.COMMENT else PR), ident, at=FRESH)
+
+
+def review_number(conn: sqlite3.Connection, ident: int) -> str:
+    """The journal number a source gave review item `ident`, as a `review` cursor names it.
+
+    Returns:
+        The number, as the overseer passes it.
+    """
+    [found] = records.fetch_all(
+        conn,
+        records.ObservedReview,
+        sql.select("*").from_("observed_reviews").where("id = ?", ident),
+    )
+    return str(found.number)
 
 
 def observed_comments(conn: sqlite3.Connection) -> list[records.ObservedComment]:
-    """KEY's observed comments, in the order the block reads them."""
+    """KEY's observed comments, in the order the block reads them: the order they were first observed."""
     return records.fetch_all(
         conn,
         records.ObservedComment,
-        sql.select("*").from_("observed_comments").order_by("commented_at, id"),
+        sql.select("*").from_("observed_comments").order_by("number"),
     )
 
 
@@ -121,17 +160,32 @@ def check(
     run_id: int = 11,
     head: str = HEAD,
 ) -> None:
-    """Record a check of PR at `head` as a read does: the newest run of its context, and the run kept once it ends."""
+    """Record a check of PR at `head` as a read does: the newest run of its context, and the run kept once it ends.
+
+    A completed run takes its journal number, what a `ci` cursor names; see `number_of`.
+    """
+    done = status == "completed" and conclusion is not None
+    number = item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, run_id, at=FRESH) if done else None
     conn.execute(
-        "INSERT OR REPLACE INTO observed_checks (pr_url, name, head_sha, status, conclusion, run_id, url, observed_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (PR, name, head, status, conclusion, run_id, f"https://github.com/acme/repo/actions/runs/{run_id}", FRESH),
+        "INSERT OR REPLACE INTO observed_checks (pr_url, name, head_sha, status, conclusion, run_id, url, observed_at, "
+        "number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            PR,
+            name,
+            head,
+            status,
+            conclusion,
+            run_id,
+            f"https://github.com/acme/repo/actions/runs/{run_id}",
+            FRESH,
+            number,
+        ),
     )
-    if status == "completed" and conclusion is not None:
+    if done:
         conn.execute(
-            "INSERT OR IGNORE INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (PR, run_id, name, head, conclusion, FRESH),
+            "INSERT OR IGNORE INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at, "
+            "number) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (PR, run_id, name, head, conclusion, FRESH, number),
         )
 
 
@@ -145,14 +199,21 @@ def review(
     *,
     item: str = "review",
     bot: bool = False,
-) -> None:
-    """Record a review, or with `item` a review comment, of PR by `author`."""
+) -> int:
+    """Record a review, or with `item` a review comment, of PR by `author`.
+
+    Returns:
+        Its journal number, what a `review` cursor names.
+    """
     thread = "PRRT_1" if item == "comment" else None
+    kind = NumberedItem.REVIEW if item == "review" else NumberedItem.REVIEW_COMMENT
+    number = item_numbers.take(conn, kind, PR, ident, at=FRESH)
     conn.execute(
         "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, url, thread_id, "
-        "observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (PR, item, ident, author, bot, state, at, body, f"{PR}#review-{ident}", thread, FRESH),
+        "observed_at, number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (PR, item, ident, author, bot, state, at, body, f"{PR}#review-{ident}", thread, FRESH, number),
     )
+    return number
 
 
 #: Who comments on an artifact in the helpers' changes: a person the store signed in.
