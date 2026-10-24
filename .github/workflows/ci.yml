@@ -95,7 +95,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
-    timeout-minutes: 15
+    # The suite alone takes 10 to 15 minutes on a runner (2026-10-24), so 15 cancelled runs whose every test passed.
+    timeout-minutes: 25
     permissions:
       contents: read
       # For the OIDC token the Codecov upload authenticates with.
