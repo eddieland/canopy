@@ -75,7 +75,12 @@ def cmd_model(
             ref.id,
             chosen_for,
             model,
-            listing=lambda variants: runtime_models.listed(ctx.runner, cwd=ctx.workspace.root, variants=variants),
+            listing=lambda variants: runtime_models.listed(
+                ctx.runner,
+                version=ctx.config.runtime.version,
+                cwd=ctx.workspace.root,
+                variants=variants,
+            ),
             channel=CLI,
         )
     except conversation.Refused as r:
@@ -98,7 +103,10 @@ def cmd_models(click_ctx: click.Context) -> int:
     model in [runtime.models] is not on it, since that agent's runs are refused until it is.
     """
     ctx = open_context(click_ctx)
-    lines, refused = render(runtime_models.listed(ctx.runner, cwd=ctx.workspace.root), ctx.config.runtime.models)
+    lines, refused = render(
+        runtime_models.listed(ctx.runner, version=ctx.config.runtime.version, cwd=ctx.workspace.root),
+        ctx.config.runtime.models,
+    )
     for line in lines:
         click.echo(line)
     return int(refused)

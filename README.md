@@ -136,7 +136,8 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
 
 3. **Connect your MCP servers.** In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP
    server (Jira, Linear, anything with one; for GitHub Issues the GitHub server is both). Your runtime holds the
-   tokens; canopy never sees them.
+   tokens; canopy never sees them. To run OpenCode 2 (2.1.4 or later), set `version = 2` under `[runtime]` in your
+   user config, and give each of those servers `"codemode": false`, since canopy's agents are denied code mode (D077).
 
    Grant only what the agents need. Workers need write tools to comment on a ticket, edit its labels, and open PRs;
    the reviewer needs only read tools. canopy's agent definitions deny the dangerous tools by name, but names differ by
@@ -217,7 +218,7 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | Pack the primary clones' loose objects, between runs, since git's own maintenance is off in them | `canopy gc --git` |
 | Empty the sandbox's per-role caches, each while no run of its role is live | `canopy gc --caches` |
 | Keep every plan, with its status, approval, prompt, original, your comments, and the work that followed, in a private repository of yours | `canopy archive DIR` |
-| Read a run's transcript | its page in the web UI, or `opencode export <session id>` |
+| Read a run's transcript | its page in the web UI, or `opencode export <session id>` (OpenCode 2: `opencode session export`) |
 | Teach your own agent session canopy | `canopy skill --install`, which saves it in `~/.agents/skills/canopy/` |
 | Complete canopy's commands, repositories, and chores with Tab | `canopy completion bash` (or `zsh`, `fish`); its help says how to load it |
 

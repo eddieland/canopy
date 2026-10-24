@@ -45,7 +45,7 @@ def _status(ctx: Context, repo: str) -> Sequence[pools.Slot]:
 
 def _models(ctx: Context) -> ModelList:
     # Read in the workspace root, as a run's model is looked up (DESIGN §13), with the variants a choice may name.
-    return runtime_models.listed(ctx.runner, cwd=ctx.workspace.root, variants=True)
+    return runtime_models.listed(ctx.runner, version=ctx.config.runtime.version, cwd=ctx.workspace.root, variants=True)
 
 
 def _close_task_run(ctx: Context, run: records.TaskRun) -> bool:
