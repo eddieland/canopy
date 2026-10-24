@@ -25,6 +25,7 @@ from tests.canopy.helpers import (
     in_tick,
     planner_does,
     present,
+    tick_starts,
     worker_does,
 )
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches
@@ -87,6 +88,7 @@ def dispatched_then(scenario: Scenario, between: Callable[[], object], *commands
     conn, runner = scenario.conn, InlineRunner()
     with worker_does(*commands), in_tick(conn) as tick_id:
         assert main(dispatches()[1:], runner=runner) == 0
+        tick_starts(tick_id, runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         between()
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])

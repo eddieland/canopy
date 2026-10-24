@@ -9,12 +9,10 @@ from __future__ import annotations
 
 import contextlib
 import errno
-import json
 import os
 import queue
 import signal
 import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -122,24 +120,6 @@ class Runner(Protocol):
         ...
 
 
-#: What `spawn` runs between a reparenting runner and its child: it starts the child as `spawn` would, prints its pid,
-#: and exits, so the child's parent is gone before `spawn` returns. Stdlib only, run by this interpreter, isolated.
-_INTERMEDIATE = """\
-import json, subprocess, sys
-argv, log, held = json.loads(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
-try:
-    child = subprocess.Popen(
-        argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, pass_fds=(held,)
-    )
-except FileNotFoundError:
-    print(json.dumps({"missing": True}))
-except OSError as e:
-    print(json.dumps({"error": e.strerror}))
-else:
-    print(json.dumps({"pid": child.pid}))
-"""
-
-
 class SubprocessRunner:
     """The real runner.
 
@@ -149,14 +129,10 @@ class SubprocessRunner:
 
     #: Variables removed from every child's environment, whatever the inherited one or a call's `env` holds.
     unset: AbstractSet[str] = frozenset()
-    #: Whether `spawn` starts its child through an intermediate that exits at once, so the child is never this
-    #: process's descendant: what stops this process's descendants when it ends then leaves the child running.
-    reparent: bool = False
 
-    def __init__(self, *, unset: Iterable[str] = (), reparent: bool = False) -> None:
-        """Remove `unset` from every child's environment, and, with `reparent`, spawn through an intermediate."""
+    def __init__(self, *, unset: Iterable[str] = ()) -> None:
+        """Remove `unset` from every child's environment."""
         self.unset = frozenset(unset)
-        self.reparent = reparent
 
     def run(
         self,
@@ -301,10 +277,8 @@ class SubprocessRunner:
             raise
         env = _child_env(cwd, None, self.unset, None)
         try:
-            if self.reparent:
-                return _spawn_reparented(argv, cwd=cwd, env=env, log=fd, held=held)
-            # stdin and stdout are never the caller's: a caller whose output is captured through a pipe (an overseer
-            # running `canopy dispatch`) would otherwise wait for the detached child to close it.
+            # stdin and stdout are never the caller's: a caller whose output is captured through a pipe (a `canopy
+            # tick` a scheduler runs) would otherwise wait for the detached child to close it.
             proc = subprocess.Popen(
                 argv,
                 cwd=cwd,
@@ -321,52 +295,12 @@ class SubprocessRunner:
         except OSError as e:
             drop_lifelock(log_path)
             raise ProcError(f"cannot start {argv[0]}: {e.strerror}") from e
-        except ProcError:
-            drop_lifelock(log_path)
-            raise
         finally:
             # The child's copy of `held` keeps the lock; a child that never started leaves it free.
             os.close(fd)
             os.close(held)
         # The child is detached on purpose. Popen reaps it later if it exits while this process still runs.
         return proc.pid
-
-
-def _spawn_reparented(argv: tuple[str, ...], *, cwd: Path, env: Mapping[str, str] | None, log: int, held: int) -> int:
-    """Start `argv` as `spawn` does, through an intermediate that exits once it has, and return the child's pid.
-
-    The intermediate is waited for, so when this returns the child's parent has exited and the child is reparented.
-
-    Returns:
-        The child's pid.
-
-    Raises:
-        CommandNotFoundError: The executable is missing.
-        ProcError: The child could not be started, or the intermediate did not say what it started.
-    """
-    intermediate = [sys.executable, "-I", "-c", _INTERMEDIATE, json.dumps(argv), str(log), str(held)]
-    with subprocess.Popen(
-        intermediate,
-        cwd=cwd,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=log,
-        pass_fds=(log, held),
-        text=True,
-    ) as proc:
-        said, _ = proc.communicate()
-    try:
-        started = json.loads(said)
-    except json.JSONDecodeError:
-        started = None
-    if not isinstance(started, dict):
-        raise ProcError(f"cannot start {argv[0]}: its intermediate exited {proc.returncode} saying nothing of it")
-    if "pid" in started:
-        return int(started["pid"])
-    if started.get("missing"):
-        raise CommandNotFoundError(f"command not found: {argv[0]}")
-    raise ProcError(f"cannot start {argv[0]}: {started.get('error')}")
 
 
 def _child_env(

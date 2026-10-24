@@ -17,9 +17,9 @@ in order:
 
 1. Acquire the lock. If held, log and exit 0, recording no tick.
 2. Apply pending migrations, close any tick still running as abandoned (holding the lock proves its process is gone),
-   and record the tick with the canopy version running it. Its id tags all logs. Migrations wait while any detached
-   run's own process is alive, since it writes the old schema; a journal with migrations this canopy does not know is
-   refused (D068).
+   and any run it recorded unstarted (§8), and record the tick with the canopy version running it. Its id tags all
+   logs. Migrations wait while any detached run's own process is alive, since it writes the old schema; a journal with
+   migrations this canopy does not know is refused (D068).
 3. **Reconcile local state.** A run of any kind whose own process is gone is marked `crashed`, what is left of its
    agent killed, and its slots returned. A slot leased under canopy's prefix with no live run is returned, in every
    pool (§18). Memory proposals expire (§28). A live tick starts the operator's queued tasks (§36). Each source that
@@ -49,12 +49,14 @@ in order:
    harness's dispatches, and closes `ok`.
 
    Then run `overseer_cmd` in the workspace root (§18), with `CANOPY_TICK_ID` set and its tools named in its
-   environment alone (§27); they refuse unless it names a running tick (D020). Its output goes to a log only the
+   environment alone (§27); they refuse unless it names a running tick (D020). A run they ask for is recorded, and
+   the tick starts it once the overseer's run ends, with the harness's dispatches (§8). Its output goes to a log only the
    operator can read, never to the journal. It succeeded if it exited 0 and a line of its final message (§13) is
    exactly `CANOPY_TICK_DONE`, which catches a run that exits 0 short of the last step; otherwise the tick closes
    `overseer_failed`. A successful run that recorded a tick-wide skip, such as the tracker's MCP being down, closes the
    tick `skipped`, which leaves the attention list standing, so an outage does not resolve and re-raise every item.
-   What it started before the skip stands: an outage of one server does not hold work that needs nothing from it (§15).
+   What it asked for before the skip still starts: an outage of one server does not hold work that needs nothing from
+   it (§15).
 
    **The overseer's duties.** A successful run is then checked for what a tick owes: the query when it is due (§7),
    unless a source read it fresh, when the harness records its result before the overseer runs; a decision for every
@@ -67,7 +69,7 @@ in order:
    In a dry run (D036), dispatch checks the live guards (§8) and starts nothing, no cursor advances, and nothing is
    marked done. What the overseer writes is rendered into a later prompt, so its tools validate its keys, verbs,
    reasons, phases (§7), and cursor ids, and bounds its free text.
-6. Close the tick with a summary.
+6. Close the tick with a summary, and close unstarted any run it recorded and did not start (§8).
 7. **Publish attention** (§14): rewrite `attention.md` from the journal, then deliver to each notification sink (§20)
    what changed since it last heard. This follows the close because the list is the latest `ok` tick's. A failure here
    does not change the tick's status. Release the lock.
@@ -261,6 +263,11 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
    Dispatches are serialized from the guards through the spawn, so two cannot both pass a limit. Leases are all or
    nothing, and cursors move only once the worker has started, so a refused or failed dispatch leaves no slot leased
    and what it was meant to handle still new.
+
+   A dispatch the overseer asks for, as a review, a revision, or a chore run it asks for, stops here: its guards
+   passed, it is recorded, its id returned, and the tick starts it once the overseer's run ends (below). A recorded run
+   counts as running in every guard, its ticket's one run and its capacity, `reserved`'s too, and asks are serialized
+   as spawns are. It leases no slot.
 2. Lease a slot in each named repository's pool (§18) and record the run, its slots, and each base.
 3. Render the worker prompt for the kind, with the operator's messages (§22), standing instructions (§12), and the
    notice, and the latest runs' reports as data. A started ticket's run gets the kind's private variant (§22), with no
@@ -269,6 +276,18 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
    The overseer's context points at what to read, never a copy of ticket or PR text, which invites injection, nor a
    file, which could be any the operator can read. A prompt override missing a check the run needs fails it (D051).
 4. Spawn `canopy _run` detached, holding its lifelock (§6), and return immediately.
+
+**The tick starts every run.** No run is spawned from the overseer's process tree: the tick starts every run the
+overseer recorded once its run ends, whatever it ended as, with the harness's own dispatches (§37), in §7's order, chores
+last, and within a rank the overseer's first, as their guards counted them first. Each passes the guards again, as the
+harness's do, and a refusal then is recorded like any other; then steps 2 to 4 run, and the dispatch is recorded with
+its run. The claims (§35) are checked once, at the ask: no poll changes the observations while the tick holds its lock.
+A recorded run belongs to its tick: one not started by its tick's close, or by its process's death, is closed unstarted
+then or by the next tick's step 2, counts toward no limit, and no later tick starts it, since that tick decides again
+from what it reads. A dry run records none (D036). Why: nothing the overseer asked for dies when its run ends, whether
+the runtime kills its server's descendants (§27) or a sandbox around it ends what it holds, and no run, its setup, or
+the harness's git and treehouse calls inherit that sandbox (§24). Rejected: spawning through an intermediate, which
+escapes the runtime but not a sandbox.
 
 `canopy _run`:
 

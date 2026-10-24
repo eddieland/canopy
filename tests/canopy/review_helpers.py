@@ -9,7 +9,7 @@ from typing import Unpack
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.review_drafts import Comment
-from tests.canopy.helpers import Behavior, Called, InlineRunner, in_tick, present, reported, scripted
+from tests.canopy.helpers import Behavior, Called, InlineRunner, in_tick, present, reported, scripted, tick_starts
 from tests.conftest import GitPool, git
 
 # A PR the loop opened.
@@ -57,8 +57,9 @@ def run_inline(
     runner: InlineRunner | None = None,
 ) -> int:
     """Start a review in its own tick and do its `_review` in this process, as the detached one would."""
-    with in_tick(conn, ends_ok=True):
+    with in_tick(conn, ends_ok=True) as tick_id:
         assert main(review(*args, sha=sha, pr=pr), runner=InlineRunner()) == 0
+        tick_starts(tick_id)
         run_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
         assert main(["_review", str(run_id)], runner=runner or InlineRunner()) == 0
     return run_id

@@ -60,6 +60,8 @@ from canopy.core.vocab import (
     Proposal,
     PrState,
     Reaction,
+    RecordedKind,
+    RecordedStatus,
     ReplyMode,
     ResumeReason,
     ReviewDraftAuthor,
@@ -206,6 +208,34 @@ class Decision(Row):
     pr: str | None
     #: Who made it; None on a decision recorded before the journal said (TRUST_MODEL T5).
     decider: Decider | None
+
+
+@dataclass(frozen=True)
+class RecordedRun(Row):
+    """A run the overseer asked for (DESIGN §8): recorded at the ask, started by its tick after the overseer's run."""
+
+    TABLE: ClassVar[str] = "recorded_runs"
+
+    id: int
+    tick_id: int
+    kind: RecordedKind
+    #: A dispatch's ticket, or the ticket a review names.
+    ticket_key: str | None
+    #: A review's or a revision's PR.
+    pr: str | None
+    #: The persona a review is written in, one of several the operator chose for its PR.
+    persona: str | None
+    #: A chore run's chore.
+    chore: str | None
+    #: Its place in §7's order (`harness_dispatches.Rank`).
+    rank: int
+    #: The overseer's request, validated at the ask, as JSON.
+    request: str
+    status: RecordedStatus
+    #: The run it started, in the table `kind` names.
+    run_id: int | None
+    recorded_at: str
+    ended_at: str | None
 
 
 @dataclass(frozen=True)

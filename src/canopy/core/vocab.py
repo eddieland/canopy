@@ -59,6 +59,32 @@ class ReviewRunStatus(StrEnum):
 type AnyRunStatus = RunStatus | ChoreRunStatus | ReviewRunStatus
 
 
+class RecordedKind(StrEnum):
+    """What a run the overseer asked for starts, `recorded_runs.kind` (DESIGN §8): each a run table's run."""
+
+    #: A worker run, in `runs`: `canopy dispatch`.
+    DISPATCH = "dispatch"
+    #: A review run, in `review_runs`: `canopy review run`.
+    REVIEW = "review"
+    #: A revision of a review's draft, a review run too: `canopy review revise`.
+    REVISION = "revision"
+    #: A chore run, in `chore_runs`: `canopy chore run`.
+    CHORE = "chore"
+
+
+class RecordedStatus(StrEnum):
+    """Where a run the overseer asked for stands, `recorded_runs.status` (DESIGN §8)."""
+
+    #: Asked for, and not yet started: it counts as running.
+    RECORDED = "recorded"
+    #: Its tick started it; `run_id` names the run.
+    STARTED = "started"
+    #: A guard refused it at the spawn, which recorded the refusal.
+    REFUSED = "refused"
+    #: Its tick ended, or died, before starting it: it counts toward no limit, and no later tick starts it.
+    UNSTARTED = "unstarted"
+
+
 class TickStatus(StrEnum):
     """A tick's status, `ticks.status` (DESIGN §6)."""
 

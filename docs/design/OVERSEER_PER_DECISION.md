@@ -6,9 +6,10 @@ the map. Previous: [A tick without the overseer](WITHOUT_THE_OVERSEER.md).
 
 ## 40. The overseer per decision
 
-Designed, not built (ROADMAP M40). The runs per subject wait on §39; the recorded run (below) needs nothing from it.
-Until each is built, §5, §6, §8, §11, §13, §15, §27, and TRUST_MODEL describe canopy as it is; this section says what
-changes, and the PR that finishes it changes those sections and cuts this one to what is left.
+Designed, and in part built (ROADMAP M40). The runs per subject wait on §39. The tick starting every run the overseer
+asks for is built, and is §8's (The tick starts every run), which the runs per subject keep. Until the rest is built,
+§5, §6, §11, §13, §15, §27, and TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that
+finishes it changes those sections and cuts this one to what is left.
 
 Once the harness decides what needs no judgment (§37) and the overseer runs only when something is left (§39), its
 runs on a quiet queue come hours apart, past the provider's cache of its prompt (§6 step 4), and each is handed every
@@ -60,24 +61,9 @@ share of each tick that decided it.
 
 ### The tick starts every run
 
-A run the overseer asks for, a dispatch, a review, or a chore's, is recorded, never spawned from the overseer's process
-tree: the tick spawns it once the overseer's runs have ended, with the harness's own (§37), in §7's order. This holds
-whether a tick makes one overseer run or many, so it can be built first.
-
-- At the ask, every guard of §8 step 1 is checked, and a refusal goes back to the run as it does today. The recorded
-  run counts as running: it is its ticket's one run and holds its capacity in every count, `reserved`'s among them.
-  Asks are serialized through the record as they are through the spawn today, so two cannot both pass a limit. It
-  leases no slot (§9). The tool returns its id.
-- At the spawn the guards are checked again, as the harness's own are, and a refusal is recorded like any other. Then
-  it leases and `_run` starts (§8 step 4); cursors still move only once the worker starts.
-- A recorded run belongs to its tick. One the tick did not spawn, because it ended early or its process died, is
-  closed unstarted when the tick closes or when step 2 closes the tick abandoned, and counts toward no limit; no later
-  tick spawns it, since that tick decides again from what it reads. A dry run records and spawns none (D036).
-
-Why: with no run in the overseer's process tree, nothing it asked for dies when it ends, whether the runtime kills its
-server's descendants (§27) or a sandbox around the overseer ends what it holds, and no run, its setup, or the harness's
-git and treehouse calls inherit that sandbox. So `overseer_cmd` can be wrapped apart from its runs (§24). Rejected:
-spawning through an intermediate, as §27's server does, which escapes the runtime but not a sandbox.
+Built, and §8's: every run the overseer asks for is recorded, and the tick starts it once the overseer's run ends,
+never from its process tree. With a run per subject, the tick starts what all of them recorded once the last has ended,
+with the harness's own, in §7's order.
 
 ### Trust model changes, when built
 
@@ -85,10 +71,7 @@ spawning through an intermediate, as §27's server does, which escapes the runti
   subject, so text on one ticket cannot steer a decision about another, nor its failing run hold up another's.
   Residual: it still steers its own ticket's run, bounded as any overseer decision is; the standing instructions and
   the notice, in the shared part, reach every run, as they do today.
-- T3: a tick makes at most one run per subject, each with the overseer's timeout, one at a time. A recorded run holds
-  its ticket and its capacity from the ask to the spawn, is checked again at the spawn, and is closed with its tick.
-- T4: no run canopy starts is the overseer's descendant, so a sandbox around `overseer_cmd` confines the overseer
-  alone; wrapping it is a change of its own (§24).
+- T3: a tick makes at most one run per subject, each with the overseer's timeout, one at a time.
 - T6: a steered run holds one subject's text, so what it records can carry nothing of another ticket's.
 
 ### Open

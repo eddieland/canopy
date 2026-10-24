@@ -26,6 +26,7 @@ from tests.canopy.helpers import (
     overseer_does,
     pool,
     present,
+    tick_starts,
     wait_for_run,
     waits,
     worker_does,
@@ -317,10 +318,11 @@ def test_killed_worker_is_detected_on_the_next_tick(
     """M2 acceptance, against the fakes: a killed worker is found by the next tick and its slot returned."""
     with (
         worker_does(sleep=60),
-        in_tick(conn, ends_ok=True),
+        in_tick(conn, ends_ok=True) as tick_id,
     ):
         dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main(dispatch) == 0
+        tick_starts(tick_id, procs.SubprocessRunner())
 
     # Wait for both, in either order. `_run` records the worker's pid only after starting it, so the agent log can come
     # first. The log is written after the fake's stdout chatter: killing `_run` before then would break the worker's

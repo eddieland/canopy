@@ -10,10 +10,8 @@ cases about a ticket's run enable two rows here, as a measurement would, and wri
 from __future__ import annotations
 
 import json
-from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from unittest import mock
 
 import pytest
 
@@ -23,6 +21,7 @@ from canopy.core.vocab import Decider, Phase, ResumeReason, RunKind, TickStatus
 from canopy.infra import procs
 from canopy.loop import attention, harness_dispatches, mcp, phases
 from tests.canopy.helpers import (
+    ENABLED,
     KEY,
     LABEL,
     InlineRunner,
@@ -31,12 +30,15 @@ from tests.canopy.helpers import (
     chore_toml,
     context,
     decisions,
+    derived,
+    enabled,
     in_tick,
     json_block,
     last_tick,
     mcp_session,
     overseer_does,
     tool_call,
+    unit_at,
     waits,
 )
 from tests.canopy.observation_helpers import observe_ticket
@@ -44,16 +46,11 @@ from tests.canopy.scenario_helpers import dispatches, pushes
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Mapping
 
     from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import CanopyEnv, GitPool
 
-#: Two rows a measurement might enable, each with its fixed context.
-ENABLED = {
-    Phase.CONFLICTED: harness_dispatches.Row(ResumeReason.CONFLICT, "The PR conflicts with its base: bring it in."),
-    Phase.PUSHED_NO_PR: harness_dispatches.Row(ResumeReason.NO_PR, "The branch has no PR: open one."),
-}
 #: A chore with no `when`, which the harness runs, and one with a `when`, which the overseer decides.
 MINE, THEIRS = "deps", "build-health"
 
@@ -183,25 +180,6 @@ def test_the_overseers_verbs_about_the_harnesss_chore_are_refused(conn: sqlite3.
 
 
 # A ticket's run, with rows enabled
-
-
-@contextmanager
-def enabled() -> Iterator[None]:
-    """Until the block ends, the harness dispatches for ENABLED's rows."""
-    with mock.patch.object(harness_dispatches, "ROWS", ENABLED):
-        yield
-
-
-@contextmanager
-def derived(*subjects: phases.Derived) -> Iterator[None]:
-    """Until the block ends, every tick derives `subjects`, a derivation written by hand."""
-    with mock.patch.object(phases, "derive", autospec=True, return_value=list(subjects)):
-        yield
-
-
-def unit_at(key: str, phase: Phase) -> list[phases.Derived]:
-    """A fresh, open candidate holding no row of its own, its unit in `repo` holding `phase` alone."""
-    return [phases.Derived(key, None, (), candidate=True, closed=False), phases.Derived(key, "repo", (phase,))]
 
 
 @pytest.fixture

@@ -46,6 +46,7 @@ from tests.canopy.helpers import (
     overseer_does,
     present,
     state_block,
+    tick_starts,
     tools_of,
     with_events,
 )
@@ -77,6 +78,7 @@ def run_inline(conn: sqlite3.Connection, report: object, *, close: bool = True) 
     """Start build-health in its own tick, then do its `_chore` in this process, as the detached one would."""
     with in_tick(conn) as tick_id, chore_reports(report):
         assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
+        tick_starts(tick_id, InlineRunner())
         run_id = int(conn.execute("SELECT max(id) FROM chore_runs").fetchone()[0])
         assert main(["_chore", str(run_id)], runner=InlineRunner()) == 0
         if close:
@@ -132,6 +134,7 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
     with in_tick(conn) as tick_id, chore_reports(OK), mock.patch.dict(os.environ, inherited):
         before = time.time()
         assert main(["chore", "run", "build-health", "--context", "Look at build 90"]) == 0
+        tick_starts(tick_id, procs.SubprocessRunner())
         deadline = time.monotonic() + 30
         row = chore_runs.get_chore_run(conn, 1)
         while row is not None and row.status == "running" and time.monotonic() < deadline:
@@ -272,12 +275,14 @@ def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
         runner = InlineRunner()
         # The run is started but its `_chore` never runs, so it stays running.
         assert main(["chore", "run", "build-health"], runner=runner) == 0
+        tick_starts(tick_id, runner)
         assert main(["chore", "run", "build-health"], runner=runner) == 1
         assert main(["chore", "run", "queue-age"], runner=runner) == 1
         assert db.finish_run(conn, "chore_runs", 1, ChoreRunStatus.OK, json.dumps({"status": "ok"}))
         assert main(["chore", "run", "build-health"], runner=runner) == 1
         backdate(conn, 120)
         assert main(["chore", "run", "queue-age"], runner=runner) == 0
+        tick_starts(tick_id, runner)
         assert main(["chore", "run", "nope"], runner=runner) == 1
 
         found = chore_decisions(conn, tick_id)
@@ -301,6 +306,7 @@ def test_a_dry_run_checks_the_guards_and_starts_nothing(canopy_env: CanopyEnv, c
     with in_tick(conn, dry_run=True) as tick_id:
         runner = InlineRunner()
         assert main(["chore", "run", "build-health"], runner=runner) == 0
+        tick_starts(tick_id, runner)
         assert main(["chore", "run", "build-health"], runner=runner) == 1
         assert chore_decisions(conn, tick_id) == [
             ("build-health", "dispatch:chore", "dry run: not dispatched"),
@@ -552,8 +558,9 @@ def test_a_chore_with_a_model_of_its_own_runs_on_it(
     own_model(canopy_env, "acme/fake-model-2@high")
     conn = canopy_env.journal()
     for run_id, name in enumerate(("triage", "build-health"), start=1):
-        with in_tick(conn, ends_ok=True), chore_reports(OK):
+        with in_tick(conn, ends_ok=True) as tick_id, chore_reports(OK):
             assert main(["chore", "run", name], runner=InlineRunner()) == 0
+            tick_starts(tick_id, InlineRunner())
             assert main(["_chore", str(run_id)], runner=InlineRunner()) == 0
         assert present(chore_runs.get_chore_run(conn, run_id)).status == "ok"
     triage, build_health = agent_runs(agent_log)
@@ -588,8 +595,9 @@ def test_a_project_agent_named_for_a_chores_copy_stops_the_chore(
     own_model(canopy_env, "acme/fake-model-2")
     canopy_env.append_user(f"cwd = {json.dumps(str(project))}\n")
     conn = canopy_env.journal()
-    with in_tick(conn, ends_ok=True), chore_reports(OK):
+    with in_tick(conn, ends_ok=True) as tick_id, chore_reports(OK):
         assert main(["chore", "run", "triage"], runner=InlineRunner()) == 0
+        tick_starts(tick_id, InlineRunner())
         assert main(["_chore", "1"], runner=InlineRunner()) == 0
     run = present(chore_runs.get_chore_run(conn, 1))
     assert run.status == "crashed"
@@ -625,8 +633,9 @@ def test_a_chores_model_the_runtime_does_not_list_refuses_its_run_with_an_attent
     assert [(i.ticket_key, i.reason) for i in attention.current(conn)] == [("chore:triage", "model_missing")]
     # Once the runtime lists it, the chore runs on it.
     listed(opencode_state, "acme/fake-model-1", "acme/fake-model-2")
-    with in_tick(conn, ends_ok=True), chore_reports(OK):
+    with in_tick(conn, ends_ok=True) as tick_id, chore_reports(OK):
         assert main(["chore", "run", "triage"], runner=InlineRunner()) == 0
+        tick_starts(tick_id, InlineRunner())
         assert main(["_chore", "1"], runner=InlineRunner()) == 0
     assert present(chore_runs.get_chore_run(conn, 1)).status == "ok"
     assert attention.current(conn) == []
@@ -661,6 +670,7 @@ def test_a_chore_for_another_workspace_is_not_configured_here(canopy_env: Canopy
         assert chore_decisions(conn, tick_id)[0][1] == "refused:unknown_chore"
         canopy_env.write_user(text.replace('["elsewhere"]', '["acme"]'))  # the name in this workspace's map
         assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
+        tick_starts(tick_id, InlineRunner())
 
 
 def test_a_chore_that_times_out(canopy_env: CanopyEnv, chores: Path) -> None:
@@ -668,8 +678,9 @@ def test_a_chore_that_times_out(canopy_env: CanopyEnv, chores: Path) -> None:
         canopy_env.user_file.read_text().replace("every_minutes = 120", "every_minutes = 120\ntimeout_minutes = 1"),
     )
     conn = canopy_env.journal()
-    with in_tick(conn):
+    with in_tick(conn) as tick_id:
         assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
+        tick_starts(tick_id, InlineRunner())
         assert main(["_chore", "1"], runner=InlineRunner(timeout_agent=True)) == 0
         row = present(chore_runs.get_chore_run(conn, 1))
         assert row.status == "timeout"
@@ -683,8 +694,9 @@ def test_a_killed_chore_run_is_crashed_on_the_next_tick(
     agent_log: Path,
 ) -> None:
     conn = canopy_env.journal()
-    with in_tick(conn, ends_ok=True), chore_reports(OK, sleep=60):
+    with in_tick(conn, ends_ok=True) as tick_id, chore_reports(OK, sleep=60):
         assert main(["chore", "run", "build-health"]) == 0
+        tick_starts(tick_id, procs.SubprocessRunner())
     deadline = time.monotonic() + 30
     row = chore_runs.get_chore_run(conn, 1)
     while (row is None or row.agent_pid is None) and time.monotonic() < deadline:

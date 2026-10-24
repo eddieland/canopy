@@ -13,7 +13,7 @@ import contextlib
 import json
 import re
 import sys
-from collections.abc import Collection, Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -29,6 +29,7 @@ from canopy.core import (
     personas,
     pools,
     prompts,
+    recorded_runs,
     records,
     review_requests,
     review_runs,
@@ -36,7 +37,7 @@ from canopy.core import (
     ticket_models,
 )
 from canopy.core import review_result as result
-from canopy.core.vocab import ReviewRunStatus
+from canopy.core.vocab import RecordedKind, ReviewRunStatus
 from canopy.infra import lock, logs, procs
 from canopy.infra.text import quoted
 from canopy.reviews import findings, grants, settle
@@ -208,8 +209,48 @@ def check(ctx: Context, *, tick_id: int, request: Request) -> str:
         return repo
 
 
-def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) -> Started:
+def record(ctx: Context, *, tick_id: int, request: Request, rank: int, asked: str) -> int:
+    """Check the guards a review the overseer asks for passes, and record it for its tick to start (DESIGN §8).
+
+    Nothing is leased or spawned: the tick starts it, by `start`, once the overseer's run ends, under every guard again.
+    Until then it counts as running: a review of its PR in its persona, and one of its ticket's, is refused `running`,
+    and it counts toward its PR's limit, the day's, `max_reviews`, and `max_workers`. `asked` is the overseer's request
+    as JSON, which the tick starts it from, and `rank` its place in §7's order.
+
+    Returns:
+        The recorded run's id.
+
+    Raises:
+        Refusal: a guard refused.
+    """
+    with lock.hold(ctx.dispatch_lock_path, wait=True):
+        _guard(ctx, request, held=recorded_runs.held(ctx.conn))
+        _persona(ctx, request)
+        _check_model(ctx, request)
+        return recorded_runs.record(
+            ctx.conn,
+            tick_id=tick_id,
+            kind=RecordedKind.REVIEW,
+            rank=rank,
+            request=asked,
+            ticket_key=request.ticket,
+            pr=request.pr,
+            persona=request.persona,
+        )
+
+
+def start(
+    ctx: Context,
+    *,
+    tick_id: int,
+    request: Request,
+    context: str | None,
+    recorded: int | None = None,
+) -> Started:
     """Check the guards, lease a slot, record the review run, render its prompt, and spawn `canopy _review`.
+
+    `recorded` is the run the overseer asked for that this starts (`record`): every other run recorded and not yet
+    started counts as running.
 
     Returns:
         The new review run's id, the pid of its `canopy _review`, and the slot it leased.
@@ -219,7 +260,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             left running and no slot is left leased.
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        repo = _guard(ctx, request)
+        repo = _guard(ctx, request, held=recorded_runs.held(ctx.conn, but=recorded))
         # Fixed before the run is recorded, so a persona or model that cannot be used costs the PR none of its reviews.
         persona = _persona(ctx, request)
         _check_model(ctx, request)
@@ -231,7 +272,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             sha=request.sha,
             ticket=request.ticket,
             repo=repo,
-            purpose=_purpose(ctx.conn, request),
+            purpose=purpose(ctx.conn, request),
             logs_dir=reviews_dir(ctx),
             persona=persona.name,
             persona_digest=persona.digest,
@@ -356,7 +397,7 @@ def _reviewers_persona(ctx: Context, name: str) -> personas.Persona:
         raise personas.PersonaError(e.guard, f"[personas] reviewers: {e.reason}") from e
 
 
-def _purpose(conn: sqlite3.Connection, request: Request) -> str:
+def purpose(conn: sqlite3.Connection, request: Request) -> str:
     """Why the review runs: `own` with a ticket, checked by `_check_ours`; `request` for a PR the operator asked for.
 
     Returns:
@@ -506,12 +547,13 @@ def _guard(
     request: Request,
     *,
     planned: Collection[records.Decision] | None = None,
+    held: Sequence[records.RecordedRun] = (),
     dry_run: bool = False,
 ) -> str:
     """Refuse unless a review of `request` may start now. Returns the repository it leases in.
 
-    `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running. A dry run
-    records no head as seen (D036).
+    `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running, as the runs in
+    `held` do, recorded and not yet started (DESIGN §8). A dry run records no head as seen (D036).
 
     Returns:
         The name of the repository the review leases in.
@@ -529,8 +571,8 @@ def _guard(
     repo = check_repo(ctx, request.repo)
     _check_ours(ctx, request, repo)
     planned_reviews, planned_runs = split_planned(planned or [])
-    _check_running(ctx, request, planned_reviews, planned_runs)
-    _check_limits(ctx, request, planned_reviews, planned_runs, record=not dry_run)
+    _check_running(ctx, request, planned_reviews, planned_runs, held)
+    _check_limits(ctx, request, planned_reviews, planned_runs, held, record=not dry_run)
     return repo
 
 
@@ -570,11 +612,12 @@ def _check_running(
     request: Request,
     planned_reviews: Iterable[records.Decision],
     planned_runs: Iterable[records.Decision],
+    held: Sequence[records.RecordedRun],
 ) -> None:
-    """`running`: a review of this PR, or a worker on its ticket, is running.
+    """`running`: a review of this PR, or a worker on its ticket, is running, or recorded to start (`held`).
 
     Raises:
-        Refusal: (`running`) a review of the PR is running or planned, or a worker on its ticket is.
+        Refusal: (`running`) a review of the PR is running, recorded, or planned, or a worker on its ticket is.
     """
     # Reviews in the personas chosen for the PR run side by side, each blocking only another in its own persona.
     running = next(
@@ -589,12 +632,30 @@ def _check_running(
         raise Refusal("running", f"review run {running['id']} of this PR is running")
     if not request.among and any(d.pr == request.pr for d in planned_reviews):
         raise Refusal("running", "this dry run already reviewed this PR")
+    recorded = next((r for r in recorded_runs.reviews(held) if r.pr == request.pr and _holds_off(r, request)), None)
+    if recorded is not None:
+        raise Refusal("running", f"recorded run {recorded.id} of this PR starts once the overseer's run ends")
     if request.ticket is None:
         return
     worker = next((r for r in db.running_runs(ctx.conn, "runs") if r["ticket_key"] == request.ticket), None)
-    if worker is not None or any(d.ticket_key == request.ticket for d in planned_runs):
+    asked = any(r.kind is RecordedKind.DISPATCH and r.ticket_key == request.ticket for r in held)
+    if worker is not None or asked or any(d.ticket_key == request.ticket for d in planned_runs):
         # A review must not race the push it is meant to judge.
         raise Refusal("running", f"a worker run for {request.ticket} is running; review its PR once it ends")
+
+
+def _holds_off(recorded: records.RecordedRun, request: Request) -> bool:
+    """Whether a review or revision recorded for `request`'s PR holds it off, as a running one would.
+
+    Reviews in the personas chosen for the PR run side by side, each holding off only another in its own persona; a
+    revision holds off every review of its PR.
+
+    Returns:
+        True when it does.
+    """
+    if recorded.kind is RecordedKind.REVISION:
+        return True
+    return recorded.persona == request.persona or recorded.persona not in request.among
 
 
 def _check_limits(
@@ -602,12 +663,14 @@ def _check_limits(
     request: Request,
     planned_reviews: Collection[records.Decision],
     planned_runs: Collection[records.Decision],
+    held: Sequence[records.RecordedRun],
     *,
     record: bool,
 ) -> None:
     """`reviewed`, `review_limit`, and `settling`, then `check_room`'s, in that order.
 
-    `record` records the head as seen, if it is new, before checking that it has settled.
+    `record` records the head as seen, if it is new, before checking that it has settled. A review recorded for the PR
+    and not yet started, in `held`, counts toward its limit as one that ran.
 
     Raises:
         Refusal: the commit already has a `done` review, the PR has used its reviews, the commit has not been seen for
@@ -636,10 +699,12 @@ def _check_limits(
             + (f" per persona, and it was in {request.persona}" if request.persona is not None else ""),
         )
     limit = grants.limit(ctx.conn, cfg, request.pr)
-    if len(runs) >= limit:
-        raise Refusal("review_limit", f"this PR has had {len(runs)} review runs and the limit is {limit}")
+    recorded = sum(r.kind is RecordedKind.REVIEW and r.pr == request.pr for r in held)
+    if len(runs) + recorded >= limit:
+        counted = f", and {recorded} recorded to start," if recorded else ""
+        raise Refusal("review_limit", f"this PR has had {len(runs)} review runs{counted} and the limit is {limit}")
     _check_settled(ctx, request, record=record, now=datetime.now(UTC))
-    check_room(ctx, planned_reviews, planned_runs)
+    check_room(ctx, planned_reviews, planned_runs, held=held)
 
 
 def _check_settled(ctx: Context, request: Request, *, record: bool, now: datetime) -> None:
@@ -650,7 +715,7 @@ def _check_settled(ctx: Context, request: Request, *, record: bool, now: datetim
     Raises:
         Refusal: (`settling`) the commit was first seen less than the settle time ago, or is first seen now.
     """
-    if _purpose(ctx.conn, request) == REQUEST:
+    if purpose(ctx.conn, request) == REQUEST:
         return
     head = settle.see(ctx.conn, ctx.config, request.pr, request.sha, record=record, now=now)
     if head is None or head.settles_at <= now:
@@ -668,8 +733,13 @@ def check_room(
     ctx: Context,
     planned_reviews: Collection[records.Decision],
     planned_runs: Collection[records.Decision],
+    *,
+    held: Sequence[records.RecordedRun] = (),
 ) -> None:
     """`daily_limit`, `review_capacity`, and `capacity`, in that order: what holds a review and a revision alike.
+
+    A run recorded and not yet started, in `held`, counts as running (DESIGN §8): a review or a revision as a review
+    run started today, a dispatch as a worker.
 
     Raises:
         Refusal: the day's review runs, revisions among them, are used, or the review runs or the workers and reviews
@@ -677,16 +747,18 @@ def check_room(
     """
     cfg = ctx.config
     since = db.format_time(datetime.now(UTC) - _DAY)
-    today = len(review_runs.review_runs_since(ctx.conn, since, revisions=True)) + len(planned_reviews)
+    recorded = len(recorded_runs.reviews(held))
+    today = len(review_runs.review_runs_since(ctx.conn, since, revisions=True)) + len(planned_reviews) + recorded
     if today >= cfg.capacity.max_reviews_per_day:
         per_day = cfg.capacity.max_reviews_per_day
         raise Refusal("daily_limit", f"{today} review runs started in the last 24 hours; the limit is {per_day}")
-    busy_reviews = len(db.running_runs(ctx.conn, "review_runs")) + len(planned_reviews)
+    busy_reviews = len(db.running_runs(ctx.conn, "review_runs")) + len(planned_reviews) + recorded
     if busy_reviews >= cfg.capacity.max_reviews:
         raise Refusal("review_capacity", f"{busy_reviews} of {cfg.capacity.max_reviews} review runs are running")
     # A task's run holds a slot too (DESIGN §36).
     tasks = len(db.running_runs(ctx.conn, "task_runs"))
-    busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + tasks + len(planned_runs)
+    workers = sum(r.kind is RecordedKind.DISPATCH for r in held)
+    busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + tasks + len(planned_runs) + workers
     if busy >= cfg.capacity.max_workers:
         raise Refusal("capacity", f"{busy} of {cfg.capacity.max_workers} workers, reviews, and tasks are running")
 
