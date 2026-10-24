@@ -45,7 +45,8 @@ publish_roles = ["worker"]     # an agent, as runtime.allow_bash names one
 Accept: written with the design, before work starts. Live, once built: a worker publishes an artifact to Louvre for a
 ticket, a listed author comments on a passage, the comment reaches the ticket's conversation, and a worker publishes a
 new version that answers it, replies, and resolves the thread; an unlisted author's comment waits on the attention
-list.
+list. On the local store, an artifact a worker publishes names its run's ticket and run in its origin, whatever origin
+the worker passed, which shows the runtime gives the store's server the run's environment.
 
 Status: in progress. Stage 1 is built (2026-10-22): `canopy-artifacts serve`, the local store, serves the eight
 tools over stdio from a directory of the operator's, with versions, anchors, and the feed, and the contract is its
