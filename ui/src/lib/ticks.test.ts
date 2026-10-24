@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { byteSize, tickId, tickState } from './ticks'
+import { TICK_TONE, byteSize, tickId, tickState } from './ticks'
 
 describe('tickState', () => {
     it("reads a tick's ok and skipped as a run's done, and anything else that ended as failed", () => {
@@ -10,6 +10,15 @@ describe('tickState', () => {
         expect(tickState('overseer_failed')).toBe('failed')
         expect(tickState('abandoned')).toBe('failed')
         expect(tickState('a status added later')).toBe('failed')
+    })
+})
+
+describe('TICK_TONE', () => {
+    it("colors a tick halted before its overseer as a failure, its model's refusals among them", () => {
+        for (const status of ['canopy_unavailable', 'disk_low', 'model_missing', 'model_list_failed']) {
+            expect(TICK_TONE[status]).toBe('text-status-failed')
+        }
+        expect(TICK_TONE['ok']).toBeUndefined()
     })
 })
 

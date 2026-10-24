@@ -8,6 +8,8 @@ export const TICK_TONE: Record<string, string> = {
     running: 'text-status-running',
     canopy_unavailable: 'text-status-failed',
     disk_low: 'text-status-failed',
+    model_missing: 'text-status-failed',
+    model_list_failed: 'text-status-failed',
     overseer_failed: 'text-status-failed',
     reconcile_failed: 'text-status-failed',
     error: 'text-status-failed',

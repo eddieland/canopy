@@ -68,6 +68,9 @@ def chore_run(ctx: Context, request: ChoreRun) -> Outcome[ChoreStarted]:
             started = chore_start.start(ctx, tick_id=tick_id, name=name, context=context)
     except chore_start.Refusal as r:
         db.record_decision(ctx.conn, tick_id, None, f"refused:{r.guard}", r.reason, chore=name)
+        if r.attention is not None:
+            # A model the operator must fix (DESIGN §13): the item is about the chore.
+            db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, chore=name)
         log.info("chore run refused", extra={"chore": name, "guard": r.guard, "reason": r.reason})
         raise Refused(f"chore run refused ({r.guard}): {r.reason}; the refusal was recorded") from None
     on_context = f"; context={context}" if context else ""

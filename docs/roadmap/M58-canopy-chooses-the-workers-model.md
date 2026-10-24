@@ -156,4 +156,13 @@ there are several, beside the model canopy asked for.
 Built (2026-10-24): the check before a review, in a dry run too: the review's ticket's reviewer override, else
 `runtime.models`' reviewer, looked up as a dispatch's is, and refused `model_missing` or `model_list_failed` with its
 attention item before the review run is recorded, so the PR spends none of its reviews.
-Not built yet: the check before a chore, a task's run, and a tick's overseer, with its tick status.
+Built (2026-10-24): the check before a chore, a task's run, and a tick's overseer, in a dry run too where one starts.
+A chore's own `model`, else `runtime.models`' chore, is refused `model_missing` or `model_list_failed` with its item
+about the chore, the overseer's or the harness's, before its run is recorded. Tasks wait while the private worker's
+model cannot be used, looked up once a tick before the first would lease a slot, and the tick raises the item about the
+workspace, since config chose the model; the overseer is not shown it as its own. The overseer's model is looked up
+after its tools' server answers, and a tick it refuses closes `model_missing` or `model_list_failed`, two
+`TickStatus` members named for the item each raises as `disk_low` is (no migration: `ticks.status` has no `CHECK`).
+Chosen conservatively: such a tick makes no harness dispatches, as any tick halted before its overseer; the two items
+are kept out of the harness's reasons, since a dispatch's refusal raises the same names about its ticket; and the
+operator's own `canopy chore try`, from the CLI or the web UI, is not looked up, as no guard holds it.

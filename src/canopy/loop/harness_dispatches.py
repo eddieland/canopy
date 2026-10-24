@@ -387,6 +387,8 @@ def _chore(ctx: Context, tick_id: int, name: str, *, dry_run: bool, log: logs.Ti
             rationale = f"chore run {started.run_id}; {CHORE_WHY}"
     except chore_start.Refusal as r:
         _record(ctx, tick_id, None, f"refused:{r.guard}", r.reason, chore=name)
+        if r.attention is not None:
+            _record(ctx, tick_id, None, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, chore=name)
         log.info("harness chore run refused", extra={"chore": name, "guard": r.guard, "reason": r.reason})
         return
     _record(ctx, tick_id, None, chore_start.DISPATCH_ACTION, rationale, chore=name)
