@@ -71,6 +71,10 @@ class TickStatus(StrEnum):
     # The state directory's or the workspace's filesystem had less than `loop.min_free_disk_mib` free, so the overseer
     # did not run.
     DISK_LOW = "disk_low"
+    #: The runtime does not list the overseer's model, or its variant (DESIGN §13), so the overseer did not run.
+    MODEL_MISSING = "model_missing"
+    #: The runtime's list of models could not be read to look the overseer's up (DESIGN §13), so it did not run.
+    MODEL_LIST_FAILED = "model_list_failed"
     OVERSEER_FAILED = "overseer_failed"
     RECONCILE_FAILED = "reconcile_failed"
     # The tick raised an unexpected exception; its summary names it.

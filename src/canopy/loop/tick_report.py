@@ -37,6 +37,8 @@ _STATUS_STYLES = {
     "lock_busy": "bold yellow",
     "canopy_unavailable": "bold red",
     "disk_low": "bold red",
+    "model_missing": "bold red",
+    "model_list_failed": "bold red",
     "overseer_failed": "bold red",
     "reconcile_failed": "bold red",
     "error": "bold red",

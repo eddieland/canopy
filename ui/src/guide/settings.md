@@ -100,6 +100,11 @@ each agent's next run; a run already going keeps its model. One ticket's overrid
 [its page](tickets#choosing-a-model) and never shows here. **Show the runtime's models** lists what you can name, as
 `canopy models` prints it, read only when you open it, since each read starts the runtime.
 
+Each run looks its model up in that list before it starts, and one the list lacks never runs on another instead. The
+overseer's holds the whole tick, which closes `model missing`; a chore's waits, still due; the worker's model holds
+every queued task, since each runs on it. Each leaves an item on [Attention](attention) naming the model, and lasts
+only as long as the typo.
+
 ## Config
 
 The loop reads your workspace's `canopy-workspace.toml` and your `config.toml` when it starts. **Reload** reads them

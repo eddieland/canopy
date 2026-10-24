@@ -22,7 +22,7 @@ from canopy.core.vocab import RunStatus
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Collection, Mapping
 
     from canopy.core import records
     from canopy.core.context import Context
@@ -40,6 +40,21 @@ class Started:
     pid: int
 
 
+class ModelRefused(Exception):  # noqa: N818  (an outcome the tick raises an item for, not an error)
+    """No queued task started: the runtime does not list the model tasks' runs take, or its list could not be read.
+
+    `guard` is `model_missing` or `model_list_failed`, the attention item the tick raises, and `waiting` how many
+    queued tasks wait for it.
+    """
+
+    def __init__(self, guard: str, reason: str, waiting: int) -> None:
+        """Name the guard, say why, and count the tasks it holds."""
+        super().__init__(f"{guard}: {reason}")
+        self.guard = guard
+        self.reason = reason
+        self.waiting = waiting
+
+
 def start_queued(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[Started]:
     """Start each queued task the guards let start now, the oldest first, under the dispatch lock (DESIGN §36).
 
@@ -49,10 +64,15 @@ def start_queued(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[Star
 
     Returns:
         The runs it started, in the order it started them.
+
+    Raises:
+        ModelRefused: the model every task's run takes cannot be used, so every queued task waits; none started.
     """
     started: list[Started] = []
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        for task in tasks.queued(ctx.conn):
+        queued = tasks.queued(ctx.conn)
+        _check_model(ctx, queued)
+        for task in queued:
             held = _held(ctx)
             if held is not None:
                 log.info("tasks wait", extra={"task": task.id, "reason": held})
@@ -61,6 +81,15 @@ def start_queued(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[Star
             if found is not None:
                 started.append(found)
     return started
+
+
+def check(ctx: Context) -> None:
+    """Look up the model the queued tasks' runs take, as `start_queued` does first, for a dry tick that starts none.
+
+    Raises:
+        ModelRefused: the model cannot be used, so a live tick would start none of them.
+    """
+    _check_model(ctx, tasks.queued(ctx.conn))
 
 
 def runs_dir(ctx: Context) -> Path:
@@ -82,6 +111,30 @@ def prompt_file(log_path: Path) -> Path:
 def objects_dir(log_path: Path) -> Path:
     """Return a task run's object directory, beside its log at `log_path`, as a worker run's is (DESIGN §8)."""
     return log_path.with_suffix(".objects")
+
+
+def _check_model(ctx: Context, queued: Collection[records.Task]) -> None:
+    """Look up the model of a task's run, the private worker's in `runtime.models`, as a dispatch does (DESIGN §13).
+
+    One model for every task, so it is looked up once a tick, before a slot is leased, and only when one of `queued`
+    may start now; none chosen is the runtime's default, which needs no check. It is never fallen back from.
+
+    Raises:
+        ModelRefused: The runtime does not list the model or its variant, or its list could not be read.
+    """
+    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.private_worker_cmd)
+    if model is None or not queued or _held(ctx) is not None:
+        return
+    try:
+        agent_models.check(
+            ctx.runner,
+            ctx.workspace.root,
+            model,
+            version=ctx.config.runtime.version,
+            chosen="for tasks' runs in runtime.models",
+        )
+    except agent_models.ModelError as e:
+        raise ModelRefused(e.guard, e.reason, len(queued)) from e
 
 
 def _held(ctx: Context) -> str | None:

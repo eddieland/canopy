@@ -156,4 +156,11 @@ there are several, beside the model canopy asked for.
 Built (2026-10-24): the check before a review, in a dry run too: the review's ticket's reviewer override, else
 `runtime.models`' reviewer, looked up as a dispatch's is, and refused `model_missing` or `model_list_failed` with its
 attention item before the review run is recorded, so the PR spends none of its reviews.
-Not built yet: the check before a chore, a task's run, and a tick's overseer, with its tick status.
+Built (2026-10-24): the check before a chore, a task's run, and a tick's overseer, so every run's start checks its
+model. A chore's, the overseer's or the harness's, is refused before its run is recorded, in a dry run too, with its
+attention item about the chore, and `canopy chore try` refuses it with no item. The overseer's closes the tick
+`model_missing` or `model_list_failed`, new tick statuses, with a workspace item of that name, as `disk_low` does.
+Chosen conservatively: a halted tick makes none of the harness's dispatches, as a tick halted for the disk makes none;
+and the model every task's run takes, the private worker's, is looked up once a tick while a queued task could
+start, holding every queued task with one workspace item that counts them, a dry tick looking it up too so its list
+keeps the item. Left: the live check in Accept.

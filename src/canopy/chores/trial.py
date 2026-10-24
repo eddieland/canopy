@@ -65,12 +65,17 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
         The chore's definition and prompt, the directory it runs in, and the command with the rendered prompt.
 
     Raises:
-        TrialError: no such chore for this workspace, its prompt or the standing instructions to chores cannot be read,
-            or its working directory is unusable.
+        TrialError: no such chore for this workspace, the runtime does not list its model or the list cannot be read,
+            its prompt or the standing instructions to chores cannot be read, or its working directory is unusable.
     """
     chore = view.defined(ctx.config, ctx.workspace).get(name)
     if chore is None:
         raise TrialError(f"no chore named {name!r} is defined for this workspace")
+    try:
+        # Said to the operator who asked, here: a try raises no attention item.
+        start.check_model(ctx, name, chore)
+    except start.Refusal as e:
+        raise TrialError(f"{e.reason} ({e.guard})") from e
     try:
         body = start.read_body(ctx.config, chore)
     except prompts.PromptError as e:
