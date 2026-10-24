@@ -58,11 +58,12 @@ def chore(conn: sqlite3.Connection, started: str, session: str) -> int:
     return cursor.lastrowid
 
 
-def review(conn: sqlite3.Connection, tick_id: int, started: str, session: str) -> int:
+def review(conn: sqlite3.Connection, tick_id: int, started: str, session: str, ticket: str | None = None) -> int:
     cursor = conn.execute(
-        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, ended_at, status, log_path, session_id) "
-        "VALUES (?, 'https://e.test/pr/7', 'abc', ?, ?, 'done', 'l', ?)",
-        (tick_id, started, started, session),
+        "INSERT INTO review_runs "
+        "(tick_id, pr_url, sha, started_at, ended_at, status, log_path, session_id, ticket_key) "
+        "VALUES (?, 'https://e.test/pr/7', 'abc', ?, ?, 'done', 'l', ?, ?)",
+        (tick_id, started, started, session, ticket),
     )
     assert cursor.lastrowid is not None
     return cursor.lastrowid
@@ -148,3 +149,65 @@ def test_a_run_read_again_keeps_its_models_till_a_read_finds_its_session(conn: s
     [(status, attempts)] = conn.execute("SELECT status, attempts FROM run_model_reads").fetchall()
     assert (status, attempts) == ("found", 1)
     assert due(conn) == []
+
+
+def test_a_tickets_cost_by_model_sums_its_runs_and_the_reviews_naming_it(conn: sqlite3.Connection) -> None:
+    first = tick(conn, at(5), "ses_t")
+    canary, switched = worker(conn, first, at(4), "ses_w1"), worker(conn, first, at(3), "ses_w2")
+    reviewed, elsewhere = review(conn, first, at(2), "ses_r1", "PROJ-1"), review(conn, first, at(1), "ses_r2")
+    run_models.record(conn, Due("runs", canary, "ses_w1", 0), ModelsRead.FOUND, [ModelUse("a/opus", 4, 1.5)])
+    used = [ModelUse("a/opus", 1, 0.25), ModelUse("a/sonnet", 9, 0.5)]
+    run_models.record(conn, Due("runs", switched, "ses_w2", 0), ModelsRead.FOUND, used)
+    run_models.record(conn, Due("review_runs", reviewed, "ses_r1", 0), ModelsRead.FOUND, [ModelUse("o/gpt", 2, 0.75)])
+    run_models.record(conn, Due("review_runs", elsewhere, "ses_r2", 0), ModelsRead.FOUND, [ModelUse("o/gpt", 2, 9.0)])
+    # The overseer's is the workspace's, and a review that names no ticket is no ticket's.
+    run_models.record(conn, Due("ticks", first, "ses_t", 0), ModelsRead.FOUND, [ModelUse("a/opus", 1, 5.0)])
+    totals = [(m.model, m.runs, m.cost_usd) for m in run_models.of_ticket(conn, "PROJ-1")]
+    assert totals == [("a/opus", 2, 1.75), ("o/gpt", 1, 0.75), ("a/sonnet", 1, 0.5)]
+    assert run_models.of_ticket(conn, "PROJ-2") == []
+
+
+def test_a_read_records_each_reply_s_model_and_replaces_those_of_one_before(conn: sqlite3.Connection) -> None:
+    w = worker(conn, tick(conn, at(5), None), at(4), "ses_w")
+    split = [ModelUse("a/x", 1, 0.1), ModelUse("a/y", 1, 0.2)]
+    run_models.record(conn, Due("runs", w, "ses_w", 0), ModelsRead.FOUND, split, replies={"m1": "a/x", "m2": "a/y"})
+    assert run_models.replies_of(conn, "runs", w) == {"m1": "a/x", "m2": "a/y"}
+    assert run_models.replies_of(conn, "ticks", w) == {}  # another table's run of the same id
+    # A read that fails, or finds the session gone, keeps them with the models.
+    conn.execute("DELETE FROM run_model_reads")
+    run_models.record(conn, Due("runs", w, "ses_w", 0), ModelsRead.FAILED, error="exited 1")
+    conn.execute("DELETE FROM run_model_reads")
+    run_models.record(conn, Due("runs", w, "ses_w", 0), ModelsRead.MISSING)
+    assert run_models.replies_of(conn, "runs", w) == {"m1": "a/x", "m2": "a/y"}
+    run_models.record(conn, Due("runs", w, "ses_w", 1), ModelsRead.FOUND, [ModelUse("a/z", 2, 0.3)])
+    assert run_models.replies_of(conn, "runs", w) == {}
+
+
+def test_0088_reads_again_only_the_runs_more_than_one_model_served(tmp_path: Path, journals: Journals) -> None:
+    """A run read before canopy kept each reply's model is read again for them, if it had more than one model."""
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    shipped = db.discover(resources.migrations_dir())
+    for m in shipped:
+        if m.version < 88:
+            (migrations / m.path.name).write_text(m.path.read_text())
+    conn = journals.open(tmp_path / db.DB_FILE_NAME, migrate=False)
+    db.migrate(conn, migrations)
+    conn.execute("INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES ('PROJ-1', 'ws', 'x', 'x')")
+    first = tick(conn, at(5), "ses_t")
+    w = worker(conn, first, at(4), "ses_w")
+    conn.executemany(
+        "INSERT INTO run_model_reads (run_table, run_id, status, error, attempts, read_at) "
+        "VALUES (?, ?, 'found', NULL, 1, 'x')",
+        [("ticks", first), ("runs", w)],
+    )
+    conn.executemany(
+        "INSERT INTO run_models (run_table, run_id, model, replies, cost_usd) VALUES (?, ?, ?, 1, 0.1)",
+        [("ticks", first, "a/x"), ("runs", w, "a/x"), ("runs", w, "a/y")],
+    )
+    [latest] = [m for m in shipped if m.version == 88]
+    (migrations / latest.path.name).write_text(latest.path.read_text())
+    db.migrate(conn, migrations)
+    assert due(conn) == [("runs", w, "ses_w", 0)]
+    # Its models are shown till a read replaces them.
+    assert [m.model for m in run_models.of_run(conn, "runs", w)] == ["a/x", "a/y"]

@@ -750,8 +750,8 @@ class _World:
         stored = result.stored(run.result_json)
         if stored is None:
             return False
-        dismissed = review_runs.review_dismissals(self.ctx.conn, run.id)
-        return any(i not in dismissed for i in range(1, len(stored.findings) + 1))
+        withheld = review_runs.withheld(self.ctx.conn, run.id)
+        return any(i not in withheld for i in range(1, len(stored.findings) + 1))
 
 
 def _query_result(conn: sqlite3.Connection) -> list[str]:

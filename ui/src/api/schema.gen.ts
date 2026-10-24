@@ -3081,6 +3081,13 @@ export type components = {
              */
             cost_usd: number | null;
             /**
+             * Models
+             * @description A ticket's: what each model their sessions named cost, the most costly first; the rest of `cost_usd` is the
+             *     runs no session named a model for. Empty for a PR's.
+             * @default []
+             */
+            models: components["schemas"]["ModelCost"][];
+            /**
              * Priced
              * @description How many of those runs and review runs reported a cost.
              */
@@ -3711,6 +3718,11 @@ export type components = {
          * @enum {string}
          */
         FeedbackPlanStatusName: "waiting" | "stale" | "approved" | "spent";
+        /**
+         * @description What a resumed worker answered of a review's finding (DESIGN §21).
+         * @enum {string}
+         */
+        FindingAnswerName: "fixed" | "declined";
         /**
          * @description How much a review finding matters (DESIGN §21).
          * @enum {string}
@@ -4527,6 +4539,27 @@ export type components = {
          * @enum {string}
          */
         ModelAgent: "worker" | "planner" | "reviewer";
+        /**
+         * ModelCost
+         * @description What one model cost over a subject's agent runs, as their sessions say (DESIGN §13).
+         */
+        ModelCost: {
+            /**
+             * Cost Usd
+             * @description What the sessions priced its replies at, in US dollars.
+             */
+            cost_usd: number;
+            /**
+             * Model
+             * @description As `provider/model`, as the runtime names it.
+             */
+            model: string;
+            /**
+             * Runs
+             * @description How many of the runs it wrote a reply of: a run on two models counts under each.
+             */
+            runs: number;
+        };
         /**
          * ModelList
          * @description The models the runtime lists to run an agent on, as `canopy models` prints them: what the operator may choose.
@@ -5950,6 +5983,13 @@ export type components = {
          *     Both are None when the diff does not show the file; `line` alone is None when it does not show the line.
          */
         ReviewFinding: {
+            /** @description What the latest worker handed it answered: `fixed` or `declined`; None when none answered it. */
+            answer: components["schemas"]["FindingAnswerName"] | null;
+            /**
+             * Answer Reason
+             * @description The worker's reason for its answer, in its words: untrusted text. None when it gave none.
+             */
+            answer_reason: string | null;
             /**
              * Detail
              * @description Its detail, as the reviewer wrote it: untrusted text.
@@ -5968,6 +6008,13 @@ export type components = {
              * @description The index in the diff's files of the file it is in; None when the diff does not show it.
              */
             file: number | null;
+            /**
+             * Held
+             * @description Whether canopy holds it for the operator, a rebuttal of a worker's decline: no worker gets it until they send it
+             *     (DESIGN §21).
+             * @default false
+             */
+            held: boolean;
             /**
              * Line
              * @description The line it is on, on the new side; None when the diff does not show it.
@@ -6333,7 +6380,10 @@ export type components = {
              *     for a run from before canopy chose one.
              */
             model: string | null;
-            /** @description Which models served it, on its page and in the runs list; None where another page lists it. */
+            /**
+             * @description Which models served it, on its page, in the runs list, and in a ticket's or a PR's runs; None where another page
+             *     lists it.
+             */
             models: components["schemas"]["ModelsServed"] | null;
             /**
              * New Tokens
@@ -8372,6 +8422,12 @@ export type components = {
              * @enum {string}
              */
             kind: "step";
+            /**
+             * Model
+             * @description The model that made the call, as the run's models name it (DESIGN §13), when more than one served the run; None
+             *     for a run one model served, which its page names, and until canopy has read its session.
+             */
+            model: string | null;
             /**
              * Reason
              * @description Why the call ended, in the runtime's word.

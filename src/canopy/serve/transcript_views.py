@@ -8,6 +8,7 @@ text.
 from __future__ import annotations
 
 import os
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from canopy.core import gc_passes
@@ -26,13 +27,24 @@ from canopy.serve.schema.transcript import (
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Mapping
     from pathlib import Path
 
+#: No reply's model: a run one model served, or one whose replies canopy has not read.
+_NO_MODELS: Mapping[str, str] = MappingProxyType({})
 
-def session_transcript(path: Path, session: object, removed_after_days: int | None = None) -> Transcript:
+
+def session_transcript(
+    path: Path,
+    session: object,
+    removed_after_days: int | None = None,
+    models: Mapping[str, str] = _NO_MODELS,
+) -> Transcript:
     """The events of the session the journal recorded, read back from the file they were printed to (DESIGN §22).
 
     `removed_after_days` is how long retention kept the file and its prompt, when it removed them (`removed_after`).
+    `models` is the model of each reply of a run more than one model served, by its message (`run_models.replies_of`),
+    which names the model of each model call.
 
     Returns:
         The entries read, with status `no_session` when the journal recorded no session, or `no_log` when the file is
@@ -48,15 +60,15 @@ def session_transcript(path: Path, session: object, removed_after_days: int | No
     return Transcript(
         status="read",
         session_id=session,
-        entries=[transcript_entry(e) for e in found.entries],
+        entries=[transcript_entry(e, models) for e in found.entries],
         truncated=found.truncated,
         unreadable=found.unreadable,
         prompt=prompt,
     )
 
 
-def transcript_entry(entry: entries.Entry) -> TranscriptEntry:
-    """One entry of a transcript as the API sends it.
+def transcript_entry(entry: entries.Entry, models: Mapping[str, str] = _NO_MODELS) -> TranscriptEntry:
+    """One entry of a transcript as the API sends it, a model call's naming its model when `models` has its reply.
 
     Returns:
         The model for the entry's kind: text, a tool call, a step, or an error.
@@ -91,6 +103,7 @@ def transcript_entry(entry: entries.Entry) -> TranscriptEntry:
                 tokens=t.total if t is not None else None,
                 split=TranscriptTokens(**vars(t)) if t is not None else None,
                 call=entry.call,
+                model=models.get(entry.message) if entry.message is not None else None,
             )
         case entries.Error():
             return TranscriptError(at=entry.at, name=entry.name, message=entry.message, call=entry.call)

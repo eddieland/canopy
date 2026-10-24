@@ -77,6 +77,9 @@ class Step:
     cost_usd: float | None
     tokens: Tokens | None
     call: int | None = None
+    #: The runtime's id of the reply the call wrote, which the session's record names its model by
+    #: (`canopy.runtime.report.SessionModels.replies`); None when the runtime named none canopy keeps.
+    message: str | None = None
 
 
 @dataclass(frozen=True)

@@ -6,7 +6,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from canopy.core import conversation, db, observe, records, slack_replies, sql
-from canopy.core.config import Source
+from canopy.core.config import Notify, Sink, Source
 from canopy.core.vocab import ConnectorRunStatus
 from canopy.infra import logs
 from tests.canopy.helpers import KEY
@@ -37,10 +37,23 @@ def asked(state: Path) -> list[dict[str, Any]]:
     return [json.loads(line)["request"] for line in log.read_text().splitlines()] if log.exists() else []
 
 
-def run(ctx: Context, *, dry_run: bool = False) -> observe.Observed:
-    """Run the slack source, as a tick does."""
+def run(ctx: Context, *, dry_run: bool = False, told: bool = True) -> observe.Observed:
+    """Run the slack source, as a tick does, with a sink that takes `replies` unless not `told`."""
     request = observe.Request(repo=ctx.repo, operators=SOURCE.operators)
-    return slack_replies.read(ctx.conn, ctx.runner, SOURCE, request, dry_run=dry_run, log=logs.for_tick(None))
+    sinks = {"slack": Sink(cmd="canopy-notify-slack", events=("replies",))} if told else {}
+    config = ctx.config.model_copy(update={"notify": Notify(sinks=sinks)})
+    return slack_replies.read(ctx.conn, config, ctx.runner, SOURCE, request, dry_run=dry_run, log=logs.for_tick(None))
+
+
+def told(ctx: Context) -> list[tuple[str, dict[str, Any]]]:
+    """Each event the sinks were told, as its kind and fields, oldest first."""
+    rows = ctx.conn.execute("SELECT kind, fields FROM notify_events ORDER BY id")
+    return [(str(r[0]), json.loads(r[1])) for r in rows]
+
+
+def mentions(ts: str, body: str, *, ticket: str | None = KEY) -> dict[str, object]:
+    """A `reply` line for a top-level message mentioning canopy's bot, as `canopy-connect-slack` prints one."""
+    return {"kind": "reply", "via": "mention", "ticket": ticket, "ts": ts, "user": OPERATOR, "body": body}
 
 
 def replies(ctx: Context) -> list[records.Message]:
@@ -130,3 +143,64 @@ def test_a_dry_run_records_no_message(ctx: Context, connector_state: Path) -> No
     ran = run(ctx, dry_run=True)
     assert (ran.recorded, ran.refused) == ({"dry_run": 1}, {"unlisted": 1})
     assert replies(ctx) == []
+
+
+def test_a_mention_records_the_reply_on_its_ticket_and_tells_the_sinks(ctx: Context, connector_state: Path) -> None:
+    db.touch_ticket(ctx.conn, KEY, ctx.repo)
+    reads(connector_state, mentions("1790.000050", "use the staging config"), says("1790.000005", "in the thread"))
+    ran = run(ctx)
+    assert (ran.recorded, ran.refused) == ({"reply": 2}, {})
+    assert [(m.channel, m.body) for m in replies(ctx)] == [
+        ("slack", "use the staging config"),
+        ("slack", "in the thread"),
+    ]
+    # Only the mention is acknowledged: a reply in a thread stands where the operator left it.
+    [(kind, fields)] = told(ctx)
+    assert (kind, fields) == (
+        "reply.recorded",
+        {"ticket": KEY, "message": replies(ctx)[0].id, "ts": "1790.000050", "body": "use the staging config"},
+    )
+    # Read again on the next poll, it records nothing and tells nothing.
+    assert run(ctx).recorded == {"already": 2}
+    assert len(told(ctx)) == 1
+
+
+def test_a_refused_reply_is_told_once_however_often_it_is_read(ctx: Context, connector_state: Path) -> None:
+    db.touch_ticket(ctx.conn, KEY, ctx.repo)
+    reads(
+        connector_state,
+        mentions("1790.000050", "", ticket=None),
+        mentions("1790.000051", "go", ticket="PROJ-404"),
+        says("1790.000052", "x" * (conversation.MAX_OPERATOR + 1)),
+    )
+    ran = run(ctx)
+    assert (ran.recorded, ran.refused) == ({}, {"no_ticket": 1, "unknown": 1, "bad_body": 1})
+    run(ctx)
+    assert [(kind, f["ticket"], f["ts"], f["guard"]) for kind, f in told(ctx)] == [
+        ("reply.refused", None, "1790.000050", "no_ticket"),
+        ("reply.refused", "PROJ-404", "1790.000051", "unknown"),
+        ("reply.refused", KEY, "1790.000052", "bad_body"),
+    ]
+    assert told(ctx)[0][1]["reason"].startswith("it names no ticket: mention canopy, then the ticket's key")
+    assert replies(ctx) == []
+
+
+def test_without_a_sink_that_takes_replies_nothing_is_told(ctx: Context, connector_state: Path) -> None:
+    db.touch_ticket(ctx.conn, KEY, ctx.repo)
+    reads(connector_state, mentions("1790.000050", "go"), mentions("1790.000051", "?", ticket="PROJ-404"))
+    ran = run(ctx, told=False)
+    assert (ran.recorded, ran.refused) == ({"reply": 1}, {"unknown": 1})
+    assert told(ctx) == []
+
+
+def test_a_dry_run_tells_nothing(ctx: Context, connector_state: Path) -> None:
+    db.touch_ticket(ctx.conn, KEY, ctx.repo)
+    reads(connector_state, mentions("1790.000050", "go"), mentions("1790.000051", "", ticket=None))
+    assert run(ctx, dry_run=True).recorded == {"dry_run": 2}
+    assert (told(ctx), replies(ctx)) == ([], [])
+
+
+def test_mentions_the_reader_could_not_read_make_the_run_partial(ctx: Context, connector_state: Path) -> None:
+    reads(connector_state, mentions=False)
+    ran = run(ctx)
+    assert (ran.status, ran.missed) == (ConnectorRunStatus.PARTIAL, "did not read the Slack channel's mentions")

@@ -273,6 +273,26 @@ describe('FeedbackPlanPanel', () => {
         expect(screen.queryByTestId('feedback-plan-why')).toBeNull()
     })
 
+    it('says when an item said nothing, or is no longer on the PR as read', async () => {
+        const plan = feedbackPlan({
+            items: [
+                feedbackPlanItem({
+                    number: 1,
+                    item: 'review',
+                    thread_id: null,
+                    excerpt: null,
+                    rationale: null,
+                    url: null,
+                }),
+                feedbackPlanItem({ number: 2, excerpt: null, rationale: null }),
+            ],
+        })
+        await renderRouted(<FeedbackPlanPanel plan={plan} onChange={changed} />)
+        const said = screen.getAllByTestId('feedback-plan-said').map((s) => s.textContent)
+        expect(said).toEqual(['a review with no words', 'no longer on the PR as read'])
+        expect(screen.queryByTestId('feedback-plan-why')).toBeNull()
+    })
+
     it('offers nothing to approve once a resume spent the plan', async () => {
         await renderRouted(
             <FeedbackPlanPanel plan={feedbackPlan({ status: 'spent', spent_run: 47 })} onChange={changed} />,

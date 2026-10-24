@@ -381,6 +381,21 @@ class DismissalReason(StrEnum):
     NOT_WORTH_IT = "not_worth_it"
 
 
+class FindingAnswer(StrEnum):
+    """What a resumed worker answered of a review's finding, `review_answers.answer` (DESIGN §21)."""
+
+    FIXED = "fixed"
+    #: Not changed, for a reason the worker gives, which the next review reads.
+    DECLINED = "declined"
+
+
+class HoldKind(StrEnum):
+    """Why the harness holds a review's finding for the operator, `review_holds.kind` (DESIGN §21)."""
+
+    #: A later review's answer to a finding the worker declined: the operator settles it, never another `resume`.
+    REBUTTAL = "rebuttal"
+
+
 class Reaction(StrEnum):
     """A reaction a thread's draft stages on the comment it names, `draft_versions.reaction` (DESIGN §29).
 

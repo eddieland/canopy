@@ -30,6 +30,10 @@ type DismissalReasonName = Annotated[
         "`intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix.",
     ),
 ]
+type FindingAnswerName = Annotated[
+    Literal["fixed", "declined"],
+    Field(description="What a resumed worker answered of a review's finding (DESIGN §21)."),
+]
 type ReviewDraftStatusName = Annotated[
     Literal["waiting", "publishing", "unconfirmed", "staged", "published", "discarded"],
     Field(
@@ -129,6 +133,13 @@ class ReviewFinding(Model):
     """Whether the operator dismissed it: no worker or tick acts on it (DESIGN §21)."""
     dismissed_reason: DismissalReasonName | None = None
     """Why they dismissed it; None when it is not dismissed, or was before canopy asked why."""
+    held: bool = False
+    """Whether canopy holds it for the operator, a rebuttal of a worker's decline: no worker gets it until they send it
+    (DESIGN §21)."""
+    answer: FindingAnswerName | None = None
+    """What the latest worker handed it answered: `fixed` or `declined`; None when none answered it."""
+    answer_reason: str | None = None
+    """The worker's reason for its answer, in its words: untrusted text. None when it gave none."""
 
 
 class DiffLine(Model):

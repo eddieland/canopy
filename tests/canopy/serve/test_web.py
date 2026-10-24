@@ -38,6 +38,7 @@ from tests.canopy.helpers import (
     overseer_does,
     present,
     running_run,
+    with_events,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, client, free_port, refused, signed_in_client
@@ -95,6 +96,7 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
         return c.get(f"/api/runs/{run_id}").json()["models"]
 
     assert models() == {"status": "running", "models": [], "error": None}
+    assert [r["models"] for r in c.get(f"/api/tickets/{KEY}").json()["runs"]] == [models()]  # its ticket's runs too
     db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
     assert models()["status"] == "no_session"  # the runtime reported none, so there is nothing to read
     db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", None)
@@ -116,6 +118,7 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
         "error": None,
     }
     assert [r["models"] for r in c.get("/api/runs").json()] == [models()]  # the runs list carries them too
+    assert [r["models"] for r in c.get(f"/api/tickets/{KEY}").json()["runs"]] == [models()]
     found = models()
     # Read again, as 0069 has every found run read: what was found stays shown while the read is due, fails, or finds
     # the session gone.
@@ -149,6 +152,26 @@ def test_a_runs_page_names_the_model_canopy_asked_for_while_it_runs_before_its_s
     scenario.configures(runtime={"models": {"worker": None}})
     ran = scenario.run(dispatches("PROJ-2"), worker=pushes())
     assert c.get(f"/api/runs/{ran.id}").json()["model"] is None
+
+
+def test_a_transcript_names_each_calls_model_once_canopy_reads_a_session_two_models_served(
+    scenario: Scenario,
+    opencode_state: Path,
+    ctx: Context,
+) -> None:
+    with_events(scenario.env, "canopy-overseer")
+    # The fake overseer's two calls write replies `msg_1` and `msg_2`, which the session's record names the models of.
+    served = [["anthropic", "claude-x", 0.25], ["openai", "gpt-y", 0.5]]
+    opencode_state.write_text(json.dumps({"sessions": {"ses_fake": served}}))
+    tick_id = scenario.tick().tick.id
+    c, _ = signed_in_client(ctx)
+    steps = [e for e in c.get(f"/api/ticks/{tick_id}/transcript").json()["entries"] if e["kind"] == "step"]
+    assert [s["model"] for s in steps] == ["anthropic/claude-x", "openai/gpt-y"]
+    # One model's session names none: the tick's models name it.
+    opencode_state.write_text(json.dumps({"sessions": {"ses_fake": [served[0], served[0]]}}))
+    tick_id = scenario.tick().tick.id
+    steps = [e for e in c.get(f"/api/ticks/{tick_id}/transcript").json()["entries"] if e["kind"] == "step"]
+    assert [s["model"] for s in steps] == [None, None]
 
 
 def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context) -> None:
@@ -837,7 +860,13 @@ def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_30_days_a
 def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     first = running_run(ctx, KEY)
-    assert c.get(f"/api/tickets/{KEY}").json()["cost"] == {"runs": 1, "reviews": 0, "priced": 0, "cost_usd": None}
+    assert c.get(f"/api/tickets/{KEY}").json()["cost"] == {
+        "runs": 1,
+        "reviews": 0,
+        "priced": 0,
+        "cost_usd": None,
+        "models": [],
+    }
 
     second = running_run(ctx, KEY)
     running_run(ctx, "PROJ-2")  # another ticket's
@@ -857,7 +886,7 @@ def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Conte
     ctx.conn.execute("UPDATE ticks SET cost_usd = 3.0 WHERE id = ?", (tick_id,))  # the overseer's is the workspace's
 
     cost = c.get(f"/api/tickets/{KEY}").json()["cost"]
-    assert cost == {"runs": 2, "reviews": 1, "priced": 2, "cost_usd": pytest.approx(1.75)}
+    assert cost == {"runs": 2, "reviews": 1, "priced": 2, "cost_usd": pytest.approx(1.75), "models": []}
 
 
 def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) -> None:

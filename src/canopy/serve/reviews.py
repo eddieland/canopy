@@ -11,6 +11,8 @@ control characters dropped, as every page's does, and the diff within `review_di
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -18,10 +20,12 @@ from canopy.core import (
     contract,
     conversation,
     db,
+    review_answers,
     review_diff,
     review_drafts,
     review_requests,
     review_runs,
+    run_models,
 )
 from canopy.core import review_result as result
 from canopy.core.vocab import DismissalReason, ReviewRunStatus, SeenKind
@@ -31,6 +35,7 @@ from canopy.serve.schema.review import (
     DiffHunk,
     DiffLine,
     DismissalReasonName,
+    FindingAnswerName,
     FindingSeverity,
     RequestedReview,
     ReviewDetail,
@@ -94,7 +99,11 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
     if row is None:
         return None
     stored = result.stored(row.result_json)
-    dismissed = review_runs.review_dismissals(ctx.conn, run_id)
+    marks = _Marks(
+        dismissed=review_runs.review_dismissals(ctx.conn, run_id),
+        held=frozenset(review_runs.held(ctx.conn, run_id)),
+        answers=review_answers.latest(ctx.conn, run_id),
+    )
     note = contract.stored_object(row.result_json).get("harness")
     kept = review_diff.path_for(row.log_path)
     found = review_diff.read(kept)
@@ -106,9 +115,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         summary=lines(stored.summary) or None if stored is not None else None,
         note=lines(note) or None if isinstance(note, str) else None,
         base_branch=row.base_branch or None,
-        findings=[_finding(f, found, i, dismissed) for i, f in enumerate(stored.findings, 1)]
-        if stored is not None
-        else [],
+        findings=[_finding(f, found, i, marks) for i, f in enumerate(stored.findings, 1)] if stored is not None else [],
         diff=diff,
         diff_removed_after_days=removed_after(ctx.conn, kept, row.ended_at, "run_files_days"),
         runs=summaries(ctx.conn, review_runs.review_runs_of(ctx.conn, row.pr_url)),
@@ -141,7 +148,8 @@ def review_transcript(ctx: Context, run_id: int) -> Transcript | None:
     if row is None:
         return None
     log = Path(row.log_path)
-    return session_transcript(log, row.session_id, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
+    removed = removed_after(ctx.conn, log, row.ended_at, "run_files_days")
+    return session_transcript(log, row.session_id, removed, run_models.replies_of(ctx.conn, "review_runs", run_id))
 
 
 def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
@@ -233,14 +241,19 @@ def _worst(findings: Iterable[result.Finding]) -> FindingSeverity | None:
     return next((s for s in _SEVERITIES if s in found), None)
 
 
-def _finding(
-    f: result.Finding,
-    diff: review_diff.Diff | None,
-    number: int,
-    dismissed: Mapping[int, DismissalReason | None],
-) -> ReviewFinding:
+@dataclass(frozen=True)
+class _Marks:
+    """What the journal holds beside a review's findings, by their numbers: dismissals, holds, and workers' answers."""
+
+    dismissed: Mapping[int, DismissalReason | None]
+    held: AbstractSet[int]
+    answers: Mapping[int, records.ReviewAnswer]
+
+
+def _finding(f: result.Finding, diff: review_diff.Diff | None, number: int, marks: _Marks) -> ReviewFinding:
     file, line = review_diff.anchor(diff, f.location) if diff is not None else (None, None)
-    reason = dismissed.get(number)
+    reason = marks.dismissed.get(number)
+    answer = marks.answers.get(number)
     return ReviewFinding(
         severity=f.severity,
         title=lines(f.title),
@@ -248,8 +261,11 @@ def _finding(
         detail=lines(f.detail),
         file=file,
         line=line,
-        dismissed=number in dismissed,
+        dismissed=number in marks.dismissed,
         dismissed_reason=cast("DismissalReasonName", reason.value) if reason is not None else None,
+        held=number in marks.held,
+        answer=cast("FindingAnswerName", answer.answer.value) if answer is not None else None,
+        answer_reason=lines(answer.reason) if answer is not None and answer.reason else None,
     )
 
 

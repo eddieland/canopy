@@ -18,12 +18,14 @@ import {
     kindsOffered,
     modelRows,
     monthName,
+    perRun,
     seriesCost,
     SERIES,
     shareText,
     spendLine,
     spendWindow,
     toolRows,
+    unattributedShare,
     windowId,
     windowName,
 } from './spend'
@@ -175,6 +177,19 @@ describe('spend', () => {
         ])
         expect(modelRows(models, 'overseer').map((m) => m.model)).toEqual(['a/small', null])
         expect(modelRows(models, 'plans')).toEqual([])
+    })
+
+    it("gives a model's spend per run, so two models' runs compare, and the share no session named a model for", () => {
+        const rows = [
+            { model: 'a/small', runs: 6, replies: 46, cost_usd: 1.5 },
+            { model: 'a/big', runs: 1, replies: 9, cost_usd: 0.5 },
+            { model: null, runs: 5, replies: 0, cost_usd: 2 },
+        ]
+        expect(rows.map((row) => perRun(row))).toEqual([0.25, 0.5, 0.4])
+        expect(perRun({ model: null, runs: 2, replies: 0, cost_usd: null })).toBeNull()
+        expect(unattributedShare(rows)).toBe(0.5)
+        expect(unattributedShare(rows.slice(0, 2))).toBeNull()
+        expect(unattributedShare([{ model: null, runs: 2, replies: 0, cost_usd: null }])).toBeNull()
     })
 
     it("sums each tool's calls over every kind, the most returned first, its tokens from the sum", () => {
