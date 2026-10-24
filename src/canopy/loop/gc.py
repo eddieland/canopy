@@ -23,7 +23,7 @@ import canopy_sandbox
 from canopy.chores import start as chore_start
 from canopy.core import db, hostgit, review_diff, sql
 from canopy.core.context import db_path
-from canopy.core.vocab import MemoryScope, MemoryStatus, TickStatus
+from canopy.core.vocab import MemoryScope, MemoryStatus, PrState, TickStatus
 from canopy.infra import lock, logs, procs
 from canopy.loop import attention, gc_branches
 from canopy.reviews import start as review_start
@@ -44,7 +44,7 @@ KIB = 1024
 MIB = KIB * KIB
 _COUNT_OBJECTS_TIMEOUT_SECONDS = 60
 #: A table of the journal a pass removes rows of (DESIGN §26, The journal).
-type RowTable = Literal["decisions", "connector_runs", "derivations"]
+type RowTable = Literal["decisions", "connector_runs", "derivations", "observed_check_runs"]
 # The bytes of each row's text, in each table a pass removes rows of: what it holds, not the pages it fills.
 _DECISION_BYTES = sql.frag(
     "length(CAST(action AS BLOB)) + length(CAST(rationale AS BLOB)) + length(CAST(created_at AS BLOB)) + "
@@ -59,6 +59,10 @@ _RUN_BYTES = sql.frag(
 _DERIVED_BYTES = sql.frag(
     "length(CAST(ticket_key AS BLOB)) + coalesce(length(CAST(repo AS BLOB)), 0) + length(CAST(phases AS BLOB)) + "
     "coalesce(length(CAST(stale AS BLOB)), 0) + coalesce(length(CAST(overseer_phase AS BLOB)), 0)",
+)
+_CHECK_RUN_BYTES = sql.frag(
+    "length(CAST(pr_url AS BLOB)) + length(CAST(name AS BLOB)) + length(CAST(head_sha AS BLOB)) + "
+    "length(CAST(conclusion AS BLOB)) + length(CAST(observed_at AS BLOB))",
 )
 
 
@@ -227,13 +231,15 @@ def retention_cutoff(now: datetime, days: int) -> str:
 
 
 def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> list[RowKind]:
-    """The rows a pass removes from the journal: the harness's attention items, connector runs, and derivations.
+    """The rows a pass removes from the journal: the harness's attention items, connector runs, derivations, check runs.
 
     A row goes once it is older than `journal_days` and outside the attention list's window, the newest
     `attention.HISTORY_TICKS` ticks that closed `ok`, so the list, each item's open-since, and what the sinks are told
     stay as they were; a journal with fewer `ok` ticks than the window has none outside it. A poll's connector run,
     made between ticks, is outside once it started before the window's oldest tick. Each source's newest run and its
-    newest that recorded the query's result stay whatever their age (DESIGN §26, §30).
+    newest that recorded the query's result stay whatever their age (DESIGN §26, §30). A kept check run is read only at
+    its PR's head (DESIGN §35), so one goes once older than `journal_days` and its PR is seen at another head, merged,
+    or closed; one of a PR no read recorded, or recorded with no head, stays, since nothing says its head moved.
 
     Returns:
         The kinds, in the order of §26's table.
@@ -269,6 +275,22 @@ def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> 
             _DERIVED_BYTES,
             sql.frag("tick_id < ? AND tick_id IN (SELECT id FROM ticks WHERE started_at < ?)", window.tick_id, cutoff),
             rule,
+        ),
+        RowKind(
+            "check runs",
+            "observed_check_runs",
+            sql.frag("1"),
+            _CHECK_RUN_BYTES,
+            sql.all_of(
+                sql.frag("observed_at < ?", cutoff),
+                sql.frag(
+                    "EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = observed_check_runs.pr_url AND "
+                    "(p.state IN (?, ?) OR (p.head_sha IS NOT NULL AND p.head_sha != observed_check_runs.head_sha)))",
+                    PrState.MERGED,
+                    PrState.CLOSED,
+                ),
+            ),
+            f"journal_days = {retention.journal_days}, not at its PR's head",
         ),
     ]
 

@@ -113,8 +113,9 @@ operator's views and a private ticket's own worker read the conversation; a comm
 message, text, and source, found by its comment id, so the mirror's residual stays for those alone; an edit after the
 first read is not followed; the mirror cursor's column stays, unread, since no migration drops a column; and a tracker
 with no connector records no comment, since its tool is gone.
-Left: journal-numbered cursors and their migration, the design folded into the sections it names, pruning
-`observed_check_runs`, which nothing prunes yet (M47's garbage-collection pass would name it), and the live
+Built (2026-10-24): `observed_check_runs` pruned by M47's pass, a run going after `journal_days` once a read shows its
+PR at another head, merged, or closed; one of a PR no read recorded stays.
+Left: journal-numbered cursors and their migration, the design folded into the sections it names, and the live
 re-measurement.
 Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker` source is
 required (recommended: required), and how many new items a subject shows before the rest are counted.
