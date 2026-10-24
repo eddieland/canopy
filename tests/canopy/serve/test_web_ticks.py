@@ -13,6 +13,7 @@ from canopy.core.context import Context
 from canopy.loop import attention
 from canopy.serve import tick_views
 from canopy.serve.backend import Backend
+from canopy.serve.mock import history
 from tests.canopy.helpers import present
 from tests.canopy.web_helpers import client
 
@@ -23,9 +24,10 @@ def test_the_ticks_list_is_the_latest_newest_first_with_how_many_decisions_each(
     assert (latest["id"], latest["status"], latest["dry_run"], latest["decisions"]) == (2, "ok", False, 5)
     assert (latest["session_id"], latest["cost_usd"], latest["summary"]) == ("ses_tick2", 0.31, "mock tick")
     assert latest["canopy_version"] == "0.3.1"
+    # Tick 1 also records the history's `done` decisions, which no older tick can.
     assert (first["id"], first["decisions"], first["summary"]) == (
         1,
-        5,
+        5 + len(history.TICKETS),
         "dispatched 2, waiting on 1:\n- ABC-099 implement\n- ABC-103 implement",
     )
     # The header's tick carries the count too, so the stream sends it again as a running tick records decisions.
@@ -60,7 +62,8 @@ def test_a_tick_page_is_what_canopy_decisions_prints(backend: Backend) -> None:
         assert shown_row["subject"].startswith(attention.decided_about(row))
 
     first = c.get("/api/ticks/1").json()["decisions"]
-    assert [d["subject"] for d in first] == ["ABC-102", "ABC-100 (web)", "ABC-099 (web)", "chore:deps", "api"]
+    assert [d["subject"] for d in first[:5]] == ["ABC-102", "ABC-100 (web)", "ABC-099 (web)", "chore:deps", "api"]
+    assert [d["action"] for d in first[5:]] == ["done"] * len(history.TICKETS)
 
 
 def test_a_tick_page_names_the_ticks_either_side_dry_runs_included_and_steps_over_a_gap(ctx: Context) -> None:
@@ -126,7 +129,8 @@ def test_the_spend_breakdown_reads_the_last_24_hours_by_the_hour(backend: Backen
 def test_the_spend_breakdown_carries_the_month_against_its_budget_whatever_the_window(backend: Backend) -> None:
     c = client(None, backend)
     found = c.get("/api/spend/breakdown", params={"hours": 24}).json()["month"]
-    # The mock's budget is $40, and every run in its journal started in October, so the month holds them all.
+    # The mock's budget is $40, and every run in its journal that started in October started on its day, so the
+    # month holds the day's runs alone.
     assert (found["month"], found["budget_usd"], found["since"]) == ("2026-10", 40, "2026-10-01T00:00:00Z")
     assert found["spent_usd"] == pytest.approx(c.get("/api/spend").json()["day"]["cost_usd"])
     assert found["projected_usd"] == pytest.approx(found["spent_usd"] / found["elapsed"])
@@ -145,7 +149,9 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
     assert (today["overseer"], today["idle"], today["dry_run"]) == (pytest.approx(0.59), 0.31, None)
     assert today == found["totals"]
     with backend.open() as ctx:
-        assert today["total"] == pytest.approx(db.spent_ever(ctx.conn))  # everything the mock journal holds
+        # Everything the mock journal holds but its months before T0.
+        before = sum(r.cost_usd for t in history.TICKETS for r in t.runs)
+        assert today["total"] + before == pytest.approx(db.spent_ever(ctx.conn))
     groups = {g["group"]: (g["ticks"], g["cost_usd"]) for g in found["ticks"]}
     assert (groups["idle"], groups["busy"], groups["hand_run"]) == ((1, 0.31), (1, 0.28), (0, None))
     assert found["idle_share"] == pytest.approx(0.31 / 0.59)

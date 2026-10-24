@@ -21,12 +21,14 @@ from canopy.loop import attention, web
 from canopy.serve import chore_views, live, pull_requests, reviews, spend_views, tick_views, views
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
+from canopy.serve.mock import history as serve_history
 from tests.conftest import Journals
 
 # The mock's own PR, which the old history leaves alone.
 PR = "https://github.com/acme/web/pull/88"
-# How old the oldest of the mock's own rows is, in minutes; the history this adds is older than 30 days.
-HISTORY_STARTS = 40 * 24 * 60
+# How old the oldest of the mock's own rows is, in minutes, its months before T0 among them (mock/history.py); the
+# history this adds is older than that.
+HISTORY_STARTS = 200 * 24 * 60
 # SQLite calls the progress handler once per this many virtual machine instructions: a step.
 STEP = 10
 # How much more work a read may do over five times the history: a deeper index, never another pass over it.
@@ -83,10 +85,11 @@ def test_the_stream_reads_the_same_lists_over_a_long_history(backend: Backend) -
         add_history(ctx.conn, 0, 1_500)
         events = [e.root for e in live._Sent().changes(backend, ctx)]  # noqa: SLF001  (the stream's own record)
     [tickets] = [e for e in events if isinstance(e, live.TicketsUpdated)]
-    # The mock's seven of the day, newest first, its feedback plans' seven of eight days before, then the history's
-    # newest.
-    newest = ["ABC-101", "ABC-104", "ABC-102", "ABC-105", "ABC-099", "ABC-100", "ABC-103"]
-    newest += ["ABC-136", "ABC-135", "ABC-134", "ABC-133", "ABC-132", "ABC-131", "ABC-130", "OLD-0"]
+    # The mock's seven of the day, newest first, the two it landed in October, its feedback plans' seven of eight days
+    # before, the rest it landed, then the history's newest.
+    landed = [t.key for t in sorted(serve_history.TICKETS, key=lambda t: t.done_at, reverse=True)]
+    newest = ["ABC-101", "ABC-104", "ABC-102", "ABC-105", "ABC-099", "ABC-100", "ABC-103", *landed[:2]]
+    newest += ["ABC-136", "ABC-135", "ABC-134", "ABC-133", "ABC-132", "ABC-131", "ABC-130", *landed[2:], "OLD-0"]
     assert [t.key for t in tickets.tickets[: len(newest)]] == newest
     assert len(tickets.tickets) == views.TICKETS
     [runs] = [e for e in events if isinstance(e, live.RunsUpdated)]

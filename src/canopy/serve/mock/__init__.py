@@ -14,8 +14,8 @@ workspace's policy allows one resume and two reviews, so ABC-100 is at its resum
 running, is a resume for a failed check and review feedback together. The running runs 41 and 43 have the latest tool
 call on each one's row (§8).
 Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
-memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, and the runs'
-transcripts.
+memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the runs'
+transcripts, and the months before T0, whose landed tickets the reports page shows.
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -38,6 +38,7 @@ from canopy.serve.mock import (
     chores,
     drafts,
     feedback_plans,
+    history,
     memory,
     personas,
     plans,
@@ -317,6 +318,7 @@ def seed(directory: Path) -> Backend:
         db.migrate(ctx.conn, resources.migrations_dir())
         with db.transaction(ctx.conn):
             _fixtures(ctx.conn, root)
+            history.seed(ctx.conn, root)
             plans.seed(ctx.conn, ws.state_dir, at, root)
             memory.seed(ctx.conn, at)
             reviews.seed(ctx.conn, ws.state_dir, at)

@@ -223,9 +223,10 @@ def test_the_route_searches_the_mock_journal_and_refuses_a_bad_query(backend: Ba
     assert body["words"] == ["search"]
     assert [(h["source"], h["ticket_key"], h["label"]) for h in body["hits"]] == [
         ("ticket", "ABC-099", "review_pending"),
+        ("ticket", "ABC-073", "merged"),
         ("message", "ABC-099", "report"),
     ]
-    assert body["hits"][1]["run_id"] == 39
+    assert body["hits"][2]["run_id"] == 39
     assert body["more"] == []
     hits = c.get("/api/search", params={"q": "billing_legacy"}).json()["hits"]
     assert [(h["source"], h["task_id"], h["run_id"], h["label"]) for h in hits] == [("task", 4, None, None)]

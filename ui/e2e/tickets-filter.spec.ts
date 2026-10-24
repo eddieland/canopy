@@ -31,8 +31,9 @@ test('a filter by where a ticket stands keeps the tickets standing there, in the
     await filters.getByRole('link', { name: 'waiting on you' }).click()
     await expect.poll(() => keys(page)).toEqual(['ABC-102'])
 
+    // Each ticket the months before the mock's day landed or closed (canopy/serve/mock/history.py).
     await filters.getByRole('link', { name: 'done' }).click()
-    await expect(page.getByText('no done tickets now')).toBeVisible()
+    await expect(page.getByTestId('tickets-count')).toHaveText(/^21 of \d+$/u)
 
     await filters.getByRole('link', { name: 'all' }).click()
     await expect(page).toHaveURL(/\/tickets$/u)
