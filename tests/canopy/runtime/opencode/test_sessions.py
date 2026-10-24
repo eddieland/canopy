@@ -154,6 +154,27 @@ def test_a_row_canopy_cannot_read_is_passed_over_and_counted(tmp_path: Path) -> 
     assert (page.skipped, page.cursor) == (3, (2_003, "ses_4"))
 
 
+def test_a_row_whose_update_or_id_is_mistyped_never_stops_the_reading(tmp_path: Path) -> None:
+    path = database(tmp_path)
+    add_session(path, "ses_1", updated=2_000)
+    with contextlib.closing(sqlite3.connect(path)) as conn, conn:
+        conn.execute(
+            "INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)"
+            " VALUES ('ses_2', 'g', 's', '/d', 't', 'v', 1, 'soon')",
+        )
+        conn.execute(
+            "INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)"
+            " VALUES (X'33', 'g', 's', '/d', 't', 'v', 1, 2001)",
+        )
+
+    first = read(tmp_path)
+    add_session(path, "ses_4", updated=2_002)
+    second = read(tmp_path, first.cursor)
+
+    assert ([s.session_id for s in first.sessions], first.cursor) == (["ses_1"], (2_000, "ses_1"))
+    assert [s.session_id for s in second.sessions] == ["ses_4"]
+
+
 def test_a_reply_canopy_cannot_read_is_left_out_of_its_sessions_models(tmp_path: Path) -> None:
     path = database(tmp_path)
     add_session(path, "ses_1", updated=2_000)

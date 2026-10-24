@@ -44,12 +44,14 @@ if TYPE_CHECKING:
 #: How long a read waits for OpenCode to let go of the database, in seconds.
 TIMEOUT_SECONDS = 5.0
 #: A page of sessions updated after a cursor, the least recently updated first: the cursor's update, twice, its id, and
-#: the page's size. The columns are `_Session`'s, in its order.
+#: the page's size. The columns are `_Session`'s, in its order. A row whose update or id is not of its column's type is
+#: never read, since the cursor could not pass it: SQLite stores any type in any column, and a run can write the file.
 SESSIONS_SQL = """
 SELECT id, parent_id, directory, time_created, time_updated,
        cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write
 FROM session
-WHERE time_updated > ? OR (time_updated = ? AND id > ?)
+WHERE typeof(time_updated) = 'integer' AND typeof(id) = 'text'
+  AND (time_updated > ? OR (time_updated = ? AND id > ?))
 ORDER BY time_updated, id
 LIMIT ?
 """

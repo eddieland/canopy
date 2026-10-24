@@ -22,7 +22,8 @@ SESSIONS_SQL = """
 SELECT id, parent_id, directory, time_created, time_updated,
        cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write
 FROM session_v2
-WHERE time_updated > ? OR (time_updated = ? AND id > ?)
+WHERE typeof(time_updated) = 'integer' AND typeof(id) = 'text'
+  AND (time_updated > ? OR (time_updated = ? AND id > ?))
 ORDER BY time_updated, id
 LIMIT ?
 """
