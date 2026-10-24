@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
     choreRef,
     choreRunRef,
+    feedbackPlanRef,
     memoryRef,
     messageRef,
     parseTaskRef,
@@ -22,6 +23,7 @@ describe('refs', () => {
         expect(memoryRef(3)).toBe('memory:3')
         expect(choreRef('deps')).toBe('chore:deps')
         expect(planRef(2)).toBe('plan:2')
+        expect(feedbackPlanRef(7)).toBe('feedback-plan:7')
     })
 
     it("names a chore run by its chore's reference and its number", () => {

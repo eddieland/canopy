@@ -597,7 +597,9 @@ def test_chore_runs_reach_a_sink_that_takes_chores(scenario: Scenario, sink_scri
     prompt = scenario.env.home / "chore.md"
     prompt.write_text("Check.\n")
     chore_cmd = "agent run --agent canopy-chore {prompt}"
-    scenario.configures(chores={"check": {"prompt": str(prompt), "every_minutes": 60, "cmd": chore_cmd}})
+    # With a `when`, the overseer's to run or hold off (DESIGN §37).
+    check = {"prompt": str(prompt), "every_minutes": 60, "cmd": chore_cmd, "when": "Weekdays only."}
+    scenario.configures(chores={"check": check})
     out = tmp_path / "chores.txt"
     add_sink(scenario, sink_script, "s", out, format="text", events=["chores"])
     scenario.tick(canopy("chore", "wait", "check", "--rationale", "not needed yet"))
@@ -641,6 +643,8 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         message.Event(6, "loop.failing", since, {"tick": 9}),
         message.Event(7, "loop.recovered", since, {"failed": 3}),
         message.Event(8, "loop.budget_reached", since, {"month": "2026-10", "budget": 30, "percent": 100}),
+        message.Event(9, "reply.recorded", since, {"ticket": "PROJ-1", "message": 4, "ts": "1.2", "body": "go"}),
+        message.Event(10, "reply.refused", since, {"ticket": None, "ts": "1.3", "guard": "no_ticket", "reason": "r"}),
     ]
     change = notify_journal.Diff(added, [], [], [])
     sent = message.Message("slack", "/r", Path("/r/attention.md"), change, 4, events, ui=UI)
@@ -663,6 +667,8 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         f"{UI}ticks/9",
         None,
         f"{UI}spend",
+        f"{UI}tickets/PROJ-1",
+        None,
     ]
     # The text format links nothing, so `notify.cmd` sees no change.
     assert sent.text() == dataclasses.replace(sent, ui=None).text()
@@ -701,3 +707,19 @@ def test_serve_url_ends_in_a_slash_and_is_private(canopy_env: CanopyEnv) -> None
     canopy_env.append_shared('\n[serve]\nurl = "https://evil.test/"\n')
     with pytest.raises(ConfigError, match="is private"):
         load(canopy_env.root, canopy_env.user_file)
+
+
+def test_what_came_of_a_reply_from_slack_reads_as_a_line() -> None:
+    recorded = {"ticket": "PROJ-1", "message": 4, "ts": "1.2", "body": "use the staging config"}
+    refused = {"ticket": "PROJ-9", "ts": "1.3", "guard": "unknown", "reason": "canopy has no record of PROJ-9"}
+    unnamed = {"ticket": None, "ts": "1.4", "guard": "no_ticket", "reason": "it names no ticket"}
+    assert (
+        message.event_line("reply.recorded", recorded)
+        == "+ PROJ-1 your reply from Slack recorded: use the staging config"
+    )
+    assert message.event_line("reply.refused", refused) == (
+        "! your reply from Slack on PROJ-9 not recorded (unknown): canopy has no record of PROJ-9"
+    )
+    assert message.event_line("reply.refused", unnamed) == (
+        "! your reply from Slack not recorded (no_ticket): it names no ticket"
+    )

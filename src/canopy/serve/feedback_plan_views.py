@@ -10,11 +10,11 @@ plan's.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, assert_never
 
 from canopy.core import db, feedback_items, feedback_plans, plans, records, sql
-from canopy.core.vocab import PlanStatus, ReviewItem
-from canopy.serve.schema import WaitingFeedbackPlan
+from canopy.core.vocab import PlanItem, PlanStatus
+from canopy.serve.schema import FeedbackPlanWritten, WaitingFeedbackPlan
 from canopy.serve.schema.feedback_plan import FeedbackPlan, FeedbackPlanApproved, FeedbackPlanItem, ItemName
 
 if TYPE_CHECKING:
@@ -49,11 +49,14 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
     path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
     reading = plans.read(path)
     who = feedback_plans.authors(conn, plan.id)
+    checks = feedback_items.check_names(conn, plan.id)
     trusted = ctx.config.trust.trusted_reviewers
+    why = feedback_plans.rationales(reading.text) if reading.text is not None else {}
     items: list[FeedbackPlanItem] = []
     for i in feedback_plans.items(conn, plan.id):
         author = who.get((i.pr_url, i.item, i.item_id))
-        on_page = i.pr_url == url and i.item is ReviewItem.COMMENT
+        on_page = i.pr_url == url and i.item is PlanItem.COMMENT
+        said = _said(conn, i)
         items.append(
             FeedbackPlanItem(
                 number=i.number,
@@ -66,6 +69,10 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
                 author=author,
                 trusted=author is not None and author in trusted,
                 thread_id=thread_of.get(i.item_id) if on_page else None,
+                excerpt=feedback_plans.first_line(said.body) if said is not None else None,
+                rationale=why.get(i.item_id),
+                url=said.url if said is not None else None,
+                check=checks.get((i.pr_url, i.item_id)) if i.item is PlanItem.CHECK else None,
             ),
         )
     return FeedbackPlan(
@@ -125,6 +132,54 @@ def waiting(ctx: Context, key: str) -> WaitingFeedbackPlan | None:
         pr_urls=[str(u.pr_url) for u in units if u.pr_url and u.repo in covered],
         items=len(feedback_plans.items(conn, plan.id)),
         stale=bool(feedback_items.changes(conn, ctx.config.trust, plan)),
+    )
+
+
+def written(ctx: Context, run_id: int) -> FeedbackPlanWritten | None:
+    """The feedback plan the run `run_id` wrote, as its page names it, with the PRs' pages where it is approved.
+
+    Returns:
+        The plan, its PRs, and where it stands now; None when the run wrote none.
+    """
+    conn = ctx.conn
+    plan = feedback_plans.of_run(conn, run_id)
+    if plan is None:
+        return None
+    covered = feedback_plans.repos(conn, plan)
+    units = db.units(conn, plan.ticket_key)
+    return FeedbackPlanWritten(
+        id=plan.id,
+        pr_urls=[str(u.pr_url) for u in units if u.pr_url and u.repo in covered],
+        status=_stands(plan),
+    )
+
+
+def _stands(plan: records.FeedbackPlan) -> Literal["waiting", "approved", "spent", "superseded"]:
+    if plan.spent_run_id is not None:
+        return "spent"
+    match plan.status:
+        case PlanStatus.PROPOSED:
+            return "waiting"
+        case PlanStatus.APPROVED:
+            return "approved"
+        case PlanStatus.SUPERSEDED:
+            return "superseded"
+        case _:
+            assert_never(plan.status)
+
+
+def _said(conn: sqlite3.Connection, item: records.FeedbackPlanItem) -> records.ObservedReview | None:
+    """The review or comment an item is, as the `vcs` source last read it.
+
+    Returns:
+        Its row; None once a read no longer holds it.
+    """
+    return records.fetch_one(
+        conn,
+        records.ObservedReview,
+        sql.select("*")
+        .from_("observed_reviews")
+        .where("pr_url = ? AND item = ? AND id = ?", item.pr_url, item.item, item.item_id),
     )
 
 

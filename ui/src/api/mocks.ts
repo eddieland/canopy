@@ -58,6 +58,7 @@ export const mockRuns: Run[] = [
         persona_digest: '6c1f0a3e9b2d4c5a7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d',
         model: null,
         models: { status: 'running', models: [], error: null },
+        feedback_plan: null,
     },
     {
         id: 42,
@@ -89,6 +90,7 @@ export const mockRuns: Run[] = [
             models: [{ model: 'anthropic/claude-sonnet-4-5', replies: 52, cost_usd: 1.07 }],
             error: null,
         },
+        feedback_plan: null,
     },
 ]
 
@@ -348,6 +350,7 @@ export function draft(fields: Partial<Draft> = {}): Draft {
         sent_url: null,
         reacted: null,
         created_at: '2026-10-08T11:38:00Z',
+        from_plan: null,
         ...fields,
     }
 }
@@ -461,6 +464,10 @@ export function feedbackPlanItem(fields: Partial<FeedbackPlanItem> = {}): Feedba
         author: 'alice',
         trusted: true,
         thread_id: 'PRRT_1',
+        excerpt: 'Can it move into a `finally`?',
+        rationale: 'Move it into a `finally`.',
+        url: 'https://github.com/acme/web/pull/88#discussion_r2468013579',
+        check: null,
         ...fields,
     }
 }
@@ -494,6 +501,9 @@ export function feedbackPlan(fields: Partial<FeedbackPlan> = {}): FeedbackPlan {
                 proposal: 'leave',
                 reply: null,
                 thread_id: null,
+                excerpt: 'Two small things, then good to go.',
+                rationale: null,
+                url: 'https://github.com/acme/web/pull/88#pullrequestreview-4102337001',
             }),
             feedbackPlanItem(),
         ],

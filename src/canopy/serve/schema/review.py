@@ -17,7 +17,13 @@ from canopy.serve.schema import CostTotal, Decision, Limit, Model, ModelsServed,
 type ReviewVerdict = Annotated[Literal["clean", "findings"], Field(description="A review run's verdict (DESIGN §21).")]
 type ReviewImpact = Annotated[
     Literal["low", "normal", "high"],
-    Field(description="A change's impact, as the reviewer calls it: `low` as `review.low_impact` allows (DESIGN §21)."),
+    Field(
+        description=(
+            "A change's impact, as the reviewer calls it: `low` as `review.low_impact` allows, and `high` for a change "
+            "to `.github/workflows/` or a path its repository's `high_impact_paths` lists, whatever it says "
+            "(DESIGN §21)."
+        ),
+    ),
 ]
 type FindingSeverity = Annotated[
     Literal["blocking", "major", "minor"],
@@ -29,6 +35,10 @@ type DismissalReasonName = Annotated[
         description="Why the operator dismissed a review's finding (DESIGN §21): `wrong`, it does not hold; "
         "`intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix.",
     ),
+]
+type FindingAnswerName = Annotated[
+    Literal["fixed", "declined"],
+    Field(description="What a resumed worker answered of a review's finding (DESIGN §21)."),
 ]
 type ReviewDraftStatusName = Annotated[
     Literal["waiting", "publishing", "unconfirmed", "staged", "published", "discarded"],
@@ -129,6 +139,13 @@ class ReviewFinding(Model):
     """Whether the operator dismissed it: no worker or tick acts on it (DESIGN §21)."""
     dismissed_reason: DismissalReasonName | None = None
     """Why they dismissed it; None when it is not dismissed, or was before canopy asked why."""
+    held: bool = False
+    """Whether canopy holds it for the operator, a rebuttal of a worker's decline or a late finding: no worker gets it
+    until they send it (DESIGN §21)."""
+    answer: FindingAnswerName | None = None
+    """What the latest worker handed it answered: `fixed` or `declined`; None when none answered it."""
+    answer_reason: str | None = None
+    """The worker's reason for its answer, in its words: untrusted text. None when it gave none."""
 
 
 class DiffLine(Model):

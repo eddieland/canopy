@@ -38,7 +38,9 @@ from canopy.core.vocab import (
     DraftKind,
     DraftStance,
     DraftStatus,
+    FindingAnswer,
     GcPassStatus,
+    HoldKind,
     MemoryAuthor,
     MemoryCited,
     MemoryMode,
@@ -50,6 +52,7 @@ from canopy.core.vocab import (
     OverrideKind,
     Phase,
     PlanEffort,
+    PlanItem,
     PlanSetting,
     PlanStatus,
     PoolKind,
@@ -66,6 +69,7 @@ from canopy.core.vocab import (
     RunKind,
     RunStatus,
     SeenKind,
+    SessionsRead,
     SourceKind,
     StartStatus,
     ThreadState,
@@ -125,6 +129,9 @@ class Tick(Row):
     definitions_digest: str | None
     # The version of canopy that ran the tick; None on a tick from before that was recorded.
     canopy_version: str | None
+    #: Whether it ran its overseer: False when halted or when nothing was left to it (DESIGN §39); None on a tick from
+    #: before that was recorded, or one that ended before it got that far.
+    overseer_ran: bool | None
 
 
 @dataclass(frozen=True)
@@ -146,6 +153,7 @@ class Ticket(Row):
     needs_human_since: str | None
     done: bool
     last_message_id: int | None
+    #: The mirror cursor, unread since M37 retired the mirror (DESIGN §35); kept, since no migration drops a column.
     last_mirrored_id: str | None
     # When the operator last forgot the ticket's work, and its newest run and message then (DESIGN §22).
     forgotten_at: str | None
@@ -420,6 +428,17 @@ class ReviewRequestPersona(Row):
 
 
 @dataclass(frozen=True)
+class ReviewHead(Row):
+    """A PR's head commit as canopy last saw it, and since when (DESIGN §21): the clock a review's settle time reads."""
+
+    TABLE: ClassVar[str] = "review_heads"
+
+    pr_url: str
+    sha: str
+    seen_at: str
+
+
+@dataclass(frozen=True)
 class PoolSlot(Row):
     """A slot of one of canopy's own pools (DESIGN §18): where it is, and its lease while it has one."""
 
@@ -498,6 +517,9 @@ class FeedbackPlanPr(Row):
     plan_id: int
     pr_url: str
     head_sha: str | None
+    #: Whether it conflicted with its base then, as its host said; None while it had not said, or for a plan recorded
+    #: before this was.
+    conflicted: bool | None
 
 
 @dataclass(frozen=True)
@@ -549,7 +571,7 @@ class FeedbackPlanSeen(Row):
 
 @dataclass(frozen=True)
 class FeedbackPlanItem(Row):
-    """An item a feedback plan covers: a review or review comment by its observed id, and what the plan proposes."""
+    """An item a feedback plan covers, by its id, and what the plan proposes for it (DESIGN §32)."""
 
     TABLE: ClassVar[str] = "feedback_plan_items"
 
@@ -557,10 +579,12 @@ class FeedbackPlanItem(Row):
     #: Its place in the planner's result line, from 1: what an approval names it by.
     number: int
     pr_url: str
-    item: ReviewItem
+    item: PlanItem
+    #: A review's or comment's id as the `vcs` source observed it; a failed check's or a conflict's, below zero, as
+    #: canopy gave it (`feedback_items.check_id`).
     item_id: int
     proposal: Proposal
-    #: The reply the plan would draft, for a change or a decline: model text, never an instruction.
+    #: The reply the plan would draft, for a review item's change or decline: model text, never an instruction.
     reply: str | None
     #: Whether the operator's approval left it out: its `resume` does not act on it, and the next plan gets it.
     left_out: bool
@@ -809,6 +833,75 @@ class RunModel(Row):
 
 
 @dataclass(frozen=True)
+class RuntimeSession(Row):
+    """A session the agent runtime keeps, canopy's or not, as the runtime last recorded it (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "runtime_sessions"
+
+    session_id: str
+    #: The session it ran for as a subagent; None for a session of its own.
+    parent_id: str | None
+    directory: str
+    started_at: str
+    updated_at: str
+    #: The runtime's own stamp of the update, in milliseconds since the epoch.
+    updated_ms: int
+    cost_usd: float
+    tokens_input: int
+    tokens_output: int
+    tokens_reasoning: int
+    tokens_cache_read: int
+    tokens_cache_write: int
+    read_at: str
+
+
+@dataclass(frozen=True)
+class RuntimeSessionModel(Row):
+    """One model a runtime session's replies name, and what they cost (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "runtime_session_models"
+
+    session_id: str
+    #: As `provider/model`.
+    model: str
+    replies: int
+    cost_usd: float
+
+
+@dataclass(frozen=True)
+class RuntimeSessionRead(Row):
+    """How reading the runtime's sessions stands (DESIGN §13): where the next read starts, and how the last ended."""
+
+    TABLE: ClassVar[str] = "runtime_session_reads"
+
+    #: Always 1: the table holds one row.
+    id: int
+    #: The last session read's update, in the runtime's milliseconds, and its id; both None before the first.
+    cursor_updated_ms: int | None
+    cursor_session_id: str | None
+    status: SessionsRead
+    #: canopy's words for why it failed; None unless `failed`.
+    error: str | None
+    #: How many sessions every read so far passed over as ones canopy cannot read.
+    skipped: int
+    read_at: str
+
+
+@dataclass(frozen=True)
+class RunReplyModel(Row):
+    """The model that wrote one reply of an agent run more than one model served (DESIGN §13)."""
+
+    TABLE: ClassVar[str] = "run_reply_models"
+
+    run_table: str
+    run_id: int
+    #: The runtime's id of the reply, which the events of the model call that wrote it name in the run's log.
+    message: str
+    #: As `run_models.model` names it.
+    model: str
+
+
+@dataclass(frozen=True)
 class RunOffer(Row):
     """canopy's ask of the runtime, as an agent run started, of what it offered the run (DESIGN §13)."""
 
@@ -949,7 +1042,7 @@ class ObservedComment(Row):
     id: str
     author: str
     commented_at: str
-    #: The comment's text, cut at the mirror's length.
+    #: The comment's text, cut at `conversation.MAX_COMMENT`.
     body: str
     truncated: bool
     #: `worker` when it carries the workers' marks (D069), else `tracker`.
@@ -982,6 +1075,22 @@ class ObservedCheck(Row):
     conclusion: CheckConclusion | None
     run_id: int | None
     url: str | None
+    observed_at: str
+
+
+@dataclass(frozen=True)
+class ObservedCheckRun(Row):
+    """A completed check run a `vcs` source observed, kept across later reads of its PR (DESIGN §35)."""
+
+    TABLE: ClassVar[str] = "observed_check_runs"
+
+    pr_url: str
+    run_id: int
+    #: Its context's name, as `observed_checks.name`.
+    name: str
+    head_sha: str
+    conclusion: CheckConclusion
+    #: When a source first observed it completed.
     observed_at: str
 
 
@@ -1068,7 +1177,7 @@ class ObservedArtifactComment(Row):
     #: For an agent's comment, the person it wrote for.
     on_behalf_of: str | None
     via: str
-    #: Its text, cut at the mirror's length; empty once deleted.
+    #: Its text, cut at `conversation.MAX_COMMENT`; empty once deleted.
     body: str
     truncated: bool
     #: Whether it carries every one of the workers' marks (D069).
@@ -1165,6 +1274,8 @@ class Draft(Row):
     #: The reaction a send added on GitHub, which stays there even when the send's review then failed.
     reacted: Reaction | None
     reacted_at: str | None
+    #: The number of the item of its run's feedback plan whose proposed reply it started from, or None (0093).
+    plan_item: int | None
 
 
 @dataclass(frozen=True)
@@ -1364,7 +1475,7 @@ class Message(Row):
     at: str
     #: `worker`, `operator`, or `tracker`.
     source: str
-    #: `report` or `question`, a worker's; `reply`, the operator's.
+    #: `report` or `question`, a worker's; `reply`, the operator's; `comment`, a tracker comment a source observed.
     kind: str
     #: `run`, `cli`, `web`, `slack`, or `tracker`.
     channel: str
@@ -1474,6 +1585,38 @@ class ReviewDismissal(Row):
     channel: str
     #: Why the operator dismissed it; None for a dismissal from before canopy asked.
     reason: DismissalReason | None
+
+
+@dataclass(frozen=True)
+class ReviewAnswer(Row):
+    """What a resumed worker answered of one of a review's findings (DESIGN §21): the worker's words, untrusted."""
+
+    TABLE: ClassVar[str] = "review_answers"
+
+    run_id: int
+    review_run_id: int
+    finding: int
+    answer: FindingAnswer
+    #: Why it declined, or what it says of a fix; None for a fix it said nothing of.
+    reason: str | None
+
+
+@dataclass(frozen=True)
+class ReviewHold(Row):
+    """A review's finding the harness holds for the operator: it reaches no worker until they send it (DESIGN §21)."""
+
+    TABLE: ClassVar[str] = "review_holds"
+
+    review_run_id: int
+    finding: int
+    kind: HoldKind
+    #: The earlier review run, and its finding, that a rebuttal answers; None for a `late` hold.
+    rebuts_run_id: int | None
+    rebuts_finding: int | None
+    held_at: str
+    #: When the operator sent it to a worker, and through which channel; None while it is held.
+    released_at: str | None
+    released_channel: str | None
 
 
 @dataclass(frozen=True)

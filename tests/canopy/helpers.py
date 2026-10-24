@@ -83,6 +83,7 @@ PROMPT_VALUES = {
     "OPERATOR_MESSAGES": None,
     "PREVIOUS_RUNS": None,
     "REVIEW_FINDINGS": None,
+    "REVIEW_ANSWERS": "",
     "PLAN": None,
     "REASONS": "- `review`: review comments to address.",
     "FOLLOW_UPS": prompts.follow_ups("PROJ-1", 5, ["repo"], needs_human="needs-human", labels=["agent-ready-alice"]),
@@ -353,6 +354,11 @@ def pool(treehouse_state: Path) -> list[dict[str, object]]:
         *(s for p in state.get("pools", {}).values() for s in p.get("slots", [])),
     ]
     return slots
+
+
+def listed(state: Path, *lines: str, variants: Mapping[str, Sequence[str]] | None = None) -> None:
+    """Have the fake `opencode models`, whose state file is `state`, print `lines`, and with `--verbose` `variants`."""
+    state.write_text(json.dumps({"models": list(lines), "variants": dict(variants or {})}))
 
 
 def pool_statuses(treehouse_state: Path) -> list[str]:

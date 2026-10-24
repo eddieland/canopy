@@ -198,6 +198,19 @@ class Proposal(StrEnum):
     LEAVE = "leave"
 
 
+class PlanItem(StrEnum):
+    """What a feedback plan's item is, `feedback_plan_items.item` (DESIGN §32, What a plan covers)."""
+
+    #: A review, by the id the `vcs` source observed.
+    REVIEW = "review"
+    #: A thread of review comments, by its item comment's observed id.
+    COMMENT = "comment"
+    #: A failed check at the PR's head, by an id canopy gives it (`feedback_items.check_id`).
+    CHECK = "check"
+    #: The PR's conflict with its base, by an id canopy gives it (`feedback_items.conflict_id`).
+    CONFLICT = "conflict"
+
+
 class MoveKind(StrEnum):
     """What moved on a waiting feedback plan's PR, `feedback_plan_moves.kind` (DESIGN §32, Planning again)."""
 
@@ -381,6 +394,23 @@ class DismissalReason(StrEnum):
     NOT_WORTH_IT = "not_worth_it"
 
 
+class FindingAnswer(StrEnum):
+    """What a resumed worker answered of a review's finding, `review_answers.answer` (DESIGN §21)."""
+
+    FIXED = "fixed"
+    #: Not changed, for a reason the worker gives, which the next review reads.
+    DECLINED = "declined"
+
+
+class HoldKind(StrEnum):
+    """Why the harness holds a review's finding for the operator, `review_holds.kind` (DESIGN §21)."""
+
+    #: A later review's answer to a finding the worker declined: the operator settles it, never another `resume`.
+    REBUTTAL = "rebuttal"
+    #: A later review's finding on a line unchanged since the PR's first reviewed commit, which the first review read.
+    LATE = "late"
+
+
 class Reaction(StrEnum):
     """A reaction a thread's draft stages on the comment it names, `draft_versions.reaction` (DESIGN §29).
 
@@ -521,6 +551,17 @@ class ModelsRead(StrEnum):
     #: The runtime keeps no session of that id, which reading again would not change.
     MISSING = "missing"
     #: The runtime could not be asked, or said what canopy cannot read; read again later.
+    FAILED = "failed"
+
+
+class SessionsRead(StrEnum):
+    """How canopy's last read of the runtime's sessions ended, `runtime_session_reads.status` (DESIGN §13)."""
+
+    #: The record was read: what it held after the cursor is in `runtime_sessions`.
+    FOUND = "found"
+    #: The runtime has kept no session yet.
+    MISSING = "missing"
+    #: The record could not be read; read again later.
     FAILED = "failed"
 
 

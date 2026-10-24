@@ -268,6 +268,20 @@ cmd = ""
 # agent_prs = true                                            # the loop's own PRs, before a human is asked
 # query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs, reviewed for you alone
 # low_impact = "Only docs, comments, or tests change."
+# settle_minutes = 30   # review a head once it has been the head this long; a push starts over. 0 to 10080
+#
+# Cases `canopy review eval` scores the reviewer on, after you change reviewer.md, a persona, or its model; best in the
+# workspace's .canopy/config.toml, since each names one of its repositories. A bug case is a change that was reverted or
+# fixed forward, with the lines you confirmed its bug on ("path:line" or "path:first-last"); a clean one, one you know
+# is sound, counts every finding as a false alarm. sha is the commit reviewed, base the commit its change starts from.
+# [[review.eval_cases]]
+# name = "retry-forever"
+# pr = "https://github.com/acme/api/pull/412"
+# repo = "api"
+# sha = "<the PR's head, 40 hex characters>"
+# base = "<its merge base with main>"
+# kind = "bug"
+# lines = ["src/retry.py:42"]
 
 # Optional: an artifact store workers publish pages to for people to comment on (DESIGN §38), Louvre or canopy's local
 # one, `canopy-artifacts serve`, each an MCP server your runtime config names. Every agent's definition denies the
@@ -286,8 +300,9 @@ cmd = ""
 #
 # And, with the Slack sink on a bot token and --threads, a source that reads the replies in its ticket threads (ROADMAP
 # M64). A reply from an id in `operators` is your message on the ticket, as `canopy reply` records one: list only your
-# own Slack member id. The bot also needs channels:history (groups:history for a private channel). --channel is the
-# sink's own, by id.
+# own Slack member id. So is `@canopy PROJ-123 your reply` in the channel, for a ticket with no thread; add "replies"
+# to the sink's events to see what came of it. The bot also needs channels:history (groups:history for a private
+# channel). --channel is the sink's own, by id.
 # [connect.sources.slack]
 # kind = "slack"
 # cmd = "canopy-connect-slack --channel C0123ABCD"

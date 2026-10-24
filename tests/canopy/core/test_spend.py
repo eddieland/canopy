@@ -10,8 +10,8 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, spend, sql
-from canopy.runtime.report import ToolUse, Usage
+from canopy.core import db, runtime_sessions, spend, sql
+from canopy.runtime.report import SessionPage, SessionSpend, ToolUse, Usage
 from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
 
@@ -32,11 +32,13 @@ def tick(
     dry_run: bool = False,
     idle: bool | None = None,
     woken_by: str | None = None,
+    overseer_ran: bool | None = None,
 ) -> int:
+    ran = None if overseer_ran is None else int(overseer_ran)
     cursor = conn.execute(
-        "INSERT INTO ticks (started_at, ended_at, dry_run, status, idle, woken_by, cost_usd) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (started, started, int(dry_run), status, None if idle is None else int(idle), woken_by, cost),
+        "INSERT INTO ticks (started_at, ended_at, dry_run, status, idle, woken_by, cost_usd, overseer_ran) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (started, started, int(dry_run), status, None if idle is None else int(idle), woken_by, cost, ran),
     )
     assert cursor.lastrowid is not None
     return cursor.lastrowid
@@ -310,10 +312,12 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
     assert [line.split()[0] for line in out[3:6]] == days  # a line per day, oldest first
     assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "$0.75", "$1.50", "-", "$0.30", "$7.05"]
     words = [line.split() for line in out]
-    assert ["idle", "3", "$0.50"] in words
-    assert ["not", "idle", "2", "$1.50"] in words
+    assert ["ticks", "count", "spent", "no", "overseer"] in words
+    assert ["idle", "3", "$0.50", "0"] in words
+    assert ["not", "idle", "2", "$1.50", "0"] in words
     assert "Idle ticks were 20% of the live overseer's spend." in out
-    assert ["timer", "3", "$0.50"] in words
+    assert ["woken", "by", "count", "spent", "no", "overseer"] in words
+    assert ["timer", "3", "$0.50", "0"] in words
     # A kind whose every run reported a cost is left out.
     assert out[-1] == "No cost reported: 1 of 8 overseer runs, 1 of 2 worker runs, 1 of 2 chore runs."
 
@@ -333,7 +337,33 @@ def test_canopy_spend_json_is_the_breakdown_with_each_total(
     assert data["totals"]["total"] == pytest.approx(7.05)
     assert data["per_day"][0]["costs"]["total"] is None
     assert data["idle_share"] == pytest.approx(0.2)
-    assert data["ticks"][0] == {"group": "idle", "ticks": 3, "cost_usd": 0.5}
+    assert data["ticks"][0] == {"group": "idle", "ticks": 3, "cost_usd": 0.5, "without_overseer": 0}
+
+
+def test_a_tick_that_ran_no_overseer_counts_at_nothing_and_is_split_from_those_that_did(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Two idle ticks the timer woke: one ran the overseer for a quarter, one the harness left it nothing (DESIGN §39).
+    conn = canopy_env.journal()
+    now = noon_today()
+    tick(conn, earlier(now, 0, 2), 0.25, idle=True, woken_by="timer", overseer_ran=True)
+    tick(conn, earlier(now, 0, 1), None, idle=True, woken_by="timer", overseer_ran=False)
+    tick(conn, earlier(now, 0, 3), None, idle=True, woken_by="run", overseer_ran=False)
+    found = spend.breakdown(conn, now, 1)
+    [idle] = [g for g in found.ticks if g.group == "idle"]
+    assert (idle.ticks, idle.cost_usd, idle.without_overseer) == (3, 0.25, 2)
+    assert [(w.by, w.ticks, w.cost_usd, w.without_overseer) for w in found.woken] == [
+        ("timer", 2, 0.25, 1),
+        ("run", 1, 0.0, 1),
+    ]
+    # Never among the runs that reported no cost.
+    [overseer] = [u for u in found.unpriced if u.kind == "overseer"]
+    assert (overseer.runs, overseer.unpriced) == (3, 0)
+    assert main(["spend", "--days", "1", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["woken"][1] == {"by": "run", "ticks": 1, "cost_usd": 0.0, "without_overseer": 1}
+    assert data["unpriced"][0] == {"kind": "overseer", "runs": 3, "unpriced": 0}
 
 
 def test_canopy_spend_reads_at_most_a_year(canopy_env: CanopyEnv) -> None:
@@ -683,7 +713,7 @@ def test_tools_read_only_the_windows_runs(tmp_path: Path, journals: Journals, ki
     plans share `runs`, told apart by kind, which the index does not cover: each run in the window is read for it.
     """
     conn = journals.open(tmp_path / "canopy.db")
-    table, _ = spend._ALL_TABLES[kind]  # noqa: SLF001 (the query the plan is of)
+    table, _ = spend.KIND_TABLES[kind]
     query = spend._tools_of(kind, earlier(NOW, 7), earlier(NOW, 0))  # noqa: SLF001
     plan = [str(row[3]) for row in sql.execute(conn, sql.frag("EXPLAIN QUERY PLAN {}", query))]
     assert re.match(rf"SEARCH r USING (COVERING )?INDEX {table}_spent \(started_at>\? AND started_at<\?\)", plan[0]), (
@@ -762,7 +792,7 @@ def test_canopy_spend_says_when_no_run_s_models_were_read(
 def test_models_read_only_the_windows_runs(tmp_path: Path, journals: Journals, kind: spend.Kind) -> None:
     """As `test_tools_read_only_the_windows_runs`: the run table leads, and `run_models` is read by its key."""
     conn = journals.open(tmp_path / "canopy.db")
-    table, _ = spend._ALL_TABLES[kind]  # noqa: SLF001 (the query the plan is of)
+    table, _ = spend.KIND_TABLES[kind]
     query = spend._named_models(kind, earlier(NOW, 7), earlier(NOW, 0))  # noqa: SLF001
     plan = [str(row[3]) for row in sql.execute(conn, sql.frag("EXPLAIN QUERY PLAN {}", query))]
     assert re.match(rf"SEARCH r USING (COVERING )?INDEX {table}_spent \(started_at>\? AND started_at<\?\)", plan[0]), (
@@ -878,3 +908,77 @@ def test_a_month_s_percent_is_floored_in_whole_cents(tmp_path: Path, journals: J
     assert (spend.month(conn, NOW, 1).percent, spend.month(conn, NOW, 1).over) == (99, False)
     tick(conn, "2026-10-02T12:00:00.000Z", 0.01)
     assert (spend.month(conn, NOW, 1).percent, spend.month(conn, NOW, 1).over) == (100, True)
+
+
+def journal_of_sessions(conn: sqlite3.Connection, now: datetime) -> None:
+    """A tick whose overseer ran in `ses_overseer`, and the runtime's record of it, its subagent's, and two others."""
+    started = earlier(now, 0)
+    conn.execute(
+        "INSERT INTO ticks (started_at, ended_at, dry_run, status, session_id) VALUES (?, ?, 0, 'ok', 'ses_overseer')",
+        (started, started),
+    )
+    ms = int(now.timestamp() * 1000)
+
+    def session(session_id: str, cost: float, directory: str, parent: str | None = None) -> SessionSpend:
+        return SessionSpend(session_id, parent, directory, ms, ms, cost, 1, 1, 0, 0, 0)
+
+    runtime_sessions.record(
+        conn,
+        SessionPage(
+            "found",
+            (
+                session("ses_overseer", 1.0, "/work/ws"),
+                session("ses_sub", 0.5, "/work/ws", parent="ses_overseer"),
+                session("ses_notes", 2.0, "/home/me/notes"),
+                session("ses_web", 0.25, "/work/web"),
+            ),
+            cursor=(ms, "ses_web"),
+        ),
+        now=db.format_time(now),
+    )
+
+
+def test_canopy_spend_prints_every_runtime_session_canopys_apart(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    now = noon_today()
+    journal_of_sessions(canopy_env.journal(), now)
+    assert main(["spend", "--days", "1"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    start = out.index(f"Every runtime session, as its record says (read {now:%Y-%m-%d}):")
+    assert [line.split() for line in out[start + 1 : start + 6]] == [
+        ["sessions", "count", "spent"],
+        ["canopy's", "runs", "2", "$1.50"],
+        ["outside", "canopy", "2", "$2.25"],
+        ["1", "$2.00", "/home/me/notes"],
+        ["1", "$0.25", "/work/web"],
+    ]
+    assert (
+        out[start + 6]
+        == "A subagent's session counts with the session it ran for; another workspace's runs are outside."
+    )
+
+
+def test_canopy_spend_json_has_every_runtime_session_canopys_apart(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    journal_of_sessions(canopy_env.journal(), noon_today())
+    assert main(["spend", "--days", "1", "--json"]) == 0
+    found = json.loads(capsys.readouterr().out)["sessions"]
+    assert found["canopy"] == {"sessions": 2, "cost_usd": 1.5}
+    assert found["outside"] == {"sessions": 2, "cost_usd": 2.25}
+    assert found["directories"][0] == {"directory": "/home/me/notes", "sessions": 1, "cost_usd": 2.0}
+    assert found["status"] == "found"
+
+
+def test_canopy_spend_says_when_the_runtimes_sessions_were_never_read(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    journal_of_a_week(canopy_env.journal(), noon_today())
+    assert main(["spend"]) == 0
+    assert "The runtime's sessions were never read: canopy loop reads them, canopy's and not, between ticks." in (
+        capsys.readouterr().out.splitlines()
+    )

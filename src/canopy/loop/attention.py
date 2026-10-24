@@ -2,9 +2,12 @@
 
 Attention items are decisions with action `attention:<reason>`, recorded every tick the cause holds: by the overseer
 for what it reads in the world, and by the harness for runs that ended in a way a human must look at (`from_runs`). The
-current list is therefore the items of the latest tick whose overseer finished; an item disappears when a tick no
-longer records it. A tick that could not run the overseer because `canopy` does not work for it adds one item of its own
-to that list, while it is the latest tick.
+current list is therefore the items of the latest `ok` tick; an item disappears when a tick no longer records it. One
+the overseer recorded is held through a tick that did not give the overseer its subject, such as a ticket the harness
+decided, or any subject in a tick that ran no overseer, and goes once its ticket is done or stopped (`current`, DESIGN
+§37, §39). A tick that could not
+run the overseer because `canopy` does not work for it adds one item of its own to that list, while it is the latest
+tick.
 
 A chore's open findings are on the list too, from its latest `ok` run, and a chore whose latest run failed has a
 `chore_failed` item the harness records each tick (DESIGN §19). Both are about a chore, named `chore:<name>` where a
@@ -21,7 +24,8 @@ After every tick, `publish` rewrites `<state_dir>/attention.md` and hands the li
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
@@ -40,11 +44,12 @@ from canopy.core import (
     tasks,
 )
 from canopy.core.items import Item, age, fingerprint, one_line, subject
-from canopy.core.vocab import RunKind, RunStatus, TickStatus
+from canopy.core.vocab import Decider, RunKind, RunStatus, TickStatus
 from canopy.infra import logs
 from canopy.infra.text import printable
 from canopy.loop import archive
 from canopy.notify import deliver
+from canopy.reviews import impact as review_impact
 from canopy.reviews import waiting as review_waiting
 from canopy.runs import drafted
 
@@ -59,6 +64,8 @@ CHORE_PREFIX = "chore:"
 PR_PREFIX = "pr:"
 #: Where a ticket key would be, an item about a one-off task names it so (DESIGN §36).
 TASK_PREFIX = "task:"
+#: What the overseer's verb about a ticket the harness decided records, refused (DESIGN §37, `loop.tools`).
+REFUSED_DECIDED = "refused:decided"
 
 
 def run_reason(status: RunStatus) -> str | None:
@@ -166,25 +173,74 @@ def _sort_key(item_id: _ItemId) -> tuple[str, str, str]:
 
 
 def current(conn: sqlite3.Connection) -> list[Item]:
-    """Return the current attention list, sorted by ticket key and reason."""
-    ticks = [
-        int(r[0])
-        for r in sql.execute(
-            conn,
-            sql.select("id").from_("ticks").where("status = 'ok'").order_by("id DESC").limit(HISTORY_TICKS),
-        )
-    ]
+    """Return the current attention list, sorted by ticket key and reason.
+
+    It is the latest `ok` tick's items, each open since the first tick of its unbroken run. An item the harness raises
+    is recorded every tick its cause holds, so it is open only while the latest `ok` tick recorded it. One the overseer
+    recorded is held besides through every `ok` tick that did not give the overseer its subject (`_gave`), such as a
+    ticket the harness decided there (DESIGN §37), or one that ran no overseer at all (§39): the overseer cannot record
+    again what it was not shown. It goes the
+    first tick the overseer is given its subject and leaves it out, or once its ticket is done or stopped.
+    """
+    rows = sql.execute(
+        conn,
+        sql.select("id, overseer_ran").from_("ticks").where("status = 'ok'").order_by("id DESC").limit(HISTORY_TICKS),
+    ).fetchall()
+    ticks = [int(r[0]) for r in rows]
     if not ticks:
         return _halted(conn, None)
-    recorded = (
-        sql.select("tick_id, ticket_key, action, rationale, created_at, repo, chore, pr")
+    by_tick = _recorded(conn, ticks)
+    subjects = {i[0] for found in by_tick.values() for i, r in found.items() if r.held and i[0] is not None}
+    given = _given(conn, ticks, subjects)
+    # A tick from before it was recorded that closed `ok` ran its overseer (DESIGN §39).
+    ran = frozenset(int(r[0]) for r in rows if r[1] != 0)
+    open_items: dict[_ItemId, _Open] = {}
+    for tick_id in reversed(ticks):
+        now: dict[_ItemId, _Open] = {}
+        for item_id, r in by_tick[tick_id].items():
+            earlier = open_items.get(item_id)
+            now[item_id] = r if earlier is None else replace(r, since=earlier.since)
+        for item_id, r in open_items.items():
+            if item_id not in now and r.held and not _gave(item_id[0], tick_id, given, ran):
+                now[item_id] = r
+        open_items = now
+    ended = _ended(conn, {i[0] for i, r in open_items.items() if r.held and i[0] is not None})
+    items = [
+        Item(i[0], i[1], r.detail, r.since, i[2])
+        for i, r in sorted(open_items.items(), key=lambda found: _sort_key(found[0]))
+        if not (r.held and i[0] in ended)
+    ]
+    return items + _halted(conn, ticks[0])
+
+
+@dataclass(frozen=True)
+class _Open:
+    """An item as the ticks up to one left it (`current`)."""
+
+    #: Its detail, as the newest tick that recorded it worded it.
+    detail: str
+    #: When the first tick of its unbroken run recorded it.
+    since: str
+    #: Whether the overseer recorded it, so it is held through a tick that did not give the overseer its subject.
+    held: bool
+
+
+def _recorded(conn: sqlite3.Connection, ticks: Collection[int]) -> dict[int, dict[_ItemId, _Open]]:
+    """The attention items each of `ticks` recorded, each as its first row there words it.
+
+    Returns:
+        By tick, each item, held when the overseer recorded it there: a reason the harness does not raise, recorded
+        other than by the harness.
+    """
+    rows = sql.execute(
+        conn,
+        sql.select("tick_id, ticket_key, action, rationale, created_at, repo, chore, pr, decider")
         .from_("decisions")
         .where("action LIKE 'attention:%'")
         .where_in("tick_id", ticks)
-        .order_by("id")
-    )
-    rows = sql.execute(conn, recorded).fetchall()
-    by_tick: dict[int, dict[_ItemId, tuple[str, str]]] = {t: {} for t in ticks}
+        .order_by("id"),
+    ).fetchall()
+    by_tick: dict[int, dict[_ItemId, _Open]] = {t: {} for t in ticks}
     for r in rows:
         key = None if r["ticket_key"] is None else str(r["ticket_key"])
         if r["chore"] is not None:
@@ -192,20 +248,77 @@ def current(conn: sqlite3.Connection) -> list[Item]:
         elif key is None and r["pr"] is not None:
             key = f"{PR_PREFIX}{r['pr']}"
         repo = None if r["repo"] is None else str(r["repo"])
-        item_id: _ItemId = (key, str(r["action"]).removeprefix(ACTION_PREFIX), repo)
-        by_tick[int(r["tick_id"])].setdefault(item_id, (str(r["rationale"]), str(r["created_at"])))
+        reason = str(r["action"]).removeprefix(ACTION_PREFIX)
+        item_id: _ItemId = (key, reason, repo)
+        held = r["decider"] != Decider.HARNESS and reason not in HARNESS_REASONS
+        found = by_tick[int(r["tick_id"])]
+        first = found.get(item_id)
+        if first is None:
+            found[item_id] = _Open(str(r["rationale"]), str(r["created_at"]), held=held)
+        elif held and not first.held:
+            found[item_id] = replace(first, held=True)
+    return by_tick
 
-    latest = by_tick[ticks[0]]
-    items: list[Item] = []
-    for item_id in sorted(latest, key=_sort_key):
-        detail, since = latest[item_id]
-        for tick_id in ticks[1:]:
-            earlier = by_tick[tick_id].get(item_id)
-            if earlier is None:
-                break
-            since = earlier[1]
-        items.append(Item(item_id[0], item_id[1], detail, since, item_id[2]))
-    return items + _halted(conn, ticks[0])
+
+def _given(conn: sqlite3.Connection, ticks: Collection[int], keys: Collection[str]) -> dict[int, set[str]]:
+    """Which of tickets `keys` the overseer was given in each of `ticks`: those it recorded a decision about there.
+
+    An `ok` tick has a decision about every ticket its state block listed, or its duties check would have failed it
+    (DESIGN §6 step 5). A mirror decides nothing, and a refusal `decided` is about a ticket the harness took, which
+    the overseer was not shown; neither counts, nor anything the harness recorded.
+
+    Returns:
+        By tick, the keys.
+    """
+    found: dict[int, set[str]] = {t: set() for t in ticks}
+    if not keys:
+        return found
+    rows = sql.execute(
+        conn,
+        sql.select("tick_id, ticket_key, action, decider")
+        .from_("decisions")
+        .where_in("tick_id", ticks)
+        .where_in("ticket_key", keys)
+        .where("action NOT IN (?, ?)", conversation.MIRROR_ACTION, REFUSED_DECIDED),
+    ).fetchall()
+    for r in rows:
+        action = str(r["action"])
+        raised = action.startswith(ACTION_PREFIX) and action.removeprefix(ACTION_PREFIX) in HARNESS_REASONS
+        if r["decider"] != Decider.HARNESS and not raised:
+            found[int(r["tick_id"])].add(str(r["ticket_key"]))
+    return found
+
+
+def _gave(key: str | None, tick_id: int, given: Mapping[int, AbstractSet[str]], ran: AbstractSet[int]) -> bool:
+    """Whether tick `tick_id` gave the overseer `key`, the subject of an item it recorded (`current`).
+
+    A ticket is given where the overseer recorded a decision about it (`_given`); a PR, a chore, or the workspace
+    wherever the overseer ran.
+
+    Returns:
+        True when an item the tick left out ends there.
+    """
+    if key is None or key.startswith((PR_PREFIX, CHORE_PREFIX)):
+        return tick_id in ran
+    return key in given[tick_id]
+
+
+def _ended(conn: sqlite3.Connection, keys: Collection[str]) -> set[str]:
+    """Which of `keys` an item the overseer recorded is no longer about: done, or stopped by the operator (§37).
+
+    Returns:
+        Their keys.
+    """
+    if not keys:
+        return set()
+    done = sql.select("key").from_("tickets").where("done = 1").where_in("key", keys)
+    stopped = (
+        sql.select("subject_id")
+        .from_("starts")
+        .where("subject_kind = ? AND status = 'stopped'", conversation.TICKET)
+        .where_in("subject_id", keys)
+    )
+    return {str(r[0]) for r in sql.execute(conn, done)} | {str(r[0]) for r in sql.execute(conn, stopped)}
 
 
 def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
@@ -247,12 +360,14 @@ class OpenItem(TypedDict):
     since: str
 
 
-def for_overseer(conn: sqlite3.Connection) -> list[OpenItem]:
+def for_overseer(conn: sqlite3.Connection, *, decided: AbstractSet[str] = frozenset()) -> list[OpenItem]:
     """The open items the overseer recorded, for its state block (DESIGN §6 step 4, ROADMAP M28).
 
-    An item stays open only while each tick records it again, so the overseer is shown what it would drop by leaving
-    one out. Items the harness raises itself, and chores', are left out: the overseer never records those. So is
-    every detail, which may quote a comment: the item's subject, reason, and age say which one it is.
+    An item stays open only while each tick that gives the overseer its subject records it again, so the overseer is
+    shown what it would drop by leaving one out. Items the harness raises itself, and chores', are left out: the
+    overseer never records those. So are those about `decided`, the tickets the harness decided this tick, which the
+    block does not list and which hold their items until the overseer is given them again (`current`). So is every
+    detail, which may quote a comment: the item's subject, reason, and age say which one it is.
 
     Returns:
         One object per item: its ticket, or its PR when it has no ticket; its repository when it has one; its reason;
@@ -261,7 +376,7 @@ def for_overseer(conn: sqlite3.Connection) -> list[OpenItem]:
     found: list[OpenItem] = []
     for item in current(conn):
         key = item.ticket_key
-        if item.reason in HARNESS_REASONS or (key is not None and key.startswith(CHORE_PREFIX)):
+        if item.reason in HARNESS_REASONS or (key is not None and key.startswith(CHORE_PREFIX)) or key in decided:
             continue
         found.append(
             {
@@ -285,7 +400,8 @@ def listed(ctx: Context) -> list[Item]:
     the operator dismissed (DESIGN §19). A `drafts_waiting` item says what waits now, not at the tick that recorded
     it, so one the operator sent or dropped every draft of is gone at once (DESIGN §29), and so do a review's
     `review_waiting` and `review_unsettled`, gone once the operator publishes or a read settles it (§34). So do a
-    task's `awaiting_reply` and `task_ticket_unrecorded`, which no tick records (DESIGN §36).
+    task's `awaiting_reply` and `task_ticket_unrecorded`, which no tick records (DESIGN §36). An item about a PR whose
+    latest review is `high` impact, or about its ticket, comes before the rest (§21), so a notification lists it first.
     """
     configured = set(chore_view.configured(ctx.config, ctx.workspace))
     items = [
@@ -308,7 +424,20 @@ def listed(ctx: Context) -> list[Item]:
     ]
     waiting = [_task_item(w) for w in tasks.awaiting(ctx.conn)]
     unrecorded = [_unrecorded_item(u) for u in task_tickets.unrecorded(ctx.conn)]
-    return items + waiting + unrecorded + findings
+    return _high_first(ctx.conn, items) + waiting + unrecorded + findings
+
+
+def _high_first(conn: sqlite3.Connection, items: Sequence[Item]) -> list[Item]:
+    """The items about a PR, or its ticket, whose latest reviewed commit has a `high` review first (DESIGN §21).
+
+    Returns:
+        `items` in their order, but each such item before every other.
+    """
+    prs = {i.ticket_key.removeprefix(PR_PREFIX) for i in items if i.ticket_key and i.ticket_key.startswith(PR_PREFIX)}
+    tickets = {i.ticket_key for i in items if i.ticket_key and ":" not in i.ticket_key}
+    found = review_impact.high(conn, tickets, prs)
+    ranked = {*found.tickets, *(f"{PR_PREFIX}{url}" for url in found.prs)}
+    return sorted(items, key=lambda i: i.ticket_key not in ranked)
 
 
 def _task_item(waiting: tasks.Awaiting) -> Item:
@@ -368,7 +497,7 @@ def _reviews_now(conn: sqlite3.Connection, items: Iterable[Item]) -> list[Item]:
     Returns:
         The items in order, each review's with what it says now, or left out once its cause is gone.
     """
-    now = {(f"{PR_PREFIX}{i.pr}", i.reason): i.detail for i in review_waiting.items(conn)}
+    now = {(i.ticket or f"{PR_PREFIX}{i.pr}", i.reason): i.detail for i in review_waiting.items(conn)}
     found: list[Item] = []
     for item in items:
         if item.reason not in review_waiting.REASONS:

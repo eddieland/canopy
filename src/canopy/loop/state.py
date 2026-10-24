@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
     from canopy.loop.attention import OpenItem
     from canopy.loop.harness import Decided
+    from canopy.loop.harness_dispatches import ToCome
     from canopy.loop.observations import ObservationsState
     from canopy.reviews.view import ReviewsSection
     from canopy.runs.reconcile import Capacity
@@ -30,7 +31,8 @@ class OverseerState(TypedDict):
     """The state block's JSON: what the journal knows, the config the overseer decides by, and this tick.
 
     It has `chores` only when chores are configured, `reviews` only when reviews are on, `notices` only when the
-    operator set a notice lately, and `harness` only when the harness decided a ticket this tick (DESIGN §37).
+    operator set a notice lately, `harness` only when the harness decided a ticket this tick, and `dispatches_to_come`
+    only when it dispatches after the overseer (DESIGN §37).
     `observations` is the world as the connectors last read it (DESIGN §35).
     """
 
@@ -44,6 +46,7 @@ class OverseerState(TypedDict):
     stopped: list[str]
     recently_done: list[str]
     harness: NotRequired[list[Decided]]
+    dispatches_to_come: NotRequired[ToCome]
     chores: NotRequired[list[ChoreSummary]]
     reviews: NotRequired[ReviewsSection]
     notices: NotRequired[list[NoticeState]]
@@ -51,7 +54,6 @@ class OverseerState(TypedDict):
     observations: ObservationsState
     capacity: CapacityState
     running_workers: list[RunningWorker]
-    mirror: MirrorState
     query_due: bool
     tick_id: int
     now: str
@@ -204,12 +206,6 @@ class NoticeState(TypedDict):
     in_force: bool
 
 
-class MirrorState(TypedDict):
-    """How many tracker comments one tick may mirror (DESIGN §22)."""
-
-    max_per_tick: int
-
-
 def state_block(
     config: Config,
     repo_root: Path,
@@ -224,6 +220,7 @@ def state_block(
     stopped: Sequence[str],
     recently_done: Sequence[sqlite3.Row] = (),
     harness: Sequence[Decided] = (),
+    dispatches_to_come: ToCome | None = None,
     units: Mapping[str, Sequence[records.TicketUnit]],
     last_runs: Mapping[str, records.Run],
     run_slots: Mapping[int, Sequence[records.RunSlot]],
@@ -250,12 +247,13 @@ def state_block(
     marked done; `recently_done` names by key those marked done lately, so the overseer leaves out one the
     tracker still shows open (DESIGN §7). `harness` names the tickets the harness decided this tick, each with its
     decision, which `tickets` and `observations` leave out; with none, the block has no `harness` key (DESIGN §37).
-    `units` are each ticket's units, and `run_slots` and `run_reasons` each running or latest run's slots and, for a
-    `resume`, its reasons, by run id (DESIGN §8). `attempts`, `grants`, and
-    `ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key (DESIGN
-    §22). An old `fix-ci` run counts in a unit's `resume` attempts, and its kind is in none; an old `split` run counts
-    nowhere. `chores` are the configured chores (DESIGN §19); with none, the block has no `chores` key, exactly as
-    before chores existed. `notices` are the operator's notices in force or ended lately (`notice.recent`), newest
+    `dispatches_to_come` are the harness's after the overseer, and the workers they hold; their tickets are left out
+    too. `units` are each ticket's units, and `run_slots` and `run_reasons` each running or latest run's slots and,
+    for a `resume`, its reasons, by run id (DESIGN §8). `attempts`, `grants`, and `ci_cooldowns` are per unit
+    (`policy.unit`); a unit the operator granted no runs has no `granted` key (DESIGN §22). An old `fix-ci` run counts
+    in a unit's `resume` attempts, and its kind is in none; an old `split` run counts nowhere. `chores` are the
+    configured chores with a `when` (DESIGN §19, §37); with none, the block has no `chores` key, exactly as before
+    chores existed. `notices` are the operator's notices in force or ended lately (`notice.recent`), newest
     first; with none, the block has no `notices` key. `private` holds each private ticket's conversation state, by
     key (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages
     newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `planned`
@@ -306,11 +304,7 @@ def state_block(
             "title": t.title,
             "phase": t.phase,
             "branch": t.branch,
-            # The mirror cursor is moved by the mirror tool itself, never by `cursors` (DESIGN §22).
-            "cursors": {
-                **{name: getattr(t, column) for name, column in db.TICKET_CURSORS.items()},
-                "mirror": t.last_mirrored_id,
-            },
+            "cursors": {name: getattr(t, column) for name, column in db.TICKET_CURSORS.items()},
             "units": [unit_summary(key, u) for u in units.get(key, [])],
             "needs_human_since": t.needs_human_since,
             "last_seen_at": t.last_seen_at,
@@ -378,6 +372,8 @@ def state_block(
         "recently_done": [str(t["key"]) for t in recently_done],
         # Tickets the harness decided this tick, in code: the overseer records nothing about one (DESIGN §37).
         **({"harness": list(harness)} if harness else {}),
+        # What the harness starts after the overseer, and the workers it holds for them (DESIGN §37).
+        **({"dispatches_to_come": dispatches_to_come} if dispatches_to_come is not None else {}),
         **({"chores": chores} if chores else {}),
         # With reviews off, nothing about them reaches the overseer (DESIGN §21).
         **({"reviews": reviews} if reviews is not None else {}),
@@ -395,8 +391,6 @@ def state_block(
             "available": capacity.available,
         },
         "running_workers": [_running_summary(r, run_slots, run_reasons) for r in running],
-        # Tracker comments the overseer copies into the journal (DESIGN §22).
-        "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK},
         # Whether this tick runs the tracker query, or works the tickets above alone (DESIGN §7, Spacing the query).
         "query_due": query_due,
         "tick_id": tick_id,
@@ -407,8 +401,7 @@ def state_block(
         mode = (
             "This is a dry run. `canopy_dispatch` checks its guards and records what it would have done, or the "
             "refusal, and starts nothing. `canopy_ticket-set` records phases but neither advances cursors nor marks "
-            "tickets done. `canopy_mirror` records comments but moves no mirror cursor. Decide exactly as you would "
-            "otherwise."
+            "tickets done. Decide exactly as you would otherwise."
         )
     else:
         mode = "This is a live tick."

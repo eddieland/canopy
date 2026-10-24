@@ -129,6 +129,50 @@ def test_every_agent_writes_in_canopys_voice_until_the_operator_chooses(canopy_e
     assert cfg.paths.personas is None
 
 
+#: An eval case's keys but `kind` and `lines` (DESIGN §21, Scoring the reviewer).
+EVAL_CASE = f'pr = "https://github.com/acme/api/pull/7"\nrepo = "api"\nsha = "{"a" * 40}"\nbase = "{"b" * 40}"\n'
+
+
+def test_an_eval_case_is_a_pr_at_a_commit_with_the_lines_its_bug_is_on(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_user(
+        f'\n[[review.eval_cases]]\nname = "retry"\n{EVAL_CASE}kind = "bug"\nlines = ["src/retry.py:42", "a.py:3-9"]\n'
+        f'\n[[review.eval_cases]]\nname = "sound"\n{EVAL_CASE}kind = "clean"\n',
+    )
+    retry, sound = load(canopy_env.root, canopy_env.user_file).review.eval_cases
+    assert (retry.name, retry.kind, retry.lines) == ("retry", "bug", ("src/retry.py:42", "a.py:3-9"))
+    assert (sound.name, sound.kind, sound.lines) == ("sound", "clean", ())
+
+
+@pytest.mark.parametrize(
+    ("toml", "message"),
+    [
+        (f'name = "x"\n{EVAL_CASE}kind = "bug"\n', "bug case x needs lines"),
+        (f'name = "x"\n{EVAL_CASE}kind = "clean"\nlines = ["a.py:1"]\n', "clean case x has no bug"),
+        (f'name = "x"\n{EVAL_CASE}kind = "bug"\nlines = ["a.py"]\n', "must be path:line or path:first-last"),
+        (f'name = "x"\n{EVAL_CASE}kind = "bug"\nlines = ["a.py:9-3"]\n', "ends before it starts"),
+        (f'name = "X"\n{EVAL_CASE}kind = "clean"\n', "must match"),
+        (f'name = "x"\n{EVAL_CASE.replace("a" * 40, "HEAD")}kind = "clean"\n', "must be a full commit"),
+        (f'name = "x"\n{EVAL_CASE.replace("https", "http")}kind = "clean"\n', "plain https:// URL"),
+    ],
+)
+def test_an_eval_case_that_cannot_be_scored_is_refused(canopy_env: CanopyEnv, toml: str, message: str) -> None:
+    canopy_env.append_user(f"\n[[review.eval_cases]]\n{toml}")
+    with pytest.raises(ConfigError, match=message):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_eval_cases_are_named_once_and_only_in_private_config(canopy_env: CanopyEnv) -> None:
+    case = f'\n[[review.eval_cases]]\nname = "x"\n{EVAL_CASE}kind = "clean"\n'
+    canopy_env.append_user(case * 2)
+    with pytest.raises(ConfigError, match="names x more than once"):
+        load(canopy_env.root, canopy_env.user_file)
+    canopy_env.write_user(user_toml())
+    # A case may name a private repository's PR, and authorizes a review of it (TRUST_MODEL T7).
+    canopy_env.append_shared(case)
+    with pytest.raises(ConfigError, match=r"review\.eval_cases is private and cannot be set in the workspace file"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
 def test_a_removed_key_says_what_to_do(canopy_env: CanopyEnv) -> None:
     """`paths.state_dir` was in the example user config; a copy of it must say to delete the key (D016)."""
     canopy_env.append_user('state_dir = "~/.canopy"\n')

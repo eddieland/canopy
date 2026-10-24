@@ -27,9 +27,12 @@ The items come in four groups, in this order, and within a group the one open lo
    `canopy unavailable`, when the overseer couldn't run canopy at all; or `disk low`, when the disk was too full for
    the overseer to run.
 2. **Waiting on you**, in amber: a worker's question (`awaiting reply`), a review from someone the loop doesn't trust
-   (`untrusted review`), a plan or a feedback plan to approve (`plan review`), replies a run drafted for you to send
-   (`drafts waiting`), a review you asked for that's done with its draft unpublished (`review waiting`), and a review
-   you staged on GitHub, or whose post never said how it went (`review unsettled`).
+   (`untrusted review`), a review's rebuttal of a finding the worker declined, which canopy holds for you to settle
+   ([`review rebuttal`](pull-requests#when-canopy-reviews)), a later review's finding on code its first review
+   already read ([`review late`](pull-requests#when-canopy-reviews)), a plan or a feedback plan to approve
+   (`plan review`), replies a run drafted for you to send (`drafts waiting`), a review you asked for that's done with
+   its draft unpublished (`review waiting`), and a review you staged on GitHub, or whose post never said how it went
+   (`review unsettled`).
 3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, a
    lesson a worker proposed for [memory](memory), or a worker's report of follow-up tickets canopy couldn't record
    (`follow up unrecorded`), until its ticket is done or forgotten. The follow-ups it did record never land here:

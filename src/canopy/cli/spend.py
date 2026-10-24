@@ -43,6 +43,8 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
 )
 _DAY_WIDTH = 10
 _COST_WIDTH = 9
+#: The ticks' tables' last column: how many ran no overseer, left nothing to judge or halted before it (DESIGN §39).
+_NO_OVERSEER = "no overseer"
 _KEY_WIDTH = 16
 # The costliest tickets the text lists; `--json` lists every one.
 _TICKETS = 10
@@ -70,7 +72,8 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     The overseer, workers, plan runs, chores, and reviews, as the agent runtime reported each; dry runs apart from the
     live ticks, and idle ticks' share of the overseer's spend. Then the tickets marked done, the spend for each, and
     the costliest tickets, the tools whose calls put the most into context, and each kind's spend by the models its
-    sessions name; --json adds every ticket, PR, and tool, and each kind's first model calls by definitions snapshot.
+    sessions name, and every session the runtime keeps, canopy's apart from the rest; --json adds every ticket, PR, and
+    tool, and each kind's first model calls by definitions snapshot.
     """
     ctx = open_context(click_ctx)
     if as_json:
@@ -101,17 +104,15 @@ def render(found: Breakdown, month: Month | None = None) -> list[str]:
     lines.extend(["", *_tickets(found)])
     lines.extend(["", *_tools(found)])
     lines.extend(["", *_models(found)])
-    lines.extend(["", f"{'ticks':<{_DAY_WIDTH}}{'count':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}"])
+    lines.extend(["", *_sessions(found)])
+    lines.extend(["", _tick_line("ticks", "count", "spent", _NO_OVERSEER)])
     lines.extend(
-        f"{GROUP_LABELS[g.group]:<{_DAY_WIDTH}}{g.ticks:>{_COST_WIDTH}}{cost_text(g.cost_usd):>{_COST_WIDTH}}"
-        for g in found.ticks
+        _tick_line(GROUP_LABELS[g.group], g.ticks, cost_text(g.cost_usd), g.without_overseer) for g in found.ticks
     )
     if found.idle_share is not None:
         lines.append(f"Idle ticks were {found.idle_share:.0%} of the live overseer's spend.")
-    lines.extend(["", f"{'woken by':<{_DAY_WIDTH}}{'count':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}"])
-    lines.extend(
-        f"{w.by:<{_DAY_WIDTH}}{w.ticks:>{_COST_WIDTH}}{cost_text(w.cost_usd):>{_COST_WIDTH}}" for w in found.woken
-    )
+    lines.extend(["", _tick_line("woken by", "count", "spent", _NO_OVERSEER)])
+    lines.extend(_tick_line(w.by, w.ticks, cost_text(w.cost_usd), w.without_overseer) for w in found.woken)
     if not found.woken:
         lines.append("no tick canopy loop ran")
     unpriced = ", ".join(f"{u.unpriced} of {u.runs} {KIND_LABELS[u.kind]}" for u in found.unpriced if u.unpriced)
@@ -131,6 +132,15 @@ def budget_text(month: Month) -> str:
         f"This month, {month.month}: {cost_text(month.spent_usd or 0.0)} of a ${month.budget_usd} budget "
         f"({month.percent}%){pace}.{over}"
     )
+
+
+def _tick_line(label: str, ticks: int | str, spent: str, without: int | str) -> str:
+    """A line of the ticks' tables: a group or a cause, how many, what their overseers cost, and how many ran none.
+
+    Returns:
+        The line, in the tables' columns.
+    """
+    return f"{label:<{_DAY_WIDTH}}{ticks:>{_COST_WIDTH}}{spent:>{_COST_WIDTH}}{without:>{len(_NO_OVERSEER) + 2}}"
 
 
 def since_text(stamp: str) -> str:
@@ -216,6 +226,31 @@ def _models(found: Breakdown) -> list[str]:
     )
     lines.append("A run on two models counts under each.")
     return lines
+
+
+# Every session the runtime keeps that started in the window, canopy's apart from the rest, and where the rest ran, as
+# `canopy loop` recorded them between ticks.
+def _sessions(found: Breakdown) -> list[str]:
+    spent = found.sessions
+    if spent is None or spent.read_at is None:
+        return ["The runtime's sessions were never read: canopy loop reads them, canopy's and not, between ticks."]
+    read = f"read {spend.local_day(spent.read_at)}" + (f", last {spent.status}" if spent.status != "found" else "")
+    lines = [
+        f"Every runtime session, as its record says ({read}):",
+        _session_line("sessions", "count", "spent"),
+        _session_line("canopy's runs", str(spent.canopy.sessions), cost_text(spent.canopy.cost_usd)),
+        _session_line("outside canopy", str(spent.outside.sessions), cost_text(spent.outside.cost_usd)),
+    ]
+    # Where the rest ran, the directory last, since a path is as long as it is.
+    lines.extend(
+        f"{_session_line('', str(d.sessions), cost_text(d.cost_usd))}  {d.directory}" for d in spent.directories
+    )
+    lines.append("A subagent's session counts with the session it ran for; another workspace's runs are outside.")
+    return lines
+
+
+def _session_line(label: str, *counts: str) -> str:
+    return f"{label:<{_KEY_WIDTH}}" + "".join(f"{c:>{_COST_WIDTH}}" for c in counts)
 
 
 def _tool_line(tool: str, kind: str, *counts: str) -> str:

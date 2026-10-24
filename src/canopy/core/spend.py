@@ -9,7 +9,8 @@ cost, what it got done: the tickets marked done in it, and what each ticket and 
 And what each kind of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and
 how often it started cold. And what each kind's tool calls put into its context, by tool: the reads that each later
 model call reads again. And what each kind spent on each model, as the runs' own sessions say (§13). And the local
-calendar month so far against the operator's monthly budget, which nothing enforces.
+calendar month so far against the operator's monthly budget, which nothing enforces. And what every session the runtime
+keeps cost, canopy's apart from the rest, as the runtime's record says (`runtime_sessions`).
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Literal, LiteralString
 
-from canopy.core import contract, db, records, sql
+from canopy.core import contract, db, records, runtime_sessions, sql
 from canopy.core.vocab import RunKind
 
 if TYPE_CHECKING:
@@ -62,7 +63,8 @@ _TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
     "reviews": ("review_runs", _EVERY),
     "tasks": ("task_runs", _EVERY),
 }
-_ALL_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
+#: Every kind of agent run by its table and the condition on the table's rows, the overseer's ticks included.
+KIND_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
 #: The budget whole, as a percentage of it: the alert always sent.
 FULL = 100
 # About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
@@ -123,6 +125,8 @@ class TickGroup:
     group: Group
     ticks: int
     cost_usd: float | None
+    #: How many of them ran no overseer, left nothing to judge or halted before it (§39): each counted at nothing.
+    without_overseer: int = 0
 
 
 @dataclass(frozen=True)
@@ -132,6 +136,8 @@ class Woken:
     by: str
     ticks: int
     cost_usd: float | None
+    #: How many of them ran no overseer, left nothing to judge or halted before it (§39): each counted at nothing.
+    without_overseer: int = 0
 
 
 @dataclass(frozen=True)
@@ -245,7 +251,7 @@ class Breakdown:
     whose first call is a live tick's. `tools` is what each kind's tool calls returned, by tool, the most characters
     first; the overseer's include dry runs too. `models` is what each kind spent on each model, the kinds in `KINDS`
     order and each kind's models the most costly first, its runs no session named a model for last; the overseer's
-    include dry runs too.
+    include dry runs too. `sessions` is what every session the runtime keeps cost, canopy's apart from the rest.
     """
 
     since: str
@@ -265,6 +271,7 @@ class Breakdown:
     tools: Sequence[ToolSpend] = ()
     hours: int | None = None
     models: Sequence[ModelSpend] = ()
+    sessions: runtime_sessions.SessionsSpend | None = None
 
 
 @dataclass(frozen=True)
@@ -487,12 +494,13 @@ def _breakdown(
             for day, cost in sql.execute(conn, costs):
                 by_day.setdefault(str(day), {})[kind] = cost
         unpriced = _unpriced(conn, since, until, rows)
-        done = _done(conn, since, until)
+        done = done_in(conn, since, until)
         tickets = _tickets(conn, since, until, done)
         pull_requests = _pull_requests(conn, since, until)
         first_calls = _first_calls(conn, since, until)
         tools = _tools(conn, since, until)
         models = _models(conn, since, until)
+        sessions = runtime_sessions.spend(conn, since, until)
     for row in rows:
         day = by_day.setdefault(row.day, {})
         for name in _SERIES:
@@ -522,6 +530,7 @@ def _breakdown(
         tools=tools,
         hours=hours,
         models=models,
+        sessions=sessions,
     )
 
 
@@ -565,6 +574,8 @@ class _TickRow:
     dry: bool
     group: Group | None
     woken_by: str | None
+    #: Whether they ran their overseer: False for ticks the harness left it nothing (§39), whose cost is nothing.
+    ran: bool
     ticks: int
     cost_usd: float | None
     unpriced: int
@@ -576,14 +587,17 @@ class _TickRow:
 
 
 def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: sql.Fragment) -> list[_TickRow]:
+    # A tick from before `overseer_ran` was recorded ran its overseer if it got that far. One that ran none spent
+    # nothing, so it counts at nothing, and never among the runs that reported no cost (§39).
     grouped = (
         sql.select(
-            "{} AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), count(*) - count(cost_usd)",
+            "{} AS day, dry_run, status, idle, woken_by, overseer_ran IS NOT 0 AS ran, count(*), SUM(cost_usd), "
+            "count(*) - count(cost_usd)",
             bucket,
         )
         .from_("ticks")
         .where("started_at >= ? AND started_at < ?", since, until)
-        .group_by("day, dry_run, status, idle, woken_by")
+        .group_by("day, dry_run, status, idle, woken_by, ran")
     )
     rows = sql.execute(conn, grouped).fetchall()
     return [
@@ -592,11 +606,12 @@ def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: sql.Fra
             dry=bool(dry),
             group=_group(str(status), idle, dry=bool(dry)),
             woken_by=None if woken is None else str(woken),
+            ran=bool(ran),
             ticks=int(count),
-            cost_usd=cost,
-            unpriced=int(unpriced),
+            cost_usd=cost if ran else (cost or 0.0),
+            unpriced=int(unpriced) if ran else 0,
         )
-        for day, dry, status, idle, woken, count, cost, unpriced in rows
+        for day, dry, status, idle, woken, ran, count, cost, unpriced in rows
     ]
 
 
@@ -629,6 +644,7 @@ def _groups(rows: Collection[_TickRow]) -> list[TickGroup]:
             group=g,
             ticks=sum(r.ticks for r in rows if r.group == g),
             cost_usd=_sum([r.cost_usd for r in rows if r.group == g]),
+            without_overseer=sum(r.ticks for r in rows if r.group == g and not r.ran),
         )
         for g in GROUPS
     ]
@@ -641,7 +657,12 @@ def _woken(rows: Iterable[_TickRow]) -> list[Woken]:
         if row.live_loop and row.woken_by is not None:
             by_cause.setdefault(row.woken_by, []).append(row)
     found = [
-        Woken(by=cause, ticks=sum(r.ticks for r in caused), cost_usd=_sum([r.cost_usd for r in caused]))
+        Woken(
+            by=cause,
+            ticks=sum(r.ticks for r in caused),
+            cost_usd=_sum([r.cost_usd for r in caused]),
+            without_overseer=sum(r.ticks for r in caused if not r.ran),
+        )
         for cause, caused in sorted(by_cause.items())
     ]
     return sorted(found, key=lambda w: -w.ticks)
@@ -670,10 +691,16 @@ def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: Iterable[_
     return found
 
 
-# The tickets marked done in the window, each with how and when: its newest `done` decision, as `recently_done` reads
-# it (§7), but `closed` ones too, since a tracker that closes a ticket when its PR merges closes most that landed. Not
-# one marked done before the operator last forgot it, nor one reopened since, which is no longer done.
-def _done(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple[Done, str]]:
+def done_in(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple[Done, str]]:
+    """The tickets marked done in `[since, until)`, each a journal time, with how and when.
+
+    A ticket's newest `done` decision, as `recently_done` reads it (§7), but `closed` ones too, since a tracker that
+    closes a ticket when its PR merges closes most that landed. Not one marked done before the operator last forgot
+    it, nor one reopened since, which is no longer done.
+
+    Returns:
+        Each ticket's key, with `merged` or `closed` and when the decision was made.
+    """
     marked = (
         sql.select("t.key, d.rationale, d.created_at")
         .from_("tickets t")
@@ -781,7 +808,7 @@ def _first_key(named: Iterable[tuple[str | None, float | None]]) -> str | None:
 def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[FirstCalls]:
     found: list[FirstCalls] = []
     for kind in KINDS:
-        table, which = _ALL_TABLES[kind]
+        table, which = KIND_TABLES[kind]
         by_digest: dict[str | None, list[tuple[int, bool, str]]] = {}
         first = (
             sql.select(_FIRST_CALL)
@@ -833,7 +860,7 @@ def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
 # reordering them, which with no statistics it would, reading every `run_tools` row of the kind ever recorded. The
 # kind's condition names only the run table's columns, which `run_tools` shares none of.
 def _tools_of(kind: Kind, since: str, until: str) -> sql.Select:
-    table, which = _ALL_TABLES[kind]
+    table, which = KIND_TABLES[kind]
     return (
         sql.select("t.tool, count(*), SUM(t.calls), SUM(t.errors), SUM(t.result_chars)")
         .from_("{} r CROSS JOIN run_tools t ON t.run_table = ? AND t.run_id = r.id", sql.name(table), table)
@@ -861,7 +888,7 @@ def _models(conn: sqlite3.Connection, since: str, until: str) -> list[ModelSpend
 # One kind's spend by model in a window, read as `_tools_of` reads `run_tools`: the run table leads, by its `_spent`
 # index, and `run_models` is read by its key's prefix.
 def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
-    table, which = _ALL_TABLES[kind]
+    table, which = KIND_TABLES[kind]
     return (
         sql.select("m.model, count(*), SUM(m.replies), SUM(m.cost_usd)")
         .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
@@ -874,7 +901,7 @@ def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
 
 # One kind's runs in a window that no session named a model for, and what they reported they cost.
 def _unnamed_models(kind: Kind, since: str, until: str) -> sql.Select:
-    table, which = _ALL_TABLES[kind]
+    table, which = KIND_TABLES[kind]
     return (
         sql.select("count(*), SUM(r.cost_usd)")
         .from_("{} r", sql.name(table))

@@ -365,7 +365,7 @@ function Spent({
     const cost = window?.cost_usd ?? null
     return (
         <Link
-            to="/spend"
+            to="/reports/spend"
             search={{ days, hours }}
             className="-mx-1 flex items-baseline gap-1.5 rounded-sm px-1 hover:bg-surface-raised"
             title={hint}

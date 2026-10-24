@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from canopy.core.config import Chore, Config
     from canopy.infra import procs
     from canopy.runtime.implementation import Version
+    from canopy.runtime.report import ModelList
 
 #: A key of `[runtime.models]`: the role of canopy's it chooses a model for.
 type Role = Literal["worker", "planner", "reviewer", "overseer", "chore"]
@@ -222,14 +223,22 @@ def check(
             "before its first call; nothing ran on another model. Choose a model it lists, or set up its provider",
         )
     if model.variant is not None and model.variant not in found.variants.get(model.id, ()):
-        listed = sorted(found.variants.get(model.id, ()))
-        some = ", ".join(listed[:_MAX_NAMED]) + (", ..." if len(listed) > _MAX_NAMED else "")
-        has = f"it lists {some}" if listed else "it lists none for it"
         raise ModelError(
             MISSING,
             f"{invocation.NAME} lists the model {model.id} chosen {chosen} but not its variant "
-            f"{model.variant} ({has}); nothing ran. Choose a variant it lists",
+            f"{model.variant} ({variants_listed(found, model.id)}); nothing ran. Choose a variant it lists",
         )
+
+
+def variants_listed(found: ModelList, model: str) -> str:
+    """Say which variants `found` lists for `model`, for a refusal of one it does not, naming a few at most.
+
+    Returns:
+        The words, such as `it lists high, max`, or `it lists none for it`.
+    """
+    listed = sorted(found.variants.get(model, ()))
+    some = ", ".join(listed[:_MAX_NAMED]) + (", ..." if len(listed) > _MAX_NAMED else "")
+    return f"it lists {some}" if listed else "it lists none for it"
 
 
 def check_role(role: str) -> str:

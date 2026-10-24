@@ -511,10 +511,34 @@ export function FindingCard({
                     <span className="font-mono text-xs break-all text-muted-foreground">{finding.location}</span>
                 )}
                 {finding.dismissed && <Chip>{dismissedLabel(finding)}</Chip>}
+                {finding.held && <Chip tone="blocked">{HELD}</Chip>}
                 <span className="ml-auto">{button}</span>
             </header>
             {finding.detail && <RichText text={finding.detail} className="mt-1.5 text-muted-foreground" />}
+            <FindingAnswer finding={finding} />
             {notice}
         </article>
+    )
+}
+
+/**
+ * A held finding's chip: canopy holds a rebuttal of a worker's decline, or a late finding, for the operator (DESIGN
+ * §21).
+ */
+export const HELD = 'held for you'
+
+/**
+ * What the latest worker handed a finding answered of it, `fixed` or `declined`, and its reason, in its words: what the
+ * next review read beside the finding. Nothing when no worker answered it.
+ */
+function FindingAnswer({ finding }: { finding: Numbered['finding'] }) {
+    if (finding.answer === null) {
+        return null
+    }
+    return (
+        <div className="mt-1.5 border-l-2 pl-2 text-xs text-muted-foreground" data-testid="finding-answer">
+            <p>The worker answered: {finding.answer}</p>
+            {finding.answer_reason !== null && <RichText text={finding.answer_reason} className="mt-1" />}
+        </div>
     )
 }

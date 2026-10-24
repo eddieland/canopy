@@ -204,8 +204,10 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`), or the ticket's page |
 | Allow one more review past a `review_limit` | `canopy grant PR_URL review`, or the PR's page |
 | Have canopy review a coworker's PR | `canopy start PR_URL --review`, or the reviews page |
+| Score the reviewer on PRs whose bugs you know, after changing its prompt, persona, or model | `canopy review eval [--persona NAME] [--model MODEL]`, cases under `[[review.eval_cases]]` |
 | See what a tick decided and what it cost | `canopy decisions [TICK] [--ticket KEY]` |
-| See what the last days cost, how much of it idle ticks spent, and what each ticket done cost | `canopy spend [--days N]`, or the web UI's spend page |
+| See what the last days cost, how much of it idle ticks spent, and what each ticket done cost | `canopy spend [--days N]`, or the web UI's spend page, under Reports |
+| Compare months: cost and tokens by kind and model, cache hits, and what each landed ticket took | The web UI's reports page |
 | See which ticks and runs failed lately, and what the guards refused | `canopy health [--days N]` |
 | See each number, switch, and choice in your config, its default, and the file that set it | `canopy config show` |
 | See each agent's command as a run starts it, rendered from your templates, to check their quoting | `canopy config commands` |
@@ -214,6 +216,7 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | Give one ticket's workers, planner, or reviewer a persona of its own, until you clear it | `canopy persona KEY NAME [--agent planner\|reviewer]`, or the ticket's page |
 | See what canopy keeps of its own history, and what your retention would remove | `canopy gc --dry-run` |
 | Pack the primary clones' loose objects, between runs, since git's own maintenance is off in them | `canopy gc --git` |
+| Empty the sandbox's per-role caches, each while no run of its role is live | `canopy gc --caches` |
 | Keep every plan, with its status, approval, prompt, original, your comments, and the work that followed, in a private repository of yours | `canopy archive DIR` |
 | Read a run's transcript | its page in the web UI, or `opencode export <session id>` (OpenCode 2: `opencode session export`) |
 | Teach your own agent session canopy | `canopy skill --install`, which saves it in `~/.agents/skills/canopy/` |

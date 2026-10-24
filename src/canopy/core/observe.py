@@ -6,10 +6,13 @@ and last an `end` line naming the subjects it read whole: tickets, PRs, and repo
 bounded here before anything is written. A line of a kind its source does not own, or of no kind canopy reads, is
 skipped; one that does not validate is refused and counted, and its subject is not whole this run, whatever `end` says.
 A subject read whole has its rows replaced in one transaction; one not read whole keeps its old rows and their age, so
-a cut-off read never looks like a check, review, or branch gone. A run with no `end` line records nothing.
+a cut-off read never looks like a check, review, or branch gone. Each completed check run is also kept by its run id
+across reads, so a re-run at the same head is told from the run it repeats (§35). A run with no `end` line records
+nothing.
 
 An observation is a dated copy of what a connector saw, never authority (DESIGN §22): in M36 it decides which thread a
-draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do.
+draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do. Each comment is also
+recorded in its ticket's conversation when first observed, as data (§35).
 """
 
 from __future__ import annotations
@@ -41,6 +44,9 @@ from canopy.core.vocab import (
 from canopy.infra import logs, procs
 
 if TYPE_CHECKING:
+    from collections.abc import Set as AbstractSet
+
+    from canopy.core import records
     from canopy.core.config import Config, Source
 
 #: How much of a connector's stderr a run keeps.
@@ -49,7 +55,7 @@ MAX_STDERR = 300
 MAX_OUTPUT = 16 * 1024 * 1024
 #: A line longer than this is refused unread.
 MAX_LINE = 1024 * 1024
-#: A title is cut to this, on one line; a body to `conversation.MAX_MIRRORED`, as a mirrored comment's is.
+#: A title is cut to this, on one line; a body, as a comment's is, to `conversation.MAX_COMMENT`.
 MAX_TITLE = 200
 #: More labels or blockers than this refuse the line: a list cut short would read as one removed.
 MAX_LIST = 100
@@ -66,6 +72,22 @@ OWNS: Mapping[SourceKind, frozenset[str]] = {
     SourceKind.ARTIFACTS: frozenset(),
     SourceKind.SLACK: frozenset(),
 }
+#: How a completed CI context ends red: what holds a unit at `ci_red`, and what makes a failed check a feedback plan's
+#: item (DESIGN §32).
+FAILED: AbstractSet[CheckConclusion] = frozenset(
+    {
+        CheckConclusion.FAILURE,
+        CheckConclusion.ERROR,
+        CheckConclusion.CANCELLED,
+        CheckConclusion.TIMED_OUT,
+        CheckConclusion.ACTION_REQUIRED,
+        CheckConclusion.STARTUP_FAILURE,
+    },
+)
+#: How a completed CI context passes. One `stale` neither passes nor fails: GitHub left it for a newer run.
+PASSED: AbstractSet[CheckConclusion] = frozenset(
+    {CheckConclusion.SUCCESS, CheckConclusion.NEUTRAL, CheckConclusion.SKIPPED},
+)
 
 
 @dataclass(frozen=True)
@@ -373,6 +395,19 @@ def is_pr_url(value: str) -> bool:
     return contract.plain_url(value, conversation.MAX_PR_URL) and conversation.PR_URL_RE.fullmatch(value) is not None
 
 
+def conflicts(pr: records.ObservedPr) -> bool | None:
+    """Whether an observed PR conflicts with its base, as its host says: what holds a unit at `conflicted`.
+
+    Returns:
+        True when it conflicts, False when the host says it does not, and None while the host has not said.
+    """
+    if pr.mergeable == "conflicting" or pr.mergeable_state is MergeState.DIRTY:
+        return True
+    if pr.mergeable == "mergeable" or pr.mergeable_state not in (None, MergeState.UNKNOWN):
+        return False
+    return None
+
+
 def _pr_url(value: str) -> str:
     if not is_pr_url(value):
         raise ValueError("must be a PR's URL")
@@ -396,7 +431,7 @@ _Login = Annotated[str, text_of(MAX_NAME, _LOGIN_RE)]
 _Sha = Annotated[str, text_of(64, _SHA_RE)]
 _Name = Annotated[str, text_of(MAX_NAME)]
 _Title = Annotated[str, contract.one_line, contract.bounded(MAX_TITLE)]
-_Body = Annotated[str, contract.bounded(conversation.MAX_MIRRORED)]
+_Body = Annotated[str, contract.bounded(conversation.MAX_COMMENT)]
 
 
 class _Line(BaseModel):
@@ -429,7 +464,7 @@ class _Comment(_Line):
     id: Annotated[str, text_of(200, conversation.COMMENT_ID_RE)]
     author: Annotated[str, text_of(conversation.MAX_AUTHOR, re.compile(r"\S+"))]
     time: Time
-    # Cut where it is recorded, and marked truncated there, as a mirrored comment is.
+    # Cut where it is recorded, and marked truncated there.
     body: str = ""
 
     @property
@@ -714,6 +749,7 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
                     observed_at=now,
                 ).or_replace(),
             )
+            _keep_check_run(conn, line, now)
         case _Branch():
             sql.execute(
                 conn,
@@ -731,13 +767,15 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
 def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, now: str) -> bool:
     """Record a comment the tracker connector read in `observed_comments`, once per ticket and comment id.
 
-    Not in `messages`: in M36 the observations are in shadow, so no worker's prompt or overseer's state block carries
-    a comment the overseer did not mirror. It is cut and marked as `mirror` cuts one, and an edit after is not followed.
+    One new to the journal is recorded in its ticket's conversation too, in the same transaction and with the same text,
+    source `worker` when it carries the workers' marks, else `tracker` (DESIGN §35). Its body is cut and marked, and an
+    edit after is not followed, here or in the conversation.
 
     Returns:
         True if the comment was new to the journal.
     """
     text = line.body.strip() or "(no text)"
+    body, truncated = text[: conversation.MAX_COMMENT], len(text) > conversation.MAX_COMMENT
     source = (
         "worker"
         if conversation.worker_marked(line.body, config.trust.comment_prefix, config.trust.comment_suffix)
@@ -751,13 +789,17 @@ def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, no
             id=line.id,
             author=line.author,
             commented_at=line.time,
-            body=text[: conversation.MAX_MIRRORED],
-            truncated=len(text) > conversation.MAX_MIRRORED,
+            body=body,
+            truncated=truncated,
             source=source,
             observed_at=now,
         ).or_ignore(),
     )
-    return cursor.rowcount == 1
+    if cursor.rowcount != 1:
+        return False
+    comment = db.Comment(id=line.id, author=line.author, at=line.time, truncated=truncated)
+    conversation.record_comment(conn, line.ticket, comment, source=source, body=body, channel="tracker")
+    return True
 
 
 def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
@@ -784,6 +826,28 @@ def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
             resolved=None if thread is None else thread.resolved,
             observed_at=now,
         ).or_replace(),
+    )
+
+
+def _keep_check_run(conn: sqlite3.Connection, line: _Check, now: str) -> None:
+    """Keep a completed check run in `observed_check_runs`, once per run id, as it was first observed (DESIGN §35).
+
+    A later read replaces the PR's `observed_checks` with the newest run of each context, so this is what tells a
+    re-run at the same head from the run it repeats. A commit status has no run to keep.
+    """
+    if line.status is not CheckStatus.COMPLETED or line.run_id is None or line.conclusion is None:
+        return
+    sql.execute(
+        conn,
+        sql.insert(
+            "observed_check_runs",
+            pr_url=line.pr,
+            run_id=line.run_id,
+            name=line.name,
+            head_sha=line.head_sha,
+            conclusion=line.conclusion,
+            observed_at=now,
+        ).or_ignore(),
     )
 
 

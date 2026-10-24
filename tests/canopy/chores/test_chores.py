@@ -264,7 +264,7 @@ def test_the_chore_prompt(
 
 
 def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
-    canopy_env.append_user(chore_toml("queue-age", every=30))
+    canopy_env.append_user(chore_toml("queue-age", every=30, extra='when = "Weekdays only."\n'))
     (canopy_env.home / "chores" / "queue-age.md").write_text("Queue age.\n")
     conn = canopy_env.journal()
     with in_tick(conn) as tick_id:
@@ -526,11 +526,14 @@ def test_a_shadowing_config_above_the_cwd_stops_the_chore(canopy_env: CanopyEnv,
 
 
 def own_model(canopy_env: CanopyEnv, model: str) -> None:
-    """Add the chore triage, with `model` of its own, its command running canopy's chore agent from its definitions."""
+    """Add the chore triage, with `model` of its own, its command running canopy's chore agent from its definitions.
+
+    It has a `when`, so the overseer's `canopy chore run` may start it: one without is the harness's (DESIGN §19).
+    """
     canopy_env.append_user(
         chore_toml(
             "triage",
-            extra=f"model = {json.dumps(model)}\n",
+            extra=f'when = "Weekdays only."\nmodel = {json.dumps(model)}\n',
         ).replace("cmd = 'agent run", "cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run"),
     )
     (canopy_env.home / "chores" / "triage.md").write_text("# Triage\n\nLook at the errors.\n")
@@ -603,7 +606,10 @@ def test_deleting_a_chore_clears_its_items(
 
 
 def test_a_chore_for_another_workspace_is_not_configured_here(canopy_env: CanopyEnv, chores: Path) -> None:
-    text = canopy_env.user_file.read_text().replace('when = "Weekdays only."', 'workspaces = ["elsewhere"]')
+    text = canopy_env.user_file.read_text().replace(
+        'when = "Weekdays only."',
+        'when = "Weekdays only."\nworkspaces = ["elsewhere"]',
+    )
     canopy_env.write_user(text)
     conn = canopy_env.journal()
     with in_tick(conn) as tick_id:

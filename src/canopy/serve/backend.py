@@ -44,8 +44,8 @@ def _status(ctx: Context, repo: str) -> Sequence[pools.Slot]:
 
 
 def _models(ctx: Context) -> ModelList:
-    # Read in the workspace root, as a run's model is looked up (DESIGN §13).
-    return runtime_models.listed(ctx.runner, version=ctx.config.runtime.version, cwd=ctx.workspace.root)
+    # Read in the workspace root, as a run's model is looked up (DESIGN §13), with the variants a choice may name.
+    return runtime_models.listed(ctx.runner, version=ctx.config.runtime.version, cwd=ctx.workspace.root, variants=True)
 
 
 def _close_task_run(ctx: Context, run: records.TaskRun) -> bool:
@@ -123,8 +123,8 @@ class Backend:
     # A repository's pool's slots, for the worktrees page: its `status`. Called on a thread per pool, each with a
     # Context of its own from `open`.
     slots: Callable[[Context, str], Sequence[pools.Slot]] = field(default=_status)
-    # The models the runtime lists to run an agent on, for the ticket page's Model panel to choose from and for a
-    # choice of one to be looked up in: what `canopy models` prints.
+    # The models the runtime lists to run an agent on, and each one's variants, for the ticket page's Model panel to
+    # choose from and for a choice of one to be looked up in: what `canopy models` prints.
     models: Callable[[Context], ModelList] = field(default=_models)
     # Now, for windows such as the spend figure's: the mock's is fixed, as its journal's times are.
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))

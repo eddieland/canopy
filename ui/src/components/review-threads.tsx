@@ -5,9 +5,10 @@ import { useId, useState } from 'react'
 
 import { dropDraft, editDraft, refreshThreads, sendDrafts, stageDrafts } from '@/api/mutations'
 import { pullRequestThreadsQuery } from '@/api/queries'
-import type { Draft, FeedbackPlanItem, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
+import type { Draft, DraftFromPlan, FeedbackPlanItem, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
 import { Age } from '@/components/age'
 import { CommentText } from '@/components/comment-text'
+import { Disclosure } from '@/components/disclosure'
 import { DraftCardFrame, DraftForm, DraftVerbs, DropVerb, EditVerb } from '@/components/draft-card'
 import { FeedbackPlanPanel, PlanProposal } from '@/components/feedback-plan'
 import { LinkOut } from '@/components/link-out-icon'
@@ -20,6 +21,7 @@ import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, Word } from '@/components/status'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useToast } from '@/hooks/use-toast'
 import {
@@ -45,7 +47,7 @@ import {
     draftsStagedText,
     draftsStagedToast,
 } from '@/lib/outcomes'
-import { shortSha } from '@/lib/reviews'
+import { shortSha, threadAnchor } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
 /**
@@ -54,8 +56,9 @@ import { cn } from '@/lib/utils'
  * file when the diff does not show the line or it is outdated, or in a Not in the diff panel. Its comments and every
  * draft are plain text, every hidden character named, a comment's `<details>` blocks folded. A draft is edited,
  * dropped, or sent where it sits; the head panel lists every draft with a link to its card, and sends every waiting one
- * together, as one comment review. The current feedback plan of the PR's ticket, when it has one, follows the head
- * panel, where it is approved, and each thread it covers carries its proposal above the drafts (DESIGN §32).
+ * together, as one comment review. The current feedback plan of the PR's ticket, when it has one, is where it is
+ * approved: ahead of the head panel while it waits on the operator, what they came to answer, after it once approved
+ * or spent. Each thread it covers carries its proposal above the drafts (DESIGN §32).
  */
 export function ReviewThreads({ url }: { url: string }) {
     const client = useQueryClient()
@@ -64,6 +67,13 @@ export function ReviewThreads({ url }: { url: string }) {
     const [wanted, setWanted] = useState<Wanted | null>(null)
     const changed = () => void refreshThreads(client, url)
     const { data } = query
+    // Whether the plan leads the drafts, settled as each plan is first read, as a ticket's page settles its plan's
+    // card: one approved meanwhile stays where it was read, its band in view, rather than move from under the button.
+    const plan = data?.feedback_plan ?? null
+    const [settled, setSettled] = useState<{ id: number; leads: boolean } | null>(null)
+    if (plan !== null && settled?.id !== plan.id) {
+        setSettled({ id: plan.id, leads: plan.status === 'waiting' || plan.status === 'stale' })
+    }
     if (data === undefined) {
         return (
             <Panel>
@@ -74,10 +84,15 @@ export function ReviewThreads({ url }: { url: string }) {
     }
     const placed = placeThreads(data)
     const proposals = new Map((data.feedback_plan?.items ?? []).map((i) => [i.thread_id, i]))
+    const planPanel = plan === null ? null : <FeedbackPlanPanel plan={plan} onChange={changed} />
+    const leads = settled?.leads === true && settled.id === plan?.id
+    // A spent plan's resume has gone ahead, so a draft beside its proposal no longer answers ahead of anything.
+    const resumes = plan !== null && plan.status !== 'spent'
     return (
         <>
+            {leads && planPanel}
             <RepliesPanel threads={data} placed={placed} onChange={changed} onFollow={(file) => setWanted({ file })} />
-            {data.feedback_plan !== null && <FeedbackPlanPanel plan={data.feedback_plan} onChange={changed} />}
+            {!leads && planPanel}
             {data.diff !== null && (
                 <DiffPanels
                     diff={data.diff}
@@ -85,7 +100,13 @@ export function ReviewThreads({ url }: { url: string }) {
                     wanted={wanted}
                     cards={['thread', 'threads']}
                     renderCard={(t) => (
-                        <ThreadCard key={t.id} thread={t} item={proposals.get(t.id)} onChange={changed} />
+                        <ThreadCard
+                            key={t.id}
+                            thread={t}
+                            item={proposals.get(t.id)}
+                            resumes={resumes}
+                            onChange={changed}
+                        />
                     )}
                 />
             )}
@@ -96,7 +117,13 @@ export function ReviewThreads({ url }: { url: string }) {
                     </PanelHeader>
                     <div className="flex flex-col gap-2 p-3">
                         {placed.elsewhere.map((t) => (
-                            <ThreadCard key={t.id} thread={t} item={proposals.get(t.id)} onChange={changed} />
+                            <ThreadCard
+                                key={t.id}
+                                thread={t}
+                                item={proposals.get(t.id)}
+                                resumes={resumes}
+                                onChange={changed}
+                            />
                         ))}
                     </div>
                 </Panel>
@@ -354,20 +381,29 @@ function sendRefs(drafts: Draft[]): string {
  * One review thread: where it is, whether GitHub says it is outdated or resolved, its comments as their authors wrote
  * them, plain text with each `<details>` block folded (`CommentText`), with a link to each on its host, then the
  * feedback plan's proposal for it, `item`, when the plan covers it, then the drafts that answer it. One the operator
- * sent wears `sent by you`. A thread no draft answers shows as it is.
+ * sent wears `sent by you`. A thread no draft answers shows as it is. While the plan's resume is still to come
+ * (`resumes`), a `change` it acts on says so over a waiting draft, which answers first if sent.
  */
 export function ThreadCard({
     thread,
     item,
+    resumes = false,
     onChange,
 }: {
     thread: ReviewThread
     item?: FeedbackPlanItem | undefined
+    resumes?: boolean
     onChange: () => void
 }) {
     const where = threadWhere(thread)
+    const ahead =
+        resumes && item?.proposal === 'change' && !item.left_out && thread.drafts.some((d) => d.status === 'waiting')
     return (
-        <article className="rounded-md border bg-surface-raised p-3 text-sm" data-testid="review-thread">
+        <article
+            id={threadAnchor(thread.id)}
+            className="rounded-md border bg-surface-raised p-3 text-sm"
+            data-testid="review-thread"
+        >
             <header className="flex flex-wrap items-center gap-2">
                 {where !== null && <span className="font-mono text-xs break-all text-muted-foreground">{where}</span>}
                 {thread.outdated && <Chip>outdated</Chip>}
@@ -387,7 +423,7 @@ export function ThreadCard({
                     </li>
                 ))}
             </ol>
-            {item !== undefined && <PlanProposal item={item} />}
+            {item !== undefined && <PlanProposal item={item} ahead={ahead} />}
             {thread.drafts.length > 0 && (
                 <div className="mt-2 flex flex-col gap-2">
                     {thread.drafts.map((d) => (
@@ -407,8 +443,10 @@ export function ThreadCard({
  * has checked yet, Edit and Drop; a dropped one, Undo. Send reads Sending… until the post returns, and a toast says
  * what it did as well as the line under the card. Its hash is the one a send carries, so what posts is the text shown.
  * A draft superseded by this one that carried the operator's edits is named, since they are not carried over. A
- * ticket's draft names the issue it goes to, as the worker read it, for the operator to check. Each verb calls
- * `onChange` once done, to read again what shows the draft.
+ * ticket's draft names the issue it goes to, as the worker read it, for the operator to check. A draft that started
+ * from a feedback plan's proposed reply (DESIGN §32) wears `as planned`, or `changed from the plan` when canopy found
+ * the run's text, or what it says it did, other than the plan proposed, with that reply to read beside it. Each verb
+ * calls `onChange` once done, to read again what shows the draft.
  */
 export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => void }) {
     const [said, setSaid] = useState<string | null>(null)
@@ -448,6 +486,12 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                     <Chip tone={DRAFT_TONE[draft.status]} word={draft.status} />
                     {draft.stance !== null && <Word word={draft.stance} className="text-xs text-muted-foreground" />}
                     {draft.edited && <Chip>your text</Chip>}
+                    {draft.from_plan !== null &&
+                        (draft.from_plan.departs ? (
+                            <Chip tone="blocked">changed from the plan</Chip>
+                        ) : (
+                            <Chip>as planned</Chip>
+                        ))}
                     <span className="ml-auto font-mono text-2xs text-muted-foreground" title="The hash a send carries">
                         {draft.hash}
                     </span>
@@ -462,6 +506,7 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                     It replaces a draft you edited, and your edits are not carried over: read it before you send it.
                 </p>
             )}
+            {draft.from_plan?.departs === true && <FromPlan from={draft.from_plan} />}
             {draft.issue_url !== null && (
                 <p className="mt-1 text-xs text-muted-foreground" data-testid="draft-issue">
                     To <span className="font-mono break-all text-foreground">{draft.issue_url}</span>, as the worker
@@ -557,6 +602,39 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => v
                 {said}
             </Notice>
         </DraftCardFrame>
+    )
+}
+
+/**
+ * The feedback plan item a draft departs from: its number and what the plan proposed, and the reply it proposed, shown
+ * on demand as plain text, every hidden character named, as the draft's own is. What departs is the run's text, not
+ * the operator's edits of it.
+ */
+function FromPlan({ from }: { from: DraftFromPlan }) {
+    const [shown, setShown] = useState(false)
+    const item = `plan item ${String(from.number)}, which proposed ${from.proposal}`
+    const said = from.left_out
+        ? `Your approval left out ${item}.`
+        : `The run departs from ${item}${from.reply === null ? ' and no reply' : ''}.`
+    return (
+        <Collapsible open={shown} onOpenChange={setShown} className="mt-1">
+            <p
+                className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+                data-testid="draft-from-plan"
+            >
+                {said}
+                {from.reply !== null && <Disclosure open={shown} what="the proposed reply" />}
+            </p>
+            {from.reply !== null && (
+                <CollapsibleContent>
+                    <MemoryText
+                        text={from.reply}
+                        lines
+                        className="mt-1 block border-l-2 pl-2 text-xs text-muted-foreground"
+                    />
+                </CollapsibleContent>
+            )}
+        </Collapsible>
     )
 }
 

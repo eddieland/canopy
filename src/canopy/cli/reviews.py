@@ -1,4 +1,4 @@
-"""`canopy review`: `run`, `wait`, `end`, and `revise` for the overseer; `show`, `noise`, and drafts, for you.
+"""`canopy review`: `run`, `wait`, `end`, and `revise` for the overseer; `show`, `noise`, `eval`, and drafts, for you.
 
 The detached `_review` does one review run (DESIGN §21), or one revision of a review's draft (§34). A review of a PR
 the loop does not own is a draft of a review on that PR (§34): `draft` shows it as it would post, `edit` changes it,
@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, assert_never
 import click
 
 from canopy.cli.common import CliError, Group, OverseerCommand, leave_the_tick, open_context
-from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, verb
+from canopy.cli.params import EVAL_CASE, PERSONA, PR_URL, REPO, TICKET_KEY, TextType, verb
 from canopy.core import (
     conversation,
     db,
@@ -35,10 +35,12 @@ from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
 from canopy.loop import review_tools
-from canopy.reviews import execute, findings, noise, view
+from canopy.reviews import evals, execute, findings, noise, view
 
 if TYPE_CHECKING:
     import sqlite3
+
+    from canopy.core.config import EvalCase
 
 #: The channel `show` marks a review seen through, and a draft's edit or publish is recorded with (DESIGN §22).
 CLI = "cli"
@@ -148,14 +150,75 @@ def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
 @click.option("--json", "as_json", is_flag=True, help="Print the tallies as one JSON object instead.")
 @click.pass_context
 def cmd_review_noise(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
-    """Count the last days' review findings by severity, persona, and model, and why you dismissed each.
+    """Count the last days' review findings by severity, persona, and model, and what became of each.
 
-    A finding dismissed `wrong` is the reviewer's noise; `intentional` and `not_worth_it` held and were left. The
-    `wrong` rate is the share of a group's findings dismissed so. A finding not dismissed is not counted as fixed.
+    A finding dismissed `wrong` is the reviewer's noise; `intentional` and `not_worth_it` held and were left. One not
+    dismissed counts by a worker's latest answer to it, `fixed` or `declined`; your dismissal wins over an answer. A
+    rebuttal is a finding held as one of a worker's decline. The `wrong` rate is the share of a group's findings
+    dismissed so.
     """
     ctx = open_context(click_ctx)
     found = noise.tally(ctx.conn, db.format_time(datetime.now(UTC) - timedelta(days=days)))
     click.echo(json.dumps(found.as_json(), indent=2) if as_json else "\n".join(noise.lines(found)))
+    return 0
+
+
+@review_group.command("eval")
+@click.option(
+    "--case",
+    "names",
+    type=EVAL_CASE,
+    multiple=True,
+    help="Review this case alone; give it again for each. Default: every case.",
+)
+@click.option("--persona", type=PERSONA, help="Review in this persona. Default: [personas] reviewer's.")
+@click.option("--model", metavar="MODEL", help="Review on this model, provider/model. Default: runtime.models'.")
+@click.option("--dry-run", is_flag=True, help="Show the cases and what each would be reviewed with; start nothing.")
+@click.option("--json", "as_json", is_flag=True, help="Print the result as one JSON object instead.")
+@click.pass_context
+def cmd_review_eval(
+    click_ctx: click.Context,
+    *,
+    names: tuple[str, ...],
+    persona: str | None,
+    model: str | None,
+    dry_run: bool,
+    as_json: bool,
+) -> int:
+    """Score the reviewer on your cases, `[[review.eval_cases]]` in your private config, one review each, in turn.
+
+    A bug case is found when a finding is within 3 lines of a line you confirmed its bug on; every finding on a clean
+    case is a false alarm. A review that ends any way but done is not scored. The eval records nothing in the journal:
+    no review, draft, attention item, or notification. Its result, with the digests of the prompt and the persona and
+    the model, is saved in .canopy/review-evals/ to compare with the next, and printed as a section to paste into
+    docs/MEASUREMENTS.md. It gates nothing. A case the review guards refuse (the daily limit, review capacity,
+    max_workers) is skipped and not scored, so run it while the loop is idle.
+    """
+    try:
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"review eval refused ({r.guard}): {r.reason}") from None
+    ctx = open_context(click_ctx)
+    try:
+        setup = evals.prepare(ctx, names=names, persona=persona, model=model)
+    except evals.EvalError as e:
+        raise CliError(f"review eval refused: {e}") from None
+    if dry_run:
+        plan = {**evals.setup_json(setup), "cases": [evals.case_json(c) for c in setup.cases]}
+        click.echo(json.dumps(plan, indent=2) if as_json else "\n".join(evals.planned(ctx, setup)))
+        return 0
+    count = len(setup.cases)
+
+    def reviewing(case: EvalCase) -> None:
+        number = next(n for n, c in enumerate(setup.cases, 1) if c.name == case.name)
+        click.echo(f"reviewing case {number} of {count}, {case.name}: {case.pr} at {case.sha[:12]}", err=True)
+
+    try:
+        done = evals.run(ctx, setup, reviewing=reviewing)
+    except evals.EvalError as e:
+        raise CliError(f"review eval refused: {e}") from None
+    click.echo(json.dumps(done.as_json(), indent=2) if as_json else "\n".join(evals.lines(done)))
+    click.echo(f"saved to {done.saved}", err=True)
     return 0
 
 

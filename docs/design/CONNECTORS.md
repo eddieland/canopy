@@ -21,7 +21,8 @@ the measurement read.
 ### Sources
 
 There is at most one source of each kind, `tracker`, `vcs`, `artifacts` (an artifact store's comment feed, §38), and
-`slack` (the replies in the Slack sink's ticket threads, §20), each a command run with no shell (§20) under a timeout.
+`slack` (the operator's replies in the Slack sink's threads and mentions of its bot, §20), each a command run with
+no shell (§20) under a timeout.
 Every `connect.*` key is private (§12, TRUST_MODEL T7), since each runs a command with the operator's credentials. The
 `vcs` source defaults to canopy's own programs (§29), so PRs are observed with nothing configured. There is no default
 `tracker` source, since the harness never branches on `tracker.provider` (§17); without one, tickets are not observed,
@@ -50,7 +51,7 @@ them.
 
 ### Validating and the journal
 
-Each line is validated against its kind (D026). Text is cut and marked, as a mirrored comment's is (§22); a field whose
+Each line is validated against its kind (D026). Text is cut and marked, as a tracker comment's is (§22); a field whose
 cut would change what it says, such as an id or a state, refuses the line instead. A refused line leaves its subject
 not whole this run, whatever `end` says, so a line canopy could not read never looks like a review or a check gone. A
 run with no `end` line records nothing: without it, canopy cannot tell what is missing from what is not there. A
@@ -60,13 +61,10 @@ leaves no subject of its kind whole; a line that is not JSON is skipped, as an u
 whole: each change is read once, past the cursor the last run's `end` line named, and kept as the newest change to its
 thread or comment. A refused change holds the cursor before it, so the next run reads it again and none is missed.
 
-Comments are kept apart from the conversation, in their own observations, once each and cut and marked as a mirrored
-comment is (§22), the workers' marks (D069) read in code. The conversation is what a private worker's prompt carries
-(§8), so a comment written there would reach a worker without the overseer mirroring it, under none of the mirror's
-bounds; while this section is in shadow they stay apart (operator, 2026-10-19), and the step that has the overseer read
-the journal (§35) decides how they reach it. The connector moves no mirror cursor and records no decision, so the
-overseer mirrors as before. Each tick's run of a source is recorded with what it was asked and what it read; §29's
-reads after a run and before a send are validated the same way but are not a tick's runs.
+Comments are observed once each, cut and marked, the workers' marks (D069) read in code, and each is recorded in its
+ticket's conversation when first observed, in the same transaction and with the same text (§22, §35). The connector
+moves no cursor and records no decision. Each tick's run of a source is recorded with what it was asked and what it
+read; §29's reads after a run and before a send are validated the same way but are not a tick's runs.
 
 ### In the tick, and between ticks
 

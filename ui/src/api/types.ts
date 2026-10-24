@@ -123,6 +123,18 @@ export type SpendModel = Schemas['SpendModel']
 export type SpendMonth = Schemas['SpendMonth']
 /** A kind of agent run, as the spend breakdown counts it: the overseer, workers, plans, chores, reviews, or tasks. */
 export type SpendKind = Schemas['SpendKind']
+/** The last months, oldest first, as the reports page shows them. */
+export type MonthlyReport = Schemas['MonthlyReport']
+/** One local calendar month: what each kind of run cost, by model, in dollars and tokens, and the tickets it landed. */
+export type ReportMonth = Schemas['ReportMonth']
+/** What one kind of run cost in a month, in dollars and tokens. */
+export type ReportKind = Schemas['ReportKind']
+/** What one model's replies cost in a month, over every kind of run; a null model for the unnamed. */
+export type ReportModel = Schemas['ReportModel']
+/** A ticket the loop marked done as merged in a month, and what getting there took. */
+export type ReportTicket = Schemas['ReportTicket']
+/** The tokens a month's runs reported, by kind, and the share of what was sent read from the cache. */
+export type ReportTokens = Schemas['ReportTokens']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */
@@ -261,6 +273,8 @@ export type ReviewThread = Schemas['Thread']
 export type ThreadComment = Schemas['ThreadComment']
 /** A comment a run drafted in place of posting it: a worker's text until the operator sends it. */
 export type Draft = Schemas['Draft']
+/** The feedback plan item a thread's draft started from, and whether canopy found the run's text departs from it. */
+export type DraftFromPlan = Schemas['DraftFromPlan']
 /** Where a draft stands, as `canopy draft list` prints it. */
 export type DraftStatus = Schemas['DraftStatusName']
 /** A reaction a thread's draft stages on the comment it names, by GitHub's name for it. */
@@ -277,6 +291,8 @@ export type FeedbackPlanItem = Schemas['FeedbackPlanItem']
 export type FeedbackPlanApproved = Schemas['FeedbackPlanApproved']
 /** A ticket's feedback plan while it waits on the operator, as its ticket's summary names it for the attention list. */
 export type WaitingFeedbackPlan = Schemas['WaitingFeedbackPlan']
+/** The feedback plan a `feedback-plan` run wrote, as the run's page names it: its PRs and where it stands. */
+export type FeedbackPlanWritten = Schemas['FeedbackPlanWritten']
 
 /** Every run state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss. */
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]

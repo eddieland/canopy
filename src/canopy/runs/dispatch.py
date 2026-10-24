@@ -36,6 +36,7 @@ from canopy.core import (
     pools,
     prompts,
     replies,
+    review_answers,
     sandboxing,
     ticket_models,
 )
@@ -157,6 +158,7 @@ def start(
     review: str | None = None,
     reasons: Collection[str] = (),
     cursors: AbstractSet[str] = frozenset(),
+    reserved: int = 0,
 ) -> Started:
     """Check the guards, lease a slot in each repository, record the run, and spawn `canopy _run` for it.
 
@@ -167,7 +169,8 @@ def start(
     (DESIGN §25); a `feedback-plan` reads its units' PRs at their heads, and writes the plan their `resume` waits on
     under `policy.feedback_plan = "approve"` (DESIGN §32). A `resume` for a canopy review's findings carries them in
     `review`, read from the journal (DESIGN §21). A `resume` names why it runs in `reasons`, and `cursors` names the
-    cursors the dispatch moves, with `review_run` for `--review-run`: each needs its reason (DESIGN §8).
+    cursors the dispatch moves, with `review_run` for `--review-run`: each needs its reason (DESIGN §8). `reserved` is
+    the workers the harness's dispatches to come this tick hold ahead of this one, to leave free (DESIGN §37).
 
     Returns:
         The run that started: its id, branch, the slots it leased, the worker's pid, and its desk if it is joint.
@@ -192,7 +195,7 @@ def start(
             reasons=reasons,
             cursors=cursors,
         )
-        attempt, limit = _guard(ctx, key, kind, plan.repos, reasons=reasons)
+        attempt, limit = _guard(ctx, key, kind, plan.repos, reasons=reasons, reserved=reserved)
         # Fixed now, before a slot is leased: a persona that cannot be used refuses the run whole (DESIGN §31).
         persona = _check_persona(ctx, key, kind)
         # And its model, looked up in the runtime's list now: one it lacks refuses the run whole (DESIGN §13).
@@ -231,6 +234,7 @@ def check(
     repos: Sequence[str] = (),
     reasons: Collection[str] = (),
     cursors: AbstractSet[str] = frozenset(),
+    reserved: int = 0,
 ) -> Plan:
     """Check the guards a live dispatch would, for a dry run, and return the plan of the run it would start (D036).
 
@@ -265,7 +269,7 @@ def check(
             reasons=reasons,
             cursors=cursors,
         )
-        _guard(ctx, key, kind, plan.repos, planned=planned, reasons=reasons)
+        _guard(ctx, key, kind, plan.repos, planned=planned, reasons=reasons, reserved=reserved)
         _check_persona(ctx, key, kind)
         _check_model(ctx, key, kind, private=plan.private)
     return plan
@@ -756,21 +760,24 @@ def _guard(
     *,
     planned: Sequence[str] = (),
     reasons: Collection[str] = (),
+    reserved: int = 0,
 ) -> tuple[int, int]:
     """Refuse unless a `kind` run for `key` over `repos` may start now. Returns the run's attempt number and limit.
 
     Attempt limits and the CI cooldown are per unit: the run is refused if any unit it covers is at its limit or, for
     a `resume` whose only reason is `ci`, in its cooldown. A unit's limit is the policy's plus the runs the operator
     granted it (DESIGN §22). The run's attempt number and limit are those of the unit with the most runs of the kind.
-    `planned` holds the tickets a dry run has already dispatched this tick; each counts as a running run.
+    `planned` holds the tickets a dry run has already dispatched this tick; each counts as a running run. `reserved`
+    workers are held for the harness's dispatches to come (DESIGN §37).
 
     Returns:
         The run's attempt number and attempt limit.
 
     Raises:
         Refusal: a run is already working `key` or the dry run dispatched it (`running`), a unit, or the ticket for a
-            plan, is at its attempt limit (`attempt_limit`) or a unit in its CI cooldown (`cooldown`),
-            or the workers are at capacity (`capacity`). A refusal about one unit names its repository.
+            plan, is at its attempt limit (`attempt_limit`) or a unit in its CI cooldown (`cooldown`), or the workers
+            are at capacity (`capacity`), or the run would leave fewer free than `reserved` (`reserved`). A refusal
+            about one unit names its repository.
     """
     running = db.running_runs(ctx.conn, "runs")
     for run in running:
@@ -779,7 +786,7 @@ def _guard(
     if key in planned:
         raise Refusal("running", f"this dry run already dispatched {key}")
     if kind == policy.FEEDBACK_PLAN:
-        return _guard_feedback_plan(ctx, key, repos, running, planned)
+        return _guard_feedback_plan(ctx, key, repos, running, planned, reserved=reserved)
     if kind in policy.TICKET_KINDS:
         # A plan is the ticket's, not a unit's: its count is per ticket.
         done = policy.ticket_attempts(ctx.conn, kind).get(key, 0)
@@ -787,7 +794,7 @@ def _guard(
         refused = policy.blocked(key, kind, counts={kind: done}, limit=ticket_limit, cooldown_until=None)
         if refused is not None:
             raise Refusal(*refused)
-        _check_capacity(ctx, running, planned)
+        _check_capacity(ctx, running, planned, reserved=reserved)
         return done + 1, ticket_limit
     counts = policy.attempts(ctx.conn)
     granted = policy.grants(ctx.conn)
@@ -809,7 +816,7 @@ def _guard(
         if refused is not None:
             raise Refusal(*refused, repo=repo)
         numbered.append((unit_counts[kind] + 1, -limit))
-    _check_capacity(ctx, running, planned)
+    _check_capacity(ctx, running, planned, reserved=reserved)
     attempt, negative_limit = max(numbered, default=(1, -policy.limits(ctx.config)[kind]))
     return attempt, -negative_limit
 
@@ -820,6 +827,8 @@ def _guard_feedback_plan(
     repos: Sequence[str],
     running: Sequence[object],
     planned: Sequence[str],
+    *,
+    reserved: int,
 ) -> tuple[int, int]:
     """Refuse a feedback plan run for a unit at its limit, or past capacity (DESIGN §32, TRUST_MODEL T3).
 
@@ -829,7 +838,7 @@ def _guard_feedback_plan(
         The run's attempt number and attempt limit: the unit with the most feedback plan runs sets both.
 
     Raises:
-        Refusal: a unit at its feedback plan limit (`attempt_limit`), naming its repository, or `capacity`.
+        Refusal: a unit at its feedback plan limit (`attempt_limit`), naming its repository, `capacity`, or `reserved`.
     """
     counts = policy.feedback_plan_attempts(ctx.conn)
     granted = policy.grants(ctx.conn)
@@ -848,17 +857,18 @@ def _guard_feedback_plan(
         if refused is not None:
             raise Refusal(*refused, repo=repo)
         numbered.append((done + 1, -limit))
-    _check_capacity(ctx, running, planned)
+    _check_capacity(ctx, running, planned, reserved=reserved)
     attempt, negative_limit = max(numbered, default=(1, -ctx.config.policy.max_feedback_plan_attempts))
     return attempt, -negative_limit
 
 
-def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[str]) -> None:
+def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[str], *, reserved: int) -> None:
     """Refuse when `max_workers` runs, review runs, and task runs are running: each holds a slot (DESIGN §21, §36).
 
     Raises:
         Refusal: `capacity`, when running runs, review runs, task runs, and those in `planned` number `max_workers` or
-            more.
+            more; `reserved`, when the run would leave fewer free than the `reserved` workers the harness's
+            dispatches to come hold ahead of it (DESIGN §37).
     """
     max_workers = ctx.config.capacity.max_workers
     others = len(db.running_runs(ctx.conn, "review_runs")) + len(db.running_runs(ctx.conn, "task_runs"))
@@ -866,6 +876,12 @@ def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[s
     if busy >= max_workers:
         planned_note = f", counting {len(planned)} this dry run dispatched" if planned else ""
         raise Refusal("capacity", f"{busy} of {max_workers} workers are running{planned_note}")
+    if busy + reserved >= max_workers:
+        raise Refusal(
+            "reserved",
+            f"{max_workers - busy} of {max_workers} workers are free, and the harness's dispatches to come this tick "
+            f"that rank above this one hold {reserved} (the state block's `dispatches_to_come`)",
+        )
 
 
 def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, Leased]]:
@@ -956,6 +972,8 @@ def _spawn(
         # The overseer's, which ticket and PR text can steer: quoted, so no line of it passes for the prompt's own.
         "CONTEXT": quoted(context) if context else None,
         "REVIEW_FINDINGS": review or None,
+        # Follows the result line, as memory's contract does: the field a resume answers its review's findings in.
+        review_answers.REVIEW_ANSWERS: review_answers.contract_text() if review else "",
         "AUTHORIZED_REPLIERS": repliers or "none (no reply may instruct you)",
         "TRUSTED_REVIEWERS": prompts.trusted_reviewers(cfg.trust.trusted_reviewers),
         "LABELS": ", ".join(f"`{label}`" for label in cfg.tracker.labels),

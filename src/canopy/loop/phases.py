@@ -26,11 +26,9 @@ from canopy.core import conversation, db, observe, personas, plans, records, rev
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
-    CheckConclusion,
     CheckStatus,
     ConnectorRunStatus,
     Decider,
-    MergeState,
     Phase,
     PrState,
     ReviewItem,
@@ -50,21 +48,6 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-#: How a completed CI context ends red: what holds a unit at `ci_red`.
-FAILED: AbstractSet[CheckConclusion] = frozenset(
-    {
-        CheckConclusion.FAILURE,
-        CheckConclusion.ERROR,
-        CheckConclusion.CANCELLED,
-        CheckConclusion.TIMED_OUT,
-        CheckConclusion.ACTION_REQUIRED,
-        CheckConclusion.STARTUP_FAILURE,
-    },
-)
-#: How a completed CI context passes. One `stale` neither passes nor fails: GitHub left it for a newer run.
-PASSED: AbstractSet[CheckConclusion] = frozenset(
-    {CheckConclusion.SUCCESS, CheckConclusion.NEUTRAL, CheckConclusion.SKIPPED},
-)
 _DISPATCH = "dispatch:"
 _ATTENTION = attention.ACTION_PREFIX
 _RESUME = f"{_DISPATCH}resume"
@@ -161,6 +144,33 @@ def record(conn: sqlite3.Connection, tick_id: int, derived: Iterable[Derived]) -
     columns = ("tick_id", "ticket_key", "repo", "candidate", "closed", "phases", "stale")
     with db.transaction(conn):
         sql.execute_many(conn, sql.insert_rows("derivations", columns), rows)
+
+
+def recorded(conn: sqlite3.Connection, tick_id: int) -> list[Derived]:
+    """What tick `tick_id` derived, read back from the journal as `derive` returned it.
+
+    Returns:
+        Each ticket's own row, then its units', by key.
+    """
+    rows = records.fetch_all(
+        conn,
+        records.Derivation,
+        sql.select("*")
+        .from_("derivations")
+        .where("tick_id = ?", tick_id)
+        .order_by("ticket_key, repo IS NOT NULL, repo"),
+    )
+    return [
+        Derived(
+            r.ticket_key,
+            r.repo,
+            tuple(Phase(p) for p in json.loads(r.phases)),
+            stale=r.stale,
+            candidate=r.candidate,
+            closed=r.closed,
+        )
+        for r in rows
+    ]
 
 
 def record_overseer(conn: sqlite3.Connection, tick_id: int) -> None:
@@ -363,7 +373,7 @@ def _overseers(decision: records.Decision) -> bool:
 
     Returns:
         False for one the harness recorded, a harness's attention item from before the journal said who recorded it,
-        a refusal, or a mirror.
+        a refusal, or an older tick's mirror.
     """
     action = decision.action
     if decision.decider is Decider.HARNESS or action.startswith("refused:") or action == conversation.MIRROR_ACTION:
@@ -651,7 +661,7 @@ class _World:
         if pr.state is not PrState.OPEN:
             return Derived(key, repo)
         phases: list[Phase] = []
-        if pr.mergeable == "conflicting" or pr.mergeable_state is MergeState.DIRTY:
+        if observe.conflicts(pr):
             phases.append(Phase.CONFLICTED)
         ci, passed = self._ci(repo, pr, unit)
         phases.extend(ci)
@@ -678,12 +688,12 @@ class _World:
         human = found.human_checks if found is not None else frozenset[str]()
         ci = [c for c in self.checks.get(pr.url, []) if c.head_sha == pr.head_sha and c.name not in human]
         pending = any(c.status is not CheckStatus.COMPLETED for c in ci)
-        failed = [c for c in ci if c.status is CheckStatus.COMPLETED and c.conclusion in FAILED]
+        failed = [c for c in ci if c.status is CheckStatus.COMPLETED and c.conclusion in observe.FAILED]
         phases = [Phase.CI_RUNNING] if pending else []
-        cursor = _ci_cursor(unit.last_ci_run_id)
+        cursor = ci_cursor(unit.last_ci_run_id)
         if any(cursor is None or (c.run_id is not None and c.run_id > cursor) for c in failed):
             phases.append(Phase.CI_RED)
-        return phases, not pending and all(c.conclusion in PASSED for c in ci)
+        return phases, not pending and all(c.conclusion in observe.PASSED for c in ci)
 
     def _feedback(self, key: str, pr: records.ObservedPr, unit: records.TicketUnit) -> list[Phase]:
         """Derive the review rows (DESIGN §7, D089): feedback newer than the unit's `review` cursor, by whom it is from.
@@ -750,8 +760,8 @@ class _World:
         stored = result.stored(run.result_json)
         if stored is None:
             return False
-        dismissed = review_runs.review_dismissals(self.ctx.conn, run.id)
-        return any(i not in dismissed for i in range(1, len(stored.findings) + 1))
+        withheld = review_runs.withheld(self.ctx.conn, run.id)
+        return any(i not in withheld for i in range(1, len(stored.findings) + 1))
 
 
 def _query_result(conn: sqlite3.Connection) -> list[str]:
@@ -791,8 +801,12 @@ def _approved(reviews: Collection[records.ObservedReview]) -> bool:
     return any(state is ReviewState.APPROVED for state in latest.values())
 
 
-# The `ci` cursor, a check run's id; None when it is empty or not a number, so every failure is new.
-def _ci_cursor(value: str | None) -> int | None:
+def ci_cursor(value: str | None) -> int | None:
+    """Read a unit's `ci` cursor, a check run's id.
+
+    Returns:
+        The id; None when it is empty or not a number, so every failure is new.
+    """
     try:
         return int(value) if value else None
     except ValueError:

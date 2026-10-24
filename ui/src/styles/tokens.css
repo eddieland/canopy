@@ -47,7 +47,7 @@
     --section-reviews: oklch(0.55 0.2 330);
     --section-chores: oklch(0.535 0.14 50);
     --section-ticks: oklch(0.51 0.145 135);
-    --section-spend: oklch(0.525 0.105 95);
+    --section-reports: oklch(0.525 0.105 95);
     --section-memory: oklch(0.49 0.11 225);
     --section-settings: oklch(0.5 0.03 250);
 
@@ -61,6 +61,12 @@
     --syntax-string: oklch(0.5 0.12 135);
     --syntax-number: oklch(0.515 0.11 70);
     --syntax-literal: oklch(0.52 0.17 315);
+
+    /* A feedback plan's proposals (src/components/status.tsx): what each would do to its item, quiet hues no status
+     * wears, so `change`, the one that edits code, stands out; `leave`, which does nothing, stays plain. */
+    --proposal-change: oklch(0.48 0.15 345);
+    --proposal-decline: oklch(0.46 0.06 115);
+    --proposal-ask: oklch(0.465 0.065 245);
 
     /* The spend page's chart (src/lib/spend.ts): a series per kind of agent run, as fills, never text and never state.
      * Idle overseer spend is the overseer's own hue, lighter, so it reads as a part of it. */
@@ -136,7 +142,7 @@
     --section-reviews: oklch(0.76 0.17 330);
     --section-chores: oklch(0.8 0.14 55);
     --section-ticks: oklch(0.84 0.16 130);
-    --section-spend: oklch(0.86 0.15 100);
+    --section-reports: oklch(0.86 0.15 100);
     --section-memory: oklch(0.83 0.09 218);
     --section-settings: oklch(0.74 0.03 250);
 
@@ -147,6 +153,10 @@
     --syntax-string: oklch(0.8 0.12 135);
     --syntax-number: oklch(0.82 0.12 75);
     --syntax-literal: oklch(0.76 0.14 315);
+
+    --proposal-change: oklch(0.77 0.13 345);
+    --proposal-decline: oklch(0.76 0.06 115);
+    --proposal-ask: oklch(0.75 0.065 245);
 
     --spend-overseer: oklch(0.62 0.15 265);
     --spend-idle: oklch(0.82 0.08 265);
@@ -408,7 +418,7 @@
     --color-section-reviews: var(--section-reviews);
     --color-section-chores: var(--section-chores);
     --color-section-ticks: var(--section-ticks);
-    --color-section-spend: var(--section-spend);
+    --color-section-reports: var(--section-reports);
     --color-section-memory: var(--section-memory);
     --color-section-settings: var(--section-settings);
 
@@ -419,6 +429,10 @@
     --color-syntax-string: var(--syntax-string);
     --color-syntax-number: var(--syntax-number);
     --color-syntax-literal: var(--syntax-literal);
+
+    --color-proposal-change: var(--proposal-change);
+    --color-proposal-decline: var(--proposal-decline);
+    --color-proposal-ask: var(--proposal-ask);
 
     --color-spend-overseer: var(--spend-overseer);
     --color-spend-idle: var(--spend-idle);

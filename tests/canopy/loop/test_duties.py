@@ -114,9 +114,8 @@ def test_a_query_not_due_is_not_recorded_though_a_source_read_it(scenario: Scena
 
 def test_a_ticket_left_out_fails_the_tick_and_keeps_its_attention_item(scenario: Scenario) -> None:
     scenario.tick(raises("PROJ-1", "needs_reviewer", "https://example.test/pr/1"), *waits("PROJ-2"))
-    # A mirror is not a decision, and PROJ-2 gets none at all.
-    mirror = ["mirror", "PROJ-1", "--comment", "10", "--author", "acct-1", "--at", "2026-10-15T10:00:00Z"]
-    failed = scenario.tick(canopy(*mirror, "--body", "hello"), code=1)
+    # A phase is not a decision, and PROJ-2 gets none at all.
+    failed = scenario.tick(canopy("ticket", "set", "PROJ-1", "--phase", "approved"), code=1)
     assert failed.tick.status == "overseer_failed"
     assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-1, PROJ-2"
     # The items of the tickets it left out are not taken as resolved.
@@ -160,7 +159,7 @@ def test_a_due_chore_left_undecided_fails_the_tick(scenario: Scenario, canopy_en
     prompt = canopy_env.home / "chores" / "build-health.md"
     prompt.parent.mkdir()
     prompt.write_text("# Build health\n")
-    canopy_env.append_user(chore_toml())
+    canopy_env.append_user(chore_toml(extra='when = "Weekdays only."\n'))
     failed = scenario.tick(code=1)
     assert failed.tick.summary == "overseer left duties undone: no run or wait for chore build-health"
     scenario.tick(canopy("chore", "wait", "build-health", "--rationale", "not now"))

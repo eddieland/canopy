@@ -91,7 +91,7 @@ Controls:
   not in code from its observed labels and state, a non-candidate by key and why with none of its text, and a
   candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a
   trusted reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from
-  it, and reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut as a mirror cuts it.
+  it, and reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut and marked.
   `canopy dispatch` checks the overseer's claims against them in code, before its other guards: the label must be one
   observed on the ticket, a `resume` for `reply` must point at a new comment by an authorized replier that is not a
   worker's or at a new operator message, a `resume` for `review` must cover a trusted reviewer's item, or anyone
@@ -100,18 +100,23 @@ Controls:
   private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual: the
   guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
 - An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own,
-  apart from every conversation, cut as a mirror cuts them, with the store's id for each author and whether the
-  comment is an agent's or carries every comment mark. In shadow (ROADMAP M62), no prompt, state block, attention
-  item, or guard reads them, so a comment steers nothing. The ticket one names is its artifact's origin, a worker's
-  word until canopy sets it per run.
+  cut as a tracker comment is, with the store's id for each author and whether the comment is an agent's or carries
+  every comment mark. A comment on an artifact whose origin names a ticket the journal holds is also recorded once in
+  that ticket's conversation, quoting its passage, as a tracker comment is (DESIGN §35): data, whoever wrote it, read
+  only by the operator's views, a private ticket's own worker, and the plan archive's conversations when they are on.
+  No state block, attention item, or guard reads them yet (ROADMAP M62), so a comment steers nothing. The ticket one
+  names is its artifact's origin, a worker's word until canopy sets it per run, so a steered worker could name another
+  ticket the journal holds; comments then reach that ticket's conversation as data, as anyone's tracker comment does.
 - The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
   `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
   each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
-  these, none stale and no item the overseer holds open on it. Such a ticket's text reaches no overseer that tick, and
-  whatever the overseer records about it, a decision, dispatch, attention item, or `ticket set`, is refused `decided`,
-  through a tool and its command alike, so a steered overseer cannot overrule the harness. Residual: the harness
-  reads the absence of every other row from the derivation, so a row it misses waits until the overseer is given the
-  ticket again; it starts no run.
+  these, none stale. Such a ticket's text reaches no overseer that tick, and whatever the overseer records about it, a
+  decision, dispatch, attention item, or `ticket set`, is refused `decided`, through a tool and its command alike, so
+  a steered overseer cannot overrule the harness; an item the overseer raised on it stands until the overseer is given
+  the ticket again, or it is done or stopped. Residual: the harness reads the absence of every other row from the
+  derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
+  model-written context: today it starts only a due chore with no `when`, whose `chore run` and `chore wait` the
+  overseer is refused `decided`, and no ticket's run, since each rests on an observation.
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
@@ -152,8 +157,10 @@ Controls:
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
   it into every public worker prompt itself (`implement`, `resume`), and refuses a prompt override that
   would drop it (D093).
-- A reply in the Slack sink's ticket thread (DESIGN §22, M64) is an operator message only when the Slack user id that
-  wrote it is one a `slack` source's `operators` lists (private, T7), and only on a ticket the journal already has.
+- A reply in the Slack sink's ticket thread, or a top-level message in its channel that starts by mentioning canopy's
+  bot and then a ticket's key (DESIGN §20, §22, M64), is an operator message only when the Slack user id that wrote it
+  is one a `slack` source's `operators` lists (private, T7), and only on a ticket the journal already has: a mention
+  reaches no ticket but the one its key names, whether or not it has a thread.
   The ids are enforced twice: `canopy-connect-slack` is asked for their replies alone, and refuses to run without one,
   so nobody else's words reach canopy; and the harness checks each line's id against config in code, whatever the
   connector printed, so a connector of the operator's own that prints more widens nothing. It is recorded through
@@ -162,7 +169,9 @@ Controls:
   operator-only file, and the ids they listed, each of which Slack's own sign-in proves. A reply from anyone else, or
   from a bot, records nothing, not even as data, and a dry run records none (D036). Residual: whoever controls a listed
   Slack account, or a Slack admin able to act as it, can answer and resume a ticket's worker as the operator; and a
-  reply edited after canopy read it keeps the words first read.
+  reply edited after canopy read it keeps the words first read. Sinks that take `replies` hear what came of an
+  operator's reply: a mention recorded, its words cut to a summary, and any reply refused, with canopy's own reason,
+  once each; that sends the operator's words back to the channel they were written in (T6).
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
   `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8), and for a reply, a listed
@@ -267,18 +276,19 @@ Controls:
   a run in canopy's own voice.
 - Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
   and a chore's `model`, both private (T7), which canopy writes into the agent's definition, or for one ticket's worker,
-  planner, or reviewer an override of the model alone, set with `canopy model` or the ticket's page (T8), which refuses
-  inside a tick or a run and refuses a model the runtime does not list. The overseer, a dispatch, ticket text, and
-  labels choose none, the overseer's own included, and a `runtime` template, prefix, or suffix that passes a model or a
-  variant is a config error, as is a chore's command that does while it runs canopy's chore agent, so no agent's
-  command line overrides it unseen. A worker run whose model or variant the runtime does not list, or whose list cannot
-  be read, is refused with an attention item, never run on config's model or the runtime's default instead.
-- Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like a
-  dispatch's `label`, and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds
-  the workers' marks (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages
-  only. A private worker's prompt labels a mirrored comment as data, with its author. The overseer passes a comment's
-  text as a field of its `mirror` tool's JSON arguments, which no shell reads, so there is nothing in it to expand,
-  quote, or end early (DESIGN §27).
+  planner, or reviewer an override of the model, at one of its variants or none, set with `canopy model` or the
+  ticket's page (T8), which refuses inside a tick or a run and refuses a model the runtime does not list, or a variant
+  the model lacks. The overseer, a dispatch, ticket text, and labels choose none, the overseer's own included, and a
+  `runtime` template, prefix, or suffix that passes a model or a variant is a config error, as is a chore's command
+  that does while it runs canopy's chore agent, so no agent's command line overrides it unseen. A worker run whose
+  model or variant the runtime does not list, or whose list cannot be read, is refused with an attention item, never
+  run on config's model or the runtime's default instead.
+- Tracker comments in a ticket's conversation (DESIGN §22, §35) are what the tracker source observed, each recorded
+  once in code, as the connector printed it, when first observed, and authorize nothing. They are recorded with source
+  `tracker`, or `worker` when the harness finds the workers' marks (D069), never `operator`, and phases,
+  `awaiting_reply`, and the loop's wake read operator messages only. A private worker's prompt labels one as data,
+  with its author. The overseer has no tool that writes one. Residual: the comments the overseer mirrored before M37
+  stay as it recorded them, and a later observation of the same comment does not replace one.
 - The overseer has no edit or write tools, and can act only through canopy's own MCP tools, whose guards are code
   (D020, DESIGN §27), and the commands the operator names for it in `runtime.allow_bash`, such as a tracker's CLI while
   its MCP server is down. The server is named in the overseer process's environment alone, from which the harness
@@ -314,7 +324,17 @@ Controls:
   classifies review comments, and a resumed worker reads them in its prompt as it reads any review comment. The next
   review of the same PR reads the latest `done` one's summary and undismissed findings as data, so a steered review can
   reach only a later reviewer of the PR whose text steered it, which reads that text anyway; the worst it does is lead
-  that review to miss a defect, as a steered reviewer already could by reporting clean.
+  that review to miss a defect, as a steered reviewer already could by reporting clean. It reads too what the resumed
+  worker answered of each finding, `fixed` or `declined` with a reason in the worker's words, as data. A steered worker
+  can decline a real finding; the next review then reports it again only as a rebuttal, which the harness holds for
+  the operator, never for another `resume`, and holds only a finding that names a decline the journal recorded. So an
+  answer moves a finding from the worker to the operator, never out of sight, and authorizes nothing. A later
+  review's finding on lines unchanged since the PR's first reviewed commit is held the same way, as the harness's git
+  reads the two commits, the finding's path a literal one; a steered reviewer can only aim a finding at old code, which
+  sends it to the operator rather than a worker, and a `blocking` one is never held.
+  A review's `impact` is the reviewer's judgment, which the PR's text can steer, so the harness records `high`, whatever
+  the reviewer says, for a change to a high-impact path, as git names the paths: CI's workflows in every repository,
+  and the paths the map lists for the PR's repository. It only raises, and `high` only ranks attention.
   A revision of a review's draft (DESIGN §34) runs as the reviewer does and reads the same PR, its draft, and its
   review, all data; the operator's notes since the draft's newest version are its only instructions. Its version is
   untrusted like the reviewer's until the operator publishes it, and the state block names the draft, never its text
@@ -326,6 +346,10 @@ Controls:
   another PR. The overseer names the repository the review runs in, as it does for `review.query`'s matches, and can end
   a request, as `merged`, `closed`, or `unknown_repo`, and nothing else: a wrong repository fails that review, and a
   steered overseer ending a request early costs a review, never adds one; the PR's page shows who ended it and why.
+  An eval case (`review.eval_cases`, private, T7) authorizes a review of its PR at its commit too, which only
+  `canopy review eval` starts, in the operator's shell, refused as `inside_run` as a request is. An eval records
+  nothing in the journal, so what its reviewer writes reaches no worker, draft, overseer, or notification, only the
+  operator's terminal and the result file in the state directory, made printable.
   Reviews live in the journal (D114): nothing on a PR is one but a version of a review of someone else's PR the operator
   published (DESIGN §34), which the loop reads as no review of its own.
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
@@ -356,9 +380,8 @@ give a ticket's runs a file, in the operator's name, or write the journal file d
 follows injected text naively, not one that works around it. The operator accepted this (D076); a forged `canopy reply`
 on a public ticket, a go-ahead on untrusted review feedback, is the same exposure. A steered overseer can dispatch a
 `resume` for an untrusted reviewer's comments without a go-ahead; the worker's own check and human review of the PR
-remain, and those comments were never instructions to it. A steered overseer can mirror text that was never on the
-ticket, or name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the
-tracker stays its source.
+remain, and those comments were never instructions to it. The journal's copy of a public ticket's conversation is
+what a connector printed, and the tracker stays its source.
 
 ### T2. Credential misuse or leakage
 
@@ -410,7 +433,14 @@ Controls in code, not prompts:
   PR's review limit.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
-- Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
+- The harness's dispatches (DESIGN §37): made after the overseer, by the same guards as the overseer's and counted in
+  every limit, cooldown, and capacity, and none in a dry run. An overseer's dispatch that would leave fewer workers
+  free than the harness's runs ranked above it in §7's order hold is refused `reserved`, so new work cannot take the
+  capacity of work in flight.
+- A tick whose block leaves the overseer nothing to judge runs none and spends nothing (DESIGN §39): it makes only the
+  harness's dispatches, under the guards above, and the disk check still holds them. It is paced as any tick is, by
+  `loop.min_gap_minutes` and every wake, and leaves idle pacing's count as it was.
+- Tracker comments: each body cut at 2000 characters where the tracker source records it (DESIGN §30).
 - Tasks (DESIGN §36): one run per task at a time, started only by a live tick, in code; at most `capacity.max_tasks`
   task runs at once (1 by default, and the workspace file may only lower it), within `capacity.max_workers`, which
   counts task runs with workers' and reviews'; each with the worker's timeout. A task the guards hold waits for a
@@ -610,7 +640,7 @@ Controls:
   runs that followed its plans with their statuses and its PRs' URLs and states. So do the operator's comments on
   each ticket's plans, with the passages they quote, unless `paths.plan_archive_comments`, private and on by default,
   is off. With `paths.plan_archive_conversations`, private and off by default, so does each planned ticket's
-  conversation: workers' reports and questions, the operator's replies, and mirrored tracker comments. A private ticket's
+  conversation: workers' reports and questions, the operator's replies, and tracker comments. A private ticket's
   conversation still never reaches the tracker (DESIGN §22); it reaches this remote only when the operator turns that
   on. The keys are private, so a shared workspace file can neither name a remote nor change what goes there (T7). The
   harness, never an agent, does it: no agent runs git there, and `canopy archive` refuses inside a tick or run. It uses
@@ -661,9 +691,10 @@ Controls:
   question, branch, head, PR, and recorded keys leave the machine only as a `task.ended` event, to a sink whose events
   list `tasks`, which none does unless the operator adds it; its report never does. Its `awaiting_reply` and
   `task_ticket_unrecorded` items, on every attention sink, name the task and never the question or the keys.
-- The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
-  the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
-  notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
+- The journal also holds the tracker comments the tracker source observes (DESIGN §22, §35), each cut at 2000
+  characters, in the same operator-only state directory, for every ticket it reads, public, private, or not a
+  candidate. Nothing sends them anywhere: no notification event carries one, and only a private ticket's own worker
+  reads them, in its prompt.
 - With `[artifacts]` set (DESIGN §38), the agents `artifacts.publish_roles` names may call the artifact store's
   tools by exact name: publish an artifact or a new version of one, read and list them, and reply, comment, and resolve
   threads on them, never the comment feed. The public worker is the one agent config lets it name, and its definition
@@ -781,6 +812,9 @@ Controls, in code:
   is private instead (DESIGN §32): it holds a trusted reviewer's feedback for the operator and lets anyone else's
   start a plan run, so a shared file chooses neither. So is `policy.planner_may_approve` (§25), which lets a planner's
   word stand for the operator's approval.
+- A repository's `high_impact_paths` in the map only adds to `.github/workflows/`, which the harness holds high
+  impact in every repository, so a commit to the workspace file cannot take CI's workflows off. It can change the rest
+  of the list, which only ranks attention.
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not

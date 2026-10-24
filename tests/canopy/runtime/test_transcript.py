@@ -99,6 +99,19 @@ def test_each_entry_is_numbered_by_the_model_call_the_runtime_started_it_in(tmp_
     assert [e.call for e in found.entries] == [None, 1, 1, 2]
 
 
+def test_a_model_call_s_end_names_the_message_it_wrote_when_canopy_would_keep_it(tmp_path: Path) -> None:
+    """The message is what the session's record names the call's model by; one shaped otherwise names none."""
+    path = log(
+        tmp_path,
+        event("step_finish", {"type": "step-finish", "messageID": "msg_161053f0f0017IWW1WudAQFBNE"}),
+        event("step_finish", {"type": "step-finish", "messageID": "msg 2\x1b[2J"}),
+        event("step_finish", {"type": "step-finish"}),
+    )
+    found = transcript.read(path, SESSION, version=Version.ONE)
+    assert found is not None
+    assert [e.message for e in found.entries if isinstance(e, Step)] == ["msg_161053f0f0017IWW1WudAQFBNE", None, None]
+
+
 def test_only_the_recorded_sessions_events_are_read(tmp_path: Path) -> None:
     # A subagent's session, a stray line shaped like an event, and plain output are not this session's.
     path = log(

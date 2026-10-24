@@ -88,6 +88,13 @@ it in one click, which beats holding backspace through a worker's earnest paragr
 it. A send adds the reactions first, then the review. GitHub keeps one of each per person, so if the review then
 fails, the reaction stays, the card says so, and sending again won't stack a second 👍 on your coworker's comment.
 
+With feedback plans on, the `resume` after the plan you approved starts each reply from the one the plan proposed for
+its thread, and canopy compares what the run wrote with that proposal itself, rather than taking the worker's word
+for it. A reply the run kept as proposed wears `as planned`: you read it once already, in the plan. One whose text, or
+what it says it did, came out otherwise wears `changed from the plan`, says which item, and **Show the proposed
+reply** puts the plan's version under it, as plain text, to hold the two side by side. Those are the ones to reread.
+Your own edits don't count as a change: you know what you wrote.
+
 **Send N waiting**, at the top, sends every waiting draft together. Either way, one PR's drafts go as one comment
 review, so your coworker gets one notification rather than a burst. The button reads **Sending…** while the post is on
 its way, and once it lands a toast at the bottom of the window says what went and where it went, so you're not
@@ -118,29 +125,46 @@ The [attention list](attention) holds a `drafts waiting` item while any draft fo
 
 With `policy.feedback_plan = "approve"` in your own config, a round of review on one of the loop's PRs is planned
 before any worker touches it: a planner reads every new item (a review, a thread, whoever wrote it) and proposes what
-to do with each, and the resume waits for you. The PR's page shows that plan under **Feedback plan**, after the
-threads' panel.
+to do with each, and the resume waits for you. The PR's page shows that plan under **Feedback plan**: above the
+threads' panel and its drafts while it waits on you, since it is what you came to answer, and below them once it is
+approved or spent. It stays where you found it while you approve it, so the button doesn't wander off mid-click.
 
-The panel says which run wrote it, when, and where it stands: `waiting` on you, `stale`, `approved`, or `spent` once a
-resume has gone ahead on it. Under that, a row for each item: its number, its id on GitHub, what the plan proposes
-(`change`, `decline`, `ask`, or `leave`), who wrote it, `trusted` if `trust.trusted_reviewers` names them, and where
-it is. On a thread, the thread's card carries the proposal too, as **Plan item N** above the drafts, with the reply
-the planner would draft. A review, or an item with no thread on this page, shows its proposed reply in its row
-instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it stands, as plain text, so an
-enthusiastic `<img>` in a coworker's comment stays a string of characters.
+The panel says which run wrote it, when, and where it stands: `waiting on you`, `stale`, `approved`, or `spent` once
+a resume has gone ahead on it. Under that, a row for each item: its number, the first line of what was said, and where
+it is, which is a link: **on its thread** jumps to the thread's card on this page, and **the review** opens the review
+on GitHub. Under that line, what the plan proposes (`change`, `decline`, `ask`, or `leave`, each in a color of its own:
+`change`, the one that edits code, the loudest, and `leave`, which does nothing, none at all), who wrote the item,
+`trusted` if `trust.trusted_reviewers` names them, the plan's first line on it, which is why it proposes that, and
+the item's id on GitHub. Enough to decide each row without leaving the panel; the full thread is one click away when
+it is not. On a thread, the thread's card carries the proposal too, as **Plan item N** above the drafts, set off by a
+rule down its left edge, with the reply the planner would draft. Where it proposes a `change` and a worker's draft
+already waits on the same thread, it says so: the plan's resume writes a new reply there, and sending the draft first
+answers ahead of it. Both may go, or one; the page won't pick for you. A review, or an item with no thread on this page,
+shows its proposed reply in its row instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it
+stands, as plain text, so an enthusiastic `<img>` in a coworker's comment stays a string of characters, in the rows as
+in the file.
 
 A plan goes `stale` when the PR moves after it was written: a new comment or reply, an edit, a resolved thread, a new
 head, or a check that changed its mind. The panel lists each change, in the same words `canopy show` uses. The loop
 plans again once the PR has been quiet for `policy.feedback_quiet_minutes`, so a reviewer typing ten comments in five
 minutes gets one new plan, not ten.
 
-To approve, tick the items the resume should address and press the button: **Approve whole** with every box ticked,
-**Approve 2 of 3** otherwise. Hover it for the command it is, `canopy plan KEY --approve`, with `--item` or `--leave`
-for the ones you picked. Anything you write in **Your words, for its resume** goes after the message the approval
-writes on the ticket, which names the items to address and to leave by number, never by quoting them. Approving a
-stale plan is refused once, naming what changed, so you approve it knowing; press again and it's approved as it is,
-and the new feedback waits for the next plan. An approved plan can be approved again, with other boxes or other
-words, until its resume starts. To send the planner back instead, reply on the ticket.
+To approve, tick the items the resume should act on and press the button: **Approve whole** with every box ticked,
+**Approve 2 of 3** otherwise, and nothing at all with none ticked, or while the plan's file has gone missing, in which
+case the panel says so and the way out is a reply on the ticket asking for a new plan. Ticking a `leave` item approves
+leaving it be. An item you untick is **for the next plan**, which is not the same thing at all: its resume does nothing
+about it, and the next plan gets it to propose again. Each such row says so, and so does its thread's card. Hover the
+button for the command it is, `canopy plan KEY --approve`, with `--item` naming the ones you ticked or `--leave` the
+ones you didn't, whichever list is shorter. Yes, the flag says leave; the page doesn't, since a `leave` proposal already
+means something else. Anything you write in **Your words, for its resume** goes after the message the approval writes
+on the ticket, which names the items to address and those for the next plan by number, never by quoting them.
+
+A stale plan's button reads **Approve stale plan**, and the first press is refused by design, so you approve it knowing
+what changed: the panel says so calmly, not in red, and the button becomes **Approve as it is**. Press it and the plan
+is approved as it stands, and the new feedback waits for the next plan. An approval done gets the band an approved
+ticket plan gets, with its leaf and the way back to Attention, and clears your words; the button rests as **Approve
+again** until you tick other boxes or write other words, so the send key cannot approve it twice by accident. Approving
+again is allowed until its resume starts. To send the planner back instead, reply on the ticket.
 
 ## When canopy reviews
 
@@ -167,6 +191,12 @@ A review of a new commit isn't starting from scratch: it reads canopy's last fin
 and every finding you didn't dismiss, and checks whether each still holds. A finding the worker fixed stops coming back,
 and one it didn't is reported again. It still reads the whole change, though. Being told where the last reviewer
 looked is useful; being told where not to look is how a bug lives through three reviews.
+
+A later review also gets no credit for finding old news. A finding on lines nothing has changed since the PR's first
+review, which read them, is held for you the same way, under `review late`: it starts no resume, so a reviewer that
+turns up a few more old bugs each round can't keep the loop spinning. canopy holds it only when git can place it,
+never a **blocking** one, and only on the loop's own PRs. Send it if it belongs in this PR, or dismiss it if it can
+wait for one of its own.
 
 The reviewer is its own agent, so give it another model than your workers', `runtime.models.reviewer` in your config
 (not a `--model` in its command, which canopy refuses, since it would override the choice unseen): a second model

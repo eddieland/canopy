@@ -126,16 +126,16 @@ test.describe('in a narrow window', () => {
         await expect(sheet).toHaveCount(0)
     })
 
-    test('/spend?days=30 names its days whole, centered under their bars', async ({ page }) => {
-        await page.goto('spend?days=30')
+    test('/reports/spend?days=30 names its days whole, centered under their bars', async ({ page }) => {
+        await page.goto('reports/spend?days=30')
         await settled(page)
         await expectSpendAxisWhole(page, 6)
     })
 
-    test("/spend?days=30 keeps the dearest day's total inside the chart when today is the dearest", async ({
+    test("/reports/spend?days=30 keeps the dearest day's total inside the chart when today is the dearest", async ({
         page,
     }) => {
-        await page.goto('spend?days=30')
+        await page.goto('reports/spend?days=30')
         await settled(page)
         // The mock prices today alone, the last of 30 bars, each narrower than the total over it. Centered, a total of
         // $1,234.56 would overhang the bar by more than the chart's padding, so on the last bar it is flush with the
@@ -190,7 +190,7 @@ for (const width of [HALF.width, 1024]) {
 
         for (const days of [7, 30]) {
             test(`the By day table keeps 0.75rem between its columns over ${days} days`, async ({ page }) => {
-                await page.goto(`spend?days=${days}`)
+                await page.goto(`reports/spend?days=${days}`)
                 await settled(page)
                 const gaps = await page.getByTestId('spend-table').evaluate((table) =>
                     [...table.querySelectorAll('tr')].flatMap((row) => {

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import tomllib
+from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -76,6 +77,17 @@ def _check_name(value: str) -> str:
     return value
 
 
+def _impact_path(value: str) -> str:
+    # Compared with the paths git names, which are from the root, by whole components (`canopy.reviews.impact`).
+    parts = value.removesuffix("/").split("/")
+    if not value.isprintable() or value.startswith("/") or any(p in {"", ".", ".."} for p in parts):
+        raise ValueError(
+            "must be a path from the repository's root, such as '.agents/' or 'docs/TRUST_MODEL.md', with no leading "
+            "'/', empty part, '.', or '..'",
+        )
+    return value
+
+
 def _url(value: str) -> str:
     error = url_error(value)
     if error is not None:
@@ -99,6 +111,8 @@ class _RepoTable(_Table):
     branch_url: Annotated[StrictStr, link_template(BRANCH_NAME)] | None = None
     # The checks that are not CI: contexts that stay pending until a person acts (DESIGN §30).
     human_checks: tuple[Annotated[StrictStr, AfterValidator(_check_name)], ...] = ()
+    # Paths whose change makes a review high impact, beside CI's workflows, which no entry removes (DESIGN §21).
+    high_impact_paths: tuple[Annotated[StrictStr, AfterValidator(_impact_path)], ...] = ()
 
 
 class _Map(_Table):
@@ -117,6 +131,9 @@ class Repo:
     branch_url: str = ""
     #: The contexts that are not CI, by name: each stays pending until a person acts (DESIGN §30).
     human_checks: AbstractSet[str] = field(default_factory=frozenset[str])
+    #: The paths from the root, each covering itself and everything under it, whose change makes a review of this
+    #: repository `high` impact. They add to `.github/workflows/`, which covers every repository (DESIGN §21).
+    high_impact_paths: Sequence[str] = ()
 
     @property
     def cloned(self) -> bool:
@@ -261,6 +278,7 @@ def load(root: Path) -> Workspace:
             summary=table.summary,
             branch_url=github_branch_url(table.url) if table.branch_url is None else table.branch_url,
             human_checks=frozenset(table.human_checks),
+            high_impact_paths=table.high_impact_paths,
         )
         for name, table in sorted(parsed.repos.items())
     )

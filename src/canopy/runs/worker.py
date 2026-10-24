@@ -50,6 +50,7 @@ from canopy.core import (
     plans,
     pools,
     replies,
+    review_answers,
     review_diff,
     run_models,
     run_offers,
@@ -65,6 +66,8 @@ from canopy.runtime import project_config, stdout
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
+    from collections.abc import Set as AbstractSet
+
     from canopy.core import records
     from canopy.core.context import Context
 
@@ -162,7 +165,7 @@ class PlanResult(BaseModel):
 
 
 class FeedbackItem(BaseModel):
-    """One item a feedback plan's result names: an observed id, what it proposes, and the reply it would draft."""
+    """One item a feedback plan's result names: its id, what it proposes, and the reply it would draft."""
 
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
@@ -191,6 +194,8 @@ class Outcome:
     drafts: drafts.Fields | None = None
     #: The follow-up tickets the worker reported, checked: those to record, and those refused (DESIGN §18).
     follow_ups: follow_ups.Checked | None = None
+    #: What a resume's worker answered of the review findings it was handed, checked (DESIGN §21).
+    answers: review_answers.Checked | None = None
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11).
@@ -291,11 +296,14 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     """Write what the run reported beside its result, in the transaction that closes it.
 
     That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), with the event that tells the sinks of
-    them, so a run reconcile closed first writes none.
+    them, so a run reconcile closed first writes none. So are its answers to review findings (§21), but only from a
+    run that ended `done` or `blocked`: one that did not finish its work cannot say what it fixed.
     """
     run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
     drafts.record_run(ctx.conn, run_id, outcome.drafts)
+    if outcome.status in (RunStatus.DONE, RunStatus.BLOCKED):
+        review_answers.record(ctx.conn, run_id, outcome.answers)
     if outcome.follow_ups is not None and outcome.follow_ups.recorded:
         key = str(run["ticket_key"])
         recorded = follow_ups.record(ctx.conn, outcome.follow_ups, parent=key, run_id=run_id)
@@ -637,8 +645,9 @@ def _feedback_plan(
     """Run the planner on what came back to the run's PRs, and write and record the feedback plan (DESIGN §32).
 
     Each slot is checked out at the ticket's branch, as its PR's head was pushed. Each PR is read whole through the
-    `vcs` source first: the items the planner may cover are what that read observed, written to its desk with a copy
-    of the feedback plan this one replaces, if the ticket has one, and what changed on its PRs since that plan saw them.
+    `vcs` source first: the items the planner may cover are what that read observed, its reviews and threads, failed
+    checks, and conflicts, written to its desk with a copy of the feedback plan this one replaces, if the ticket has
+    one, and what changed on its PRs since that plan saw them.
     An item the result names that it was not given is refused, with a harness note; the rest are recorded with the
     plan, and with what the read saw, its snapshot (DESIGN §32, Planning again).
 
@@ -661,8 +670,10 @@ def _feedback_plan(
     read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
     if not prs or read.failure is not None:
         raise SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
-    offered = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
-    snapshot = feedback_items.take(ctx.conn, prs, offered)
+    reviews = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
+    snapshot = feedback_items.take(ctx.conn, prs, reviews)
+    human = {units[s.repo]: _human_checks(ctx, s.repo) for s in slots if s.repo in units}
+    offered = [*reviews, *feedback_items.raised(ctx.conn, key, prs, human)]
     desk_files = _feedback_desk(ctx, key, offered) | _place_attachments(run, slots, _attachment_copies(ctx, run))
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.plan_cmd, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
@@ -681,7 +692,17 @@ def _feedback_plan(
     return _record_feedback_plan(ctx, run, parsed, written.text, matched=matched, snapshot=snapshot, log=log)
 
 
-def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Offered]) -> dict[str, str]:
+def _human_checks(ctx: Context, repo: str) -> AbstractSet[str]:
+    """The checks repository `repo` names `human_checks`: they wait on a person, so no feedback plan's items.
+
+    Returns:
+        Their names; none for a repository the map does not have.
+    """
+    found = ctx.workspace.repo(repo)
+    return found.human_checks if found is not None else frozenset[str]()
+
+
+def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Item]) -> dict[str, str]:
     """Return the files a feedback planner's desk holds, each data to it (DESIGN §32).
 
     Returns:
@@ -775,6 +796,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     # a side output must not cost the run its PRs (DESIGN §18).
     filed = _check_follow_ups(ctx, run, follow_ups.parse(text)) if parsed is not None else None
     filed_note = filed.note() if filed is not None else ""
+    answered = _check_answers(ctx, run, text) if parsed is not None else None
+    answered_note = answered.note() if answered is not None else ""
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
@@ -812,8 +835,17 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         committed += checkpoint.unmarked(slot.git, branch, start, slot.base, marks)
     _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
-    notes = "; ".join(n for n in [note, *committed, filed_note] if n)
-    return Outcome(status, parsed, notes, memory=remembered, head=head, drafts=drafted, follow_ups=filed)
+    notes = "; ".join(n for n in [note, *committed, filed_note, answered_note] if n)
+    return Outcome(
+        status,
+        parsed,
+        notes,
+        memory=remembered,
+        head=head,
+        drafts=drafted,
+        follow_ups=filed,
+        answers=answered,
+    )
 
 
 def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow_ups.Checked:
@@ -829,6 +861,17 @@ def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow
         repos={r.name for r in ctx.workspace.repos},
         limit=ctx.config.policy.max_follow_ups,
     )
+
+
+def _check_answers(ctx: Context, run: sqlite3.Row, text: str) -> review_answers.Checked | None:
+    """Check the answers a worker gave to the review findings it was handed, which only a resume is (DESIGN §21).
+
+    Returns:
+        The answers to record when the run is closed, and those refused; None for a run of another kind.
+    """
+    if run["kind"] != RunKind.RESUME:
+        return None
+    return review_answers.check(ctx.conn, review_answers.parse(text), key=str(run["ticket_key"]))
 
 
 def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:

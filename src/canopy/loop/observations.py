@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 #: How many new items a subject shows, oldest first, before the rest are counted: a ticket's comments, and a unit's
 #: reviews and review comments together. The rest stay new, so a later tick shows them. Chosen conservatively, for the
-#: operator to set from the measurement's ticks (ROADMAP M37, Open): ten comments at the mirror's bound are about
+#: operator to set from the measurement's ticks (ROADMAP M37, Open): ten comments at their bound are about
 #: 5,000 tokens, and a busier subject waits a tick rather than swelling every tick's block.
 MAX_NEW_ITEMS = 10
 #: Why a ticket's subject is unobserved when no source reads tickets.
@@ -109,7 +109,7 @@ class BlockerState(TypedDict):
 
 
 class CommentState(TypedDict):
-    """A tracker comment, cut and marked as a mirrored one is. `truncated` only when it was cut.
+    """A tracker comment, cut and marked where it was recorded. `truncated` only when it was cut.
 
     `authorized`: its author is in `trust.authorized_repliers`. `worker`: it carries the workers' marks (D069). Both
     are decided in code.
@@ -417,7 +417,7 @@ class Reader:
         if not self.units_of.get(key):
             found["body"] = seen.body
         record = self.journal[key]
-        new = past_comments(self.comments.get(key, []), record.last_comment_id, record.last_mirrored_id)
+        new = past_comments(self.comments.get(key, []), record.last_comment_id)
         found["comments"] = [self._comment(c) for c in new[:MAX_NEW_ITEMS]]
         if len(new) > MAX_NEW_ITEMS:
             found["more_comments"] = len(new) - MAX_NEW_ITEMS
@@ -659,9 +659,9 @@ def _checks(checks: Iterable[records.ObservedCheck], human: AbstractSet[str]) ->
             people.append({"name": c.name, "status": c.status, "conclusion": c.conclusion})
         elif c.status is not CheckStatus.COMPLETED:
             found["pending"].append(c.name)
-        elif c.conclusion in phases.PASSED:
+        elif c.conclusion in observe.PASSED:
             found["passed"] += 1
-        elif c.conclusion is not None and c.conclusion in phases.FAILED:
+        elif c.conclusion is not None and c.conclusion in observe.FAILED:
             found["failed"].append({"name": c.name, "conclusion": c.conclusion, "run_id": c.run_id, "url": c.url})
         else:
             stale.append(c.name)

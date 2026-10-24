@@ -1,6 +1,8 @@
 """The attention list rendered to `attention.md`, and its diff piped to `notify.cmd` (DESIGN §6, §14)."""
 
+import json
 import os
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from itertools import starmap
 from pathlib import Path
@@ -8,10 +10,11 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import db
+from canopy.core import db, review_runs
 from canopy.core.config import ConfigError, load
+from canopy.core.vocab import Decider, ReviewRunStatus
 from canopy.loop import attention
-from tests.canopy.helpers import messages, waits
+from tests.canopy.helpers import KEY, context, in_tick, messages, operator, seen, waits
 from tests.canopy.scenario_helpers import Scenario, raises, skips_tick
 from tests.conftest import CanopyEnv
 
@@ -89,6 +92,45 @@ def test_notify_gets_new_and_resolved_items_once(scenario: Scenario, canopy_env:
     assert sorted(str(r[0]) for r in rows) == ["PROJ-3", "PROJ-4"]
 
 
+def reviewed(conn: sqlite3.Connection, logs: Path, key: str, impact: str, sha: str) -> None:
+    """A `done` review of `key`'s PR at `sha`, the reviewer, or the harness, judging its impact `impact`."""
+    with in_tick(conn, ends_ok=True) as tick_id:
+        run_id = review_runs.insert_review_run(
+            conn,
+            tick_id=tick_id,
+            pr_url=f"https://example.test/acme/repo/pull/{key}",
+            sha=sha,
+            ticket=key,
+            repo=None,
+            purpose="own",
+            logs_dir=logs,
+        )
+        assert db.claim_run(conn, "review_runs", run_id, os.getpid())
+        report = {"status": "done", "verdict": "clean", "impact": impact}
+        assert db.finish_run(conn, "review_runs", run_id, ReviewRunStatus.DONE, json.dumps(report))
+
+
+def test_an_item_whose_pr_has_a_high_impact_review_reaches_the_operator_first(
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    notified: Path,
+    tmp_path: Path,
+) -> None:
+    """The latest commit reviewed decides: PROJ-5's `high` was of a commit a later review read again (DESIGN §21)."""
+    reviewed(scenario.conn, tmp_path, "PROJ-3", "normal", "a" * 40)
+    reviewed(scenario.conn, tmp_path, "PROJ-4", "high", "b" * 40)
+    reviewed(scenario.conn, tmp_path, "PROJ-5", "high", "c" * 40)
+    reviewed(scenario.conn, tmp_path, "PROJ-5", "normal", "d" * 40)
+    scenario.tick(*recorded(("PROJ-3", "needs_reviewer"), ("PROJ-4", "ready_to_merge"), ("PROJ-5", "needs_reviewer")))
+    [message] = messages(notified)
+    assert message.splitlines()[1:4] == [
+        "+ PROJ-4 ready_to_merge: PROJ-4 detail",
+        "+ PROJ-3 needs_reviewer: PROJ-3 detail",
+        "+ PROJ-5 needs_reviewer: PROJ-5 detail",
+    ]
+    assert [i.ticket_key for i in attention.listed(context(canopy_env))] == ["PROJ-4", "PROJ-3", "PROJ-5"]
+
+
 def test_failed_notify_is_retried_next_tick(scenario: Scenario, canopy_env: CanopyEnv, notified: Path) -> None:
     needs_reviewer = recorded(("PROJ-3", "needs_reviewer"))
     with mock.patch.dict(os.environ, {"NOTIFY_EXIT": "1"}):
@@ -129,6 +171,81 @@ def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
     # The overseer sees the world again and still records the item: it was never gone, so it is not new.
     scenario.tick(*recorded(("PROJ-3", "needs_reviewer")), dry_run=True)
     assert len(messages(notified)) == 1
+
+
+def ok_tick(conn: sqlite3.Connection, *decided: tuple[str | None, str], by: Decider = Decider.OVERSEER) -> int:
+    """An `ok` tick that records each `(key, action)` in `decided`, by `by`, an attention item as `attention:<reason>`.
+
+    Returns:
+        Its id.
+    """
+    with in_tick(conn, ends_ok=True) as tick_id:
+        for key, action in decided:
+            db.record_decision(conn, tick_id, key, action, f"{key} detail", decider=by)
+    return tick_id
+
+
+def open_items(conn: sqlite3.Connection) -> list[tuple[str | None, str]]:
+    return [(i.ticket_key, i.reason) for i in attention.current(conn)]
+
+
+def test_an_overseer_item_stands_through_a_tick_not_given_its_ticket_and_goes_when_one_leaves_it_out(
+    conn: sqlite3.Connection,
+) -> None:
+    ok_tick(conn, (KEY, "attention:needs_author"))
+    since = attention.current(conn)[0].since
+    # The harness decided it, so the overseer was not shown it: its refusal `decided` does not give it the ticket.
+    ok_tick(conn, (KEY, "wait"), by=Decider.HARNESS)
+    ok_tick(conn, (KEY, "refused:decided"), ("PROJ-2", "wait"))
+    [item] = attention.current(conn)
+    assert (item.ticket_key, item.reason, item.since) == (KEY, "needs_author", since)
+    assert attention.for_overseer(conn, decided={KEY}) == []
+    ok_tick(conn, (KEY, "wait"))
+    assert open_items(conn) == []
+
+
+def test_an_overseer_item_recorded_again_keeps_its_age_and_takes_its_new_detail(conn: sqlite3.Connection) -> None:
+    ok_tick(conn, (KEY, "attention:needs_author"))
+    since = attention.current(conn)[0].since
+    ok_tick(conn, ("PROJ-2", "wait"))
+    with in_tick(conn, ends_ok=True) as tick_id:
+        db.record_decision(conn, tick_id, KEY, "attention:needs_author", "reworded")
+    [item] = attention.current(conn)
+    assert (item.detail, item.since) == ("reworded", since)
+
+
+@pytest.mark.parametrize("how", ["done", "stopped"])
+def test_an_overseer_item_goes_once_its_ticket_is_done_or_stopped(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    how: str,
+) -> None:
+    seen(conn, canopy_env, KEY, "PROJ-2")
+    ok_tick(conn, (KEY, "attention:needs_author"), ("PROJ-2", "attention:needs_author"))
+    if how == "done":
+        db.change_ticket(conn, KEY, "done", 1)
+        conn.commit()
+    else:
+        assert operator("start", KEY) == 0
+        assert open_items(conn) == [(KEY, "needs_author"), ("PROJ-2", "needs_author")]
+        assert operator("stop", KEY) == 0
+    assert open_items(conn) == [("PROJ-2", "needs_author")]
+
+
+def test_the_harnesss_item_goes_the_first_ok_tick_that_does_not_record_it(conn: sqlite3.Connection) -> None:
+    # Its cause is read again every tick, whatever reason it names: an `attempt_limit` its own dispatch was refused.
+    ok_tick(conn, (KEY, "attention:crashed"), ("PROJ-2", "attention:attempt_limit"), by=Decider.HARNESS)
+    assert open_items(conn) == [(KEY, "crashed"), ("PROJ-2", "attempt_limit")]
+    ok_tick(conn)
+    assert open_items(conn) == []
+
+
+def test_an_overseer_item_about_a_pr_goes_the_next_tick_the_overseer_ran_without_it(conn: sqlite3.Connection) -> None:
+    with in_tick(conn, ends_ok=True) as tick_id:
+        db.record_decision(conn, tick_id, None, "attention:review_failed", "run 3", pr="https://example.test/pr/3")
+    assert open_items(conn) == [("pr:https://example.test/pr/3", "review_failed")]
+    ok_tick(conn)
+    assert open_items(conn) == []
 
 
 def test_notify_cmd_takes_no_prompt_placeholder(canopy_env: CanopyEnv) -> None:

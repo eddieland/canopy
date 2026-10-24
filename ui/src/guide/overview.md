@@ -21,7 +21,7 @@ The guide comes in four parts, in the order you'll need them.
 - **Your work**: the pages where the loop waits on you. [Attention](attention) first, then [Tickets](tickets),
   [Plans](plans), and [Pull requests and reviews](pull-requests), with [Code review](code-review) on how to spend
   your reviewing time when agents write most of the code.
-- **The loop**: the pages where you watch it work. [Runs and worktrees](runs), [Ticks and spend](ticks),
+- **The loop**: the pages where you watch it work. [Runs and worktrees](runs), [Ticks](ticks), [Reports](reports),
   [Chores](chores), [Memory](memory), and [Settings](settings).
 - **Reference**: the [Glossary](glossary), every word the other pages assume you know, for when one of them does.
 
@@ -39,14 +39,15 @@ The nav on the left lists them, most used first. If you learn only one, learn At
   runs and reviews.
 - [Reviews](/reviews): canopy's PR reviews, kept in the journal, with their findings pinned to the diff. One of a
   coworker's PR is also a draft you may publish as your own; nothing posts until you do.
-- [Runs](/runs): every agent canopy runs, workers, reviews, and chores alike, the ones running now first, and how
-  full each limit is. A worker run's page has its session's transcript. When you want to know what an agent was
+- [Runs](/runs): every agent canopy runs, workers, reviews, chores, and tasks alike, the ones running now first, and
+  how full each limit is. A worker run's page has its session's transcript. When you want to know what an agent was
   thinking, this is the receipt.
 - [Chores](/chores): scheduled agents that look at your CI, PRs, tracker, or anything else they can read, and report
   what needs you. Each chore's runs and findings are here, and Try now on its page runs it at once, whatever its
   schedule.
-- [Spend](/spend): what agent runs cost each day, and what idle ticks spent deciding there was nothing to do. Some of
-  the priciest answers are "no".
+- [Reports](/reports): what canopy cost and got done month by month, in dollars and tokens, and under it the spend
+  page: what agent runs cost each day, and what idle ticks spent deciding there was nothing to do. Some of the
+  priciest answers are "no".
 - [Ticks](/ticks): the overseer's latest ticks, and what each one decided.
 - [Worktrees](/worktrees): each repository's pool, its slots, and what's holding them.
 - [Memory](/memory): what workers remember, the ticket notes and the lessons, and which runs read them. The header's

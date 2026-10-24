@@ -13,7 +13,7 @@ export const SECTIONS = [
     '/reviews',
     '/runs',
     '/chores',
-    '/spend',
+    '/reports',
     '/ticks',
     '/worktrees',
     '/memory',
@@ -34,7 +34,7 @@ export const SECTION_LABEL: Record<Section, string> = {
     '/reviews': 'Reviews',
     '/chores': 'Chores',
     '/ticks': 'Ticks',
-    '/spend': 'Spend',
+    '/reports': 'Reports',
     '/memory': 'Memory',
     '/settings': 'Settings',
 }
@@ -52,7 +52,7 @@ export const SECTION_TEXT: Record<Section, string> = {
     '/reviews': 'text-section-reviews',
     '/chores': 'text-section-chores',
     '/ticks': 'text-section-ticks',
-    '/spend': 'text-section-spend',
+    '/reports': 'text-section-reports',
     '/memory': 'text-section-memory',
     '/settings': 'text-section-settings',
 }
@@ -68,7 +68,7 @@ export const SECTION_TINT: Record<Section, string> = {
     '/reviews': 'bg-section-reviews/16',
     '/chores': 'bg-section-chores/16',
     '/ticks': 'bg-section-ticks/16',
-    '/spend': 'bg-section-spend/16',
+    '/reports': 'bg-section-reports/16',
     '/memory': 'bg-section-memory/16',
     '/settings': 'bg-section-settings/16',
 }
@@ -84,7 +84,7 @@ export const SECTION_FILL: Record<Section, string> = {
     '/reviews': 'bg-section-reviews',
     '/chores': 'bg-section-chores',
     '/ticks': 'bg-section-ticks',
-    '/spend': 'bg-section-spend',
+    '/reports': 'bg-section-reports',
     '/memory': 'bg-section-memory',
     '/settings': 'bg-section-settings',
 }

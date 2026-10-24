@@ -228,8 +228,43 @@ def test_a_ticks_derivations_go_outside_the_window_after_journal_days(
     assert (kinds["derivations"]["count"], kinds["derivations"]["removable"]) == (3, 2)
 
 
+def test_a_kept_check_run_goes_after_journal_days_once_its_pr_is_seen_past_its_head(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Only a check run at its PR's head is read (DESIGN §35), so one goes once its PR moved on or ended."""
+    conn = canopy_env.journal()
+    now = datetime.now(UTC)
+    old = earlier(now, 200)
+    prs = [
+        ("moved", "bbb", "open"),
+        ("merged", "aaa", "merged"),
+        ("closed", "aaa", "closed"),
+        ("at-head", "aaa", "open"),
+        ("no-head", None, "open"),
+    ]
+    for name, head, state in prs:
+        conn.execute(
+            "INSERT INTO observed_prs (url, repository, number, head_sha, state, draft, observed_at) "
+            "VALUES (?, 'o/r', 1, ?, ?, 0, ?)",
+            (f"https://x/{name}", head, state, old),
+        )
+    runs = [(*(f"https://x/{name}" for name, _, _ in prs), "https://x/unread"), ("https://x/moved", "https://x/merged")]
+    for run_id, (pr, observed_at) in enumerate([*((pr, old) for pr in runs[0]), *((pr, db.now()) for pr in runs[1])]):
+        conn.execute(
+            "INSERT INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at) "
+            "VALUES (?, ?, 'ci', 'aaa', 'failure', ?)",
+            (pr, run_id, observed_at),
+        )
+    conn.commit()
+    kinds = dry_run(capsys)
+    # The old runs of the moved, merged, and closed PRs go; one at its PR's head, one of a PR read with no head, one of
+    # a PR no read recorded, and the recent ones stay.
+    assert (kinds["check runs"]["count"], kinds["check runs"]["removable"]) == (8, 3)
+
+
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
-@pytest.mark.parametrize("flag", ["--dry-run", "--vacuum", "--git"])
+@pytest.mark.parametrize("flag", ["--dry-run", "--vacuum", "--git", "--caches"])
 def test_an_agent_cannot_run_gc(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
@@ -241,14 +276,14 @@ def test_an_agent_cannot_run_gc(
     assert "gc refused (inside_run)" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("flags", [[], ["--dry-run", "--vacuum"], ["--vacuum", "--git"]])
-def test_gc_takes_one_of_dry_run_vacuum_and_git(
+@pytest.mark.parametrize("flags", [[], ["--dry-run", "--vacuum"], ["--vacuum", "--git"], ["--git", "--caches"]])
+def test_gc_takes_one_of_dry_run_vacuum_git_and_caches(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
     flags: list[str],
 ) -> None:
     assert main(["gc", *flags]) == 2
-    assert "give one of `--dry-run`, `--vacuum`, and `--git`" in capsys.readouterr().err
+    assert "give one of `--dry-run`, `--vacuum`, `--git`, and `--caches`" in capsys.readouterr().err
 
 
 def test_the_text_report(snapshot: SnapshotAssertion) -> None:

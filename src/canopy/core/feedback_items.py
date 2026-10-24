@@ -4,7 +4,9 @@ An item is a review, or a thread of review comments, on one of a ticket's PRs, a
 whole (DESIGN §29, §30). A thread is one item: the comment a feedback plan of the ticket covered, or else its first
 comment, with each other comment on it a reply given beside it, so a reviewer's "never mind" or the PR author's "won't
 do" reaches the planner as an answer to the item, never as work of its own. The operator's replies sent through canopy,
-a worker's comments (D069), pending reviews, resolved threads, and reviews that say nothing are neither.
+a worker's comments (D069), pending reviews, resolved threads, and reviews that say nothing are neither. A failed check
+at a PR's head, but one its repository's `human_checks` names, and the PR's conflict with its base, are items too
+(`raised`), by ids canopy gives them (`check_id`, `conflict_id`), since the source observes none.
 
 When a feedback plan is recorded, what its run's read saw is recorded with it (`take`, `record`): each PR's head, each
 check's conclusion at that head, and each item and reply the planner was given, by id with a SHA-256 of its body, never
@@ -25,11 +27,12 @@ from dataclasses import astuple, dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import db, drafts, records, sql
-from canopy.core.vocab import CheckConclusion, MoveKind, ReviewItem, ReviewState, RunStatus
+from canopy.core import db, drafts, observe, records, sql
+from canopy.core.vocab import CheckConclusion, CheckStatus, MoveKind, PlanItem, ReviewItem, ReviewState, RunStatus
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Set as AbstractSet
     from datetime import datetime
 
     from canopy.core.config import Trust
@@ -41,8 +44,11 @@ CHANGES = ".canopy-feedback-changes.json"
 #: The most changes a refusal names one by one.
 MAX_SAID = 10
 
-#: An item or a reply by its PR, its kind, and the id the `vcs` source observed.
-type Key = tuple[str, ReviewItem, int]
+#: An item or a reply by its PR, its kind, and its id: the one the `vcs` source observed, or the one canopy gave it.
+type Key = tuple[str, PlanItem, int]
+#: How many bits of a SHA-256 a failed check's or a conflict's id takes: few enough to stay an exact number in JSON and
+#: JavaScript, and enough that two of a PR's never share one.
+_ID_BITS = 48
 
 
 class Changed(StrEnum):
@@ -60,6 +66,8 @@ class Changed(StrEnum):
     EDITED = "edited"
     #: A thread the plan covers was resolved.
     RESOLVED = "resolved"
+    #: The PR came to conflict with its base, or no longer does, at a head that did not move.
+    CONFLICT = "conflict"
 
 
 @dataclass(frozen=True)
@@ -82,10 +90,34 @@ class Offered:
     path: str | None
     line: int | None
     outdated: bool | None
-    #: Its text, cut as a mirrored comment's is: model or human text, data to the planner, whoever wrote it.
+    #: Its text, cut as a tracker comment's is: model or human text, data to the planner, whoever wrote it.
     body: str
     #: An item's thread's other comments, oldest first, each given beside it as a reply: none for a reply or a review.
     replies: Sequence[Offered] = ()
+
+
+@dataclass(frozen=True)
+class Raised:
+    """A failed check at one of a plan's PRs' heads, or the PR's conflict with its base: an item with an id canopy gave.
+
+    Neither has an author, so neither has a reply; a check's name and link are as the `vcs` source observed them, data
+    to the planner.
+    """
+
+    pr_url: str
+    item: PlanItem
+    id: int
+    head_sha: str
+    #: A check's name, its conclusion, and its link; None for a conflict.
+    name: str | None = None
+    conclusion: CheckConclusion | None = None
+    url: str | None = None
+    #: The base branch a conflict is with, as the reader said; None for a check.
+    base_ref: str | None = None
+
+
+#: Anything a feedback plan may cover: a review item, or a failed check or a conflict.
+type Item = Offered | Raised
 
 
 @dataclass(frozen=True)
@@ -96,8 +128,10 @@ class Snapshot:
     heads: Mapping[str, str | None]
     #: Each check's conclusion at its PR's head, by PR and check name.
     checks: Mapping[tuple[str, str], CheckConclusion | None]
-    #: The items the planner was given, each with its replies.
+    #: The review items the planner was given, each with its replies.
     given: Sequence[Offered]
+    #: Whether each PR conflicted with its base, by URL; None where its host had not said.
+    conflicts: Mapping[str, bool | None]
 
 
 @dataclass(frozen=True)
@@ -122,7 +156,7 @@ class Change:
     #: A new or edited item's or reply's body hash as the reads hold it now: what tells one edit from the next.
     body_sha256: str | None = None
 
-    def said(self) -> str:
+    def said(self) -> str:  # noqa: PLR0911 - one return for each kind of change
         """Return the change in the harness's words, for a refusal or a note.
 
         Returns:
@@ -144,6 +178,8 @@ class Change:
                 return f"{what} on {pr}{answering} was edited"
             case Changed.RESOLVED:
                 return f"item {self.id}'s thread on {pr} was resolved"
+            case Changed.CONFLICT:
+                return f"{pr} now conflicts with its base" if self.now else f"{pr} no longer conflicts with its base"
             case _:
                 assert_never(self.changed)
 
@@ -162,7 +198,7 @@ class Change:
             found |= {"author": self.author, "pr_author": self.pr_author, "trusted": self.trusted}
         if self.name is not None:
             found["name"] = self.name
-        if self.changed in (Changed.HEAD, Changed.CHECK):
+        if self.changed in (Changed.HEAD, Changed.CHECK, Changed.CONFLICT):
             found |= {"was": self.was, "now": self.now}
         return found
 
@@ -172,7 +208,7 @@ class Change:
 
 
 def offered(conn: sqlite3.Connection, trust: Trust, key: str, prs: Sequence[str]) -> list[Offered]:
-    """Return each item on `prs` a feedback plan of `key` may cover, with its replies, as the journal's reads hold them.
+    """Return each review item on `prs` a feedback plan of `key` may cover, with its replies, as the reads hold them.
 
     That is every review with text or asking for changes, and every thread not resolved, but those a `resume` went
     ahead on whose body and replies are as the plan that covered them saw them. Feedback is not split by reviewer: the
@@ -194,19 +230,96 @@ def offered(conn: sqlite3.Connection, trust: Trust, key: str, prs: Sequence[str]
     return found
 
 
-def items_file(items: Iterable[Offered]) -> str:
+def raised(
+    conn: sqlite3.Connection,
+    key: str,
+    prs: Sequence[str],
+    human: Mapping[str, AbstractSet[str]],
+) -> list[Raised]:
+    """Return each failed check and conflict on `prs` a feedback plan of `key` may cover, as the reads hold them.
+
+    A failed check is one completed red at its PR's head, but one `human` names for that PR: those wait on a person and
+    are not CI (DESIGN §30). A conflict is the PR's with its base, while its host says so. A `resume` that went ahead
+    on one handled it while the PR's head is where it was, since its id names that head.
+
+    Returns:
+        The items, by PR in the order given, each PR's checks by name and then its conflict.
+    """
+    handled = _Handled(conn, key)
+    found: list[Raised] = []
+    for pr in prs:
+        observed = records.fetch_one(
+            conn,
+            records.ObservedPr,
+            sql.select("*").from_("observed_prs").where("url = ?", pr),
+        )
+        if observed is None or observed.head_sha is None:
+            continue
+        head = observed.head_sha
+        skip = human.get(pr, frozenset[str]())
+        found.extend(
+            Raised(pr, PlanItem.CHECK, check_id(pr, head, c.name), head, c.name, c.conclusion, c.url)
+            for c in _checks_at(conn, pr, head)
+            if c.name not in skip and c.status is CheckStatus.COMPLETED and c.conclusion in observe.FAILED
+        )
+        if observe.conflicts(observed):
+            base = observed.base_ref
+            found.append(Raised(pr, PlanItem.CONFLICT, conflict_id(pr, head, base), head, base_ref=base))
+    return [r for r in found if not handled.has((r.pr_url, r.item, r.id))]
+
+
+def check_id(pr: str, head: str, name: str) -> int:
+    """Return the id canopy gives the check named `name` at `pr`'s `head`, as a feedback plan's item.
+
+    Returns:
+        A number below zero, the same on every read of that head.
+    """
+    return _raised_id(PlanItem.CHECK, pr, head, name)
+
+
+def conflict_id(pr: str, head: str, base: str | None) -> int:
+    """Return the id canopy gives `pr`'s conflict with its `base` at its `head`, as a feedback plan's item.
+
+    Returns:
+        A number below zero, the same on every read of that head against that base.
+    """
+    return _raised_id(PlanItem.CONFLICT, pr, head, base or "")
+
+
+def check_names(conn: sqlite3.Connection, plan_id: int) -> dict[tuple[str, int], str]:
+    """Return the name of each check a feedback plan saw at its PRs' heads, by PR and the id canopy gives it.
+
+    Returns:
+        The names, from the plan's snapshot; none for a plan recorded before snapshots were.
+    """
+    heads = records.fetch_all(
+        conn,
+        records.FeedbackPlanPr,
+        sql.select("*").from_("feedback_plan_prs").where("plan_id = ?", plan_id),
+    )
+    checks = records.fetch_all(
+        conn,
+        records.FeedbackPlanCheck,
+        sql.select("*").from_("feedback_plan_checks").where("plan_id = ?", plan_id),
+    )
+    at = {h.pr_url: h.head_sha for h in heads if h.head_sha is not None}
+    return {(c.pr_url, check_id(c.pr_url, at[c.pr_url], c.name)): c.name for c in checks if c.pr_url in at}
+
+
+def items_file(items: Iterable[Item]) -> str:
     """Return the desk's items file: each item as JSON, its replies beside it, all of it data to the planner."""
-    return json.dumps([_item_json(o) for o in items], indent=1)
+    return json.dumps([_item_json(o) if isinstance(o, Offered) else _raised_json(o) for o in items], indent=1)
 
 
 def take(conn: sqlite3.Connection, prs: Iterable[str], given: Sequence[Offered]) -> Snapshot:
-    """Return what the journal's latest reads hold of `prs`, with the items `given` to a planner: its snapshot.
+    """Return what the journal's latest reads hold of `prs`, with the review items `given` to a planner: its snapshot.
 
     Returns:
-        Each PR's head, the conclusion of each check at it, and the items given.
+        Each PR's head, the conclusion of each check at it, whether it conflicted, and the items given.
     """
     heads: dict[str, str | None] = {}
     checks: dict[tuple[str, str], CheckConclusion | None] = {}
+    conflicts: dict[str, bool | None] = {}
     for pr in prs:
         observed = records.fetch_one(
             conn,
@@ -215,17 +328,18 @@ def take(conn: sqlite3.Connection, prs: Iterable[str], given: Sequence[Offered])
         )
         head = None if observed is None else observed.head_sha
         heads[pr] = head
+        conflicts[pr] = None if observed is None else observe.conflicts(observed)
         for check in _checks_at(conn, pr, head):
             checks[pr, check.name] = check.conclusion
-    return Snapshot(heads=heads, checks=checks, given=given)
+    return Snapshot(heads=heads, checks=checks, given=given, conflicts=conflicts)
 
 
 def record(conn: sqlite3.Connection, plan_id: int, snapshot: Snapshot) -> None:
     """Record `snapshot` as what feedback plan `plan_id` saw. Call inside the transaction that records the plan."""
     sql.execute_many(
         conn,
-        sql.insert_rows("feedback_plan_prs", ("plan_id", "pr_url", "head_sha")),
-        [(plan_id, pr, head) for pr, head in snapshot.heads.items()],
+        sql.insert_rows("feedback_plan_prs", ("plan_id", "pr_url", "head_sha", "conflicted")),
+        [(plan_id, pr, head, snapshot.conflicts.get(pr)) for pr, head in snapshot.heads.items()],
     )
     sql.execute_many(
         conn,
@@ -250,7 +364,8 @@ def record(conn: sqlite3.Connection, plan_id: int, snapshot: Snapshot) -> None:
 def changes(conn: sqlite3.Connection, trust: Trust, plan: records.FeedbackPlan) -> list[Change]:
     """Return what changed on `plan`'s PRs since it saw them, as the journal's latest reads hold them (DESIGN §32).
 
-    A head that moved; a check whose conclusion at an unmoved head changed; a review or thread the plan was not given;
+    A head that moved; a check whose conclusion at an unmoved head changed, or a conflict with its base that came or
+    went there; a review or thread the plan was not given;
     a reply on a thread it was given, named as answering that thread's item; an item it covers edited or its thread
     resolved; and an item a `resume` went ahead on, edited since. A plan recorded before snapshots were has none.
 
@@ -393,7 +508,7 @@ def _move(change: Change) -> MoveKind | None:
             return MoveKind.HEAD
         case Changed.CHECK:
             return MoveKind.CHECK
-        case Changed.NEW | Changed.REPLY | Changed.EDITED | Changed.RESOLVED:
+        case Changed.NEW | Changed.REPLY | Changed.EDITED | Changed.RESOLVED | Changed.CONFLICT:
             return None
         case _:
             assert_never(change.changed)
@@ -512,7 +627,7 @@ class _Handled:
             .group_by("i.pr_url, i.item, i.item_id"),
         )
         #: The plan that last covered each handled item.
-        self._by: dict[Key, int] = {(str(r[0]), ReviewItem(r[1]), int(r[2])): int(r[3]) for r in rows}
+        self._by: dict[Key, int] = {(str(r[0]), PlanItem(r[1]), int(r[2])): int(r[3]) for r in rows}
         self._seen: dict[int, dict[Key, records.FeedbackPlanSeen]] = {}
 
     def still(self, thread: _Thread) -> bool:
@@ -529,6 +644,16 @@ class _Handled:
         if not seen:
             return True
         return all(_unchanged(row, seen) for row in (thread.row, *thread.replies))
+
+    def has(self, key: Key) -> bool:
+        """Whether a `resume` went ahead on the item `key`, which holds a failed check or a conflict handled.
+
+        Its id names the head it was at, so it stays handled until a push makes a new one.
+
+        Returns:
+            True when a plan a `resume` went ahead on covered it, and the approval left it in.
+        """
+        return key in self._by
 
     def seen_by(self, row: records.ObservedReview) -> Mapping[Key, records.FeedbackPlanSeen]:
         """What the plan that last covered `row`'s item, with a `resume` gone ahead on it, saw.
@@ -556,7 +681,7 @@ def _seen(conn: sqlite3.Connection, plan_id: int) -> dict[Key, records.FeedbackP
         records.FeedbackPlanSeen,
         sql.select("*").from_("feedback_plan_seen").where("plan_id = ?", plan_id),
     )
-    return {(r.pr_url, r.item, r.item_id): r for r in rows}
+    return {(r.pr_url, PlanItem(r.item), r.item_id): r for r in rows}
 
 
 def _unchanged(row: records.ObservedReview, seen: Mapping[Key, records.FeedbackPlanSeen]) -> bool:
@@ -570,11 +695,28 @@ def _unchanged(row: records.ObservedReview, seen: Mapping[Key, records.FeedbackP
 
 
 def _key(row: records.ObservedReview) -> Key:
-    return (row.pr_url, row.item, row.id)
+    return (row.pr_url, PlanItem(row.item), row.id)
 
 
 def _sha(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _raised_id(item: PlanItem, pr: str, head: str, what: str) -> int:
+    """The id canopy gives a failed check or a conflict, which has none of the `vcs` source's.
+
+    Returns:
+        The id.
+    """
+    # Below zero, so it never meets an observed review's or comment's id, which the connector contract holds to 1 and
+    # up (`observe`), in a plan's result line or wherever an item is named. Made of what the item is, its PR, the head,
+    # and the check's name or the base, and of nothing a read changes at that head, such as a check run's id or its
+    # time: every read of the same head names the same failure by the same id, so an item a `resume` handled stays
+    # handled, and one no plan covered is offered again as itself, until a push makes a new one. Two of a PR's sharing
+    # one, a chance near n²/2^49 for its n items, makes `feedback_plans.match` refuse that id with a note, so neither is
+    # planned until a push: a rare re-plan, never a wrong item approved, and more bits would not stay exact in JSON.
+    digest = hashlib.sha256(f"{item}\0{pr}\0{head}\0{what}".encode()).digest()
+    return -(int.from_bytes(digest) >> (256 - _ID_BITS)) - 1
 
 
 def _pr_author(conn: sqlite3.Connection, pr: str) -> str | None:
@@ -643,6 +785,21 @@ def _item_json(o: Offered) -> dict[str, object]:
     return found
 
 
+def _raised_json(r: Raised) -> dict[str, object]:
+    found: dict[str, object] = {"id": r.id, "pr": r.pr_url, "item": str(r.item), "head_sha": r.head_sha}
+    match r.item:
+        case PlanItem.CHECK:
+            conclusion = None if r.conclusion is None else str(r.conclusion)
+            found |= {"name": r.name, "conclusion": conclusion, "url": r.url}
+        case PlanItem.CONFLICT:
+            found["base_ref"] = r.base_ref
+        case PlanItem.REVIEW | PlanItem.COMMENT:
+            pass
+        case _:
+            assert_never(r.item)
+    return found
+
+
 def _checks_at(conn: sqlite3.Connection, pr: str, head: str | None) -> list[records.ObservedCheck]:
     """The checks the reads hold at `pr`'s `head`, by name.
 
@@ -659,10 +816,11 @@ def _checks_at(conn: sqlite3.Connection, pr: str, head: str | None) -> list[reco
 
 
 def _moved(conn: sqlite3.Connection, plan_id: int, then: records.FeedbackPlanPr) -> list[Change]:
-    """What changed at a plan's PR's head: the head itself, or the checks at it while it did not move.
+    """What changed at a plan's PR's head: the head itself, or the checks and the conflict at it while it did not move.
 
     Returns:
-        The head's move, or each check whose conclusion changed; empty while the reads hold nothing of the PR.
+        The head's move, or each check whose conclusion changed and a conflict that came or went; empty while the reads
+        hold nothing of the PR.
     """
     pr = then.pr_url
     observed = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", pr))
@@ -678,11 +836,22 @@ def _moved(conn: sqlite3.Connection, plan_id: int, then: records.FeedbackPlanPr)
             sql.select("*").from_("feedback_plan_checks").where("plan_id = ? AND pr_url = ?", plan_id, pr),
         )
     }
-    return [
+    found = [
         Change(Changed.CHECK, pr, name=c.name, was=_str(was.get(c.name)), now=_str(c.conclusion))
         for c in _checks_at(conn, pr, observed.head_sha)
         if c.conclusion != was.get(c.name)
     ]
+    # Only once the host has said now: a PR whose mergeability it is still working out has not moved. One it had not
+    # settled when the plan read it was offered no conflict, so a conflict it settles since is new to the plan, and no
+    # conflict is no change.
+    now = observe.conflicts(observed)
+    if now is not None and now != then.conflicted and (now or then.conflicted is not None):
+        found.append(Change(Changed.CONFLICT, pr, was=_conflicting(then.conflicted), now=_conflicting(now)))
+    return found
+
+
+def _conflicting(conflicts: bool | None) -> str | None:  # noqa: FBT001
+    return "conflicting" if conflicts else None
 
 
 def _str(value: CheckConclusion | None) -> str | None:
@@ -766,7 +935,11 @@ def _covered(conn: sqlite3.Connection, plan_id: int, seen: Mapping[Key, records.
     covered = records.fetch_all(
         conn,
         records.FeedbackPlanItem,
-        sql.select("*").from_("feedback_plan_items").where("plan_id = ?", plan_id).order_by("number"),
+        sql.select("*")
+        .from_("feedback_plan_items")
+        .where("plan_id = ?", plan_id)
+        .where_in("item", (PlanItem.REVIEW, PlanItem.COMMENT))
+        .order_by("number"),
     )
     for i in covered:
         row = records.fetch_one(
@@ -780,7 +953,7 @@ def _covered(conn: sqlite3.Connection, plan_id: int, seen: Mapping[Key, records.
         if row is None or then is None:
             continue
         if row.resolved:
-            found.append(Change(Changed.RESOLVED, i.pr_url, item=i.item, id=i.item_id))
+            found.append(Change(Changed.RESOLVED, i.pr_url, item=row.item, id=i.item_id))
         elif _sha(row.body) != then.body_sha256:
             found.append(_edited(row))
     return found

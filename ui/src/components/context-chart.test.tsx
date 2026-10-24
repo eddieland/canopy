@@ -39,6 +39,7 @@ function step(call: number, sent: number | null): TranscriptEntry {
         split: sent === null ? null : { input: sent, cache_read: 0, cache_write: 0, output: 0, reasoning: 0 },
         tokens: sent,
         cost_usd: null,
+        model: null,
     }
 }
 

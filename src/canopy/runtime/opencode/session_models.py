@@ -2,9 +2,11 @@
 
 `opencode export ID --sanitize` prints the session and its messages as one JSON object, their text, reasoning, tool
 output, and paths redacted. Each assistant message names the provider and model that wrote it, the variant it ran at
-when not the model's default, and what it cost; only those are read. A model run at a variant is named with it,
-`anthropic/claude-opus@high`, so each variant counts on its own. OpenCode looks a session up by its id alone, in the
-one database that holds every project's sessions, so any directory finds it. One it does not have it names on stderr,
+when not the model's default, and what it cost; only those, and its id, are read. A model run at a variant is named
+with it, `anthropic/claude-opus@high`, so each variant counts on its own. The id is the `messageID` each event of the
+model call that wrote the message carries (`canopy.runtime.opencode.transcript`), so a session more than one model
+served names the model of each call in its transcript. OpenCode looks a session up by its id alone, in the one
+database that holds every project's sessions, so any directory finds it. One it does not have it names on stderr,
 `Session not found: ID`, and exits 1.
 
 Its stdout is captured through a file, not a pipe. With stderr a pipe too, OpenCode exits having written only what a
@@ -23,7 +25,16 @@ from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, Stric
 
 from canopy.infra import procs
 from canopy.runtime.opencode import printed as printed_json
-from canopy.runtime.report import MAX_COST_USD, MAX_MODEL_NAME, MAX_MODELS, OTHER_MODELS, ModelUse, SessionModels
+from canopy.runtime.report import (
+    MAX_COST_USD,
+    MAX_MODEL_NAME,
+    MAX_MODELS,
+    MAX_REPLIES,
+    MESSAGE_ID_RE,
+    OTHER_MODELS,
+    ModelUse,
+    SessionModels,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -41,6 +52,7 @@ _OBJECT_RE = re.compile(r"^\{", re.MULTILINE)
 class _Info(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
+    id: StrictStr | None = None
     role: StrictStr
     # A user message names the model it asked for; only an assistant's names the one that wrote it.
     provider: StrictStr | None = Field(default=None, alias="providerID")
@@ -78,7 +90,8 @@ def read(runner: procs.Runner, *, cwd: Path, session_id: str) -> SessionModels:
     exported = printed_json.among(printed, _OBJECT_RE, _Export.model_validate_json)
     if exported is None:
         return SessionModels("failed", error=f"`{COMMAND}` printed what canopy cannot read")
-    return SessionModels("found", _models(exported.messages))
+    models, replies = _models(exported.messages)
+    return SessionModels("found", models, replies=replies if len(models) > 1 else {})
 
 
 class _FailedError(Exception):
@@ -106,8 +119,10 @@ def _export(runner: procs.Runner, cwd: Path, session_id: str) -> str | None:
     raise _FailedError(f"`{COMMAND}` exited {result.returncode}")
 
 
-def _models(messages: tuple[_Message, ...]) -> tuple[ModelUse, ...]:
+# Each model's replies, the most costly first, and the model of each reply whose id is a message's, by its id.
+def _models(messages: tuple[_Message, ...]) -> tuple[tuple[ModelUse, ...], dict[str, str]]:
     found: dict[str, ModelUse] = {}
+    replies: dict[str, str] = {}
     for message in messages:
         info = message.info
         if info.role != "assistant" or info.provider is None or info.model is None:
@@ -118,7 +133,9 @@ def _models(messages: tuple[_Message, ...]) -> tuple[ModelUse, ...]:
             name = OTHER_MODELS
         was = found.get(name, ModelUse(name, 0, 0.0))
         found[name] = ModelUse(name, was.replies + 1, was.cost_usd + float(info.cost))
-    return tuple(sorted(found.values(), key=lambda m: (-m.cost_usd, m.model)))
+        if info.id is not None and MESSAGE_ID_RE.fullmatch(info.id) and len(replies) < MAX_REPLIES:
+            replies[info.id] = name
+    return tuple(sorted(found.values(), key=lambda m: (-m.cost_usd, m.model))), replies
 
 
 # Shown on a terminal, so printable, with no space in it; `?` when nothing is left.

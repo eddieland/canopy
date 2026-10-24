@@ -113,11 +113,23 @@ leaving a finding out of your draft dismisses it ([Publishing your review](pull-
 
 It's easy to catch more bugs if you don't mind flagging a lot of non-bugs, so watch what you do with the findings.
 `canopy review noise` counts the last 90 days' findings by severity, persona, and model, and why you dismissed each.
+The ones you didn't dismiss count by what the worker last said of them, `fixed` or `declined`, beside how many came
+back as rebuttals. Your dismissal outranks the worker's answer: a finding the worker called fixed and you called wrong
+counts as wrong.
 
 - A high `wrong` rate is a reviewer worth retuning: another model, another persona, or a sharper `REVIEW.md`.
 - A high `not worth it` rate is a reviewer that's right about things you've chosen to live with. Ask for fewer minor
   findings, in a persona or your docs.
 - Few dismissals at all, on a reviewer you don't trust yet, is the evidence for trusting it.
+- A pile of rebuttals is an author and a reviewer that disagree on purpose. Read a few: one of them is usually right.
+
+Noise is half the story; the other half is what the reviewer misses, and you can only count that on bugs you already
+know about. Keep a few as `[[review.eval_cases]]` in the workspace's private config: PRs that were reverted or fixed
+forward, each with the line its bug was on, and a few you know are clean. `canopy review eval` reviews every case at
+its commit and reports how many of the bugs it found and how many alarms it raised on the clean ones; `--persona` and
+`--model` try something else on the same cases. Run it when you change the reviewer's prompt, persona, or model, before
+you decide the change helped. It's a measurement, not a gate: nothing it finds reaches the loop, and each result lands
+in `.canopy/review-evals/` with what it ran on, so the next run has a number to beat.
 
 ## Review has to converge
 
@@ -144,6 +156,14 @@ A docs fix and a change to the auto-updater don't deserve the same review. Each 
 The reviewer may call a change `low` only under your rule for it, `review.low_impact`, written in plain language; with
 none, nothing is low.
 
+Some changes are `high` whatever the reviewer thinks. A PR that touches `.github/workflows/`, in any repository, is
+recorded `high`, and the review's `harness` line names the path that did it. The reviewer reads the PR's description,
+and a description is exactly where someone would write "trivial CI tweak, nothing to see". Each repository can add its
+own paths in the workspace file, as `high_impact_paths` in its `[repos.NAME]` table: canopy's own lists `.agents/` and
+`docs/TRUST_MODEL.md`. An entry covers the path it names and everything under it; there are no globs. A repository's
+list only adds, so nobody can take CI's workflows off it. `high` puts the PR's items first in `canopy status`,
+`attention.md`, and your notifications. It doesn't buy a longer review.
+
 Spend review where a missed bug is expensive. For a PR that worries you, ask for a review in two or three personas
 ([Asking for a review](pull-requests#asking-for-a-review)), and give the reviewer a stronger model than the one that
 wrote the code. For routine work, one review in the default persona is plenty.
@@ -168,6 +188,7 @@ you're about to sign.
 ## When a review misses something
 
 Something will get through. When it does, ask what the reviewer didn't have in front of it, and put the answer where
-the next review will read it: a rule in `AGENTS.md` or `REVIEW.md`, a test, or a lint rule. A [chore](chores) can
+the next review will read it: a rule in `AGENTS.md` or `REVIEW.md`, a test, or a lint rule. Then add the PR as a bug
+case, so the next eval says whether the rule worked ([Measure the noise](#measure-the-noise)). A [chore](chores) can
 read your existing code through GitHub on a schedule, too, and report the old bugs no PR's review was ever going to
 look at.

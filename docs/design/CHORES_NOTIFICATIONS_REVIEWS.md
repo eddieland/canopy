@@ -48,8 +48,10 @@ its prompt runs.
 
 ### Delegation
 
-The state block lists each chore with its `when`, when it is next due, whether it is running, its latest run, and its
-open findings. Each tick the overseer runs each due chore or records why it waits. Findings inform only decisions about
+The state block lists each chore with a `when`, when it is next due, whether it is running, its latest run, and its
+open findings. Each tick the overseer runs each due chore or records why it waits. A chore with no `when` needs no
+judgment, so the harness runs it when due, after the overseer, with no context (§37), and the overseer's `chore run`
+or `chore wait` about one is refused `decided`. Findings inform only decisions about
 the chore: chores never cause or prevent a dispatch (Open). With no chores, or `capacity.max_chores = 0`, nothing about
 chores reaches the overseer.
 
@@ -141,8 +143,8 @@ operator's programs. This generalizes `notify.cmd` (§14), which stays and behav
 
 A closed set, written by the harness from the journal, in groups: `attention` (an item opened or resolved), `runs` (a
 worker started or ended, a plan proposed or approved by its planner, §25, follow-ups filed, §18), `chores` (§19),
-`reviews` (§21), `tasks` (a task's run ended, §36), and `loop` (ticks failing and recovering, a sink failing, the
-month's spend reaching its budget or one of its alerts). Each
+`reviews` (§21), `tasks` (a task's run ended, §36), `replies` (a reply read from Slack recorded or refused, below),
+and `loop` (ticks failing and recovering, a sink failing, the month's spend reaching its budget or one of its alerts). Each
 carries only bounded fields, its text on one line. No plan event carries the plan's text. `run.ended` carries a
 `blocked` run's question, since the needs-human label is not an attention item.
 
@@ -212,7 +214,11 @@ Lightly two-way, with no listener: a listener must follow TRUST_MODEL T8 (D055),
 inbound internet access, stays out. Reading a thread is an outbound call, as posting is, so a `slack` source (§30)
 reads the replies in the sink's ticket threads on the loop's polls, and a reply from a Slack id the operator listed is
 their message on the ticket, as `canopy reply` records one (§22). The sink keeps each ticket's threads a week, so a
-reply in yesterday's still reaches it. Only replies on tickets: plans, starts, and the other verbs stay in canopy.
+reply in yesterday's still reaches it. A ticket with no thread is answered by mentioning canopy's bot in the channel,
+then the ticket's key: `@canopy PROJ-123 use the staging config`. Sinks that take `replies` hear what came of it, so
+the sink acknowledges a mention in the ticket's thread and answers a refused reply under the operator's own message,
+once each; a reply in a thread needs no acknowledgement. Only replies on tickets: plans, starts, and the other verbs
+stay in canopy.
 
 ### Trust model changes
 
@@ -241,29 +247,30 @@ through `resume`; PRs matching `review.query`, reviewed and nothing else, never 
 the operator asks for one at a time (Review requests), reviewed as a query match is.
 
 Why nothing is posted: a review on the PR speaks for the operator to everyone, and an adversarial reader is wrong often
-enough that the operator wants its findings first; kept in the journal, it needs no write tool and cannot be forged. Its
-verdict leaves the machine only as a notification (§20), so no automation can let a PR skip a human reviewer on it; that
-waits on a bot identity (ROADMAP, deferred).
+enough that the operator wants its findings first; kept in the journal, it needs no write tool and cannot be forged. It
+is read from the journal only, apart from worker runs, its text shown as data, made printable. Its verdict leaves the
+machine only as a notification (§20), so no automation can let a PR skip a human reviewer on it; that waits on a bot
+identity (ROADMAP, deferred).
 
 Every review key is private (§12) except `policy.max_reviews_per_pr` and §34's `policy.max_revisions_per_draft`,
 shared limits the repository may only tighten (TRUST_MODEL T7). With no source of reviews or no review capacity,
 nothing about reviews reaches the overseer and no review starts; a note asking a revision is a source of one (§34).
 `review.query` authorizes, unlike `tracker.query` (§17): without an author filter it reviews other
 people's PRs in the operator's name, which is the operator's choice (TRUST_MODEL §7). `review.low_impact` says in plain
-language which changes the reviewer may call `low`; without it, none. Reviews touch TRUST_MODEL T1 (what the reviewer
-writes is data; `review.query` and requests authorize), T3 (review limits are controls in code), T4 (nothing runs from
-the checkout), T6 (no write tool), T7, T8 (requests are web channel writes), and §6 (never push to a PR the loop only
-reviews).
+language which changes the reviewer may call `low`; without it, none.
 
 ### Running a review
 
-Only a tick starts a review (D020). The PR's URL is an opaque string the harness never parses, and only a review that
-names its ticket (an `own` review) can send findings to a worker. The harness refuses, and records the refusal, a review
-while reviews are off, of a PR in no known repository, naming a ticket that did not open the PR, of a PR whose review or
-ticket's worker is running, of a commit with a `done` review (in the same persona, when the operator chose several for
-the PR, §31), or past the per-PR limit (runs however they ended, plus
-any the operator grants, §22), the daily limit, review capacity, or `max_workers`, which counts reviews. A dry run
-checks the same guards and starts nothing (D036).
+Only a tick starts a review (D020), but for an eval's, which the journal never holds (Scoring the reviewer). The PR's
+URL is an opaque string the harness never parses, and only a review that names its ticket (an `own` review) can send
+findings to a worker. The harness refuses, and records the refusal, a review while reviews are off, of a PR in no known
+repository, naming a ticket that did not open the PR, of a PR whose review or ticket's worker is running, of a commit
+with a `done` review (in the same persona, when the operator chose several for the PR, §31), or past the per-PR limit
+(runs however they ended, plus any the operator grants, §22), the daily limit, review capacity, or `max_workers`, which
+counts reviews. A dry run checks the same guards and starts nothing (D036). With `review.settle_minutes`, it also
+refuses a head that has not been the PR's head that long, so a PR pushed to often is reviewed once it goes quiet: the
+clock starts when the overseer first asks to review that head, since the harness cannot read push times, and another
+head restarts it. A requested review does not wait. The state block lists the heads still settling.
 
 The review starts detached, as a worker does (§8 step 4), checks out the commit detached in a leased slot, and deletes
 every tracked symlink that resolves outside the checkout. The reviewer runs in a private directory of canopy's holding a
@@ -271,16 +278,16 @@ link to the checkout, **not in the checkout**, so the runtime loads no configura
 signal too, the slot is returned (§8 step 6). It can be sandboxed (§24). canopy ships `canopy-reviewer` in the
 definitions directory (§13), not the repository's (TRUST_MODEL T7): no edits, no subagents, no bash, reads only inside
 the checkout and, through canopy's read-only git tools, its history (§27), and MCP read tools only, every tool that
-writes denied by name. A review that runs the PR's tests uses the
-operator's own copy (§19), so runs the PR's code (§7).
+writes denied by name. A review that runs the PR's tests uses the operator's own copy (§19), so runs the PR's code (§7).
 
 The prompt carries the notice to workers (§8) and asks only for what the diff itself gets wrong, so a `resume` is never
 sent to fix code its PR did not touch. Rejected: a second agent verifying each finding, doubling a review's spend.
 
-It also carries the PR's latest `done` review, its summary and the findings the operator did not dismiss, as data to
-check at the new commit: what still holds is reported again, since each review's result stands alone, and the review
-still reads the whole change. Rejected: notes reviewers write for later reviews, which would tell the next one what to
-skip.
+It also carries the PR's latest `done` review, its summary and the findings the operator did not dismiss, each with
+the resumed worker's answer, as data to check at the new commit: what still holds and was not declined is reported
+again, since each review's result stands alone, and the review still reads the whole change. It asks for a class of
+bug once with every instance, and on the PR's last round for a different approach over more line-level findings.
+Rejected: notes reviewers write for later reviews, which would tell the next one what to skip.
 
 Result contract, the last line of the reviewer's text (§13), validated (D026); anything else is `unknown`:
 
@@ -288,12 +295,35 @@ Result contract, the last line of the reviewer's text (§13), validated (D026); 
 {"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high",
  "summary":"a paragraph, line breaks sparingly","body":"what to tell the PR's author beyond the findings, or nothing",
  "pr_title":"the PR's title as it stands",
- "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what and why"}]}
+ "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what and why",
+               "rebuts":null}]}
 ```
 
 `verdict` is `findings` exactly when there are findings, and `low` without `review.low_impact` is recorded as `normal`.
-`pr_title` is the PR author's text, for display only (§8). `summary` is for the operator; `body` is for the PR's author,
-and only a draft (§34) uses it.
+The reviewer judges impact from the PR's text, which can talk it down (T1), so a change to a high-impact path, as git
+names the paths of the range the review keeps a diff of, is recorded `high` before `review.low_impact` applies, with a
+note naming the path. The high-impact paths are `.github/workflows/` in every repository, plus those the PR's
+repository lists as `high_impact_paths` in the map (§18; whole-component prefixes, no globs), which add to it and
+cannot remove it (TRUST_MODEL T7). The harness only raises. `high` ranks attention (§14), and
+changes nothing else about the review. `pr_title` is the PR author's text, for display only (§8). `summary` is for
+the operator; `body` is for the PR's author, and only a draft (§34) uses it. `rebuts` is set only on a rebuttal
+(Answers and rebuttals).
+
+### Answers and rebuttals
+
+A `resume` handed findings answers each in its result's `review_answers`: `fixed`, or `declined` with its reason, by
+review run and number. `_run` keeps an answer only to a finding of a `done` review of the run's own ticket, from a run
+that ended `done` or `blocked`. The next review reads them, so a declined finding comes back only as a rebuttal, which
+names the declined finding in `rebuts`. The harness holds a rebuttal for the operator when the decline is in the
+journal: it reaches no worker and starts no `resume`, `review_rebuttal` raises attention about the ticket, and the
+operator settles it by sending it, which releases it, or dismissing it. So an author and a reviewer that disagree
+reach a person instead of the per-PR limit.
+
+A later review's finding that is not `blocking` and whose `path:line` is on lines no change since the PR's first
+reviewed commit touched, by `git diff` of the two in the review's own repository, is late, and held the same way under
+`review_late`: the first review read that code, so a reviewer finding more of it each round would never converge.
+Whatever git cannot place is not late, and goes to the worker. Rejected: following findings across commits to refuse
+repeats (Open).
 
 ### The overseer's part
 
@@ -303,12 +333,12 @@ the head, under the per-PR limit, where the overseer starts a review; and `revie
 `resume` with that review's undismissed findings or records `needs_author`. Findings are `review_findings` only when
 `trust.trusted_reviewers` lists `canopy:review`; otherwise they are `untrusted_review` and wait for the operator (§7,
 D089). A clean review, or a PR at its limit, moves on to `green_unreviewed`; a review never counts toward
-`changes_requested`. A `resume` carries only undismissed findings of its ticket's own `done` review, and a prompt
-override that drops them fails to render. For other PRs, the overseer reviews each whose head has no `done` review or
-records why it waits, and decides nothing else about them. `review_failed` and `review_limit` are attention items;
-findings are not. Under `[personas] reviewers` (§31) a head is reviewed once each persona has a `done` review of it:
-until then the state block names the personas it is owed, and after, it shows the head's reviews as one, and a
-`resume` for one of them carries the undismissed findings of each.
+`changes_requested`. A `resume` carries only findings of its ticket's own `done` review neither dismissed nor held,
+and a prompt override that drops them fails to render. For other PRs, the overseer reviews each whose head has no
+`done` review or records why it waits, and decides nothing else about them. `review_failed` and `review_limit` are
+attention items; findings are not. Under `[personas] reviewers` (§31) a head is reviewed once each persona has a `done`
+review of it: until then the state block names the personas it is owed, and after, it shows the head's reviews as one,
+and a `resume` for one of them carries the findings of each.
 
 ### Review requests
 
@@ -323,20 +353,16 @@ a coworker's PR is refused, so a review never turns into work on someone else's 
 run: a request authorizes a review as `review.query` does, so an agent steered by a PR's text could otherwise aim the
 operator's spend at any PR (T1).
 
-### Reading reviews
-
-Reviews are read from the journal only, apart from worker runs; a review's text is shown as data, made printable.
-
 ### Dismissing and sending findings
 
 A dismissed finding stays listed but leaves what a `resume` hands the worker. A review whose findings are all dismissed
 moves on as a clean one. A dismissal says why: `wrong`, `intentional`, or `not_worth_it`, so the operator's dismissals
 measure the reviewer's noise by severity, persona, and model, which is what would justify a verifier's spend. Sending
 findings is the operator's go-ahead on an `own` review's findings while its ticket has the PR: an operator message on
-the ticket names them by number, never quoting them, since the reviewer's text is data
-(T1) and the message an instruction. The next tick dispatches a `resume` with them (§7, D089), whether or not
-`canopy:review` is trusted. A dismissed finding, or one on a PR not the loop's own, cannot be sent. Both are refused
-inside a run, so no agent can hold a finding back from a worker or start work in the operator's name.
+the ticket names them by number, never quoting them, since the reviewer's text is data (T1) and the message an
+instruction. The next tick dispatches a `resume` with them (§7, D089), whether or not `canopy:review` is trusted. A
+dismissed finding, or one on a PR not the loop's own, cannot be sent. Both are refused inside a run, so no agent can
+hold a finding back from a worker or start work in the operator's name.
 
 ### The diff
 
@@ -344,8 +370,18 @@ Since the slot goes with the review and the web UI cannot ask GitHub (principle 
 the commit the reviewer read, best effort and readable only by the operator. Diff drivers and textconv are off, since a
 commit's `.gitattributes` can name them (D107). It is the PR's text: rendered as text, never served as a file. It runs
 from the commit's merge base with the branch the PR merges into, as the vcs source last read the PR, and the
-reviewer's prompt names that branch; a PR it has not read falls back to the pool's base branch. For this, the vcs
-source reads a requested PR from the tick after its request.
+reviewer's prompt names that branch; a PR it has not read falls back to the pool's base branch.
+
+### Scoring the reviewer
+
+`canopy review eval` scores the reviewer on the operator's cases, `review.eval_cases`: PRs at a commit, each with a bug
+at lines the operator confirmed, or known clean. Each is reviewed as a PR's first review, in the persona and on the
+model named; a finding within a few lines of a confirmed one finds the bug, and every finding on a clean case is a false
+alarm. The score, with digests of the prompt and persona and the model, is saved in the state directory and gates
+nothing. The journal holds nothing of an eval, so none reaches a worker, a draft, or the attention list. A case
+authorizes a review as `review.query` does, so only the operator runs one, never in a tick or a run, and a case the
+review guards refuse is skipped, not scored. Rejected: review runs for an eval, which would count against PRs' limits
+and make drafts.
 
 ### Open
 

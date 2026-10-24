@@ -6,10 +6,11 @@ import json
 from typing import TYPE_CHECKING, Any
 from unittest import mock
 
-from canopy.core import artifact_feed, conversation, observe, records, sql
+from canopy.core import artifact_feed, conversation, db, observe, records, sql
 from canopy.core.config import Source
 from canopy.core.vocab import AnchorStatus, AuthorKind, ConnectorRunStatus, ThreadState
 from canopy.infra import logs
+from tests.canopy.helpers import KEY, present
 from tests.canopy.observation_helpers import artifact_change as change
 
 if TYPE_CHECKING:
@@ -189,14 +190,14 @@ def test_an_edit_or_deletion_replaces_the_comment_and_keeps_who_wrote_it(ctx: Co
 def test_text_is_cut_and_marked_and_the_workers_marks_read(ctx: Context, connector_state: Path) -> None:
     trust = ctx.config.trust
     marked = f"{trust.comment_prefix} Done. {trust.comment_suffix}".strip()
-    long = "word " * conversation.MAX_MIRRORED
+    long = "word " * conversation.MAX_COMMENT
     agent = {"id": "agent:implement", "kind": "agent", "on_behalf_of": "operator"}
     on = {"anchor": {"exact": long}, "origin": {"canopy.ticket": "not a key"}}
     feeds(connector_state, change(1, body=long, **on), change(2, body=marked, author=agent, **on))
     run(ctx)
     found = comments(ctx)
     assert (len(found["c1"].body), found["c1"].truncated, found["c1"].marked) == (
-        conversation.MAX_MIRRORED,
+        conversation.MAX_COMMENT,
         True,
         False,
     )
@@ -206,6 +207,82 @@ def test_text_is_cut_and_marked_and_the_workers_marks_read(ctx: Context, connect
     assert observed.exact is not None
     assert (len(observed.exact), observed.exact.endswith("...")) == (artifact_feed.MAX_PASSAGE, True)
     assert observed.ticket is None, "an origin's ticket that is not a key names none"
+
+
+def conversation_of(ctx: Context, key: str = KEY) -> list[records.Message]:
+    """Ticket `key`'s conversation, oldest first."""
+    return db.messages_of(ctx.conn, conversation.TICKET, key, 100)
+
+
+def test_a_comment_reaches_its_tickets_conversation_once_quoting_its_passage(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    db.touch_ticket(ctx.conn, KEY, "repo")
+    ctx.conn.commit()
+    feeds(connector_state, change(1, body="Shard by tenant, not by day."), end={"through": 1})
+    run(ctx)
+    feeds(
+        connector_state,
+        change(2, kind="comment_edited", comment_id="c1", body="Edited.", edited_at="2026-10-23T11:00:00Z"),
+        end={"through": 2},
+    )
+    run(ctx)
+
+    # Once, as first read: the edit is not followed, as a tracker comment's is not (DESIGN §35).
+    [message] = conversation_of(ctx)
+    assert (message.source, message.kind, message.channel) == ("artifact", "comment", "artifacts")
+    assert (message.comment_id, message.author, message.truncated) == ("artifact:c1", "u_ana", False)
+    assert message.body == "> shard it\n\nShard by tenant, not by day."
+    # Data in a private worker's prompt, named as an artifact's comment, whoever wrote it.
+    prompt = present(conversation.prompt_conversation(ctx.conn, KEY))
+    assert f"Message {message.id}, account u_ana's artifact comment artifact:c1, data, at" in prompt
+    # It authorizes nothing: no operator message, so the loop has nothing to wake for.
+    assert db.latest_message_id(ctx.conn, source="operator") == 0
+
+
+def test_a_comment_reaches_no_conversation_without_a_ticket_the_journal_holds_or_once_deleted(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    db.touch_ticket(ctx.conn, KEY, "repo")
+    ctx.conn.commit()
+    feeds(
+        connector_state,
+        change(1, origin={"canopy.ticket": "PROJ-9"}),
+        change(2, origin={}),
+        change(3, kind="comment_deleted", comment_id="c9", body="", deleted_at="2026-10-23T12:00:00Z"),
+        end={"through": 3},
+    )
+    run(ctx)
+    assert len(comments(ctx)) == 3, "each is still observed"
+    assert conversation_of(ctx) == []
+    assert conversation_of(ctx, "PROJ-9") == [], "the origin is the worker's word: a ticket the journal lacks gets none"
+
+
+def test_a_comment_on_a_whole_artifact_quotes_nothing_and_a_marked_one_is_a_workers(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    trust = ctx.config.trust
+    marked = f"{trust.comment_prefix} Revised. {trust.comment_suffix}".strip()
+    long = "word " * conversation.MAX_COMMENT
+    db.touch_ticket(ctx.conn, KEY, "repo")
+    ctx.conn.commit()
+    feeds(
+        connector_state,
+        change(1, anchor=None, body="Looks right."),
+        change(2, body=marked),
+        change(3, anchor={"exact": "x" * 1000}, body=long),
+        end={"through": 3},
+    )
+    run(ctx)
+    whole, worker, cut = conversation_of(ctx)
+    assert (whole.source, whole.body) == ("artifact", "Looks right.")
+    assert (worker.source, worker.body) == ("worker", f"> shard it\n\n{marked}")
+    # A long passage is quoted cut, and the message is cut and marked as a tracker comment's is.
+    assert cut.body.startswith(f"> {'x' * (artifact_feed.MAX_QUOTE - 3)}...\n\nword")
+    assert (len(cut.body), cut.truncated) == (conversation.MAX_COMMENT, True)
 
 
 def test_the_request_names_only_the_cursor() -> None:

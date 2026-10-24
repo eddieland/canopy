@@ -27,6 +27,10 @@ then approves the plan on the planner's word: the implement goes ahead without y
 and your sinks get one line saying so. The **Plan** card says it was **approved by** the planner, with that sentence,
 so you can read the plan after and disagree at leisure. Feedback plans take the same key.
 
+A feedback plan, the one for what came back to a PR, lives on that PR's page, not here: see
+[The feedback plan](pull-requests#the-feedback-plan). While one waits on you, the ticket's page leads with a card
+that points there, and its run's page names the plan it wrote.
+
 The planner's word counts only until you've had one of your own. Once you've asked for changes, or asked for the plan
 by name with `canopy plan KEY`, every plan after waits on you, whatever the planner thinks. Edit an approved plan and
 it needs your approval again, as any plan does. The ticket's text can talk a planner into anything, including this,

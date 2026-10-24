@@ -33,10 +33,13 @@ class FeedbackPlanItem(Model):
     """Its number in the plan, from 1: what an approval names it by, as `canopy show` lists it."""
     pr_url: str
     """The PR it is on."""
-    item: Literal["review", "comment"]
-    """A review, or a review thread by the comment the plan covers."""
+    item: Literal["review", "comment", "check", "conflict"]
+    """A review, a review thread by the comment the plan covers, a failed check at the PR's head, or its conflict."""
     item_id: int
-    """The id the `vcs` source observed: the one the plan's `### Item <id>` heading carries."""
+    """The one the plan's `### Item <id>` heading carries: the id the `vcs` source observed, or for a check or a
+    conflict the one canopy gives it, below zero."""
+    check: str | None = None
+    """For a check, its name, as the plan's read saw it; None for any other item."""
     proposal: ProposalName
     """What the plan proposes for it."""
     reply: str | None = None
@@ -49,6 +52,14 @@ class FeedbackPlanItem(Model):
     """Whether `trust.trusted_reviewers` names its author: shown to weigh it, never a gate (DESIGN §32)."""
     thread_id: str | None = None
     """The thread on this PR's page it is, when it is one; None for a review, or an item of another PR or no thread."""
+    excerpt: str | None = None
+    """The first line of what was said, cut short, as the `vcs` source last read it: plain text here, whoever wrote
+    it. None once no read holds it, or for a review that said nothing."""
+    rationale: str | None = None
+    """The plan's first line on it, under its `### Item <id>` heading, cut short: the planner's words, plain text here.
+    None when the plan's file has no such heading, or nothing under it."""
+    url: str | None = None
+    """Where it is on its host, a review's page or a comment's, as the read observed it; None when none was read."""
 
 
 class FeedbackPlan(Model):

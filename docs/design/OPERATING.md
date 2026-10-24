@@ -18,8 +18,9 @@ back. The schema is in `migrations/`, squashed once for v0.1; a journal from bef
 
 What it records, and why:
 
-- **Ticks**: each tick's status, summary, what it read up to (§6 step 3), and, for a tick `canopy loop` ran, what woke
-  it (§6), so spend can be split by what it bought. A tick that cannot take the lock writes nothing.
+- **Ticks**: each tick's status, summary, what it read up to (§6 step 3), whether it ran the overseer (§39), and, for
+  a tick `canopy loop` ran, what woke it (§6), so spend can be split by what it bought. A tick that cannot take the
+  lock writes nothing.
 - **Tickets and units**: each ticket seen, with its derived phase, its branch, whether it is done or forgotten (§22),
   and its cursors; each unit, a ticket's work in one repository (§18), with its branch, PR, phase, and cursors (§7).
 - **Runs**: every worker, plan, review, and chore run (§19, §21), with its status, a summary of its result, and
@@ -45,6 +46,12 @@ window, `merged` and `closed` alike, since a tracker that closes a ticket when i
 sees the merge. Spend per ticket done divides the window's whole spend, overseer and chores included. A tool's share of
 context is measured in characters it returned, since the runtime does not attribute tokens to tool results, and is
 labeled an estimate wherever shown (MEASUREMENTS 2026-10-13).
+
+The web UI's reports page reads the same figures by local calendar month, dollars and tokens by kind and by model,
+beside what each month landed: a ticket the loop marked done as merged, with its worker runs, the comments and reviews
+people other than its PR's author left, and how long it took. The journal keeps no merge time and no phase history, so
+a ticket lands when the loop marks it done, and its review wait runs from its first worker run that ended `done`; the
+page says so, rather than pass a proxy off as GitHub's own clock. The spend page, by day, sits under it.
 
 `spend.monthly_budget_usd` is what the operator means a local calendar month of runs to cost. `canopy spend` and the
 spend page track the month so far against it, with the pace it is on once its first day is over, and a sink that takes
@@ -322,9 +329,9 @@ registered; they, and what OpenCode does with a plugin, are §33.
 ### Each agent's model
 
 Built as far as each agent's default in `[runtime.models]`, a chore's own model, variants, the ticket's override
-from `canopy model` or the ticket's page, the check of a model and its variant before a worker or plan run, and
-recording what served (REQUIREMENTS R23). The check before a review, a chore, or a tick's overseer is still to come;
-until then such a run on an unlisted model fails as it starts, and one at an unlisted variant may run at the model's
+from `canopy model` or the ticket's page, the check of a model and its variant before a worker, plan, or review run,
+and recording what served (REQUIREMENTS R23). The check before a chore or a tick's overseer is still to come; until
+then such a run on an unlisted model fails as it starts, and one at an unlisted variant may run at the model's
 default.
 
 The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
@@ -341,10 +348,12 @@ promises:
 - **What is recorded is what served.** No event names the model a call went to, so canopy reads each run's session
   from the runtime's own record once the run ends: the process that ran it reads it as it closes the run, and the wait
   after a live tick reads the rest, one at a time, never-read runs the newest first, past ones among them. A read
-  records each model that wrote a run's replies, a variant other than its default named with it, and what they cost.
-  `canopy spend` breaks each kind's cost down by model, and the web UI names each run's models on its page. A read
-  never fails a run or a tick; a session the runtime no longer keeps leaves its run unattributed, or as a read before
-  found it, and a failed read is tried again later, a few times at most.
+  records each model that wrote a run's replies, a variant other than its default named with it, and what they cost;
+  for a run more than one model served, also which wrote each reply, keyed as the log's events key each call.
+  `canopy spend` breaks each kind's cost down by model, and the web UI names each run's models on its page, and a
+  split run's on its transcript, at each call where the model changed. A read never fails a run or a tick; a session
+  the runtime no longer keeps leaves its run unattributed, or as a read before found it, and a failed read is tried
+  again later, a few times at most.
 - **canopy's choice is the one made.** canopy writes the model, and its variant, into the agent's rendered
   definition, so each set of models gets its own snapshot (D040); a chore with a model of its own runs a copy of the
   chore's definition made for it. A template's model or variant option would override it unseen, so any `runtime`
@@ -359,6 +368,18 @@ promises:
 The PR that builds the choosing proposes T1, T5, T7, and T8 to match. Rejected: a model chosen by the overseer or
 ticket labels (T1); a list of models shipped with canopy; one override for all of a ticket's agents; recording only the
 model asked for, which leaves every run on the default unattributed and splits no run's cost between models.
+
+### Every session's spend
+
+The operator wants spend tracked in canopy and out of it: what canopy's runs cost beside what the same runtime cost in
+the operator's own sessions. While it waits between live ticks, `canopy loop` records every session the runtime keeps,
+in every directory, subagents' included, from the runtime's own record: read-only, a page at a time from where the last
+read stopped, so a session updated since is read again and its row replaced. Each keeps its cost and tokens, as the
+runtime summed them, each model's share, its directory, and the session it ran for. What the record holds is not
+canopy's to trust, since a run can write the runtime's data, so a session canopy cannot read is passed over and
+counted. `canopy spend` splits the window's sessions into canopy's, a session one of the journal's runs names and its
+subagents', and the rest, by directory; another workspace's runs are outside, since its journal is another. Rejected:
+listing sessions through the runtime's commands, which list one project's top-level sessions only.
 
 ### The operator's skill
 
@@ -376,12 +397,14 @@ too, with the loop's state and the running and recent runs.
 Reasons are the phase table's attention rows (§7), the run reasons below, `attempt_limit`, and those the sections that
 raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`,
 `auto_maintenance_on`, `multi_repo`, and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
-`review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `flaky_rerun` (§23), `plan_review`,
-`plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28),
+`review_failed`, `review_limit`, `review_rebuttal`, and `review_late` (§21), `awaiting_reply` (§22, §25),
+`flaky_rerun` (§23), `plan_review`, `plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`,
+and `lesson_wrong` (§28),
 `drafts_waiting` (§29), `connector_failed` (§30), `persona_missing` and `bad_persona` (§31), `model_missing` and
 `model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34), and
 `task_ticket_unrecorded` (§36). An item
-about one unit names its repository, shown as `KEY (repo)`.
+about one unit names its repository, shown as `KEY (repo)`. An item about a PR whose latest reviewed commit has a
+`high` review (§21), or about its ticket, comes first: within its reason on the list, and in a notification.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
 reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or `worker_failed` (for `failed`). The
@@ -402,7 +425,10 @@ record, until the ticket is done or forgotten (§18).
 every tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention
 decisions of the latest `ok` tick, so an item disappears the first tick that does not record it, and a failed or
 `skipped` tick leaves the previous list standing; `canopy_unavailable` or `disk_low` is added to it while it is the
-latest tick's. The state block lists the overseer's open items (§6 step 4), so it records each again until it sees the
+latest tick's. The harness holds the overseer's item through a tick that did not give the overseer its subject, such as
+a ticket the harness decided (§37), since the overseer cannot record again what it was not shown; the item goes the
+first tick that gives the overseer its subject and leaves it out, or once its ticket is done or stopped. The state
+block lists the overseer's open items on what it is given (§6 step 4), so it records each again until it sees the
 cause gone. An item's age runs from the first tick of its unbroken run. `attempt_limit` is recorded by the overseer when
 the state block shows a ticket at its limit, and by `canopy dispatch` with an `attempt_limit` refusal, and lasts while
 the overseer keeps asking.

@@ -22,9 +22,9 @@ Everything below is for an agent helping the operator in their own session.
 - Read, explain, and suggest. Do not start ticks or loops: `canopy loop` runs until Ctrl-C and would hang your session,
   and `canopy tick` runs the overseer, which spends money. Suggest the command and let the operator run it, unless
   they ask you to run a single `canopy tick --dry-run`.
-- `canopy dispatch`, `decide`, `queried`, `attention`, `ticket set`, and `mirror` are the overseer's tools and refuse
-  outside a tick, by design. Nothing dispatches a ticket by hand: a ticket is worked through its queue label or
-  `canopy start` (see Getting a ticket worked).
+- `canopy dispatch`, `decide`, `queried`, `attention`, and `ticket set` are the overseer's tools and refuse outside
+  a tick, by design. Nothing dispatches a ticket by hand: a ticket is worked through its queue label or `canopy start`
+  (see Getting a ticket worked).
 - Every command that acts is the operator's own, among them `start`, `stop`, `reply`, `forget`, `grant`, `plan`,
   `pause`, `resume`, `notice`, `dismiss`, `send`, and `draft`'s and `memory`'s changes: they authorize work, answer
   workers, hold the loop, and tell later runs about an outage. Suggest them; run one only when the operator asks, with
@@ -189,6 +189,7 @@ The overseer may record other reasons; the detail says what it wants.
 | `drafts_waiting` | A run drafted replies for you: `canopy draft list KEY`, then `edit`, `drop`, or `send` each. |
 | `review_waiting` | A review you asked for is done: `canopy review draft ID`, then edit it and `canopy review publish`, or `canopy review discard ID`. |
 | `review_unsettled` | A review you staged waits for you to submit or delete it on GitHub, or a publish's outcome is unknown. |
+| `review_rebuttal`, `review_late` | canopy holds a review's finding for you: a rebuttal of a worker's decline, or one on code unchanged since the PR's first review. `canopy send review:ID N`, or `canopy dismiss review:ID N --reason R`. |
 | `canopy_unavailable` | The server of the overseer's tools, `canopy _mcp`, did not answer where the loop runs, so the overseer did not run: fix the install. |
 | `disk_low` | `.canopy/` or the workspace has under `loop.min_free_disk_mib` free, so the overseer did not run: free space. |
 | `multi_repo` | Independent pieces in several repositories: decide, or ask for a split (below). |
