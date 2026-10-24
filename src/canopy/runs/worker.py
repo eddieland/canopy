@@ -628,8 +628,8 @@ def _feedback_plan(
 
     Each slot is checked out at the ticket's branch, as its PR's head was pushed. Each PR is read whole through the
     `vcs` source first: the items the planner may cover are what that read observed, its reviews and threads, failed
-    checks, and conflicts, written to its desk with a copy of the feedback plan this one replaces, if the ticket has
-    one, and what changed on its PRs since that plan saw them.
+    checks, conflicts, and merged blockers, written to its desk with a copy of the feedback plan this one replaces, if
+    the ticket has one, and what changed on its PRs since that plan saw them.
     An item the result names that it was not given is refused, with a harness note; the rest are recorded with the
     plan, and with what the read saw, its snapshot (DESIGN §32, Planning again).
 

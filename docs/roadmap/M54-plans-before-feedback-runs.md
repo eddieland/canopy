@@ -139,4 +139,14 @@ under `post` the prompt gives no proposed reply; only a thread's draft starts fr
 departs when the run's own first text differs from the proposed reply past whitespace at either end, when its `did` is
 not the plan's change or decline, when the plan proposed no reply (`ask`, `leave`), or when the approval left the item
 out; the operator's edits are not compared; and the card marks a departure and shows the proposal, with no word diff.
-Left: a merged blocker as an item.
+Built 2026-10-24, against the fakes, a merged blocker as an item: an open PR that still targets the branch canopy
+recorded for another ticket's unit in its repository, whose PR there the reader last read merged, has that blocker in
+the planner's items file, with the ticket and its PR, by an id canopy gives it, below zero, from a hash of the PR, the
+head, and the blocker's PR; it is planned, numbered, approved or left by item, named in `{{PLAN}}` and `canopy show`,
+and on the PR's page by the PR that merged, as checks and conflicts are, and the planner's prompt has no section of its
+own for it any more; migration 0099 widens `feedback_plan_items.item` and records the merged PR each PR was stacked on,
+so a blocker that merges, or a retarget, at an unmoved head makes a waiting plan stale. Settled for it, open to the
+operator: a blocker canopy has no ticket's PR for, or whose PR the reader has not read, is no item and reaches the
+planner only as the overseer's context; a handled one stays handled until a push or a retarget; it carries no reply;
+it does not restart the quiet period, as a conflict does not; and the `resume`'s `retarget` reason is still the
+overseer's to name, whether or not the approval left the item out. Left: the live check in Accept.

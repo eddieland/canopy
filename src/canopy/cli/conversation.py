@@ -837,9 +837,10 @@ def _show_feedback_plan(ctx: Context, key: str) -> None:
     covered = feedback_plans.items(ctx.conn, plan.id)
     who = feedback_plans.authors(ctx.conn, plan.id)
     checks = feedback_items.check_names(ctx.conn, plan.id)
+    blockers = feedback_items.blockers(ctx.conn, plan.id)
     several = len({i.pr_url for i in covered}) > 1
     for i in covered:
-        line = f"  {i.number}. id {i.item_id}, {_item_what(i, who, checks)}, {i.proposal}"
+        line = f"  {i.number}. id {i.item_id}, {_item_what(i, who, checks, blockers)}, {i.proposal}"
         line += f", on {i.pr_url}" if several else ""
         click.echo(line + (", left out" if i.left_out else ""))
     if not covered:
@@ -855,8 +856,9 @@ def _item_what(
     item: records.FeedbackPlanItem,
     who: Mapping[feedback_items.Key, str | None],
     checks: Mapping[tuple[str, int], str],
+    blockers: Mapping[tuple[str, int], str],
 ) -> str:
-    """What a feedback plan's item is, for `canopy show`: a review item's author, a check's name, or a conflict.
+    """What a feedback plan's item is, for `canopy show`: an author, a check's name, a conflict, or a merged blocker.
 
     Returns:
         The words, the author's and the check's name each on one line.
@@ -870,6 +872,9 @@ def _item_what(
             return f"failed check {one_line(name)}" if name else "a failed check"
         case PlanItem.CONFLICT:
             return "conflict with its base"
+        case PlanItem.BLOCKER:
+            merged = blockers.get((item.pr_url, item.item_id))
+            return f"merged blocker {merged}" if merged else "a merged blocker"
         case _:
             assert_never(item.item)
 
