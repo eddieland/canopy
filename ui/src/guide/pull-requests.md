@@ -88,6 +88,13 @@ it in one click, which beats holding backspace through a worker's earnest paragr
 it. A send adds the reactions first, then the review. GitHub keeps one of each per person, so if the review then
 fails, the reaction stays, the card says so, and sending again won't stack a second 👍 on your coworker's comment.
 
+With feedback plans on, the `resume` after the plan you approved starts each reply from the one the plan proposed for
+its thread, and canopy compares what the run wrote with that proposal itself, rather than taking the worker's word
+for it. A reply the run kept as proposed wears `as planned`: you read it once already, in the plan. One whose text, or
+what it says it did, came out otherwise wears `changed from the plan`, says which item, and **Show the proposed
+reply** puts the plan's version under it, as plain text, to hold the two side by side. Those are the ones to reread.
+Your own edits don't count as a change: you know what you wrote.
+
 **Send N waiting**, at the top, sends every waiting draft together. Either way, one PR's drafts go as one comment
 review, so your coworker gets one notification rather than a burst. The button reads **Sending…** while the post is on
 its way, and once it lands a toast at the bottom of the window says what went and where it went, so you're not
