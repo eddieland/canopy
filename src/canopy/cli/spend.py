@@ -72,7 +72,8 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     The overseer, workers, plan runs, chores, and reviews, as the agent runtime reported each; dry runs apart from the
     live ticks, and idle ticks' share of the overseer's spend. Then the tickets marked done, the spend for each, and
     the costliest tickets, the tools whose calls put the most into context, and each kind's spend by the models its
-    sessions name; --json adds every ticket, PR, and tool, and each kind's first model calls by definitions snapshot.
+    sessions name, and every session the runtime keeps, canopy's apart from the rest; --json adds every ticket, PR, and
+    tool, and each kind's first model calls by definitions snapshot.
     """
     ctx = open_context(click_ctx)
     if as_json:
@@ -103,6 +104,7 @@ def render(found: Breakdown, month: Month | None = None) -> list[str]:
     lines.extend(["", *_tickets(found)])
     lines.extend(["", *_tools(found)])
     lines.extend(["", *_models(found)])
+    lines.extend(["", *_sessions(found)])
     lines.extend(["", _tick_line("ticks", "count", "spent", _NO_OVERSEER)])
     lines.extend(
         _tick_line(GROUP_LABELS[g.group], g.ticks, cost_text(g.cost_usd), g.without_overseer) for g in found.ticks
@@ -224,6 +226,31 @@ def _models(found: Breakdown) -> list[str]:
     )
     lines.append("A run on two models counts under each.")
     return lines
+
+
+# Every session the runtime keeps that started in the window, canopy's apart from the rest, and where the rest ran, as
+# `canopy loop` recorded them between ticks.
+def _sessions(found: Breakdown) -> list[str]:
+    spent = found.sessions
+    if spent is None or spent.read_at is None:
+        return ["The runtime's sessions were never read: canopy loop reads them, canopy's and not, between ticks."]
+    read = f"read {spend.local_day(spent.read_at)}" + (f", last {spent.status}" if spent.status != "found" else "")
+    lines = [
+        f"Every runtime session, as its record says ({read}):",
+        _session_line("sessions", "count", "spent"),
+        _session_line("canopy's runs", str(spent.canopy.sessions), cost_text(spent.canopy.cost_usd)),
+        _session_line("outside canopy", str(spent.outside.sessions), cost_text(spent.outside.cost_usd)),
+    ]
+    # Where the rest ran, the directory last, since a path is as long as it is.
+    lines.extend(
+        f"{_session_line('', str(d.sessions), cost_text(d.cost_usd))}  {d.directory}" for d in spent.directories
+    )
+    lines.append("A subagent's session counts with the session it ran for; another workspace's runs are outside.")
+    return lines
+
+
+def _session_line(label: str, *counts: str) -> str:
+    return f"{label:<{_KEY_WIDTH}}" + "".join(f"{c:>{_COST_WIDTH}}" for c in counts)
 
 
 def _tool_line(tool: str, kind: str, *counts: str) -> str:

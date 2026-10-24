@@ -15,6 +15,7 @@ from canopy.runtime.opencode import (
     project_config,
     servers,
     session_models,
+    sessions,
     transcript,
     watch,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "project_config",
     "servers",
     "session_models",
+    "sessions",
     "transcript",
     "watch",
 ]

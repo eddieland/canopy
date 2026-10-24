@@ -4,13 +4,13 @@ The harness reads these and nothing else of a run's output. The runtime's implem
 printed (`canopy.runtime.stdout`); a template that asks for no events reports text alone. What holds whatever the
 runtime is lives here, for the implementation to build on: a session id canopy prints, the sum of the model calls, and
 the bounded rollup of the tool calls, and which models served a session, as the runtime's record of it says, and
-which models it lists to run an agent on.
+which models it lists to run an agent on, and what each session the runtime keeps cost, canopy's or not.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from typing import Annotated, Literal
@@ -173,6 +173,56 @@ class SessionModels:
     replies: Mapping[str, str] = field(default_factory=dict)
 
 
+#: Where a read of the runtime's sessions stopped, to start the next after: the last session's update, in
+#: milliseconds since the epoch, and its id. Sessions are read in that order, so one updated since is read again.
+type SessionCursor = tuple[int, str]
+#: How reading the runtime's sessions ended: read; the runtime has kept none yet, which reading again may change; or
+#: its record could not be read.
+type SessionsRead = Literal["found", "missing", "failed"]
+#: How many sessions one read returns at most: a page, so a long history is read a page at a time.
+MAX_SESSIONS = 500
+#: How long a session's directory may be, as the record keeps it; a longer one is cut.
+MAX_DIRECTORY = 4096
+
+
+@dataclass(frozen=True)
+class SessionSpend:
+    """What one session the runtime keeps cost, whoever ran it: canopy, the operator, or a session it ran for."""
+
+    session_id: str
+    #: The session it ran for, as a subagent; None for a session of its own.
+    parent_id: str | None
+    #: Where it ran, printable, at most `MAX_DIRECTORY` characters.
+    directory: str
+    #: When it was made and last updated, in milliseconds since the epoch.
+    created_ms: int
+    updated_ms: int
+    #: What its replies cost, in US dollars, as the runtime priced them, and their tokens by kind.
+    cost_usd: float
+    input: int
+    output: int
+    reasoning: int
+    cache_read: int
+    cache_write: int
+    #: Each model's replies and their cost, the most costly first, at most `MAX_MODELS`.
+    models: Sequence[ModelUse] = ()
+
+
+@dataclass(frozen=True)
+class SessionPage:
+    """The runtime's sessions updated after a cursor, in the order of their update, and how reading them ended."""
+
+    outcome: SessionsRead
+    #: At most `MAX_SESSIONS`, and the limit the read was given; empty unless `found`.
+    sessions: Sequence[SessionSpend] = ()
+    #: Where the next read starts: after the last session read, any skipped among them; None when none was read.
+    cursor: SessionCursor | None = None
+    #: How many sessions the read passed over as ones canopy cannot read.
+    skipped: int = 0
+    #: Why it `failed`, in canopy's words, never what the runtime wrote.
+    error: str | None = None
+
+
 @dataclass(frozen=True)
 class ModelList:
     """The models the runtime lists to run an agent on, the list it looks a run's model up in, or why it listed none."""
@@ -198,6 +248,25 @@ class Printed:
 def session_id(value: object) -> str | None:
     """Return `value` if it is a session id canopy prints (`SESSION_ID_RE`), else None."""
     return value if isinstance(value, str) and SESSION_ID_RE.fullmatch(value) else None
+
+
+def model_uses(replies: Iterable[tuple[str, int, float]]) -> tuple[ModelUse, ...]:
+    """Each model's replies and their cost, from rows of a model's name, its replies, and their cost.
+
+    A name is kept printable, with no space, cut to `MAX_MODEL_NAME`, or `?` when nothing is left; past `MAX_MODELS`
+    models, a new one counts under `OTHER_MODELS`.
+
+    Returns:
+        The models, the most costly first.
+    """
+    found: dict[str, ModelUse] = {}
+    for model, count, cost in replies:
+        name = "".join(c for c in model if c.isprintable() and not c.isspace())[:MAX_MODEL_NAME] or "?"
+        if name not in found and len(found) >= MAX_MODELS:
+            name = OTHER_MODELS
+        was = found.get(name, ModelUse(name, 0, 0.0))
+        found[name] = ModelUse(name, was.replies + count, was.cost_usd + cost)
+    return tuple(sorted(found.values(), key=lambda m: (-m.cost_usd, m.model)))
 
 
 def total(calls: Sequence[Call]) -> Usage:
