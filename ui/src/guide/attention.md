@@ -27,12 +27,13 @@ The items come in four groups, in this order, and within a group the one open lo
    `canopy unavailable`, when the overseer couldn't run canopy at all; or `disk low`, when the disk was too full for
    the overseer to run.
 2. **Waiting on you**, in amber: a worker's question (`awaiting reply`), a review from someone the loop doesn't trust
-   (`untrusted review`), a review's rebuttal of a finding the worker declined, which canopy holds for you to settle
-   ([`review rebuttal`](pull-requests#when-canopy-reviews)), a later review's finding on code its first review
-   already read ([`review late`](pull-requests#when-canopy-reviews)), a plan or a feedback plan to approve
-   (`plan review`), replies a run drafted for you to send (`drafts waiting`), a review you asked for that's done with
-   its draft unpublished (`review waiting`), and a review you staged on GitHub, or whose post never said how it went
-   (`review unsettled`).
+   (`untrusted review`), a comment on one of a ticket's artifacts by someone you haven't listed in
+   `artifacts.authorized_authors` (`untrusted artifact comment`), a review's rebuttal of a finding the worker
+   declined, which canopy holds for you to settle ([`review rebuttal`](pull-requests#when-canopy-reviews)), a later
+   review's finding on code its first review already read ([`review late`](pull-requests#when-canopy-reviews)), a plan
+   or a feedback plan to approve (`plan review`), replies a run drafted for you to send (`drafts waiting`), a review
+   you asked for that's done with its draft unpublished (`review waiting`), and a review you staged on GitHub, or whose
+   post never said how it went (`review unsettled`).
 3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, a
    lesson a worker proposed for [memory](memory), or a worker's report of follow-up tickets canopy couldn't record
    (`follow up unrecorded`), until its ticket is done or forgotten. The follow-ups it did record never land here:
@@ -74,8 +75,9 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   another go, and never leave the page.
 - **A PR waiting on someone else** (`needs reviewer`, `ready to merge`): a button that opens the PR on GitHub, since the
   next move happens there, and someone other than canopy makes it. canopy never merges, however long the PR sits.
-- **A wait on your answer** (`awaiting reply`, `untrusted review`): the reply box is the action. A question's head
-  says which message waits and since when; the question itself is in the conversation, marked `waiting on you`.
+- **A wait on your answer** (`awaiting reply`, `untrusted review`, `untrusted artifact comment`): the reply box is the
+  action. A question's head says which message waits and since when; the question itself is in the conversation,
+  marked `waiting on you`.
 - **A plan to approve** (`plan review`): the plan's card, the same one the ticket's page shows: which plan it is, who
   wrote it, how many comments are open, **Approve**, and **Open plan**. Approve right there if you've already read it;
   open it if you haven't, which is the honest option more often than anyone admits. Once you approve it, skip it, or
@@ -148,8 +150,9 @@ What happens next depends on the ticket:
 
 - On a **private** ticket, your reply is the next worker's instruction.
 - On a **public** ticket, it reaches the ticket's workers as an instruction too, and never the ticket itself. It's how
-  you tell a worker what to do about an untrusted review. To answer where the ticket's readers can see it, answer on
-  the tracker.
+  you tell a worker what to do about an untrusted review, or send on a comment on an artifact from someone you haven't
+  listed: say what of it a worker should act on, since the comment itself steers nothing. To answer where the ticket's
+  readers can see it, answer on the tracker.
 
 Either way, the loop reads it at its next tick. Until then your message carries `waiting for the next tick`, and the
 item shows `answered`, with a line saying it leaves at the next tick. Once a tick has read it, the chip turns to `seen`:

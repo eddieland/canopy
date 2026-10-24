@@ -36,11 +36,13 @@ const FAILED = new Set([
 const REVIEW_DRAFT_REASONS = new Set(['review_waiting', 'review_unsettled'])
 
 // Reasons that wait on the operator's own answer: a private ticket's question or a planner's, an untrusted review's
-// go-ahead (D089), a review's rebuttal of a worker's decline or its late finding (DESIGN §21), a plan to approve (§25),
-// the replies a run drafted (§29), or a review's draft (§34).
+// go-ahead (D089), an unlisted author's comment on an artifact to send on (§38), a review's rebuttal of a worker's
+// decline or its late finding (DESIGN §21), a plan to approve (§25), the replies a run drafted (§29), or a review's
+// draft (§34).
 const WAITING = new Set([
     'awaiting_reply',
     'untrusted_review',
+    'untrusted_artifact_comment',
     'review_rebuttal',
     'review_late',
     'plan_review',
@@ -58,8 +60,9 @@ const RUN_BROKE = new Set(['worker_failed', 'crashed', 'unpushed', 'unknown_resu
 // The reasons agent memory raises (DESIGN §28), each with the proposals or lessons to act on under its head.
 const MEMORY_REASONS = new Set(['memory_proposal', 'lesson_review', 'lesson_wrong'])
 
-// Reasons whose answer is a reply: a question, or the go-ahead an untrusted review waits on (D089).
-const ANSWERED_BY_REPLY = new Set(['awaiting_reply', 'untrusted_review'])
+// Reasons whose answer is a reply: a question, the go-ahead an untrusted review waits on (D089), or an unlisted
+// author's comment on an artifact, sent on (§38).
+const ANSWERED_BY_REPLY = new Set(['awaiting_reply', 'untrusted_review', 'untrusted_artifact_comment'])
 
 // How the overseer's `plan_review` detail names a feedback plan (DESIGN §32), with its id: `feedback plan 3 for ...`.
 const FEEDBACK_PLAN = /^feedback plan (\d+)\b/u

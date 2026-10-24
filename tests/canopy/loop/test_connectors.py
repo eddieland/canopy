@@ -350,15 +350,15 @@ def test_an_artifacts_source_reads_its_feed_past_its_cursor_last_and_in_shadow(
         sql.select("*").from_("observed_artifact_comments").order_by("seq"),
     )
     assert [c.body for c in found] == ["Why shard it?", "Comment 2."]
-    # Each reaches its ticket's conversation as data, quoting its passage, but no state block or attention item yet
-    # (DESIGN §38).
+    # Each reaches its ticket's conversation, quoting its passage. By an author the operator does not list, it is data
+    # the overseer is not shown, and waits on the operator as an attention item (DESIGN §38).
     assert "Why shard it?" not in json.dumps(scenario.state())
     said = scenario.conn.execute("SELECT subject_id, source, channel, body FROM messages WHERE body LIKE '%shard%'")
     assert [tuple(r) for r in said] == [
         (KEYS[0], "artifact", "artifacts", "> shard it\n\nWhy shard it?"),
         (KEYS[0], "artifact", "artifacts", "> shard it\n\nComment 2."),
     ]
-    assert scenario.attention() == []
+    assert scenario.attention() == [(KEYS[0], "untrusted_artifact_comment")]
 
     scenario.tick(*waits(*KEYS))
     assert asked(watched)[-1]["request"] == {"since": 2}
@@ -372,7 +372,9 @@ def test_an_artifacts_source_read_short_raises_connector_failed_and_reads_the_ch
     scenario: Scenario,
     watched: Path,
 ) -> None:
-    scenario.configures("private", connect={"sources": {"louvre": ARTIFACTS}})
+    # Comments by an author the operator lists, so the source's own item is the only one.
+    listed = {"authorized_authors": ["u_ana"]}
+    scenario.configures("private", connect={"sources": {"louvre": ARTIFACTS}}, artifacts=listed)
     plays(watched, louvre={"lines": [artifact_change(1), {"kind": "comment_created", "seq": 2}, artifact_change(3)]})
     ticked = scenario.tick(*waits(*KEYS))
     assert ticked.tick.status == "ok", "a source read short does not fail the tick"

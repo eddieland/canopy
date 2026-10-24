@@ -99,14 +99,20 @@ Controls:
   shown (`unobserved`). A dispatch resting on a public ticket or a PR observed past that age is refused `stale`. A
   private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual: the
   guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
-- An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own,
-  cut as a tracker comment is, with the store's id for each author and whether the comment is an agent's or carries
-  every comment mark. A comment on an artifact whose origin names a ticket the journal holds is also recorded once in
-  that ticket's conversation, quoting its passage, as a tracker comment is (DESIGN §35): data, whoever wrote it, read
-  only by the operator's views, a private ticket's own worker, and the plan archive's conversations when they are on.
-  No state block, attention item, or guard reads them yet (ROADMAP M62), so a comment steers nothing. The ticket one
-  names is its artifact's origin, a worker's word until canopy sets it per run, so a steered worker could name another
-  ticket the journal holds; comments then reach that ticket's conversation as data, as anyone's tracker comment does.
+- An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own, cut
+  as a tracker comment is, with the store's id for each author and whether the comment is an agent's or carries every
+  comment mark. A comment on an artifact whose origin names a ticket the journal holds is also recorded once in that
+  ticket's conversation, quoting its passage, as a tracker comment is (DESIGN §35), and read by the
+  operator's views, a private ticket's own worker, and the plan archive's conversations when they are on. Whose
+  comment counts is decided in code, from the store's authenticated author id and the private list
+  `artifacts.authorized_authors` (T7), empty by default. On a public ticket a listed person's comment is authority, as
+  an authorized reply is, so the overseer is shown it as an instruction, a `resume` for `reply` may cite it, and that
+  ticket's worker hears it as one. A comment the store marks an agent's, or carrying every comment mark (D069), is never
+  authority; nor is any comment on a private ticket. Anyone else's is data that raises `untrusted_artifact_comment`
+  until the operator replies on the ticket. The ticket a comment reaches is its artifact's origin, a worker's word until
+  canopy sets it per run, so a steered worker could name another ticket the journal holds: a listed author's comment on
+  its artifact would then steer that ticket's next worker, and anyone else's would raise an item about it. Residual: a
+  listed author's account, or a Louvre that misreports authors, steers workers as an authorized replier's would.
 - The harness records the decisions that need no judgment itself, before the overseer runs (DESIGN §37): today only
   `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
   each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
@@ -759,7 +765,8 @@ else it reads to the store, under any title, where whoever can read canopy's nam
 resolve any thread there, and comment on any artifact of the namespace. The namespace bounds where (Louvre's token,
 the local store's `--namespace`), and no tool deletes an artifact or changes who may see it, so what was published
 stays until a person removes it in the store. The skill says to publish only when asked, which no guard checks. An
-artifact's origin, which names its ticket, is the worker's word until canopy sets it per run. A repository's OpenCode
+artifact's origin, which names its ticket, is the worker's word until canopy sets it per run, so a steered worker
+chooses which ticket a listed author's comment on the artifact steers (T1). A repository's OpenCode
 config naming the store's tools is not refused, as it is for the tracker's on a private run, and an example chore's
 agent, copied at install and never rendered, does not deny the store's server.
 A private ticket's privacy rests on the tool lists: a tool listed as read that writes would write; the defaults are

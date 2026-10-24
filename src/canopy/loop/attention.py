@@ -31,6 +31,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
 from canopy.core import (
+    artifact_authority,
     chore_result,
     chore_view,
     connector_runs,
@@ -124,6 +125,7 @@ HARNESS_REASONS = frozenset(
         *review_waiting.REASONS,
         follow_ups.REASON,
         task_tickets.REASON,
+        artifact_authority.REASON,
     },
 )
 # The window the list reads: how far back to look when working out how long an item has been open. Garbage

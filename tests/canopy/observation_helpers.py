@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from unittest import mock
 
-from canopy.core import db, records, sql
-from tests.canopy.helpers import KEY, LABEL
+from canopy.core import artifact_feed, conversation, db, records, sql
+from tests.canopy.helpers import KEY, LABEL, present
 
 if TYPE_CHECKING:
     import sqlite3
@@ -157,6 +157,37 @@ def review(
 
 #: Who comments on an artifact in the helpers' changes: a person the store signed in.
 ANA = {"id": "u_ana", "display_name": "Ana", "kind": "person"}
+
+
+def artifact_comment(
+    conn: sqlite3.Connection,
+    ident: str,
+    author: str = "u_ana",
+    *,
+    kind: str = "person",
+    marked: bool = False,
+    key: str = KEY,
+    body: str = "Shard by tenant, not by day.",
+) -> int:
+    """Record comment `ident` on `key`'s artifact as the `artifacts` source does: observed, and in its conversation.
+
+    Returns:
+        The id of its message in `key`'s conversation.
+    """
+    conn.execute(
+        "INSERT OR IGNORE INTO observed_artifact_threads (id, artifact_id, origin, ticket, anchored_version, state, "
+        "seq, observed_at) VALUES (?, ?, ?, ?, 1, 'open', 1, ?)",
+        (f"t-{key}", f"art-{key}", json.dumps({artifact_feed.TICKET_KEY: key}), key, FRESH),
+    )
+    conn.execute(
+        "INSERT INTO observed_artifact_comments (id, thread_id, author, author_name, author_kind, via, body, "
+        "truncated, marked, created_at, seq, observed_at) VALUES (?, ?, ?, ?, ?, 'web', ?, 0, ?, ?, 1, ?)",
+        (ident, f"t-{key}", author, author, kind, body, marked, FRESH, FRESH),
+    )
+    said = db.Comment(id=f"{artifact_feed.COMMENT_ID_PREFIX}{ident}", author=author, at=FRESH, truncated=False)
+    source = "worker" if marked else artifact_feed.SOURCE
+    conversation.record_comment(conn, key, said, source=source, body=body, channel=conversation.ARTIFACTS)
+    return present(db.comment_message(conn, conversation.TICKET, key, said.id)).id
 
 
 def artifact_change(seq: int, kind: str = "comment_created", **more: object) -> dict[str, object]:

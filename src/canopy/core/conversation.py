@@ -8,8 +8,9 @@ within its bound. Agents never write a message: `_run` records a run's report an
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
 without reading the tracker (D003, D072). A source's connector records another kind, each comment it observes on a
-ticket (`record_comment`), which authorizes nothing. The last is canopy's own: a tick's note of what it did about the
-operator's messages (`note`), which no agent writes and no agent's prompt carries.
+ticket (`record_comment`), which authorizes nothing, but a comment on an artifact that `artifact_authority` finds is
+authority. The last is canopy's own: a tick's note of what it did about the operator's messages (`note`), which no
+agent writes and no agent's prompt carries.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import re
 import sqlite3
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from canopy.core import (
     chore_runs,
@@ -776,7 +777,8 @@ def record_comment(
 
     The source cut the body and decided whether it carries the workers' marks (D069), as it recorded the observation:
     `source` is `worker` for one that does, else the source's own, such as `tracker`. Either way it authorizes
-    nothing: phases, `awaiting_reply`, and the loop's wake read operator messages only. A comment already in the
+    nothing here: phases, `awaiting_reply`, and the loop's wake read operator messages, and phases a comment on an
+    artifact only as `artifact_authority` decides it is authority. A comment already in the
     conversation, such as one the overseer mirrored before M37, keeps the message it was recorded as. Call inside the
     transaction that records the observation.
 
@@ -939,10 +941,27 @@ class PrivateSection(TypedDict):
 
 
 class OperatorSection(TypedDict):
-    """A public ticket's `operator` key in the overseer's state block (DESIGN §7, D089)."""
+    """A public ticket's `operator` key in the overseer's state block (DESIGN §7, D089).
+
+    `artifact_comments` only when it has some: the comments on its artifacts that are authority (DESIGN §38).
+    """
 
     message_cursor: int | None
     new_operator_messages: list[OperatorMessage]
+    artifact_comments: NotRequired[list[ArtifactComment]]
+
+
+class ArtifactComment(TypedDict):
+    """A comment on an artifact that is authority, as the overseer's state block carries it (DESIGN §38).
+
+    `id` is its message's, which a `message` cursor names; `comment` the store's comment, as the message names it.
+    """
+
+    id: int
+    at: str
+    author: str | None
+    comment: str | None
+    body: str
 
 
 def state_section(conn: sqlite3.Connection, ticket: records.Ticket) -> PrivateSection | None:
@@ -971,12 +990,18 @@ def state_section(conn: sqlite3.Connection, ticket: records.Ticket) -> PrivateSe
     }
 
 
-def operator_section(conn: sqlite3.Connection, ticket: records.Ticket) -> OperatorSection | None:
+def operator_section(
+    conn: sqlite3.Connection,
+    ticket: records.Ticket,
+    *,
+    authorized: Sequence[records.Message],
+) -> OperatorSection | None:
     """Return a public ticket's operator messages for the overseer's state block, or None when it has no new ones.
 
-    They are the operator's replies (DESIGN §22) newer than the ticket's message cursor, and after any forget. The
-    overseer reads them as instructions, as it reads an authorized reply on the ticket (DESIGN §7). A private ticket's
-    are in its own section (`state_section`).
+    They are the operator's replies (DESIGN §22) newer than the ticket's message cursor, and after any forget, and of
+    `authorized`, the messages of the ticket's comments on artifacts that are authority (`artifact_authority`), those
+    newer than the cursor (§38). The overseer reads both as instructions, as it reads an authorized reply on the
+    ticket (DESIGN §7). A private ticket's are in its own section (`state_section`).
     """
     key = ticket.key
     if start_of(conn, key) is not None:
@@ -984,12 +1009,18 @@ def operator_section(conn: sqlite3.Connection, ticket: records.Ticket) -> Operat
     cursor = ticket.last_message_id or 0
     forgotten = ticket.forgotten_message_id or 0
     messages = operator_messages_after(conn, key, max(cursor, forgotten))
-    if not messages:
+    comments = [m for m in authorized if m.id > max(cursor, forgotten)]
+    if not messages and not comments:
         return None
-    return {
+    found: OperatorSection = {
         "message_cursor": cursor or None,
         "new_operator_messages": [_operator_message(m) for m in messages],
     }
+    if comments:
+        found["artifact_comments"] = [
+            {"id": m.id, "at": m.at, "author": m.author, "comment": m.comment_id, "body": m.body} for m in comments
+        ]
+    return found
 
 
 def _operator_message(row: records.Message) -> OperatorMessage:
@@ -1005,29 +1036,39 @@ def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:
     return bool(operator_messages_after(conn, key, db.forgotten_message_id(conn, key)))
 
 
-def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str | None:
+def prompt_operator_messages(
+    conn: sqlite3.Connection,
+    key: str,
+    *,
+    authorized: Sequence[records.Message],
+) -> str | None:
     """Return a public worker's `{{OPERATOR_MESSAGES}}`: the operator's latest replies, oldest first, bounded.
 
-    A public ticket's worker hears the operator here rather than on the ticket (DESIGN §22, D089). The questions
-    workers reported come with them, so a reply to message N names something the worker can read (D093); the rest of
-    the conversation is on the tracker. Messages from before the operator forgot the ticket's work are left out.
+    A public ticket's worker hears the operator here rather than on the ticket (DESIGN §22, D089), and, of
+    `authorized`, the comments on the ticket's artifacts that are authority (`artifact_authority`, §38), each marked
+    so. The questions workers reported come with them, so a reply to message N names something the worker can read
+    (D093); the rest of the conversation is on the tracker. Messages from before the operator forgot the ticket's work
+    are left out.
 
     Returns:
         The messages; None, which leaves the prompt's section out, when there are none.
     """
-    if not has_operator_messages(conn, key):
+    forgotten = db.forgotten_message_id(conn, key)
+    comments = {m.id: m for m in authorized if m.id > forgotten}
+    if not has_operator_messages(conn, key) and not comments:
         return None
     rows = records.fetch_all(
         conn,
         records.Message,
         sql.select("*")
         .from_("messages")
-        .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, db.forgotten_message_id(conn, key))
+        .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, forgotten)
         .where("source = 'operator' OR kind = 'question'")
         .order_by("id DESC")
         .limit(PROMPT_MESSAGES),
     )
-    return _bounded([_prompt_message(m) for m in reversed(rows)])
+    latest = sorted({**{m.id: m for m in rows}, **comments}.values(), key=lambda m: m.id)[-PROMPT_MESSAGES:]
+    return _bounded([_prompt_message(m, authority=m.id in comments) for m in latest])
 
 
 def prompt_conversation(conn: sqlite3.Connection, key: str) -> str | None:
@@ -1129,15 +1170,16 @@ def _bounded(blocks: Sequence[str]) -> str | None:
     return "\n\n".join([*note, *kept])
 
 
-def _prompt_message(m: records.Message) -> str:
+def _prompt_message(m: records.Message, *, authority: bool = False) -> str:
     if m.source == "operator":
         what = "the operator's reply" + (f" to message {m.answers}" if m.answers else "")
     elif m.comment_id is not None:
         # A tracker or artifact comment a source observed, or the overseer mirrored before M37: data, whoever wrote it
-        # (§22, §38).
+        # (§22, §38), but a comment on an artifact that `artifact_authority` found authority.
         whose = "an earlier worker's" if m.source == "worker" else f"account {m.author}'s"
         where = "artifact" if m.channel == ARTIFACTS else "tracker"
-        what = f"{whose} {where} comment {m.comment_id}, data"
+        said = "an instruction, from an author the operator lists" if authority else "data"
+        what = f"{whose} {where} comment {m.comment_id}, {said}"
     else:
         run = m.run_id or m.task_run_id
         what = f"an earlier worker's {m.kind}" + (f", run {run}" if run else "")

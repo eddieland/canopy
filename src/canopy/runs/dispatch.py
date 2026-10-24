@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import (
     agent_models,
+    artifact_authority,
     attachments,
     conversation,
     db,
@@ -48,6 +49,7 @@ from canopy.infra.text import quoted
 from canopy.runs import plan_guards, policy
 
 if TYPE_CHECKING:
+    from canopy.core import records
     from canopy.core.context import Context
 
 #: A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17).
@@ -1009,14 +1011,16 @@ def _spawn(
         values["OPERATOR_MESSAGES"] = (
             conversation.prompt_conversation(ctx.conn, key)
             if plan.private
-            else conversation.prompt_operator_messages(ctx.conn, key)
+            else conversation.prompt_operator_messages(ctx.conn, key, authorized=_authorized(ctx, key))
         )
     elif plan.private:
         values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
     else:
-        values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
+        operator = conversation.prompt_operator_messages(ctx.conn, key, authorized=_authorized(ctx, key))
+        values["OPERATOR_MESSAGES"] = operator
         values["PREVIOUS_RUNS"] = conversation.prompt_previous_runs(ctx.conn, key)
-        if conversation.has_operator_messages(ctx.conn, key):
+        # What the worker must hear: the operator's messages (D093), and the comments on artifacts that are authority.
+        if operator is not None:
             required = (*required, *prompts.REQUIRED_OPERATOR)
     if review is not None:
         required = (*required, *prompts.REQUIRED_REVIEW)
@@ -1077,6 +1081,15 @@ def _spawn(
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _authorized(ctx: Context, key: str) -> list[records.Message]:
+    """The messages of a public ticket's comments on artifacts that are authority, which its worker hears (§38).
+
+    Returns:
+        The messages, oldest first.
+    """
+    return artifact_authority.authorized(ctx.conn, key, frozenset(ctx.config.artifacts.authorized_authors))
 
 
 def _follow_ups_note(ctx: Context, key: str, *, private: bool) -> str:

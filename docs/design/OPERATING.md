@@ -399,8 +399,8 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 `flaky_rerun` (§23), `plan_review`, `plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`,
 and `lesson_wrong` (§28),
 `drafts_waiting` (§29), `connector_failed` (§30), `persona_missing` and `bad_persona` (§31), `model_missing` and
-`model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34), and
-`task_ticket_unrecorded` (§36). An item
+`model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34),
+`task_ticket_unrecorded` (§36), and `untrusted_artifact_comment` (§38). An item
 about one unit names its repository, shown as `KEY (repo)`. An item about a PR whose latest reviewed commit has a
 `high` review (§21), or about its ticket, comes first: within its reason on the list, and in a notification.
 
@@ -418,7 +418,9 @@ every source whose run that tick read less than it was asked (§30), and `canopy
 step 5), the last two also about the workspace while queued tasks wait on their model (§13). Follow-ups a run filed
 are an event, not an item: the sinks hear of them once, as `follow_ups.filed` (§20), since nothing canopy watches tells
 when the operator has decided on one. It raises `follow_up_unrecorded` about a ticket whose runs reported tickets the
-journal did not record, until the ticket is done or forgotten (§18).
+journal did not record, until the ticket is done or forgotten (§18), and `untrusted_artifact_comment` about a ticket
+with a comment on its artifacts by an author the operator does not list, until the operator replies on the ticket after
+it (§38).
 
 **Recorded by the overseer.** The overseer records an item with its `attention` tool (§27), with a reason and a detail,
 every tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention
