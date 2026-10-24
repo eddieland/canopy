@@ -594,9 +594,12 @@ def test_the_state_block_shows_reviewed_prs(reviewing: CanopyEnv, scenario: Scen
         "max_reviews": 1,
         "max_reviews_per_day": 20,
         "max_reviews_per_pr": 3,
+        "settle_minutes": 0,
         "started_last_24h": 1,
     }
     assert section["running"] == []
+    # With settling off, no head is recorded.
+    assert section["settling"] == []
     [reviewed] = section["prs"]
     assert (reviewed["url"], reviewed["ticket"], reviewed["review_runs"]) == (PR, "PROJ-1", 1)
     latest = reviewed["latest"]
