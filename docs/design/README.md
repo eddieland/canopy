@@ -116,6 +116,9 @@ not go in the middle of the sequence.
 - [A tick without the overseer](WITHOUT_THE_OVERSEER.md): the tick that runs no overseer when nothing is left to
   judge, and the loop that ticks when the connectors see a change.
   - [39. A tick without the overseer](WITHOUT_THE_OVERSEER.md#39-a-tick-without-the-overseer)
+- [The overseer per decision](OVERSEER_PER_DECISION.md): one overseer run for each subject left to judgment, and the
+  runs it asks for, which the tick starts outside its process tree.
+  - [40. The overseer per decision](OVERSEER_PER_DECISION.md#40-the-overseer-per-decision)
 
 ## 1. Problem
 
