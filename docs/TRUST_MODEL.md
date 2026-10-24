@@ -327,6 +327,9 @@ Controls:
   review's finding on lines unchanged since the PR's first reviewed commit is held the same way, as the harness's git
   reads the two commits, the finding's path a literal one; a steered reviewer can only aim a finding at old code, which
   sends it to the operator rather than a worker, and a `blocking` one is never held.
+  A review's `impact` is the reviewer's judgment, which the PR's text can steer, so the harness records `high`, whatever
+  the reviewer says, for a change to a high-impact path, as git names the paths: CI's workflows in every repository,
+  and the paths the map lists for the PR's repository. It only raises, and `high` only ranks attention.
   A revision of a review's draft (DESIGN §34) runs as the reviewer does and reads the same PR, its draft, and its
   review, all data; the operator's notes since the draft's newest version are its only instructions. Its version is
   untrusted like the reviewer's until the operator publishes it, and the state block names the draft, never its text
@@ -797,6 +800,9 @@ Controls, in code:
   is private instead (DESIGN §32): it holds a trusted reviewer's feedback for the operator and lets anyone else's
   start a plan run, so a shared file chooses neither. So is `policy.planner_may_approve` (§25), which lets a planner's
   word stand for the operator's approval.
+- A repository's `high_impact_paths` in the map only adds to `.github/workflows/`, which the harness holds high
+  impact in every repository, so a commit to the workspace file cannot take CI's workflows off. It can change the rest
+  of the list, which only ranks attention.
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not
