@@ -107,6 +107,9 @@ one in a tick of its own, or in the one `ticking` holds open, so what several ra
             scenario.overseer("attention", "PROJ-2", "needs_human", "--detail", "two")
         assert len(scenario.attention()) == 2
 
+The loop is told the same way: `loops(scenario, ...)` runs `canopy loop`, dry, on a fake clock, acting at the minutes
+it is given, and gives back each tick with what woke it and the minute it started at.
+
 A step the verbs do not cover is written as before, in the same test: the verbs are argv lists and context managers, so
 they mix with `canopy(...)`, `overseer_does`, and the journal's own queries.
 
@@ -144,9 +147,10 @@ from unittest import mock
 
 from canopy.cli.main import main
 from canopy.core import db, feedback_items, records, review_runs
+from canopy.core.context import Context
 from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TickStatus
 from canopy.infra import logs, procs
-from canopy.loop import attention, poll
+from canopy.loop import attention, poll, repeat, tick
 from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,
@@ -156,6 +160,7 @@ from tests.canopy.helpers import (
     WORKER_DONE,
     Behavior,
     Called,
+    FakeTime,
     InlineRunner,
     Script,
     blocked_result,
@@ -166,6 +171,7 @@ from tests.canopy.helpers import (
     in_tick,
     last_run,
     last_tick,
+    log_file,
     operator,
     overseer_does,
     planner_does,
@@ -495,6 +501,30 @@ class Ticked:
         # What `canopy tick` printed no longer reaches the test's own output, so what went wrong in it is told here.
         lines += [f"  {line}" for line in self.printed.err.splitlines() if line.strip()]
         return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class Looped:
+    """What `canopy loop` did: the ticks it ran, each with the minute of its clock it started at."""
+
+    #: The ticks' rows, closed, in the order they ran.
+    ticks: Sequence[records.Tick]
+    #: The minute of the loop's clock each tick started at, the first at 0: a tick takes none of it.
+    started: Sequence[float]
+    #: What the loop printed, a logfmt line for each event, as to the daemon's file.
+    printed: str
+
+    @property
+    def woken_by(self) -> list[str | None]:
+        """What started each tick, as its row records it: `start`, `timer`, `poll`, ..."""
+        return [t.woken_by for t in self.ticks]
+
+    def __str__(self) -> str:
+        """Each tick, by when it started, what woke it, and how it ended."""
+        return "\n".join(
+            f"  at minute {m:g}, tick {t.id} woken by {t.woken_by}: {t.status}: {t.summary}"
+            for m, t in zip(self.started, self.ticks, strict=True)
+        )
 
 
 @dataclass
@@ -1093,6 +1123,68 @@ def sends_drafts(entries: object, *, pr: str = DRAFTS_PR) -> Script:
     It sends `entries` as its drafts, whatever they hold, so a test can send ones canopy refuses.
     """
     return pushes(prs={"repo": pr}, drafts=entries)
+
+
+def loops(
+    scenario: Scenario,
+    *moves: list[str],
+    ticks: int = 2,
+    at: Mapping[float, Callable[[], None]] | None = None,
+) -> Looped:
+    """Run `canopy loop` in `scenario`, dry, for `ticks` ticks on a fake clock, its overseer running `moves`.
+
+    `at` acts during the waits: each action runs once, as the loop's clock reaches that many minutes, such as a
+    source that answers otherwise from then on. The clock starts at 0 and only a wait moves it. The overseer records
+    no query: a `tracker` source's read is the harness's to record.
+
+    Returns:
+        The ticks the loop ran, and the minute each started at.
+    """
+    clock = FakeTime()
+    pending = sorted((at or {}).items())
+    started: list[float] = []
+    ran = tick.run
+
+    def acts() -> None:
+        while pending and clock.now >= pending[0][0] * 60:
+            pending.pop(0)[1]()
+
+    def ticks_at(
+        ctx: Context,
+        *,
+        dry_run: bool,
+        woken_by: tick.WokenBy | None = None,
+        ui: str | None = None,
+    ) -> tick.Outcome:
+        started.append(clock.now / 60)
+        return ran(ctx, dry_run=dry_run, woken_by=woken_by, ui=ui)
+
+    clock.on_sleep = acts
+    before = int(scenario.conn.execute("SELECT coalesce(max(id), 0) FROM ticks").fetchone()[0])
+    term, out = log_file()
+    with (
+        overseer_does(*moves, queried="skip"),
+        mock.patch.object(
+            tick,
+            "run",
+            autospec=True,
+            side_effect=ticks_at,
+        ),
+    ):
+        repeat.run(
+            context(scenario.env),
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=ticks,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=clock.sleep,
+            clock=clock.clock,
+        )
+    rows = scenario.conn.execute("SELECT id FROM ticks WHERE id > ? ORDER BY id", (before,)).fetchall()
+    looped = Looped([present(db.get_tick(scenario.conn, int(r["id"]))) for r in rows], started, out.getvalue())
+    scenario.story.append(f"the loop runs {len(looped.ticks)} ticks\n{looped}")
+    return looped
 
 
 def with_a_pr(scenario: Scenario, *, approve: bool = True) -> None:

@@ -25,8 +25,13 @@ So does a run ending, a cooldown running out, a chore coming due, or a notice la
 
 While it waits, the loop also polls: every `connect.every_minutes`, two by default, it runs the connectors that read
 your tracker and GitHub into canopy's own record, and the comments on your artifacts if you set up a source for them.
-A poll runs no overseer, so it keeps that record fresh however long you set the wait between ticks. For now nothing
-acts on what a poll reads, and a poll never starts a tick early, with one exception: a
+A poll runs no overseer, so it keeps that record fresh however long you set the wait between ticks. After a poll that
+read everything, canopy works out what a tick would make of it, and when that's something the last tick didn't have, a
+ticket new to the queue, a new comment, a check gone red, a decision canopy would now make itself, the poll ends the
+wait, still no sooner than `loop.min_gap_minutes`. A poll that reads the same world again ends nothing, and neither
+does an edit to a comment the last tick already had: nobody pays for an overseer run to learn that nothing happened. A
+source that fails ends the wait once, so the tick reads it again and tells you if it's still down; after that the loop
+keeps to its timer until a poll reads everything again, and that poll ends the wait too. A
 [reply from Slack](slack#replying-from-slack) is yours, so it ends the wait like any other.
 
 ## Runs
