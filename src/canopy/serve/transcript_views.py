@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
+    from canopy.runtime.implementation import Version
+
 #: No reply's model: a run one model served, or one whose replies canopy has not read.
 _NO_MODELS: Mapping[str, str] = MappingProxyType({})
 
@@ -39,8 +41,13 @@ def session_transcript(
     session: object,
     removed_after_days: int | None = None,
     models: Mapping[str, str] = _NO_MODELS,
+    *,
+    version: Version,
 ) -> Transcript:
     """The events of the session the journal recorded, read back from the file they were printed to (DESIGN §22).
+
+    They are read as the runtime `version` runs prints them: the one config names now, so a session another version
+    printed reads as this one's events.
 
     `removed_after_days` is how long retention kept the file and its prompt, when it removed them (`removed_after`).
     `models` is the model of each reply of a run more than one model served, by its message (`run_models.replies_of`),
@@ -54,7 +61,7 @@ def session_transcript(
     prompt = TranscriptPrompt(text=kept.text, truncated=kept.truncated) if kept is not None else None
     if not isinstance(session, str) or not session:
         return Transcript(status="no_session", prompt=prompt, removed_after_days=removed_after_days)
-    found = transcript.read(path, session)
+    found = transcript.read(path, session, version=version)
     if found is None:
         return Transcript(status="no_log", session_id=session, prompt=prompt, removed_after_days=removed_after_days)
     return Transcript(

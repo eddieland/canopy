@@ -8,17 +8,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.runtime.implementation import events
+from canopy.runtime.implementation import one, pick, two
 
 if TYPE_CHECKING:
+    from canopy.runtime.implementation import Version
     from canopy.runtime.report import AgentOutput
 
 
-def read(stdout: str) -> AgentOutput:
-    """Read an agent's stdout, as its runtime prints it.
+def read(stdout: str, *, version: Version) -> AgentOutput:
+    """Read an agent's stdout, as the runtime `version` runs prints it.
 
     Returns:
         Its text and final message, and, from any events, its session, what it spent (None when a model call could not
         be read), and its tool calls rolled up by tool. Output with no events is its own text and final message.
     """
-    return events.read(stdout)
+    return pick(version, one.events, two.events).read(stdout)

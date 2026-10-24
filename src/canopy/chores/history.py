@@ -145,7 +145,11 @@ def run_env(ctx: Context, run_id: str) -> dict[str, str]:
     return {
         conversation.RUN_ID_ENV: run_id,
         WORKSPACE_ENV: str(root),
-        **servers.env({SERVER: SERVER_COMMAND, reports.SERVER: reports.SERVER_COMMAND}, cwd=root),
+        **servers.env(
+            {SERVER: SERVER_COMMAND, reports.SERVER: reports.SERVER_COMMAND},
+            version=ctx.config.runtime.version,
+            cwd=root,
+        ),
     }
 
 

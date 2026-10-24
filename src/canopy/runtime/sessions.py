@@ -10,18 +10,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.runtime.implementation import sessions as implementation
+from canopy.runtime.implementation import one, pick, two
 from canopy.runtime.report import MAX_SESSIONS
 
 if TYPE_CHECKING:
+    from canopy.runtime.implementation import Version
     from canopy.runtime.report import SessionCursor, SessionPage
 
 
-def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS) -> SessionPage:
-    """Read the sessions the runtime keeps, updated after `cursor`, or every one from the first when it is None.
+def updated_after(cursor: SessionCursor | None, *, version: Version, limit: int = MAX_SESSIONS) -> SessionPage:
+    """Read the sessions the runtime `version` runs keeps, updated after `cursor`, or every one from the first if None.
 
     Returns:
         At most `limit` sessions, capped at `MAX_SESSIONS`, the least recently updated first, and the cursor to read on
         from; `missing` when the runtime has kept no session yet; `failed`, with why, when its record could not be read.
     """
-    return implementation.updated_after(cursor, limit=min(limit, MAX_SESSIONS))
+    return pick(version, one.sessions, two.sessions).updated_after(cursor, limit=min(limit, MAX_SESSIONS))

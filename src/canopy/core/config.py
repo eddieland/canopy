@@ -37,6 +37,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import (
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     StrictBool,
@@ -53,6 +54,7 @@ from canopy.infra import procs
 from canopy.runtime import agents, invocation
 from canopy.runtime.agents import McpTools
 from canopy.runtime.definitions import MAX_SKILL_NAME, SKILL_NAME_RE, TOOL_PART_RE
+from canopy.runtime.implementation import Version
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
@@ -711,13 +713,34 @@ class Pools(Section):
     backend: Annotated[PoolKind, Scope.PRIVATE] = PoolKind.TREEHOUSE
 
 
-def _default_cmd(agent: str) -> str:
-    return invocation.default_template(agent, definitions_dir=DEFINITIONS_DIR, title=TITLE)
+def _default_cmd(agent: str, version: Version = Version.ONE) -> str:
+    return invocation.default_template(agent, version=version, definitions_dir=DEFINITIONS_DIR, title=TITLE)
+
+
+def _plain_version(value: object) -> object:
+    # A plain integer, as every number config reads is: not "2", true, or 2.0, which the enum would take as one.
+    if not isinstance(value, Version) and type(value) is not int:
+        raise ValueError(f"must be {' or '.join(str(v.value) for v in Version)}, a number")
+    return value
+
+
+#: Each agent's command template, by its key, and the agent the key's default runs.
+_AGENT_CMDS = {
+    "overseer_cmd": agents.OVERSEER,
+    "worker_cmd": agents.WORKER,
+    "private_worker_cmd": agents.PRIVATE_WORKER,
+    "plan_cmd": agents.PLANNER,
+    "chore_cmd": agents.CHORE,
+    "review_cmd": agents.REVIEWER,
+}
 
 
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
+    #: The major version of the runtime canopy runs: 1, or 2 to run OpenCode 2, 2.1.4 or later (DESIGN §13). The
+    #: default templates are the version's. Private: it decides what runs on the operator's machine.
+    version: Annotated[Version, Scope.PRIVATE, BeforeValidator(_plain_version)] = Version.ONE
     overseer_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("overseer")] = _default_cmd(agents.OVERSEER)
     #: The overseer's temperature, or -1 to set none and leave the model's own: set -1 when the overseer runs on a
     #: model that refuses one, such as OpenAI's reasoning models.
@@ -766,6 +789,20 @@ class Runtime(Section):
     #: `setup_cmd`, and a review's, with the role each takes (DESIGN §24). Names need not be in this workspace's map,
     #: as the user file serves every workspace. Private: it decides what a run may reach (TRUST_MODEL T4, T7).
     sandbox_repos: Annotated[tuple[RepoName, ...], Scope.PRIVATE] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _version_defaults(cls, data: object) -> object:
+        # A template the operator did not set is the default of the version they did; a version that is not one is
+        # left for the field to refuse.
+        if not isinstance(data, Mapping):
+            return data
+        try:
+            version = Version(data.get("version", Version.ONE))
+        except (TypeError, ValueError):
+            return data
+        defaults = {key: _default_cmd(agent, version) for key, agent in _AGENT_CMDS.items() if key not in data}
+        return {**data, **defaults}
 
     @model_validator(mode="after")
     def _sandboxed_once(self) -> Runtime:
