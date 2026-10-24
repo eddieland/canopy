@@ -18,6 +18,8 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+import canopy_sandbox
+
 from canopy.chores import start as chore_start
 from canopy.core import db, hostgit, review_diff, sql
 from canopy.core.context import db_path
@@ -569,18 +571,29 @@ def count_objects(runner: procs.Runner, clone: Path) -> dict[str, int] | None:
     return counts
 
 
+def tree_size(root: Path) -> int:
+    """The bytes of the regular files under `root`, following no link.
+
+    Returns:
+        Their sum; a file that cannot be read counts nothing.
+    """
+    total = 0
+    for parent, _dirs, names in os.walk(root):
+        for name in names:
+            total += _regular_size(Path(parent) / name) or 0
+    return total
+
+
 def _sandbox_caches() -> Kind:
     """Each role's cache under `$XDG_CACHE_HOME/canopy/sandbox/`, which only `--caches` empties (DESIGN §24).
 
     Returns:
         The kind, counting role directories and the bytes of the regular files in them.
     """
-    xdg = Path(os.environ.get("XDG_CACHE_HOME", ""))
-    root = (xdg if xdg.is_absolute() else Path.home() / ".cache") / "canopy" / "sandbox"
     tally = _Tally()
-    for role in _listing(root):
+    for role in _listing(canopy_sandbox.cache_root()):
         if _is_dir(role):
-            tally.add(_tree_size(role), removable=False)
+            tally.add(tree_size(role), removable=False)
     return tally.kind("sandbox caches", "directories", "--caches")
 
 
@@ -647,16 +660,3 @@ def _listing(directory: Path) -> list[Path]:
         return sorted(directory.iterdir())
     except OSError:
         return []
-
-
-def _tree_size(root: Path) -> int:
-    """The bytes of the regular files under `root`, following no link.
-
-    Returns:
-        Their sum; a file that cannot be read counts nothing.
-    """
-    total = 0
-    for parent, _dirs, names in os.walk(root):
-        for name in names:
-            total += _regular_size(Path(parent) / name) or 0
-    return total

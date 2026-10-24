@@ -267,7 +267,10 @@ while reviews are off, of a PR in no known repository, naming a ticket that did 
 ticket's worker is running, of a commit with a `done` review (in the same persona, when the operator chose several for
 the PR, §31), or past the per-PR limit (runs however they ended, plus
 any the operator grants, §22), the daily limit, review capacity, or `max_workers`, which counts reviews. A dry run
-checks the same guards and starts nothing (D036).
+checks the same guards and starts nothing (D036). With `review.settle_minutes`, it also refuses a head that has not
+been the PR's head that long, so a PR pushed to often is reviewed once it goes quiet: the clock starts when the overseer
+first asks to review that head, since the harness cannot read push times, and another head restarts it. A requested
+review does not wait. The state block lists the heads still settling.
 
 The review starts detached, as a worker does (§8 step 4), checks out the commit detached in a leased slot, and deletes
 every tracked symlink that resolves outside the checkout. The reviewer runs in a private directory of canopy's holding a

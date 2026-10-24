@@ -78,6 +78,11 @@ export function messageRef(id: number | string): string {
     return `#${id}`
 }
 
+/** The anchor of a message's bubble in its ticket's conversation, `message-5`: what a link to it hashes to. */
+export function messageAnchor(id: number | string): string {
+    return `message-${id}`
+}
+
 /** A worktree slot, as its pool numbers it: `#3`. */
 export function slotRef(name: string): string {
     return `#${name}`
@@ -86,4 +91,9 @@ export function slotRef(name: string): string {
 /** A ticket's plan, as `canopy show --plans` reads it: `plan:2`. */
 export function planRef(id: number | string): string {
     return `plan:${id}`
+}
+
+/** A ticket's feedback plan, as `canopy show` names it: `feedback-plan:7`. */
+export function feedbackPlanRef(id: number | string): string {
+    return `feedback-plan:${id}`
 }

@@ -9,7 +9,7 @@ import { Chip } from '@/components/status'
 import { TaskRunLink } from '@/components/task-link'
 import { Timestamp } from '@/components/timestamp'
 import { awaitsTick } from '@/lib/acknowledged'
-import { messageRef } from '@/lib/refs'
+import { messageAnchor, messageRef } from '@/lib/refs'
 import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -96,7 +96,8 @@ export function Conversation({
             {messages.map((message) => (
                 <li
                     key={message.id}
-                    data-testid={`message-${message.id}`}
+                    id={messageAnchor(message.id)}
+                    data-testid={messageAnchor(message.id)}
                     data-source={message.source}
                     className={cn(
                         'flex w-full max-w-2xl flex-col gap-1 [--enter:pop]',
