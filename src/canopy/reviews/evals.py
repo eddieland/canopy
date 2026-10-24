@@ -540,7 +540,8 @@ def _reviewed(
     ) as e:
         return execute.Outcome(ReviewRunStatus.CRASHED, None, f"{type(e).__name__}: {e}"), None
     output = stdout.read(done.stdout)
-    return execute.reviewed(ctx, done, output), output.usage
+    # An eval scores findings alone, so it names no changed paths: its impact is the reviewer's.
+    return execute.reviewed(ctx, done, output, changed=(), repo=case.repo), output.usage
 
 
 def _render(ctx: Context, setup: Setup, case: EvalCase, checkout: Path) -> str:

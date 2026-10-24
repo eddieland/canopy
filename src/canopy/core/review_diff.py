@@ -92,6 +92,17 @@ def diff_args(fork: str, head: str) -> tuple[str, ...]:
     return ("diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", fork, head)
 
 
+def names_args(fork: str, head: str) -> tuple[str, ...]:
+    """The `git` arguments that name every path the diff `diff_args` takes touches, each ending in a NUL.
+
+    Renames are not followed, so a renamed file's old path and new path are both named, as a deleted and an added one.
+
+    Returns:
+        The arguments after `git`.
+    """
+    return ("diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z", fork, head)
+
+
 def keep(path: Path, diff: str) -> None:
     """Write `diff` to `path`, readable only by the operator, cut at the bound `read` reads.
 
