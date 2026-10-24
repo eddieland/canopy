@@ -241,6 +241,7 @@ def test_a_kept_check_run_goes_after_journal_days_once_its_pr_is_seen_past_its_h
         ("merged", "aaa", "merged"),
         ("closed", "aaa", "closed"),
         ("at-head", "aaa", "open"),
+        ("no-head", None, "open"),
     ]
     for name, head, state in prs:
         conn.execute(
@@ -257,9 +258,9 @@ def test_a_kept_check_run_goes_after_journal_days_once_its_pr_is_seen_past_its_h
         )
     conn.commit()
     kinds = dry_run(capsys)
-    # The old runs of the moved, merged, and closed PRs go; one at its PR's head, one of a PR no read recorded, and the
-    # recent ones stay.
-    assert (kinds["check runs"]["count"], kinds["check runs"]["removable"]) == (7, 3)
+    # The old runs of the moved, merged, and closed PRs go; one at its PR's head, one of a PR read with no head, one of
+    # a PR no read recorded, and the recent ones stay.
+    assert (kinds["check runs"]["count"], kinds["check runs"]["removable"]) == (8, 3)
 
 
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])

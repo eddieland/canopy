@@ -239,7 +239,7 @@ def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> 
     made between ticks, is outside once it started before the window's oldest tick. Each source's newest run and its
     newest that recorded the query's result stay whatever their age (DESIGN §26, §30). A kept check run is read only at
     its PR's head (DESIGN §35), so one goes once older than `journal_days` and its PR is seen at another head, merged,
-    or closed; one of a PR no read recorded stays, since nothing says its head moved.
+    or closed; one of a PR no read recorded, or recorded with no head, stays, since nothing says its head moved.
 
     Returns:
         The kinds, in the order of §26's table.
@@ -284,9 +284,10 @@ def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> 
             sql.all_of(
                 sql.frag("observed_at < ?", cutoff),
                 sql.frag(
-                    "EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = observed_check_runs.pr_url "
-                    "AND (p.head_sha IS NOT observed_check_runs.head_sha OR p.state IS NOT ?))",
-                    PrState.OPEN,
+                    "EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = observed_check_runs.pr_url AND "
+                    "(p.state IN (?, ?) OR (p.head_sha IS NOT NULL AND p.head_sha != observed_check_runs.head_sha)))",
+                    PrState.MERGED,
+                    PrState.CLOSED,
                 ),
             ),
             f"journal_days = {retention.journal_days}, not at its PR's head",
