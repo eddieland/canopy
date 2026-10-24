@@ -11,21 +11,33 @@ from typing import Any
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.core import conversation, db, feedback_items, feedback_plans, plans
+from canopy.core import conversation, db, drafts, feedback_items, feedback_plans, plans
 from canopy.core.config import load
-from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
+from canopy.core.vocab import (
+    DraftStatus,
+    PlanEffort,
+    PlanItem,
+    PlanStatus,
+    Proposal,
+    ResumeReason,
+    RunKind,
+    RunStatus,
+)
+from canopy.infra import resources
 from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,
     agent_runs,
     commands_run,
     comment,
+    context,
     github_has,
     personas_dir,
     plan_file,
     planner_does,
     present,
     reads,
+    thread,
     waits,
 )
 from tests.canopy.scenario_helpers import ALICES_COMMENT as ALICE
@@ -41,13 +53,17 @@ from tests.canopy.scenario_helpers import (
     feedback_planned,
     github_shows,
     pushes,
+    sends_drafts,
     with_a_pr,
 )
+from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv
 
 PR = DRAFTS_PR
 FEEDBACK_PLAN = dispatches(kind=RunKind.FEEDBACK_PLAN)
 RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
+#: The reply the planner proposes for bob's comment, as FEEDBACK_PLANNED has it.
+PLANNED_REPLY = "Kept, since the API needs it."
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -68,17 +84,30 @@ def test_a_resume_waits_on_a_feedback_plan_the_operator_approved_and_goes_ahead_
     assert planner["cwd"] == str(env.root / "desks" / KEY)
     [*_, [_, cat]] = commands_run(scenario.agent_log)
     given = json.loads(cat["stdout"])
-    assert [(i["id"], i["author"], i["trusted"], i["body"]) for i in given] == [
+    assert [(i["id"], i["author"], i["trusted"], i["body"]) for i in given[:2]] == [
         (501, "alice", True, "Rename this."),
         (502, "bob", False, "Drop this argument."),
+    ]
+    # `build`, red at the head, is an item too, by the id canopy gave it; this planner leaves it for the next plan.
+    build = feedback_items.check_id(PR, HEAD, "build")
+    assert given[2:] == [
+        {
+            "id": build,
+            "pr": PR,
+            "item": "check",
+            "head_sha": HEAD,
+            "name": "build",
+            "conclusion": "failure",
+            "url": None,
+        },
     ]
     # The id it was never given is refused with a note; the rest are the plan's items.
     [plan] = feedback_plans.history(conn, KEY)
     assert (plan.run_id, plan.status, plan.spent_run_id) == (run_id, PlanStatus.PROPOSED, None)
     assert plan_file(env, run_id).read_text() == TEXT
     assert [(i.number, i.item, i.item_id, i.proposal, i.reply) for i in feedback_plans.items(conn, plan.id)] == [
-        (1, ReviewItem.COMMENT, 501, Proposal.CHANGE, "Renamed."),
-        (2, ReviewItem.COMMENT, 502, Proposal.DECLINE, "Kept, since the API needs it."),
+        (1, PlanItem.COMMENT, 501, Proposal.CHANGE, "Renamed."),
+        (2, PlanItem.COMMENT, 502, Proposal.DECLINE, "Kept, since the API needs it."),
     ]
     result = json.loads(present(conn.execute("SELECT result_json FROM runs WHERE id = ?", (run_id,)).fetchone())[0])
     assert result["harness"] == (
@@ -120,6 +149,92 @@ def test_a_resume_that_fails_hands_its_items_back_to_the_next_plan(scenario: Sce
     assert resume.status == RunStatus.FAILED
     trust = load(scenario.env.root, scenario.env.user_file).trust
     assert [o.id for o in feedback_items.offered(conn, trust, KEY, [PR])] == [501, 502]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_resume_starts_its_drafts_from_the_plan_and_canopy_marks_those_that_depart(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    feedback_planned(scenario, github_state)
+    scenario.operator("plan", KEY, "--approve")
+    # alice's draft is the plan's reply but for a trailing space, naming a later comment on her thread, which matches
+    # it to her item; bob's departs, its text the run's own.
+    github_shows(github_state, ALICE, comment(503, author="me", body="On it."), BOB)
+    entries = [thread(503, text="Renamed. "), thread(502, did="declined", text="Kept: the CLI needs it.")]
+    resume = scenario.run(RESUME, worker=sends_drafts(entries))
+    assert resume.status == RunStatus.DONE
+    # The prompt gave each approved item's proposed reply, as data, to start its draft from.
+    assert "Start the item's draft on its thread from it" in resume.prompt
+    assert "Item 1 (id 501):\n\n```text\nRenamed.\n```" in resume.prompt
+    assert "Item 2 (id 502):\n\n```text\nKept, since the API needs it.\n```" in resume.prompt
+    found = drafts.of_run(conn, resume.id)
+    assert [(d.comment_id, d.plan_item, d.status) for d in found] == [
+        (503, 1, DraftStatus.WAITING),
+        (502, 2, DraftStatus.WAITING),
+    ]
+    same, departs = (present(drafts.from_plan(conn, d)) for d in found)
+    assert (same.number, same.item_id, same.proposal, same.departs) == (1, 501, Proposal.CHANGE, False)
+    assert (departs.number, departs.reply, departs.departs) == (2, "Kept, since the API needs it.", True)
+
+    shown = scenario.operator("draft", "show", f"run:{resume.id}").out
+    assert "as feedback plan item 1 (id 501), change proposed it" in shown
+    assert (
+        "changed from the plan: feedback plan item 2 (id 502), decline, proposed this reply:\n"
+        "    | Kept, since the API needs it."
+    ) in shown
+    ctx = context(scenario.env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    c, _ = signed_in_client(ctx)
+    response = c.get("/api/pull-request/threads", params={"url": PR})
+    assert response.status_code == 200, response.text
+    plans_of = [[d["from_plan"] for d in t["drafts"]] for t in response.json()["threads"]]
+    assert plans_of == [
+        [{"number": 1, "item_id": 501, "proposal": "change", "reply": "Renamed.", "left_out": False, "departs": False}],
+        [
+            {
+                "number": 2,
+                "item_id": 502,
+                "proposal": "decline",
+                "reply": "Kept, since the API needs it.",
+                "left_out": False,
+                "departs": True,
+            },
+        ],
+    ]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_draft_departs_from_the_plan_by_what_it_did_and_for_an_item_the_approval_left_out(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    feedback_planned(scenario, github_state)
+    scenario.operator("plan", KEY, "--approve", "--leave", "2")
+    entries = [thread(501, did="declined", text="Renamed."), thread(502, did="declined", text=PLANNED_REPLY)]
+    resume = scenario.run(RESUME, worker=sends_drafts(entries))
+    # Only the item approved has its reply in the prompt.
+    assert "Item 1 (id 501):" in resume.prompt
+    assert "Item 2 (id 502):" not in resume.prompt
+    said, left = (present(drafts.from_plan(conn, d)) for d in drafts.of_run(conn, resume.id))
+    assert (said.departs, left.left_out, left.departs) == (True, True, True)
+    shown = scenario.operator("draft", "show", f"run:{resume.id}").out
+    assert "feedback plan item 2 (id 502), decline, which your approval left out, proposed this reply:" in shown
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_resume_that_posts_its_replies_is_given_none_of_the_plans(scenario: Scenario, github_state: Path) -> None:
+    with_a_pr(scenario)
+    scenario.configures("private", trust={"review_replies": "post"})
+    feedback_planned(scenario, github_state)
+    scenario.operator("plan", KEY, "--approve")
+    resume = scenario.run(RESUME, worker=pushes())
+    assert "1. id 501, on" in resume.prompt
+    assert "The plan proposed a reply" not in resume.prompt
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -424,6 +539,7 @@ def stale_for(scenario: Scenario) -> list[str]:
             f"check build on {PR} went from failure to success",
             id="a changed check",
         ),
+        pytest.param({"mergeable": "conflicting"}, f"{PR} now conflicts with its base", id="a conflict"),
     ],
 )
 def test_a_change_on_its_pr_marks_a_waiting_plan_stale_with_its_reason(
@@ -436,12 +552,36 @@ def test_a_change_on_its_pr_marks_a_waiting_plan_stale_with_its_reason(
     feedback_planned(scenario, github_state)
     assert read_again(scenario)["stale"] is False
     reviews = shown.get("reviews", [ALICE, BOB])
-    github_shows(github_state, *reviews, head=shown.get("head", HEAD), checks=shown.get("checks", (RED,)))
+    head, checks, mergeable = shown.get("head", HEAD), shown.get("checks", (RED,)), shown.get("mergeable", "mergeable")
+    github_shows(github_state, *reviews, head=head, checks=checks, mergeable=mergeable)
     newest = read_again(scenario)
     # A head or a check that moved starts the quiet period afresh; the comments here are long quiet.
     moved = "'s head moved" in said or said.startswith("check ")
     assert (newest["stale"], newest["quiet_passed"]) == (True, not moved)
     assert stale_for(scenario) == [said]
+
+
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize(
+    ("now", "said"),
+    [
+        pytest.param("conflicting", [f"{PR} now conflicts with its base"], id="a conflict"),
+        pytest.param("mergeable", [], id="no conflict"),
+        pytest.param("unknown", [], id="still unknown"),
+    ],
+)
+def test_a_conflict_the_host_had_not_settled_when_planned_marks_the_plan_stale_once_it_says_so(
+    scenario: Scenario,
+    github_state: Path,
+    now: str,
+    said: list[str],
+) -> None:
+    with_a_pr(scenario)
+    feedback_planned(scenario, github_state, mergeable="unknown")
+    github_shows(github_state, ALICE, BOB, mergeable=now)
+    # The plan was offered no conflict, so one the host settles since is new to it; none is no change.
+    assert read_again(scenario)["stale"] is bool(said)
+    assert stale_for(scenario) == said
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -505,7 +645,7 @@ def test_a_re_plans_desk_carries_the_old_plan_what_changed_and_each_reply_beside
     ]  # fmt: skip
     # bob's reply is no item of its own: it is given beside alice's comment, which it answers.
     given = json.loads(items["stdout"])
-    assert [(i["id"], [r["id"] for r in i["replies"]]) for i in given] == [(501, [503]), (502, []), (601, [])]
+    assert [(i["id"], [r["id"] for r in i["replies"]]) for i in given[:3]] == [(501, [503]), (502, []), (601, [])]
     assert given[0]["replies"][0]["body"] == "Never mind."
     assert "503, which is no item of its PRs" in str(again.row["result_json"])
 
@@ -573,7 +713,7 @@ def test_a_plan_keeps_what_it_saw_and_off_leaves_every_snapshot_unchanged(
     alice = hashlib.sha256(b"Rename this.").hexdigest()
     bob = hashlib.sha256(b"Drop this argument.").hexdigest()
     assert kept == [
-        (plan.id, PR, HEAD),
+        (plan.id, PR, HEAD, 0),
         (plan.id, PR, "build", "failure"),
         (plan.id, PR, "comment", 501, "PRRT_1", "alice", alice, None),
         (plan.id, PR, "comment", 502, "PRRT_2", "bob", bob, None),
@@ -741,7 +881,8 @@ def test_an_approval_by_item_resumes_on_exactly_those_items_and_the_next_plan_ge
     planner = planner_does(["cat", feedback_items.ITEMS], plan=TEXT, result={"status": "done", "summary": "bob's"})
     assert scenario.run(FEEDBACK_PLAN, worker=planner).status == RunStatus.DONE
     [*_, [_, cat]] = commands_run(scenario.agent_log)
-    assert [i["id"] for i in json.loads(cat["stdout"])] == [502]
+    # So is `build`, red at the head, which no plan covered.
+    assert [i["id"] for i in json.loads(cat["stdout"])] == [502, feedback_items.check_id(PR, HEAD, "build")]
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -906,3 +1047,61 @@ def test_show_prints_the_current_feedback_plan_and_its_items_by_number(scenario:
     shown = scenario.operator("show", KEY).out
     assert f"\nFeedback plan: feedback-plan:1  spent by run:{resume.id}, written " in shown
     assert "Approve it with" not in shown
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_failed_check_and_a_conflict_are_items_planned_approved_and_left_by_number(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    conn = scenario.conn
+    with_a_pr(scenario)
+    github_shows(github_state, ALICE, mergeable="conflicting")
+    build = feedback_items.check_id(PR, HEAD, "build")
+    conflict = feedback_items.conflict_id(PR, HEAD, "main")
+    items = [
+        {"id": 501, "proposal": "change", "reply": "Renamed."},
+        {"id": build, "proposal": "change", "reply": "Fixed the build."},
+        {"id": conflict, "proposal": "change"},
+    ]
+    planner = planner_does(["cat", feedback_items.ITEMS], plan=TEXT, result={**PLANNED, "items": items})
+    assert scenario.run(FEEDBACK_PLAN, worker=planner).status == RunStatus.DONE
+    # Each has an id of its own, below zero where no observed id is, made of the PR, its head, and what it is.
+    [*_, [_, cat]] = commands_run(scenario.agent_log)
+    given = json.loads(cat["stdout"])
+    assert [(i["id"], i["item"]) for i in given] == [(501, "comment"), (build, "check"), (conflict, "conflict")]
+    assert given[2] == {"id": conflict, "pr": PR, "item": "conflict", "head_sha": HEAD, "base_ref": "main"}
+    assert build < 0
+    assert conflict < 0
+    assert build != feedback_items.check_id(PR, "def5678", "build") != feedback_items.check_id(PR, HEAD, "test")
+    [plan] = feedback_plans.history(conn, KEY)
+    # Neither has an author, so neither keeps a reply.
+    assert [(i.number, i.item, i.item_id, i.reply) for i in feedback_plans.items(conn, plan.id)] == [
+        (1, PlanItem.COMMENT, 501, "Renamed."),
+        (2, PlanItem.CHECK, build, None),
+        (3, PlanItem.CONFLICT, conflict, None),
+    ]
+    shown = scenario.operator("show", KEY).out
+    assert f"  2. id {build}, failed check build, change\n  3. id {conflict}, conflict with its base, change\n" in shown
+
+    # Left out by number, as a review item is, and named by number and id.
+    approved = scenario.operator("plan", KEY, "--approve", "--leave", "3")
+    assert f"Left out, for the next plan: item 3 (id {conflict})." in approved.out
+    resume = scenario.run(RESUME, worker=pushes())
+    assert resume.status == RunStatus.DONE
+    assert f"1. id 501, on {PR}: change\n2. id {build}, a failed check on {PR}: change\n" in resume.prompt
+    assert f"They left out its item 3 (id {conflict})" in resume.prompt
+
+    # Read again at the same head, the check the resume went ahead on is handled; the conflict left out is the next
+    # plan's, by the same id. A push makes the failure at the new head an item of its own.
+    read_again(scenario)
+    assert [(r.item, r.id) for r in feedback_items.raised(conn, KEY, [PR], {})] == [(PlanItem.CONFLICT, conflict)]
+    github_shows(github_state, ALICE, head="def5678", mergeable="conflicting")
+    read_again(scenario)
+    assert [r.id for r in feedback_items.raised(conn, KEY, [PR], {})] == [
+        feedback_items.check_id(PR, "def5678", "build"),
+        feedback_items.conflict_id(PR, "def5678", "main"),
+    ]
+    # A check the repository's `human_checks` names waits on a person: no item.
+    human = {PR: frozenset({"build"})}
+    assert [r.item for r in feedback_items.raised(conn, KEY, [PR], human)] == [PlanItem.CONFLICT]

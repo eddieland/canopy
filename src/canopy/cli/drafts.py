@@ -295,6 +295,7 @@ def _print(conn: sqlite3.Connection, draft: records.Draft) -> None:
         click.echo(
             f"  {draft.reacted} is on comment {draft.comment_id} already: a send that did not post the rest added it",
         )
+    _print_plan(conn, draft)
     hashed = f"  hash {drafts_manage.hash_of_version(text)}{edited}"
     if text.reaction is not None and not text.body:
         click.echo(f"{hashed}, the reaction {text.reaction} alone")
@@ -302,3 +303,21 @@ def _print(conn: sqlite3.Connection, draft: records.Draft) -> None:
     click.echo(f"{hashed}, with the reaction {text.reaction}:" if text.reaction is not None else f"{hashed}:")
     for line in text.body.split("\n"):
         click.echo(f"    {visible(line)}")
+
+
+def _print_plan(conn: sqlite3.Connection, draft: records.Draft) -> None:
+    """Print the feedback plan item a draft started from, and, where the run's text departs from it, its reply."""
+    planned = drafts.from_plan(conn, draft)
+    if planned is None:
+        return
+    item = f"feedback plan item {planned.number} (id {planned.item_id}), {planned.proposal}"
+    if not planned.departs:
+        click.echo(f"  as {item} proposed it")
+        return
+    left = ", which your approval left out" if planned.left_out else ""
+    if planned.reply is None:
+        click.echo(f"  changed from the plan: {item}{left}, proposed no reply")
+        return
+    click.echo(f"  changed from the plan: {item}{left}, proposed this reply:")
+    for line in planned.reply.split("\n"):
+        click.echo(f"    | {visible(line)}")

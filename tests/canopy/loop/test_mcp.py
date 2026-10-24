@@ -77,7 +77,9 @@ def overseen(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> C
     prompt.write_text("# Build health\n\nLook at the build queue.\n")
     reviewer = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{reviewer}'\n", 1)
-    canopy_env.write_user(user + chore_toml() + "\n[review]\nagent_prs = true\n")
+    # A chore with a `when` is the overseer's to run (DESIGN §37).
+    when = 'when = "Weekdays only."\n'
+    canopy_env.write_user(user + chore_toml(extra=when) + "\n[review]\nagent_prs = true\n")
     return canopy_env
 
 

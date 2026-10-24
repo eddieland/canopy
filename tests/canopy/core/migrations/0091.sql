@@ -1,1 +1,4 @@
--- sha256 of 0091_comments_in_conversations.sql: 472221e3b62689ddd6bd68dc3f4dfbba15b71a9d6a89da1974c46ae198431cfd
+-- sha256 of 0091_observed_check_runs.sql: 7fee17ebd4afb195c7d2d0cb6c2363858b3fa8f0142bb50197dec3030468d425
+
+INSERT INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at)
+VALUES ('https://e.test/pr/7', 10, 'build', 'abc1234', 'failure', 'x');

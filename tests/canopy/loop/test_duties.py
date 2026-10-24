@@ -159,7 +159,7 @@ def test_a_due_chore_left_undecided_fails_the_tick(scenario: Scenario, canopy_en
     prompt = canopy_env.home / "chores" / "build-health.md"
     prompt.parent.mkdir()
     prompt.write_text("# Build health\n")
-    canopy_env.append_user(chore_toml())
+    canopy_env.append_user(chore_toml(extra='when = "Weekdays only."\n'))
     failed = scenario.tick(code=1)
     assert failed.tick.summary == "overseer left duties undone: no run or wait for chore build-health"
     scenario.tick(canopy("chore", "wait", "build-health", "--rationale", "not now"))

@@ -213,6 +213,22 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "why": "running: a worker of it is running"
     }
   ],
+  "dispatches_to_come": {
+    "holds_workers": 1,
+    "runs": [
+      {
+        "ticket": "PROJ-7",
+        "repo": "repo",
+        "kind": "resume",
+        "rows": [
+          "conflicted"
+        ]
+      }
+    ],
+    "chores": [
+      "deps"
+    ]
+  },
   "chores": [
     {
       "name": "build-health",

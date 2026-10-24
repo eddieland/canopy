@@ -16,7 +16,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import Decider, Phase, RunStatus, TickStatus
-from canopy.loop import harness, phases
+from canopy.loop import attention, harness, phases
 from tests.canopy.helpers import (
     KEY,
     LABEL,
@@ -24,6 +24,7 @@ from tests.canopy.helpers import (
     decisions,
     in_tick,
     mcp_session,
+    messages,
     operator,
     running_run,
     tool_call,
@@ -45,6 +46,7 @@ from tests.canopy.scenario_helpers import dispatches, raises
 
 if TYPE_CHECKING:
     import sqlite3
+    from pathlib import Path
 
     from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import CanopyEnv, GitPool
@@ -138,15 +140,18 @@ def test_a_running_ticket_not_fresh_open_and_labeled_is_left_to_the_overseer(
     assert decided(canopy_env) == []
 
 
-def test_a_ticket_with_an_item_the_overseer_holds_is_left_to_it(
+def test_a_ticket_with_an_item_the_overseer_holds_is_the_harnesss_and_the_item_stands(
     canopy_env: CanopyEnv,
     observed: sqlite3.Connection,
 ) -> None:
-    # The overseer keeps an item open only by recording it again (D020): taking its ticket would drop it.
+    # A tick that does not give the overseer the ticket does not end its item (DESIGN §37).
     running_run(context(canopy_env), KEY, private=False)
     with in_tick(observed, ends_ok=True) as tick_id:
         db.record_decision(observed, tick_id, KEY, "attention:needs_author", "its blocker's PR closed")
-    assert decided(canopy_env) == []
+    assert decided(canopy_env) == [RUNNING]
+    with in_tick(observed, ends_ok=True) as tick_id:
+        harness.record(observed, tick_id, str(canopy_env.root), [RUNNING])
+    assert [(i.ticket_key, i.reason) for i in attention.current(observed)] == [(KEY, "needs_author")]
 
 
 def test_its_decision_is_recorded_as_its_own_with_the_phase(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
@@ -250,6 +255,28 @@ def test_a_tick_leaves_a_running_ticket_to_the_harness_and_the_overseer_only_the
     # Its run ended: the ticket is the overseer's again.
     after = scenario.tick(*waits(KEY, "PROJ-2"))
     assert [d.decider for d in after.decisions if d.ticket_key == KEY] == [Decider.OVERSEER]
+
+
+def test_an_item_the_overseer_raised_stands_while_the_harness_decides_its_ticket(
+    scenario: Scenario,
+    git_pool: GitPool,
+    notified: Path,
+) -> None:
+    scenario.operator("start", KEY)
+    [working] = scenario.tick(dispatches(label=None), raises(KEY, "needs_author"), hold=True).working
+    branches_read(scenario.conn, at=db.now())
+    scenario.conn.commit()
+    # The overseer is not given the ticket, so it cannot record the item again; the item stands, and is not news.
+    ticked = scenario.tick()
+    assert [(d.action, d.decider) for d in ticked.decisions if d.ticket_key == KEY] == [("wait", Decider.HARNESS)]
+    assert scenario.attention() == [(KEY, "needs_author")]
+    assert scenario.state()["attention"] == []
+    assert len(messages(notified)) == 1
+    working.finishes()
+    # Given the ticket again, the overseer leaves the item out: its cause is gone.
+    scenario.tick(*waits(KEY))
+    assert scenario.attention() == []
+    assert messages(notified)[1].startswith("canopy attention: 0 new, 1 resolved")
 
 
 def test_a_dry_run_records_the_harnesss_decisions_and_starts_nothing(scenario: Scenario, git_pool: GitPool) -> None:

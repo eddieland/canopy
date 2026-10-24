@@ -41,7 +41,7 @@ from pydantic_core import PydanticUndefined
 from canopy.core import config, contract, conversation, db, memory, vocab
 from canopy.core.vocab import ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
-from canopy.loop import attention, claims, duties, harness
+from canopy.loop import attention, claims, duties, harness, harness_dispatches
 from canopy.reviews import findings, grants
 from canopy.runs import dispatch, policy
 
@@ -442,6 +442,8 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
     handles = _handles(cursor_pairs, request.review_run)
+    # The workers the harness's runs to come hold ahead of this one, in §7's order (DESIGN §37).
+    reserved = harness_dispatches.reserved(ctx, tick_id, kind, reasons)
     try:
         dispatch.check_kind(kind)
         review = _review_findings(ctx.conn, key, kind, repos, request.review_run)
@@ -472,6 +474,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
                 repos=repos,
                 reasons=reasons,
                 cursors=handles,
+                reserved=reserved,
             )
             branch, queue_label, repo_names, starts = plan.branch, plan.label, plan.repos, plan.starts
             started = None
@@ -489,6 +492,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
                 review=review,
                 reasons=reasons,
                 cursors=handles,
+                reserved=reserved,
             )
             branch, queue_label, repo_names, starts = started.branch, started.label, started.repos, started.starts
     except dispatch.Refusal as r:
@@ -896,16 +900,23 @@ def running_tick(ctx: Context) -> records.Tick:
 def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
     """Refuse the overseer's `verb` about ticket `key` when the harness decided it in tick `tick_id` (DESIGN §37).
 
-    The overseer was not shown the ticket, and the harness's decision stands: a steered overseer cannot overrule it
-    (TRUST_MODEL T1). The refusal is recorded, as a guard's is.
+    The harness decided it before the overseer ran, or dispatches it after. The overseer was not shown the ticket, and
+    the harness's decision stands: a steered overseer cannot overrule it (TRUST_MODEL T1). The refusal is recorded, as
+    a guard's is.
 
     Raises:
         Refused: The harness decided the ticket this tick.
     """
-    if not harness.decided(ctx.conn, tick_id, key):
+    if harness.decided(ctx.conn, tick_id, key):
+        where = "decided"
+        shown = "harness"
+    elif key in harness_dispatches.tickets(ctx, tick_id):
+        where = "dispatches"
+        shown = "dispatches_to_come"
+    else:
         return
-    reason = f"the harness decided {key} this tick (the state block's `harness`); record nothing about it"
-    db.record_decision(ctx.conn, tick_id, key, f"refused:{DECIDED}", reason)
+    reason = f"the harness {where} {key} this tick (the state block's `{shown}`); record nothing about it"
+    db.record_decision(ctx.conn, tick_id, key, attention.REFUSED_DECIDED, reason)
     logs.for_tick(tick_id).info("refused: decided by the harness", extra={"ticket": key, "verb": verb})
     raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")
 
