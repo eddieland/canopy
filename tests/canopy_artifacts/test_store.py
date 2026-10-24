@@ -26,6 +26,8 @@ from canopy_artifacts.store import (
     open_store,
 )
 
+from canopy.core import artifact_feed, conversation
+from canopy.runs import worker
 from tests.conftest import invoke
 
 NAMESPACE = "canopy/operator"
@@ -555,6 +557,42 @@ def test_serve_answers_on_stdio_until_stdin_closes(store_dir: Path) -> None:
             "canopy.run": "7",
         }
     assert store_dir.stat().st_mode & 0o777 == 0o700
+
+
+def test_in_a_run_canopy_starts_the_runs_environment_names_its_ticket_over_the_callers(store_dir: Path) -> None:
+    """The variables canopy sets on a worker's run are the store's, so the worker cannot name another ticket."""
+    publish = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "artifact_publish",
+            "arguments": {
+                "title": "Plan",
+                "content_type": "text/markdown",
+                "content": "# Plan",
+                "origin": {artifact_feed.TICKET_KEY: "PROJ-9", "canopy.run": "1", "topic": "cache"},
+            },
+        },
+    }
+    run = {conversation.RUN_ID_ENV: "7", worker.TICKET_ENV: "PROJ-1", worker.WORKSPACE_ENV: "acme"}
+    options = ["--namespace", NAMESPACE, "--origin", "canopy.run=3", "--origin", "a=b"]
+    with mock.patch.dict(os.environ, run):
+        served = invoke(cli.main, ["serve", "--store", str(store_dir), *options], stdin=json.dumps(publish) + "\n")
+    assert served.exit_code == 0
+    [answer] = [json.loads(line) for line in served.stdout.splitlines()]
+    published = json.loads(answer["result"]["content"][0]["text"])
+    with opened(store_dir, Scope(NAMESPACE, agent("reader"))) as store:
+        assert Client(store).call("artifact_read", artifact_id=published["artifact_id"])["artifact"]["origin"] == {
+            "canopy.workspace": "acme",
+            artifact_feed.TICKET_KEY: "PROJ-1",
+            "canopy.run": "7",
+            "a": "b",
+            "topic": "cache",
+        }
+    # A variable set to nothing names nothing, and outside a run there are none.
+    assert cli.run_origin({worker.TICKET_ENV: "", conversation.RUN_ID_ENV: "7"}) == {"canopy.run": "7"}
+    assert cli.run_origin({}) == {}
 
 
 def test_a_store_directory_open_to_others_is_refused(store_dir: Path) -> None:

@@ -18,9 +18,13 @@ The options are the scope a Louvre token carries, set by whoever writes the MCP 
 - `--agent` (default `agent`): every comment and resolution written here is the author `agent:NAME`, `kind: agent`,
   on behalf of `operator`. The local store's tools never write as a person: a comment through them is an agent's, as
   one written with a Louvre token is, so it is never authority (§38, D069).
-- `--origin KEY=VALUE`, repeated: pairs set on every artifact made here, over the caller's, so canopy, not the worker,
-  names the workspace, ticket, and run.
+- `--origin KEY=VALUE`, repeated: pairs set on every artifact made here, over the caller's.
 - `--read-only`: every write is refused with `read_only`, as a `read` token's are.
+
+In a run canopy starts, the runtime starts `serve` with the run's environment, which no tool call can change, and
+`serve` reads the run from it, so canopy, not the worker, names the workspace, ticket, and run: `CANOPY_WORKSPACE` sets
+`canopy.workspace`, `CANOPY_TICKET` `canopy.ticket`, and `CANOPY_RUN_ID` `canopy.run`, each over the caller's pair and
+`--origin`'s. A variable unset or empty sets nothing, so outside a run the caller's pairs stand.
 
 ```sh
 canopy-artifacts feed --store DIR [--namespace NS] [--origin KEY=VALUE ...] [--most N]

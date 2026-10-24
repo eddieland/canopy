@@ -2,7 +2,8 @@
 
 `canopy-artifacts serve --store DIR` serves the store in DIR over stdio until stdin closes, as the agent runtime's
 MCP config starts it. Its options are the scope a hosted store's token would carry, set by whoever writes that config,
-never by a tool's caller.
+never by a tool's caller. In a run canopy starts, the run's environment names the artifact's workspace, ticket, and
+run (`RUN_ORIGIN`), as `--origin` would, so they are canopy's word and not the worker's.
 
 `canopy-artifacts feed --store DIR` is canopy's `artifacts` source (DESIGN §30, §38): given `{"since": SEQ}` on stdin,
 it prints each change to a comment or thread after SEQ, a JSON object to a line, oldest first, paging the comment feed,
@@ -15,7 +16,9 @@ usable, and nothing was served or printed.
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import os
 import re
 import sys
 from collections.abc import Mapping
@@ -36,6 +39,14 @@ _AGENT = re.compile(r"[A-Za-z0-9._-]{1,64}")
 MOST = 1000
 #: Who a reader is, in its scope: it writes nothing, so no comment is signed with it.
 _READER = "feed"
+#: The variables canopy sets on each run it starts, and the origin key each names. The agent runtime starts the store's
+#: server as a child of the run's agent, with the run's environment, which no call of the agent's can change: so in a
+#: run, canopy names the artifact's workspace, ticket, and run, over the caller's pairs and `--origin`'s.
+RUN_ORIGIN: Mapping[str, str] = {
+    "CANOPY_WORKSPACE": "canopy.workspace",
+    "CANOPY_TICKET": "canopy.ticket",
+    "CANOPY_RUN_ID": "canopy.run",
+}
 
 
 @click.group("canopy-artifacts", context_settings={"help_option_names": ["-h", "--help"]})
@@ -84,6 +95,8 @@ def serve(
 ) -> None:
     """Serve the store's tools over MCP on stdin and stdout, until stdin closes. Opens no socket."""
     scope = _scope(namespace, agent_name, origin, read_only=read_only)
+    # The run's pairs over the options': the command line is the same for every run, and the run is this one.
+    scope = dataclasses.replace(scope, origin={**scope.origin, **run_origin(os.environ)})
     try:
         store = open_store(directory, scope)
     except StoreError as e:
@@ -140,6 +153,15 @@ def feed(ctx: click.Context, directory: Path, namespace: str, origin: tuple[str,
             click.echo(json.dumps(line, ensure_ascii=False))
     finally:
         store.close()
+
+
+def run_origin(environ: Mapping[str, str]) -> dict[str, str]:
+    """Read the origin pairs of the run canopy started this server in, from the environment the runtime gave it.
+
+    Returns:
+        A pair for each variable of `RUN_ORIGIN` that `environ` sets, and sets to more than nothing; none outside a run.
+    """
+    return {key: environ[name] for name, key in RUN_ORIGIN.items() if environ.get(name)}
 
 
 def _since(request: str) -> int:

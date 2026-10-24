@@ -79,6 +79,11 @@ MAX_PR_URL = 500
 # checked out detached (DESIGN §8).
 SETUP_REPO_ENV = "CANOPY_REPO"
 SETUP_BRANCH_ENV = "CANOPY_BRANCH"
+#: The run's ticket, by its key, and its workspace, by its name, beside its id in CANOPY_RUN_ID: what the local artifact
+#: store, which the worker's runtime starts with the worker's environment, sets in each artifact's origin over the
+#: worker's own pairs (DESIGN §38).
+TICKET_ENV = "CANOPY_TICKET"
+WORKSPACE_ENV = "CANOPY_WORKSPACE"
 
 
 class WorkerError(Exception):
@@ -490,7 +495,13 @@ def _run_agent(
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the object
     # directory; an unsandboxed worker ignores it (DESIGN §8). A planner, which has no shell, reads its worktrees'
     # history through canopy's read-only git tools, over those worktrees alone, each named for its repository (§27).
-    env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
+    # The run's id, ticket, and workspace name what it publishes to an artifact store, rather than the worker (§38).
+    env = {
+        conversation.RUN_ID_ENV: str(run_id),
+        TICKET_ENV: str(run["ticket_key"]),
+        WORKSPACE_ENV: ctx.workspace.name,
+        tidy.OBJECTS_ENV: str(_objects(ctx, run)),
+    }
     if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
         env |= git_tools.run_env(
             {s.repo: s.path for s in slots},

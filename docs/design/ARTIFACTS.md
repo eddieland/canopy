@@ -7,9 +7,10 @@ overseer](WITHOUT_THE_OVERSEER.md).
 
 ## 38. Artifacts and Louvre
 
-The local store, publishing from runs, and comments back to the ticket are built; canopy setting an artifact's ticket
-per run is designed, not built (ROADMAP M62). Until it is, the ticket a comment reaches is the publishing worker's
-word.
+The local store, publishing from runs, and comments back to the ticket are built (ROADMAP M62). On the local store
+canopy names an artifact's workspace, ticket, and run from the run that publishes it, in the environment the runtime
+starts the store's server with, so the worker does not choose them. Louvre's server is reached over the network and
+is not given the run, so there the ticket a comment reaches is still the publishing worker's word.
 
 An **artifact** is a page a worker publishes for people to read: a report, a design, an HTML mock-up. People comment
 on its passages, and the comments come back to the ticket that produced it, where they count as review feedback does.

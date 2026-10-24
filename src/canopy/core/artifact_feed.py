@@ -338,9 +338,9 @@ def _to_conversation(conn: sqlite3.Connection, change: _Change) -> None:
     """Record the comment `change` carries in its artifact's ticket's conversation, quoting its passage (DESIGN §38).
 
     Once per comment, as it was first read, as a tracker comment is (§35): an edit after is not followed, and a comment
-    first read deleted is not recorded. Only for a ticket the journal holds, since the origin is the worker's word. Its
-    source is `worker` when the comment carries the workers' marks, else `artifact`; what it counts for is
-    `artifact_authority`'s to decide.
+    first read deleted is not recorded. Only for a ticket the journal holds, since on Louvre the origin is the worker's
+    word; the local store takes it from the run. Its source is `worker` when the comment carries the workers' marks,
+    else `artifact`; what it counts for is `artifact_authority`'s to decide.
     """
     observed = records.fetch_one(
         conn,
