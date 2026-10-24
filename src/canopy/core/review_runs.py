@@ -113,15 +113,22 @@ def set_review_dismissal(
     )
 
 
-def held(conn: sqlite3.Connection, run_id: int) -> dict[int, records.ReviewHold]:
+def held(conn: sqlite3.Connection, run_id: int, *, released: bool = False) -> dict[int, records.ReviewHold]:
     """Return review run `run_id`'s findings the harness holds for the operator (DESIGN §21), by their numbers from 1.
 
     A held finding reaches no worker and starts no `resume` until the operator sends it, which releases it.
 
+    Args:
+        conn: The journal.
+        run_id: The review run.
+        released: Also return the findings the operator has released, which were held once.
+
     Returns:
-        Each finding still held, with its hold; one the operator released is not among them.
+        Each finding still held, with its hold; one the operator released only with `released`.
     """
-    query = sql.select("*").from_("review_holds").where("review_run_id = ? AND released_at IS NULL", run_id)
+    query = sql.select("*").from_("review_holds").where("review_run_id = ?", run_id)
+    if not released:
+        query = query.where("released_at IS NULL")
     return {h.finding: h for h in records.fetch_all(conn, records.ReviewHold, query)}
 
 
