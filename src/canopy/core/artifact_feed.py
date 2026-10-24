@@ -11,8 +11,10 @@ change what it says, such as an id, a `seq`, or a time, refuses the line. The ru
 line refused and moves the cursor to the last of them, never past it, so the next run reads the refused change again
 and none is missed; the run is `partial`. A run with no `end` line records nothing and leaves the cursor where it was.
 
-An observation is a dated copy of what the store said, never authority (DESIGN §22): in shadow, nothing reaches a
-ticket's conversation, the overseer's state block, or a dispatch, and whose comment counts is not decided here.
+An observation is a dated copy of what the store said, never authority (DESIGN §22). A comment on an artifact whose
+origin names a ticket the journal holds reaches that ticket's conversation, quoting its passage, once, as a tracker
+comment does (§35): as data, whoever wrote it. Nothing reaches the overseer's state block or a dispatch, and whose
+comment counts is not decided here.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from canopy.core import contract, conversation, db, observe, sql
+from canopy.core import contract, conversation, db, observe, records, sql
 from canopy.core.vocab import AnchorStatus, AuthorKind, ConnectorRunStatus, ThreadState
 
 if TYPE_CHECKING:
@@ -51,6 +53,12 @@ MAX_PASSAGE = conversation.MAX_COMMENT
 MAX_CONTEXT = 200
 #: The most characters kept of an author's name, on one line.
 MAX_AUTHOR_NAME = 200
+#: The most characters of its passage a comment's message quotes: enough to find it, short of the comment it heads.
+MAX_QUOTE = 300
+#: The source of a comment's message in its ticket's conversation, unless it carries the workers' marks.
+SOURCE = "artifact"
+#: What starts a comment's id in its ticket's conversation, so it never meets a tracker comment's id.
+COMMENT_ID_PREFIX = "artifact:"
 
 
 def read(
@@ -254,6 +262,7 @@ def _record(
             _record_thread(conn, change, now)
             if change.kind in COMMENT_CHANGES:
                 _record_comment(conn, config, change, now)
+                _to_conversation(conn, change)
             recorded[change.kind] += 1
         moved = sql.insert("observed_feeds", source=name, through=through, read_at=now if whole else None)
         conflict = "(source) DO UPDATE SET through = max(through, excluded.through), read_at = coalesce(?, read_at)"
@@ -324,3 +333,43 @@ def _record_comment(conn: sqlite3.Connection, config: Config, change: _Change, n
             " observed_at = excluded.observed_at WHERE excluded.seq > seq",
         ),
     )
+
+
+def _to_conversation(conn: sqlite3.Connection, change: _Change) -> None:
+    """Record the comment `change` carries in its artifact's ticket's conversation, quoting its passage (DESIGN §38).
+
+    Once per comment, as it was first read, as a tracker comment is (§35): an edit after is not followed, and a comment
+    first read deleted is not recorded. Only for a ticket the journal holds, since the origin is the worker's word. Its
+    source is `worker` when the comment carries the workers' marks, else `artifact`; either way it authorizes nothing.
+    """
+    observed = records.fetch_one(
+        conn,
+        records.ObservedArtifactComment,
+        sql.select("*").from_("observed_artifact_comments").where("id = ?", change.comment_id),
+    )
+    key = change.ticket
+    if observed is None or observed.deleted_at is not None or key is None or db.get_ticket(conn, key) is None:
+        return
+    text = _quoting(change.anchor, observed.body or "(no text)")
+    body = text[: conversation.MAX_COMMENT]
+    comment = db.Comment(
+        id=f"{COMMENT_ID_PREFIX}{observed.id}",
+        author=observed.author,
+        at=observed.created_at,
+        truncated=observed.truncated or len(text) > len(body),
+    )
+    source = "worker" if observed.marked else SOURCE
+    conversation.record_comment(conn, key, comment, source=source, body=body, channel=conversation.ARTIFACTS)
+
+
+def _quoting(anchor: _Anchor | None, body: str) -> str:
+    """A comment's body under the passage it is on, quoted and cut to `MAX_QUOTE`, or as it is on a whole artifact.
+
+    Returns:
+        The text its message records.
+    """
+    if anchor is None:
+        return body
+    passage = anchor.exact if len(anchor.exact) <= MAX_QUOTE else anchor.exact[: MAX_QUOTE - 3] + "..."
+    quoted = "\n".join(f"> {line}" if line else ">" for line in passage.splitlines())
+    return f"{quoted}\n\n{body}"
