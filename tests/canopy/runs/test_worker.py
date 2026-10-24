@@ -19,7 +19,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, definitions, run_models
+from canopy.core import config, db, definitions, run_models, workspace
 from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
@@ -31,6 +31,7 @@ from tests.canopy.helpers import (
     has_deadline,
     pool,
     present,
+    private_worker_does,
     scripted,
     slot_of,
     tools_of,
@@ -101,6 +102,42 @@ def test_a_worker_inherits_no_server_its_process_was_given(scenario: Scenario) -
         scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)
     assert not set(given) & set(w["env"])
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_worker_that_may_publish_is_given_its_runs_origin_for_the_store(scenario: Scenario) -> None:
+    """canopy, not the worker, names the ticket an artifact is for (DESIGN §38): the store sets these pairs over its."""
+    scenario.configures("private", artifacts={"mcp_server": "louvre", "publish_roles": ["worker"]})
+    run = scenario.run(worker=pushes())
+    [w] = agent_runs(scenario.agent_log)
+    assert json.loads(w["env"]["CANOPY_ARTIFACT_ORIGIN"]) == {
+        "canopy.workspace": workspace.load(scenario.env.root).name,
+        "canopy.ticket": "PROJ-1",
+        "canopy.run": str(run.id),
+    }
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_worker_config_does_not_let_publish_is_given_no_origin(scenario: Scenario) -> None:
+    scenario.configures("private", artifacts={"mcp_server": "louvre", "publish_roles": []})
+    scenario.run(worker=pushes())
+    [w] = agent_runs(scenario.agent_log)
+    assert "CANOPY_ARTIFACT_ORIGIN" not in w["env"]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_private_tickets_worker_is_given_no_origin(scenario: Scenario) -> None:
+    """A private ticket's worker never publishes (DESIGN §22), so it is given nothing to name its ticket to a store."""
+    scenario.configures("private", artifacts={"mcp_server": "louvre", "publish_roles": ["worker"]})
+    scenario.operator("start", "PROJ-1")
+    done: dict[str, object] = {"status": "done", "summary": "did it"}
+    run = scenario.run(
+        dispatches(label=None),
+        worker=private_worker_does(*commit_and_push("agent/PROJ-1-work"), result=done),
+    )
+    assert run.row["private"] == 1
+    [w] = agent_runs(scenario.agent_log)
+    assert "CANOPY_ARTIFACT_ORIGIN" not in w["env"]
 
 
 @pytest.mark.parametrize(

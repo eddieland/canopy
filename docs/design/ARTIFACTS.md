@@ -7,9 +7,8 @@ overseer](WITHOUT_THE_OVERSEER.md).
 
 ## 38. Artifacts and Louvre
 
-The local store, publishing from runs, and comments back to the ticket are built; canopy setting an artifact's ticket
-per run is designed, not built (ROADMAP M62). Until it is, the ticket a comment reaches is the publishing worker's
-word.
+The local store, publishing from runs, comments back to the ticket, and canopy setting an artifact's ticket per run are
+built (ROADMAP M62).
 
 An **artifact** is a page a worker publishes for people to read: a report, a design, an HTML mock-up. People comment
 on its passages, and the comments come back to the ticket that produced it, where they count as review feedback does.
@@ -57,7 +56,9 @@ The contract in full, field by field and tool by tool, is the local store's READ
 ([packages/canopy-artifacts](../../packages/canopy-artifacts/README.md)). What canopy relies on:
 
 - **Versions and origin.** A revision is a new version of the same artifact, so its threads carry over. Each artifact
-  carries origin keys canopy sets (workspace, ticket, run), opaque to the store, which a reader filters on.
+  carries origin keys canopy sets (workspace, ticket, run), opaque to the store, which a reader filters on. canopy
+  gives each publishing run its keys in a variable the store's server inherits, set over the worker's, so the ticket
+  a comment reaches is canopy's word; on a store that does not take them, it is the worker's.
 - **Anchors by words.** A thread is anchored by its passage's words and the text either side, as a plan's comments are
   (§25), never by a position. On a new version a thread is looked for again by its words; one not found is
   `passage_gone` and never moves to other words.

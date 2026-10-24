@@ -14,6 +14,9 @@ and none is missed; the run is `partial`. A run with no `end` line records nothi
 An observation is a dated copy of what the store said, never authority (DESIGN §22). A comment on an artifact whose
 origin names a ticket the journal holds reaches that ticket's conversation, quoting its passage, once, as a tracker
 comment does (§35). Whose comment counts is not decided here but in `artifact_authority`, from that message.
+
+Which ticket an artifact names is canopy's word on a store that takes it: each run whose agent may publish is given its
+workspace, ticket, and run in `ORIGIN_ENV` (`origin_env`), which the local store sets over the worker's own pairs.
 """
 
 from __future__ import annotations
@@ -42,6 +45,12 @@ CHANGES = frozenset({"comment_created", "comment_edited", "comment_deleted", "th
 COMMENT_CHANGES = frozenset({"comment_created", "comment_edited", "comment_deleted"})
 #: The origin key whose value names the ticket an artifact is for.
 TICKET_KEY = "canopy.ticket"
+#: The origin keys whose values name the workspace and the run an artifact was made in.
+WORKSPACE_KEY = "canopy.workspace"
+RUN_KEY = "canopy.run"
+#: The variable a publishing run's agent is given its origin pairs in, a JSON object, which its store's MCP server
+#: inherits and sets over the worker's: so the worker does not choose the ticket its artifact's comments reach.
+ORIGIN_ENV = "CANOPY_ARTIFACT_ORIGIN"
 #: The most origin pairs, and characters of a pair's key and value, as the contract bounds them: past them, a line is
 #: refused rather than cut, since a pair cut short would name another origin.
 MAX_ORIGIN = 16
@@ -111,6 +120,16 @@ def cursor(conn: sqlite3.Connection, name: str) -> int:
     """
     row = sql.execute(conn, sql.select("through").from_("observed_feeds").where("source = ?", name)).fetchone()
     return 0 if row is None else int(row[0])
+
+
+def origin_env(workspace: str, ticket: str, run_id: int) -> dict[str, str]:
+    """The variable that names run `run_id`'s origin, of ticket `ticket` in workspace `workspace`, to its store.
+
+    Returns:
+        `ORIGIN_ENV`, to set on the run's agent.
+    """
+    pairs = {WORKSPACE_KEY: workspace, TICKET_KEY: ticket, RUN_KEY: str(run_id)}
+    return {ORIGIN_ENV: json.dumps(pairs, ensure_ascii=False)}
 
 
 # What a line carries

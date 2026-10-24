@@ -2,7 +2,8 @@
 
 `canopy-artifacts serve --store DIR` serves the store in DIR over stdio until stdin closes, as the agent runtime's
 MCP config starts it. Its options are the scope a hosted store's token would carry, set by whoever writes that config,
-never by a tool's caller.
+never by a tool's caller. So are the origin pairs canopy names a run by in `CANOPY_ARTIFACT_ORIGIN`, which the server
+inherits from the run's agent before any tool is called.
 
 `canopy-artifacts feed --store DIR` is canopy's `artifacts` source (DESIGN §30, §38): given `{"since": SEQ}` on stdin,
 it prints each change to a comment or thread after SEQ, a JSON object to a line, oldest first, paging the comment feed,
@@ -16,6 +17,7 @@ usable, and nothing was served or printed.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from collections.abc import Mapping
@@ -36,6 +38,9 @@ _AGENT = re.compile(r"[A-Za-z0-9._-]{1,64}")
 MOST = 1000
 #: Who a reader is, in its scope: it writes nothing, so no comment is signed with it.
 _READER = "feed"
+#: The variable canopy gives a run's agent its origin pairs in, a JSON object of strings, which `serve` inherits and
+#: sets on every artifact made, under `--origin`'s.
+ORIGIN_ENV = "CANOPY_ARTIFACT_ORIGIN"
 
 
 @click.group("canopy-artifacts", context_settings={"help_option_names": ["-h", "--help"]})
@@ -69,7 +74,7 @@ def main() -> None:
     "origin",
     multiple=True,
     metavar="KEY=VALUE",
-    help="An origin pair set on every artifact made here, over the caller's; repeat for each.",
+    help=f"An origin pair set on every artifact made here, over the caller's and {ORIGIN_ENV}'s; repeat for each.",
 )
 @click.option("--read-only", is_flag=True, help="Refuse every write.")
 @click.pass_context
@@ -83,7 +88,7 @@ def serve(
     read_only: bool,
 ) -> None:
     """Serve the store's tools over MCP on stdin and stdout, until stdin closes. Opens no socket."""
-    scope = _scope(namespace, agent_name, origin, read_only=read_only)
+    scope = _scope(namespace, agent_name, origin, read_only=read_only, run=_run_origin(os.environ.get(ORIGIN_ENV, "")))
     try:
         store = open_store(directory, scope)
     except StoreError as e:
@@ -182,8 +187,37 @@ def _changes(store: Store, origin: Mapping[str, str], since: int, most: int) -> 
         since = through
 
 
-def _scope(namespace: str, agent_name: str, origin: tuple[str, ...], *, read_only: bool) -> Scope:
-    """Read the scope the options name.
+def _run_origin(value: str) -> dict[str, str]:
+    """Read the origin pairs canopy named the run by in `ORIGIN_ENV`: none when it is unset or empty.
+
+    Returns:
+        The pairs.
+
+    Raises:
+        click.UsageError: The variable is not a JSON object of strings.
+    """
+    if not value:
+        return {}
+    try:
+        found: object = json.loads(value)
+    except json.JSONDecodeError as e:
+        raise click.UsageError(f"{ORIGIN_ENV} is not JSON: {e}") from e
+    if not isinstance(found, dict) or not all(
+        isinstance(k, str) and k and isinstance(v, str) for k, v in cast("dict[object, object]", found).items()
+    ):
+        raise click.UsageError(f"{ORIGIN_ENV} is not a JSON object of strings")
+    return cast("dict[str, str]", found)
+
+
+def _scope(
+    namespace: str,
+    agent_name: str,
+    origin: tuple[str, ...],
+    *,
+    read_only: bool,
+    run: Mapping[str, str] | None = None,
+) -> Scope:
+    """Read the scope the options name, `--origin`'s pairs over the run's, `run`.
 
     Returns:
         The scope.
@@ -195,7 +229,7 @@ def _scope(namespace: str, agent_name: str, origin: tuple[str, ...], *, read_onl
         raise click.BadParameter(f"{namespace!r} is not a namespace, such as canopy/operator", param_hint="--namespace")
     if not _AGENT.fullmatch(agent_name):
         raise click.BadParameter(f"{agent_name!r} is not an agent's name, such as implement", param_hint="--agent")
-    pairs: dict[str, str] = {}
+    pairs: dict[str, str] = dict(run or {})
     for given in origin:
         key, sep, value = given.partition("=")
         if not sep or not key:
