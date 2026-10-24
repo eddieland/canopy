@@ -45,10 +45,10 @@ The chips filter by kind, `workers`, `reviews`, `chores`, or `tasks`, and by the
 `reviews` then `failed` is every PR whose latest review failed. A cost of `–` means the runtime reported none, which
 is not the same as free.
 
-A model on [the spend page](ticks#the-spend-page) opens this page filtered to it, `?model=`: the worker runs it served,
-or, until their sessions are read, the ones that asked for it, each ticket's latest of those leading its row. Reviews
-and chores drop out, since this list doesn't name their models, and so do runs older than the recent ones the page
-keeps. **all** beside the model takes the filter off.
+A model on [the spend page](reports#the-spend-page) opens this page filtered to it, `?model=`: the worker runs it
+served, or, until their sessions are read, the ones that asked for it, each ticket's latest of those leading its row.
+Reviews and chores drop out, since this list doesn't name their models, and so do runs older than the recent ones the
+page keeps. **all** beside the model takes the filter off.
 
 Under the page's description, one line says how full each limit is, counted the way canopy counts it before it starts
 anything: `workers 2 of 2` is `capacity.max_workers`, which reviews and task runs count toward (its hover says how

@@ -31,6 +31,7 @@ from canopy.serve.api import (
     plans,
     pull_requests,
     refs,
+    reports,
     reviews,
     runs,
     search,
@@ -69,6 +70,7 @@ _RESOURCES = (
     models,
     drafts,
     memory,
+    reports,
 )
 
 # Each resource's tag, described by its module's docstring, in the order the schema lists them.

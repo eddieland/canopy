@@ -47,7 +47,7 @@
     --section-reviews: oklch(0.55 0.2 330);
     --section-chores: oklch(0.535 0.14 50);
     --section-ticks: oklch(0.51 0.145 135);
-    --section-spend: oklch(0.525 0.105 95);
+    --section-reports: oklch(0.525 0.105 95);
     --section-memory: oklch(0.49 0.11 225);
     --section-settings: oklch(0.5 0.03 250);
 
@@ -142,7 +142,7 @@
     --section-reviews: oklch(0.76 0.17 330);
     --section-chores: oklch(0.8 0.14 55);
     --section-ticks: oklch(0.84 0.16 130);
-    --section-spend: oklch(0.86 0.15 100);
+    --section-reports: oklch(0.86 0.15 100);
     --section-memory: oklch(0.83 0.09 218);
     --section-settings: oklch(0.74 0.03 250);
 
@@ -418,7 +418,7 @@
     --color-section-reviews: var(--section-reviews);
     --color-section-chores: var(--section-chores);
     --color-section-ticks: var(--section-ticks);
-    --color-section-spend: var(--section-spend);
+    --color-section-reports: var(--section-reports);
     --color-section-memory: var(--section-memory);
     --color-section-settings: var(--section-settings);
 
