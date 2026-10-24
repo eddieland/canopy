@@ -6,11 +6,12 @@ import dataclasses
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+import canopy_sandbox
 import click
 
 from canopy.cli.common import CliError, open_context
 from canopy.core import conversation, reports
-from canopy.loop import gc, git_gc, vacuum
+from canopy.loop import cache_gc, gc, git_gc, vacuum
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -27,8 +28,17 @@ _SIZE_WIDTH = 11
 @click.option("--json", "as_json", is_flag=True, help="Print the dry run's report as one JSON object instead.")
 @click.option("--vacuum", "vacuum_journal", is_flag=True, help="Give the journal's free pages back to its disk.")
 @click.option("--git", "git_objects", is_flag=True, help="Pack the primary clones' loose objects and small packs.")
+@click.option("--caches", "sandbox_caches", is_flag=True, help="Empty each sandbox role's cache no live run uses.")
 @click.pass_context
-def cmd_gc(click_ctx: click.Context, *, dry_run: bool, as_json: bool, vacuum_journal: bool, git_objects: bool) -> int:
+def cmd_gc(
+    click_ctx: click.Context,
+    *,
+    dry_run: bool,
+    as_json: bool,
+    vacuum_journal: bool,
+    git_objects: bool,
+    sandbox_caches: bool,
+) -> int:
     """Report what canopy keeps of its own history, and what a pass with your `[retention]` would remove.
 
     For each kind: how many there are and their size, then how many a pass would remove and theirs, and the rule that
@@ -36,21 +46,26 @@ def cmd_gc(click_ctx: click.Context, *, dry_run: bool, as_json: bool, vacuum_jou
     and rotates canopy.log. By hand, `--dry-run` removes nothing, and `--vacuum` shrinks the journal by its free pages:
     it runs only while no tick is running and no run is live, and when the disk has room for a copy of the journal.
     `--git` packs each primary clone's loose objects and combines its small packs, pruning nothing, and skips a
-    repository while a slot of its pool is leased; a dispatch waits for it (ROADMAP M47).
+    repository while a slot of its pool is leased; a dispatch waits for it (ROADMAP M47). `--caches` empties each
+    sandbox role's cache under `$XDG_CACHE_HOME/canopy/sandbox/`, skipping one while a run of its role is live.
 
     Raises:
-        UsageError: not exactly one of `--dry-run`, `--vacuum`, and `--git` is given.
-        CliError: it runs inside one of canopy's ticks or runs, `--vacuum` cannot run now, or git failed in a clone.
+        UsageError: not exactly one of `--dry-run`, `--vacuum`, `--git`, and `--caches` is given.
+        CliError: it runs inside one of canopy's ticks or runs, `--vacuum` cannot run now, git failed in a clone, or a
+            sandbox cache could not be emptied.
     """
     try:
         conversation.check_operator()
     except conversation.Refused as r:
         raise CliError(f"gc refused ({r.guard}): {r.reason}") from None
-    if dry_run + vacuum_journal + git_objects != 1:
+    if dry_run + vacuum_journal + git_objects + sandbox_caches != 1:
         raise click.UsageError(
-            "give one of `--dry-run`, `--vacuum`, and `--git`; the loop's live ticks run the pass once a day",
+            "give one of `--dry-run`, `--vacuum`, `--git`, and `--caches`; "
+            "the loop's live ticks run the pass once a day",
         )
     ctx = open_context(click_ctx)
+    if sandbox_caches:
+        return _caches(ctx)
     if git_objects:
         return _git(ctx)
     if vacuum_journal:
@@ -123,6 +138,27 @@ def _git(ctx: Context) -> int:
     failed = sum(r.outcome == "failed" for r in done)
     if failed:
         raise CliError(f"git failed in {failed} of {len(done)} primary clones; see above")
+    return 0
+
+
+def _caches(ctx: Context) -> int:
+    """`--caches`, printing what it came to in each of the sandbox's cache directories.
+
+    Returns:
+        0, when no cache it found failed to empty.
+
+    Raises:
+        CliError: a cache could not be emptied.
+    """
+    done = cache_gc.empty(ctx)
+    if not done:
+        click.echo(f"No sandbox cache is in {canopy_sandbox.cache_root()}.")
+    for cache in done:
+        detail = f"{size_text(cache.freed)} freed" if cache.outcome == "emptied" else cache.detail
+        click.echo(f"{cache.cache}: {cache.outcome}: {detail}")
+    failed = sum(c.outcome == "failed" for c in done)
+    if failed:
+        raise CliError(f"{failed} of {len(done)} sandbox caches could not be emptied; see above")
     return 0
 
 

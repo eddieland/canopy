@@ -455,9 +455,7 @@ def cache_dir(role: str) -> Path:
     Raises:
         SandboxError: it cannot be made, or it is a link, or not a directory of this user's.
     """
-    base = Path(os.environ.get("XDG_CACHE_HOME", ""))
-    root = base if base.is_absolute() else Path.home() / ".cache"
-    path = root / "canopy" / "sandbox" / CACHES[role]
+    path = cache_root() / CACHES[role]
     try:
         path.mkdir(mode=0o700, parents=True, exist_ok=True)
         info = path.lstat()
@@ -468,6 +466,18 @@ def cache_dir(role: str) -> Path:
     # mkdir sets the mode only on a directory it makes.
     path.chmod(0o700)
     return path.resolve()
+
+
+def cache_root() -> Path:
+    """The directory that holds each role's cache directory, where `canopy gc --caches` finds them.
+
+    Returns:
+        `canopy/sandbox` under the operator's XDG_CACHE_HOME when that is absolute, or else under `~/.cache`. It may not
+        exist.
+    """
+    base = Path(os.environ.get("XDG_CACHE_HOME", ""))
+    root = base if base.is_absolute() else Path.home() / ".cache"
+    return root / "canopy" / "sandbox"
 
 
 def make_run_dir() -> Path:

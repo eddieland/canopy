@@ -7,8 +7,8 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 ## 26. Garbage collection
 
 Built: `canopy gc --dry-run`, `[retention]`, the loop's pass over files and the journal, with `canopy.log`'s rotation,
-`canopy gc --vacuum`, and `canopy gc --git`. Until the rest lands, canopy removes only what the table's third column
-says, and §6, §11, §12, §18, and §22 describe canopy as it is; this section says what changes.
+`canopy gc --vacuum`, `canopy gc --git`, and `canopy gc --caches`. Until the rest lands, canopy removes only what the
+table's third column says, and §6, §11, §12, §18, and §22 describe canopy as it is; this section says what changes.
 
 ### What grows
 
