@@ -377,7 +377,8 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 `drafts_waiting` (§29), `connector_failed` (§30), `persona_missing` and `bad_persona` (§31), `model_missing` and
 `model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34), and
 `task_ticket_unrecorded` (§36). An item
-about one unit names its repository, shown as `KEY (repo)`.
+about one unit names its repository, shown as `KEY (repo)`. An item about a PR whose latest reviewed commit has a
+`high` review (§21), or about its ticket, comes first: within its reason on the list, and in a notification.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
 reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or `worker_failed` (for `failed`). The

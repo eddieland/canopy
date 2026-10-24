@@ -90,6 +90,9 @@ def load_both(root: Path, user_file: Path) -> None:
         ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "http://x.test/a/tree/{branch}"\n', "plain https://"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "https://x.test/{repo}/tree/{branch}"\n', "braces"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nhuman_checks = [""]\n', "repos.api.human_checks"),
+        ('[repos.api]\nurl = "https://x.test/a.git"\nhigh_impact_paths = "infra/"\n', "repos.api.high_impact_paths"),
+        # The key is a repository's, in the map, never the config's.
+        ('[review]\nhigh_impact_paths = ["infra/"]\n', "review.high_impact_paths"),
         ("[desks]\nx = 1\n", "unknown key desks.x"),
     ],
 )
@@ -97,6 +100,26 @@ def test_the_map_is_validated(ws: Ws, canopy_env: CanopyEnv, table: str, error: 
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text() + "\n" + table)
     with pytest.raises(config.ConfigError, match=error):
         load_both(ws.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize("entry", ["", "/etc/", "a/../b", "./a", "a//b", "a\nb"])
+def test_a_high_impact_path_is_a_path_from_the_repositorys_root(ws: Ws, entry: str) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text()
+        + f'\n[repos.api]\nurl = "https://x.test/a.git"\nhigh_impact_paths = [".agents/", {json.dumps(entry)}]\n',
+    )
+    error = r"canopy-workspace\.toml: repos\.api\.high_impact_paths\.1: .*a path from the repository's root"
+    with pytest.raises(config.ConfigError, match=error):
+        workspace.load(ws.root)
+
+
+def test_a_repositorys_high_impact_paths_are_read_from_its_table(ws: Ws) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(("web", "https://x.test/web.git"))
+        + '\n[repos.api]\nurl = "https://x.test/a.git"\nhigh_impact_paths = [".agents/", "docs/TRUST_MODEL.md"]\n',
+    )
+    found = {r.name: r.high_impact_paths for r in workspace.load(ws.root).repos}
+    assert found == {"api": (".agents/", "docs/TRUST_MODEL.md"), "web": ()}
 
 
 def test_a_repositorys_branch_url_comes_from_its_github_url_unless_the_map_sets_one(ws: Ws) -> None:

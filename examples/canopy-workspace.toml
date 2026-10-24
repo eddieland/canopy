@@ -22,6 +22,10 @@ summary = "Public REST API. Owns the order schema and the generated OpenAPI spec
 # Optional: the checks that are not CI, ones that stay pending until a person acts, such as a deploy approval. canopy
 # does not wait on them, count them red, or need them to pass. Every other check is CI.
 # human_checks = ["deploy/approval"]
+# Optional: paths from the repository's root whose change makes a review high impact whatever the reviewer says, its
+# items first on the attention list. Each covers itself and everything under it; no globs. They add to
+# .github/workflows/, which is high impact in every repository and cannot be removed. canopy's own lists its agents:
+# high_impact_paths = [".agents/", "docs/TRUST_MODEL.md"]
 
 [repos.web]
 url = "https://github.com/acme/web.git"
