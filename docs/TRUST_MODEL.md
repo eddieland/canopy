@@ -152,8 +152,10 @@ Controls:
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
   it into every public worker prompt itself (`implement`, `resume`), and refuses a prompt override that
   would drop it (D093).
-- A reply in the Slack sink's ticket thread (DESIGN §22, M64) is an operator message only when the Slack user id that
-  wrote it is one a `slack` source's `operators` lists (private, T7), and only on a ticket the journal already has.
+- A reply in the Slack sink's ticket thread, or a top-level message in its channel that starts by mentioning canopy's
+  bot and then a ticket's key (DESIGN §20, §22, M64), is an operator message only when the Slack user id that wrote it
+  is one a `slack` source's `operators` lists (private, T7), and only on a ticket the journal already has: a mention
+  reaches no ticket but the one its key names, whether or not it has a thread.
   The ids are enforced twice: `canopy-connect-slack` is asked for their replies alone, and refuses to run without one,
   so nobody else's words reach canopy; and the harness checks each line's id against config in code, whatever the
   connector printed, so a connector of the operator's own that prints more widens nothing. It is recorded through
@@ -162,7 +164,9 @@ Controls:
   operator-only file, and the ids they listed, each of which Slack's own sign-in proves. A reply from anyone else, or
   from a bot, records nothing, not even as data, and a dry run records none (D036). Residual: whoever controls a listed
   Slack account, or a Slack admin able to act as it, can answer and resume a ticket's worker as the operator; and a
-  reply edited after canopy read it keeps the words first read.
+  reply edited after canopy read it keeps the words first read. Sinks that take `replies` hear what came of an
+  operator's reply: a mention recorded, its words cut to a summary, and any reply refused, with canopy's own reason,
+  once each; that sends the operator's words back to the channel they were written in (T6).
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
   `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8), and for a reply, a listed

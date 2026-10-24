@@ -1,22 +1,28 @@
-"""What a `slack` source read of the replies in the Slack sink's ticket threads (DESIGN §22, §30, ROADMAP M64).
+"""What a `slack` source read of the operator's replies in Slack (DESIGN §20, §22, §30, ROADMAP M64).
 
 The source is a command of the operator's config, `canopy-connect-slack`, run as every connector is (`observe.run`),
 with `{"repo": ROOT, "operators": [ID, ...]}` on stdin: the workspace as canopy's messages to the sink name it, which
 files the sink's threads, and the source's `operators`. It prints a `reply` line for each message one of them wrote in
-a ticket's thread, nobody else's, and last
-`{"kind": "end", "tickets": [...], "unread": [...]}`, naming the tickets whose threads it read whole and those it could
-not.
+a ticket's thread, or wrote in the channel starting with a mention of canopy's bot and a ticket's key (`via`
+`mention`), nobody else's, and last `{"kind": "end", "tickets": [...], "unread": [...], "mentions": true}`, naming the
+tickets whose threads it read whole, those it could not, and whether it read the channel's mentions.
 
 Unlike the other sources, what it reads is no observation. A reply from one of the source's `operators`, on a ticket
 canopy knows, is the operator's own message, recorded through `conversation.reply` as `canopy reply` records one, on
 the channel `slack`, the message's `ts` its submission: the next run reads it again, and records nothing new
 (TRUST_MODEL T1). Whose reply counts is checked here too, in code, against the operator's private config, whatever
 the reader printed, so a reader of the operator's own that prints more widens nothing. Any other line records
-nothing, not even as data: a reply from someone not listed, on a ticket canopy does not know, or one `reply` refuses,
-such as one over its bound. Each is counted in the run's record by why, and a refused operator's reply is logged.
+nothing, not even as data: a reply from someone not listed, on a ticket canopy does not know, a mention that names
+none, or one `reply` refuses, such as one over its bound. Each is counted in the run's record by why, and a refused
+operator's reply is logged.
 
-A run with no `end` line records nothing, as any connector's. A dry run records no message (D036): it counts the replies
-it would have recorded.
+The sinks that take `replies` hear what came of them (§20): a mention recorded, as `reply.recorded`, in the transaction
+that records it, so the operator sees in Slack that canopy took it; and an operator's reply refused, as
+`reply.refused`, once per Slack message however often the reader reads it again, so a mistyped key never vanishes. A
+reply in a thread needs no word that it was taken: it stands where the operator left it.
+
+A run with no `end` line records nothing, as any connector's. A dry run records no message and tells the sinks nothing
+(D036): it counts the replies it would have recorded.
 """
 
 from __future__ import annotations
@@ -29,7 +35,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from canopy.core import conversation, db, observe
+from canopy.core import conversation, db, observe, outbox, sql
 from canopy.core.config import SLACK_USER_RE
 from canopy.core.vocab import ConnectorRunStatus
 
@@ -37,11 +43,13 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Mapping, Sequence
 
-    from canopy.core.config import Source
+    from canopy.core.config import Config, Source
     from canopy.infra import logs, procs
 
 #: The channel a reply read from Slack is recorded on (DESIGN §22).
 CHANNEL = "slack"
+#: Why a mention that names no ticket records nothing, as `reply.refused` says it.
+NO_TICKET = "no_ticket"
 #: How many unread tickets a run's `missed` names before it counts the rest.
 _NAMED = 5
 #: A Slack message's `ts`: seconds, a dot, and the microseconds that make it unique in its channel.
@@ -50,6 +58,7 @@ _TS = re.compile(r"\d{1,20}\.\d{1,20}")
 
 def read(
     conn: sqlite3.Connection,
+    config: Config,
     runner: procs.Runner,
     source: Source,
     request: observe.Request,
@@ -60,7 +69,8 @@ def read(
     """Run the `slack` source's connector for `request`, and record each listed operator's reply it read.
 
     Returns:
-        How the run ended: `partial` when its `end` line names tickets whose threads it could not read.
+        How the run ended: `partial` when its `end` line names tickets whose threads it could not read, or says it could
+        not read the channel's mentions.
     """
     ran = observe.run(runner, source, request, log=log)
     if isinstance(ran, observe.Observed):
@@ -68,9 +78,9 @@ def read(
     found = _read(ran.stdout)
     if found.end is None:
         return observe.failed(log, ran.started_at, "it ended without its end line", ran.stderr, found.refused)
-    recorded, refused = _record(conn, source.operators, found.replies, dry_run=dry_run, log=log)
+    recorded, refused = _record(conn, config, source.operators, found.replies, dry_run=dry_run, log=log)
     refused.update(found.refused)
-    missed = _missed(found.end.unread)
+    missed = _missed(found.end.unread, mentions=found.end.mentions)
     if missed is not None:
         log.warning("slack source read short", extra={"missed": missed})
     return observe.Observed(
@@ -106,7 +116,10 @@ class _Line(BaseModel):
 
 class _Reply(_Line):
     kind: Literal["reply"]
-    ticket: _Key
+    #: Where the operator wrote it: in a ticket's thread, or in the channel, mentioning canopy's bot.
+    via: Literal["thread", "mention"] = "thread"
+    #: None for a mention that named no ticket.
+    ticket: _Key | None
     ts: _Ts
     user: _User
     # Bounded where it is recorded: `conversation.reply` refuses one over its bound, rather than cut the operator's
@@ -118,6 +131,8 @@ class _End(_Line):
     kind: Literal["end"]
     tickets: list[_Key] = []
     unread: list[_Key] = []
+    #: Whether it read the channel's mentions to the last page.
+    mentions: bool = True
 
 
 @dataclass
@@ -165,6 +180,7 @@ def _take(found: _Output, raw: Mapping[str, object]) -> None:
 
 def _record(
     conn: sqlite3.Connection,
+    config: Config,
     operators: Sequence[str],
     replies: Sequence[_Reply],
     *,
@@ -176,7 +192,8 @@ def _record(
     Returns:
         What was recorded, by kind: `reply` for a new message, `already` for one recorded by an earlier run, and, in a
         dry run, `dry_run` for one it would have recorded. And what was not, by why: `unlisted` for someone not in
-        `operators`, or the guard `reply` refused it by, such as `unknown` or `bad_body`.
+        `operators`, `no_ticket` for a mention that named none, or the guard `reply` refused it by, such as `unknown`
+        or `bad_body`.
     """
     recorded: Counter[str] = Counter()
     refused: Counter[str] = Counter()
@@ -187,12 +204,29 @@ def _record(
         if dry_run:
             recorded["dry_run"] += 1
             continue
+        if line.ticket is None:
+            why = "it names no ticket: mention canopy, then the ticket's key, then your reply"
+            _refused(conn, config, line, conversation.Refused(NO_TICKET, why), log=log)
+            refused[NO_TICKET] += 1
+            continue
+        ack = (
+            outbox.reply_recorded(config, key=line.ticket, ts=line.ts, body=line.body)
+            if line.via == "mention"
+            else None
+        )
         ref = conversation.Ref(conversation.TICKET, line.ticket)
         try:
-            replied = conversation.reply(conn, ref, line.body, channel=CHANNEL, submission=submission(line.ts))
+            replied = conversation.reply(
+                conn,
+                ref,
+                line.body,
+                channel=CHANNEL,
+                submission=submission(line.ts),
+                event=ack,
+            )
         except conversation.Refused as e:
+            _refused(conn, config, line, e, log=log)
             refused[e.guard] += 1
-            log.warning("slack reply not recorded", extra={"ticket": line.ticket, "ts": line.ts, "guard": e.guard})
             continue
         recorded["reply" if replied.new else "already"] += 1
         if replied.new:
@@ -200,14 +234,41 @@ def _record(
     return recorded, refused
 
 
-def _missed(unread: Sequence[str]) -> str | None:
-    """The harness's words for the tickets whose threads the reader could not read, or None.
+def _refused(
+    conn: sqlite3.Connection,
+    config: Config,
+    line: _Reply,
+    refusal: conversation.Refused,
+    *,
+    log: logs.TickAdapter,
+) -> None:
+    """Log an operator's reply canopy took nothing from, and tell the sinks, once per Slack message."""
+    log.warning("slack reply not recorded", extra={"ticket": line.ticket, "ts": line.ts, "guard": refusal.guard})
+    event = outbox.reply_refused(config, key=line.ticket, ts=line.ts, guard=refusal.guard, reason=refusal.reason)
+    if event is None:
+        return
+    told = (
+        sql.select("1")
+        .from_("notify_events")
+        .where("kind = ? AND json_extract(fields, '$.ts') = ?", event.kind, line.ts)
+    )
+    with db.transaction(conn):
+        # The reader reads the message again on every run until it ages out: the sinks hear of it once.
+        if sql.execute(conn, told).fetchone() is None:
+            db.record_event(conn, event)
+
+
+def _missed(unread: Sequence[str], *, mentions: bool) -> str | None:
+    """The harness's words for the tickets whose threads the reader could not read, and its mentions, or None.
 
     Returns:
         The words, naming at most `_NAMED` tickets.
     """
-    if not unread:
-        return None
-    named = ", ".join(unread[:_NAMED])
-    more = f" and {len(unread) - _NAMED} more" if len(unread) > _NAMED else ""
-    return f"did not read the Slack threads of {named}{more}"
+    parts: list[str] = []
+    if unread:
+        named = ", ".join(unread[:_NAMED])
+        more = f" and {len(unread) - _NAMED} more" if len(unread) > _NAMED else ""
+        parts.append(f"did not read the Slack threads of {named}{more}")
+    if not mentions:
+        parts.append("did not read the Slack channel's mentions")
+    return "; ".join(parts) or None

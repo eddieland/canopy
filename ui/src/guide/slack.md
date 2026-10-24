@@ -117,6 +117,8 @@ posts to two channels.
 - `reviews`: a review run ended, with its verdict and how many findings.
 - `chores`: a chore's run ended, with how many findings. The findings themselves are attention items.
 - `tasks`: a task's run ended, with its PR or its question.
+- `replies`: what came of a reply you wrote in Slack: a mention recorded on its ticket, or any reply canopy refused,
+  and why ([below](#replying-from-slack)).
 - `loop`: ticks failing several in a row, and recovering; a sink failing; and the month's spend reaching its
   budget or one of its alerts ([the spend page](ticks#the-spend-page)).
 
@@ -197,7 +199,9 @@ makes to post. So a reply lands within a couple of minutes, not instantly, and o
    `groups:history` for a private one. Reinstall the app when Slack asks. The token file stays as it is.
 2. Find your own Slack member id: your profile, the three dots, **Copy member ID**. It looks like `U0123ABCD`.
 3. Add a `slack` source to your config, its `--channel` exactly the sink's, and list yourself in `operators`.
-4. **Reload**.
+4. Add `replies` to the sink's `events`, so it can tell you what came of a [mention](#tickets-without-a-thread) or a
+   reply canopy refused.
+5. **Reload**.
 
 ```toml
 [connect.sources.slack]
@@ -213,11 +217,29 @@ List only yourself. Whoever signs in as a listed account answers your workers as
 story best told about somebody else's loop.
 
 It reads replies in tickets' threads from the last three days (`--days`, up to seven), and only on tickets canopy
-already knows. A post in the channel itself, a reply in a review's thread, and anything about plans, starts, or
-grants stay in canopy: approve a plan on [its page](plans), not with a thumbs-up. Each Slack message counts once, so the
-connector rereading a thread every poll records nothing twice, and an edit after canopy read it changes nothing; reply
-again instead. A reply over 4,000 characters is refused, as `canopy reply` refuses one, and the loop's log says so. A
-dry run reads the threads and records nothing.
+already knows. A reply in a review's thread, and anything about plans, starts, or grants, stay in canopy: approve a
+plan on [its page](plans), not with a thumbs-up. Each Slack message counts once, so the connector rereading a thread
+every poll records nothing twice, and an edit after canopy read it changes nothing; reply again instead. A reply over
+4,000 characters is refused, as `canopy reply` refuses one. With `replies` in the sink's events, the sink says so in a
+reply under yours, once; without it, only the loop's log does. A dry run reads the threads and records nothing.
+
+### Tickets without a thread
+
+A ticket only gets a thread once canopy has something to say about it, so the one you want to nudge often has none.
+Mention the bot in the channel instead, then the ticket's key, then your reply:
+
+```text
+@canopy PROJ-123 use the staging config, not prod
+```
+
+That's the same reply, recorded the same way, on any ticket canopy knows, thread or not. The mention has to come first
+and the key right after it, `PROJ-123:` works too; a message that mentions the bot anywhere else is just a message,
+and so is one in a thread. It's read from the same last three days, and only from the ids in `operators`.
+
+Since nothing in the channel would otherwise show it landed, the sink answers: it posts the reply in the ticket's
+thread, starting one if it has to, so you see where it went. A mention canopy can't use, a key it has never heard of
+or no key at all, gets a reply under your message saying why. Typos are the most common Slack-to-canopy protocol, and
+this way they cost you a reply rather than a silent afternoon.
 
 Give the sink its channel by id, not by name, for this: the sink files its threads under whatever `--channel` says,
 and Slack's API reads only an id, so a sink set up with `#canopy` leaves the connector reading nothing at all.

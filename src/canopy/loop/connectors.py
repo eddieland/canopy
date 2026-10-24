@@ -76,7 +76,15 @@ def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter, *, dry_run: bo
             if kind is SourceKind.ARTIFACTS:
                 observed = artifact_feed.read(ctx.conn, ctx.config, ctx.runner, source, request, name=name, log=log)
             elif kind is SourceKind.SLACK:
-                observed = slack_replies.read(ctx.conn, ctx.runner, source, request, dry_run=dry_run, log=log)
+                observed = slack_replies.read(
+                    ctx.conn,
+                    ctx.config,
+                    ctx.runner,
+                    source,
+                    request,
+                    dry_run=dry_run,
+                    log=log,
+                )
             else:
                 observed = observe.observe(ctx.conn, ctx.config, ctx.runner, source, request, log=log)
         except Exception as e:

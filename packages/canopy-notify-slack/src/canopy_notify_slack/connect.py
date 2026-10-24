@@ -1,4 +1,4 @@
-"""`canopy-connect-slack`: reads the replies people wrote in the Slack sink's ticket threads (ROADMAP M64).
+"""`canopy-connect-slack`: reads the operator's replies in the Slack sink's threads and mentions (ROADMAP M64).
 
 Run as `canopy-connect-slack --channel C0123ABCD`, on the channel the sink posts to with `--threads`, given as the
 sink's own `--channel` is, since the sink files its threads under that: by its id, for both, as the Web API reads only
@@ -15,12 +15,19 @@ ticket, the thread's and the message's `ts`, the Slack user id, the time, and th
 escaping undone, whole. Nobody else's words leave the process. A thread's first post, the sink's own, is not printed,
 and neither is a message with no user, from a bot (`bot_id`, which a bot posting under a person's name still carries),
 or with a `subtype`, such as a join or a file comment. An edited message is printed as it reads now; canopy records a
-message by its `ts`, once, so an edit after that changes nothing. A review's thread is not read, nor the channel itself.
+message by its `ts`, once, so an edit after that changes nothing. A review's thread is not read.
 
-Last, an `end` line naming the tickets whose threads were each read to the last page, `tickets`, and those it could
-not read, `unread`. A thread that could not be read prints nothing for its ticket but its error on stderr, so a cut-off
-read never looks like a thread nobody answered. A thread Slack no longer has, its first post deleted, is read as one
-with no replies, so it does not fail every run until it ages out. Nothing is posted to Slack.
+It reads the channel itself for mentions: a top-level message one of `operators` wrote in the last `--days` that starts
+by mentioning the app's own bot user, which `auth.test` names, `@canopy PROJ-123 use the staging config`. Its first
+word is the ticket and the rest the reply, printed as a `reply` line with `via` `mention`, whether or not the ticket has
+a thread; one whose first word is no ticket key is printed with no ticket, so canopy can say why it took nothing from
+it. A message that mentions the bot anywhere else, or replies in a thread, is not a mention.
+
+Last, an `end` line naming the tickets whose threads were each read to the last page, `tickets`, those it could
+not read, `unread`, and whether it read the channel's mentions to the last page, `mentions`. A thread that could not
+be read prints nothing for its ticket but its error on stderr, so a cut-off read never looks like a thread nobody
+answered. A thread Slack no longer has, its first post deleted, is read as one with no replies, so it does not fail
+every run until it ages out. Nothing is posted to Slack.
 
 Exit codes: 0 everything was read; 1 something was not, and the `end` line names what was; 2 the command line, the
 token file, the threads file, or stdin is not usable, and nothing was read.
@@ -37,7 +44,7 @@ import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 from typing import TextIO
 
@@ -54,7 +61,8 @@ from canopy_notify_slack import (
     read_token,
 )
 
-SLACK_REPLIES_URL = "https://slack.com/api/conversations.replies"
+#: The Web API, its methods named after it.
+SLACK_API = "https://slack.com/api/"
 #: How many of a thread's messages a page asks for: the most Slack recommends.
 PAGE = 200
 #: How many pages one thread may take before it counts as not read: a thread canopy started is not this long.
@@ -69,14 +77,18 @@ _TS = re.compile(r"\d{1,20}\.\d{1,20}")
 _GONE = "thread_not_found"
 #: A link or a mention in a message's text, as Slack writes it: `<https://x|label>`, `<@U123>`, `<#C123|name>`.
 _ANGLED = re.compile(r"<([^<>|]*)(?:\|([^<>]*))?>")
+#: A message that starts by mentioning a user, as Slack writes the mention, and what follows it.
+_LEADING_MENTION = re.compile(r"\s*<@([UW][A-Z0-9]{2,30})(?:\|[^<>]*)?>[\s:,]*(.*)", re.DOTALL)
+#: What follows a mention of the bot: a ticket's key, set off by a space or a `:` or `,`, then the reply.
+_ADDRESSED = re.compile(r"([A-Za-z0-9][A-Za-z0-9_-]{0,99})(?:[:,]\s*|\s+|$)(.*)", re.DOTALL)
 
 
 @dataclass(frozen=True)
 class Reach:
     """Where the reader reads Slack, and what day it is: Slack's own and the clock's, unless a test gives its own."""
 
-    #: The Web API's `conversations.replies`.
-    replies_url: str = SLACK_REPLIES_URL
+    #: The Web API's base URL, ending in `/`: `conversations.replies`, `conversations.history`, and `auth.test` below.
+    api: str = SLACK_API
     #: Today's date, in the operator's time zone, as the sink names a thread's day.
     today: Callable[[], date] = lambda: datetime.now(UTC).astimezone().date()
 
@@ -94,11 +106,11 @@ class Reach:
     type=click.IntRange(1, KEEP_DAYS),
     default=3,
     show_default=True,
-    help="Read the threads started this many days back, today's among them.",
+    help="Read the threads started, and the mentions written, this many days back, today's among them.",
 )
 @click.pass_context
 def main(ctx: click.Context, channel: str, token_file: Path | None, days: int) -> None:
-    """Read the replies in the Slack sink's ticket threads into canopy's journal (ROADMAP M64).
+    """Read the operator's replies in the Slack sink's threads, and their mentions of it, into canopy (ROADMAP M64).
 
     The request is one JSON object on stdin; what was read is JSON lines on stdout, the `end` line last.
     """
@@ -111,13 +123,14 @@ def main(ctx: click.Context, channel: str, token_file: Path | None, days: int) -
     except SinkError as e:
         _say(str(e))
         ctx.exit(2)
-    asked = threads.recent(reach.today().isoformat(), days)
-    reader = _Reader(reach.replies_url, token, checked, request.operators, sys.stdout)
-    for key, started in asked.items():
+    today = reach.today()
+    reader = _Reader(reach.api, token, checked, request.operators, sys.stdout)
+    for key, started in threads.recent(today.isoformat(), days).items():
         if _KEY.fullmatch(key) and (request.tickets is None or key in request.tickets):
             reader.read(key, [ts for _, ts in started])
-    _emit(sys.stdout, {"kind": "end", "tickets": reader.whole, "unread": reader.unread})
-    ctx.exit(1 if reader.failed else 0)
+    mentions = reader.mentions(_since(today, days), request.tickets)
+    _emit(sys.stdout, {"kind": "end", "tickets": reader.whole, "unread": reader.unread, "mentions": mentions})
+    ctx.exit(1 if reader.failed or not mentions else 0)
 
 
 @dataclass(frozen=True)
@@ -170,7 +183,8 @@ def _is_user(value: object) -> bool:
 class _Reader:
     """One run's reads: the tickets it printed whole, and those it could not read."""
 
-    url: str
+    #: The Web API's base URL.
+    api: str
     token: str
     channel: str
     #: The Slack user ids whose replies are printed.
@@ -202,6 +216,41 @@ class _Reader:
             _emit(self.stdout, line)
         self.whole.append(key)
 
+    def mentions(self, since: float, tickets: AbstractSet[str] | None) -> bool:
+        """Print a `reply` line for each top-level message an operator wrote since `since`, mentioning the bot first.
+
+        Only one naming one of `tickets`, when canopy named any, or naming no ticket, so canopy can say why.
+
+        Returns:
+            Whether the channel was read to the last page.
+        """
+        try:
+            bot = self._bot()
+            found = self._pages("conversations.history", {"oldest": f"{since:.6f}"})
+        except SinkError as e:
+            _say(f"cannot read the channel's mentions: {e}")
+            return False
+        # The newest first, as Slack lists them: printed oldest first, as a thread's are.
+        for message in reversed(found):
+            line = _mention(message, bot, self.operators)
+            if line is not None and (tickets is None or line["ticket"] is None or line["ticket"] in tickets):
+                _emit(self.stdout, line)
+        return True
+
+    def _bot(self) -> str:
+        """The app's own bot user, whose mention addresses canopy: `auth.test` with the bot's token names it.
+
+        Returns:
+            Its user id.
+
+        Raises:
+            SinkError: Slack could not be asked, or named no user.
+        """
+        user = _get(self.api + "auth.test", {}, self.token).get("user_id")
+        if not isinstance(user, str) or not _USER.fullmatch(user):
+            raise SinkError("auth.test named no bot user")
+        return user
+
     def _messages(self, thread: str) -> list[Mapping[str, object]]:
         """Every message of a thread, page by page, to the last.
 
@@ -211,17 +260,28 @@ class _Reader:
         Raises:
             SinkError: A page could not be read, Slack refused it, or the pages never end.
         """
+        try:
+            return self._pages("conversations.replies", {"ts": thread})
+        except _GoneError:
+            # Its first post was deleted: nobody can reply in it, and the replies it had are gone with it.
+            return []
+
+    def _pages(self, method: str, asked: Mapping[str, str]) -> list[Mapping[str, object]]:
+        """Every message a method lists for the channel, page by page, to the last.
+
+        Returns:
+            The messages, in Slack's order.
+
+        Raises:
+            SinkError: A page could not be read, Slack refused it, or the pages never end.
+        """
         found: list[Mapping[str, object]] = []
         cursor = ""
         for _ in range(MAX_PAGES):
-            params = {"channel": self.channel, "ts": thread, "limit": str(PAGE)}
+            params = {"channel": self.channel, **asked, "limit": str(PAGE)}
             if cursor:
                 params["cursor"] = cursor
-            try:
-                reply = _get(self.url, params, self.token)
-            except _GoneError:
-                # Its first post was deleted: nobody can reply in it, and the replies it had are gone with it.
-                return found
+            reply = _get(self.api + method, params, self.token)
             messages = reply.get("messages")
             listed: list[object] = messages if isinstance(messages, list) else []
             found.extend({str(k): v for k, v in m.items()} for m in listed if isinstance(m, dict))
@@ -230,6 +290,51 @@ class _Reader:
             if reply.get("has_more") is not True or not cursor:
                 return found
         raise SinkError(f"its pages never end: more than {MAX_PAGES} of them")
+
+
+def _since(today: date, days: int) -> float:
+    """The start of the first of the `days` up to `today`, in the operator's time zone, as Slack's `ts` counts time.
+
+    Returns:
+        Seconds since the epoch.
+    """
+    first = today.toordinal() - (days - 1)
+    return datetime.combine(date.fromordinal(first), time.min).astimezone().timestamp()
+
+
+def _mention(
+    message: Mapping[str, object],
+    bot: str,
+    operators: AbstractSet[str],
+) -> dict[str, object] | None:
+    """A top-level message's `reply` line, if one of `operators` wrote it starting with a mention of `bot`.
+
+    Its first word after the mention is the ticket, if it reads as a key, and the rest the reply; else it names no
+    ticket, and the whole of what follows is its body.
+
+    Returns:
+        The line, or None.
+    """
+    ts, user, text, thread = message.get("ts"), message.get("user"), message.get("text"), message.get("thread_ts")
+    if not isinstance(ts, str) or not _TS.fullmatch(ts) or (thread is not None and thread != ts):
+        return None
+    if "bot_id" in message or "subtype" in message or not isinstance(user, str) or user not in operators:
+        return None
+    mention = _LEADING_MENTION.fullmatch(text) if isinstance(text, str) else None
+    if mention is None or mention.group(1) != bot:
+        return None
+    rest = mention.group(2).strip()
+    addressed = _ADDRESSED.fullmatch(rest)
+    ticket, body = (addressed.group(1), addressed.group(2)) if addressed is not None else (None, rest)
+    return {
+        "kind": "reply",
+        "via": "mention",
+        "ticket": ticket,
+        "ts": ts,
+        "user": user,
+        "time": _time(ts),
+        "body": plain(body).strip(),
+    }
 
 
 def _get(url: str, params: Mapping[str, str], token: str) -> dict[str, object]:
@@ -291,6 +396,7 @@ def _reply(
         return None
     return {
         "kind": "reply",
+        "via": "thread",
         "ticket": key,
         "thread": thread,
         "ts": ts,

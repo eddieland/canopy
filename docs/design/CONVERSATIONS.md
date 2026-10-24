@@ -10,8 +10,9 @@ The journal is the one record of every ticket's conversation: what workers repor
 and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
 Slack. Each proves the operator its own way: the tracker by `trust.authorized_repliers`, read by agents; the CLI by
 the operator's shell (T1); the web UI by the listener secret (TRUST_MODEL T8); Slack by the user ids a `slack` source
-lists, checked in code, for replies in the sink's ticket threads alone (§20). Outbound, every channel uses §20's
-events. The overseer and workers never see which channel a message came from, so adding one changes no prompt.
+lists, checked in code, for replies in the sink's ticket threads and mentions of canopy's bot in its channel (§20).
+Outbound, every channel uses §20's events. The overseer and workers never see which channel a message came from, so
+adding one changes no prompt.
 
 A ticket is **public** when one of `tracker.labels` authorizes it, and **private** when the operator starts it in
 canopy, or, with `tracker.private` set, when its label brings it in (below). A started ticket is private whatever labels
