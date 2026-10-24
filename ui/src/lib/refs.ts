@@ -78,6 +78,11 @@ export function messageRef(id: number | string): string {
     return `#${id}`
 }
 
+/** The anchor of a message's bubble in its ticket's conversation, `message-5`: what a link to it hashes to. */
+export function messageAnchor(id: number | string): string {
+    return `message-${id}`
+}
+
 /** A worktree slot, as its pool numbers it: `#3`. */
 export function slotRef(name: string): string {
     return `#${name}`

@@ -52,8 +52,11 @@ describe('FeedbackPlanPanel', () => {
         answer = () => Response.json({ ...APPROVED, addressed: [...APPROVED.addressed, ...APPROVED.left], left: [] })
         await renderRouted(<FeedbackPlanPanel plan={feedbackPlan()} onChange={changed} />)
         const panel = screen.getByTestId('feedback-plan')
-        expect(within(panel).getByText('waiting')).toBeTruthy()
+        expect(within(panel).getByText('waiting on you')).toBeTruthy()
         expect(within(panel).getByRole('link', { name: 'run:46' })).toBeTruthy()
+        expect(panel.textContent).toContain(
+            'its resume acts on the items you approve, and only those. It waits on you.',
+        )
         const rows = within(panel).getAllByTestId('feedback-plan-item')
         // Each row leads with what was said, then where it is, then the proposal, who said it, why, and its id.
         expect(rows.map((row) => row.textContent)).toEqual([
@@ -75,15 +78,36 @@ describe('FeedbackPlanPanel', () => {
         }
         const approve = screen.getByRole<HTMLButtonElement>('button', { name: 'Approve whole' })
         expect(approve.title).toBe('canopy plan ABC-099 --approve')
+        fireEvent.change(screen.getByRole('textbox', { name: 'Your words, for its resume (optional)' }), {
+            target: { value: 'Go ahead.' },
+        })
         fireEvent.click(approve)
-        expect((await screen.findByRole('status')).textContent).toBe(
+        // The moment it is: the band says what it did, with the way back to Attention, and the words are cleared.
+        const moment = await screen.findByTestId('plan-approved')
+        expect(within(moment).getByRole('status').textContent).toBe(
             'Feedback plan 1 of ABC-099, covering 2 items, is approved whole as its file stands now. The next tick ' +
                 'can resume ABC-099 on it, once. Message 12 on ABC-099 names the items.',
         )
+        expect(within(moment).getByRole('link', { name: 'Back to Attention' }).getAttribute('href')).toBe('/attention')
         expect(sent).toEqual([
-            { path: '/api/tickets/ABC-099/feedback-plan', body: { items: [], leave: [], message: null } },
+            { path: '/api/tickets/ABC-099/feedback-plan', body: { items: [], leave: [], message: 'Go ahead.' } },
         ])
         expect(changed).toHaveBeenCalledOnce()
+        const words = screen.getByRole<HTMLTextAreaElement>('textbox', {
+            name: 'Your words, for its resume (optional)',
+        })
+        expect(words.value).toBe('')
+        // At rest until a box or the words change: the send key approves nothing twice.
+        const again = screen.getByRole<HTMLButtonElement>('button', { name: 'Approve again' })
+        expect(again.disabled).toBe(true)
+        expect(screen.getByText('Tick other items, or write words for its resume, to approve it again.')).toBeTruthy()
+        fireEvent.keyDown(words, { key: 'Enter' })
+        expect(sent).toHaveLength(1)
+        fireEvent.change(words, { target: { value: 'And the tests.' } })
+        expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Approve again' }).disabled).toBe(false)
+        fireEvent.keyDown(words, { key: 'Enter' })
+        await vi.waitFor(() => expect(sent).toHaveLength(2))
+        expect(sent[1]?.body).toEqual({ items: [], leave: [], message: 'And the tests.' })
     })
 
     it('approves only the ticked items, with the operator’s words, as --leave names the rest', async () => {
@@ -107,11 +131,11 @@ describe('FeedbackPlanPanel', () => {
         await renderRouted(<FeedbackPlanPanel plan={feedbackPlan()} onChange={changed} />)
         fireEvent.click(screen.getByRole('checkbox', { name: 'address item 1' }))
         fireEvent.click(screen.getByRole('checkbox', { name: 'address item 2' }))
-        expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Approve 0 of 2' }).disabled).toBe(true)
+        expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Approve' }).disabled).toBe(true)
         expect(screen.getByText('Tick an item to approve, or reply on the ticket to ask for changes.')).toBeTruthy()
     })
 
-    it('says what changed on a stale plan, and a refusal names its guard', async () => {
+    it('says what changed on a stale plan, and its first refusal reads as the step it is, not an error', async () => {
         const said = 'reply 2468013702 on https://github.com/acme/web/pull/88 by bob, answering item 2468013579'
         answer = () =>
             Response.json({ detail: { guard: 'stale', reason: `feedback plan 1 is stale` } }, { status: 409 })
@@ -120,8 +144,13 @@ describe('FeedbackPlanPanel', () => {
         const stale = screen.getByTestId('feedback-plan-stale')
         expect(within(stale).getByText(said)).toBeTruthy()
         expect(stale.textContent).toContain('Approving it now is refused once, naming this')
-        fireEvent.click(screen.getByRole('button', { name: 'Approve whole' }))
-        expect((await screen.findByRole('alert')).textContent).toBe('refused (stale): feedback plan 1 is stale')
+        const approve = screen.getByRole<HTMLButtonElement>('button', { name: 'Approve stale plan' })
+        expect(approve.title).toBe('canopy plan ABC-099 --approve')
+        fireEvent.click(approve)
+        expect((await screen.findByRole('status')).textContent).toBe(
+            'Refused once, as a stale plan is the first time: approve it as it is to go ahead.',
+        )
+        expect(screen.queryByRole('alert')).toBeNull()
         // Read again, since the refusal is recorded and approving again approves it.
         expect(changed).toHaveBeenCalledOnce()
         cleanup()
@@ -129,6 +158,21 @@ describe('FeedbackPlanPanel', () => {
         expect(screen.getByTestId('feedback-plan-stale').textContent).toContain(
             'Approving it again approves it as it is; what changed waits for the next plan.',
         )
+        expect(screen.getByRole('button', { name: 'Approve as it is' })).toBeTruthy()
+    })
+
+    it('shows any other refusal in the failure color, naming its guard', async () => {
+        answer = () =>
+            Response.json(
+                { detail: { guard: 'bad_plan', reason: 'feedback plan run 48 for ABC-099 is running' } },
+                { status: 409 },
+            )
+        await renderRouted(<FeedbackPlanPanel plan={feedbackPlan()} onChange={changed} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Approve whole' }))
+        expect((await screen.findByRole('alert')).textContent).toBe(
+            'refused (bad_plan): feedback plan run 48 for ABC-099 is running',
+        )
+        expect(screen.queryByTestId('plan-approved')).toBeNull()
     })
 
     it('ticks an approved plan’s items as its approval left them, and says how it was approved', async () => {
@@ -141,12 +185,92 @@ describe('FeedbackPlanPanel', () => {
         })
         await renderRouted(<FeedbackPlanPanel plan={plan} onChange={changed} />)
         const panel = screen.getByTestId('feedback-plan')
-        expect(panel.textContent).toContain('Approved via web')
-        expect(panel.textContent).toContain('message 12 names its items. The next tick may resume ABC-099 on it, once.')
+        expect(within(panel).getByText('approved')).toBeTruthy()
+        // The preamble is down to where it stands, and the message links to the ticket's conversation.
+        expect(panel.textContent).not.toContain('its resume acts on the items you approve')
+        expect(panel.textContent).toContain('Approved by you')
+        expect(panel.textContent).toContain(
+            'message 12 on the ticket names its items. The next tick may resume ABC-099 on it, once.',
+        )
+        expect(within(panel).getByRole('link', { name: 'message 12' }).getAttribute('href')).toBe(
+            '/tickets/ABC-099#message-12',
+        )
         expect(screen.getByRole('checkbox', { name: 'address item 1' }).getAttribute('aria-checked')).toBe('false')
         expect(screen.getByRole('checkbox', { name: 'address item 2' }).getAttribute('aria-checked')).toBe('true')
         expect(within(panel).getByText('left out')).toBeTruthy()
-        expect(screen.getByRole('button', { name: 'Approve 1 of 2' })).toBeTruthy()
+        const again = screen.getByRole<HTMLButtonElement>('button', { name: 'Approve again' })
+        expect(again.disabled).toBe(false)
+        expect(again.title).toBe('canopy plan ABC-099 --approve --leave 1')
+    })
+
+    it("quotes its planner's reason once, from the command line says so, and ends each sentence once", async () => {
+        const planner = feedbackPlan({
+            status: 'approved',
+            approved_at: '2026-10-08T11:55:00Z',
+            approved_channel: 'planner',
+            approved_reason: 'Every item is a leave: it changes no code.',
+        })
+        await renderRouted(<FeedbackPlanPanel plan={planner} onChange={changed} />)
+        expect(screen.getByTestId('feedback-plan').textContent).toContain(
+            ', saying “Every item is a leave: it changes no code.” The next tick may resume ABC-099 on it, once.',
+        )
+        expect(screen.getByTestId('feedback-plan').textContent).toContain('Its planner approved it')
+        cleanup()
+        await renderRouted(
+            <FeedbackPlanPanel
+                plan={{ ...planner, approved_channel: 'cli', approved_reason: null, approved_message: 13 }}
+                onChange={changed}
+            />,
+        )
+        expect(screen.getByTestId('feedback-plan').textContent).toContain('Approved by you, from the command line')
+        expect(screen.getByTestId('feedback-plan').textContent).toContain(
+            '; message 13 on the ticket names its items. The next tick',
+        )
+    })
+
+    it('offers nothing to approve while the plan’s file is missing, and says how to get a new one', async () => {
+        await renderRouted(
+            <FeedbackPlanPanel plan={feedbackPlan({ text: null, problem: 'missing' })} onChange={changed} />,
+        )
+        expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Approve whole' }).disabled).toBe(true)
+        expect(
+            screen.getByText(
+                'Its file is missing, so nothing can be approved: reply on the ticket to ask for a new plan.',
+            ),
+        ).toBeTruthy()
+        expect(screen.getByTestId('feedback-plan-no-file').textContent).toBe(
+            'Its file is missing: /home/op/acme/.canopy/plans/ABC-099/46.md',
+        )
+        expect(screen.queryByRole('button', { name: 'Show the plan' })).toBeNull()
+        fireEvent.keyDown(screen.getByRole('textbox', { name: 'Your words, for its resume (optional)' }), {
+            key: 'Enter',
+        })
+        expect(sent).toEqual([])
+    })
+
+    it('says a plan that covers no item does', async () => {
+        await renderRouted(<FeedbackPlanPanel plan={feedbackPlan({ items: [] })} onChange={changed} />)
+        expect(screen.getByText('It covers no item.')).toBeTruthy()
+    })
+
+    it('says when an item said nothing, or is no longer on the PR as read', async () => {
+        const plan = feedbackPlan({
+            items: [
+                feedbackPlanItem({
+                    number: 1,
+                    item: 'review',
+                    thread_id: null,
+                    excerpt: null,
+                    rationale: null,
+                    url: null,
+                }),
+                feedbackPlanItem({ number: 2, excerpt: null, rationale: null }),
+            ],
+        })
+        await renderRouted(<FeedbackPlanPanel plan={plan} onChange={changed} />)
+        const said = screen.getAllByTestId('feedback-plan-said').map((s) => s.textContent)
+        expect(said).toEqual(['a review with no words', 'no longer on the PR as read'])
+        expect(screen.queryByTestId('feedback-plan-why')).toBeNull()
     })
 
     it('says when an item said nothing, or is no longer on the PR as read', async () => {
