@@ -81,17 +81,20 @@ def high(conn: sqlite3.Connection, tickets: Collection[str], prs: Collection[str
         The PRs among `prs`, or reviewed for one of `tickets`, whose latest `done` review's commit has a `high` review,
         and the tickets among `tickets` with such a PR.
     """
-    query = (
-        sql.select("*")
-        .from_("review_runs")
-        .where("revises IS NULL AND status = ?", ReviewRunStatus.DONE)
-        .where("{}", sql.any_of(sql.in_("ticket_key", tickets), sql.in_("pr_url", prs)))
-        .order_by("id DESC")
-    )
+    # One lookup per index, ticket and PR, merged here: an OR of the two lets SQLite walk the whole table for the order.
+    runs: dict[int, records.ReviewRun] = {}
+    for named in (sql.in_("ticket_key", tickets), sql.in_("pr_url", prs)):
+        query = (
+            sql.select("*")
+            .from_("review_runs")
+            .where("{}", named)
+            .where("revises IS NULL AND status = ?", ReviewRunStatus.DONE)
+        )
+        runs.update((run.id, run) for run in records.fetch_all(conn, records.ReviewRun, query))
     latest: dict[str, str] = {}
     found_prs: set[str] = set()
     found_tickets: set[str] = set()
-    for run in records.fetch_all(conn, records.ReviewRun, query):
+    for run in sorted(runs.values(), key=lambda r: r.id, reverse=True):
         if latest.setdefault(run.pr_url, run.sha) != run.sha:
             continue
         stored = result.stored(run.result_json)
