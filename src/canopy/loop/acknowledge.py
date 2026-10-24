@@ -89,7 +89,7 @@ def body(tick_id: int, key: str, read: Sequence[int], decisions: Sequence[record
         One sentence, `Tick 12 read message 40: started run 57 (resume).`, or that it decided nothing about `key`.
     """
     said = f"Tick {tick_id} read {_messages(read)}"
-    did = [_decided(d) for d in decisions if d.action != conversation.MIRROR_ACTION]
+    did = [_decided(d) for d in decisions]
     if not did:
         return f"{said} and decided nothing about {key}."
     return f"{said}: {'; '.join(did)}."

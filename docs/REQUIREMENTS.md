@@ -171,9 +171,9 @@ label brings it in, and the label stays visible on the ticket.
 
 Built in M19, live acceptance pending. Every ticket's conversation, public or private, in one place canopy owns, so the
 web UI (N1) can show it as one inbox and later channels such as Slack join it rather than keeping their own (§22, D072).
-For a public ticket the tracker stays the authority and the journal holds the overseer's copy: each tick the overseer
-mirrors new tracker comments with its `mirror` tool (§27), and `canopy show` lists them with workers' reports and the
-operator's replies. Gap: PR review comments, which would join with PR subjects (M14, closed unbuilt).
+For a public ticket the tracker stays the authority and the journal holds a copy: each comment the tracker source
+observes is recorded in the ticket's conversation in code (§35), and `canopy show` lists them with workers' reports and
+the operator's replies. Gap: PR review comments, which would join with PR subjects (M14, closed unbuilt).
 
 ### R13. Trusted and untrusted reviewers
 

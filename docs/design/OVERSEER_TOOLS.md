@@ -15,8 +15,7 @@ the tools' functions, until nothing needs them (ROADMAP M48).
 - A call is typed. A refusal comes back as a tool error naming the field, which the model reads and corrects, where a
   click usage error is text it has to parse.
 - The overseer's only write path is not a shell. Its guards are code either way (D020), but in a shell which command
-  runs is decided by quoting, and a comment's body had to reach `canopy mirror` through a heredoc whose delimiter was
-  random per tick. A tool call's arguments are JSON fields, with nothing to quote, expand, or end early.
+  runs is decided by quoting. A tool call's arguments are JSON fields, with nothing to quote, expand, or end early.
 - Each verb is its own tool name, so spend by tool (§11) splits the overseer's calls by verb.
 
 Workers are out of scope: what they report is read
@@ -34,7 +33,7 @@ runtime dependency with its own async stack and HTTP transports, for the few met
   `CANOPY_TICK_ID` names a running tick (D020). With `CANOPY_RUN_ID` set, the server lists no tools and refuses every
   call, as the operator's commands refuse inside a run (§22).
 - A guard's refusal or an invalid input is a tool error with the text the CLI prints, which the model reads and goes
-  on. It never logs an argument's text: a mirrored comment's body is the tracker's, not the log's.
+  on. It never logs an argument's free text, which may echo a tracker's or a reviewer's.
 - It writes nothing to stderr, which OpenCode never reads, so output there cannot block it mid-call.
 - A run a tool starts is never the server's descendant, since OpenCode kills those when the overseer's run ends; it is
   reparented, as a `canopy dispatch` run is today.
@@ -63,8 +62,8 @@ and then allow each by exact name; every other definition denies them. Workers k
 ### The tools
 
 One tool per overseer verb, named for its command with hyphens for spaces: `dispatch`, `decide`, `queried`,
-`attention`, `ticket-set`, `mirror` (its body a field: no heredoc, no delimiter), `review-run`, `review-wait`,
-`review-end`, `review-revise`, `chore-run`, and `chore-wait`. The overseer sees them as `canopy_dispatch` and so on.
+`attention`, `ticket-set`, `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and
+`chore-wait`. The overseer sees them as `canopy_dispatch` and so on.
 No tool name holds an underscore: OpenCode joins server and tool with one, so `canopy_ticket_set` could also come from
 a server named `canopy_ticket`, and the later would replace the earlier. No tool reads the pool: the state block
 already does.
@@ -113,7 +112,7 @@ these:
 - Code mode, on with `OPENCODE_EXPERIMENTAL_CODE_MODE`, or with `OPENCODE_EXPERIMENTAL` when that is unset, offers no
   MCP tool; the first set to false turns it off whatever the second says.
 
-D124 holds that canopy serves MCP itself, over stdio only. §35 retires mirroring, and with it the `mirror` tool.
+D124 holds that canopy serves MCP itself, over stdio only.
 
 ### Open
 

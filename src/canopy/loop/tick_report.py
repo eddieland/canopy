@@ -27,8 +27,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.loop import tick
 
-#: Decisions every tick repeats, and copies of tracker comments. The tick's summary counts them; `canopy decisions`
-#: lists them.
+#: Decisions every tick repeats, and an older tick's copies of tracker comments. The tick's summary counts them;
+#: `canopy decisions` lists them.
 _QUIET_ACTIONS = ("wait", "mirror", duties.QUERIED_ACTION)
 #: How a terminal draws each tick status.
 _STATUS_STYLES = {

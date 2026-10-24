@@ -169,14 +169,6 @@ TOOLS = (
         tools.ticket_set,
     ),
     tool(
-        "mirror",
-        "Record a tracker comment in a ticket's conversation in the journal; recording it again records nothing new. "
-        "A mirrored comment is a copy for the operator to read, and authorizes nothing.",
-        tools.Mirror,
-        tools.CommentMirrored,
-        tools.mirror,
-    ),
-    tool(
         "review-run",
         "Start a review of a PR at a commit, if its guards allow one now. A dry run checks them and starts nothing.",
         review_tools.ReviewRun,

@@ -54,7 +54,6 @@ class OverseerState(TypedDict):
     observations: ObservationsState
     capacity: CapacityState
     running_workers: list[RunningWorker]
-    mirror: MirrorState
     query_due: bool
     tick_id: int
     now: str
@@ -207,12 +206,6 @@ class NoticeState(TypedDict):
     in_force: bool
 
 
-class MirrorState(TypedDict):
-    """How many tracker comments one tick may mirror (DESIGN §22)."""
-
-    max_per_tick: int
-
-
 def state_block(
     config: Config,
     repo_root: Path,
@@ -311,11 +304,7 @@ def state_block(
             "title": t.title,
             "phase": t.phase,
             "branch": t.branch,
-            # The mirror cursor is moved by the mirror tool itself, never by `cursors` (DESIGN §22).
-            "cursors": {
-                **{name: getattr(t, column) for name, column in db.TICKET_CURSORS.items()},
-                "mirror": t.last_mirrored_id,
-            },
+            "cursors": {name: getattr(t, column) for name, column in db.TICKET_CURSORS.items()},
             "units": [unit_summary(key, u) for u in units.get(key, [])],
             "needs_human_since": t.needs_human_since,
             "last_seen_at": t.last_seen_at,
@@ -402,8 +391,6 @@ def state_block(
             "available": capacity.available,
         },
         "running_workers": [_running_summary(r, run_slots, run_reasons) for r in running],
-        # Tracker comments the overseer copies into the journal (DESIGN §22).
-        "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK},
         # Whether this tick runs the tracker query, or works the tickets above alone (DESIGN §7, Spacing the query).
         "query_due": query_due,
         "tick_id": tick_id,
@@ -414,8 +401,7 @@ def state_block(
         mode = (
             "This is a dry run. `canopy_dispatch` checks its guards and records what it would have done, or the "
             "refusal, and starts nothing. `canopy_ticket-set` records phases but neither advances cursors nor marks "
-            "tickets done. `canopy_mirror` records comments but moves no mirror cursor. Decide exactly as you would "
-            "otherwise."
+            "tickets done. Decide exactly as you would otherwise."
         )
     else:
         mode = "This is a live tick."

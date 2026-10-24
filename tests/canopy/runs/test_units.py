@@ -249,7 +249,7 @@ def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
     assert (ticket["phase"], ticket["branch"], ticket["cursors"]) == (
         "running",
         BRANCH,
-        {"comment": "c-1", "message": None, "mirror": None},
+        {"comment": "c-1", "message": None},
     )
     no_limit = {"implement": 1, "resume": 0}
     assert ticket["units"] == [

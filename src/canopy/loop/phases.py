@@ -373,7 +373,7 @@ def _overseers(decision: records.Decision) -> bool:
 
     Returns:
         False for one the harness recorded, a harness's attention item from before the journal said who recorded it,
-        a refusal, or a mirror.
+        a refusal, or an older tick's mirror.
     """
     action = decision.action
     if decision.decider is Decider.HARNESS or action.startswith("refused:") or action == conversation.MIRROR_ACTION:

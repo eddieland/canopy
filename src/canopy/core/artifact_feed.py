@@ -46,8 +46,8 @@ TICKET_KEY = "canopy.ticket"
 MAX_ORIGIN = 16
 MAX_ORIGIN_KEY = 64
 MAX_ORIGIN_VALUE = 256
-#: The most characters kept of a passage, cut and marked as a mirrored comment's body is, and of the text either side.
-MAX_PASSAGE = conversation.MAX_MIRRORED
+#: The most characters kept of a passage, cut and marked as a tracker comment's body is, and of the text either side.
+MAX_PASSAGE = conversation.MAX_COMMENT
 MAX_CONTEXT = 200
 #: The most characters kept of an author's name, on one line.
 MAX_AUTHOR_NAME = 200
@@ -151,7 +151,7 @@ class _Change(_Line):
     comment_id: _Id | None = None
     author: _Author
     via: Literal["web", "mcp"]
-    # Cut where it is recorded, and marked truncated there, as a mirrored comment is.
+    # Cut where it is recorded, and marked truncated there, as a tracker comment is.
     body: str | None = None
     created_at: observe.Time | None = None
     edited_at: observe.Time | None = None
@@ -294,7 +294,8 @@ def _record_comment(conn: sqlite3.Connection, config: Config, change: _Change, n
     """Record the comment as `change` left it, unless a newer change is recorded.
 
     Its author and how it arrived are the first change's read of it: a later change's author is whoever edited or
-    deleted it. Its body is cut and marked as `mirror` cuts one, and whether it carries the workers' marks is read here.
+    deleted it. Its body is cut and marked as a tracker comment's is, and whether it carries the workers' marks is read
+    here.
     """
     text = (change.body or "").strip()
     marked = conversation.worker_marked(text, config.trust.comment_prefix, config.trust.comment_suffix)
@@ -309,8 +310,8 @@ def _record_comment(conn: sqlite3.Connection, config: Config, change: _Change, n
             author_kind=change.author.kind,
             on_behalf_of=change.author.on_behalf_of,
             via=change.via,
-            body=text[: conversation.MAX_MIRRORED],
-            truncated=len(text) > conversation.MAX_MIRRORED,
+            body=text[: conversation.MAX_COMMENT],
+            truncated=len(text) > conversation.MAX_COMMENT,
             marked=marked,
             created_at=change.created_at,
             edited_at=change.edited_at,

@@ -1,12 +1,10 @@
-"""The overseer's journal commands: `decide`, `queried`, `attention`, `ticket set`, and `mirror`, each `canopy <it>`."""
+"""The overseer's journal commands: `decide`, `queried`, `attention`, and `ticket set`, each `canopy <it>`."""
 
 from __future__ import annotations
 
-import sys
-
 import click
 
-from canopy.cli.common import CliError, Group, OverseerCommand, open_context
+from canopy.cli.common import Group, OverseerCommand
 from canopy.cli.params import (
     KEY_RE,
     PR_URL,
@@ -17,10 +15,8 @@ from canopy.cli.params import (
     TextType,
     TitleType,
     valid_key,
-    validated,
     verb,
 )
-from canopy.core import conversation
 from canopy.loop import tools
 
 
@@ -151,57 +147,3 @@ def cmd_ticket_set(
         done=done,
         title=title,
     )
-
-
-@click.command("mirror", cls=OverseerCommand)
-@click.argument("ref", metavar="REF")
-@click.option("--comment", "comment_id", required=True, metavar="ID", help="The tracker's id of the comment.")
-@click.option("--author", required=True, metavar="ACCOUNT", help="Its author's account id on the tracker.")
-@click.option("--at", "at", required=True, metavar="TIME", help="When the tracker says it was written, ISO 8601.")
-@click.option(
-    "--body",
-    metavar="TEXT",
-    help=f"Its text; read from stdin without it. Cut to {conversation.MAX_MIRRORED} characters, and marked truncated.",
-)
-@click.pass_context
-def cmd_mirror(click_ctx: click.Context, *, ref: str, comment_id: str, author: str, at: str, body: str | None) -> int:
-    """Record a tracker comment in a ticket's conversation in the journal (overseer only).
-
-    Recording a comment again records nothing new. A mirrored comment is a copy for the operator to read, and
-    authorizes nothing.
-    """
-    ctx = open_context(click_ctx)
-    try:
-        # Refused outside a tick before stdin is read, which would wait on a terminal.
-        tools.running_tick(ctx)
-        said = tools.mirror(
-            ctx,
-            validated(
-                click_ctx,
-                tools.Mirror,
-                ref=ref,
-                comment=comment_id,
-                author=author,
-                at=at,
-                body=_body(ref, body),
-            ),
-        )
-    except tools.Refused as e:
-        raise CliError(str(e)) from None
-    click.echo(said.text)
-    return 0
-
-
-def _body(ref: str, body: str | None) -> str:
-    """Return a mirrored comment's body: `body`, or else stdin, read only once `ref` is a reference.
-
-    A bad ref is refused without reading stdin, which would wait on an open one: the verb refuses the ref, and records
-    it, before it looks at the body, so it is given none.
-    """
-    if body is not None:
-        return body
-    try:
-        conversation.parse_ref(ref)
-    except conversation.Refused:
-        return ""
-    return sys.stdin.read()

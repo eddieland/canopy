@@ -132,7 +132,6 @@ def test_a_note_says_each_decision_in_a_few_words_and_cuts_a_long_reason() -> No
         decision("refused:capacity", "every slot is busy."),
         decision("skip", "the ticket\nis closed"),
         decision("done", "merged"),
-        decision(conversation.MIRROR_ACTION, "mirrored 2 comments"),
         decision(f"dispatch:{RunKind.RESUME}", "dry run: not dispatched; would resume"),
     ]
     assert acknowledge.body(7, KEY, [40], made) == (

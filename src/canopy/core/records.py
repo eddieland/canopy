@@ -152,6 +152,7 @@ class Ticket(Row):
     needs_human_since: str | None
     done: bool
     last_message_id: int | None
+    #: The mirror cursor, unread since M37 retired the mirror (DESIGN §35); kept, since no migration drops a column.
     last_mirrored_id: str | None
     # When the operator last forgot the ticket's work, and its newest run and message then (DESIGN §22).
     forgotten_at: str | None
@@ -985,7 +986,7 @@ class ObservedComment(Row):
     id: str
     author: str
     commented_at: str
-    #: The comment's text, cut at the mirror's length.
+    #: The comment's text, cut at `conversation.MAX_COMMENT`.
     body: str
     truncated: bool
     #: `worker` when it carries the workers' marks (D069), else `tracker`.
@@ -1120,7 +1121,7 @@ class ObservedArtifactComment(Row):
     #: For an agent's comment, the person it wrote for.
     on_behalf_of: str | None
     via: str
-    #: Its text, cut at the mirror's length; empty once deleted.
+    #: Its text, cut at `conversation.MAX_COMMENT`; empty once deleted.
     body: str
     truncated: bool
     #: Whether it carries every one of the workers' marks (D069).
@@ -1418,7 +1419,7 @@ class Message(Row):
     at: str
     #: `worker`, `operator`, or `tracker`.
     source: str
-    #: `report` or `question`, a worker's; `reply`, the operator's.
+    #: `report` or `question`, a worker's; `reply`, the operator's; `comment`, a tracker comment a source observed.
     kind: str
     #: `run`, `cli`, `web`, `slack`, or `tracker`.
     channel: str

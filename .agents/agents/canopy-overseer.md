@@ -102,7 +102,6 @@ permission:
   "canopy_queried": allow
   "canopy_attention": allow
   "canopy_ticket-set": allow
-  "canopy_mirror": allow
   "canopy_review-run": allow
   "canopy_review-wait": allow
   "canopy_review-end": allow

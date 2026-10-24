@@ -22,7 +22,7 @@ filed without the agent's reports, its questions, or the operator's answers appe
 ### Messages
 
 Each message is recorded against its subject, with its source (a worker's run, the operator through a channel that
-authenticated them, or a mirrored tracker comment), its kind, and its channel. The harness records a run's report and
+authenticated them, or a tracker comment), its kind, and its channel. The harness records a run's report and
 a `blocked` run's question from the result line (§8), in the transaction that closes the run. Operator input goes
 through one function every channel calls, which refuses an empty or overlong body rather than cut it and records a
 retried submission once. Agents never write a message directly. An operator message, or a task submitted (§36), or a
@@ -33,8 +33,8 @@ has one.
 
 ### Authority stays with the source
 
-- **Public ticket.** Authorization and replies are the overseer's live read of the tracker (§7, §17); a mirrored
-  comment is only its claim. The operator may also reply in canopy (D089), which is how they answer an untrusted
+- **Public ticket.** Authorization and replies are the overseer's live read of the tracker (§7, §17); a tracker
+  comment in the journal is only a copy. The operator may also reply in canopy (D089), which is how they answer an untrusted
   reviewer (§7); the message is canopy's own fact and stays in the journal.
 - **Private ticket.** The journal is the source. Its start record and the operator's messages are canopy's own facts,
   written after a channel authenticated the operator, so the harness checks them in code without reading the tracker
@@ -62,7 +62,7 @@ so no agent can lift a limit that bounds it (TRUST_MODEL T1).
   private run filed is a public ticket like any other, worked only once the operator labels or starts it.
 - Its phases (§7) come from the journal: `needs_human` after a `blocked` run with no operator message since,
   `human_replied` after one. The harness raises `awaiting_reply` for an unanswered question (§14).
-- Workers' prompts carry the operator's messages as instructions, and reports and mirrored comments as data; the
+- Workers' prompts carry the operator's messages as instructions, and reports and tracker comments as data; the
   overseer points at a message by id and never quotes it. On a public ticket (D093), keeping those messages off the
   tracker is the worker's prompt's rule, not a guard (T6).
 
@@ -87,10 +87,11 @@ hide a result by marking it seen.
 
 ### Tracker comments in the journal
 
-The overseer copies each ticket's new tracker comments into the journal every tick, so the operator reads every
-conversation in one place, through a tool only a tick's overseer has (D020, §27), the comment's body a field no comment
-can break out of (TRUST_MODEL T1). A comment bearing a worker's marks (D069) is recorded as a worker's. Either
-way it authorizes nothing: phases, `awaiting_reply`, and the loop's wake read operator messages only.
+Each comment the tracker source observes (§30) is recorded once in its ticket's conversation, in code and as the
+connector read it, so the operator reads every conversation in one place; no agent writes one. A comment bearing a
+worker's marks (D069) is recorded as a worker's. Either way it authorizes nothing: phases, `awaiting_reply`, and the
+loop's wake read operator messages only. An edit after its first read is not followed, and without a tracker source no
+comment reaches the conversation.
 
 ### Attachments
 
@@ -133,7 +134,7 @@ times the text.
 
 ### Trust model changes
 
-Private tickets and mirrored comments changed TRUST_MODEL T1 and T6, and the web UI added T8. Operator messages on
+Private tickets and tracker comments changed TRUST_MODEL T1 and T6, and the web UI added T8. Operator messages on
 public tickets (D089) changed T1: one authorizes a `resume` as an authorized reply does. Seen marks changed T8: the web
 writes what no CLI verb does (D127). Limits and trust (M41) changed T8 too: the web writes a few config keys, limits
 within bounds and trust only stricter (D128).

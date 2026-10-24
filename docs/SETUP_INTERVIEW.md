@@ -42,7 +42,7 @@ are the ones you run.
 - **Never start the loop.** `canopy loop` without `--ticks` runs until Ctrl-C and would hang this session;
   `canopy daemon start` leaves it running. The one tick you may run is the dry one in stage 9, with the operator's
   go-ahead, because it spends a model call.
-- **Never run canopy's overseer tools**: `canopy dispatch`, `decide`, `queried`, `attention`, `ticket set`, `mirror`.
+- **Never run canopy's overseer tools**: `canopy dispatch`, `decide`, `queried`, `attention`, `ticket set`.
   They refuse outside a tick by design.
 - **Keep agent config out of the workspace.** Do not write an `opencode.json`, `.opencode/`, or any other agent
   runtime's config into the workspace or the clones under `repos/`: the overseer runs there, and canopy refuses to start

@@ -190,7 +190,7 @@ def test_next_tick_sees_the_journal(scenario: Scenario) -> None:
 
 def test_the_state_block_names_the_tickets_marked_done_lately(scenario: Scenario) -> None:
     # A merged ticket stays open in the tracker until a human closes it, so the query keeps finding it: listed, the
-    # overseer leaves it alone instead of reading it, mirroring it, and marking it done again every tick (DESIGN §7).
+    # overseer leaves it alone instead of reading it and marking it done again every tick (DESIGN §7).
     conn = scenario.conn
     repo = str(scenario.env.root)
     with in_tick(conn) as tick_id:

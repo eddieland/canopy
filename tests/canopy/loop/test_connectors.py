@@ -149,11 +149,11 @@ def test_a_tick_asks_each_source_its_own_kind_and_records_what_it_read_whole(sce
     [comment] = records.fetch_all(scenario.conn, records.ObservedComment, sql.frag("SELECT * FROM observed_comments"))
     assert (comment.ticket, comment.id, comment.source, comment.body) == ("PROJ-1", "10001", "tracker", "(no text)")
     assert comment.commented_at == "2026-10-18T10:00:00.000Z"
-    # The comment is in no conversation, so no worker's prompt carries it, and it moves no cursor; the overseer's
-    # state block shows what the connector read (DESIGN §35).
-    assert scenario.conn.execute("SELECT count(*) FROM messages WHERE comment_id IS NOT NULL").fetchone()[0] == 0
+    # The comment reaches its ticket's conversation, as data, and moves no cursor; the overseer's state block shows
+    # what the connector read (DESIGN §35).
+    assert scenario.conn.execute("SELECT count(*) FROM messages WHERE comment_id = '10001'").fetchone()[0] == 1
     assert scenario.state()["observations"]["query"]["result"] == ["PROJ-2", "PROJ-1"]
-    assert scenario.ticket_state("PROJ-1")["cursors"]["mirror"] is None
+    assert scenario.ticket_state("PROJ-1")["cursors"] == {"comment": None, "message": None}
     assert scenario.attention() == []
 
     # The next run asks only for comments newer than the newest the journal holds.

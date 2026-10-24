@@ -22,9 +22,9 @@ Everything below is for an agent helping the operator in their own session.
 - Read, explain, and suggest. Do not start ticks or loops: `canopy loop` runs until Ctrl-C and would hang your session,
   and `canopy tick` runs the overseer, which spends money. Suggest the command and let the operator run it, unless
   they ask you to run a single `canopy tick --dry-run`.
-- `canopy dispatch`, `decide`, `queried`, `attention`, `ticket set`, and `mirror` are the overseer's tools and refuse
-  outside a tick, by design. Nothing dispatches a ticket by hand: a ticket is worked through its queue label or
-  `canopy start` (see Getting a ticket worked).
+- `canopy dispatch`, `decide`, `queried`, `attention`, and `ticket set` are the overseer's tools and refuse outside
+  a tick, by design. Nothing dispatches a ticket by hand: a ticket is worked through its queue label or `canopy start`
+  (see Getting a ticket worked).
 - Every command that acts is the operator's own, among them `start`, `stop`, `reply`, `forget`, `grant`, `plan`,
   `pause`, `resume`, `notice`, `dismiss`, `send`, and `draft`'s and `memory`'s changes: they authorize work, answer
   workers, hold the loop, and tell later runs about an outage. Suggest them; run one only when the operator asks, with
