@@ -281,6 +281,33 @@ describe('DraftCard', () => {
         expect(screen.getByTestId('supersedes-edited')).toBeTruthy()
     })
 
+    it('marks a draft that departs from its plan item, with the proposed reply to read as text', async () => {
+        const fromPlan = { number: 2, item_id: 502, proposal: 'decline' as const, left_out: false, departs: true }
+        await renderRouted(
+            <DraftCard
+                draft={draft({ from_plan: { ...fromPlan, reply: 'Kept, **as** it was.' } })}
+                onChange={changed}
+            />,
+        )
+        expect(screen.getByText('changed from the plan')).toBeTruthy()
+        expect(screen.getByTestId('draft-from-plan').textContent).toContain(
+            'The run departs from plan item 2, which proposed decline.',
+        )
+        expect(screen.queryByText('Kept, **as** it was.')).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Show the proposed reply' }))
+        expect(screen.getByText('Kept, **as** it was.')).toBeTruthy()
+    })
+
+    it('marks a draft its plan item proposed as planned, and names no departure', async () => {
+        const fromPlan = { number: 1, item_id: 501, proposal: 'change' as const, reply: 'Done.', left_out: false }
+        await renderRouted(
+            <DraftCard draft={draft({ from_plan: { ...fromPlan, departs: false } })} onChange={changed} />,
+        )
+        expect(screen.getByText('as planned')).toBeTruthy()
+        expect(screen.queryByText('changed from the plan')).toBeNull()
+        expect(screen.queryByTestId('draft-from-plan')).toBeNull()
+    })
+
     it('says why a draft was refused, and offers no verb on it', async () => {
         await renderRouted(
             <DraftCard

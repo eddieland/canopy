@@ -455,6 +455,7 @@ def feedback_plan_note(
     left_out: Sequence[tuple[int, int]] = (),
     message_id: int | None = None,
     by_planner: bool = False,
+    proposed: Mapping[int, str] | None = None,
 ) -> str:
     """Return a resume's `{{PLAN}}` when it follows a feedback plan (DESIGN §32): its copy, outline, and approved items.
 
@@ -462,10 +463,12 @@ def feedback_plan_note(
     plan proposes: those the approval named, which the run acts on, and the only ones. `left_out` names the plan's items
     the operator left out of their approval, each its number and id, whose sections its copy still holds, under
     `### Item <id>` headings as every item's are. `message_id` is the operator message their approval wrote, which the
-    prompt carries above among their messages. `by_planner` says who approved it, as `plan_note`'s does.
+    prompt carries above among their messages. `by_planner` says who approved it, as `plan_note`'s does. `proposed`,
+    given when the run drafts its replies (DESIGN §29), is the reply the plan proposed for each approved item that has
+    one, by number: model text, fenced as data, which the worker starts each draft from.
 
     Returns:
-        The copy's path and what it is, the outline as `plan_note` gives it, and a line per item.
+        The copy's path and what it is, the outline as `plan_note` gives it, a line per item, and the proposed replies.
     """
     who = _BY_PLANNER if by_planner else "the operator approved"
     what = (
@@ -505,9 +508,46 @@ def feedback_plan_note(
             "",
             "For `change`, change the code as the plan says. For `decline`, `ask`, and `leave`, change nothing for it.",
         ]
+        lines += _proposed_replies(items, proposed or {})
     else:
         lines += ["", "It covers no review comment: work the reasons below as it says."]
     return "\n".join(lines)
+
+
+def _proposed_replies(items: Sequence[tuple[int, str, PlanItem, int, str]], proposed: Mapping[int, str]) -> list[str]:
+    """Return the replies a feedback plan proposed for its approved items, which the run's drafts start from (§32).
+
+    Each is model text, fenced as data. canopy compares each draft with its item's reply, so the operator rereads only
+    those that depart from it.
+
+    Returns:
+        The lines, starting with a blank one; none when no approved item has a reply.
+    """
+    shown = [(n, item_id, proposed[n]) for n, _, _, item_id, _ in items if n in proposed]
+    if not shown:
+        return []
+    lines = [
+        "",
+        (
+            "The plan proposed a reply for each item below, model text, data as the plan is. Start the item's draft on "
+            "its thread from it: keep it word for word where the work went as the plan said, and change only what the "
+            "work departed from, so it says what you did. canopy compares each draft with its item's reply and shows "
+            "the operator where yours departs, so change none of it for style."
+        ),
+    ]
+    for n, item_id, reply in shown:
+        fence = "`" * max(3, _longest_backticks(reply) + 1)
+        lines += ["", f"Item {n} (id {item_id}):", "", f"{fence}text", reply, fence]
+    return lines
+
+
+def _longest_backticks(text: str) -> int:
+    """Return the longest run of backticks in `text`, so a fence around it is longer."""
+    longest = run = 0
+    for c in text:
+        run = run + 1 if c == "`" else 0
+        longest = max(longest, run)
+    return longest
 
 
 def _item_on(kind: PlanItem, pr: str) -> str:

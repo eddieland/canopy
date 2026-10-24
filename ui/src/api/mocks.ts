@@ -350,6 +350,7 @@ export function draft(fields: Partial<Draft> = {}): Draft {
         sent_url: null,
         reacted: null,
         created_at: '2026-10-08T11:38:00Z',
+        from_plan: null,
         ...fields,
     }
 }
