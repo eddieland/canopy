@@ -27,7 +27,8 @@ interface RunsSearch {
  * task's newest run. Running ones first, then the ones that ended last. `?state=` keeps the subjects whose latest run
  * is in that state, and `?kind=` those of one kind. `?model=`, which the spend page's By model links to, keeps the
  * worker runs that model ran (`ranOn`), each ticket by its latest of them: reviews, chores, and tasks are listed
- * without their models, so it leaves them out.
+ * without their models, so it leaves them out. The overseer's ticks are under it, at `/runs/ticks`, and the
+ * worktree pools, at `/runs/worktrees`.
  */
 export const Route = createFileRoute('/runs/')({
     // Typed search params: `?state=blocked` filters; anything else is dropped, never trusted. Return every key, even
@@ -68,7 +69,23 @@ function RunsPage() {
             >
                 Every agent canopy runs: workers on tickets, reviews of PRs, chores, and tasks, each subject&apos;s
                 latest run first, running ones on top, then the ones that ended last. A subject&apos;s earlier runs open
-                under it.
+                under it. The overseer&apos;s ticks, and the worktree pools the runs work in, are under Runs too:{' '}
+                <Link
+                    to="/runs/ticks"
+                    className="text-accent underline-offset-4 hover:underline"
+                    data-testid="runs-ticks-link"
+                >
+                    Ticks
+                </Link>{' '}
+                and{' '}
+                <Link
+                    to="/runs/worktrees"
+                    className="text-accent underline-offset-4 hover:underline"
+                    data-testid="runs-worktrees-link"
+                >
+                    Worktrees
+                </Link>
+                .
             </PageHeader>
             <Panel>
                 <PanelHeader label="Runs">

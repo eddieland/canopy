@@ -285,7 +285,7 @@ function CommentList({
                             </Chip>
                             {/* A router link, not a bare `#` href, which the page's <base> would send to the root. */}
                             <Link
-                                to="/reviews/$id"
+                                to="/pull-requests/reviews/$id"
                                 params={{ id: String(run) }}
                                 hash={c.finding === null ? commentAnchor(c.number) : findingAnchor(c.finding)}
                                 onClick={() => {

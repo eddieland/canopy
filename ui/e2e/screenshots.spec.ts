@@ -74,7 +74,7 @@ for (const theme of THEMES) {
         await page.clock.setFixedTime(NOW)
         await storeTheme(page, theme)
         await signIn(page)
-        await page.goto('ticks/2')
+        await page.goto('runs/ticks/2')
         await settled(page)
         const output = page.getByTestId('tick-output')
         await output.getByRole('button', { name: 'Show output' }).click()
@@ -165,7 +165,7 @@ test("a tick's output shown in dark", async ({ page }) => {
     await page.clock.setFixedTime(NOW)
     await storeTheme(page, 'dark')
     await signIn(page)
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     const output = page.getByTestId('tick-output')
     await output.getByRole('button', { name: 'Show output' }).click()
@@ -195,7 +195,7 @@ test('a long review diff folded in dark', async ({ page }) => {
         dismissed: false,
     }
     await serveReview(page, files, [finding])
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     await settled(page)
     const panel = page.getByTestId('diff-file').nth(1)
     await expect(panel.getByTestId('diff-fold')).toHaveCount(2)
@@ -223,10 +223,10 @@ test.describe('in a narrow window', () => {
         await screenshotWhole(page, 'tickets-ABC-102-narrow-dark.png')
     })
 
-    for (const route of ['tickets', 'pull-requests', 'reviews', 'worktrees']) {
+    for (const route of ['tickets', 'pull-requests', 'pull-requests/reviews', 'runs/worktrees']) {
         test(`${route} narrow`, async ({ page }) => {
             await openInDark(page, route)
-            await screenshotMain(page, `${route}-narrow-dark.png`)
+            await screenshotMain(page, `${route.replaceAll('/', '-')}-narrow-dark.png`)
         })
     }
 })

@@ -39,7 +39,7 @@ function renderRow(tick: Partial<Tick> = {}) {
 describe('TickRow', () => {
     it('heads a tick as `canopy decisions` does: its link, its decisions counted, and its tokens', async () => {
         await renderRow()
-        expect(screen.getByRole('link', { name: 'tick:12' }).getAttribute('href')).toBe('/ticks/12')
+        expect(screen.getByRole('link', { name: 'tick:12' }).getAttribute('href')).toBe('/runs/ticks/12')
         expect(screen.getByText('3 decisions')).toBeDefined()
         expect(screen.getByText('19.3k tokens').title).toBe(RUN_TOKENS_TITLE)
         expect(screen.getByText('25.2k peak').title).toBe(RUN_TOKENS_TITLE)

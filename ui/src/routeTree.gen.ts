@@ -29,6 +29,7 @@ import { Route as ReviewsIndexRouteImport } from './routes/reviews.index'
 import { Route as ReviewsIdRouteImport } from './routes/reviews.$id'
 import { Route as RunsIndexRouteImport } from './routes/runs.index'
 import { Route as RunsIdRouteImport } from './routes/runs.$id'
+import { Route as RunsWorktreesRouteImport } from './routes/runs.worktrees'
 import { Route as SettingsLimitsRouteImport } from './routes/settings_.limits'
 import { Route as TasksIndexRouteImport } from './routes/tasks.index'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
@@ -36,9 +37,14 @@ import { Route as TicketsIndexRouteImport } from './routes/tickets.index'
 import { Route as TicketsKeyRouteImport } from './routes/tickets.$key'
 import { Route as TicksIndexRouteImport } from './routes/ticks.index'
 import { Route as TicksIdRouteImport } from './routes/ticks.$id'
+import { Route as PullRequestsReviewsIndexRouteImport } from './routes/pull-requests.reviews.index'
+import { Route as PullRequestsReviewsIdRouteImport } from './routes/pull-requests.reviews.$id'
 import { Route as ReviewsIdRunRouteImport } from './routes/reviews.$id_.run'
+import { Route as RunsTicksIndexRouteImport } from './routes/runs.ticks.index'
+import { Route as RunsTicksIdRouteImport } from './routes/runs.ticks.$id'
 import { Route as TicketsKeyPlanRouteImport } from './routes/tickets.$key_.plan'
 import { Route as ChoresNameRunsIdRouteImport } from './routes/chores.$name_.runs.$id'
+import { Route as PullRequestsReviewsIdRunRouteImport } from './routes/pull-requests.reviews.$id_.run'
 import { Route as TasksIdRunsRunRouteImport } from './routes/tasks.$id_.runs.$run'
 
 const IndexRoute = IndexRouteImport.update({
@@ -141,6 +147,11 @@ const RunsIdRoute = RunsIdRouteImport.update({
   path: '/runs/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RunsWorktreesRoute = RunsWorktreesRouteImport.update({
+  id: '/runs/worktrees',
+  path: '/runs/worktrees',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsLimitsRoute = SettingsLimitsRouteImport.update({
   id: '/settings_/limits',
   path: '/settings/limits',
@@ -176,9 +187,30 @@ const TicksIdRoute = TicksIdRouteImport.update({
   path: '/ticks/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PullRequestsReviewsIndexRoute =
+  PullRequestsReviewsIndexRouteImport.update({
+    id: '/pull-requests/reviews/',
+    path: '/pull-requests/reviews/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const PullRequestsReviewsIdRoute = PullRequestsReviewsIdRouteImport.update({
+  id: '/pull-requests/reviews/$id',
+  path: '/pull-requests/reviews/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReviewsIdRunRoute = ReviewsIdRunRouteImport.update({
   id: '/reviews/$id_/run',
   path: '/reviews/$id/run',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RunsTicksIndexRoute = RunsTicksIndexRouteImport.update({
+  id: '/runs/ticks/',
+  path: '/runs/ticks/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RunsTicksIdRoute = RunsTicksIdRouteImport.update({
+  id: '/runs/ticks/$id',
+  path: '/runs/ticks/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TicketsKeyPlanRoute = TicketsKeyPlanRouteImport.update({
@@ -191,6 +223,12 @@ const ChoresNameRunsIdRoute = ChoresNameRunsIdRouteImport.update({
   path: '/chores/$name/runs/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PullRequestsReviewsIdRunRoute =
+  PullRequestsReviewsIdRunRouteImport.update({
+    id: '/pull-requests/reviews/$id_/run',
+    path: '/pull-requests/reviews/$id/run',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const TasksIdRunsRunRoute = TasksIdRunsRunRouteImport.update({
   id: '/tasks/$id_/runs/$run',
   path: '/tasks/$id/runs/$run',
@@ -212,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
+  '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings/limits': typeof SettingsLimitsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
@@ -225,9 +264,14 @@ export interface FileRoutesByFullPath {
   '/tasks/': typeof TasksIndexRoute
   '/tickets/': typeof TicketsIndexRoute
   '/ticks/': typeof TicksIndexRoute
+  '/pull-requests/reviews/$id': typeof PullRequestsReviewsIdRoute
   '/reviews/$id/run': typeof ReviewsIdRunRoute
+  '/runs/ticks/$id': typeof RunsTicksIdRoute
   '/tickets/$key/plan': typeof TicketsKeyPlanRoute
+  '/pull-requests/reviews/': typeof PullRequestsReviewsIndexRoute
+  '/runs/ticks/': typeof RunsTicksIndexRoute
   '/chores/$name/runs/$id': typeof ChoresNameRunsIdRoute
+  '/pull-requests/reviews/$id/run': typeof PullRequestsReviewsIdRunRoute
   '/tasks/$id/runs/$run': typeof TasksIdRunsRunRoute
 }
 export interface FileRoutesByTo {
@@ -245,6 +289,7 @@ export interface FileRoutesByTo {
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
+  '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings/limits': typeof SettingsLimitsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
@@ -258,9 +303,14 @@ export interface FileRoutesByTo {
   '/tasks': typeof TasksIndexRoute
   '/tickets': typeof TicketsIndexRoute
   '/ticks': typeof TicksIndexRoute
+  '/pull-requests/reviews/$id': typeof PullRequestsReviewsIdRoute
   '/reviews/$id/run': typeof ReviewsIdRunRoute
+  '/runs/ticks/$id': typeof RunsTicksIdRoute
   '/tickets/$key/plan': typeof TicketsKeyPlanRoute
+  '/pull-requests/reviews': typeof PullRequestsReviewsIndexRoute
+  '/runs/ticks': typeof RunsTicksIndexRoute
   '/chores/$name/runs/$id': typeof ChoresNameRunsIdRoute
+  '/pull-requests/reviews/$id/run': typeof PullRequestsReviewsIdRunRoute
   '/tasks/$id/runs/$run': typeof TasksIdRunsRunRoute
 }
 export interface FileRoutesById {
@@ -279,6 +329,7 @@ export interface FileRoutesById {
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
+  '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings_/limits': typeof SettingsLimitsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
@@ -292,9 +343,14 @@ export interface FileRoutesById {
   '/tasks/': typeof TasksIndexRoute
   '/tickets/': typeof TicketsIndexRoute
   '/ticks/': typeof TicksIndexRoute
+  '/pull-requests/reviews/$id': typeof PullRequestsReviewsIdRoute
   '/reviews/$id_/run': typeof ReviewsIdRunRoute
+  '/runs/ticks/$id': typeof RunsTicksIdRoute
   '/tickets/$key_/plan': typeof TicketsKeyPlanRoute
+  '/pull-requests/reviews/': typeof PullRequestsReviewsIndexRoute
+  '/runs/ticks/': typeof RunsTicksIndexRoute
   '/chores/$name_/runs/$id': typeof ChoresNameRunsIdRoute
+  '/pull-requests/reviews/$id_/run': typeof PullRequestsReviewsIdRunRoute
   '/tasks/$id_/runs/$run': typeof TasksIdRunsRunRoute
 }
 export interface FileRouteTypes {
@@ -314,6 +370,7 @@ export interface FileRouteTypes {
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
+    | '/runs/worktrees'
     | '/settings/limits'
     | '/tasks/$id'
     | '/tickets/$key'
@@ -327,9 +384,14 @@ export interface FileRouteTypes {
     | '/tasks/'
     | '/tickets/'
     | '/ticks/'
+    | '/pull-requests/reviews/$id'
     | '/reviews/$id/run'
+    | '/runs/ticks/$id'
     | '/tickets/$key/plan'
+    | '/pull-requests/reviews/'
+    | '/runs/ticks/'
     | '/chores/$name/runs/$id'
+    | '/pull-requests/reviews/$id/run'
     | '/tasks/$id/runs/$run'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -347,6 +409,7 @@ export interface FileRouteTypes {
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
+    | '/runs/worktrees'
     | '/settings/limits'
     | '/tasks/$id'
     | '/tickets/$key'
@@ -360,9 +423,14 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/tickets'
     | '/ticks'
+    | '/pull-requests/reviews/$id'
     | '/reviews/$id/run'
+    | '/runs/ticks/$id'
     | '/tickets/$key/plan'
+    | '/pull-requests/reviews'
+    | '/runs/ticks'
     | '/chores/$name/runs/$id'
+    | '/pull-requests/reviews/$id/run'
     | '/tasks/$id/runs/$run'
   id:
     | '__root__'
@@ -380,6 +448,7 @@ export interface FileRouteTypes {
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
+    | '/runs/worktrees'
     | '/settings_/limits'
     | '/tasks/$id'
     | '/tickets/$key'
@@ -393,9 +462,14 @@ export interface FileRouteTypes {
     | '/tasks/'
     | '/tickets/'
     | '/ticks/'
+    | '/pull-requests/reviews/$id'
     | '/reviews/$id_/run'
+    | '/runs/ticks/$id'
     | '/tickets/$key_/plan'
+    | '/pull-requests/reviews/'
+    | '/runs/ticks/'
     | '/chores/$name_/runs/$id'
+    | '/pull-requests/reviews/$id_/run'
     | '/tasks/$id_/runs/$run'
   fileRoutesById: FileRoutesById
 }
@@ -414,6 +488,7 @@ export interface RootRouteChildren {
   ReportsSpendRoute: typeof ReportsSpendRoute
   ReviewsIdRoute: typeof ReviewsIdRoute
   RunsIdRoute: typeof RunsIdRoute
+  RunsWorktreesRoute: typeof RunsWorktreesRoute
   SettingsLimitsRoute: typeof SettingsLimitsRoute
   TasksIdRoute: typeof TasksIdRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
@@ -427,9 +502,14 @@ export interface RootRouteChildren {
   TasksIndexRoute: typeof TasksIndexRoute
   TicketsIndexRoute: typeof TicketsIndexRoute
   TicksIndexRoute: typeof TicksIndexRoute
+  PullRequestsReviewsIdRoute: typeof PullRequestsReviewsIdRoute
   ReviewsIdRunRoute: typeof ReviewsIdRunRoute
+  RunsTicksIdRoute: typeof RunsTicksIdRoute
   TicketsKeyPlanRoute: typeof TicketsKeyPlanRoute
+  PullRequestsReviewsIndexRoute: typeof PullRequestsReviewsIndexRoute
+  RunsTicksIndexRoute: typeof RunsTicksIndexRoute
   ChoresNameRunsIdRoute: typeof ChoresNameRunsIdRoute
+  PullRequestsReviewsIdRunRoute: typeof PullRequestsReviewsIdRunRoute
   TasksIdRunsRunRoute: typeof TasksIdRunsRunRoute
 }
 
@@ -575,6 +655,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RunsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runs/worktrees': {
+      id: '/runs/worktrees'
+      path: '/runs/worktrees'
+      fullPath: '/runs/worktrees'
+      preLoaderRoute: typeof RunsWorktreesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings_/limits': {
       id: '/settings_/limits'
       path: '/settings/limits'
@@ -624,11 +711,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TicksIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pull-requests/reviews/': {
+      id: '/pull-requests/reviews/'
+      path: '/pull-requests/reviews'
+      fullPath: '/pull-requests/reviews/'
+      preLoaderRoute: typeof PullRequestsReviewsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pull-requests/reviews/$id': {
+      id: '/pull-requests/reviews/$id'
+      path: '/pull-requests/reviews/$id'
+      fullPath: '/pull-requests/reviews/$id'
+      preLoaderRoute: typeof PullRequestsReviewsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reviews/$id_/run': {
       id: '/reviews/$id_/run'
       path: '/reviews/$id/run'
       fullPath: '/reviews/$id/run'
       preLoaderRoute: typeof ReviewsIdRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runs/ticks/': {
+      id: '/runs/ticks/'
+      path: '/runs/ticks'
+      fullPath: '/runs/ticks/'
+      preLoaderRoute: typeof RunsTicksIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runs/ticks/$id': {
+      id: '/runs/ticks/$id'
+      path: '/runs/ticks/$id'
+      fullPath: '/runs/ticks/$id'
+      preLoaderRoute: typeof RunsTicksIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tickets/$key_/plan': {
@@ -643,6 +758,13 @@ declare module '@tanstack/react-router' {
       path: '/chores/$name/runs/$id'
       fullPath: '/chores/$name/runs/$id'
       preLoaderRoute: typeof ChoresNameRunsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pull-requests/reviews/$id_/run': {
+      id: '/pull-requests/reviews/$id_/run'
+      path: '/pull-requests/reviews/$id/run'
+      fullPath: '/pull-requests/reviews/$id/run'
+      preLoaderRoute: typeof PullRequestsReviewsIdRunRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasks/$id_/runs/$run': {
@@ -670,6 +792,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsSpendRoute: ReportsSpendRoute,
   ReviewsIdRoute: ReviewsIdRoute,
   RunsIdRoute: RunsIdRoute,
+  RunsWorktreesRoute: RunsWorktreesRoute,
   SettingsLimitsRoute: SettingsLimitsRoute,
   TasksIdRoute: TasksIdRoute,
   TicketsKeyRoute: TicketsKeyRoute,
@@ -683,9 +806,14 @@ const rootRouteChildren: RootRouteChildren = {
   TasksIndexRoute: TasksIndexRoute,
   TicketsIndexRoute: TicketsIndexRoute,
   TicksIndexRoute: TicksIndexRoute,
+  PullRequestsReviewsIdRoute: PullRequestsReviewsIdRoute,
   ReviewsIdRunRoute: ReviewsIdRunRoute,
+  RunsTicksIdRoute: RunsTicksIdRoute,
   TicketsKeyPlanRoute: TicketsKeyPlanRoute,
+  PullRequestsReviewsIndexRoute: PullRequestsReviewsIndexRoute,
+  RunsTicksIndexRoute: RunsTicksIndexRoute,
   ChoresNameRunsIdRoute: ChoresNameRunsIdRoute,
+  PullRequestsReviewsIdRunRoute: PullRequestsReviewsIdRunRoute,
   TasksIdRunsRunRoute: TasksIdRunsRunRoute,
 }
 export const routeTree = rootRouteImport

@@ -19,7 +19,7 @@ from canopy.cli.main import main
 from canopy.core import config, conversation, db, prompts, records, run_models, spend, sql, task_tickets, tasks
 from canopy.core.context import Context
 from canopy.core.items import Item
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import Decider, RunStatus
 from canopy.infra import logs
 from canopy.loop import attention
 from canopy.notify import message
@@ -35,6 +35,7 @@ from tests.canopy.helpers import (
     in_tick,
     inline_context,
     json_block,
+    listed,
     messages,
     operator,
     pool_statuses,
@@ -257,11 +258,13 @@ def test_the_commit_trailer_names_the_private_workers_chosen_model(
     canopy_env: CanopyEnv,
     agent_log: Path,
     git_pool: GitPool,
+    opencode_state: Path,
 ) -> None:
     """A task's run is the private worker's, on the model `runtime.models.worker` chooses (DESIGN §13).
 
     git adds the trailer that names it to the task's commits (TRUST_MODEL T5).
     """
+    listed(opencode_state, "provider/model-a")
     canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"worker": "provider/model-a"}}})
     ctx = inline_context(canopy_env)
     submit()
@@ -274,6 +277,63 @@ def test_the_commit_trailer_names_the_private_workers_chosen_model(
     assert trailers_on(git_pool.origin, BRANCH) == [[trailer]]
     assert run.status == RunStatus.DONE
     assert "harness" not in json.loads(present(run.result_json))
+
+
+@pytest.mark.parametrize(
+    ("state", "guard", "why"),
+    [
+        (
+            {"models": ["provider/model-b"]},
+            "model_missing",
+            (
+                "OpenCode does not list the model provider/model-a chosen in runtime.models, so a run on it would "
+                "fail before its first call; nothing ran on another model. Choose a model it lists, or set up its "
+                "provider"
+            ),
+        ),
+        (
+            {"exit": 1, "stderr": "Error: something broke\n"},
+            "model_list_failed",
+            (
+                "could not look up the model provider/model-a chosen in runtime.models: `opencode models` exited 1. "
+                "Nothing ran on another model; the work resumes once the list can be read"
+            ),
+        ),
+    ],
+    ids=["missing", "list-failed"],
+)
+def test_tasks_wait_while_the_private_workers_model_cannot_be_used(
+    canopy_env: CanopyEnv,
+    agent_log: Path,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    opencode_state: Path,
+    state: dict[str, object],
+    guard: str,
+    why: str,
+) -> None:
+    """A task's run is looked up before it starts, as a worker's dispatch is, and never falls back (DESIGN §13).
+
+    Every task waits, its slot unleased, and the tick raises the item about the workspace, since config chose the model.
+    """
+    del git_pool
+    opencode_state.write_text(json.dumps(state))
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"models": {"worker": "provider/model-a"}}})
+    ctx = inline_context(canopy_env)
+    submit()
+    with in_tick(ctx.conn, ends_ok=True) as tick_id:
+        assert task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id)) == []
+    raised = [(d.ticket_key, d.action, d.rationale, d.decider) for d in db.decisions_for_tick(ctx.conn, tick_id)]
+    assert raised == [(None, f"attention:{guard}", f"queued tasks wait: {why}", Decider.HARNESS)]
+    assert every_run(ctx.conn) == []
+    assert set(pool_statuses(treehouse_state)) == {"available"}
+    assert [(i.ticket_key, i.reason) for i in attention.current(ctx.conn)] == [(None, guard)]
+    # The overseer never records an item about no ticket, so it is not shown this one as its own.
+    assert attention.for_overseer(ctx.conn) == []
+    # Once the runtime lists the model, the task starts on it.
+    listed(opencode_state, "provider/model-a")
+    assert [s.task_id for s in start(ctx)] == [1]
+    assert agent_runs(agent_log) == []
 
 
 def test_a_pushed_branch_is_recorded_with_its_head_and_the_slot_returned(

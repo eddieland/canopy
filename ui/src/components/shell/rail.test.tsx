@@ -119,7 +119,7 @@ describe('RailWorking', () => {
         expect(within(third).getByText('2m')).toBeDefined()
 
         await follow(third)
-        expect(router.state.location.pathname).toBe('/reviews/5')
+        expect(router.state.location.pathname).toBe('/pull-requests/reviews/5')
         await follow(first)
         expect(router.state.location.pathname).toBe('/chores/deps/runs/3')
     })

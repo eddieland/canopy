@@ -31,7 +31,7 @@ test("a list's order flips from its header, keeps across a reload, and leaves ot
     expect(await testIds(messages)).toEqual(['message-5', 'message-4'])
 
     // The ticks keep their own order, newest first.
-    await page.goto('ticks')
+    await page.goto('runs/ticks')
     await settled(page)
     await expect(page.getByTestId('order-ticks')).toHaveText('newest first')
     expect(await testIds(page.getByTestId('ticks').locator('> li'))).toEqual(['tick-2', 'tick-1'])
@@ -50,7 +50,7 @@ test('a list by latest activity says it runs by the most recently updated, not t
 })
 
 test("the reviews, and a PR's reviews, flip like any list in time", async ({ page }) => {
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     await settled(page)
     const reviews = page.getByTestId('reviews').locator('> li')
     const first = await testIds(reviews)

@@ -42,8 +42,10 @@ in order:
    `disk_low`: the overseer and the runs it would start are what fill a disk, and a full one can kill the loop
    mid-write. Reconcile has run, so what frees space still does. If the server of the overseer's tools (§27), started
    as the runtime would start it, does not answer `initialize`, the tick records `attention:canopy_unavailable` and
-   closes `canopy_unavailable` without running an overseer that could record nothing (MEASUREMENTS 2026-10-12). A tick
-   whose block leaves the overseer nothing to judge runs none (§39): it skips that check, owes no duty, makes the
+   closes `canopy_unavailable` without running an overseer that could record nothing (MEASUREMENTS 2026-10-12). If the
+   runtime does not list the overseer's chosen model, or its list cannot be read (§13), the tick records the item and
+   closes `model_missing` or `model_list_failed` the same way, never running it on another model. A tick
+   whose block leaves the overseer nothing to judge runs none (§39): it skips those checks, owes no duty, makes the
    harness's dispatches, and closes `ok`.
 
    Then run `overseer_cmd` in the workspace root (§18), with `CANOPY_TICK_ID` set and its tools named in its

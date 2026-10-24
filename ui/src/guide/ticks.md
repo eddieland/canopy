@@ -5,10 +5,10 @@ you find out what it was thinking. What the ticks cost is on [the spend page](re
 
 ## The ticks page
 
-[Ticks](/ticks) lists the latest 50 ticks, newest first: each one's status, how many decisions it recorded, what its
-overseer cost in dollars, tokens, and peak context, and its summary. A `dry run` chip marks a tick from
-`canopy tick --dry-run`, which plans and dispatches nothing. Before the first tick, the page says when one comes: after
-`loop.interval_minutes`, or now, with **Tick now** right there in the sentence.
+**Ticks**, under [Runs](/runs), lists the latest 50 ticks, newest first: each one's status, how many decisions it
+recorded, what its overseer cost in dollars, tokens, and peak context, and its summary. A `dry run` chip marks a tick
+from `canopy tick --dry-run`, which plans and dispatches nothing. Before the first tick, the page says when one comes:
+after `loop.interval_minutes`, or now, with **Tick now** right there in the sentence.
 
 A tick reads `running` while it works, and ends:
 
@@ -20,6 +20,9 @@ A tick reads `running` while it works, and ends:
 - `canopy unavailable`, when the overseer couldn't run canopy at all, so nothing was decided;
 - `disk low`, when the disk had less free than `loop.min_free_disk_mib`, 2 GiB by default, so the overseer didn't run
   and started nothing;
+- `model missing`, when OpenCode doesn't list the model `runtime.models` chose for the overseer, and `model list
+  failed`, when canopy couldn't read OpenCode's list to check. Either way the overseer didn't run rather than run on a
+  model nobody chose, and the attention list says which;
 - `reconcile failed`, when tidying up after the last tick went wrong;
 - `error`, when something in canopy itself broke during the tick; its summary names what, such as a full disk;
 - `abandoned`, when its process went away without closing it, and the next tick closed it for it.

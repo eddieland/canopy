@@ -100,12 +100,12 @@ test("a requested review's draft leads to the review's page, where it is read an
     // Its draft is what it asks for, not the PR's review limit.
     await expect(detail).not.toContainText('Nothing to answer here')
     await detail.getByTestId('attention-review').getByRole('link', { name: 'Read the draft of review:5' }).click()
-    await expect(page).toHaveURL(/\/reviews\/5$/u)
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/5$/u)
     // Its page names the request's other review, the skeptic's, so the operator picks the one to publish.
     const siblings = page.getByTestId('draft-siblings')
     await expect(siblings).toContainText('Also reviewed as skeptic, from the same request at this commit.')
     await siblings.getByRole('link', { name: 'skeptic' }).click()
-    await expect(page).toHaveURL(/\/reviews\/6$/u)
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/6$/u)
     await expect(page.getByTestId('draft-siblings').getByRole('link', { name: 'canopy' })).toBeVisible()
 })
 

@@ -158,6 +158,12 @@ function viewOf(routeId: keyof FileRoutesById | undefined): View | undefined {
         routeId === '__root__' ||
         routeId === '/' ||
         routeId === '/spend' ||
+        routeId === '/reviews/' ||
+        routeId === '/reviews/$id' ||
+        routeId === '/reviews/$id_/run' ||
+        routeId === '/ticks/' ||
+        routeId === '/ticks/$id' ||
+        routeId === '/worktrees' ||
         routeId === '/guide/'
         ? undefined
         : routeId

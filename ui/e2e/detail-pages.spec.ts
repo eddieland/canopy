@@ -31,7 +31,7 @@ test("a run's and a review's pages show the persona each wrote in, with the star
     await settled(page)
     await expect(page.getByRole('definition').filter({ hasText: /^canopy c4a0f1e2d3b4$/u })).toBeVisible()
     // ABC-099's reviewer was set to skeptic from its page; its latest review wrote in it.
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     await settled(page)
     await expect(page.getByRole('definition').filter({ hasText: /^skeptic 5e7a1c2b3d4e$/u })).toBeVisible()
     await page.goto('tickets/ABC-099')
@@ -48,7 +48,7 @@ test("a chore run's chore is the trail's link alone, and a tick's output path th
         page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'chore:deps' }),
     ).toBeVisible()
 
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     await expect(page.locator('main').getByText('.canopy/ticks/2.log')).toHaveCount(1)
     await expect(page.getByTestId('tick-output')).toContainText('.canopy/ticks/2.log')
@@ -59,7 +59,7 @@ test('each page leads with its summary, says how long it ran, and names its sess
 }) => {
     const pages: [string, string][] = [
         ['runs/39', 'ses_mock39'],
-        ['ticks/2', 'ses_tick2'],
+        ['runs/ticks/2', 'ses_tick2'],
         ['chores/deps/runs/2', 'ses_chore2'],
         ['tasks/1/runs/1', 'ses_task1'],
     ]

@@ -39,14 +39,14 @@ test('a copy the browser refuses says so in its toast', async ({ page }) => {
 })
 
 test("a review's commit copies whole, though the page shows its first 7 characters", async ({ page }) => {
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     const commit = page.getByRole('button', { name: 'Copy commit' })
     await commit.click()
     expect(await clipboard(page)).toMatch(/^[0-9a-f]{40}$/u)
 })
 
 test("a slot's copy buttons show only while its row is hovered, and copy its path and branch", async ({ page }) => {
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     const slot = page.getByTestId('pool-web').getByTestId('worktree-1')
     const branch = slot.getByRole('button', { name: 'Copy branch' })
@@ -116,7 +116,7 @@ test("a chore run's log path copies whole, from its page and from its row", asyn
 })
 
 test("a tick's output path copies whole, though the page shows it from the workspace root", async ({ page }) => {
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await page.getByRole('button', { name: 'Copy output path' }).click()
     expect(await clipboard(page)).toBe(`${await workspaceRoot(page)}/.canopy/ticks/2.log`)
 })
