@@ -557,6 +557,46 @@ def test_serve_answers_on_stdio_until_stdin_closes(store_dir: Path) -> None:
     assert store_dir.stat().st_mode & 0o777 == 0o700
 
 
+def test_serve_sets_the_origin_canopy_named_the_run_by_under_the_command_lines(store_dir: Path) -> None:
+    publish = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "artifact_publish",
+            "arguments": {
+                "title": "Plan",
+                "content_type": "text/markdown",
+                "content": "# Plan",
+                "origin": {"canopy.ticket": "PROJ-9", "topic": "cache"},
+            },
+        },
+    }
+    run = {"canopy.workspace": "acme", "canopy.ticket": "PROJ-1", "canopy.run": "7"}
+    with mock.patch.dict(os.environ, {cli.ORIGIN_ENV: json.dumps(run)}):
+        served = invoke(
+            cli.main,
+            ["serve", "--store", str(store_dir), "--namespace", NAMESPACE, "--origin", "canopy.workspace=ops"],
+            stdin=json.dumps(publish) + "\n",
+        )
+    assert served.exit_code == 0
+    [answer] = [json.loads(line) for line in served.stdout.splitlines()]
+    published = json.loads(answer["result"]["content"][0]["text"])
+    with opened(store_dir, Scope(NAMESPACE, agent("reader"))) as store:
+        origin = Client(store).call("artifact_read", artifact_id=published["artifact_id"])["artifact"]["origin"]
+    # The worker's ticket gives way to the run's, and the run's workspace to the command line's.
+    assert origin == {"canopy.workspace": "ops", "canopy.ticket": "PROJ-1", "canopy.run": "7", "topic": "cache"}
+
+
+@pytest.mark.parametrize("value", ["not json", '["PROJ-1"]', '{"canopy.run": 7}', '{"": "x"}'])
+def test_an_origin_variable_that_names_no_pairs_is_refused(store_dir: Path, value: str) -> None:
+    with mock.patch.dict(os.environ, {cli.ORIGIN_ENV: value}):
+        refused = invoke(cli.main, ["serve", "--store", str(store_dir)])
+    assert refused.exit_code == 2
+    assert cli.ORIGIN_ENV in refused.stderr
+    assert not store_dir.exists()
+
+
 def test_a_store_directory_open_to_others_is_refused(store_dir: Path) -> None:
     store_dir.mkdir(mode=0o755)
     os.chmod(store_dir, 0o755)  # noqa: PTH101, S103  (past the umask: open to others is what is tested)

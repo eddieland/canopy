@@ -76,4 +76,9 @@ naming its authors and never its text, until the operator replies on the ticket 
 private ticket's comments are never authority, a listed author's included, and each person's raises the item; a
 comment deleted since counts for nothing; a verb's instruction, such as `canopy send`'s, sends nothing on; and a
 listed author's reply in an unlisted person's thread is authority for its own words only, §38's open question.
-Left: canopy setting an artifact's ticket per run, which is the worker's word until then.
+Built (2026-10-24): canopy setting an artifact's ticket per run. Each run whose agent `publish_roles` lets publish is
+given `CANOPY_ARTIFACT_ORIGIN`, its workspace, ticket, and run as a JSON object, which OpenCode passes to a local MCP
+server (read in 1.19.3's and 2.1.4's source), and `canopy-artifacts serve` sets those pairs over the worker's, under
+its own `--origin`'s. Chosen conservatively, for the operator to change: the feed reader does not check the run's pairs
+against the journal, since a store that sets them leaves the worker none to forge; a private ticket's worker and the
+planner are given none; and how Louvre takes them is Louvre's, through its MCP config. Left: the live check in Accept.
