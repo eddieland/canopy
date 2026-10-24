@@ -513,9 +513,25 @@ def test_a_worker_records_the_session_and_cost_it_reported(
 
     out = scenario.operator("status").out
     assert re.search(r"\nRecent runs \(1\):\n  PROJ-1  implement  done  \d+s ago  https://example.test/pr/1\n", out)
-    # And the persona it ran in, by name and the start of its digest (DESIGN §31).
-    said = f"session ses_w1  $0.25, 3.5k tokens, 5.5k peak context  persona canopy {row['persona_digest'][:12]}"
+    # And the persona it ran in, by name and the start of its digest (DESIGN §31), and the model that served it.
+    persona = f"persona canopy {row['persona_digest'][:12]}"
+    said = f"session ses_w1  $0.25, 3.5k tokens, 5.5k peak context  {persona}  served anthropic/claude-x"
     assert f"\n    did it\n    {said}  log {row['log_path']}\n" in out
+
+
+def test_status_names_each_model_that_served_a_run_with_its_cost(
+    scenario: Scenario,
+    git_pool: GitPool,
+    opencode_state: Path,
+) -> None:
+    """A run more than one model served names each in `canopy status`, the most costly first (DESIGN §13)."""
+    calls = [["openai", "gpt-y", 0.1], ["anthropic", "claude-x", 0.25], ["anthropic", "claude-x", 0.15]]
+    opencode_state.write_text(json.dumps({"sessions": {"ses_w1": calls}}))
+    with report_events(scenario.env):
+        run = scenario.run(worker=pushes())
+
+    out = scenario.operator("status").out
+    assert f"  served anthropic/claude-x $0.40, openai/gpt-y $0.10  log {run.row['log_path']}\n" in out
 
 
 def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(scenario: Scenario, git_pool: GitPool) -> None:

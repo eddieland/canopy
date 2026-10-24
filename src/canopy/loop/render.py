@@ -14,6 +14,7 @@ from canopy.loop import attention
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Sequence
     from datetime import datetime
 
     from canopy.core import chore_view
@@ -101,6 +102,22 @@ def model_of(row: sqlite3.Row) -> str:
     if row["model"] is None:
         return ""
     return f"  model {row['model']}"
+
+
+def served_of(models: Sequence[records.RunModel]) -> str:
+    """The models a run's session says served it (DESIGN §13), as `  served provider/model`.
+
+    A run more than one model served names each with its cost, the most costly first, as the run's page shows its share:
+    `  served a/x $0.40, b/y $0.10`.
+
+    Returns:
+        The models with two leading spaces, to append to a line, or "" for a run whose session names none yet.
+    """
+    if not models:
+        return ""
+    if len(models) == 1:
+        return f"  served {models[0].model}"
+    return "  served " + ", ".join(f"{m.model} ${m.cost_usd:.2f}" for m in models)
 
 
 def chore_line(state: chore_view.ChoreState, now: datetime) -> str:
