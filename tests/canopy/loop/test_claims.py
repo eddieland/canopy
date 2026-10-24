@@ -22,6 +22,7 @@ from tests.canopy.observation_helpers import (
     PR,
     TRACKER,
     TRUST,
+    artifact_comment,
     branches_read,
     check,
     comment,
@@ -139,6 +140,31 @@ def test_a_resume_for_reply_may_rest_on_an_operator_message_instead(observed: sq
     [message] = conversation.operator_messages_after(observed, KEY, 0)
     cursors = {**reply, "message": str(message.id)}
     assert dispatched(observed, kind="resume", label=LABEL, reasons=["reply"], cursors=cursors)[0] == "dispatch:resume"
+
+
+@pytest.mark.parametrize(
+    ("author", "kind", "marked", "action"),
+    [
+        pytest.param("u_ana", "person", False, "dispatch:resume", id="a-listed-authors"),
+        pytest.param("u_bob", "person", False, "refused:unauthorized", id="an-unlisted-authors"),
+        pytest.param("u_ana", "agent", False, "refused:unauthorized", id="an-agents"),
+        pytest.param("u_ana", "person", True, "refused:unauthorized", id="one-with-the-workers-marks"),
+    ],
+)
+def test_a_resume_for_reply_may_rest_on_a_comment_on_an_artifact_that_is_authority(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    author: str,
+    kind: str,
+    marked: bool,  # noqa: FBT001  (a parametrized argument)
+    action: str,
+) -> None:
+    # Cited by its message, as an operator message is (DESIGN §38).
+    canopy_env.configure(canopy_env.user_file, {"artifacts": {"authorized_authors": ["u_ana"]}})
+    message = artifact_comment(observed, "c1", author, kind=kind, marked=marked)
+    observed.commit()
+    cursors = {"message": str(message)}
+    assert dispatched(observed, kind="resume", label=LABEL, reasons=["reply"], cursors=cursors)[0] == action
 
 
 def test_a_resume_for_review_covers_a_trusted_reviewers_item(observed: sqlite3.Connection) -> None:

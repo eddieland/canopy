@@ -13,8 +13,7 @@ and none is missed; the run is `partial`. A run with no `end` line records nothi
 
 An observation is a dated copy of what the store said, never authority (DESIGN §22). A comment on an artifact whose
 origin names a ticket the journal holds reaches that ticket's conversation, quoting its passage, once, as a tracker
-comment does (§35): as data, whoever wrote it. Nothing reaches the overseer's state block or a dispatch, and whose
-comment counts is not decided here.
+comment does (§35). Whose comment counts is not decided here but in `artifact_authority`, from that message.
 """
 
 from __future__ import annotations
@@ -340,7 +339,8 @@ def _to_conversation(conn: sqlite3.Connection, change: _Change) -> None:
 
     Once per comment, as it was first read, as a tracker comment is (§35): an edit after is not followed, and a comment
     first read deleted is not recorded. Only for a ticket the journal holds, since the origin is the worker's word. Its
-    source is `worker` when the comment carries the workers' marks, else `artifact`; either way it authorizes nothing.
+    source is `worker` when the comment carries the workers' marks, else `artifact`; what it counts for is
+    `artifact_authority`'s to decide.
     """
     observed = records.fetch_one(
         conn,

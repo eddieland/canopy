@@ -18,8 +18,10 @@ import pytest
 
 from canopy.core import conversation, db, records, sql
 from canopy.core.config import CANOPY_REVIEWER
+from canopy.core.vocab import Phase
 from canopy.loop import phases
 from tests.canopy.helpers import KEY, canopy, context, in_tick, seen
+from tests.canopy.observation_helpers import artifact_comment
 
 if TYPE_CHECKING:
     import sqlite3
@@ -396,6 +398,23 @@ def test_a_bot_approval_is_no_approval_and_feedback_at_the_cursor_is_handled(
     observed.execute("UPDATE observed_reviews SET bot = 1, state = 'approved'")
     observed.commit()
     assert derived(canopy_env)[1].phases == (phases.Phase.GREEN_UNREVIEWED,)
+
+
+def test_a_comment_on_an_artifact_that_is_authority_is_a_reply(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    case_needs_human(canopy_env, observed)
+    canopy_env.configure(canopy_env.user_file, {"artifacts": {"authorized_authors": ["u_ana"]}})
+    artifact_comment(observed, "c1", "u_bob")
+    observed.commit()
+    [own] = [d for d in derived(canopy_env) if d.repo is None]
+    assert (Phase.NEEDS_HUMAN in own.phases, Phase.HUMAN_REPLIED in own.phases) == (True, False)
+    # A listed author's is, as an operator message is (DESIGN §38).
+    artifact_comment(observed, "c2", "u_ana")
+    observed.commit()
+    [own] = [d for d in derived(canopy_env) if d.repo is None]
+    assert Phase.HUMAN_REPLIED in own.phases
 
 
 def test_a_private_ticket_needs_a_human_from_the_journal_alone(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:

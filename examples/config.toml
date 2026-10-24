@@ -285,11 +285,11 @@ cmd = ""
 # [artifacts]
 # mcp_server = "louvre"
 # namespace = "canopy/operator"
-# authorized_authors = ["u_ana", "u_raj"]     # whose comments steer a worker, once comments come back (M62)
+# authorized_authors = ["u_ana", "u_raj"]     # whose comments steer a worker; anyone else's waits on attention
 # publish_roles = ["worker"]
 #
-# And a source that reads the store's comments into canopy's journal each tick, the local store's feed here; for now
-# nothing acts on what it reads (DESIGN §30).
+# And a source that reads the store's comments into canopy's journal each tick, the local store's feed here; each
+# comment reaches its ticket's conversation, counting as authorized_authors says (DESIGN §30, §38).
 # [connect.sources.artifacts]
 # kind = "artifacts"
 # cmd = "canopy-artifacts feed --store /path/to/your/store --namespace canopy/operator"

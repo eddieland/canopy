@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import conversation, db, observe, personas, plans, records, review_runs, sql
+from canopy.core import artifact_authority, conversation, db, observe, personas, plans, records, review_runs, sql
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
@@ -588,7 +588,12 @@ class _World:
             )
             if not replied:
                 found.append(Phase.NEEDS_HUMAN)
-        if replied or operator:
+        # A comment on one of its artifacts that is authority is a reply as an operator message is (DESIGN §38).
+        authors = frozenset(self.ctx.config.artifacts.authorized_authors)
+        commented = record is not None and bool(
+            artifact_authority.authorized(self.ctx.conn, key, authors, after=cursor),
+        )
+        if replied or operator or commented:
             found.append(Phase.HUMAN_REPLIED)
         return found
 

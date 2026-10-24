@@ -66,5 +66,14 @@ ticket the journal holds reaches that ticket's conversation once, as first read,
 `artifact` (or `worker` when it carries the workers' marks) on the channel `artifacts`, as data that authorizes
 nothing. Chosen conservatively: a ticket the journal lacks gets none, since the origin is the worker's word; a comment
 first read deleted is not recorded; and the passage is quoted cut to 300 characters.
-Left: `authorized_authors` and the comment marks deciding authority in code; an unlisted author's attention item; and
-canopy setting an artifact's ticket per run, which is the worker's word until then.
+Built (2026-10-24): `authorized_authors` and the comment marks decide authority in code, read as config says now, as
+`trust.authorized_repliers` is. On a public ticket a listed person's comment is authority as an authorized reply is:
+the overseer is shown it in the ticket's `operator` key as `artifact_comments`, a `resume` for `reply` may cite it by
+its message (`message=`), the derivation reads it as `human_replied`, and the public worker hears it with the
+operator's messages, marked an instruction. A comment the store marks an agent's, or with every comment mark, is
+neither authority nor an item; anyone else's raises `untrusted_artifact_comment` about its ticket, harness-raised,
+naming its authors and never its text, until the operator replies on the ticket after it. Chosen conservatively: a
+private ticket's comments are never authority, a listed author's included, and each person's raises the item; a
+comment deleted since counts for nothing; a verb's instruction, such as `canopy send`'s, sends nothing on; and a
+listed author's reply in an unlisted person's thread is authority for its own words only, §38's open question.
+Left: canopy setting an artifact's ticket per run, which is the worker's word until then.
