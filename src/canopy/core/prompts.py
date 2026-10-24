@@ -11,11 +11,11 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, assert_never
 
 from canopy.core import personas
 from canopy.core.config import CANOPY_REVIEWER, DEFAULT_TRAILER_EMAIL, DEFAULT_TRAILER_NAME, KEY_PLACEHOLDER
-from canopy.core.vocab import ResumeReason, RunKind
+from canopy.core.vocab import PlanItem, ResumeReason, RunKind
 from canopy.infra import resources
 
 if TYPE_CHECKING:
@@ -450,7 +450,7 @@ def _outline(outline: Sequence[str]) -> list[str]:
 def feedback_plan_note(
     copy: Path,
     outline: Sequence[str],
-    items: Sequence[tuple[int, str, int, str]],
+    items: Sequence[tuple[int, str, PlanItem, int, str]],
     *,
     left_out: Sequence[tuple[int, int]] = (),
     message_id: int | None = None,
@@ -458,9 +458,9 @@ def feedback_plan_note(
 ) -> str:
     """Return a resume's `{{PLAN}}` when it follows a feedback plan (DESIGN §32): its copy, outline, and approved items.
 
-    The items are the harness's, from the plan's validated result line, each its number, PR, observed id, and what the
+    The items are the harness's, from the plan's validated result line, each its number, PR, kind, id, and what the
     plan proposes: those the approval named, which the run acts on, and the only ones. `left_out` names the plan's items
-    the operator left out of their approval, each its number and observed id, whose sections its copy still holds, under
+    the operator left out of their approval, each its number and id, whose sections its copy still holds, under
     `### Item <id>` headings as every item's are. `message_id` is the operator message their approval wrote, which the
     prompt carries above among their messages. `by_planner` says who approved it, as `plan_note`'s does.
 
@@ -494,12 +494,13 @@ def feedback_plan_note(
         lines += [
             "",
             (
-                "The items approved, each by its number and the review or comment id canopy observed on its PR, the id "
-                "its section's `### Item <id>` heading carries:"
+                "The items approved, each by its number and the id its section's `### Item <id>` heading carries: the "
+                "review or comment id canopy observed on its PR, or the id canopy gave a failed check or a conflict "
+                "with the base:"
             ),
             "",
         ]
-        lines += [f"{n}. id {item_id}, on {pr}: {proposal}" for n, pr, item_id, proposal in items]
+        lines += [f"{n}. id {item_id}, {_item_on(kind, pr)}: {proposal}" for n, pr, kind, item_id, proposal in items]
         lines += [
             "",
             "For `change`, change the code as the plan says. For `decline`, `ask`, and `leave`, change nothing for it.",
@@ -509,8 +510,25 @@ def feedback_plan_note(
     return "\n".join(lines)
 
 
+def _item_on(kind: PlanItem, pr: str) -> str:
+    """Where a feedback plan's item is, in the harness's words: a review item by its PR, the others by what they are.
+
+    Returns:
+        `on <pr>`, `a failed check on <pr>`, or `the conflict with its base on <pr>`.
+    """
+    match kind:
+        case PlanItem.REVIEW | PlanItem.COMMENT:
+            return f"on {pr}"
+        case PlanItem.CHECK:
+            return f"a failed check on {pr}"
+        case PlanItem.CONFLICT:
+            return f"the conflict with its base on {pr}"
+        case _:
+            assert_never(kind)
+
+
 def item_names(items: Sequence[tuple[int, int]]) -> str:
-    """Name a feedback plan's items, each by its number and observed id, wherever canopy mentions them (DESIGN §32).
+    """Name a feedback plan's items, each by its number and id, wherever canopy mentions them (DESIGN §32).
 
     The number is the one the plan's surfaces show; the id is a journal value, the one its file's `### Item <id>`
     heading carries, never the item's text (TRUST_MODEL T1).
