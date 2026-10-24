@@ -191,7 +191,8 @@ def cmd_review_eval(
     case is a false alarm. A review that ends any way but done is not scored. The eval records nothing in the journal:
     no review, draft, attention item, or notification. Its result, with the digests of the prompt and the persona and
     the model, is saved in .canopy/review-evals/ to compare with the next, and printed as a section to paste into
-    docs/MEASUREMENTS.md. It gates nothing. Each review waits for review capacity as any does.
+    docs/MEASUREMENTS.md. It gates nothing. A case the review guards refuse (the daily limit, review capacity,
+    max_workers) is skipped and not scored, so run it while the loop is idle.
     """
     try:
         conversation.check_operator()
