@@ -49,6 +49,11 @@ test('the window switches from the toggle, and idle spend is its own series with
     await expect(page.getByTestId('spend-idle-share')).toContainText('53%')
     await expect(page.getByTestId('spend-groups-idle')).toContainText('1')
     await expect(page.getByTestId('spend-woken-table-timer')).toBeVisible()
+    // Each tick table splits off the ticks that ran no overseer: the mock's every tick ran one.
+    for (const table of ['spend-groups', 'spend-woken-table']) {
+        await expect(page.getByTestId(table).getByRole('columnheader', { name: 'no overseer' })).toBeVisible()
+    }
+    await expect(page.getByTestId('spend-groups-idle').getByRole('cell').last()).toHaveText('0')
     const today = page.getByTestId('spend-day-2026-10-08')
     await expect(today.locator('td').first()).toHaveText('$0.31')
 

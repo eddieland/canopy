@@ -442,7 +442,7 @@ def _ticks(
         idle = pacing.idle(ctx, outcome)
         # Measured for the prompt, not acted on (ROADMAP M28): what the tick changed with nothing new to see.
         churn = pacing.churn(ctx, outcome, before)
-        idle_count = idle_count + 1 if pace.on and idle else 0
+        idle_count = pacing.count(ctx, outcome, idle_count, idle=idle, on=pace.on)
         if outcome.tick_id is not None:
             db.set_tick_loop(ctx.conn, outcome.tick_id, idle=idle, woken_by=woken_by)
         last = max_ticks is not None and statuses.total() >= max_ticks
