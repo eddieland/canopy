@@ -10,6 +10,8 @@
   
   The journal is 120.2 MiB.
   repo: git count-objects failed in /ws/repos/repo
+  
+  No remote branch canopy made is left that no open run, unit, or task names.
   Nothing was removed: this is a dry run.
   '''
 # ---

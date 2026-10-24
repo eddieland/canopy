@@ -1,0 +1,17 @@
+# serializer version: 1
+# name: test_the_text_report_lists_the_branches
+  '''
+  What canopy keeps, at 2026-10-24 09:30 UTC, and what a pass would remove.
+  
+  kind                unit            count       size  removes      frees  by
+  journal WAL         files               0        0 B        0        0 B  checkpointed
+  
+  The journal is 120.2 MiB.
+  
+  Remote branches canopy made that no open run, unit, or task names, as each clone last fetched them;
+  canopy deletes none, so delete those you are done with yourself:
+    api: agent/PROJ-1-work  (PROJ-1, at 0123456789ab)
+    web: agent/task/3  (task 3, at fedcba987654)
+  Nothing was removed: this is a dry run.
+  '''
+# ---

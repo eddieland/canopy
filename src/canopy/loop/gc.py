@@ -1,7 +1,9 @@
 """What canopy keeps of its own history and caches, measured for `canopy gc --dry-run` (DESIGN §26, ROADMAP M47).
 
 `measure` reports each kind of §26's table that M47 changes: how many there are, their bytes, and what a pass with
-the configured `[retention]` would remove of them. It removes nothing, and runs nothing but `git count-objects`.
+the configured `[retention]` would remove of them, then the remote branches canopy made that nothing names any more
+(`gc_branches.py`), which no pass removes. It removes nothing, and runs nothing but `git count-objects` and
+`git for-each-ref`.
 `file_kinds` finds the files a pass removes, and `row_kinds` the journal's rows, for the pass (`gc_pass.py`) and the
 dry run alike, so the two agree.
 """
@@ -23,7 +25,7 @@ from canopy.core import db, hostgit, review_diff, sql
 from canopy.core.context import db_path
 from canopy.core.vocab import MemoryScope, MemoryStatus, TickStatus
 from canopy.infra import lock, logs, procs
-from canopy.loop import attention
+from canopy.loop import attention, gc_branches
 from canopy.reviews import start as review_start
 from canopy.runs import dispatch
 
@@ -160,6 +162,8 @@ class Report:
     kinds: Sequence[Kind]
     journal_size: int
     notes: Sequence[str]
+    #: The remote branches canopy made that nothing names any more, for the operator to delete: canopy deletes none.
+    branches: Sequence[gc_branches.Branch] = ()
 
 
 def measure(ctx: Context, now: datetime) -> Report:
@@ -181,7 +185,9 @@ def measure(ctx: Context, now: datetime) -> Report:
         _sandbox_caches(),
         _memory_text(ctx.conn, now, retention),
     ]
-    return Report(at=db.format_time(now), kinds=kinds, journal_size=_regular_size(journal) or 0, notes=notes)
+    branches = gc_branches.unnamed(ctx, notes)
+    size = _regular_size(journal) or 0
+    return Report(at=db.format_time(now), kinds=kinds, journal_size=size, notes=notes, branches=branches)
 
 
 def file_kinds(ctx: Context, now: datetime) -> list[FileKind]:
