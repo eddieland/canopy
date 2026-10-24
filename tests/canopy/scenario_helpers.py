@@ -1107,21 +1107,31 @@ def github_shows(
     *reviews: dict[str, Any],
     head: str = FEEDBACK_HEAD,
     checks: Sequence[Mapping[str, object]] = (FEEDBACK_RED,),
+    mergeable: str = "mergeable",
 ) -> None:
-    """Make the fake GitHub hold DRAFTS_PR at `head`, by `me`, with `reviews` on it and `checks` at its head."""
-    shown = {"pr": {"head_sha": head}, "reviews": list(reviews), "checks": list(checks)}
+    """Make the fake GitHub hold DRAFTS_PR at `head`, by `me`.
+
+    It has `reviews` on it, `checks` at its head, and `mergeable` as its mergeability.
+    """
+    shown = {"pr": {"head_sha": head, "mergeable": mergeable}, "reviews": list(reviews), "checks": list(checks)}
     state.write_text(json.dumps({"prs": {DRAFTS_PR: shown}}))
 
 
-def feedback_planned(scenario: Scenario, github_state: Path, result: object = None) -> int:
+def feedback_planned(
+    scenario: Scenario,
+    github_state: Path,
+    result: object = None,
+    *,
+    mergeable: str = "mergeable",
+) -> int:
     """A feedback plan run on alice's and bob's comments, `build` red.
 
-    It writes FEEDBACK_TEXT and reports `result`, FEEDBACK_PLANNED by default.
+    It writes FEEDBACK_TEXT and reports `result`, FEEDBACK_PLANNED by default, with the PR `mergeable` as given.
 
     Returns:
         Its run id.
     """
-    github_shows(github_state, ALICES_COMMENT, BOBS_COMMENT)
+    github_shows(github_state, ALICES_COMMENT, BOBS_COMMENT, mergeable=mergeable)
     line = FEEDBACK_PLANNED if result is None else result
     assert isinstance(line, dict)
     worker = planner_does(["cat", feedback_items.ITEMS], plan=FEEDBACK_TEXT, result=line)

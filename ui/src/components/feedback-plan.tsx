@@ -440,7 +440,9 @@ function ItemRows({
                     </span>
                     <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <Chip tone={item.proposal} word={item.proposal} />
-                        <span className="font-medium text-foreground">{item.author ?? 'no author recorded'}</span>
+                        {raisedByCanopy(item) || (
+                            <span className="font-medium text-foreground">{item.author ?? 'no author recorded'}</span>
+                        )}
                         {item.trusted && <Chip>trusted</Chip>}
                         {item.left_out && <Chip>{NEXT_PLAN}</Chip>}
                         {item.rationale !== null && (
@@ -462,9 +464,23 @@ function ItemRows({
     )
 }
 
-// What a row says in place of an excerpt: a review that said nothing, or an item no read holds any more.
+// What a row says in place of an excerpt: a review that said nothing, an item no read holds any more, or what canopy
+// raised from the PR's state, which no one wrote.
 function nothingSaid(item: FeedbackPlanItem): string {
-    return item.item === 'review' ? 'a review with no words' : 'no longer on the PR as read'
+    switch (item.item) {
+        case 'review': {
+            return 'a review with no words'
+        }
+        case 'comment': {
+            return 'no longer on the PR as read'
+        }
+        case 'check': {
+            return `the check ${item.check ?? 'of no recorded name'} failed at its head`
+        }
+        case 'conflict': {
+            return 'it conflicts with its base'
+        }
+    }
 }
 
 /**
@@ -505,4 +521,9 @@ function Where({ item }: { item: FeedbackPlanItem }) {
             on {item.pr_url}
         </span>
     )
+}
+
+// Whether canopy raised the item from the PR's state, a failed check or a conflict, so it has no author.
+function raisedByCanopy(item: FeedbackPlanItem): boolean {
+    return item.item === 'check' || item.item === 'conflict'
 }

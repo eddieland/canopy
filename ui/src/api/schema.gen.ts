@@ -3659,6 +3659,11 @@ export type components = {
              */
             author: string | null;
             /**
+             * Check
+             * @description For a check, its name, as the plan's read saw it; None for any other item.
+             */
+            check: string | null;
+            /**
              * Excerpt
              * @description The first line of what was said, cut short, as the `vcs` source last read it: plain text here, whoever wrote
              *     it. None once no read holds it, or for a review that said nothing.
@@ -3666,13 +3671,14 @@ export type components = {
             excerpt: string | null;
             /**
              * Item
-             * @description A review, or a review thread by the comment the plan covers.
+             * @description A review, a review thread by the comment the plan covers, a failed check at the PR's head, or its conflict.
              * @enum {string}
              */
-            item: "review" | "comment";
+            item: "review" | "comment" | "check" | "conflict";
             /**
              * Item Id
-             * @description The id the `vcs` source observed: the one the plan's `### Item <id>` heading carries.
+             * @description The one the plan's `### Item <id>` heading carries: the id the `vcs` source observed, or for a check or a
+             *     conflict the one canopy gives it, below zero.
              */
             item_id: number;
             /**

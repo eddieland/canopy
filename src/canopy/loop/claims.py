@@ -35,7 +35,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, records, review_runs, sql
+from canopy.core import conversation, db, observe, records, review_runs, sql
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
 from canopy.loop import observations, phases
@@ -304,7 +304,7 @@ def _check_handled(
         if c.head_sha == pr["head"]
         and c.name not in human
         and c.status is CheckStatus.COMPLETED
-        and c.conclusion in phases.FAILED
+        and c.conclusion in observe.FAILED
     ]
     query = (
         sql.select("*")
@@ -312,7 +312,7 @@ def _check_handled(
         .where("pr_url = ? AND head_sha = ? AND run_id <= ?", pr["url"], pr["head"], cursor)
     )
     runs = records.fetch_all(ctx.conn, records.ObservedCheckRun, query)
-    behind = {r.name for r in runs if r.conclusion in phases.FAILED}
+    behind = {r.name for r in runs if r.conclusion in observe.FAILED}
     if not failed or any(c.run_id is None or (c.run_id > cursor and c.name not in behind) for c in failed):
         return
     names = ", ".join(sorted({c.name for c in failed}))

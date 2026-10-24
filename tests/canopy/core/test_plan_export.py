@@ -63,7 +63,7 @@ def feedback_plan(conn: sqlite3.Connection, state_dir: Path, text: str) -> int:
     """Write and record a feedback plan for `KEY`, covering no items. Returns its run's id."""
     run_id = plan_run(conn, state_dir)
     written = plans.write(state_dir, KEY, run_id, text)
-    snapshot = feedback_items.Snapshot(heads={}, checks={}, given=())
+    snapshot = feedback_items.Snapshot(heads={}, checks={}, given=(), conflicts={})
     feedback_plans.record(conn, KEY, run_id, written, [], snapshot=snapshot)
     return run_id
 
@@ -241,7 +241,7 @@ def test_a_plan_names_what_it_and_every_run_it_took_cost(
         if kind == "plan":
             plans.record(conn, key, run_id, written)
         else:
-            snapshot = feedback_items.Snapshot(heads={}, checks={}, given=())
+            snapshot = feedback_items.Snapshot(heads={}, checks={}, given=(), conflicts={})
             feedback_plans.record(conn, key, run_id, written, [], snapshot=snapshot)
         return run_id
 
@@ -294,7 +294,7 @@ def test_an_archived_plan_reads_whole(
     # A feedback plan after it: no persona, no model chosen, its session not read.
     feedback = priced_run(conn, state_dir, "feedback-plan", 0.125)
     written = plans.write(state_dir, KEY, feedback, f"# Feedback plan: {KEY} Answer the review\n")
-    snapshot = feedback_items.Snapshot(heads={}, checks={}, given=())
+    snapshot = feedback_items.Snapshot(heads={}, checks={}, given=(), conflicts={})
     feedback_plans.record(conn, KEY, feedback, written, [], snapshot=snapshot)
     dest = tmp_path / "archive"
 
