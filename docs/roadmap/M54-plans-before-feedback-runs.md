@@ -144,7 +144,7 @@ recorded for another ticket's unit in its repository, whose PR there the reader 
 the planner's items file, with the ticket and its PR, by an id canopy gives it, below zero, from a hash of the PR, the
 head, and the blocker's PR; it is planned, numbered, approved or left by item, named in `{{PLAN}}` and `canopy show`,
 and on the PR's page by the PR that merged, as checks and conflicts are, and the planner's prompt has no section of its
-own for it any more; migration 0099 widens `feedback_plan_items.item` and records the merged PR each PR was stacked on,
+own for it any more; migration 0097 widens `feedback_plan_items.item` and records the merged PR each PR was stacked on,
 so a blocker that merges, or a retarget, at an unmoved head makes a waiting plan stale. Settled for it, open to the
 operator: a blocker canopy has no ticket's PR for, or whose PR the reader has not read, is no item and reaches the
 planner only as the overseer's context; a handled one stays handled until a push or a retarget; it carries no reply;
