@@ -143,9 +143,8 @@ The overseer derives phases each tick from the observations (§30), and from a l
 stale or unobserved. They are recorded for the status view, never read back as truth. The PR phases, `pushed_no_pr`
 to `merged`, are a unit's (§18).
 
-A ticket's title is its display name in canopy, set by the overseer with `canopy ticket set --title`, which makes it
-one short line. It is model-written, so it stays out of `attention.md` and the `text` format, and the Slack sink
-escapes it (§20).
+A ticket's title, its display name in canopy, is one short line the overseer sets. It is model-written, so it stays out
+of `attention.md` and the `text` format, and the Slack sink escapes it (§20).
 
 | Phase | Derived from | Next action |
 |---|---|---|
@@ -179,8 +178,7 @@ hold is refused `reserved`.
 
 "Authorized reply" means a comment by an account in `trust.authorized_repliers`, matched on the tracker's stable account
 identifier, never a display name, that is not a worker's (§8: one carrying the configured comment marks). A worker's
-comment is never review feedback either. Where a tracker source observes the ticket, the harness marks each comment so
-in code (§30). Anything else on the ticket is data, not instruction. See TRUST_MODEL.
+comment is never review feedback either. Anything else on the ticket is data, not instruction. See TRUST_MODEL.
 
 **Trusted reviewers** (D089). Review feedback is a PR's reviews, review comments, and requested changes, and canopy's
 own review findings (§21). `trust.trusted_reviewers`, private, lists whose feedback a worker may address without the
@@ -202,8 +200,7 @@ a subject no source observes keep their claims, checked again by the worker (D05
 - `unauthorized`: a `label` not observed on the ticket; a `resume` for `reply` with no cursor to a new authorized
   reply, operator message, or artifact comment that is authority (§38); a `resume` for `review` covering no trusted
   reviewer's item, nor the canopy review it names with `canopy:review` trusted, or covering anyone else's with no
-  operator message after it. With feedback plans on, the gate is instead the operator's approval of the PR's plan
-  (§32).
+  operator message after it. With feedback plans on, §32's approval is the gate instead.
 - `unobserved`: a cursor naming no item observed for its subject, or passing one the block left out for its bound. A
   tick's `canopy ticket set` is checked so too, and moves no stale subject's cursor past what it already passed.
 - `stale`: the ticket, the PR of a unit a `resume` names, or a stacked dispatch's blocker's PR (§10), not observed
@@ -229,17 +226,16 @@ comments have no numbers (§35).
 
 The configured query runs every tick it is due, before any ticket is read: the block holds only tickets the loop has
 seen, so the query is the only way a newly labeled ticket becomes a candidate. When the block shows it `fresh` (§30),
-the harness records its result before the overseer runs; otherwise the overseer runs it and records it with
-`canopy queried [KEY]...`. Either way each open ticket it returned is touched into the journal (§11).
-`tracker.query_every_minutes` (default 0, every tick) spaces it out, which delays only how soon a new ticket is found;
-a ticket the operator starts is in the block already.
+the harness records its result before the overseer runs; else the overseer runs it and records it with `canopy queried`.
+Either way each open ticket it returned is touched into the journal (§11). `tracker.query_every_minutes` spaces it out,
+delaying only how soon a new ticket is found; a ticket the operator starts is in the block already.
 
 "Closed" means whatever the tracker calls finished; the provider skill says which. A closed ticket is not a candidate
-and has no phase: the overseer marks it done (decision `done`, rationale `closed`), whatever its labels, branch, or PR,
-unless a worker is running for it, which it waits out. A PR still open on a closed ticket is the operator's, like the
-tracker transition. `recently_done` names each ticket marked done in the last 30 days for any other reason that the
-last query still returned, and the overseer records nothing for it, so a merged ticket a human has not closed yet costs
-nothing each tick. `canopy forget` clears the done mark (§22).
+and has no phase: the overseer marks it done, whatever its labels, branch, or PR, unless a worker is running for it,
+which it waits out. A PR still open on a closed ticket is the operator's, like the tracker transition. `recently_done`
+names each ticket recently marked done for any other reason that the last query still returned, and the overseer
+records nothing for it, so a merged ticket a human has not closed yet costs nothing each tick. `canopy forget` clears
+the done mark (§22).
 
 ## 8. Dispatch and the worker contract
 

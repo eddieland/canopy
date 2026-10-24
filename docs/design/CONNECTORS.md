@@ -6,10 +6,9 @@ has the map. Previous: [Review replies](REVIEW_REPLIES.md). Next: [Personas](PER
 
 ## 30. Connectors
 
-D003, D008. An overseer that reads the tracker and GitHub again every tick, through MCP, mostly reads what has not
-changed, and once the queue settles that watching is most of canopy's spend (MEASUREMENTS 2026-10-15). So
-deterministic programs read the world into the journal, the overseer decides from what they read, and the harness
-checks against it what was the overseer's word (§7) and derives in code what §7 and §14 derive.
+D003, D008. An overseer re-reading the tracker and GitHub every tick mostly reads what has not changed, and once the
+queue settles that is most of canopy's spend (MEASUREMENTS 2026-10-15). So deterministic programs read the world into
+the journal, the overseer decides from it, and the harness checks the overseer's claims against it (§7).
 
 A **connector** is a deterministic program that reads one source and prints what it saw as JSON lines. canopy runs it
 through `procs`, validates and bounds each line, and records it as an **observation**: a dated copy of a fact about the
@@ -32,14 +31,13 @@ tracker query and every ticket the state block lists (§6 step 4); a `vcs` sourc
 with a draft or a review waiting on it (§21, §29), or last observed open, so no observation stays open unread, the
 repositories, the branch prefix, and the review query; an `artifacts` source its feed's cursor; a `slack` source the
 workspace, which names the sink's threads, and its `operators`, whose replies alone it prints. On stdout, one JSON line
-per observation, naming its kind (tickets and comments; PRs, branches, checks, and reviews; a feed's changes to comments
-and threads), and last an `end` line naming what the run read whole, or for a feed the cursor its next run reads from;
-the exit code is not read. A connector of the operator's own speaks this contract and nothing else: it is all the
-harness knows of any of them.
+per observation, naming its kind, and last an `end` line naming what the run read whole, or for a feed the cursor its
+next run reads from; the exit code is not read. A connector of the operator's own speaks this contract and nothing else:
+it is all the harness knows of any of them.
 
 - Ids, states, times, and bounded text; never logs, diffs, PR descriptions, or a credential.
 - A connector pages everything before `end` names it: the tracker query to its last page (REQUIREMENTS R1), a PR's
-  threads, its head's checks. A watched ticket's blockers are printed too, and every branch under the prefix.
+  threads, its head's checks, a watched ticket's blockers, and every branch under the prefix.
 - CI is observed by named context, never the combined status, which read green PRs as pending (MEASUREMENTS 2026-10-15).
 - A kind the source does not own is skipped, so one source's program never writes another's facts. Unknown kinds and
   fields are ignored, so a newer connector works with an older canopy.
@@ -52,24 +50,22 @@ not whole this run, whatever `end` says, so a line canopy could not read never l
 run with no `end` line records nothing: without it, canopy cannot tell what is missing from what is not there. A
 subject read whole has its observations replaced in one transaction, so what is gone from the source is gone from the
 journal; a subject not read whole keeps its old rows and their age. A refused line whose subject canopy cannot read
-leaves no subject of its kind whole; a line that is not JSON is skipped, as an unknown kind is. A feed is never read
-whole: each change is read once, past the cursor the last run's `end` line named, and kept as the newest change to its
-thread or comment. A refused change holds the cursor before it, so the next run reads it again and none is missed.
+leaves no subject of its kind whole. A feed is never read whole: each change is read once, past the cursor the last
+run's `end` line named, and kept as the newest change to its thread or comment. A refused change holds the cursor before
+it, so the next run reads it again and none is missed.
 
 Comments are observed once each, cut and marked, the workers' marks (D069) read in code, and each is recorded in its
-ticket's conversation when first observed (§22). The connector moves no cursor and records no decision. Each tick's
-run of a source is recorded with what it was asked and what it read; §29's reads after a run and before a send are
-validated the same way but are not a tick's runs.
+ticket's conversation when first observed (§22). The connector moves no cursor and records no decision. §29's reads
+after a run and before a send are validated the same way.
 
 ### In the tick, and between ticks
 
-In §6 step 3, after the reconciles, the tick runs the `tracker` source, then the `vcs` source, which is also §29's
-reconcile read, then the `artifacts` source, then the `slack` source; a tick whose reconcile failed runs none, and a
-dry run observes as a live tick does. A source that fails, or reads less than it was asked, keeps its previous
-observations and raises the harness's `connector_failed` (§14), naming what was not read, each tick until a run reads
-everything; the overseer's view of the list leaves it out. The tick goes on: what was not read ages until it is stale
-(below), when the overseer reads it live and no dispatch rests on it (§7). The derivation follows. The loop's polls
-between ticks run the same sources the same way, record their runs with no tick, and raise nothing (§6).
+In §6 step 3, after the reconciles, the tick runs each source once, the `vcs` source's run being §29's reconcile read;
+a tick whose reconcile failed runs none, and a dry run observes as a live tick does. A source that fails, or reads less
+than it was asked, keeps its previous observations and raises the harness's `connector_failed` (§14), naming what was
+not read, each tick until a run reads everything; the overseer's view of the list leaves it out. The tick goes on: what
+was not read ages until it is stale (below), when the overseer reads it live and no dispatch rests on it (§7). The
+loop's polls between ticks run the same sources the same way and raise nothing (§6).
 
 ### What the overseer is shown
 
@@ -83,25 +79,22 @@ between ticks run the same sources the same way, record their runs with no tick,
 - A candidate shows what the overseer decides from, its body only until its first unit and its items only past their
   cursors (§7). The harness marks in code whether each comment's author is an authorized replier and whether it is a
   worker's (D069), and whether each review item's author is trusted (D089).
-- Each subject shows the rows of §7 the derivation found holding (below), the harness's reading, which the overseer
-  may overrule; and the queries show their results as their sources last read them whole (§7, §21).
-- Text is the observation's, cut and marked, and labeled by source and author in code, never by a model. A subject
-  shows a fixed number of new items, oldest first, and counts the rest, which stay new (§35).
+- Each subject shows the rows of §7 the derivation found holding (below), which the overseer may overrule, and each
+  query its result as its source last read it whole (§7, §21).
+- Source and author are labeled in code, never by a model. A subject shows a fixed number of new items, oldest first,
+  and counts the rest, which stay new (§35).
 
 ### The derivation
 
-D008 moves a rule from the prompt into code one at a time, each checked against the `decisions` corpus first; applied
-by hand, §7's table disagreed with the overseer on `ci_red` (MEASUREMENTS 2026-10-15). So the derivation is the
-harness's reading beside the overseer's, and a measurement says which rows code may take (§37).
+D008 moves a rule from the prompt into code one at a time, on a measurement against the `decisions` corpus (§37):
+applied by hand, §7's table disagreed with the overseer on `ci_red` (MEASUREMENTS 2026-10-15).
 
 - Each tick the harness derives, from the observations and the journal, what §7 and §14 derive: the candidates (§17),
   each ticket's and unit's phase, its next action and the actions a choice allows, and the attention reasons. A ticket
   that depends on a stale or missing observation is derived as stale and counted apart, never as a disagreement.
-- The derivation is recorded beside `decisions`, every row of §7 that held, as §7 has no order yet, and with it the
-  phase the overseer left each subject at when the tick closed. The overseer is shown it (above); by itself it changes
-  no attention item, cursor, phase, or guard.
-- It agrees with the overseer when the phase the overseer set is one of the rows that held and its decision one that
-  row allows. Agreement is computed, never stored, so a fix to the comparison reads every tick already recorded.
+- It records every row of §7 that held, as §7 has no order yet, beside the phase the overseer left each subject at,
+  and agrees when that phase is one of the rows and the overseer's decision one that row allows. The overseer is
+  shown it (above); by itself it changes no attention item, cursor, phase, or guard.
 
 ### Checks that are not CI
 
@@ -117,12 +110,10 @@ CI: it does not hold a unit at `ci_running`, make it `ci_red`, or have to pass.
 
 ### canopy's connectors
 
-Each is a uv workspace member importing nothing from canopy, as §29's programs are (§5), and speaks the whole contract.
-`canopy-connect-github`, §29's reader, is the `vcs` connector, and given a repository, a `tracker` connector for GitHub
-Issues, with `gh`'s token for the host a PR's URL or a repository's clone URL names. `canopy-connect-jira` reads Jira
-Cloud with credentials from an operator-only file held to the Slack sink's checks (§20), sent only to the site the
-operator names, and never in config, argv, journal, or logs. `canopy-connect-slack`, beside the Slack sink, is the
-`slack` connector, with the sink's own bot token file.
+Each is a uv workspace member importing nothing from canopy (§5), speaks the whole contract, and holds its own
+credentials (TRUST_MODEL T2). `canopy-connect-github`, §29's reader, is the `vcs` connector, and given a repository, a
+`tracker` connector for GitHub Issues. `canopy-connect-jira` reads Jira Cloud, only at the site the operator names.
+`canopy-connect-slack`, beside the Slack sink, is the `slack` connector, with the sink's own bot token file.
 
 What a `slack` source reads is no observation: a reply from one of its `operators`, on a ticket canopy knows, is the
 operator's message, recorded as `canopy reply` records one, once per Slack message (§22, TRUST_MODEL T1); the harness
