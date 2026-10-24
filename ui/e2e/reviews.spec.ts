@@ -36,6 +36,9 @@ test('a review opens from the nav and puts each finding on its line of the diff'
         'review:4 acme/web#88 ABC-099: debounce the search box by 250 ms',
     )
     await expect(nav.getByRole('link', { name: /^Pull requests/u })).toHaveAttribute('data-status', 'active')
+    await expect(
+        page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Reviews' }),
+    ).toHaveAttribute('href', /\/pull-requests\/reviews$/u)
     // The PR on GitHub is under the title, as on the PR's own page.
     const out = page.locator('main header').getByRole('navigation', { name: 'Links out' }).getByRole('link')
     await expect(out).toHaveText('on GitHub')
@@ -116,8 +119,10 @@ test("a review's run is a page of its own, one link from its results", async ({ 
     // The prompt canopy rendered for the reviewer, and its log as written, wait folded.
     await expect(page.getByTestId('prompt')).toContainText('Show prompt')
     await expect(page.getByTestId('review-output')).toContainText('Output')
-    // The trail leads back to the results.
-    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'review:4' }).click()
+    // The trail leads back to the results, through Pull requests and its reviews.
+    const trail = page.getByRole('navigation', { name: 'Breadcrumb' })
+    await expect(trail.getByRole('link')).toHaveText(['Pull requests', 'Reviews', 'review:4'])
+    await trail.getByRole('link', { name: 'review:4' }).click()
     await expect(page).toHaveURL(/\/pull-requests\/reviews\/4$/u)
 })
 
