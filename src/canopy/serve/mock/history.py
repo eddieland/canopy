@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 
 OPUS = "anthropic/claude-opus-4-1"
 SONNET = "anthropic/claude-sonnet-4-5"
+# The words a branch name leaves out of its ticket's title.
+_SMALL_WORDS = frozenset({"a", "an", "the", "to", "in", "on", "for", "of"})
 
 
 @dataclass(frozen=True)
@@ -83,8 +85,9 @@ class Ticket:
 
     @property
     def branch(self) -> str:
-        """Its branch, named for its key and the first words of its title."""
-        return f"agent/{self.key}-{'-'.join(self.title.lower().split()[:2])}"
+        """Its branch, named for its key and the first two words of its title that are not small ones."""
+        words = [w for w in self.title.lower().split() if w not in _SMALL_WORDS]
+        return f"agent/{self.key}-{'-'.join(words[:2])}"
 
     @property
     def done_at(self) -> datetime:
