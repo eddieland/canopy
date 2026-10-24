@@ -25,13 +25,25 @@ from canopy.core import (
     reports,
     review_requests,
     review_runs,
+    run_models,
     tasks,
 )
 from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
 from canopy.infra.text import one_line, printable
 from canopy.loop import attention, readback, repeat, reread, tick
-from canopy.loop.render import chore_line, model_of, named, persona_of, phase_of, prs_of, result_of, run_kind, spent
+from canopy.loop.render import (
+    chore_line,
+    model_of,
+    named,
+    persona_of,
+    phase_of,
+    prs_of,
+    result_of,
+    run_kind,
+    served_of,
+    spent,
+)
 from canopy.notify import deliver
 from canopy.runs import drafted
 
@@ -291,8 +303,12 @@ def _doing(run: sqlite3.Row) -> str:
 
 
 def _print_recent_runs(ctx: Context) -> None:
-    """Three lines per run that ended, the last to end first: what it was and its PRs, what it said, where to look."""
+    """Three lines per run that ended, the last to end first: what it was and its PRs, what it said, where to look.
+
+    The third names its session, cost, persona, the model canopy asked for, and the models its session says served it.
+    """
     runs = db.recent_runs(ctx.conn, RECENT_RUNS)
+    served = run_models.of_runs(ctx.conn, "runs", [int(r["id"]) for r in runs])
     click.echo(f"\nRecent runs ({len(runs)}):")
     for r in runs:
         result = result_of(r)
@@ -303,7 +319,8 @@ def _print_recent_runs(ctx: Context) -> None:
         if said:
             click.echo(f"    {said}")
         session = f"session {r['session_id']}" if r["session_id"] else "no session reported"
-        click.echo(f"    {session}{spent(r)}{persona_of(r)}{model_of(r)}  log {r['log_path']}")
+        models = f"{model_of(r)}{served_of(served[int(r['id'])])}"
+        click.echo(f"    {session}{spent(r)}{persona_of(r)}{models}  log {r['log_path']}")
     if not runs:
         click.echo("  none")
 
