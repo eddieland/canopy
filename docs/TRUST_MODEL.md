@@ -56,8 +56,8 @@ Controls:
 - Authorization comes only from things with permission semantics: who can add
   one of `tracker.labels`, and whose replies count for resuming blocked work
   (`trust.authorized_repliers`). All other text is data. Prompts say so.
-- canopy has no tracker code, so it cannot read labels, and a live tick showed an overseer can skip its label check
-  for a ticket the journal remembers (D051). A dispatch refuses without a `label` naming one of
+- canopy has no tracker code, so it reads labels only through a `tracker` source, and a live tick showed an overseer
+  can skip its label check for a ticket the journal remembers (D051). A dispatch refuses without a `label` naming one of
   `tracker.labels`; that is a recorded claim a harness guard checks against config, not proof the label is on the
   ticket. Where a `tracker` source observes the ticket, it is checked against the observation too (below). The
   independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
@@ -87,22 +87,22 @@ Controls:
   prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
   tracker skills read the set immediately before writing it.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
-- The overseer's state block carries what canopy's connectors observed (DESIGN §35): each ticket marked a candidate or
+- The overseer's state block carries what canopy's connectors observed (DESIGN §30): each ticket marked a candidate or
   not in code from its observed labels and state, a non-candidate by key and why with none of its text, and a
-  candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a
-  trusted reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from
-  it, and reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut and marked.
-  `canopy dispatch` checks the overseer's claims against them in code, before its other guards: the label must be one
-  observed on the ticket, a `resume` for `reply` must point at a new comment by an authorized replier that is not a
-  worker's or at a new operator message, a `resume` for `review` must cover a trusted reviewer's item, or anyone
-  else's only with an operator message after it (`unauthorized`), and each cursor must name an item observed and
-  shown (`unobserved`). A dispatch resting on a public ticket or a PR observed past that age is refused `stale`. A
-  private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual: the
-  guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
+  candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a trusted
+  reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from it, and
+  reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut and marked. `canopy dispatch`
+  checks the overseer's claims against them in code (DESIGN §7), before its other guards: the label must be one observed
+  on the ticket, a `resume` for `reply` must point at a new comment by an authorized replier that is not a worker's or
+  at a new operator message, a `resume` for `review` must cover a trusted reviewer's item, or anyone else's only with an
+  operator message after it (`unauthorized`), and each cursor, a tick's `canopy ticket set` included, must name an item
+  observed and shown (`unobserved`). A dispatch resting on a public ticket or a PR observed past that age is refused
+  `stale`. A private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual:
+  the guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
 - An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own, cut
   as a tracker comment is, with the store's id for each author and whether the comment is an agent's or carries every
   comment mark. A comment on an artifact whose origin names a ticket the journal holds is also recorded once in that
-  ticket's conversation, quoting its passage, as a tracker comment is (DESIGN §35), and read by the
+  ticket's conversation, quoting its passage, as a tracker comment is (DESIGN §22), and read by the
   operator's views, a private ticket's own worker, and the plan archive's conversations when they are on. Whose
   comment counts is decided in code, from the store's authenticated author id and the private list
   `artifacts.authorized_authors` (T7), empty by default. On a public ticket a listed person's comment is authority, as
@@ -289,7 +289,7 @@ Controls:
   that does while it runs canopy's chore agent, so no agent's command line overrides it unseen. A worker run whose
   model or variant the runtime does not list, or whose list cannot be read, is refused with an attention item, never
   run on config's model or the runtime's default instead.
-- Tracker comments in a ticket's conversation (DESIGN §22, §35) are what the tracker source observed, each recorded
+- Tracker comments in a ticket's conversation (DESIGN §22, §30) are what the tracker source observed, each recorded
   once in code, as the connector printed it, when first observed, and authorize nothing. They are recorded with source
   `tracker`, or `worker` when the harness finds the workers' marks (D069), never `operator`, and phases,
   `awaiting_reply`, and the loop's wake read operator messages only. A private worker's prompt labels one as data,
@@ -405,9 +405,12 @@ Controls:
   poster,
   `canopy-connect-github` and `canopy-post-github` (DESIGN §29), read the token `gh` holds for the host a PR's or an
   issue's URL, or a repository's clone URL in the map, names, when they run, only once `gh` names that host as one it
-  is logged in to, and send it only to that host's API, following no redirect; canopy never reads it. Lint bans network
-  modules in the harness (`urllib.request`, `http.client`, `socket`) and any import of these programs, so the process
-  that holds the journal and enforces the guards never opens a connection or reads a token or a sink's secret.
+  is logged in to, and send it only to that host's API, following no redirect; canopy never reads it.
+  `canopy-connect-jira` (DESIGN §30) reads an email and API token from an operator-only file of its own, held to the
+  Slack sink's checks, never from canopy's config, argv, journal, or logs, and sends them only to the Jira site the
+  operator names, over https, following no redirect. Lint bans network modules in the harness (`urllib.request`,
+  `http.client`, `socket`) and any import of these programs, so the process that holds the journal and enforces the
+  guards never opens a connection or reads a token or a sink's secret.
 
 ### T3. Runaway agents (cost, capacity, infinite loops)
 
@@ -700,7 +703,7 @@ Controls:
   question, branch, head, PR, and recorded keys leave the machine only as a `task.ended` event, to a sink whose events
   list `tasks`, which none does unless the operator adds it; its report never does. Its `awaiting_reply` and
   `task_ticket_unrecorded` items, on every attention sink, name the task and never the question or the keys.
-- The journal also holds the tracker comments the tracker source observes (DESIGN §22, §35), each cut at 2000
+- The journal also holds the tracker comments the tracker source observes (DESIGN §22, §30), each cut at 2000
   characters, in the same operator-only state directory, for every ticket it reads, public, private, or not a
   candidate. Nothing sends them anywhere: no notification event carries one, and only a private ticket's own worker
   reads them, in its prompt.
@@ -801,10 +804,11 @@ workspace's private file, `.canopy/config.toml` under its root. A workspace may 
 shares with a team, so anyone who can push there can change that file, and a checkout of an unreviewed branch of it
 carries their version. Unlike build scripts a worker runs (T4), this file is read by the harness itself, outside any
 worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
-`notify.cmd`, chores, the review query, prompt paths, capacity, queue labels, authorized repliers, agent memory's
-tiers, the agents' personas or models, or which agents publish artifacts and whose comments on them count, one commit
-would be enough to run commands on operators' machines, raise their spend, send what workers read off the machine, or
-pick who steers their workers.
+`notify.cmd`, chores, the review query, the connectors and how old an observation may be before a dispatch on it is
+refused, prompt paths, capacity, queue labels, authorized repliers, agent memory's tiers, the agents' personas or
+models, or which agents publish artifacts and whose comments on them count, one commit would be enough to run
+commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers their
+workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each
@@ -857,15 +861,15 @@ Residual: the repository still chooses the tracker provider, the query, `needs_h
 and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled tickets,
 agent branches under an unexpected prefix, which branch protection (§7) still governs, or the web UI's ticket links
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
-nothing. The query can still widen what the overseer reads: it reads every ticket a query returns, text and comments,
-before it checks for a label, so a widened query puts tickets nobody labeled, any the operator's tracker account can
-see, in front of the model, where their text can try to steer it (T1). It cannot make one a candidate. With a
-`tracker` source, a ticket observed fresh that is not a candidate reaches the overseer by key and why alone, and its
-prompt says not to read it (DESIGN §35); a stale or unobserved one is still read live. Settled
+nothing. The query can still widen what the overseer reads: without a `tracker` source, it reads every ticket a query
+returns, text and comments, before it checks for a label, so a widened query puts tickets nobody labeled, any the
+operator's tracker account can see, in front of the model, where their text can try to steer it (T1). It cannot make one
+a candidate. With a `tracker` source, a ticket observed fresh that is not a candidate reaches the overseer by key and
+why alone, and its prompt says not to read it (DESIGN §30); a stale or unobserved one is still read live. Settled
 (2026-10-15, the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator
-who shares the workspace with people they do not trust overrides it in the private file. Checking labels in code before
-any ticket reaches the overseer closes this with ROADMAP M37. The provider also picks the default tracker server and
-tools a private ticket's worker gets (T6): a repository that names another provider leaves the real tracker's server
+who shares the workspace with people they do not trust overrides it in the private file. Requiring a `tracker` source
+would close what is left (DESIGN §35). The provider also picks the default tracker server and tools a private ticket's
+worker gets (T6): a repository that names another provider leaves the real tracker's server
 undenied in that definition. An operator who works private tickets in a repository they do not control sets
 `tracker.mcp_server` and `tracker.read_tools`, which are private, to pin them. Through the runtime's own config it can
 also add skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the

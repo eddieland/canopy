@@ -130,6 +130,11 @@ handed to a worker; a ticket no tracker source observes keeps its `comment` curs
 nothing observed becomes 0, so a set `ci` cursor still passes a commit status, and one in no old form the readers read
 stays empty; the old `review` and `ci` columns stay, unread; `item_numbers` is not pruned, its rows being small and a
 pruned number able to come back as a new one.
-Left: the design folded into the sections it names, and the live re-measurement.
+Built (2026-10-24): the design folded into the sections it names. What the overseer is shown, and how fresh, is §30's;
+the claims and their refusals, and cursors as journal numbers, §7's, with §8's guards pointing there; §4 principle 1,
+§5's overseer, §10, §17, §22, and §27 say the overseer reads the observations and the harness checks them; §35 is cut
+to its open questions. TRUST_MODEL T1, T2 (`canopy-connect-jira`), and T7 (`connect.*` private, the widened query's
+residual left to "required") and D003 record what is built; D051 and D089 already had their code checks.
+Left: the live re-measurement.
 Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker` source is
 required (recommended: required), and how many new items a subject shows before the rest are counted.

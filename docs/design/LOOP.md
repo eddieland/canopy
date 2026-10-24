@@ -31,7 +31,7 @@ in order:
    (§14).
 4. **Render the state block**, the overseer's whole message: one JSON object holding what the overseer needs to decide
    every ticket not done or stopped, ordered from what changes rarely to what changes every tick so the provider can
-   cache it. After its fixed sections come the observations (§35): what the connectors last read of each ticket and
+   cache it. After its fixed sections come the observations (§30): what the connectors last read of each ticket and
    its units, each fresh, stale, or unobserved. The overseer's prompt is its agent definition's system prompt (§13),
    not part of the block. The block lists the overseer's own open attention items, without their detail, which may
    quote a comment: an item stays open only while every tick that gives the overseer its subject records it again
@@ -139,12 +139,12 @@ it was idle and what ended the wait before it, for spend (§11).
 
 ## 7. Ticket phases and next actions
 
-The overseer derives phases each tick from live state. They are recorded for the status view, never read back as
-truth. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§18).
+The overseer derives phases each tick from the observations (§30), and from a live read only of a subject they leave
+stale or unobserved. They are recorded for the status view, never read back as truth. The PR phases, `pushed_no_pr`
+to `merged`, are a unit's (§18).
 
-A ticket's title is its display name in canopy, set by the overseer with `canopy ticket set --title`, which makes it
-one short line. It is model-written, so it stays out of `attention.md` and the `text` format, and the Slack sink
-escapes it (§20).
+A ticket's title, its display name in canopy, is one short line the overseer sets. It is model-written, so it stays out
+of `attention.md` and the `text` format, and the Slack sink escapes it (§20).
 
 | Phase | Derived from | Next action |
 |---|---|---|
@@ -192,11 +192,22 @@ reviews. It is empty by default, so a review bot's comment never starts a fixup 
 - The worker's prompt names the trusted reviewers, and the worker addresses anyone else's comment only as an operator
   message says, checking the overseer's classification again (D051). The comment stays data either way.
 
-Where the `vcs` source observes the PR, dispatch checks this gate in code (§35); elsewhere it is the overseer's judgment,
-checked again by the worker. With feedback plans on, the gate is instead the operator's approval of the PR's plan,
-checked in code (§32).
-What the harness can check, it does: only the operator's channels write operator messages, and cursors advance only
-with a run that starts.
+**What the harness checks.** Only the operator's channels write operator messages, and cursors advance only with a run
+that starts. What a dispatch claims of a public ticket's subjects a source observes (§30) is a reference to what the
+block showed, checked in code before §8's other guards; a private ticket, which its start record authorizes (§22), and
+a subject no source observes keep their claims, checked again by the worker (D051). A refusal is a decision:
+
+- `unauthorized`: a `label` not observed on the ticket; a `resume` for `reply` with no cursor to a new authorized
+  reply, operator message, or artifact comment that is authority (§38); a `resume` for `review` covering no trusted
+  reviewer's item, nor the canopy review it names with `canopy:review` trusted, or covering anyone else's with no
+  operator message after it. With feedback plans on, §32's approval is the gate instead.
+- `unobserved`: a cursor naming no item observed for its subject, or passing one the block left out for its bound. A
+  tick's `canopy ticket set` is checked so too, and moves no stale subject's cursor past what it already passed.
+- `stale`: the ticket, the PR of a unit a `resume` names, or a stacked dispatch's blocker's PR (§10), not observed
+  within `connect.max_age_minutes`. A live read of a stale subject can mark a closed ticket done or raise an attention
+  item, never start a run, and one whose source keeps failing waits for it to recover (§30).
+- `handled`: a `resume` for CI alone whose every failure at the head is behind the `ci` cursor or repeats, at the same
+  head and context, one that is, so a re-run that went red to red starts nothing (PRIOR_ART, CI newness).
 
 A private ticket (§22) needs no label, and its own phases come from the journal: `needs_human` when its latest run
 ended `blocked` with no operator message after it, `human_replied` when an operator message is newer than its message
@@ -206,22 +217,25 @@ Cursors (`comment`, `review`, `ci`, and a private ticket's `message`) hold the n
 handled; "newer than cursor" means not handled yet. The comment cursor is the ticket's; the review and ci cursors are
 each unit's, so a dispatch that carries one names exactly one repository. A dispatch carries the cursors of what it
 handles (§8), so they advance only if the worker starts; items handled otherwise advance with `canopy ticket set`. A
-review comment waiting on a human is not advanced past. A cursor but `message` is a journal number, one order for
-every kind (§35), but the `comment` cursor of a ticket no tracker source observes, which is the tracker's comment id.
+review comment waiting on a human is not advanced past. A cursor but `message` is a journal number: each comment,
+review, review comment, and completed check run takes the next one when a source first observes it, and keeps it
+across reads, and a canopy review run takes one when it ends. So "newer" is one order for every kind, and a re-run at
+the same head is new. Rejected: the source's ids, which no tracker orders, and times, which a late submission
+backdates. The `comment` cursor of a ticket no tracker source observes stays the tracker's comment id, since its
+comments have no numbers (§35).
 
-The overseer runs the configured query every tick it is due, before it reads any ticket: the block holds only tickets
-the loop has seen, so the query is the only way a newly labeled ticket becomes a candidate. `canopy queried [KEY]...`
-records it and the open tickets it returned, touching each into the journal (§11); when the block shows the query
-`fresh` (§35), the harness records it so itself, and the overseer neither runs nor records it.
-`tracker.query_every_minutes` (default 0, every tick) spaces it out, through the block's `query_due`, which delays only
-how soon a new ticket is found; a ticket the operator starts is in the block already.
+The configured query runs every tick it is due, before any ticket is read: the block holds only tickets the loop has
+seen, so the query is the only way a newly labeled ticket becomes a candidate. When the block shows it `fresh` (§30),
+the harness records its result before the overseer runs; else the overseer runs it and records it with `canopy queried`.
+Either way each open ticket it returned is touched into the journal (§11). `tracker.query_every_minutes` spaces it out,
+delaying only how soon a new ticket is found; a ticket the operator starts is in the block already.
 
 "Closed" means whatever the tracker calls finished; the provider skill says which. A closed ticket is not a candidate
-and has no phase: the overseer marks it done (decision `done`, rationale `closed`), whatever its labels, branch, or PR,
-unless a worker is running for it, which it waits out. A PR still open on a closed ticket is the operator's, like the
-tracker transition. `recently_done` names each ticket marked done in the last 30 days for any other reason that the
-last query still returned, and the overseer records nothing for it, so a merged ticket a human has not closed yet costs
-nothing each tick. `canopy forget` clears the done mark (§22).
+and has no phase: the overseer marks it done, whatever its labels, branch, or PR, unless a worker is running for it,
+which it waits out. A PR still open on a closed ticket is the operator's, like the tracker transition. `recently_done`
+names each ticket recently marked done for any other reason that the last query still returned, and the overseer
+records nothing for it, so a merged ticket a human has not closed yet costs nothing each tick. `canopy forget` clears
+the done mark (§22).
 
 ## 8. Dispatch and the worker contract
 
@@ -232,7 +246,7 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
 1. Check the guards, which are in code and not overridable from the prompt. A refusal is recorded as a decision naming
    the guard and why, and the command exits 1; a dry run checks them and stops (§6, D036). Dispatch is refused when:
    - a claim rests on a stale observation or one that does not bear it out (`stale`, `unauthorized`, `unobserved`),
-     or a `resume` for CI alone has only failures a worker already had at that head (`handled`), checked first (§35).
+     or a `resume` for CI alone has only failures a worker already had at that head (`handled`), checked first (§7).
    - the label is not a queue label, or a started ticket's (§22) start record does not allow the run; the worker checks
      the label again (step 3, D051).
    - the request does not fit its kind: a `resume` with no branch to continue, a cursor moved without its reason, or a
@@ -366,9 +380,9 @@ reads either (HOST_ISOLATION §1).
 
 ## 10. Dependencies and stacking
 
-- The overseer reads blocker relations through MCP, in whatever form the tracker has them; the provider skill says
-  where. A blocker is resolved when it is closed. Other relations are not blockers. A relation is data: it can delay
-  work, never authorize it.
+- The overseer reads blocker relations from the observations, or through MCP for a ticket they leave stale or
+  unobserved, in whatever form the tracker has them; the provider skill says where. A blocker is resolved when it is
+  closed. Other relations are not blockers. A relation is data: it can delay work, never authorize it.
 - A ticket with an unresolved blocker and no branch of its own is `blocked`. The overseer records `wait` with rationale
   `blocked_by: <KEY>`, unless it stacks the ticket.
 - Stacking: `canopy dispatch <KEY> --label <label> --kind implement --base <blocker's branch>` starts the worker from
@@ -376,8 +390,9 @@ reads either (HOST_ISOLATION §1).
   only on a ticket's single unresolved blocker whose PR is open and green, and reads the branch from that PR.
 - `policy.stacking` (§12) defaults to `"auto"`. Under `"never"`, a blocked ticket waits until its blocker has landed,
   and gets `needs_author` attention if the blocker's PR closed unmerged. The harness adds no guard for it.
-- The harness checks only the shape of `--base` (`bad_base`, §8), so a PR cannot target a release branch. It cannot
-  read PR state (D003). `_run` fails a run whose base is not on origin.
+- The harness checks the shape of `--base` (`bad_base`, §8), so a PR cannot target a release branch, and refuses a
+  stacked dispatch while the blocker's PR is stale (§7); whether that PR is green is the overseer's reading. `_run`
+  fails a run whose base is not on origin.
 - The base is not remembered: every dispatch starts from `--base` if given, else the pool's base branch. Once the
   blocker merges, a `resume` for `retarget` retargets the PR to the repository's base branch. Workers never rebase
   unless the operator sets `trust.rebase`.

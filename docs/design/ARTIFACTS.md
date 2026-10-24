@@ -73,7 +73,7 @@ The contract in full, field by field and tool by tool, is the local store's READ
 ### canopy's part
 
 Artifacts are a channel (§22). Comments come in through an `artifacts` source, a connector beside the tracker's and
-GitHub's (§30), polled between ticks as they are, and reach the conversation in code as tracker comments do (§35),
+GitHub's (§30), polled between ticks as they are, and reach the conversation in code as tracker comments do (§22),
 each quoting its passage. The overseer judges each as it judges review feedback; a worker that acts on them publishes
 a new version, replies on the threads it addressed, and resolves them.
 

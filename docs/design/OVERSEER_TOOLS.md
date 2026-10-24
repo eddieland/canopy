@@ -65,8 +65,9 @@ One tool per overseer verb, named for its command with hyphens for spaces: `disp
 `attention`, `ticket-set`, `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and
 `chore-wait`. The overseer sees them as `canopy_dispatch` and so on.
 No tool name holds an underscore: OpenCode joins server and tool with one, so `canopy_ticket_set` could also come from
-a server named `canopy_ticket`, and the later would replace the earlier. No tool reads the pool: the state block
-already does.
+a server named `canopy_ticket`, and the later would replace the earlier. No tool reads the pool or the observations:
+the state block already holds them, and a claim on them, such as a dispatch's label or a cursor, is a field its tool
+and command check alike (§7).
 
 Each input refuses an unknown field and is the tool's schema. The bounds §6 lists move into those inputs, and the
 commands validate through the same inputs, so a tool and its command cannot drift apart. A tool's result is the text its

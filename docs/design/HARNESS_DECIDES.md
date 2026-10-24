@@ -18,7 +18,7 @@ designed, not built. Until it is, §8, §14, §21,
 and TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that finishes it changes those
 sections and cuts this one to what is left.
 
-Once the overseer reads the journal (§35), most of what it decides follows from the observations alone: applied by
+Once the overseer reads the journal (§30), most of what it decides follows from the observations alone: applied by
 hand, §7's rows that are facts agreed with it on all but six of 943 decisions, and an overseer given only the tickets
 that need judgment would cost a third less than one given every ticket (MEASUREMENTS 2026-10-15). So the harness
 records those decisions itself, before the overseer runs, and the overseer sees only what is left: D008's revisit, one
@@ -30,7 +30,7 @@ Each is recorded as the harness's decision, so `canopy decisions`, the corpus, a
 dispatches carry fixed contexts, never model-written text, and pass §8's guards as the overseer's do.
 
 - `done` for a closed ticket, and for `merged` unless a `multi_repo` item is open on it (below); `skip` for a ticket the
-  query returned that is not a candidate (§35).
+  query returned that is not a candidate (§17).
 - `wait` for `running`, `ci_running`, `needs_human`, a `resume` for CI alone in its cooldown (§8), a failed latest run
   no human has answered since (§14), and `blocked` with no blocker to stack on (§10) and none whose PR closed unmerged.
 - `resume` for `pushed_no_pr` and for `conflicted`, each with its fixed context.
@@ -94,12 +94,12 @@ lists them with what each names, so none is recorded twice.
 The state block lists only the tickets left to the overseer, each with the rows that hold: `ready` (a repository, slug,
 title, and context to choose), `blocked` with a blocker to stack on, `changes_requested` and `review_findings` (to
 classify), `human_replied` (what the reply asks), a row not enabled, a plan's rows, a check held for a notice, a stale
-or unobserved subject (§35), and a ticket whose observations fit no row; and each due chore with a `when`. Of the rest
+or unobserved subject (§30), and a ticket whose observations fit no row; and each due chore with a `when`. Of the rest
 it names only the harness's dispatches to come. Anything the overseer records about another ticket, a decision,
 dispatch, attention item, or change, is refused `decided`, and its duties (§6) are owed only for what it was listed.
 
 A dispatch moves each cursor of its reasons, once the worker starts, to the newest item of that kind the block showed,
-short of the first it may not cover (§35); the overseer passes a cursor only to stop shorter. The harness moves the
+short of the first it may not cover (§7); the overseer passes a cursor only to stop shorter. The harness moves the
 cursors past what its own decisions handle and what needs no handling: a worker's comment, a reply the operator sent.
 
 The prompt keeps only that judgment; its holds, order, candidates, phase table, cursors, and attention list go.
