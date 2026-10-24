@@ -87,3 +87,8 @@ export function slotRef(name: string): string {
 export function planRef(id: number | string): string {
     return `plan:${id}`
 }
+
+/** A ticket's feedback plan, as `canopy show` names it: `feedback-plan:7`. */
+export function feedbackPlanRef(id: number | string): string {
+    return `feedback-plan:${id}`
+}

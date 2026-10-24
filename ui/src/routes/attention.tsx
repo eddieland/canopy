@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ChevronLeft, FileText, GitPullRequest, ListChecks, MessageSquareReply, Sprout } from 'lucide-react'
+import { ChevronLeft, FileText, GitPullRequest, MessageSquareReply, Sprout } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -24,6 +24,7 @@ import { ChoreNotes } from '@/components/chore-notes'
 import { Copyable } from '@/components/copy-button'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
+import { FeedbackPlanWaits } from '@/components/feedback-plan-card'
 import { GrantLimits } from '@/components/grant-limits'
 import { Leaf } from '@/components/leaf'
 import { Notice } from '@/components/notice'
@@ -483,44 +484,20 @@ function PlanReview({ ticketKey }: { ticketKey: string }) {
 }
 
 /**
- * A feedback plan waiting on the operator (DESIGN §32): which plan, for which PRs, how many items it covers, and
- * whether its PRs moved on since it was written, with a link to each PR's page at the plan, where it is read and
- * approved by item. It is what the item asks for, so it comes before the ticket's actions and conversation. Once it
- * waits no more, the PR the item's detail names is still linked.
+ * A feedback plan waiting on the operator (DESIGN §32), as `FeedbackPlanWaits` says it: it is what the item asks for,
+ * so it comes before the ticket's actions and conversation. Once it waits no more, the PR the item's detail names is
+ * still linked.
  */
 function FeedbackPlanReview({ item, plan }: { item: AttentionItem; plan: WaitingFeedbackPlan | null }) {
     const named = pullRequestOf(item)
-    const urls = plan?.pr_urls ?? (named === null ? [] : [named])
-    const id = plan?.id ?? feedbackPlanOf(item)
-    const which = id === null ? 'The feedback plan' : `Feedback plan ${id}`
-    const prs = urls.length === 0 ? '' : ` for ${urls.map((url) => pullRequestLabel(url)).join(' and ')}`
     return (
-        <div className="flex flex-col items-start gap-2 border-b p-3" data-testid="attention-feedback-plan">
-            {plan === null ? (
-                <p className="text-sm text-muted-foreground">
-                    {which}
-                    {prs} waits on you no more.
-                </p>
-            ) : (
-                <p className="text-sm">
-                    {which}
-                    {prs} waits on you: {plan.items} {plan.items === 1 ? 'item' : 'items'}
-                    {plan.stale ? ', and its PR has moved on since it was written.' : '.'}
-                </p>
-            )}
-            {urls.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                    {urls.map((url) => (
-                        <Button asChild variant="outline" key={url}>
-                            <Link to="/pull-requests/pr" search={{ url }} hash="feedback-plan">
-                                <ListChecks />
-                                {plan === null ? 'See it on' : 'Approve it on'} {pullRequestLabel(url)}
-                            </Link>
-                        </Button>
-                    ))}
-                </div>
-            )}
-        </div>
+        <FeedbackPlanWaits
+            which={plan?.id ?? feedbackPlanOf(item)}
+            urls={plan?.pr_urls ?? (named === null ? [] : [named])}
+            plan={plan}
+            className="border-b p-3"
+            data-testid="attention-feedback-plan"
+        />
     )
 }
 

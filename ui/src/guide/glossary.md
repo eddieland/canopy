@@ -85,7 +85,7 @@ comments, copied in. See [Attention](attention#replying).
 
 A plan for what came back to a PR, written before the resume that acts on it, with `policy.feedback_plan = "approve"`
 in your own config: you read whose each item is and approve what gets addressed. A run of its own kind,
-`feedback-plan`. See [Plans](plans).
+`feedback-plan`. It lives on the PR's page. See [The feedback plan](pull-requests#the-feedback-plan).
 
 ### Follow-up
 

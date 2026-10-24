@@ -190,6 +190,18 @@ class ModelsServed(Model):
     """When `failed`, canopy's words for why."""
 
 
+class FeedbackPlanWritten(Model):
+    """The feedback plan a `feedback-plan` run wrote (DESIGN §32), as the run's page names it."""
+
+    id: int
+    """The plan's id, as `feedback-plan:N` names it."""
+    pr_urls: list[str]
+    """The PRs of the units it covers, by repository: each PR's page shows the plan, where it is approved."""
+    status: Literal["waiting", "approved", "spent", "superseded"]
+    """Where it stands: waiting on the operator, approved with no resume gone ahead on it, spent by the resume that
+    did, or superseded by a later plan or a request for one."""
+
+
 class Run(Model):
     """One worker or split run (`run:ID`)."""
 
@@ -251,6 +263,9 @@ class Run(Model):
     models: ModelsServed | None = None
     """Which models served it, on its page, in the runs list, and in a ticket's or a PR's runs; None where another page
     lists it."""
+    feedback_plan: FeedbackPlanWritten | None = None
+    """For a `feedback-plan` run, the plan it wrote, on its page alone; None for a run of another kind, one whose plan
+    was never recorded, and in the lists."""
 
 
 class WaitingFeedbackPlan(Model):

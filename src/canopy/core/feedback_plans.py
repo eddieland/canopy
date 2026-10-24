@@ -232,6 +232,19 @@ def get(conn: sqlite3.Connection, plan_id: int) -> records.FeedbackPlan | None:
     )
 
 
+def of_run(conn: sqlite3.Connection, run_id: int) -> records.FeedbackPlan | None:
+    """The feedback plan the run `run_id` wrote, whatever its status.
+
+    Returns:
+        The plan's row, or None when the run wrote none: a run of another kind, or a plan run that failed.
+    """
+    return records.fetch_one(
+        conn,
+        records.FeedbackPlan,
+        sql.select("*").from_("feedback_plans").where("run_id = ?", run_id),
+    )
+
+
 def history(conn: sqlite3.Connection, key: str) -> list[records.FeedbackPlan]:
     """Every feedback plan of the ticket, superseded ones included.
 

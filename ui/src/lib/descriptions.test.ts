@@ -154,7 +154,7 @@ describe('tickDescription', () => {
 })
 
 describe('ticketDescription', () => {
-    const IDLE = { running_run: null, awaiting: null }
+    const IDLE = { running_run: null, awaiting: null, feedback_plan: null }
     const NO_PLAN: TicketPlans = {
         changes_asked: null,
         needed: false,
@@ -167,9 +167,19 @@ describe('ticketDescription', () => {
     }
 
     it('says the run working it and the question waiting on you, and nothing for a ticket at rest', () => {
-        expect(ticketDescription({ running_run: 41, awaiting: 3 }, NO_PLAN)).toBe('run:41 running · waiting on you')
+        expect(ticketDescription({ ...IDLE, running_run: 41, awaiting: 3 }, NO_PLAN)).toBe(
+            'run:41 running · waiting on you',
+        )
         expect(ticketDescription(IDLE, NO_PLAN)).toBe('')
         expect(ticketDescription(IDLE, undefined)).toBe('')
+    })
+
+    it('says its feedback plan waits on you, after its own plan', () => {
+        const plan = { id: 7, pr_urls: ['https://github.com/acme/web/pull/88'], items: 3, stale: false }
+        expect(ticketDescription({ ...IDLE, feedback_plan: plan }, NO_PLAN)).toBe('feedback plan waiting on you')
+        expect(ticketDescription({ ...IDLE, feedback_plan: plan }, { ...NO_PLAN, needed: true })).toBe(
+            'plan needed · feedback plan waiting on you',
+        )
     })
 
     it('says a plan is needed only while it has none and needs one', () => {

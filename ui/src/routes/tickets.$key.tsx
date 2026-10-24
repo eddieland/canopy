@@ -11,6 +11,7 @@ import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
 import { Disclosure } from '@/components/disclosure'
+import { FeedbackPlanCard } from '@/components/feedback-plan-card'
 import { Field, Fields } from '@/components/fields'
 import { MemoryBand, MemoryDigestFold, MemoryRows } from '@/components/memory'
 import { MemorySaid, NoteActions } from '@/components/memory-actions'
@@ -40,7 +41,7 @@ import { None } from '@/components/none'
 /**
  * One ticket: its work, then its conversation, the reply, and the operator's actions, then its runs and decisions, each
  * its header alone while empty, and its memory, folded; and for a ticket plans touch, its plan's card below them, which
- * opens the plan's own page (DESIGN §25).
+ * opens the plan's own page (DESIGN §25). A plan waiting on the operator, a feedback plan's card too, leads the page.
  */
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
@@ -110,6 +111,9 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     if (planLeads === undefined && plans !== undefined) {
         setPlanLeads(plans.newest?.plan.status === 'proposed' && plans.planning === null)
     }
+    // A feedback plan waiting on the operator leads the page too (DESIGN §32), its card pointing at the PR's page,
+    // where it is approved. Settled once as well: a plan approved meanwhile leaves its card where it was read.
+    const [led] = useState(ticket.feedback_plan)
     const state = ticketDescription(ticket, plans)
     // Ticket notes on, the Memory panel is the left column's last row, which takes what the conversation is taller by.
     const memoryTier = useQuery(loopQuery).data?.memory?.ticket_notes
@@ -134,6 +138,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 {state === '' ? '' : ' · '}
                 active <Age at={ticket.active_at} variant="ago" />
             </PageHeader>
+            {led !== null && <FeedbackPlanCard led={led} plan={ticket.feedback_plan} />}
             {planned && planLeads === true && <PlanCard ticketKey={ticket.key} plans={plans} />}
             {/* The detail skeleton (DESIGN.md): what it is, its conversation and its answer, then its lists. */}
             {/* Wide, the conversation moves beside the rest, as in the inbox; the source keeps the reading order. */}

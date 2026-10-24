@@ -277,6 +277,8 @@ export type FeedbackPlanItem = Schemas['FeedbackPlanItem']
 export type FeedbackPlanApproved = Schemas['FeedbackPlanApproved']
 /** A ticket's feedback plan while it waits on the operator, as its ticket's summary names it for the attention list. */
 export type WaitingFeedbackPlan = Schemas['WaitingFeedbackPlan']
+/** The feedback plan a `feedback-plan` run wrote, as the run's page names it: its PRs and where it stands. */
+export type FeedbackPlanWritten = Schemas['FeedbackPlanWritten']
 
 /** Every run state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss. */
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]

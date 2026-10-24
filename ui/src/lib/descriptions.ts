@@ -105,12 +105,13 @@ export function tickDescription(tick: Pick<Tick, 'status' | 'woken_by'>, decisio
  * these; the page follows it with when the ticket was last active.
  */
 export function ticketDescription(
-    ticket: Pick<TicketSummary, 'running_run' | 'awaiting'>,
+    ticket: Pick<TicketSummary, 'running_run' | 'awaiting' | 'feedback_plan'>,
     plans: TicketPlans | undefined,
 ): string {
     const running = ticket.running_run === null ? null : `${runRef(ticket.running_run)} running`
     const waiting = ticket.awaiting === null ? null : 'waiting on you'
-    return line(running, waiting, plans === undefined ? null : planWords(plans))
+    const feedback = ticket.feedback_plan === null ? null : 'feedback plan waiting on you'
+    return line(running, waiting, plans === undefined ? null : planWords(plans), feedback)
 }
 
 /** How many of a noun, in words: `no reviews`, `1 review`, `3 reviews`. */
