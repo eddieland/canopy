@@ -33,7 +33,7 @@ const MODELS: Models = {
 // Every path the panel reads, and what the server stand-in answers each.
 let sent: string[] = []
 let models: Models = MODELS
-let listed: ModelList = { models: ['acme/deep-2', 'acme/fast-1'], error: null }
+let listed: ModelList = { models: ['acme/deep-2', 'acme/fast-1'], variants: {}, error: null }
 
 const server: Middleware = {
     onRequest({ request }) {
@@ -46,7 +46,7 @@ const server: Middleware = {
 beforeEach(() => {
     sent = []
     models = MODELS
-    listed = { models: ['acme/deep-2', 'acme/fast-1'], error: null }
+    listed = { models: ['acme/deep-2', 'acme/fast-1'], variants: {}, error: null }
     api.use(server)
 })
 
@@ -123,7 +123,7 @@ describe('ConfigModels', () => {
     })
 
     it('says why the list could not be read', async () => {
-        listed = { models: [], error: '`opencode models` exited 1' }
+        listed = { models: [], variants: {}, error: '`opencode models` exited 1' }
         renderPanel()
         await rows()
         fireEvent.click(screen.getByRole('button', { name: "Show the runtime's models" }))
