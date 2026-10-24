@@ -3,7 +3,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
-import { feedbackPlan, feedbackPlanItem, reviewThread } from '@/api/mocks'
+import { draft, feedbackPlan, feedbackPlanItem, reviewThread } from '@/api/mocks'
 import type { FeedbackPlanApproved } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
@@ -72,7 +72,7 @@ describe('FeedbackPlanPanel', () => {
             '/pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88#thread-PRRT_1',
         )
         for (const n of [1, 2]) {
-            expect(screen.getByRole('checkbox', { name: `address item ${n}` }).getAttribute('aria-checked')).toBe(
+            expect(screen.getByRole('checkbox', { name: `approve item ${n}` }).getAttribute('aria-checked')).toBe(
                 'true',
             )
         }
@@ -112,12 +112,19 @@ describe('FeedbackPlanPanel', () => {
 
     it('approves only the ticked items, with the operator’s words, as --leave names the rest', async () => {
         await renderRouted(<FeedbackPlanPanel plan={feedbackPlan()} onChange={changed} />)
-        fireEvent.click(screen.getByRole('checkbox', { name: 'address item 1' }))
+        fireEvent.click(screen.getByRole('checkbox', { name: 'approve item 1' }))
         fireEvent.change(screen.getByRole('textbox', { name: 'Your words, for its resume (optional)' }), {
             target: { value: 'Keep the old name too.' },
         })
         const approve = screen.getByRole<HTMLButtonElement>('button', { name: 'Approve 1 of 2' })
         expect(approve.title).toBe('canopy plan ABC-099 --approve --leave 1 --message TEXT')
+        // An unticked item is for the next plan, never "left" or "leave", which is a proposal of its own.
+        expect(
+            screen.getByText(
+                'Approving writes a message on the ticket naming, by number, the items to address and those for the ' +
+                    'next plan, with your words after it.',
+            ),
+        ).toBeTruthy()
         fireEvent.click(approve)
         expect((await screen.findByRole('status')).textContent).toBe(
             'Feedback plan 1 of ABC-099 is approved as its file stands now, for 1 of its 2 items: item 2 (id ' +
@@ -129,8 +136,8 @@ describe('FeedbackPlanPanel', () => {
 
     it('approves nothing with every item unticked', async () => {
         await renderRouted(<FeedbackPlanPanel plan={feedbackPlan()} onChange={changed} />)
-        fireEvent.click(screen.getByRole('checkbox', { name: 'address item 1' }))
-        fireEvent.click(screen.getByRole('checkbox', { name: 'address item 2' }))
+        fireEvent.click(screen.getByRole('checkbox', { name: 'approve item 1' }))
+        fireEvent.click(screen.getByRole('checkbox', { name: 'approve item 2' }))
         expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Approve' }).disabled).toBe(true)
         expect(screen.getByText('Tick an item to approve, or reply on the ticket to ask for changes.')).toBeTruthy()
     })
@@ -195,9 +202,9 @@ describe('FeedbackPlanPanel', () => {
         expect(within(panel).getByRole('link', { name: 'message 12' }).getAttribute('href')).toBe(
             '/tickets/ABC-099#message-12',
         )
-        expect(screen.getByRole('checkbox', { name: 'address item 1' }).getAttribute('aria-checked')).toBe('false')
-        expect(screen.getByRole('checkbox', { name: 'address item 2' }).getAttribute('aria-checked')).toBe('true')
-        expect(within(panel).getByText('left out')).toBeTruthy()
+        expect(screen.getByRole('checkbox', { name: 'approve item 1' }).getAttribute('aria-checked')).toBe('false')
+        expect(screen.getByRole('checkbox', { name: 'approve item 2' }).getAttribute('aria-checked')).toBe('true')
+        expect(within(panel).getByText('for the next plan')).toBeTruthy()
         const again = screen.getByRole<HTMLButtonElement>('button', { name: 'Approve again' })
         expect(again.disabled).toBe(false)
         expect(again.title).toBe('canopy plan ABC-099 --approve --leave 1')
@@ -341,11 +348,33 @@ describe("ThreadCard's proposal", () => {
         const item = feedbackPlanItem({ left_out: true })
         await renderRouted(<ThreadCard thread={reviewThread()} item={item} onChange={changed} />)
         const proposal = screen.getByTestId('plan-proposal')
-        expect(proposal.textContent).toBe('Plan item 2changeleft outMoved it into a `finally`.')
+        expect(proposal.textContent).toBe('Plan item 2changefor the next planMoved it into a `finally`.')
         // The card is what the plan's row links to, under the thread's anchor.
         expect(screen.getByTestId('review-thread').id).toBe('thread-PRRT_1')
         // Above the drafts, which answer it.
         const following = proposal.compareDocumentPosition(screen.getByTestId('draft'))
         expect(following & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('says a change its resume acts on answers a waiting draft again, which sent first answers ahead', async () => {
+        await renderRouted(<ThreadCard thread={reviewThread()} item={feedbackPlanItem()} resumes onChange={changed} />)
+        expect(within(screen.getByTestId('plan-proposal')).getByTestId('plan-proposal-ahead').textContent).toBe(
+            "The plan's resume writes a new reply here; sending this draft first answers ahead of it.",
+        )
+        // The draft keeps its primary Send: the note says which answers first, and leaves the choice to the operator.
+        expect(within(screen.getByTestId('draft')).getByRole('button', { name: 'Send' })).toBeTruthy()
+    })
+
+    // A proposal that writes no reply of its own, one its approval put off for the next plan, a thread no draft waits
+    // on, and a plan whose resume has gone ahead already.
+    it.each([
+        ['a leave', reviewThread(), feedbackPlanItem({ proposal: 'leave' }), true],
+        ['a change for the next plan', reviewThread(), feedbackPlanItem({ left_out: true }), true],
+        ['no waiting draft', reviewThread({ drafts: [draft({ status: 'sent' })] }), feedbackPlanItem(), true],
+        ['a spent plan', reviewThread(), feedbackPlanItem(), false],
+    ] as const)('says nothing of a draft the plan does not answer again: %s', async (_, thread, item, resumes) => {
+        await renderRouted(<ThreadCard thread={thread} item={item} resumes={resumes} onChange={changed} />)
+        expect(screen.getByTestId('plan-proposal')).toBeTruthy()
+        expect(screen.queryByTestId('plan-proposal-ahead')).toBeNull()
     })
 })

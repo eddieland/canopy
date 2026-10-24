@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
-import { draft, pullRequestThreads, reviewThread } from '@/api/mocks'
+import { draft, feedbackPlan, pullRequestThreads, reviewThread } from '@/api/mocks'
 import { ToastContext } from '@/hooks/use-toast'
 import type { NewToast } from '@/lib/toasts'
 import { renderRouted } from '@/test-utils'
@@ -410,6 +410,43 @@ describe('ReviewThreads', () => {
         const list = await screen.findByTestId('draft-list')
         const link = within(list).getByRole('link', { name: 'Thumbs up, alone' })
         expect(link.getAttribute('href')).toMatch(/#draft-46-1$/u)
+    })
+
+    // A plan waiting on the operator, stale or not, is what they came to answer; once approved or spent, it follows.
+    it.each([
+        ['waiting', true],
+        ['stale', true],
+        ['approved', false],
+        ['spent', false],
+    ] as const)('puts a %s plan ahead of the drafts: %s', async (status, leads) => {
+        answer = () => Response.json(pullRequestThreads({ feedback_plan: feedbackPlan({ status }) }))
+        await renderRouted(<ReviewThreads url={PR} />)
+        const plan = await screen.findByTestId('feedback-plan')
+        const after = plan.compareDocumentPosition(screen.getByTestId('review-replies'))
+        expect((after & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(leads)
+        // A spent plan's resume has gone ahead: its proposal no longer names the draft it would answer again.
+        expect(screen.queryByTestId('plan-proposal-ahead') !== null).toBe(status !== 'spent')
+    })
+
+    it('keeps a waiting plan where it was read once approved, rather than move it from under the button', async () => {
+        let plan = feedbackPlan()
+        const approved = {
+            plan: 1,
+            ticket_key: 'ABC-099',
+            addressed: [{ number: 2, item_id: 2468013579 }],
+            left: [{ number: 1, item_id: 4102337001 }],
+            message: 12,
+        }
+        answer = (path) =>
+            Response.json(path.endsWith('/feedback-plan') ? approved : pullRequestThreads({ feedback_plan: plan }))
+        await renderRouted(<ReviewThreads url={PR} />)
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'approve item 1' }))
+        plan = feedbackPlan({ status: 'approved' })
+        fireEvent.click(screen.getByRole('button', { name: 'Approve 1 of 2' }))
+        await screen.findByTestId('plan-approved')
+        await within(screen.getByTestId('feedback-plan')).findByText('approved')
+        const after = screen.getByTestId('feedback-plan').compareDocumentPosition(screen.getByTestId('review-replies'))
+        expect(after & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it("says when the PR's head is past the diff the page shows", async () => {

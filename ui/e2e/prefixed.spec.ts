@@ -576,6 +576,12 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
         'aria-checked',
         'true',
     )
+    // Each model's variants are offered under it, as `canopy model KEY MODEL@VARIANT` takes one.
+    await list.getByRole('option', { name: `${model}@high`, exact: true }).click()
+    await expect(worker.getByRole('status')).toHaveText(
+        `saved: ABC-104's worker runs use ${model}@high from their next run: this ticket's override.`,
+    )
+    await models.getByRole('button', { name: `worker model: ${model}@high` }).click()
     await page.getByRole('combobox', { name: 'Find a model for the worker' }).fill('no such model')
     await expect(list.getByText('no model has that name')).toBeVisible()
     await page.getByRole('option', { name: 'Clear the override' }).click()
@@ -648,7 +654,7 @@ test("a stale feedback plan is approved by item from the PR's page, refused once
     await expect(feedback.getByTestId('feedback-plan-stale')).toContainText('new review 4102337050 on')
     const bob = page.getByTestId('review-thread').filter({ hasText: 'Why 250?' })
     await expect(bob.getByTestId('plan-proposal')).toContainText('Plan item 3')
-    await feedback.getByRole('checkbox', { name: 'address item 1' }).click()
+    await feedback.getByRole('checkbox', { name: 'approve item 1' }).click()
     const approve = feedback.getByRole('button', { name: 'Approve stale plan' })
     await expect(approve).toHaveAttribute('title', 'canopy plan ABC-099 --approve --leave 1')
     await approve.click()
@@ -662,7 +668,8 @@ test("a stale feedback plan is approved by item from the PR's page, refused once
             'items 2 (id 2468013579) and 3 (id 2468013601).',
     )
     await expect(feedback).toHaveAttribute('data-status', 'approved')
-    await expect(feedback.getByRole('checkbox', { name: 'address item 1' })).not.toBeChecked()
+    await expect(feedback.getByRole('checkbox', { name: 'approve item 1' })).not.toBeChecked()
+    await expect(feedback.getByTestId('feedback-plan-item').first()).toContainText('for the next plan')
     // At rest, so the send key cannot approve it twice: a box or the words have to change first.
     await expect(feedback.getByRole('button', { name: 'Approve again' })).toBeDisabled()
 })

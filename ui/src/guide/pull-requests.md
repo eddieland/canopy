@@ -118,37 +118,46 @@ The [attention list](attention) holds a `drafts waiting` item while any draft fo
 
 With `policy.feedback_plan = "approve"` in your own config, a round of review on one of the loop's PRs is planned
 before any worker touches it: a planner reads every new item (a review, a thread, whoever wrote it) and proposes what
-to do with each, and the resume waits for you. The PR's page shows that plan under **Feedback plan**, after the
-threads' panel.
+to do with each, and the resume waits for you. The PR's page shows that plan under **Feedback plan**: above the
+threads' panel and its drafts while it waits on you, since it is what you came to answer, and below them once it is
+approved or spent. It stays where you found it while you approve it, so the button doesn't wander off mid-click.
 
 The panel says which run wrote it, when, and where it stands: `waiting on you`, `stale`, `approved`, or `spent` once
 a resume has gone ahead on it. Under that, a row for each item: its number, the first line of what was said, and where
 it is, which is a link: **on its thread** jumps to the thread's card on this page, and **the review** opens the review
-on GitHub. Under that line, what the plan proposes (`change`, `decline`, `ask`, or `leave`), who wrote the item,
+on GitHub. Under that line, what the plan proposes (`change`, `decline`, `ask`, or `leave`, each in a color of its own:
+`change`, the one that edits code, the loudest, and `leave`, which does nothing, none at all), who wrote the item,
 `trusted` if `trust.trusted_reviewers` names them, the plan's first line on it, which is why it proposes that, and
 the item's id on GitHub. Enough to decide each row without leaving the panel; the full thread is one click away when
-it is not. On a thread, the thread's card carries the proposal too, as **Plan item N** above the drafts, with the
-reply the planner would draft. A review, or an item with no thread on this page, shows its proposed reply in its row
-instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it stands, as plain text, so an
-enthusiastic `<img>` in a coworker's comment stays a string of characters, in the rows as in the file.
+it is not. On a thread, the thread's card carries the proposal too, as **Plan item N** above the drafts, set off by a
+rule down its left edge, with the reply the planner would draft. Where it proposes a `change` and a worker's draft
+already waits on the same thread, it says so: the plan's resume writes a new reply there, and sending the draft first
+answers ahead of it. Both may go, or one; the page won't pick for you. A review, or an item with no thread on this page,
+shows its proposed reply in its row instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it
+stands, as plain text, so an enthusiastic `<img>` in a coworker's comment stays a string of characters, in the rows as
+in the file.
 
 A plan goes `stale` when the PR moves after it was written: a new comment or reply, an edit, a resolved thread, a new
 head, or a check that changed its mind. The panel lists each change, in the same words `canopy show` uses. The loop
 plans again once the PR has been quiet for `policy.feedback_quiet_minutes`, so a reviewer typing ten comments in five
 minutes gets one new plan, not ten.
 
-To approve, tick the items the resume should address and press the button: **Approve whole** with every box ticked,
+To approve, tick the items the resume should act on and press the button: **Approve whole** with every box ticked,
 **Approve 2 of 3** otherwise, and nothing at all with none ticked, or while the plan's file has gone missing, in which
-case the panel says so and the way out is a reply on the ticket asking for a new plan. Hover the button for the
-command it is, `canopy plan KEY --approve`, with `--item` or `--leave` for the ones you picked. Anything you write in
-**Your words, for its resume** goes after the message the approval writes on the ticket, which names the items to
-address and to leave by number, never by quoting them. A stale plan's button reads **Approve stale plan**, and the
-first press is refused by design, so you approve it knowing what changed: the panel says so calmly, not in red, and
-the button becomes **Approve as it is**. Press it and the plan is approved as it stands, and the new feedback waits for
-the next plan. An approval done gets the band an approved ticket plan gets, with its leaf and the way back to
-Attention, and clears your words; the button rests as **Approve again** until you tick other boxes or write other
-words, so the send key cannot approve it twice by accident. Approving again is allowed until its resume starts. To
-send the planner back instead, reply on the ticket.
+case the panel says so and the way out is a reply on the ticket asking for a new plan. Ticking a `leave` item approves
+leaving it be. An item you untick is **for the next plan**, which is not the same thing at all: its resume does nothing
+about it, and the next plan gets it to propose again. Each such row says so, and so does its thread's card. Hover the
+button for the command it is, `canopy plan KEY --approve`, with `--item` naming the ones you ticked or `--leave` the
+ones you didn't, whichever list is shorter. Yes, the flag says leave; the page doesn't, since a `leave` proposal already
+means something else. Anything you write in **Your words, for its resume** goes after the message the approval writes
+on the ticket, which names the items to address and those for the next plan by number, never by quoting them.
+
+A stale plan's button reads **Approve stale plan**, and the first press is refused by design, so you approve it knowing
+what changed: the panel says so calmly, not in red, and the button becomes **Approve as it is**. Press it and the plan
+is approved as it stands, and the new feedback waits for the next plan. An approval done gets the band an approved
+ticket plan gets, with its leaf and the way back to Attention, and clears your words; the button rests as **Approve
+again** until you tick other boxes or write other words, so the send key cannot approve it twice by accident. Approving
+again is allowed until its resume starts. To send the planner back instead, reply on the ticket.
 
 ## When canopy reviews
 

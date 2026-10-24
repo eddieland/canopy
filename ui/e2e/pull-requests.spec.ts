@@ -118,6 +118,28 @@ test("a PR's page leads with where it stands, and a list it cannot fill takes on
     expect(last.y + last.height - first.y).toBeLessThan(120)
 })
 
+test("a feedback plan waiting on you leads the PR's drafts, its Approve in the first screen", async ({ page }) => {
+    // The operator's window: half a 3440×1440 ultrawide, or a 16" MacBook Pro's whole screen (PRODUCT.md).
+    await page.setViewportSize({ width: 1720, height: 1440 })
+    for (const pr of ['https://github.com/acme/web/pull/88', 'https://github.com/acme/mobile/pull/67']) {
+        await page.goto(`pull-requests/pr?url=${encodeURIComponent(pr)}`)
+        await settled(page)
+        const plan = page.getByTestId('feedback-plan')
+        await expect(plan).toHaveAttribute('data-status', /^(?:waiting|stale)$/u)
+        // The button, stale or not, whole in view before any scroll.
+        await expect(plan.getByRole('button', { name: /^Approve/u })).toBeInViewport({ ratio: 1 })
+        const [ahead, drafts] = [await box(plan), await box(page.getByTestId('review-replies'))]
+        expect(ahead.y + ahead.height).toBeLessThanOrEqual(drafts.y)
+    }
+    // On bob's thread the plan proposes a change while run 45's draft waits: the proposal says which answers first.
+    const bob = page.getByTestId('review-thread').filter({ hasText: 'Why 250?' })
+    await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+    await expect(bob.getByTestId('plan-proposal-ahead')).toHaveText(
+        "The plan's resume writes a new reply here; sending this draft first answers ahead of it.",
+    )
+    await expect(bob.getByTestId('draft').getByRole('button', { name: 'Send', exact: true })).toBeVisible()
+})
+
 test('a PR the journal does not know says so, and a decision about a PR opens its page', async ({ page }) => {
     await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/404')}`)
     await expect(page.getByText('canopy has no record of https://github.com/acme/web/pull/404')).toBeVisible()
