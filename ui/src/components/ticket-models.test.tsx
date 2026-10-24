@@ -19,6 +19,7 @@ const WORKER: AgentModel = {
     model: 'acme/deep-2',
     source: 'ticket',
     variant: null,
+    dropped_variant: null,
     last_served: 'acme/deep-2',
 }
 const PLANNER: AgentModel = {
@@ -26,19 +27,39 @@ const PLANNER: AgentModel = {
     model: 'acme/fast-1',
     source: 'config',
     variant: null,
+    dropped_variant: null,
     last_served: 'acme/old-0',
 }
 const MODELS: AgentModel[] = [
     WORKER,
     PLANNER,
-    { agent: 'reviewer', model: null, source: 'default', variant: null, last_served: 'acme/fast-1' },
+    {
+        agent: 'reviewer',
+        model: null,
+        source: 'default',
+        variant: null,
+        dropped_variant: null,
+        last_served: 'acme/fast-1',
+    },
 ]
+/** Each listed model's variants, as the server sends them: acme/fast-1 has none. */
+const VARIANTS = { 'acme/deep-2': ['high', 'low'] }
+/** The planner on config's acme/deep-2 at its `high` variant. */
+const AT_HIGH: AgentModel = {
+    agent: 'planner',
+    model: 'acme/deep-2@high',
+    source: 'config',
+    variant: 'high',
+    dropped_variant: null,
+    last_served: 'acme/deep-2',
+}
 /** The server's answer to the reviewer's choice of acme/deep-2. */
 const CHOSEN: AgentModel = {
     agent: 'reviewer',
     model: 'acme/deep-2',
     source: 'ticket',
     variant: null,
+    dropped_variant: null,
     last_served: 'acme/fast-1',
 }
 
@@ -53,7 +74,7 @@ const server: Middleware = {
         const text = await request.text()
         sent.push({ method: request.method, path, body: text === '' ? null : (JSON.parse(text) as unknown) })
         if (request.method === 'GET') {
-            return listed ?? Response.json({ models: LISTED, error: null })
+            return listed ?? Response.json({ models: LISTED, variants: {}, error: null })
         }
         return answer ?? Response.json(CHOSEN)
     },
@@ -109,9 +130,14 @@ async function offered(list: HTMLElement): Promise<HTMLElement[]> {
     return options.filter((o) => !top?.contains(o) && !['Clear the override', 'Read again'].includes(o.textContent))
 }
 
+/** What an option says: its label, as a model's variant under it has, else its text. */
+function said(o: HTMLElement): string | null {
+    return o.getAttribute('aria-label') ?? o.textContent
+}
+
 /** What an option says, whether it is checked, and whether it is disabled. */
 function readOption(o: HTMLElement): [string | null, string | null, string | null] {
-    return [o.textContent, o.getAttribute('aria-checked'), o.getAttribute('aria-disabled')]
+    return [said(o), o.getAttribute('aria-checked'), o.getAttribute('aria-disabled')]
 }
 
 describe('TicketModels', () => {
@@ -159,7 +185,7 @@ describe('TicketModels', () => {
     })
 
     it('groups a long list by provider and narrows it to the ids holding what is typed', async () => {
-        listed = Response.json({ models: MANY, error: null })
+        listed = Response.json({ models: MANY, variants: {}, error: null })
         renderModels()
         const list = openPicker('reviewer model: runtime default')
         expect(await offered(list)).toHaveLength(200)
@@ -228,7 +254,14 @@ describe('TicketModels', () => {
     })
 
     it('clears an override standing, as --clear does, and saves nothing for the override chosen again', async () => {
-        answer = Response.json({ agent: 'worker', model: null, source: 'default', variant: null, last_served: null })
+        answer = Response.json({
+            agent: 'worker',
+            model: null,
+            source: 'default',
+            variant: null,
+            dropped_variant: null,
+            last_served: null,
+        })
         renderModels()
         let list = openPicker('worker model: acme/deep-2')
         expect(readOption(pinned(list))).toEqual(["acme/deep-2this ticket's override", 'true', 'false'])
@@ -254,7 +287,7 @@ describe('TicketModels', () => {
     })
 
     it('says in the failure color why the list could not be read, offers no model, and reads it again', async () => {
-        listed = Response.json({ models: [], error: '`opencode models` exited 1' })
+        listed = Response.json({ models: [], variants: {}, error: '`opencode models` exited 1' })
         renderModels()
         const list = openPicker('worker model: acme/deep-2')
         expect(await within(list).findByText('Could not read its models: `opencode models` exited 1')).toBeDefined()
@@ -272,7 +305,16 @@ describe('TicketModels', () => {
     })
 
     it('shows a model the runtime no longer lists checked but not offered, its trigger marked', async () => {
-        renderModels([{ agent: 'worker', model: 'acme/gone-1', source: 'ticket', variant: null, last_served: null }])
+        renderModels([
+            {
+                agent: 'worker',
+                model: 'acme/gone-1',
+                source: 'ticket',
+                variant: null,
+                dropped_variant: null,
+                last_served: null,
+            },
+        ])
         // Nothing is known gone until the list is read.
         expect(screen.getByRole('button', { name: 'worker model: acme/gone-1' })).toBeDefined()
         const list = openPicker('worker model: acme/gone-1')
@@ -294,26 +336,92 @@ describe('TicketModels', () => {
         ).toBeDefined()
     })
 
-    it("offers config's model at a variant as the model alone, since an override names no variant", async () => {
-        renderModels([
-            {
-                agent: 'planner',
-                model: 'acme/fast-1@high',
-                source: 'config',
-                variant: 'high',
-                last_served: 'acme/fast-1',
-            },
+    it("offers each model's variants under it, and sets the override to one, as canopy model does", async () => {
+        listed = Response.json({ models: LISTED, variants: VARIANTS, error: null })
+        answer = Response.json({ ...CHOSEN, model: 'acme/deep-2@high', variant: 'high' })
+        renderModels()
+        const list = openPicker('reviewer model: runtime default')
+        const options = await offered(list)
+        expect(options.map((o) => said(o))).toEqual([
+            'acme/fast-1',
+            'acme/deep-2',
+            'acme/deep-2@high',
+            'acme/deep-2@low',
         ])
-        // What served it is the model alone, which is the one its row names.
-        expect(screen.getByTestId('ticket-model').textContent).toBe('acme/fast-1@high[runtime.models]')
-        const list = openPicker('planner model: acme/fast-1@high')
+        // Each variant under its model, which it names to the eye no more.
+        expect(options.at(-1)?.textContent).toBe('@low')
+        // What is typed finds a variant, and keeps its model above it.
+        fireEvent.change(field('reviewer'), { target: { value: 'high' } })
+        expect((await offered(list)).map((o) => said(o))).toEqual(['acme/deep-2', 'acme/deep-2@high'])
+        fireEvent.click(within(list).getByRole('option', { name: 'acme/deep-2@high' }))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            "saved: ABC-1's reviewer runs use acme/deep-2@high from their next run: this ticket's override.",
+        )
+        expect(sent.at(-1)).toEqual({
+            method: 'POST',
+            path: '/api/tickets/ABC-1/models',
+            body: { agent: 'reviewer', model: 'acme/deep-2@high' },
+        })
+    })
+
+    it("shows config's model at its variant, checked at that variant, and takes it whole as the override", async () => {
+        listed = Response.json({ models: LISTED, variants: VARIANTS, error: null })
+        answer = Response.json({ ...AT_HIGH, source: 'ticket' })
+        renderModels([AT_HIGH])
+        // What served it is the model alone, or at the variant, either of which its row names.
+        expect(screen.getByTestId('ticket-model').textContent).toBe('acme/deep-2@high[runtime.models]')
+        const list = openPicker('planner model: acme/deep-2@high')
         expect((await offered(list)).map((o) => readOption(o))).toEqual([
-            ['acme/fast-1', 'true', 'false'],
+            ['acme/fast-1', 'false', 'false'],
             ['acme/deep-2', 'false', 'false'],
+            ['acme/deep-2@high', 'true', 'false'],
+            ['acme/deep-2@low', 'false', 'false'],
         ])
-        expect(readOption(pinned(list))).toEqual(["acme/fast-1@highconfig's, with a variant", 'true', 'true'])
-        // Its model is listed, so its next run goes ahead: the trigger is not marked.
-        expect(screen.getByRole('button', { name: 'planner model: acme/fast-1@high', hidden: true })).toBeDefined()
+        expect(readOption(pinned(list))).toEqual(['acme/deep-2@high[runtime.models]', 'true', 'false'])
+        fireEvent.click(pinned(list))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            "saved: ABC-1's planner runs use acme/deep-2@high from their next run: this ticket's override.",
+        )
+        expect(sent.at(-1)?.body).toEqual({ agent: 'planner', model: 'acme/deep-2@high' })
+    })
+
+    it("says an override naming no variant sets config's aside, as canopy model does", async () => {
+        listed = Response.json({ models: LISTED, variants: VARIANTS, error: null })
+        answer = Response.json({
+            ...AT_HIGH,
+            model: 'acme/deep-2',
+            source: 'ticket',
+            variant: null,
+            dropped_variant: 'high',
+        })
+        renderModels([AT_HIGH])
+        const list = openPicker('planner model: acme/deep-2@high')
+        fireEvent.click(await within(list).findByRole('option', { name: 'acme/deep-2' }))
+        const status = await screen.findByRole('status')
+        expect(within(status).getByText("ABC-1's", { exact: false }).textContent).toBe(
+            ": ABC-1's planner runs use acme/deep-2 from their next run: this ticket's override (config's variant " +
+                '`high` no longer applies).',
+        )
+        // Said to the eye too, beside `saved`.
+        expect(status.textContent).toMatch(/\(config's variant high no longer applies\)$/u)
+    })
+
+    it('marks a variant the runtime no longer lists for its model, as a model no longer listed', async () => {
+        listed = Response.json({ models: LISTED, variants: { 'acme/deep-2': ['low'] }, error: null })
+        renderModels([AT_HIGH])
+        const list = openPicker('planner model: acme/deep-2@high')
+        await offered(list)
+        expect(readOption(pinned(list))).toEqual([
+            'acme/deep-2@highvariant no longer listed; its next run is refused',
+            'true',
+            'true',
+        ])
+        expect(
+            screen.getByRole('button', {
+                name: 'planner model: acme/deep-2@high, variant no longer listed; its next run is refused',
+                hidden: true,
+            }),
+        ).toBeDefined()
     })
 
     it('shows the model being saved on its button, marked pending, until the server answers', async () => {

@@ -576,6 +576,12 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
         'aria-checked',
         'true',
     )
+    // Each model's variants are offered under it, as `canopy model KEY MODEL@VARIANT` takes one.
+    await list.getByRole('option', { name: `${model}@high`, exact: true }).click()
+    await expect(worker.getByRole('status')).toHaveText(
+        `saved: ABC-104's worker runs use ${model}@high from their next run: this ticket's override.`,
+    )
+    await models.getByRole('button', { name: `worker model: ${model}@high` }).click()
     await page.getByRole('combobox', { name: 'Find a model for the worker' }).fill('no such model')
     await expect(list.getByText('no model has that name')).toBeVisible()
     await page.getByRole('option', { name: 'Clear the override' }).click()

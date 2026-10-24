@@ -247,8 +247,8 @@ def test_canopy_model_refuses_a_model_not_listed_an_unknown_agent_and_inside_a_r
     )
     variant = scenario.operator("model", KEY, f"{OTHER}@high", code=1).err
     assert variant == (
-        f"Error: model refused (unknown_model): name the model alone, {OTHER}, not a variant of it: a ticket's "
-        "override chooses no variant\n"
+        f"Error: model refused (unknown_model): OpenCode lists the model {OTHER} but not its variant high (it lists "
+        "none for it): name one it lists, or the model alone\n"
     )
     # The overseer and chores work on no one ticket, so take only their model in [runtime.models].
     unknown = scenario.operator("model", KEY, OTHER, "--agent", "overseer", code=2).err
@@ -269,6 +269,54 @@ def test_canopy_model_refuses_a_model_not_listed_an_unknown_agent_and_inside_a_r
         "`opencode models` exited 1\n"
     )
     assert scenario.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
+
+
+def test_an_override_at_a_variant_reaches_the_tickets_runs_and_one_naming_none_drops_configs(
+    scenario: Scenario,
+    opencode_state: Path,
+    agent_log: Path,
+    git_pool: GitPool,
+) -> None:
+    """The canary of an effort: config's model at `high`, one ticket's at `low`, then at the model's default."""
+    listed(opencode_state, MODEL, OTHER, variants={MODEL: ["low", "high"]})
+    scenario.configures(runtime={"models": {"worker": f"{MODEL}@high"}})
+    said = scenario.operator("model", KEY, f"{MODEL}@low").out
+    assert said == f"{KEY}'s worker runs use {MODEL}@low from their next run: this ticket's override.\n"
+    # The variants were read to look it up, as they are again when the run starts.
+    assert calls(opencode_state) == [(["models", "--verbose"], str(scenario.env.root))]
+    assert scenario.run(worker=pushes()).row["model"] == f"{MODEL}@low"
+    assert ran_on(agent_log) == f"{MODEL}@low"
+    err = scenario.operator("model", KEY, f"{MODEL}@max", code=1).err
+    assert err == (
+        f"Error: model refused (unknown_model): OpenCode lists the model {MODEL} but not its variant max (it lists "
+        "high, low): name one it lists, or the model alone\n"
+    )
+    # The override takes config's whole model: naming no variant runs at the model's default, and says so.
+    said = scenario.operator("model", KEY, MODEL).out
+    assert said == (
+        f"{KEY}'s worker runs use {MODEL} from their next run: this ticket's override (config's variant `high` no "
+        "longer applies).\n"
+    )
+    assert scenario.run(RESUME, worker=pushes()).row["model"] == MODEL
+    assert ran_on(agent_log) == MODEL
+    said = scenario.operator("model", KEY, "--clear").out
+    assert said == f"{KEY}'s worker runs use {MODEL}@high from their next run: [runtime.models].\n"
+
+
+def test_an_override_whose_variant_was_dropped_refuses_the_tickets_next_dispatch(
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    listed(opencode_state, MODEL, variants={MODEL: ["low", "high"]})
+    scenario.operator("model", KEY, f"{MODEL}@low")
+    listed(opencode_state, MODEL, variants={MODEL: ["high"]})
+    reason = (
+        f"OpenCode lists the model {MODEL} chosen for {KEY}'s worker runs (`canopy model {KEY}`) but not its variant "
+        "low (it lists high), and would run it at its default unseen; nothing ran. Choose a variant it lists"
+    )
+    assert scenario.refuses(dispatches()) == [("refused:model_missing", reason), ("attention:model_missing", reason)]
+    assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
 def test_an_override_whose_model_was_dropped_refuses_the_tickets_next_dispatch(
@@ -327,8 +375,15 @@ def calls(state: Path) -> list[tuple[list[str], str]]:
 
 
 def ran_on(agent_log: Path, agent: str = "canopy-worker") -> str | None:
-    """The model the definition of the latest run of `agent` names, as it loaded it; None when it names none."""
+    """The model the definition of the latest run of `agent` names, as it loaded it; None when it names none.
+
+    A variant it names follows the model's id after an `@`, as config spells it.
+    """
     run = [r for r in agent_runs(agent_log) if f"--agent {agent}" in " ".join(r["argv"])][-1]
     text = (Path(run["env"]["OPENCODE_CONFIG_DIR"]) / "agents" / f"{agent}.md").read_text()
     found = [line for line in text.splitlines() if line.startswith("model: ")]
-    return json.loads(found[0].removeprefix("model: ")) if found else None
+    variant = [line for line in text.splitlines() if line.startswith("variant: ")]
+    if not found:
+        return None
+    model = json.loads(found[0].removeprefix("model: "))
+    return f"{model}@{json.loads(variant[0].removeprefix('variant: '))}" if variant else model

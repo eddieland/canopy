@@ -165,16 +165,19 @@ The override holds for every run of that agent on this ticket, a `resume` after 
 asked for while it works, then the model that served it, and both when they differ, on its page and in the ticket's
 Runs panel, so a canary ticket reads straight down the panel and you can check the canary actually sang.
 
-An override names the model alone. If your config runs an agent at a variant, such as `openai/gpt-5@high`, the
-picker pins it greyed out as **config's, with a variant**, and offers `openai/gpt-5` itself: the variant, a reasoning
-effort,
-stays your config's to choose.
+Under each model sit the variants the runtime lists for it, `@high` and the like for a reasoning effort, so the canary
+you most likely want first, the same model at another effort, is one pick away, as `canopy model KEY
+openai/gpt-5@high` sets it; type `high` to see every model that has one. A variant on the button follows the model's
+id, muted. An override replaces your config's model whole, variant included: over a config of `openai/gpt-5@high`,
+picking `openai/gpt-5` itself runs it at the model's default, and the confirmation says config's variant no longer
+applies, lest the canary come back mysteriously cheaper and you credit the model.
 
 The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
 override names drops off the runtime's list before the next run, that run is refused rather than sent to another
 model, and the ticket lands on your attention list as `model_missing`, broken, with these same pickers under it. The
 picker sees it first: once it has read the list, the agent's button turns amber and the pinned model shows greyed out
-as **no longer listed**. Pick another, or set its provider up again.
+as **no longer listed**, or **variant no longer listed** for a variant the model lost. Pick another, or set its
+provider up again.
 
 ## Attaching files
 
