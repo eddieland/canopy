@@ -17,7 +17,7 @@ import { PersonaField } from '@/components/persona-field'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { Notice } from '@/components/notice'
-import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
+import { FindingCard, HELD, ReviewDiffPanels } from '@/components/review-diff'
 import type { Wanted } from '@/components/review-diff'
 import { ReviewDraftPanel, ReviewDraftState, ReviewPointCard } from '@/components/review-draft'
 import { RichText } from '@/components/rich-text'
@@ -445,6 +445,7 @@ function FindingRows({
                             {f.title}
                         </Link>
                         {f.dismissed && <Chip>{dismissedLabel(f)}</Chip>}
+                        {f.held && <Chip tone="blocked">{HELD}</Chip>}
                     </span>
                     <span className="font-mono text-xs text-muted-foreground">
                         {f.line === null ? (f.file === null ? 'not in the diff' : 'on its file') : 'on the diff'}

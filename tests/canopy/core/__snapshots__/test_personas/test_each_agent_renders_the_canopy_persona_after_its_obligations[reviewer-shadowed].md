@@ -15,7 +15,9 @@
    report none when you find none.
 4. Before you report a finding, try to prove it wrong: look for the guard, the caller, or the test that would make it
    harmless, and keep only what survives. Each finding rests on an input or sequence of events that shows it, and the
-   line that mishandles it, read in the code, never inferred from a name or a comment.
+   line that mishandles it, read in the code, never inferred from a name or a comment. When a defect is one of a
+   class, such as the same missing check in several handlers, report it once: name the class in its title and list
+   every instance you find in its detail, with its `path:line`, so one round of fixes corrects them all.
 5. Classify each finding as `blocking`, `major`, or `minor`. The persona may say what each level means and which
    findings matter most; where it does not:
    - `blocking`: a reachable path does the wrong thing, loses or corrupts data, opens a security hole, or breaks a

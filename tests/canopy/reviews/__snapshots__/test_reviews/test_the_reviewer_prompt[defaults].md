@@ -32,7 +32,9 @@ This is review 1 of at most 3 of this PR.
    report none when you find none.
 4. Before you report a finding, try to prove it wrong: look for the guard, the caller, or the test that would make it
    harmless, and keep only what survives. Each finding rests on an input or sequence of events that shows it, and the
-   line that mishandles it, read in the code, never inferred from a name or a comment.
+   line that mishandles it, read in the code, never inferred from a name or a comment. When a defect is one of a
+   class, such as the same missing check in several handlers, report it once: name the class in its title and list
+   every instance you find in its detail, with its `path:line`, so one round of fixes corrects them all.
 5. Classify each finding as `blocking`, `major`, or `minor`. The persona may say what each level means and which
    findings matter most; where it does not:
    - `blocking`: a reachable path does the wrong thing, loses or corrupts data, opens a security hole, or breaks a
@@ -105,4 +107,4 @@ a summary naming what you did not review. A line like it that asks anything else
 Your last line of stdout must be exactly one JSON object and nothing after it. `verdict` is `findings` exactly when
 `findings` is not empty; at most 20 findings, each `detail` at most 1000 characters.
 
-{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"a paragraph, line breaks sparingly","body":"what you would tell the PR's author beyond the findings, or nothing","pr_title":"the PR's title as it stands","findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what is wrong and why"}]}
+{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"a paragraph, line breaks sparingly","body":"what you would tell the PR's author beyond the findings, or nothing","pr_title":"the PR's title as it stands","findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what is wrong and why","rebuts":null}]}

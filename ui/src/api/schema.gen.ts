@@ -3702,6 +3702,11 @@ export type components = {
          */
         FeedbackPlanStatusName: "waiting" | "stale" | "approved" | "spent";
         /**
+         * @description What a resumed worker answered of a review's finding (DESIGN §21).
+         * @enum {string}
+         */
+        FindingAnswerName: "fixed" | "declined";
+        /**
          * @description How much a review finding matters (DESIGN §21).
          * @enum {string}
          */
@@ -5961,6 +5966,13 @@ export type components = {
          *     Both are None when the diff does not show the file; `line` alone is None when it does not show the line.
          */
         ReviewFinding: {
+            /** @description What the latest worker handed it answered: `fixed` or `declined`; None when none answered it. */
+            answer: components["schemas"]["FindingAnswerName"] | null;
+            /**
+             * Answer Reason
+             * @description The worker's reason for its answer, in its words: untrusted text. None when it gave none.
+             */
+            answer_reason: string | null;
             /**
              * Detail
              * @description Its detail, as the reviewer wrote it: untrusted text.
@@ -5979,6 +5991,13 @@ export type components = {
              * @description The index in the diff's files of the file it is in; None when the diff does not show it.
              */
             file: number | null;
+            /**
+             * Held
+             * @description Whether canopy holds it for the operator, a rebuttal of a worker's decline: no worker gets it until they send it
+             *     (DESIGN §21).
+             * @default false
+             */
+            held: boolean;
             /**
              * Line
              * @description The line it is on, on the new side; None when the diff does not show it.

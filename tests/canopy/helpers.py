@@ -83,6 +83,7 @@ PROMPT_VALUES = {
     "OPERATOR_MESSAGES": None,
     "PREVIOUS_RUNS": None,
     "REVIEW_FINDINGS": None,
+    "REVIEW_ANSWERS": "",
     "PLAN": None,
     "REASONS": "- `review`: review comments to address.",
     "FOLLOW_UPS": prompts.follow_ups("PROJ-1", 5, ["repo"], needs_human="needs-human", labels=["agent-ready-alice"]),

@@ -50,6 +50,7 @@ from canopy.core import (
     plans,
     pools,
     replies,
+    review_answers,
     review_diff,
     run_models,
     run_offers,
@@ -191,6 +192,8 @@ class Outcome:
     drafts: drafts.Fields | None = None
     #: The follow-up tickets the worker reported, checked: those to record, and those refused (DESIGN §18).
     follow_ups: follow_ups.Checked | None = None
+    #: What a resume's worker answered of the review findings it was handed, checked (DESIGN §21).
+    answers: review_answers.Checked | None = None
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11).
@@ -291,11 +294,14 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     """Write what the run reported beside its result, in the transaction that closes it.
 
     That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), with the event that tells the sinks of
-    them, so a run reconcile closed first writes none.
+    them, so a run reconcile closed first writes none. So are its answers to review findings (§21), but only from a
+    run that ended `done` or `blocked`: one that did not finish its work cannot say what it fixed.
     """
     run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
     drafts.record_run(ctx.conn, run_id, outcome.drafts)
+    if outcome.status in (RunStatus.DONE, RunStatus.BLOCKED):
+        review_answers.record(ctx.conn, run_id, outcome.answers)
     if outcome.follow_ups is not None and outcome.follow_ups.recorded:
         key = str(run["ticket_key"])
         recorded = follow_ups.record(ctx.conn, outcome.follow_ups, parent=key, run_id=run_id)
@@ -757,6 +763,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     # a side output must not cost the run its PRs (DESIGN §18).
     filed = _check_follow_ups(ctx, run, follow_ups.parse(text)) if parsed is not None else None
     filed_note = filed.note() if filed is not None else ""
+    answered = _check_answers(ctx, run, text) if parsed is not None else None
+    answered_note = answered.note() if answered is not None else ""
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
@@ -794,8 +802,17 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         committed += checkpoint.unmarked(slot.git, branch, start, slot.base, marks)
     _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
-    notes = "; ".join(n for n in [note, *committed, filed_note] if n)
-    return Outcome(status, parsed, notes, memory=remembered, head=head, drafts=drafted, follow_ups=filed)
+    notes = "; ".join(n for n in [note, *committed, filed_note, answered_note] if n)
+    return Outcome(
+        status,
+        parsed,
+        notes,
+        memory=remembered,
+        head=head,
+        drafts=drafted,
+        follow_ups=filed,
+        answers=answered,
+    )
 
 
 def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow_ups.Checked:
@@ -811,6 +828,17 @@ def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow
         repos={r.name for r in ctx.workspace.repos},
         limit=ctx.config.policy.max_follow_ups,
     )
+
+
+def _check_answers(ctx: Context, run: sqlite3.Row, text: str) -> review_answers.Checked | None:
+    """Check the answers a worker gave to the review findings it was handed, which only a resume is (DESIGN §21).
+
+    Returns:
+        The answers to record when the run is closed, and those refused; None for a run of another kind.
+    """
+    if run["kind"] != RunKind.RESUME:
+        return None
+    return review_answers.check(ctx.conn, review_answers.parse(text), key=str(run["ticket_key"]))
 
 
 def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:

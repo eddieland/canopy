@@ -155,6 +155,9 @@ describe('dismissedLabel', () => {
             file: null,
             line: null,
             dismissed: true,
+            held: false,
+            answer: null,
+            answer_reason: null,
         }
         expect(dismissedLabel({ ...finding, dismissed_reason: 'not_worth_it' })).toBe('dismissed: not worth it')
         expect(dismissedLabel({ ...finding, dismissed_reason: null })).toBe('dismissed')

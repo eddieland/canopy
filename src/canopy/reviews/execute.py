@@ -12,6 +12,7 @@ revises (`review_revisions.revised`) before its run closes, so a publish waiting
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import os
 import shutil
@@ -30,6 +31,7 @@ from canopy.core import (
     outbox,
     pools,
     progress,
+    review_answers,
     review_diff,
     review_drafts,
     review_revisions,
@@ -119,7 +121,8 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             clean_up(ctx, run, log)
             stored = outcome.result_json()
             ended = outbox.review_ended(ctx.config, run, outcome.status, stored)
-            if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended):
+            hold = functools.partial(_hold_rebuttals, ctx, run, outcome, log)
+            if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended, then=hold):
                 log.warning("review run was already closed; its outcome is not recorded", extra=fields)
             else:
                 if isinstance(outcome.result, result.ReviewResult) and outcome.result.pr_title:
@@ -137,6 +140,14 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             log.info("review run finished", extra={**fields, "status": outcome.status})
             run_models.read_ended(ctx, "review_runs", run_id, log)
     return outcome
+
+
+def _hold_rebuttals(ctx: Context, run: records.ReviewRun, outcome: Outcome, log: logs.TickAdapter) -> None:
+    """Hold for the operator a `done` review's rebuttals of findings a worker declined, as the run closes (§21)."""
+    if outcome.status is ReviewRunStatus.DONE and isinstance(outcome.result, result.ReviewResult):
+        held = review_answers.hold_rebuttals(ctx.conn, run, outcome.result)
+        if held:
+            log.info("rebuttals held for the operator", extra={"review_run_id": run.id, "findings": held})
 
 
 def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:

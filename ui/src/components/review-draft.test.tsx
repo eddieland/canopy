@@ -446,6 +446,9 @@ function carolFindings(fields: Partial<ReviewFinding>[] = []): ReviewFinding[] {
         line,
         dismissed: false,
         dismissed_reason: null,
+        held: false,
+        answer: null,
+        answer_reason: null,
         ...fields[n - 1],
     })
     return [at(15, 1), at(9, 2), at(null, 3)]

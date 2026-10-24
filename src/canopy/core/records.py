@@ -38,7 +38,9 @@ from canopy.core.vocab import (
     DraftKind,
     DraftStance,
     DraftStatus,
+    FindingAnswer,
     GcPassStatus,
+    HoldKind,
     MemoryAuthor,
     MemoryCited,
     MemoryMode,
@@ -1474,6 +1476,38 @@ class ReviewDismissal(Row):
     channel: str
     #: Why the operator dismissed it; None for a dismissal from before canopy asked.
     reason: DismissalReason | None
+
+
+@dataclass(frozen=True)
+class ReviewAnswer(Row):
+    """What a resumed worker answered of one of a review's findings (DESIGN §21): the worker's words, untrusted."""
+
+    TABLE: ClassVar[str] = "review_answers"
+
+    run_id: int
+    review_run_id: int
+    finding: int
+    answer: FindingAnswer
+    #: Why it declined, or what it says of a fix; None for a fix it said nothing of.
+    reason: str | None
+
+
+@dataclass(frozen=True)
+class ReviewHold(Row):
+    """A review's finding the harness holds for the operator: it reaches no worker until they send it (DESIGN §21)."""
+
+    TABLE: ClassVar[str] = "review_holds"
+
+    review_run_id: int
+    finding: int
+    kind: HoldKind
+    #: The earlier review run, and its finding, that a rebuttal answers.
+    rebuts_run_id: int | None
+    rebuts_finding: int | None
+    held_at: str
+    #: When the operator sent it to a worker, and through which channel; None while it is held.
+    released_at: str | None
+    released_channel: str | None
 
 
 @dataclass(frozen=True)
