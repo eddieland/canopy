@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictStr, model_validator
 
 from canopy.core import contract
 from canopy.core.contract import bounded, one_line
@@ -23,6 +23,12 @@ MAX_REVISED_TEXT = 4000
 MAX_REVISED_COMMENTS = 30
 
 
+def _finding_number(value: object) -> object:
+    """Return `value` if it is a finding's number, else None: a malformed `rebuts` drops, never the finding with it."""
+    is_number = isinstance(value, int) and not isinstance(value, bool) and 0 < value <= MAX_FINDINGS
+    return value if is_number else None
+
+
 class Finding(BaseModel):
     """One defect the reviewer verified against the code."""
 
@@ -33,6 +39,9 @@ class Finding(BaseModel):
     location: Annotated[StrictStr, one_line, bounded(MAX_LOCATION)] = ""
     # What is wrong and why, for the worker that fixes it: the review is posted nowhere else (DESIGN §21).
     detail: Annotated[StrictStr, bounded(MAX_DETAIL)] = ""
+    #: The number, in the previous review, of a finding the worker declined that this one rebuts: the reviewer's claim,
+    #: which the harness holds the finding for the operator on only when the worker did decline it (DESIGN §21).
+    rebuts: Annotated[int | None, BeforeValidator(_finding_number)] = None
 
 
 class ReviewResult(BaseModel):
@@ -120,7 +129,7 @@ CONTRACT = (
     '"body":"what you would tell the PR\'s author beyond the findings, or nothing",'
     '"pr_title":"the PR\'s title as it stands",'
     '"findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line",'
-    '"detail":"what is wrong and why"}]}'
+    '"detail":"what is wrong and why","rebuts":null}]}'
 )
 REVISION_CONTRACT = (
     '{"status":"done|failed","body":"the review\'s body, or why you could not revise",'

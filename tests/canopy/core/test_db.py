@@ -25,8 +25,9 @@ from tests.conftest import Journals
 # the companion's name, which is the one conflict worth having.
 COMPANIONS = Path(__file__).parent / "migrations"
 HASH = re.compile(r"-- sha256 of (\S+): ([0-9a-f]{64})\n")
-#: The tables a migration means to delete rows of, by its version: 0069 deletes the found reads, to read them again.
-DELETES: Mapping[int, AbstractSet[str]] = {69: frozenset({"run_model_reads"})}
+#: The tables a migration means to delete rows of, by its version: 0069 deletes the found reads, to read them again,
+#: and 0088 those of the runs more than one model served.
+DELETES: Mapping[int, AbstractSet[str]] = {69: frozenset({"run_model_reads"}), 88: frozenset({"run_model_reads"})}
 
 
 def companion(number: int) -> str:

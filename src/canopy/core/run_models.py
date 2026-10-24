@@ -3,14 +3,15 @@
 The runtime prints no event naming the model a call went to, so a run's session is read once the run has ended: by the
 process that ran it, as it closes the run (`read_ended`), and for a run that leaves it unread, by the loop while it
 waits between ticks (`canopy.loop.models`). What a read found is recorded here: each model's replies and their cost
-(`run_models`), and how the read ended (`run_model_reads`). `due` is what to read next: runs never read, the newest
-first, then failed ones again.
+(`run_models`), the model of each reply of a run more than one model served (`run_reply_models`), and how the read
+ended (`run_model_reads`). `due` is what to read next: runs never read, the newest first, then failed ones again.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal
 
 from canopy.core import db, records, sql
@@ -19,7 +20,7 @@ from canopy.runtime import session_models
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Sequence
+    from collections.abc import Collection, Mapping, Sequence
 
     from canopy.core.context import Context
     from canopy.infra import logs
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
 #: task's run.
 type RunTable = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
 _TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs")
+#: No reply's model, for a read that found none, or that did not find the session.
+_NO_REPLIES: Mapping[str, str] = MappingProxyType({})
 #: How long a failed read waits before it is tried again, and how many reads a run gets in all.
 RETRY_AFTER = timedelta(days=1)
 MAX_ATTEMPTS = 3
@@ -99,7 +102,7 @@ def read(ctx: Context, run: Due, log: logs.TickAdapter) -> ModelsRead:
     """
     found = session_models.read(ctx.runner, cwd=ctx.repo_root, session_id=run.session_id)
     status = ModelsRead(found.outcome)
-    record(ctx.conn, run, status, found.models, error=found.error)
+    record(ctx.conn, run, status, found.models, error=found.error, replies=found.replies)
     if status is ModelsRead.FAILED:
         log.warning(
             "could not read which models served a run",
@@ -115,22 +118,32 @@ def record(
     models: Sequence[ModelUse] = (),
     *,
     error: str | None = None,
+    replies: Mapping[str, str] = _NO_REPLIES,
 ) -> None:
     """Record how reading `run`'s session ended, and the models it found, in place of any read before.
 
-    Only a read that found the session replaces the models a read before found. One that finds it missing keeps them,
-    as found, since the runtime dropped what canopy read; one that fails keeps them till a read again finds it.
+    `replies` is the model of each reply, by its message, of a session more than one model served.
+
+    Only a read that found the session replaces the models a read before found, and their replies'. One that finds it
+    missing keeps them, as found, since the runtime dropped what canopy read; one that fails keeps them till a read
+    again finds it.
     """
     with db.transaction(conn):
         kept = status is not ModelsRead.FOUND and bool(of_run(conn, run.run_table, run.run_id))
         if kept and status is ModelsRead.MISSING:
             status = ModelsRead.FOUND
         if not kept:
-            sql.execute(conn, sql.delete("run_models").where("run_table = ? AND run_id = ?", run.run_table, run.run_id))
+            for table in ("run_models", "run_reply_models"):
+                sql.execute(conn, sql.delete(table).where("run_table = ? AND run_id = ?", run.run_table, run.run_id))
             sql.execute_many(
                 conn,
                 sql.insert_rows("run_models", ("run_table", "run_id", "model", "replies", "cost_usd")),
                 [(run.run_table, run.run_id, m.model, m.replies, m.cost_usd) for m in models],
+            )
+            sql.execute_many(
+                conn,
+                sql.insert_rows("run_reply_models", ("run_table", "run_id", "message", "model")),
+                [(run.run_table, run.run_id, message, model) for message, model in replies.items()],
             )
         sql.execute(
             conn,
@@ -174,6 +187,16 @@ def of_runs(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int])
     for row in records.fetch_all(conn, records.RunModel, query):
         found[row.run_id].append(row)
     return found
+
+
+def replies_of(conn: sqlite3.Connection, table: RunTable, run_id: int) -> dict[str, str]:
+    """The model that wrote each reply of a run more than one model served, by the reply's message.
+
+    Returns:
+        Each reply's model; empty for a run one model served, and for one not read yet or read before canopy kept them.
+    """
+    query = sql.select("*").from_("run_reply_models").where("run_table = ? AND run_id = ?", table, run_id)
+    return {row.message: row.model for row in records.fetch_all(conn, records.RunReplyModel, query)}
 
 
 def reads_of(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]) -> dict[int, records.RunModelRead]:

@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, conversation, db, plans, sql, task_tickets, tasks
+from canopy.core import contract, conversation, db, plans, run_models, sql, task_tickets, tasks
 from canopy.core.vocab import RunStatus
 from canopy.serve import views
 from canopy.serve.schema.task import TaskDetail, TaskReport, TaskRun, TaskRunDetail, TaskSummary, TaskTicket
@@ -142,7 +142,8 @@ def task_run_transcript(ctx: Context, task_id: int, run_id: int) -> Transcript |
     if row is None:
         return None
     log = Path(row.log_path)
-    return session_transcript(log, row.session_id, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
+    removed = removed_after(ctx.conn, log, row.ended_at, "run_files_days")
+    return session_transcript(log, row.session_id, removed, run_models.replies_of(ctx.conn, "task_runs", run_id))
 
 
 def task_report(ctx: Context, task_id: int, run_id: int) -> TaskReport | None:

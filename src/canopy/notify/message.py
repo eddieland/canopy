@@ -97,6 +97,11 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
         text = f"< review run {f.get('run')} of {f.get('pr')}{ticket} ended {f.get('status')}"
         findings = f.get("findings") or 0
         return _line(f"{text}: {verdict} ({findings} findings)" if verdict else text)
+    if kind == "reply.recorded":
+        return _line(f"+ {f.get('ticket')} your reply from Slack recorded: {f.get('body')}")
+    if kind == "reply.refused":
+        about = f" on {f.get('ticket')}" if f.get("ticket") else ""
+        return _line(f"! your reply from Slack{about} not recorded ({f.get('guard')}): {f.get('reason')}")
     if kind == "loop.failing":
         return (
             f"! loop failing: {f.get('count')} ticks in a row ended other than ok; latest tick {f.get('tick')} "
@@ -145,6 +150,8 @@ def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str |
         case "plan.proposed" | "plan.approved" if f.get("ticket"):
             # A feedback plan has no page of its own yet: its ticket's page is where its PRs are.
             return page(ui, "tickets", f["ticket"], *(() if f.get("feedback") else ("plan",)))
+        case "reply.recorded" if f.get("ticket"):
+            return page(ui, "tickets", f["ticket"])
         case "chore.ended" if f.get("chore") and f.get("run"):
             return page(ui, "chores", f["chore"], "runs", f["run"])
         case "review.ended" if f.get("run"):

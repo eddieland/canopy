@@ -122,12 +122,15 @@ to do with each, and the resume waits for you. The PR's page shows that plan und
 threads' panel.
 
 The panel says which run wrote it, when, and where it stands: `waiting` on you, `stale`, `approved`, or `spent` once a
-resume has gone ahead on it. Under that, a row for each item: its number, its id on GitHub, what the plan proposes
-(`change`, `decline`, `ask`, or `leave`), who wrote it, `trusted` if `trust.trusted_reviewers` names them, and where
-it is. On a thread, the thread's card carries the proposal too, as **Plan item N** above the drafts, with the reply
-the planner would draft. A review, or an item with no thread on this page, shows its proposed reply in its row
+resume has gone ahead on it. Under that, a row for each item: its number, the first line of what was said, and where
+it is, which is a link: **on its thread** jumps to the thread's card on this page, and **the review** opens the review
+on GitHub. Under that line, what the plan proposes (`change`, `decline`, `ask`, or `leave`), who wrote the item,
+`trusted` if `trust.trusted_reviewers` names them, the plan's first line on it, which is why it proposes that, and
+the item's id on GitHub. Enough to decide each row without leaving the panel; the full thread is one click away when
+it is not. On a thread, the thread's card carries the proposal too, as **Plan item N** above the drafts, with the
+reply the planner would draft. A review, or an item with no thread on this page, shows its proposed reply in its row
 instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it stands, as plain text, so an
-enthusiastic `<img>` in a coworker's comment stays a string of characters.
+enthusiastic `<img>` in a coworker's comment stays a string of characters, in the rows as in the file.
 
 A plan goes `stale` when the PR moves after it was written: a new comment or reply, an edit, a resolved thread, a new
 head, or a check that changed its mind. The panel lists each change, in the same words `canopy show` uses. The loop
@@ -164,9 +167,16 @@ becomes a refactor nobody asked for.
 Reviews are off while `capacity.max_reviews` is 0, and each commit is reviewed once in each persona chosen for it.
 
 A review of a new commit isn't starting from scratch: it reads canopy's last finished review of the PR, the summary
-and every finding you didn't dismiss, and checks whether each still holds. A finding the worker fixed stops coming back,
-and one it didn't is reported again. It still reads the whole change, though. Being told where the last reviewer
-looked is useful; being told where not to look is how a bug lives through three reviews.
+and every finding you didn't dismiss, and checks whether each still holds. It still reads the whole change, though.
+Being told where the last reviewer looked is useful; being told where not to look is how a bug lives through three
+reviews.
+
+The worker answers each finding it was handed, **fixed** or **declined** with its reason, and the next review reads
+the answers. A fixed finding that still holds comes back. A declined one comes back only if the reviewer can show the
+reason is wrong, and then as a rebuttal, which canopy holds for you: it starts no resume, the card says **held for
+you**, and the attention list raises `review rebuttal` on the ticket. Send it to a worker if the reviewer has the
+better of it, or dismiss it if the worker does. Two agents can disagree politely until the review limit runs out;
+this hands the disagreement to the one person who gets to settle it.
 
 The reviewer is its own agent, so give it another model than your workers', `runtime.models.reviewer` in your config
 (not a `--model` in its command, which canopy refuses, since it would override the choice unseen): a second model

@@ -905,3 +905,36 @@ def test_slack_links_each_item_and_event_to_its_page_in_the_web_ui() -> None:
 def test_a_page_that_is_not_a_plain_url_is_not_linked(page: object) -> None:
     added = [{"ticket": "P-1", "reason": "r", "ui": page}]
     assert _texts(slack.blocks({"repo": "/r/api", "attention": {"added": added}}))[1] == ":bell: *P-1* · r"
+
+
+def test_a_reply_from_slack_is_acknowledged_in_its_ticket_thread_and_a_refusal_under_the_message(
+    threaded: _Threaded,
+) -> None:
+    events = [
+        {"id": 1, "kind": "reply.recorded", "ticket": "PROJ-7", "message": 4, "ts": "1790.000050", "body": "go on"},
+        {
+            "id": 2,
+            "kind": "reply.refused",
+            "ticket": "PROJ-404",
+            "ts": "1790.000051",
+            "guard": "unknown",
+            "reason": "canopy has no record of PROJ-404",
+        },
+    ]
+    assert threaded(_delivery("2026-09-24T12:30:00Z", events)).exit_code == 0
+    # PROJ-7 had no thread: one is started for the acknowledgement. The refusal goes under the operator's own message,
+    # starting nothing: the key it names may be no ticket at all.
+    assert _posts() == [
+        (None, False, _starts("PROJ-7")),
+        ("1790.000001", False, [":speech_balloon: Your reply from Slack is on *PROJ-7*\n> *Reply:* go on"]),
+        (
+            "1790.000051",
+            False,
+            [
+                (
+                    ":no_entry_sign: canopy took nothing from this reply on *PROJ-404*: "
+                    "canopy has no record of PROJ-404\n_(unknown)_"
+                ),
+            ],
+        ),
+    ]

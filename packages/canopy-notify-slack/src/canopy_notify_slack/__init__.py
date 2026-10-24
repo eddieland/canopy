@@ -597,6 +597,21 @@ def _test(e: Mapping[str, object]) -> list[str]:
     return [f":test_tube: {_linked(e.get('text'))}"]
 
 
+def _reply_recorded(e: Mapping[str, object]) -> list[str]:
+    return [
+        f":speech_balloon: Your reply from Slack is on {_named(e.get('ticket'), e.get('title'))}",
+        _quote("Reply", e.get("body")),
+    ]
+
+
+def _reply_refused(e: Mapping[str, object]) -> list[str]:
+    on = f" on *{escape(e.get('ticket'))}*" if e.get("ticket") else ""
+    return [
+        f":no_entry_sign: canopy took nothing from this reply{on}: {_linked(e.get('reason'))}",
+        f"_({escape(e.get('guard'))})_",
+    ]
+
+
 # Each event kind's lines, the first naming what happened: the event's page in the web UI is linked after it.
 _EVENTS: dict[str, Callable[[Mapping[str, object]], list[str]]] = {
     "run.started": _run_started,
@@ -611,6 +626,8 @@ _EVENTS: dict[str, Callable[[Mapping[str, object]], list[str]]] = {
     "loop.recovered": _loop_recovered,
     "loop.sink_failing": _sink_failing,
     "loop.budget_reached": _budget_reached,
+    "reply.recorded": _reply_recorded,
+    "reply.refused": _reply_refused,
     "test": _test,
 }
 
@@ -842,6 +859,8 @@ BROADCASTS: Mapping[str, str] = {
 
 #: What a chore's findings' attention items name as their ticket, before the chore's name.
 _CHORE = "chore:"
+#: What `_thread` names a part answering the operator's own message by, before its `ts`: never a ticket's key.
+_ANSWER = "answer:"
 #: How many days, today's among them, the threads file keeps a thread: as far back as `canopy-connect-slack` reads.
 KEEP_DAYS = 7
 #: The threads file's format: 2 added each subject's earlier threads, which a sink that writes 1 drops.
@@ -1123,8 +1142,9 @@ def post_threaded(
 
     What is about a ticket or a review's PR goes in its thread for the day, which a post of its own starts in the
     channel, naming what the thread is about, before the first item. A reply stays in its thread, unless it holds one
-    of `broadcast` (`BROADCASTS` names them): then it is shown in the channel too. The rest, loop events, chores'
-    results, and the digest among it, is posted in the channel first, with the header.
+    of `broadcast` (`BROADCASTS` names them): then it is shown in the channel too. A reply canopy refused is answered
+    under the operator's own message, in no thread of the sink's. The rest, loop events, chores' results, and the
+    digest among it, is posted in the channel first, with the header.
 
     Returns:
         Whether Slack accepted every post, and its reply to the last one tried. The first refused post ends the
@@ -1136,8 +1156,9 @@ def post_threaded(
     day = _day(message.get("sent_at"))
     ok, reply = True, ""
     for part in split(message, threads.posted):
-        started = threads.threads.get(part.thread) if part.thread is not None else None
-        ts = started[1] if started is not None and started[0] == day else None
+        answered = _answered(part.thread)
+        started = threads.threads.get(part.thread) if part.thread is not None and answered is None else None
+        ts = answered or (started[1] if started is not None and started[0] == day else None)
         if part.thread is not None and ts is None:
             ok, reply = send(*_starter(part, message, day))
             if not ok:
@@ -1223,6 +1244,9 @@ def split(message: Mapping[str, object], skip: AbstractSet[str] = frozenset()) -
 
 def _thread(item: Mapping[str, object]) -> str | None:
     kind = item.get("kind")
+    answered = item.get("ts")
+    if kind == "reply.refused" and isinstance(answered, str) and _TS.fullmatch(answered):
+        return _ANSWER + answered
     if kind == "review.ended":
         return f"review:{item['pr']}" if item.get("pr") else None
     ticket = item.get("ticket")
@@ -1230,6 +1254,17 @@ def _thread(item: Mapping[str, object]) -> str | None:
     if kind == "chore.ended" or not ticket or str(ticket).startswith(_CHORE):
         return None
     return str(ticket)
+
+
+def _answered(thread: str | None) -> str | None:
+    """The `ts` of the operator's message a part answers, when it is one `_thread` names so, else None.
+
+    Returns:
+        The `ts`.
+    """
+    if thread is None or not thread.startswith(_ANSWER):
+        return None
+    return thread.removeprefix(_ANSWER)
 
 
 def _fingerprint(item: object) -> str:

@@ -336,7 +336,15 @@ export async function serveReview(
     await page.route('**/api/reviews/4', async (route) => {
         const response = await route.fetch()
         const body = (await response.json()) as Record<string, unknown>
-        await route.fulfill({ response, json: { ...body, findings, diff: { files, truncated: true } } })
+        // The fields the API sends every finding, as it sends them for one no one dismissed, held, or answered.
+        const sent = findings.map((f) => ({
+            dismissed_reason: null,
+            held: false,
+            answer: null,
+            answer_reason: null,
+            ...f,
+        }))
+        await route.fulfill({ response, json: { ...body, findings: sent, diff: { files, truncated: true } } })
     })
 }
 

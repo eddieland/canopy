@@ -463,6 +463,9 @@ export function feedbackPlanItem(fields: Partial<FeedbackPlanItem> = {}): Feedba
         author: 'alice',
         trusted: true,
         thread_id: 'PRRT_1',
+        excerpt: 'Can it move into a `finally`?',
+        rationale: 'Move it into a `finally`.',
+        url: 'https://github.com/acme/web/pull/88#discussion_r2468013579',
         ...fields,
     }
 }
@@ -496,6 +499,9 @@ export function feedbackPlan(fields: Partial<FeedbackPlan> = {}): FeedbackPlan {
                 proposal: 'leave',
                 reply: null,
                 thread_id: null,
+                excerpt: 'Two small things, then good to go.',
+                rationale: null,
+                url: 'https://github.com/acme/web/pull/88#pullrequestreview-4102337001',
             }),
             feedbackPlanItem(),
         ],

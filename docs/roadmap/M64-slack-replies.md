@@ -34,6 +34,13 @@ stages, in order, each in its own PRs.
   only `chat:write` and the one history scope its channel needs; whoever controls a listed Slack account resumes a
   ticket's worker as the operator). DESIGN §20's "Two-way, later" and §22's channels, and D035's rejected line, say
   the same. Its PR says what the change lets the loop do.
+- **Stage 3, mentions, and what came of them.** Asked for by the operator (2026-10-23): answer a ticket with no
+  thread. The reader also reads the channel for a top-level message an operator wrote that starts by mentioning the
+  app's bot user (`auth.test` names it), then a ticket's key, then the reply, and prints it as a `reply` line with
+  `via` `mention`, recorded as a thread's reply is; one naming no key prints with none. A `replies` event group:
+  `reply.recorded` for a mention, in the transaction that records it, and `reply.refused` for any operator's reply
+  canopy took nothing from, once per Slack message. The sink acknowledges a mention in the ticket's thread, starting
+  one, and answers a refusal under the operator's own message. TRUST_MODEL T1 says the same.
 - Not in this milestone: plans approved, tickets started or stopped, tasks, chores, or reviews answered from Slack;
   replies from people not listed, as data; a reply edited after it was recorded; Socket Mode; the overseer reading
   Slack through MCP.
@@ -56,10 +63,13 @@ operators = ["U0123ABCD"]  # Slack user ids whose thread replies are the operato
 Accept: the tests above. Live, on a real channel with the sink on `--threads`: a worker's question posts in its
 ticket's thread; the operator's reply there resumes the worker within `connect.every_minutes` of a waiting loop, with
 the reply as its instruction, recorded in the journal with the channel `slack`; a coworker's reply in the thread
-records nothing; a reply in the previous day's thread reaches its ticket.
+records nothing; a reply in the previous day's thread reaches its ticket; `@canopy KEY reply` on a ticket with no
+thread reaches it and is acknowledged in a thread the sink starts for it, and one naming a key canopy does not know is
+answered under the message with why.
 
 Status: in progress. Stage 1 is built (2026-10-23): `canopy-connect-slack` prints the replies people wrote in the
 sink's ticket threads, and the sink keeps a week of each ticket's threads. Stage 2 is built (2026-10-23): the `slack`
 source kind and its `operators`, a listed id's reply recorded as the operator's message on the channel `slack`, on the
-tick's and the poll's runs alike, none in a dry run; a thread Slack no longer has reads as one with no replies. The
-live check in Accept is next.
+tick's and the poll's runs alike, none in a dry run; a thread Slack no longer has reads as one with no replies. Stage 3
+is built (2026-10-23): a mention of canopy's bot answers any ticket canopy knows, and the `replies` events tell the
+operator in Slack what came of a mention or a refused reply. The live check in Accept is next.

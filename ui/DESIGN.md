@@ -746,22 +746,24 @@ sliver beside four others; and its axis names short call numbers without measuri
   while the operator is within a bubble's gap of it; scrolled away to read, it stays where they put it. A flip, or
   another ticket or chore, on its page or in the inbox, opens it at the newest end again.
 - **The runs page is a row per subject** (`SubjectRunsTable`, `subjectRuns` in `src/lib/run-state.ts`): every agent
-  canopy runs, a ticket's worker runs, a PR's reviews, and a chore's runs, in one list, so the operator sees where
-  the sessions go and what waits on what. A subject's row is its latest run, which says where it stands, and under it
-  `Show N earlier runs`, a `Disclosure` that opens the runs before it, newest first, each one line in the row's own
-  columns (a `ListRow` of the same kind): its state, its id, its chips, the first line of what it said in muted text
-  where the title is, cost, and when; the rest is on its run's page. A chore's earlier run is only its latest that
-  ended, under one running; its chore's page has the rest. The head line reads the state, the run's id (`run:41`,
-  `review:4`, or a chore run's `#2`), what it works for (the ticket's key, a review's ticket, the chore), its kind's
-  chips (`resume (ci)`, `review`, `chore`), and in the free column the ticket's title, or a review's PR, commit, and
-  verdict. What goes under it starts under the title. A ticket that asked, got its answer, and asked again is one
-  blocked row, not two. The kind and state filters keep each other, and the state filter goes by each subject's
-  latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing. `?model=`, which
-  By model links to, keeps the worker runs that model ran (`ranOn`) before they are grouped, and leaves out reviews and
-  chores, whose rows name no model; its filter shows in the header only once chosen, with `all` to take it off.
-  Under the page's description, a line counts what runs against each `[capacity]` limit as the harness counts it
-  (`workers 2 of 2`, reviews among them, and `chores` apart), a full one in `status-blocked` with `full`: the next
-  start of its kind waits for a run to end. A ticket's page lists its runs flat
+  canopy runs, a ticket's worker runs, a PR's reviews, a chore's runs, and a task's, in one list, so the operator sees
+  where the sessions go and what waits on what. A subject's row is its latest run, which says where it stands, and
+  under it `Show N earlier runs`, a `Disclosure` that opens the runs before it, newest first, each one line in the
+  row's own columns (a `ListRow` of the same kind): its state, its id, its chips, the first line of what it said in
+  muted text where the title is, cost, and when; the rest is on its run's page. A chore's earlier run is only its
+  latest that ended, under one running; its chore's page has the rest. A task shows its newest run alone; its task's
+  page has the rest. The head line reads the state, the run's id (`run:41`, `review:4`, a chore run's `#2`, or
+  `task:6#6`), what it works for (the ticket's key, a review's ticket, the chore, a task's repository), its kind's
+  chips (`resume (ci)`, `review`, `chore`, `task`), and in the free column the ticket's title, or a review's PR,
+  commit, and verdict. What goes under it starts under the title. A ticket that asked, got its answer, and asked again
+  is one blocked row, not two. The kind and state filters keep each other, and the state filter goes by each
+  subject's latest run, as do the rail's working runs: a blocked run a later one followed waits on nothing.
+  `?model=`, which By model links to, keeps the worker runs that model ran (`ranOn`) before they are grouped, and
+  leaves out reviews, chores, and tasks, whose rows name no model; its filter shows in the header only once chosen,
+  with `all` to take it off. Under the page's description, a line counts what runs against each `[capacity]` limit as
+  the harness counts it
+  (`workers 2 of 2`, reviews and task runs among them, and `chores` apart), a full one in `status-blocked` with
+  `full`: the next start of its kind waits for a run to end. A ticket's page lists its runs flat
   (`RunsTable`), since every row there is the same ticket's. A run's line of links names its first three worktrees,
   then `+N more worktrees` with every one in its tip, never `+1 more`, which would take the room the fourth's path
   does: a ticket across many repositories holds a slot in each, and its run's page lists them all. Beside its session
@@ -1443,18 +1445,23 @@ sliver beside four others; and its axis names short call numbers without measuri
   description.
   A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
   to the config: `Clear the override`, or `Use the default`.
-- **A choice of model** (`src/components/ticket-models.tsx`) is the same menu over the models the runtime lists, read
-  when it opens, in a row per agent laid out as the persona rows are: `worker model`, then the button, then where it
+- **A choice of model** (`src/components/ticket-models.tsx`) is a picker like the repository picker's, since a runtime
+  with a gateway behind it lists hundreds: an outline `xs` trigger opening the models the runtime lists, read when it
+  opens, grouped by provider under a field that keeps the ids holding what is typed, with the model chosen now pinned
+  in a `Chosen now` group at the top, its source in muted sans after it, and a check in the accent on it wherever it
+  sits, whatever sets it; the runtime's default is pinned disabled, a state rather than a choice. It is in a row per
+  agent laid out as the persona rows are: `worker model`, then the button, then where it
   comes from in muted `text-xs`, beside the persona rows once the Work panel is `@3xl`, so each agent's model is level
   with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
   is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
   `last served` names the model that served the agent's latest read run when it is not the button's. A choice saved
   is confirmed in its row, a `saved` in `status-done`, so nothing below moves, until the ticket's models change after
-  it. The menu offers only what the server would take: the model chosen now, when it is not one, is a disabled item
+  it. The picker offers only what the server would take: the model chosen now, when it is not one, is pinned disabled
   with why in muted text after it (`no longer listed; its next run is refused`, `config's, with a variant`), and a
   model gone from the list marks its
   trigger in `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
-  `Read again` item. While a choice saves, its trigger names it with a trailing `…` and is `aria-busy`; a refusal's
+  `Read again` item; `Clear the override` ends the list whatever is typed. While a choice saves, its trigger names it
+  with a trailing `…` and is `aria-busy`; a refusal's
   `Notice` names the agent before its guard.
 - **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, under the
   verbs at the foot of a ticket's or a task's conversation, beside the reply that says what to do with them: each file a
@@ -1615,8 +1622,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   PR's files on GitHub to finish it. Then, while its ticket has a current feedback plan (docs/design §32), a `Feedback
   plan` panel (`FeedbackPlanPanel`): `feedback-plan:N` and its status as a chip in its header (waiting and stale in
   `status-blocked`, approved as running, spent plain), a muted line of who planned it and what its status means, a
-  stale plan's changes in `status-blocked`, a row per item (a `Checkbox` until a resume spends it, its number and id,
-  its proposal as a chip, its author, `trusted`, where it is, and a reply no thread card shows, as `MemoryText`), and
+  stale plan's changes in `status-blocked`, a row per item (a `Checkbox` until a resume spends it, its number, the
+  first line of what was said as `MemoryText`, and where it is: `on its thread`, a router `Link` to the thread's card
+  by its `threadAnchor`, `the review`, a link out to it on its host, or the other PR it is on; under that, muted, its
+  proposal as a chip, its author, `trusted`, the plan's first line on it as `MemoryText`, and its id; and a reply no
+  thread card shows, under `Proposed reply`, as `MemoryText`), and
   in its foot the operator's words and `Approve whole` or `Approve N of M`, its command on hover, then a `Disclosure`
   of the plan's file as `MemoryText`. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a

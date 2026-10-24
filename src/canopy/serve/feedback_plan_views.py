@@ -50,10 +50,12 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
     reading = plans.read(path)
     who = feedback_plans.authors(conn, plan.id)
     trusted = ctx.config.trust.trusted_reviewers
+    why = feedback_plans.rationales(reading.text) if reading.text is not None else {}
     items: list[FeedbackPlanItem] = []
     for i in feedback_plans.items(conn, plan.id):
         author = who.get((i.pr_url, i.item, i.item_id))
         on_page = i.pr_url == url and i.item is ReviewItem.COMMENT
+        said = _said(conn, i)
         items.append(
             FeedbackPlanItem(
                 number=i.number,
@@ -66,6 +68,9 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
                 author=author,
                 trusted=author is not None and author in trusted,
                 thread_id=thread_of.get(i.item_id) if on_page else None,
+                excerpt=feedback_plans.first_line(said.body) if said is not None else None,
+                rationale=why.get(i.item_id),
+                url=said.url if said is not None else None,
             ),
         )
     return FeedbackPlan(
@@ -159,6 +164,21 @@ def _stands(plan: records.FeedbackPlan) -> Literal["waiting", "approved", "spent
             return "superseded"
         case _:
             assert_never(plan.status)
+
+
+def _said(conn: sqlite3.Connection, item: records.FeedbackPlanItem) -> records.ObservedReview | None:
+    """The review or comment an item is, as the `vcs` source last read it.
+
+    Returns:
+        Its row; None once a read no longer holds it.
+    """
+    return records.fetch_one(
+        conn,
+        records.ObservedReview,
+        sql.select("*")
+        .from_("observed_reviews")
+        .where("pr_url = ? AND item = ? AND id = ?", item.pr_url, item.item, item.item_id),
+    )
 
 
 def _status(plan: records.FeedbackPlan, *, stale: bool) -> Literal["waiting", "stale", "approved", "spent"]:

@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { Check } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { SubmitEvent } from 'react'
@@ -8,6 +9,7 @@ import type { FeedbackPlan, FeedbackPlanItem, FeedbackPlanStatus } from '@/api/t
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
 import { Textarea } from '@/components/input'
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
@@ -19,8 +21,10 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { feedbackPlanApprovedText } from '@/lib/outcomes'
+import { threadAnchor } from '@/lib/reviews'
 import { useSendKeys } from '@/lib/send-key'
 import type { Tone } from '@/lib/tone'
+import { cn } from '@/lib/utils'
 
 // A plan's status in its chip's color: one waiting on the operator, stale or not, as a waiting draft is; an approved
 // one as what the loop is about to act on; a spent one plain.
@@ -277,9 +281,10 @@ function command(key: string, choice: { items: number[]; leave: number[]; messag
 }
 
 /**
- * The plan's items, a row each: its box when `onTick` is given, its number, what it proposes, its author and whether
- * they are trusted, and where it is: its thread's card, which shows its proposed reply, or else the review or other PR
- * it is on, with that reply under the row.
+ * The plan's items, a row each: its box when `onTick` is given, its number, the first line of what was said, plain
+ * text, and where it is, a link to its thread's card, to the review on its host, or the other PR it is on; under
+ * that, what it proposes, its author and whether they are trusted, the plan's first line on it, and its id, muted.
+ * An item no thread card on the page shows carries its proposed reply, labelled as one, under the row.
  */
 function ItemRows({
     items,
@@ -301,30 +306,44 @@ function ItemRows({
                     className="flex flex-col gap-1 px-3 py-2 text-sm"
                     data-testid="feedback-plan-item"
                 >
-                    <span className="flex flex-wrap items-center gap-2">
+                    <span className="flex items-start gap-2">
                         {onTick !== undefined && (
                             <Checkbox
                                 aria-label={`address item ${item.number}`}
                                 checked={ticked?.has(item.number) ?? false}
                                 onCheckedChange={(checked) => onTick(item.number, checked === true)}
+                                className="mt-0.5"
                             />
                         )}
-                        <span className="readout text-xs text-muted-foreground">
-                            {item.number}. id {item.item_id}
+                        <span className="readout shrink-0 text-xs text-muted-foreground" title={`id ${item.item_id}`}>
+                            {item.number}.
                         </span>
+                        <span className="min-w-0 grow" data-testid="feedback-plan-said">
+                            {item.excerpt === null ? (
+                                <span className="text-muted-foreground">{nothingSaid(item)}</span>
+                            ) : (
+                                <MemoryText text={item.excerpt} />
+                            )}
+                        </span>
+                        <Where item={item} />
+                    </span>
+                    <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <Chip word={item.proposal} />
-                        <span className="font-medium">{item.author ?? 'no author recorded'}</span>
+                        <span className="font-medium text-foreground">{item.author ?? 'no author recorded'}</span>
                         {item.trusted && <Chip>trusted</Chip>}
                         {item.left_out && <Chip>left out</Chip>}
-                        <span
-                            className="ml-auto max-w-72 truncate font-mono text-xs text-muted-foreground"
-                            title={where(item)}
-                        >
-                            {where(item)}
-                        </span>
+                        {item.rationale !== null && (
+                            <span className="min-w-0" data-testid="feedback-plan-why">
+                                <MemoryText text={item.rationale} />
+                            </span>
+                        )}
+                        <span className="readout ml-auto">id {item.item_id}</span>
                     </span>
                     {item.thread_id === null && item.reply !== null && (
-                        <MemoryText text={item.reply} lines className="block text-muted-foreground" />
+                        <span className="flex flex-col gap-0.5" data-testid="feedback-plan-reply">
+                            <span className="panel-label">Proposed reply</span>
+                            <MemoryText text={item.reply} lines className="block text-muted-foreground" />
+                        </span>
                     )}
                 </li>
             ))}
@@ -332,10 +351,47 @@ function ItemRows({
     )
 }
 
-// Where an item is, for its row.
-function where(item: FeedbackPlanItem): string {
+// What a row says in place of an excerpt: a review that said nothing, or an item no read holds any more.
+function nothingSaid(item: FeedbackPlanItem): string {
+    return item.item === 'review' ? 'a review with no words' : 'no longer on the PR as read'
+}
+
+/**
+ * Where an item is: `on its thread`, a router link to the thread's card on this page (a bare `#` href would go to the
+ * root under the page's <base>); `the review`, opening it on its host; or the PR it is on, for one of another PR.
+ */
+function Where({ item }: { item: FeedbackPlanItem }) {
+    const look = 'ml-auto max-w-72 shrink-0 truncate text-xs'
     if (item.thread_id !== null) {
-        return 'on its thread'
+        return (
+            <Link
+                to="/pull-requests/pr"
+                search={{ url: item.pr_url }}
+                hash={threadAnchor(item.thread_id)}
+                className={cn(look, 'text-accent underline-offset-4 hover:underline')}
+            >
+                on its thread
+            </Link>
+        )
     }
-    return item.item === 'review' ? `the review ${item.item_id}` : `on ${item.pr_url}`
+    if (item.item === 'review') {
+        return item.url === null ? (
+            <span className={cn(look, 'font-mono text-muted-foreground')}>the review {item.item_id}</span>
+        ) : (
+            <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className={cn(look, 'inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline')}
+            >
+                the review
+                <LinkOutIcon href={item.url} />
+            </a>
+        )
+    }
+    return (
+        <span className={cn(look, 'font-mono text-muted-foreground')} title={item.pr_url}>
+            on {item.pr_url}
+        </span>
+    )
 }

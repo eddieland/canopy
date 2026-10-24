@@ -149,3 +149,8 @@ export function placeFindings(findings: ReviewFinding[], hasDiff: boolean): Plac
 export function findingAnchor(n: number): string {
     return `finding-${n}`
 }
+
+/** The id of a review thread's card on the PR's page, which a feedback plan's item links to, by the thread's id. */
+export function threadAnchor(id: string): string {
+    return `thread-${id}`
+}

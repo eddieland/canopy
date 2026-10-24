@@ -3653,6 +3653,12 @@ export type components = {
              */
             author: string | null;
             /**
+             * Excerpt
+             * @description The first line of what was said, cut short, as the `vcs` source last read it: plain text here, whoever wrote
+             *     it. None once no read holds it, or for a review that said nothing.
+             */
+            excerpt: string | null;
+            /**
              * Item
              * @description A review, or a review thread by the comment the plan covers.
              * @enum {string}
@@ -3681,6 +3687,12 @@ export type components = {
             /** @description What the plan proposes for it. */
             proposal: components["schemas"]["ProposalName"];
             /**
+             * Rationale
+             * @description The plan's first line on it, under its `### Item <id>` heading, cut short: the planner's words, plain text here.
+             *     None when the plan's file has no such heading, or nothing under it.
+             */
+            rationale: string | null;
+            /**
              * Reply
              * @description The reply the plan would draft, for a change or a decline: plain text here.
              */
@@ -3695,6 +3707,11 @@ export type components = {
              * @description Whether `trust.trusted_reviewers` names its author: shown to weigh it, never a gate (DESIGN §32).
              */
             trusted: boolean;
+            /**
+             * Url
+             * @description Where it is on its host, a review's page or a comment's, as the read observed it; None when none was read.
+             */
+            url: string | null;
         };
         /**
          * @description Where a feedback plan stands: waiting on the operator, waiting with its PRs changed since it was written, approved with no resume gone ahead on it, or spent by the resume that went ahead on it.
@@ -3724,6 +3741,11 @@ export type components = {
              */
             status: "waiting" | "approved" | "spent" | "superseded";
         };
+        /**
+         * @description What a resumed worker answered of a review's finding (DESIGN §21).
+         * @enum {string}
+         */
+        FindingAnswerName: "fixed" | "declined";
         /**
          * @description How much a review finding matters (DESIGN §21).
          * @enum {string}
@@ -5984,6 +6006,13 @@ export type components = {
          *     Both are None when the diff does not show the file; `line` alone is None when it does not show the line.
          */
         ReviewFinding: {
+            /** @description What the latest worker handed it answered: `fixed` or `declined`; None when none answered it. */
+            answer: components["schemas"]["FindingAnswerName"] | null;
+            /**
+             * Answer Reason
+             * @description The worker's reason for its answer, in its words: untrusted text. None when it gave none.
+             */
+            answer_reason: string | null;
             /**
              * Detail
              * @description Its detail, as the reviewer wrote it: untrusted text.
@@ -6002,6 +6031,13 @@ export type components = {
              * @description The index in the diff's files of the file it is in; None when the diff does not show it.
              */
             file: number | null;
+            /**
+             * Held
+             * @description Whether canopy holds it for the operator, a rebuttal of a worker's decline: no worker gets it until they send it
+             *     (DESIGN §21).
+             * @default false
+             */
+            held: boolean;
             /**
              * Line
              * @description The line it is on, on the new side; None when the diff does not show it.
@@ -8414,6 +8450,12 @@ export type components = {
              * @enum {string}
              */
             kind: "step";
+            /**
+             * Model
+             * @description The model that made the call, as the run's models name it (DESIGN §13), when more than one served the run; None
+             *     for a run one model served, which its page names, and until canopy has read its session.
+             */
+            model: string | null;
             /**
              * Reason
              * @description Why the call ended, in the runtime's word.
