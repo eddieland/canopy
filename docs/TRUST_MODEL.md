@@ -440,6 +440,9 @@ Controls in code, not prompts:
 - A tick whose block leaves the overseer nothing to judge runs none and spends nothing (DESIGN §39): it makes only the
   harness's dispatches, under the guards above, and the disk check still holds them. It is paced as any tick is, by
   `loop.min_gap_minutes` and every wake, and leaves idle pacing's count as it was.
+- The loop's polls (DESIGN §39): a poll ends the wait only when a tick would record or list what the latest tick did
+  not, or once when a source fails, never again until a poll reads every source whole; the tick it wakes is held by
+  `loop.min_gap_minutes`, as every wake is, so the polls cannot spin the loop.
 - Tracker comments: each body cut at 2000 characters where the tracker source records it (DESIGN §30).
 - Tasks (DESIGN §36): one run per task at a time, started only by a live tick, in code; at most `capacity.max_tasks`
   task runs at once (1 by default, and the workspace file may only lower it), within `capacity.max_workers`, which

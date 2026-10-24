@@ -232,7 +232,7 @@ def section(
     Returns:
         The block's `observations`.
     """
-    reader = Reader.read(ctx, tick_id, now, tickets)
+    reader = Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, tickets)
     found: ObservationsState = {
         "max_age_minutes": ctx.config.connect.max_age_minutes,
         "max_new_items": MAX_NEW_ITEMS,
@@ -291,15 +291,23 @@ class Reader:
     branches: Mapping[str, Sequence[records.ObservedBranch]]
     fresh_repos: AbstractSet[str]
     units_of: Mapping[str, Sequence[records.TicketUnit]]
-    #: This tick's derivation, by ticket and unit (None for the ticket's own).
-    derived: Mapping[tuple[str, str | None], records.Derivation]
+    #: The tick's derivation, by ticket and unit (None for the ticket's own).
+    derived: Mapping[tuple[str, str | None], phases.Derived]
     runs: Mapping[SourceKind, records.ConnectorRun]
     #: Whether a `tracker` source observes tickets at all.
     tracked: bool
 
     @classmethod
-    def read(cls, ctx: Context, tick_id: int, now: datetime, tickets: Iterable[records.Ticket]) -> Reader:
-        """Read the observations of tick `tick_id` as they stand at `now`, with `tickets` the ones the block lists.
+    def read(
+        cls,
+        ctx: Context,
+        derived: Iterable[phases.Derived],
+        now: datetime,
+        tickets: Iterable[records.Ticket],
+    ) -> Reader:
+        """Read the observations as they stand at `now`, with `tickets` the ones the block lists.
+
+        `derived` is the tick's derivation, which a tick has recorded and the loop's poll has not (DESIGN §39).
 
         Returns:
             The reader.
@@ -332,11 +340,6 @@ class Reader:
         branches: dict[str, list[records.ObservedBranch]] = {}
         for b in records.fetch_all(conn, records.ObservedBranch, sql.select("*").from_("observed_branches")):
             branches.setdefault(b.repository, []).append(b)
-        derivations = records.fetch_all(
-            conn,
-            records.Derivation,
-            sql.select("*").from_("derivations").where("tick_id = ?", tick_id),
-        )
         return cls(
             ctx=ctx,
             cutoff=cutoff,
@@ -353,7 +356,7 @@ class Reader:
             branches=branches,
             fresh_repos=phases.fresh_repos(conn, branches, cutoff),
             units_of=db.all_units(conn),
-            derived={(d.ticket_key, d.repo): d for d in derivations},
+            derived={(d.ticket_key, d.repo): d for d in derived},
             runs=runs,
             tracked=_tracked(ctx),
         )
@@ -423,7 +426,7 @@ class Reader:
             found["more_comments"] = len(new) - MAX_NEW_ITEMS
         derived = self.derived.get((key, None))
         if derived is not None and derived.stale is None:
-            found["derived"] = json.loads(derived.phases)
+            found["derived"] = [str(p) for p in derived.phases]
         found["units"] = self.units(key)
         return found
 
@@ -501,7 +504,7 @@ class Reader:
             }
         derived = self.derived.get((key, repo))
         if found["observed"] == "fresh" and derived is not None and derived.stale is None:
-            found["derived"] = json.loads(derived.phases)
+            found["derived"] = [str(p) for p in derived.phases]
         return found
 
     def _pr_unit(self, repo: str, unit: records.TicketUnit, url: str) -> UnitObservation:

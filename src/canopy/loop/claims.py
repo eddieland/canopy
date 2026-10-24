@@ -75,7 +75,7 @@ def check(
     record = db.get_ticket(ctx.conn, key)
     if record is None:
         return
-    reader = observations.Reader.read(ctx, tick_id, now, [record])
+    reader = observations.Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, [record])
     units = {u["repo"]: u for u in reader.units(key)}
     tracked = _check_subjects(ctx, reader, key, kind=kind, label=label, repos=repos, units=units, base=base)
     one = repos[0] if len(set(repos)) == 1 else None
@@ -120,7 +120,7 @@ def check_cursors(
     record = db.get_ticket(ctx.conn, key)
     if record is None:
         return
-    reader = observations.Reader.read(ctx, tick_id, now, [record])
+    reader = observations.Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, [record])
     if reader.ticket(key)["observed"] != "unobserved":
         _check_comment(reader, record, cursors.get("comment"))
     unit = next((u for u in reader.units_of.get(key, []) if repo is not None and u.repo == repo), None)
