@@ -1,6 +1,8 @@
 """The attention list rendered to `attention.md`, and its diff piped to `notify.cmd` (DESIGN §6, §14)."""
 
+import json
 import os
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from itertools import starmap
 from pathlib import Path
@@ -8,10 +10,11 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import db
+from canopy.core import db, review_runs
 from canopy.core.config import ConfigError, load
+from canopy.core.vocab import ReviewRunStatus
 from canopy.loop import attention
-from tests.canopy.helpers import messages, waits
+from tests.canopy.helpers import context, in_tick, messages, waits
 from tests.canopy.scenario_helpers import Scenario, raises, skips_tick
 from tests.conftest import CanopyEnv
 
@@ -87,6 +90,45 @@ def test_notify_gets_new_and_resolved_items_once(scenario: Scenario, canopy_env:
     assert messages(notified)[2].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-3 needs_reviewer")
     rows = scenario.conn.execute("SELECT ticket_key FROM notifications")
     assert sorted(str(r[0]) for r in rows) == ["PROJ-3", "PROJ-4"]
+
+
+def reviewed(conn: sqlite3.Connection, logs: Path, key: str, impact: str, sha: str) -> None:
+    """A `done` review of `key`'s PR at `sha`, the reviewer, or the harness, judging its impact `impact`."""
+    with in_tick(conn, ends_ok=True) as tick_id:
+        run_id = review_runs.insert_review_run(
+            conn,
+            tick_id=tick_id,
+            pr_url=f"https://example.test/acme/repo/pull/{key}",
+            sha=sha,
+            ticket=key,
+            repo=None,
+            purpose="own",
+            logs_dir=logs,
+        )
+        assert db.claim_run(conn, "review_runs", run_id, os.getpid())
+        report = {"status": "done", "verdict": "clean", "impact": impact}
+        assert db.finish_run(conn, "review_runs", run_id, ReviewRunStatus.DONE, json.dumps(report))
+
+
+def test_an_item_whose_pr_has_a_high_impact_review_reaches_the_operator_first(
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    notified: Path,
+    tmp_path: Path,
+) -> None:
+    """The latest commit reviewed decides: PROJ-5's `high` was of a commit a later review read again (DESIGN §21)."""
+    reviewed(scenario.conn, tmp_path, "PROJ-3", "normal", "a" * 40)
+    reviewed(scenario.conn, tmp_path, "PROJ-4", "high", "b" * 40)
+    reviewed(scenario.conn, tmp_path, "PROJ-5", "high", "c" * 40)
+    reviewed(scenario.conn, tmp_path, "PROJ-5", "normal", "d" * 40)
+    scenario.tick(*recorded(("PROJ-3", "needs_reviewer"), ("PROJ-4", "ready_to_merge"), ("PROJ-5", "needs_reviewer")))
+    [message] = messages(notified)
+    assert message.splitlines()[1:4] == [
+        "+ PROJ-4 ready_to_merge: PROJ-4 detail",
+        "+ PROJ-3 needs_reviewer: PROJ-3 detail",
+        "+ PROJ-5 needs_reviewer: PROJ-5 detail",
+    ]
+    assert [i.ticket_key for i in attention.listed(context(canopy_env))] == ["PROJ-4", "PROJ-3", "PROJ-5"]
 
 
 def test_failed_notify_is_retried_next_tick(scenario: Scenario, canopy_env: CanopyEnv, notified: Path) -> None:

@@ -45,6 +45,7 @@ from canopy.infra import logs
 from canopy.infra.text import printable
 from canopy.loop import archive
 from canopy.notify import deliver
+from canopy.reviews import impact as review_impact
 from canopy.reviews import waiting as review_waiting
 from canopy.runs import drafted
 
@@ -285,7 +286,8 @@ def listed(ctx: Context) -> list[Item]:
     the operator dismissed (DESIGN §19). A `drafts_waiting` item says what waits now, not at the tick that recorded
     it, so one the operator sent or dropped every draft of is gone at once (DESIGN §29), and so do a review's
     `review_waiting` and `review_unsettled`, gone once the operator publishes or a read settles it (§34). So do a
-    task's `awaiting_reply` and `task_ticket_unrecorded`, which no tick records (DESIGN §36).
+    task's `awaiting_reply` and `task_ticket_unrecorded`, which no tick records (DESIGN §36). An item about a PR whose
+    latest review is `high` impact, or about its ticket, comes before the rest (§21), so a notification lists it first.
     """
     configured = set(chore_view.configured(ctx.config, ctx.workspace))
     items = [
@@ -308,7 +310,20 @@ def listed(ctx: Context) -> list[Item]:
     ]
     waiting = [_task_item(w) for w in tasks.awaiting(ctx.conn)]
     unrecorded = [_unrecorded_item(u) for u in task_tickets.unrecorded(ctx.conn)]
-    return items + waiting + unrecorded + findings
+    return _high_first(ctx.conn, items) + waiting + unrecorded + findings
+
+
+def _high_first(conn: sqlite3.Connection, items: Sequence[Item]) -> list[Item]:
+    """The items about a PR, or its ticket, whose latest reviewed commit has a `high` review first (DESIGN §21).
+
+    Returns:
+        `items` in their order, but each such item before every other.
+    """
+    prs = {i.ticket_key.removeprefix(PR_PREFIX) for i in items if i.ticket_key and i.ticket_key.startswith(PR_PREFIX)}
+    tickets = {i.ticket_key for i in items if i.ticket_key and ":" not in i.ticket_key}
+    found = review_impact.high(conn, tickets, prs)
+    ranked = {*found.tickets, *(f"{PR_PREFIX}{url}" for url in found.prs)}
+    return sorted(items, key=lambda i: i.ticket_key not in ranked)
 
 
 def _task_item(waiting: tasks.Awaiting) -> Item:

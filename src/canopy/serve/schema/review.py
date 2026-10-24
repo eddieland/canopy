@@ -17,7 +17,12 @@ from canopy.serve.schema import CostTotal, Decision, Limit, Model, ModelsServed,
 type ReviewVerdict = Annotated[Literal["clean", "findings"], Field(description="A review run's verdict (DESIGN §21).")]
 type ReviewImpact = Annotated[
     Literal["low", "normal", "high"],
-    Field(description="A change's impact, as the reviewer calls it: `low` as `review.low_impact` allows (DESIGN §21)."),
+    Field(
+        description=(
+            "A change's impact, as the reviewer calls it: `low` as `review.low_impact` allows, and `high` for a change "
+            "to a path `review.high_impact_paths` covers, whatever it says (DESIGN §21)."
+        ),
+    ),
 ]
 type FindingSeverity = Annotated[
     Literal["blocking", "major", "minor"],

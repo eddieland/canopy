@@ -250,14 +250,13 @@ verdict leaves the machine only as a notification (§20), so no automation can l
 waits on a bot identity (ROADMAP, deferred).
 
 Every review key is private (§12) except `policy.max_reviews_per_pr` and §34's `policy.max_revisions_per_draft`,
-shared limits the repository may only tighten (TRUST_MODEL T7). With no source of reviews or no review capacity,
+shared limits the repository may only tighten, and `review.high_impact_paths`, which it may only add to (TRUST_MODEL
+T7). With no source of reviews or no review capacity,
 nothing about reviews reaches the overseer and no review starts; a note asking a revision is a source of one (§34).
 `review.query` authorizes, unlike `tracker.query` (§17): without an author filter it reviews other
 people's PRs in the operator's name, which is the operator's choice (TRUST_MODEL §7). `review.low_impact` says in plain
-language which changes the reviewer may call `low`; without it, none. Reviews touch TRUST_MODEL T1 (what the reviewer
-writes is data; `review.query` and requests authorize), T3 (review limits are controls in code), T4 (nothing runs from
-the checkout), T6 (no write tool), T7, T8 (requests are web channel writes), and §6 (never push to a PR the loop only
-reviews).
+language which changes the reviewer may call `low`; without it, none. Reviews touch TRUST_MODEL T1, T3, T4, T6, T7,
+T8, and §6 (never push to a PR the loop only reviews).
 
 ### Running a review
 
@@ -298,8 +297,13 @@ Result contract, the last line of the reviewer's text (§13), validated (D026); 
 ```
 
 `verdict` is `findings` exactly when there are findings, and `low` without `review.low_impact` is recorded as `normal`.
-`pr_title` is the PR author's text, for display only (§8). `summary` is for the operator; `body` is for the PR's author,
-and only a draft (§34) uses it. `rebuts` is set only on a rebuttal (Answers and rebuttals).
+The reviewer judges impact from the PR's text, which can talk it down (T1), so a change to a path in
+`review.high_impact_paths` (by default `.github/workflows/`, `.agents/`, `docs/TRUST_MODEL.md`; whole-component
+prefixes, no globs), as git names the paths of the range the review keeps a diff of, is recorded `high` before
+`review.low_impact` applies, with a note naming the path. The harness only raises. `high` ranks attention (§14), and
+changes nothing else about the review. `pr_title` is the PR author's text, for display only (§8). `summary` is for
+the operator; `body` is for the PR's author, and only a draft (§34) uses it. `rebuts` is set only on a rebuttal
+(Answers and rebuttals).
 
 ### Answers and rebuttals
 
@@ -361,8 +365,7 @@ Since the slot goes with the review and the web UI cannot ask GitHub (principle 
 the commit the reviewer read, best effort and readable only by the operator. Diff drivers and textconv are off, since a
 commit's `.gitattributes` can name them (D107). It is the PR's text: rendered as text, never served as a file. It runs
 from the commit's merge base with the branch the PR merges into, as the vcs source last read the PR, and the
-reviewer's prompt names that branch; a PR it has not read falls back to the pool's base branch. For this, the vcs
-source reads a requested PR from the tick after its request.
+reviewer's prompt names that branch; a PR it has not read falls back to the pool's base branch.
 
 ### Open
 

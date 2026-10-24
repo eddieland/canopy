@@ -323,6 +323,9 @@ Controls:
   can decline a real finding; the next review then reports it again only as a rebuttal, which the harness holds for
   the operator, never for another `resume`, and holds only a finding that names a decline the journal recorded. So an
   answer moves a finding from the worker to the operator, never out of sight, and authorizes nothing.
+  A review's `impact` is the reviewer's judgment, which the PR's text can steer, so the harness records `high`, whatever
+  the reviewer says, for a change to a path `review.high_impact_paths` covers, as git names the paths: by default CI's
+  workflows and the files that define what the loop may do. It only raises, and `high` only ranks attention.
   A revision of a review's draft (DESIGN §34) runs as the reviewer does and reads the same PR, its draft, and its
   review, all data; the operator's notes since the draft's newest version are its only instructions. Its version is
   untrusted like the reviewer's until the operator publishes it, and the state block names the draft, never its text
@@ -789,6 +792,8 @@ Controls, in code:
   is private instead (DESIGN §32): it holds a trusted reviewer's feedback for the operator and lets anyone else's
   start a plan run, so a shared file chooses neither. So is `policy.planner_may_approve` (§25), which lets a planner's
   word stand for the operator's approval.
+- `review.high_impact_paths` from the workspace file only adds entries to the operator's list or the default, so a
+  commit cannot take a path off it.
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not
