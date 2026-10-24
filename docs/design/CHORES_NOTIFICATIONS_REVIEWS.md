@@ -245,32 +245,30 @@ through `resume`; PRs matching `review.query`, reviewed and nothing else, never 
 the operator asks for one at a time (Review requests), reviewed as a query match is.
 
 Why nothing is posted: a review on the PR speaks for the operator to everyone, and an adversarial reader is wrong often
-enough that the operator wants its findings first; kept in the journal, it needs no write tool and cannot be forged. Its
-verdict leaves the machine only as a notification (§20), so no automation can let a PR skip a human reviewer on it; that
-waits on a bot identity (ROADMAP, deferred).
+enough that the operator wants its findings first; kept in the journal, it needs no write tool and cannot be forged. It
+is read from the journal only, apart from worker runs, its text shown as data, made printable. Its verdict leaves the
+machine only as a notification (§20), so no automation can let a PR skip a human reviewer on it; that waits on a bot
+identity (ROADMAP, deferred).
 
 Every review key is private (§12) except `policy.max_reviews_per_pr` and §34's `policy.max_revisions_per_draft`,
 shared limits the repository may only tighten (TRUST_MODEL T7). With no source of reviews or no review capacity,
 nothing about reviews reaches the overseer and no review starts; a note asking a revision is a source of one (§34).
 `review.query` authorizes, unlike `tracker.query` (§17): without an author filter it reviews other
 people's PRs in the operator's name, which is the operator's choice (TRUST_MODEL §7). `review.low_impact` says in plain
-language which changes the reviewer may call `low`; without it, none. Reviews touch TRUST_MODEL T1 (what the reviewer
-writes is data; `review.query` and requests authorize), T3 (review limits are controls in code), T4 (nothing runs from
-the checkout), T6 (no write tool), T7, T8 (requests are web channel writes), and §6 (never push to a PR the loop only
-reviews).
+language which changes the reviewer may call `low`; without it, none.
 
 ### Running a review
 
-Only a tick starts a review (D020). The PR's URL is an opaque string the harness never parses, and only a review that
-names its ticket (an `own` review) can send findings to a worker. The harness refuses, and records the refusal, a review
-while reviews are off, of a PR in no known repository, naming a ticket that did not open the PR, of a PR whose review or
-ticket's worker is running, of a commit with a `done` review (in the same persona, when the operator chose several for
-the PR, §31), or past the per-PR limit (runs however they ended, plus
-any the operator grants, §22), the daily limit, review capacity, or `max_workers`, which counts reviews. A dry run
-checks the same guards and starts nothing (D036). With `review.settle_minutes`, it also refuses a head that has not
-been the PR's head that long, so a PR pushed to often is reviewed once it goes quiet: the clock starts when the overseer
-first asks to review that head, since the harness cannot read push times, and another head restarts it. A requested
-review does not wait. The state block lists the heads still settling.
+Only a tick starts a review (D020), but for an eval's, which the journal never holds (Scoring the reviewer). The PR's
+URL is an opaque string the harness never parses, and only a review that names its ticket (an `own` review) can send
+findings to a worker. The harness refuses, and records the refusal, a review while reviews are off, of a PR in no known
+repository, naming a ticket that did not open the PR, of a PR whose review or ticket's worker is running, of a commit
+with a `done` review (in the same persona, when the operator chose several for the PR, §31), or past the per-PR limit
+(runs however they ended, plus any the operator grants, §22), the daily limit, review capacity, or `max_workers`, which
+counts reviews. A dry run checks the same guards and starts nothing (D036). With `review.settle_minutes`, it also
+refuses a head that has not been the PR's head that long, so a PR pushed to often is reviewed once it goes quiet: the
+clock starts when the overseer first asks to review that head, since the harness cannot read push times, and another
+head restarts it. A requested review does not wait. The state block lists the heads still settling.
 
 The review starts detached, as a worker does (§8 step 4), checks out the commit detached in a leased slot, and deletes
 every tracked symlink that resolves outside the checkout. The reviewer runs in a private directory of canopy's holding a
@@ -278,8 +276,7 @@ link to the checkout, **not in the checkout**, so the runtime loads no configura
 signal too, the slot is returned (§8 step 6). It can be sandboxed (§24). canopy ships `canopy-reviewer` in the
 definitions directory (§13), not the repository's (TRUST_MODEL T7): no edits, no subagents, no bash, reads only inside
 the checkout and, through canopy's read-only git tools, its history (§27), and MCP read tools only, every tool that
-writes denied by name. A review that runs the PR's tests uses the
-operator's own copy (§19), so runs the PR's code (§7).
+writes denied by name. A review that runs the PR's tests uses the operator's own copy (§19), so runs the PR's code (§7).
 
 The prompt carries the notice to workers (§8) and asks only for what the diff itself gets wrong, so a `resume` is never
 sent to fix code its PR did not touch. Rejected: a second agent verifying each finding, doubling a review's spend.
@@ -312,8 +309,7 @@ that ended `done` or `blocked`. The next review reads them, so a declined findin
 names the declined finding in `rebuts`. The harness holds a rebuttal for the operator when the decline is in the
 journal: it reaches no worker and starts no `resume`, `review_rebuttal` raises attention about the ticket, and the
 operator settles it by sending it, which releases it, or dismissing it. So an author and a reviewer that disagree
-reach a person instead of the per-PR limit. Rejected: following findings across commits to refuse repeats in code
-(Open); a later finding on code unchanged since the first review is not yet held, and waits on that.
+reach a person instead of the per-PR limit. Rejected: following findings across commits to refuse repeats (Open).
 
 ### The overseer's part
 
@@ -343,20 +339,16 @@ a coworker's PR is refused, so a review never turns into work on someone else's 
 run: a request authorizes a review as `review.query` does, so an agent steered by a PR's text could otherwise aim the
 operator's spend at any PR (T1).
 
-### Reading reviews
-
-Reviews are read from the journal only, apart from worker runs; a review's text is shown as data, made printable.
-
 ### Dismissing and sending findings
 
 A dismissed finding stays listed but leaves what a `resume` hands the worker. A review whose findings are all dismissed
 moves on as a clean one. A dismissal says why: `wrong`, `intentional`, or `not_worth_it`, so the operator's dismissals
 measure the reviewer's noise by severity, persona, and model, which is what would justify a verifier's spend. Sending
 findings is the operator's go-ahead on an `own` review's findings while its ticket has the PR: an operator message on
-the ticket names them by number, never quoting them, since the reviewer's text is data
-(T1) and the message an instruction. The next tick dispatches a `resume` with them (§7, D089), whether or not
-`canopy:review` is trusted. A dismissed finding, or one on a PR not the loop's own, cannot be sent. Both are refused
-inside a run, so no agent can hold a finding back from a worker or start work in the operator's name.
+the ticket names them by number, never quoting them, since the reviewer's text is data (T1) and the message an
+instruction. The next tick dispatches a `resume` with them (§7, D089), whether or not `canopy:review` is trusted. A
+dismissed finding, or one on a PR not the loop's own, cannot be sent. Both are refused inside a run, so no agent can
+hold a finding back from a worker or start work in the operator's name.
 
 ### The diff
 
@@ -364,8 +356,17 @@ Since the slot goes with the review and the web UI cannot ask GitHub (principle 
 the commit the reviewer read, best effort and readable only by the operator. Diff drivers and textconv are off, since a
 commit's `.gitattributes` can name them (D107). It is the PR's text: rendered as text, never served as a file. It runs
 from the commit's merge base with the branch the PR merges into, as the vcs source last read the PR, and the
-reviewer's prompt names that branch; a PR it has not read falls back to the pool's base branch. For this, the vcs
-source reads a requested PR from the tick after its request.
+reviewer's prompt names that branch; a PR it has not read falls back to the pool's base branch.
+
+### Scoring the reviewer
+
+`canopy review eval` scores the reviewer on the operator's cases, `review.eval_cases`: PRs at a commit, each with a bug
+at lines the operator confirmed, or known clean. Each is reviewed as a PR's first review, in the persona and on the
+model named; a finding within a few lines of a confirmed one finds the bug, and every finding on a clean case is a false
+alarm. The score, with digests of the prompt and persona and the model, is saved in the state directory and gates
+nothing. The journal holds nothing of an eval, so none reaches a worker, a draft, or the attention list. A case
+authorizes a review as `review.query` does, so only the operator runs one, never in a tick or a run, and each review
+waits for capacity. Rejected: review runs for an eval, which would count against PRs' limits and make drafts.
 
 ### Open
 

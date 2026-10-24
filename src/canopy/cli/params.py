@@ -227,3 +227,5 @@ CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", chore_names)
 # One of the example chores canopy ships, which `canopy chore install` sets up.
 EXAMPLE_CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", install.available)
 PR_URL = PrUrlType()
+PERSONA = PatternType("NAME", config.PERSONA_NAME_RE, "persona name")
+EVAL_CASE = PatternType("NAME", config.EVAL_CASE_RE, "eval case name")
