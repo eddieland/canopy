@@ -110,7 +110,7 @@ these:
 - A tool is `<server>_<tool>`, every character outside `[A-Za-z0-9_-]` made `_`.
 - When the run ends, OpenCode signals every descendant of each local server, whatever its session or process group.
 - A local server's `timeout` bounds each request to it, connecting and calling a tool alike; without one, a tool call
-  waits a minute.
+  waits a minute. OpenCode 2's (2.1.4) is `timeout.execution` for a tool call, twelve hours without it.
 - Code mode, on with `OPENCODE_EXPERIMENTAL_CODE_MODE`, or with `OPENCODE_EXPERIMENTAL` when that is unset, offers no
   MCP tool; the first set to false turns it off whatever the second says. OpenCode 2 (2.1.4, 2026-10-23) has no such
   variable: a server's own `codemode: false` takes it out of code mode. It sends a session's first model call no MCP
@@ -122,5 +122,3 @@ D124 holds that canopy serves MCP itself, over stdio only.
 
 - Structured results: JSON a tool returns instead of the CLI's text, once no command prints the same thing.
 - A validate-only `check_result` tool for workers, once workers are measured losing runs to results that do not parse.
-- Where OpenCode 2 reads a local server's request timeout, unread from its source: its own default applies, so a
-  call that waits on the dispatch lock may be given up on sooner than the run.
