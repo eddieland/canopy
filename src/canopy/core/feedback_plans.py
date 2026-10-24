@@ -4,9 +4,10 @@ A feedback plan is §25's plan written for what came back to a ticket's PRs, bef
 file is a plan's file (`plans.path_for`): the same operator-only directory, named for the run that wrote it, written
 once and read bounded, never through a link. The journal's `feedback_plans` row holds what canopy decides by, its
 status, the file's hash as written, and the hash the operator approved; `feedback_plan_items` holds the items its
-result line named, each a review or review comment by the id the `vcs` source observed (DESIGN §29). The repositories a
-plan covers are its run's slots, and what it saw of its PRs is recorded with it (`feedback_items`). A ticket has at
-most one feedback plan that is not superseded.
+result line named, each a review or review comment by the id the `vcs` source observed (DESIGN §29), or a failed check
+or a conflict with the base by the id canopy gave it (`feedback_items.check_id`). The repositories a plan covers are its
+run's slots, and what it saw of its PRs is recorded with it (`feedback_items`). A ticket has at most one feedback plan
+that is not superseded.
 
 Under `policy.feedback_plan = "approve"`, every `resume` but one whose only reason is `no_pr` waits on an approved
 feedback plan that no `resume` has spent (`resume_refusal`), and the `resume` that starts on it spends it (`spend`), in
@@ -30,7 +31,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import conversation, db, feedback_items, plans, prompts, records, replies, sql
 from canopy.core.conversation import Refused
-from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
+from canopy.core.vocab import PlanEffort, PlanItem, PlanStatus, Proposal, ResumeReason, RunKind, RunStatus
 from canopy.infra import lock
 from canopy.infra.text import printable
 
@@ -40,7 +41,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from canopy.core.config import Config, Policy, Trust
-    from canopy.core.feedback_items import Offered
+    from canopy.core.feedback_items import Item
 
 #: The most items one plan's result line names; past it, the rest are refused, each with a harness note.
 MAX_ITEMS = 100
@@ -76,7 +77,7 @@ class Matched:
     A refusal is the harness's words, for the run's note.
     """
 
-    kept: Sequence[tuple[Offered, Named]]
+    kept: Sequence[tuple[Item, Named]]
     refused: Sequence[str]
 
     def note(self) -> str:
@@ -98,19 +99,19 @@ def needed(policy: Policy, reasons: Collection[str]) -> bool:
     return policy.feedback_plan == "approve" and set(reasons) != {ResumeReason.NO_PR}
 
 
-def match(offered: Sequence[Offered], named: Sequence[Named]) -> Matched:
+def match(offered: Sequence[Item], named: Sequence[Named]) -> Matched:
     """Check the planner's items against those it was given: an id it was not given is refused (DESIGN §32).
 
     So is an id named twice after the first, an id two items share, and every item past `MAX_ITEMS`. A reply is kept
-    only for a change or a decline.
+    only for a review item's change or decline: a failed check or a conflict has no author to answer.
 
     Returns:
         The items kept, in the order named, and why each other one was refused.
     """
-    by_id: dict[int, list[Offered]] = {}
+    by_id: dict[int, list[Item]] = {}
     for o in offered:
         by_id.setdefault(o.id, []).append(o)
-    kept: list[tuple[Offered, Named]] = []
+    kept: list[tuple[Item, Named]] = []
     refused: list[str] = []
     seen: set[int] = set()
     for n, item in enumerate(named, start=1):
@@ -125,7 +126,8 @@ def match(offered: Sequence[Offered], named: Sequence[Named]) -> Matched:
             refused.append(f"{item.id}, named again")
         else:
             seen.add(item.id)
-            reply = item.reply if item.proposal in (Proposal.CHANGE, Proposal.DECLINE) else None
+            answers = found[0].item in (PlanItem.REVIEW, PlanItem.COMMENT)
+            reply = item.reply if answers and item.proposal in (Proposal.CHANGE, Proposal.DECLINE) else None
             kept.append((found[0], Named(item.id, item.proposal, reply)))
     return Matched(kept=kept, refused=refused)
 
@@ -135,7 +137,7 @@ def record(
     key: str,
     run_id: int,
     written: plans.Written,
-    kept: Sequence[tuple[Offered, Named]],
+    kept: Sequence[tuple[Item, Named]],
     *,
     snapshot: feedback_items.Snapshot,
     event: Callable[[int, str | None], db.Event | None] | None = None,
@@ -271,7 +273,7 @@ def items(conn: sqlite3.Connection, plan_id: int) -> list[records.FeedbackPlanIt
     )
 
 
-def authors(conn: sqlite3.Connection, plan_id: int) -> dict[tuple[str, ReviewItem, int], str | None]:
+def authors(conn: sqlite3.Connection, plan_id: int) -> dict[feedback_items.Key, str | None]:
     """Who wrote each item a feedback plan was given, as what it saw recorded them (`feedback_items.record`).
 
     Returns:
@@ -282,7 +284,7 @@ def authors(conn: sqlite3.Connection, plan_id: int) -> dict[tuple[str, ReviewIte
         records.FeedbackPlanSeen,
         sql.select("*").from_("feedback_plan_seen").where("plan_id = ? AND answers IS NULL", plan_id),
     )
-    return {(r.pr_url, r.item, r.item_id): r.author for r in rows}
+    return {(r.pr_url, PlanItem(r.item), r.item_id): r.author for r in rows}
 
 
 def repos(conn: sqlite3.Connection, plan: records.FeedbackPlan) -> tuple[str, ...]:
@@ -619,7 +621,7 @@ def approval_message(
     """
     named = prompts.item_names
     if not addressed and not left:
-        body = f"Go ahead on feedback plan {plan_id} as it says: it covers no review item."
+        body = f"Go ahead on feedback plan {plan_id} as it says: it covers no item."
     elif not left:
         body = f"Address {named(addressed)} of feedback plan {plan_id}, every item it covers, as it proposes."
     else:

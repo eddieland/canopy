@@ -35,11 +35,14 @@ the item `leave` or `decline`. The operator trusts `alice`, and weighs who wrote
 your plan; you plan every item the same way, trusted or not.
 
 If `/workspace/desks/PROJ-1/.canopy-feedback-changes.json` exists, it lists what changed on the pull requests since the plan this one replaces: a
-moved head, a check's new conclusion, a new item, a reply naming the item it `answers`, an edited item, or a resolved
-thread, each by id and never with its text, which the items file holds.
+moved head, a check's new conclusion, a conflict with the base that came or went, a new item, a reply naming the item
+it `answers`, an edited item, or a resolved thread, each by id and never with its text, which the items file holds.
 
-Failed checks, a conflict with the base branch, and a merged blocker are part of this round too, though they reach you
-through the context below, not the file: plan for them in the same plan.
+The feedback file also holds each check that failed at a pull request's head, a `check` with its `name`, `conclusion`,
+and `url`, and a pull request's conflict with its base branch, a `conflict` with its `base_ref`, each with the
+`head_sha` it is at and an `id` canopy gave it, below zero. Neither has an author, and neither gets a reply. A merged
+blocker is part of this round too, though it reaches you through the context below, not the file: plan for it in the
+same plan.
 
 ## Task
 
@@ -52,15 +55,18 @@ item touches at the PR's head. Then decide, for each item, one of:
 - `ask`: the item raises a question that must be answered before anything changes for it.
 - `leave`: nothing to do and nothing to say, such as an approval, a thanks, or a comment already answered.
 
+For a failed check or a conflict, `change` fixes it, and `decline` or `leave` changes nothing for it, such as for a check
+that failed for a reason outside the change, which its section says.
+
 Write the plan as markdown to `/workspace/desks/PROJ-1/.canopy-new-plan.md` with your file writing tool, within 100,000 characters:
 
 - `# Feedback plan: PROJ-1 <the ticket's title>`, the title on the heading's own line.
 - `## Summary`: in a few sentences, what this round of feedback asks for, and what the plan does about it.
 - `## Items`: a `### Item <id>: <proposal>` heading for each item you cover, in the order of your result line, saying
-  who wrote it and whether they are trusted, what it asks, what you propose and why, and for a `change`, which files and
-  tests it touches and the test that proves it.
-- `## Checks and conflicts`: what the context says of failed checks, a conflict, or a merged blocker, and the fix you
-  plan for each; `None.` when there is none.
+  who wrote it and whether they are trusted, or which check failed or what conflicts, what it asks, what you propose
+  and why, and for a `change`, which files and tests it touches and the test that proves it.
+- `## Merged blocker`: what the context says of a blocker that merged, and the fix you plan; `None.` when there is
+  none.
 - `## Risks`: what the changes could break, and what to watch in review.
 
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not
@@ -102,8 +108,8 @@ The operator lets you say that this plan needs no review. canopy then approves i
 
 Your last line of stdout must be exactly one JSON object and nothing after it. Only `done` records a plan, and only
 when `.canopy-new-plan.md` holds one. `items` lists each item you cover, at most 100, by the `id` the feedback file
-gives it, with what you propose, and for a `change` or a `decline` the reply you would draft to its author, in at most
-4,000 characters. Name only items' ids the file gives, never a reply's: canopy leaves out any other. An item
+gives it, with what you propose, and for a review's or comment's `change` or `decline` the reply you would draft to its
+author, in at most 4,000 characters. Name only items' ids the file gives, never a reply's: canopy leaves out any other. An item
 you leave out is planned next time. The summary is your report to the operator: what the plan proposes, in a paragraph.
 
 With `done`, `effort` is how much work the changes the plan proposes are for the worker that makes them: `small`, a
