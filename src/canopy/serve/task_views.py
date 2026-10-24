@@ -142,7 +142,12 @@ def task_run_transcript(ctx: Context, task_id: int, run_id: int) -> Transcript |
     if row is None:
         return None
     log = Path(row.log_path)
-    return session_transcript(log, row.session_id, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
+    return session_transcript(
+        log,
+        row.session_id,
+        removed_after(ctx.conn, log, row.ended_at, "run_files_days"),
+        version=ctx.config.runtime.version,
+    )
 
 
 def task_report(ctx: Context, task_id: int, run_id: int) -> TaskReport | None:

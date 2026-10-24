@@ -25,8 +25,6 @@ OTHER = "acme/fake-model-2"
 PLAN = dispatches(kind=RunKind.PLAN)
 #: A resume that needs no cursor and no review: its PR conflicts with its base.
 RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
-#: How canopy asks OpenCode for its models, with their variants.
-LIST_ARGV = ("api", "--standalone", "model.list")
 
 
 def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
@@ -44,7 +42,7 @@ def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
     snapshot = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest
     assert f'\nmodel: "{MODEL}"\n' in (snapshot / "agents" / "canopy-worker.md").read_text()
     # The list is read in the workspace root, not in the run's slot, whose own runtime config could change it.
-    assert calls(opencode_state) == [(list(LIST_ARGV), str(scenario.env.root))]
+    assert calls(opencode_state) == [(["models"], str(scenario.env.root))]
     assert f"  model {MODEL}  log {run.row['log_path']}\n" in scenario.operator("status").out
     # Its commits credit the model that did the work (TRUST_MODEL T5).
     assert f"`Co-authored-by: {MODEL} (canopy worker) <noreply@canopy.invalid>`" in run.prompt_file.read_text()
@@ -147,7 +145,7 @@ def test_a_run_at_a_variant_records_it_and_its_definition_names_it(
     worker = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest / "agents" / "canopy-worker.md"
     assert f'\nmodel: "{MODEL}"\nvariant: "high"\n' in worker.read_text()
     # The variants are read only when one is chosen: the runtime drops one its model lacks without a word.
-    assert calls(opencode_state) == [(list(LIST_ARGV), str(scenario.env.root))]
+    assert calls(opencode_state) == [(["models", "--verbose"], str(scenario.env.root))]
     assert f"`Co-authored-by: {MODEL}@high (canopy worker) <noreply@canopy.invalid>`" in run.prompt_file.read_text()
 
 
@@ -174,8 +172,8 @@ def test_a_list_that_cannot_be_read_refuses_the_run(scenario: Scenario, opencode
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
     scenario.configures(runtime={"models": {"worker": MODEL}})
     reason = (
-        f"could not look up the model {MODEL} chosen in runtime.models: `opencode api model.list` exited 1. "
-        "Nothing ran on another model; the work resumes once the list can be read"
+        f"could not look up the model {MODEL} chosen in runtime.models: `opencode models` exited 1. Nothing ran on "
+        "another model; the work resumes once the list can be read"
     )
     refused = scenario.refuses(dispatches())
     assert refused == [("refused:model_list_failed", reason), ("attention:model_list_failed", reason)]
@@ -268,7 +266,7 @@ def test_canopy_model_refuses_a_model_not_listed_an_unknown_agent_and_inside_a_r
     err = scenario.operator("model", KEY, OTHER, code=1).err
     assert err == (
         f"Error: model refused (model_list_failed): could not read the models OpenCode lists, to look {OTHER} up: "
-        "`opencode api model.list` exited 1\n"
+        "`opencode models` exited 1\n"
     )
     assert scenario.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
 
@@ -315,17 +313,17 @@ def test_a_tickets_reviewer_override_reaches_its_reviews_alone(
 
 
 def listed(state: Path, *lines: str, variants: Mapping[str, Sequence[str]] | None = None) -> None:
-    """Have the fake `opencode` list `lines` as its models, each with its `variants`."""
+    """Have the fake `opencode models` print `lines`, and with `--verbose` each model's `variants`."""
     state.write_text(json.dumps({"models": list(lines), "variants": dict(variants or {})}))
 
 
 def calls(state: Path) -> list[tuple[list[str], str]]:
-    """Each list of models the fake was asked for, with the directory it was asked in."""
+    """Each `opencode models` the fake ran, with the directory it ran in."""
     log = state.with_name("opencode.jsonl")
     if not log.exists():
         return []
     entries = [json.loads(line) for line in log.read_text().splitlines()]
-    return [(e["argv"], e["cwd"]) for e in entries if e["argv"] == list(LIST_ARGV)]
+    return [(e["argv"], e["cwd"]) for e in entries if e["argv"][:1] == ["models"]]
 
 
 def ran_on(agent_log: Path, agent: str = "canopy-worker") -> str | None:

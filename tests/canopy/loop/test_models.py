@@ -46,7 +46,7 @@ def ended_ticks(conn: sqlite3.Connection, n: int) -> None:
 
 def exported(state: Path) -> list[str]:
     """The sessions the fake `opencode` exported, in order."""
-    return [argv[-1] for argv, _ in exports(state)]
+    return [argv[1] for argv, _ in exports(state)]
 
 
 def reads(conn: sqlite3.Connection) -> list[tuple[str, int, str, str | None, int]]:
@@ -67,9 +67,7 @@ def test_a_live_tick_reads_which_models_served_its_overseer_once(scenario: Scena
         ("anthropic/claude-x", 2, 0.5),
     ]
     # Read where the overseer runs, its text left out.
-    assert exports(opencode_state) == [
-        (["session", "export", "--standalone", "--sanitize", SESSION], str(scenario.env.root)),
-    ]
+    assert exports(opencode_state) == [(["export", SESSION, "--sanitize"], str(scenario.env.root))]
     second = scenario.tick()
     # Each tick reads its own overseer's session, and none read already.
     assert reads(scenario.conn) == [
@@ -77,6 +75,19 @@ def test_a_live_tick_reads_which_models_served_its_overseer_once(scenario: Scena
         ("ticks", second.tick.id, "found", None, 1),
     ]
     assert len(exports(opencode_state)) == 2
+
+
+def test_opencode_2_is_asked_for_its_session_by_its_own_command(scenario: Scenario, opencode_state: Path) -> None:
+    with_events(scenario.env, "canopy-overseer")
+    scenario.configures(runtime={"version": 2})
+    sessions(opencode_state, **{SESSION: [("anthropic", "claude-x", 0.25)]})
+    ticked = scenario.tick()
+    assert [(m.model, m.replies) for m in run_models.of_run(scenario.conn, "ticks", ticked.tick.id)] == [
+        ("anthropic/claude-x", 1),
+    ]
+    assert exports(opencode_state) == [
+        (["session", "export", "--standalone", "--sanitize", SESSION], str(scenario.env.root)),
+    ]
 
 
 def test_a_dry_run_reads_no_session(scenario: Scenario, opencode_state: Path) -> None:
@@ -110,7 +121,7 @@ def test_a_failing_opencode_never_fails_the_tick(scenario: Scenario, opencode_st
     assert ticked.tick.status == "ok"
     # Failed in canopy's words, not OpenCode's, and read again later.
     assert reads(scenario.conn) == [
-        ("ticks", ticked.tick.id, "failed", "`opencode session export --sanitize` exited 1", 1),
+        ("ticks", ticked.tick.id, "failed", "`opencode export --sanitize` exited 1", 1),
     ]
 
 

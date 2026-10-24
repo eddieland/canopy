@@ -41,7 +41,7 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await expect(output).toBeVisible()
     await expect(transcript.getByTestId('transcript-entries').locator('input')).toHaveCount(0)
     // Its input is JSON, colored by what each piece is; its output, a file, stays plain.
-    await expect(read.locator('.text-syntax-key', { hasText: '"path"' })).toBeVisible()
+    await expect(read.locator('.text-syntax-key', { hasText: '"filePath"' })).toBeVisible()
     await expect(output.locator('span')).toHaveCount(0)
     // A failed call shows its error where a call's output goes.
     const missing = tools.filter({ hasText: 'useSearch.ts' }).first()
@@ -160,14 +160,14 @@ test("a failed run's Run panel names the error it ended on, and a running one's 
     await page.goto('runs/40')
     await settled(page)
     const last = page.getByTestId('transcript-entries').locator('li').last()
-    await expect(last).toContainText('provider.rate-limitRate limited: retry after 60s')
+    await expect(last).toContainText('APIErrorRate limited: retry after 60s')
     // Its Run panel names what it ended on, above the transcript, and shows that row on a click.
-    const endedOn = page.getByRole('button', { name: '+3:54 provider.rate-limit Rate limited: retry after 60s' })
+    const endedOn = page.getByRole('button', { name: '+3:54 APIError Rate limited: retry after 60s' })
     await expect(endedOn).toBeVisible()
     await page.getByRole('searchbox', { name: 'Find lines in the transcript' }).fill('gh run')
-    await expect(last).not.toContainText('provider.rate-limit')
+    await expect(last).not.toContainText('APIError')
     await endedOn.click()
-    await expect(last).toContainText('provider.rate-limitRate limited: retry after 60s')
+    await expect(last).toContainText('APIErrorRate limited: retry after 60s')
     await expect(last).toBeFocused()
     await expect(last).toBeInViewport()
 
@@ -179,7 +179,7 @@ test("a failed run's Run panel names the error it ended on, and a running one's 
     await page.goto('runs/41')
     await settled(page)
     // Its latest tool call is on its row, and the calls so far in its transcript.
-    await expect(page.getByTestId('run-doing')).toContainText('shellnpm test -- login')
+    await expect(page.getByTestId('run-doing')).toContainText('bashnpm test -- login')
     const tools = page.getByTestId('transcript').getByTestId('transcript-tool')
     await expect(tools).toHaveCount(2)
     await expect(tools.last()).toContainText('npm test -- login')
@@ -214,7 +214,7 @@ test("a transcript's chart names what grew each call's context, and shows the la
     await expect(context).toContainText('peak 30.2k at call 3')
     // The largest single addition, on the chart's line: the test run's output, a coverage table.
     const largest = context.getByTestId('context-largest')
-    await expect(largest).toHaveText('largest additionshellnpm test -- search≈4.2k into call 3')
+    await expect(largest).toHaveText('largest additionbashnpm test -- search≈4.2k into call 3')
 
     // Opened, the chart picks the call it grew, and lists what grew it, largest first, each its share by characters.
     await context.getByRole('button', { name: 'Show chart' }).click()
@@ -224,8 +224,8 @@ test("a transcript's chart names what grew each call's context, and shows the la
     const grew = context.getByTestId('context-grew')
     await expect(grew).toContainText('call 3, 30.2k sent, +4.3k on call 2, from what call 2 printed, largest first:')
     await expect(grew.getByRole('listitem')).toHaveText([
-        '≈4.2kshellnpm test -- search',
-        '≈60write/home/op/acme/.treehouse/web-3f9c2a1b/3/web/src/search/useSearch.ts',
+        '≈4.2kbashnpm test -- search',
+        '≈62writesrc/search/useSearch.ts',
         "≈34textThere is no search hook yet. I'll add one that debounces and aborts the stale request.",
     ])
     // The first call is canopy's prompt and the runtime's own.
@@ -398,12 +398,12 @@ test("a tool call's name takes its own width, so its command keeps the rest on e
     await expect.poll(async () => (await command.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(300)
     expect(await cutAfter(refusal, 'run 43 is still working')).toBeLessThanOrEqual(0)
     // A short name takes no more than its own width.
-    const shell = transcript
+    const bash = transcript
         .getByTestId('transcript-tool')
         .filter({ hasText: 'canopy decide ABC-101' })
         .locator('summary')
-        .getByTitle('shell', { exact: true })
-    expect(await spare(shell)).toBeLessThanOrEqual(1)
+        .getByTitle('bash', { exact: true })
+    expect(await spare(bash)).toBeLessThanOrEqual(1)
 
     // The whole rail takes its width from the pane, and the command gives up that much and no more.
     await windowWidth(page, FULL_RAIL - 1)

@@ -446,7 +446,11 @@ def _run_agent(
     places = [path for _, path in trees] + desk_parents
     tools = ctx.config.tracker.tools()
     read_only = run["private"] or run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN)
-    refused = project_config.refusal(places, tracker_server=tools.server if read_only and tools is not None else None)
+    refused = project_config.refusal(
+        places,
+        version=ctx.config.runtime.version,
+        tracker_server=tools.server if read_only and tools is not None else None,
+    )
     if refused is not None:
         raise SetupError(refused)
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
@@ -480,9 +484,23 @@ def _run_agent(
     # history through canopy's read-only git tools, over those worktrees alone, each named for its repository (§27).
     env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
     if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
-        env |= git_tools.run_env({s.repo: s.path for s in slots}, cwd=ctx.workspace.root.absolute())
+        env |= git_tools.run_env(
+            {s.repo: s.path for s in slots},
+            version=ctx.config.runtime.version,
+            cwd=ctx.workspace.root.absolute(),
+        )
     env |= commit_hooks.env(snapshot, marks, os.environ)
-    with run_offers.probing(ctx.conn, "runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
+    with run_offers.probing(
+        ctx.conn,
+        "runs",
+        run_id,
+        ctx.runner,
+        argv,
+        version=ctx.config.runtime.version,
+        cwd=cwd,
+        env=env,
+        log=log,
+    ):
         result = ctx.runner.run(
             argv,
             cwd=cwd,
@@ -496,7 +514,7 @@ def _run_agent(
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
-    output = stdout.read(result.stdout)
+    output = stdout.read(result.stdout, version=ctx.config.runtime.version)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn,
@@ -525,7 +543,7 @@ class _Progress:
         self.run_id = run_id
         self.out = out
         self.log = log
-        self.watch = Watch()
+        self.watch = Watch(version=ctx.config.runtime.version)
 
     def __call__(self, line: str) -> None:
         self.out.write(line)

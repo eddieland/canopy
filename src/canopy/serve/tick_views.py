@@ -122,7 +122,12 @@ def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
     if row is None:
         return None
     output = tick_output(ctx, tick_id)
-    return session_transcript(output, row.session_id, removed_after(ctx.conn, output, row.ended_at, _tick_rule(row)))
+    return session_transcript(
+        output,
+        row.session_id,
+        removed_after(ctx.conn, output, row.ended_at, _tick_rule(row)),
+        version=ctx.config.runtime.version,
+    )
 
 
 def tick_raw_output(ctx: Context, tick_id: int) -> RawOutput | None:

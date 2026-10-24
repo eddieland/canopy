@@ -28,9 +28,20 @@ if TYPE_CHECKING:
     import sqlite3
     from pathlib import Path
 
+    from canopy.runtime.implementation import Version
 
-def session_transcript(path: Path, session: object, removed_after_days: int | None = None) -> Transcript:
+
+def session_transcript(
+    path: Path,
+    session: object,
+    removed_after_days: int | None = None,
+    *,
+    version: Version,
+) -> Transcript:
     """The events of the session the journal recorded, read back from the file they were printed to (DESIGN §22).
+
+    They are read as the runtime `version` runs prints them: the one config names now, so a session another version
+    printed reads as this one's events.
 
     `removed_after_days` is how long retention kept the file and its prompt, when it removed them (`removed_after`).
 
@@ -42,7 +53,7 @@ def session_transcript(path: Path, session: object, removed_after_days: int | No
     prompt = TranscriptPrompt(text=kept.text, truncated=kept.truncated) if kept is not None else None
     if not isinstance(session, str) or not session:
         return Transcript(status="no_session", prompt=prompt, removed_after_days=removed_after_days)
-    found = transcript.read(path, session)
+    found = transcript.read(path, session, version=version)
     if found is None:
         return Transcript(status="no_log", session_id=session, prompt=prompt, removed_after_days=removed_after_days)
     return Transcript(

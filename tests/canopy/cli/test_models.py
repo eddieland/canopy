@@ -36,5 +36,18 @@ def test_canopy_models_exits_1_when_an_agents_model_is_not_listed_or_the_list_ca
     )
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
     assert scenario.operator("models", code=1).out == (
+        "could not read the models OpenCode lists (model_list_failed): `opencode models` exited 1\n"
+    )
+
+
+def test_canopy_models_asks_opencode_2_its_own_way(scenario: Scenario, opencode_state: Path) -> None:
+    # A line that names no model, as OpenCode 1 could print one, is in no list OpenCode 2 answers with.
+    opencode_state.write_text(json.dumps({"models": [OTHER, "a plugin says hello", MODEL]}))
+    scenario.configures(runtime={"version": 2, "models": {"worker": MODEL}})
+    assert scenario.operator("models").out == (
+        f"OpenCode lists 2 models:\n  {MODEL}  (runtime.models: worker)\n  {OTHER}\n"
+    )
+    opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
+    assert scenario.operator("models", code=1).out == (
         "could not read the models OpenCode lists (model_list_failed): `opencode api model.list` exited 1\n"
     )

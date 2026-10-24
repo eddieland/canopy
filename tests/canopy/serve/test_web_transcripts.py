@@ -46,16 +46,14 @@ def test_a_runs_transcript_is_its_sessions_text_tool_calls_and_steps_in_order(ba
     entries = found["entries"]
     assert [e["kind"] for e in entries[:5]] == ["text", "tool", "tool", "tool", "step"]
     read, missing = entries[2], entries[3]
-    # Titled by the path it read, as the runtime titles a call by its tool.
-    assert (read["tool"], read["status"]) == ("read", "completed")
-    assert read["title"].endswith("/web/src/search/SearchBox.tsx")
+    assert (read["tool"], read["status"], read["title"]) == ("read", "completed", "src/search/SearchBox.tsx")
     # Its input is indented JSON, and a file's markup is characters for the UI to show as text.
-    assert json.loads(read["input"])["path"].endswith("/src/search/SearchBox.tsx")
+    assert json.loads(read["input"])["filePath"].endswith("/src/search/SearchBox.tsx")
     assert "return <input value={query}" in read["output"]
-    assert missing["status"] == "error"
+    assert (missing["status"], missing["title"]) == ("error", None)
     assert missing["output"].startswith("File not found: ")
-    shell = next(e for e in entries if e["kind"] == "tool" and e["tool"] == "shell")
-    assert (shell["title"], shell["duration_ms"]) == ("npm test -- search", 14_000)
+    bash = next(e for e in entries if e["kind"] == "tool" and e["tool"] == "bash")
+    assert (bash["title"], bash["duration_ms"]) == ("Run the search tests", 14_000)
     # Its steps are what the run cost, and its last text is the result line the harness read.
     steps = [e["cost_usd"] for e in entries if e["kind"] == "step"]
     assert round(sum(steps), 2) == client(None, backend).get("/api/runs/39").json()["cost_usd"]
@@ -67,7 +65,7 @@ def test_a_runtime_error_ends_a_failed_runs_transcript(backend: Backend) -> None
     assert entries[-1] == {
         "kind": "error",
         "at": "2026-10-08T10:49:54Z",
-        "name": "provider.rate-limit",
+        "name": "APIError",
         "message": "Rate limited: retry after 60s",
         "call": 2,
     }
@@ -77,12 +75,12 @@ def test_a_running_runs_transcript_is_what_its_worker_printed_so_far(backend: Ba
     found = client(None, backend).get("/api/runs/41/transcript").json()
     assert (found["status"], found["session_id"]) == ("read", "ses_mock41")
     assert [e["kind"] for e in found["entries"]] == ["text", "tool", "step", "tool", "step"]
-    assert found["entries"][-2]["title"] == "npm test -- login"
+    assert found["entries"][-2]["title"] == "Run the login tests"
 
 
 def test_a_running_run_shows_its_latest_tool_call(backend: Backend) -> None:
     runs = {r["id"]: r for r in client(None, backend).get("/api/runs").json()}
-    assert runs[41]["activity"] == {"tool": "shell", "did": "npm test -- login", "at": "2026-10-08T12:27:00Z"}
+    assert runs[41]["activity"] == {"tool": "bash", "did": "npm test -- login", "at": "2026-10-08T12:27:00Z"}
     assert runs[39]["activity"] is None  # ended: its result says what it did
 
 

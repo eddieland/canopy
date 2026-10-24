@@ -159,9 +159,9 @@ def write(state_dir: Path, t0: datetime) -> None:
             "read",
             {
                 "status": "completed",
-                "input": {"path": f"{web}/src/search/SearchBox.tsx"},
+                "input": {"filePath": f"{web}/src/search/SearchBox.tsx"},
                 "output": _SEARCH_BOX,
-                "title": "read",
+                "title": "src/search/SearchBox.tsx",
             },
         ),
         _tool(
@@ -170,7 +170,7 @@ def write(state_dir: Path, t0: datetime) -> None:
             "read",
             {
                 "status": "error",
-                "input": {"path": f"{web}/src/search/useSearch.ts"},
+                "input": {"filePath": f"{web}/src/search/useSearch.ts"},
                 "error": f"File not found: {web}/src/search/useSearch.ts",
             },
         ),
@@ -183,9 +183,9 @@ def write(state_dir: Path, t0: datetime) -> None:
             "write",
             {
                 "status": "completed",
-                "input": {"path": f"{web}/src/search/useSearch.ts", "content": "export function useSearch() {}"},
+                "input": {"filePath": f"{web}/src/search/useSearch.ts", "content": "export function useSearch() {}"},
                 "output": "Wrote file successfully.",
-                "title": "write",
+                "title": "src/search/useSearch.ts",
             },
         ),
         _done(
@@ -238,7 +238,7 @@ def write(state_dir: Path, t0: datetime) -> None:
         _done(s40, -73, "Find the failing job", "gh run list --branch agent/ABC-100-flaky-test", "", seconds=2),
         _step(s40, -72.5, 0.18),
         _start(s40, -72.4),
-        _event("error", s40, -70.1, error={"type": "provider.rate-limit", "message": "Rate limited: retry after 60s"}),
+        _event("error", s40, -70.1, error={"name": "APIError", "data": {"message": "Rate limited: retry after 60s"}}),
     ]
     # The running runs print as they go (DESIGN §8): what each has done so far, its cost the seeded run's.
     w41, w43 = "/home/op/acme/.treehouse/web-3f9c2a1b/1/web", "/home/op/acme/.treehouse/web-3f9c2a1b/2/web"
@@ -251,9 +251,9 @@ def write(state_dir: Path, t0: datetime) -> None:
             "read",
             {
                 "status": "completed",
-                "input": {"path": f"{w41}/src/login/LoginForm.tsx"},
+                "input": {"filePath": f"{w41}/src/login/LoginForm.tsx"},
                 "output": "export function LoginForm() {}",
-                "title": "read",
+                "title": "src/login/LoginForm.tsx",
             },
         ),
         _step(s41, 1.1, 0.2),
@@ -339,10 +339,10 @@ def write(state_dir: Path, t0: datetime) -> None:
             "read",
             {
                 "status": "completed",
-                "input": {"path": "checkout/src/search/useSearch.ts"},
+                "input": {"filePath": "checkout/src/search/useSearch.ts"},
                 # The new file is the diff's last hunk, its lines without their `+`.
                 "output": "\n".join(line[1:] for line in reviews.DIFF_88.splitlines()[-21:]),
-                "title": "read",
+                "title": "src/search/useSearch.ts",
             },
         ),
         _step(r4, -57.4, 0.09, sent=18_200),
@@ -364,7 +364,7 @@ def write(state_dir: Path, t0: datetime) -> None:
             "read",
             {
                 "status": "error",
-                "input": {"path": "checkout/src/billing/client.ts"},
+                "input": {"filePath": "checkout/src/billing/client.ts"},
                 "error": "File not found: checkout/src/billing/client.ts",
             },
         ),
@@ -483,7 +483,7 @@ def _edit(session: _Session, minutes: float, path: str) -> str:
     Returns:
         The `tool_use` event as one line of JSON.
     """
-    state = {"status": "completed", "input": {"path": path}, "output": "Edit applied successfully.", "title": "edit"}
+    state = {"status": "completed", "input": {"filePath": path}, "output": "Edit applied successfully.", "title": path}
     return _tool(session, minutes, "edit", state)
 
 
@@ -536,13 +536,13 @@ def _step(session: _Session, minutes: float, cost: float, reason: str = "tool-ca
 
 
 def _done(session: _Session, minutes: float, title: str, command: str, output: str, *, seconds: float = 1) -> str:
-    """A shell call that completed.
+    """A bash call that completed.
 
     Returns:
         The `tool_use` event as one line of JSON.
     """
     state = {"status": "completed", "input": {"command": command, "description": title}, "output": output}
-    return _tool(session, minutes, "shell", {**state, "title": "shell"}, seconds)
+    return _tool(session, minutes, "bash", {**state, "title": title}, seconds)
 
 
 def _coverage() -> str:

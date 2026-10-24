@@ -82,7 +82,7 @@ Check each, and show one table of what is there, with its version, and what is m
 | uv | installs canopy | `uv --version` |
 | Go | builds treehouse at its pinned commit | `go version` |
 | Node 22.12+ and npm | the install builds the web UI; the sandbox installs `srt` with npm | `node --version`, `npm --version` |
-| OpenCode 2.1.4 or later | canopy's agent runtime | `opencode --version` |
+| OpenCode | canopy's agent runtime: 1, or 2.1.4 or later for `runtime.version = 2` | `opencode --version` |
 | gh (optional) | an HTTPS credential helper for git, `gh auth setup-git` | `gh --version` |
 
 For each missing one, propose how to install it on this OS (the upstream installer, the system package manager, or
@@ -107,8 +107,9 @@ need a model provider OpenCode is signed in to.
   GitHub Issues, the GitHub server is both.
 - For a missing server, show the operator the entry for `~/.config/opencode/opencode.json`, from that server's own
   documentation, and ask before you write it. They complete any sign-in themselves.
-- Each server canopy's agents need is set to `"codemode": false`: canopy denies its agents code mode, so a server
-  left in it is out of their reach (D077). `canopy agents` shows such a server as `none` for every agent.
+- With OpenCode 2, set `version = 2` under `[runtime]` in the user config, and set each server canopy's agents need
+  to `"codemode": false`: canopy denies its agents code mode, so a server left in it is out of their reach (D077).
+  `canopy agents` shows such a server as `none` for every agent.
 - Check that OpenCode is signed in to a model provider (OpenCode's `--help` names the command); if not, the operator
   signs in.
 - Explain the grants README step 3 describes: workers need the write tools to comment on a ticket, edit its labels,

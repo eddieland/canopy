@@ -222,7 +222,12 @@ def run_transcript(ctx: Context, run_id: int) -> Transcript | None:
     if row is None:
         return None
     log = Path(str(row["log_path"]))
-    return session_transcript(log, row["session_id"], removed_after(ctx.conn, log, row["ended_at"], "run_files_days"))
+    return session_transcript(
+        log,
+        row["session_id"],
+        removed_after(ctx.conn, log, row["ended_at"], "run_files_days"),
+        version=ctx.config.runtime.version,
+    )
 
 
 def decision(row: records.Decision) -> Decision:

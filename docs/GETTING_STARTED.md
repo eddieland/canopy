@@ -351,9 +351,14 @@ installer adds to your OpenCode and what to deny the rest.
 
 Then check that the rules held. Run `canopy agents` again: a server you denied shows `none` for that agent, the skills
 you denied are listed after `denied`, and with Jira or GitHub as the tracker, the overseer's built-in tools still have
-no `skill`. To see the merged rules themselves, start OpenCode on canopy's definitions from the workspace root, with
-`<digest>` the newest directory under `.canopy/runtime/`, and ask it for its agents, each with its rules, once canopy's
-are listed:
+no `skill`. To see the merged rules themselves, ask OpenCode from the workspace root, with `<digest>` the newest
+directory under `.canopy/runtime/`:
+
+```sh
+env OPENCODE_CONFIG_DIR="$PWD/.canopy/runtime/<digest>" opencode debug agent canopy-overseer
+```
+
+OpenCode 2 has no `debug` command: start it on canopy's definitions and ask it for its agents, each with its rules:
 
 ```sh
 export OPENCODE_CONFIG_DIR="$PWD/.canopy/runtime/<digest>" OPENCODE_PASSWORD=any
@@ -362,4 +367,4 @@ opencode api --server http://127.0.0.1:4096 agent.list
 ```
 
 `canopy agents` lists canopy's own agents only. For a chore's own agent, point `OPENCODE_CONFIG_DIR` at
-`.canopy/chore-agents/<chore>/` instead.
+`.canopy/chore-agents/<chore>/` instead, and name that agent.

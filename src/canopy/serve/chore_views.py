@@ -250,7 +250,12 @@ def chore_run_transcript(ctx: Context, name: str, run_id: int) -> Transcript | N
     if row is None:
         return None
     log = Path(row.log_path)
-    return session_transcript(log, row.session_id, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
+    return session_transcript(
+        log,
+        row.session_id,
+        removed_after(ctx.conn, log, row.ended_at, "run_files_days"),
+        version=ctx.config.runtime.version,
+    )
 
 
 def _chore_run_of(conn: sqlite3.Connection, name: str, run_id: int) -> records.ChoreRun | None:

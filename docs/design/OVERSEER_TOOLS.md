@@ -94,8 +94,9 @@ it is listed with. A refusal carries the text alone.
 - Each request the runtime makes of the server, a tool call included, may take as long as the overseer's run may: a
   dispatch can wait on the dispatch lock and a pool's lease, and the server answers one call at a time, so a call the
   runtime gave up on would still hold up the calls after it.
-- The server's entry takes it out of OpenCode's code mode (`codemode: false`), which would offer its tools only
-  through `execute`, which every agent is denied (D077).
+- Code mode offers no MCP tool by name: the harness turns OpenCode 1's off in the overseer's environment, and the
+  server's entry takes it out of OpenCode 2's (`codemode: false`), which offers tools only through `execute`, which
+  every agent is denied (D077).
 - §6 step 5 checks that the server, started as the runtime starts it, answers `initialize`; on failure the tick closes
   `canopy_unavailable`. A run that never had the tools records nothing, and the duties check (§6) fails it.
 

@@ -73,13 +73,14 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
     snapshot = definitions.ensure(env.state_dir, config.load(env.root))
     # Its deadline, the moment its timeout fires, for the clock in the snapshot (DESIGN §33).
     assert has_deadline(run, 15, before=before, after=after)
-    # Its tools: canopy's own server, in the inline config of its process alone, outside code mode, which hides them.
-    server = {"type": "local", "command": list(mcp.COMMAND), "cwd": str(env.root), "codemode": False}
+    # Its tools: canopy's own server, in the inline config of its process alone, and code mode, which hides them, off.
+    server = {"type": "local", "command": list(mcp.COMMAND), "cwd": str(env.root), "enabled": True, "timeout": 900_000}
     assert run["env"] == {
         "CANOPY_TICK_ID": "1",
         "CANOPY_DEADLINE": run["env"]["CANOPY_DEADLINE"],
         "OPENCODE_CONFIG_DIR": str(snapshot),
-        "OPENCODE_CONFIG_CONTENT": json.dumps({"mcp": {"servers": {"canopy": server}}}),
+        "OPENCODE_CONFIG_CONTENT": json.dumps({"mcp": {"canopy": server}}),
+        "OPENCODE_EXPERIMENTAL_CODE_MODE": "false",
     }
     assert "\n# canopy overseer\n" in (snapshot / "agents" / "canopy-overseer.md").read_text()
 
@@ -324,11 +325,11 @@ def test_an_overseer_failure_names_the_error_the_runtime_reported(
     failure: str,
 ) -> None:
     with_events(scenario.env, "canopy-overseer")
-    server = {"type": "provider.transport", "message": "Unexpected server error."}
+    server = {"name": "UnknownError", "data": {"message": "Unexpected server error.", "ref": "err_ccf1"}}
     failed = scenario.tick(result="", exit_code=exit_code, errors=json.dumps([server]), dry_run=True, code=1)
     assert (failed.tick.status, failed.tick.summary) == (
         "overseer_failed",
-        f"{failure}; the runtime reported provider.transport: Unexpected server error.",
+        f"{failure}; the runtime reported UnknownError: Unexpected server error. (err_ccf1)",
     )
 
 
@@ -343,7 +344,7 @@ def test_an_overseer_failure_names_each_distinct_error_the_first_and_last_past_t
 ) -> None:
     """The first error may be the cause, and the last ended the run (OpenCode goes on after a context overflow)."""
     with_events(scenario.env, "canopy-overseer")
-    errors = json.dumps([{"type": name} for name in names])
+    errors = json.dumps([{"name": name} for name in names])
     failed = scenario.tick(result="", exit_code=1, errors=errors, dry_run=True, code=1)
     assert failed.tick.summary == f"overseer exited 1; the runtime reported {reported}"
 
@@ -351,7 +352,7 @@ def test_an_overseer_failure_names_each_distinct_error_the_first_and_last_past_t
 def test_an_overseer_that_ends_its_tick_after_an_error_is_ok(scenario: Scenario) -> None:
     """The runtime's error is named only for a tick that failed: a session that recovered from it did its work."""
     with_events(scenario.env, "canopy-overseer")
-    ticked = scenario.tick(errors=json.dumps([{"type": "context.overflow"}]), dry_run=True)
+    ticked = scenario.tick(errors=json.dumps([{"name": "ContextOverflowError"}]), dry_run=True)
     assert ticked.tick.status == "ok"
 
 

@@ -11,6 +11,7 @@ from canopy.core.config import ConfigError
 from canopy.infra import procs
 from canopy.runtime import agents
 from canopy.runtime.agents import Model
+from canopy.runtime.implementation import Version
 from tests.conftest import CanopyEnv
 
 MODEL = "acme/fake-model-1"
@@ -161,37 +162,37 @@ def test_a_template_asks_for_the_model_of_the_agent_it_runs(template: str, model
 
 def test_a_listed_model_passes_the_check(opencode_state: Path, tmp_path: Path) -> None:
     opencode_state.write_text(json.dumps({"models": [MODEL]}))
-    agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL))
+    agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=Version.ONE)
 
 
 def test_a_variant_is_looked_up_among_its_models_variants(opencode_state: Path, tmp_path: Path) -> None:
-    """A variant its model lacks would fail the run, or run at the default, so canopy looks it up first (§13)."""
+    """The runtime drops a variant its model lacks without a word, so canopy looks it up first (DESIGN §13)."""
     opencode_state.write_text(
         json.dumps({"models": ["a plugin says hello", MODEL, OTHER], "variants": {MODEL: ["low", "high"]}}),
     )
-    agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL, "high"))
+    agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL, "high"), version=Version.ONE)
     with pytest.raises(agent_models.ModelError) as missing:
-        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL, "max"))
+        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL, "max"), version=Version.ONE)
     assert missing.value.guard == agent_models.MISSING
     expected = f"lists the model {MODEL} chosen in runtime.models but not its variant max (it lists high, low)"
     assert expected in missing.value.reason
     with pytest.raises(agent_models.ModelError, match="it lists none for it"):
-        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(OTHER, "high"))
+        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(OTHER, "high"), version=Version.ONE)
 
 
 def test_a_model_not_listed_or_a_list_not_read_is_refused(opencode_state: Path, tmp_path: Path) -> None:
     opencode_state.write_text(json.dumps({"models": ["acme/other"]}))
     with pytest.raises(agent_models.ModelError) as missing:
-        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL))
+        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=Version.ONE)
     assert missing.value.guard == agent_models.MISSING
     opencode_state.write_text(json.dumps({"exit": 1}))
     with pytest.raises(agent_models.ModelError) as failed:
-        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL))
+        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL), version=Version.ONE)
     assert failed.value.guard == agent_models.LIST_FAILED
-    assert "`opencode api model.list` exited 1" in failed.value.reason
+    assert "`opencode models` exited 1" in failed.value.reason
     with pytest.raises(agent_models.ModelError) as failed:
-        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL, "high"))
-    assert "`opencode api model.list` exited 1" in failed.value.reason
+        agent_models.check(procs.SubprocessRunner(), tmp_path, Model(MODEL, "high"), version=Version.ONE)
+    assert "`opencode models --verbose` exited 1" in failed.value.reason
 
 
 CHORE_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json {prompt}"

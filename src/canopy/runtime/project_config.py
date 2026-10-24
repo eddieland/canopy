@@ -10,15 +10,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.runtime.implementation import project_config
+from canopy.runtime.implementation import one, pick, two
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
 
+    from canopy.runtime.implementation import Version
 
-def refusal(places: Iterable[Path], *, tracker_server: str | None = None) -> str | None:
-    """Why an agent may not start where the runtime reads config from `places`, or None when it may.
+
+def refusal(places: Iterable[Path], *, version: Version, tracker_server: str | None = None) -> str | None:
+    """Why an agent may not start where the runtime `version` runs reads config from `places`, or None when it may.
 
     `tracker_server` is the tracker's MCP server, for a run that may call only its read tools: a private run or a plan.
     Shadowing is checked first, in every place, then the tracker's tools.
@@ -26,6 +28,7 @@ def refusal(places: Iterable[Path], *, tracker_server: str | None = None) -> str
     Returns:
         A message for the operator naming every file that refuses the run, or None.
     """
+    project_config = pick(version, one.project_config, two.project_config)
     places = list(places)
     # Once each: the runtime may read a place's parents too, which the places can share.
     shadowing = list(dict.fromkeys(found for place in places for found in project_config.shadowing(place)))
@@ -39,15 +42,18 @@ def refusal(places: Iterable[Path], *, tracker_server: str | None = None) -> str
     return project_config.naming_tools_message(tracker_server, naming) if naming else None
 
 
-def shadowing(root: Path) -> list[Path]:
-    """Return the files of the runtime's config in `root` that define, or may define, one of canopy's agents."""
-    return project_config.shadowing(root)
+def shadowing(root: Path, *, version: Version) -> list[Path]:
+    """Return the files of the runtime's config in `root` that define, or may define, one of canopy's agents.
+
+    The runtime is the one `version` runs.
+    """
+    return pick(version, one.project_config, two.project_config).shadowing(root)
 
 
-def shadowing_message(found: Iterable[Path]) -> str:
+def shadowing_message(found: Iterable[Path], *, version: Version) -> str:
     """Explain what `shadowing` found and what to do about it.
 
     Returns:
-        A message for the operator naming every file in `found`.
+        A message for the operator naming every file in `found`, as the runtime `version` runs reads them.
     """
-    return project_config.shadowing_message(found)
+    return pick(version, one.project_config, two.project_config).shadowing_message(found)

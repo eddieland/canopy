@@ -454,7 +454,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
     assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
     # A list that cannot be read says why, and refuses a choice as the CLI does.
     opencode_state.write_text(json.dumps({"exit": 1}))
-    assert c.get("/api/models").json() == {"models": [], "error": "`opencode api model.list` exited 1"}
+    assert c.get("/api/models").json() == {"models": [], "error": "`opencode models` exited 1"}
     assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")
 
 

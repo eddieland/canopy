@@ -176,10 +176,7 @@ def test_init_warns_about_copies_of_canopys_agents_in_a_repository(
     old.write_text("---\ndescription: an old copy\n---\n")
     assert main(["init"]) == 0
     out = capsys.readouterr().out
-    assert (
-        f"Warning: OpenCode config here or above defines one of canopy's agents or its MCP server `canopy` ({old})"
-        in out
-    )
+    assert f"Warning: OpenCode config here defines one of canopy's agents or its MCP server `canopy` ({old})" in out
 
 
 def test_init_explains_an_old_user_file(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
@@ -196,10 +193,7 @@ def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys
     old.write_text("---\ndescription: an old copy\n---\n")
     assert main(["init"]) == 0
     out = capsys.readouterr().out
-    assert (
-        f"Warning: OpenCode config here or above defines one of canopy's agents or its MCP server `canopy` ({old})"
-        in out
-    )
+    assert f"Warning: OpenCode config here defines one of canopy's agents or its MCP server `canopy` ({old})" in out
     assert old.exists()
 
 
