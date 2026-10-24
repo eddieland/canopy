@@ -153,5 +153,7 @@ confirmation say when that sets config's variant aside. `GET /api/models` sends 
 are, and the ticket page's picker offers them under their model and shows a variant on its button.
 Built (2026-10-24): `canopy status` names the models a recent run's session says served it, each with its cost when
 there are several, beside the model canopy asked for.
-Not built yet: the check before a review, a chore, a task's run, and a tick's overseer, with its tick status, so a
-reviewer override whose model has gone fails as the review starts.
+Built (2026-10-24): the check before a review, in a dry run too: the review's ticket's reviewer override, else
+`runtime.models`' reviewer, looked up as a dispatch's is, and refused `model_missing` or `model_list_failed` with its
+attention item before the review run is recorded, so the PR spends none of its reviews.
+Not built yet: the check before a chore, a task's run, and a tick's overseer, with its tick status.

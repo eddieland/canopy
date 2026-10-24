@@ -323,10 +323,9 @@ OpenCode does with a plugin, are §33.
 ### Each agent's model
 
 Built as far as each agent's default in `[runtime.models]`, a chore's own model, variants, the ticket's override
-from `canopy model` or the ticket's page, the check of a model and its variant before a worker or plan run, and
-recording what served (REQUIREMENTS R23). The check before a review, a chore, or a tick's overseer is still to come;
-until then such a run on an unlisted model fails as it starts, and one at an unlisted variant runs at the model's
-default.
+from `canopy model` or the ticket's page, the check of a model and its variant before a worker, plan, or review run,
+and recording what served (REQUIREMENTS R23). The check before a chore or a tick's overseer is still to come; until
+then such a run on an unlisted model fails as it starts, and one at an unlisted variant runs at the model's default.
 
 The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design

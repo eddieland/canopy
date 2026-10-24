@@ -359,6 +359,56 @@ def test_a_tickets_reviewer_override_reaches_its_reviews_alone(
     assert ran_on(agent_log) is None
 
 
+def test_a_reviewer_override_whose_model_was_dropped_refuses_the_review_as_it_starts(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    opencode_state: Path,
+    treehouse_state: Path,
+    git_pool: GitPool,
+) -> None:
+    del reviewing
+    scenario.configures(runtime={"models": {"reviewer": MODEL}})
+    listed(opencode_state, MODEL, OTHER)
+    scenario.operator("model", KEY, OTHER, "--agent", "reviewer")
+    listed(opencode_state, MODEL)
+    reason = (
+        f"OpenCode does not list the model {OTHER} chosen for {KEY}'s reviewer runs (`canopy model {KEY} --agent "
+        "reviewer`), so a run on it would fail before its first call; nothing ran on another model. Choose a model it "
+        "lists, or set up its provider"
+    )
+    # Never config's model or the runtime's default instead, and the PR spends none of its reviews.
+    refused = scenario.refuses(reviews(head(git_pool), ticket=KEY))
+    assert refused == [("refused:model_missing", reason), ("attention:model_missing", reason)]
+    assert scenario.attention() == [(KEY, "model_missing")]
+    assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+    # A dry run refuses it as a live tick would.
+    dry = scenario.refuses(reviews(head(git_pool), ticket=KEY), dry_run=True)
+    assert dry == [("refused:model_missing", reason), ("attention:model_missing", reason)]
+
+
+def test_a_reviewers_model_in_config_the_runtime_does_not_list_refuses_a_review_of_any_pr(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    del reviewing
+    listed(opencode_state, OTHER)
+    scenario.configures(runtime={"models": {"reviewer": MODEL}})
+    reason = (
+        f"OpenCode does not list the model {MODEL} chosen in runtime.models, so a run on it would fail before its "
+        "first call; nothing ran on another model. Choose a model it lists, or set up its provider"
+    )
+    # A PR with no ticket takes config's model, and is refused on it too.
+    refused = scenario.refuses(reviews(head(git_pool)))
+    assert refused[0] == ("refused:model_missing", reason)
+    assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
+    listed(opencode_state, OTHER, MODEL)
+    scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 1
+
+
 def calls(state: Path) -> list[tuple[list[str], str]]:
     """Each `opencode models` the fake ran, with the directory it ran in."""
     log = state.with_name("opencode.jsonl")
