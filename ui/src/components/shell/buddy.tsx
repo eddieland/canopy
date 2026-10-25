@@ -1,12 +1,12 @@
 import { useRouterState } from '@tanstack/react-router'
 import { X } from 'lucide-react'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, RefObject } from 'react'
 
 import { HatDrawing } from '@/components/hat'
 import { useFits } from '@/hooks/use-fits'
-import { nextTip, setBuddy, tipsFor, typeBurst } from '@/lib/buddy'
-import type { View } from '@/lib/buddy'
+import { NAMES, nextTip, setBuddy, tipsFor, typeBurst, useCompanion } from '@/lib/buddy'
+import type { Companion, View } from '@/lib/buddy'
 import { useWardrobe } from '@/lib/hats'
 import type { HatId } from '@/lib/hats'
 import { onRaveStart, useRave } from '@/lib/rave'
@@ -23,8 +23,10 @@ const OVERLAP_PX = 40
 /** How Sprig fits its slot: with the room for its bubble too, or only for itself, standing over the spend a little. */
 type Room = 'roomy' | 'tight'
 
-/** The tip Sprig last offered: on which view, what it says, whether it is up, and if it was asked. */
+/** The tip Sprig last offered: who offered it, on which view, what it says, whether it is up, and if it was asked. */
 interface Offer {
+    /** Who offered it, Sprig or the Ghost in its place, in whose voice it is. */
+    companion: Companion
     /** The view it was offered on, which it is about. */
     view: View | undefined
     /** Whether it was offered while the lightswitch rave was on, which it is then about instead. */
@@ -57,16 +59,22 @@ interface Offer {
  * by `OVERLAP_PX` or less, as the operator asked; there the bubble would cover the blocks above, so a tip shows only
  * when asked for, with a click, and Sprig lets the ones it would offer on its own pass. A slot shorter still leaves
  * Sprig out, rather than squeeze the blocks above.
+ *
+ * Settings can put a Destiny Ghost in Sprig's place: it floats where Sprig stands, in a voice of its own
+ * (src/lib/ghost.ts), and keeps every rule above. A tip one of them offered is never shown under the other's name.
  */
 export function Buddy() {
     const view = viewOf(useRouterState({ select: (state) => state.matches.at(-1)?.routeId }))
     const rave = useRave() === 'on'
+    const companion = useCompanion()
+    const name = NAMES[companion]
     // Closed until the first is offered, the bubble holding a tip's room meanwhile.
     const [offer, setOffer] = useState<Offer>(() => ({
+        companion,
         view,
         rave,
         n: 0,
-        tip: nextTip(tipsFor(view, rave), ''),
+        tip: nextTip(tipsFor(view, rave, companion), ''),
         open: false,
         asked: false,
     }))
@@ -75,10 +83,11 @@ export function Buddy() {
     // Offers the next tip, about the view on screen or the rave, never the one just offered.
     const offerNext = (asked: boolean, raving: boolean) =>
         setOffer({
+            companion,
             view,
             rave: raving,
             n: offer.n + 1,
-            tip: nextTip(tipsFor(view, raving), offer.tip),
+            tip: nextTip(tipsFor(view, raving, companion), offer.tip),
             open: true,
             asked,
         })
@@ -109,14 +118,19 @@ export function Buddy() {
     }, [offer.open])
     // The lights going off is worth a word at once: not a page loading with them off, only the switch flipped since.
     useEffect(() => onRaveStart(() => offerUnasked(true)), [])
-    const shown = offer.open && offer.view === view && offer.rave === rave && (room === 'roomy' || offer.asked)
+    const shown =
+        offer.open &&
+        offer.companion === companion &&
+        offer.view === view &&
+        offer.rave === rave &&
+        (room === 'roomy' || offer.asked)
     // A new tip opens a new bubble: the key remounts it, popping it in, and raises Sprig's brows. Closed, the bubble
     // keeps the last tip's room, whatever the page, so Sprig does not move. Sprig, and a bubble shown in a tight slot,
     // rise out of the slot over the blocks above: positioned, so they paint over them.
     return (
         <div ref={slot} className="flex min-h-0 flex-1 flex-col justify-end print:hidden">
             <aside
-                aria-label="Sprig"
+                aria-label={name}
                 data-testid="buddy"
                 data-room={room === false ? undefined : room}
                 className={cn(
@@ -126,6 +140,7 @@ export function Buddy() {
             >
                 <Bubble
                     key={offer.n}
+                    name={name}
                     tip={offer.tip}
                     open={offer.open}
                     shown={shown}
@@ -134,7 +149,7 @@ export function Buddy() {
                 />
                 <button
                     type="button"
-                    aria-label="Ask Sprig for a tip"
+                    aria-label={`Ask ${name} for a tip`}
                     data-testid="buddy-sprig"
                     onClick={another}
                     className={cn(
@@ -142,7 +157,11 @@ export function Buddy() {
                         'outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
                     )}
                 >
-                    <Figure cue={offer.n} hat={worn} rave={rave} />
+                    {companion === 'ghost' ? (
+                        <GhostFigure cue={offer.n} rave={rave} />
+                    ) : (
+                        <Figure cue={offer.n} hat={worn} rave={rave} />
+                    )}
                 </button>
             </aside>
         </div>
@@ -192,12 +211,14 @@ function roomFor(slot: HTMLElement): Room | false {
  * Not `shown`, it is hidden but keeps its room, so Sprig does not move.
  */
 function Bubble({
+    name,
     tip,
     open,
     shown,
     onAnother,
     onClose,
 }: {
+    name: string
     tip: string
     open: boolean
     shown: boolean
@@ -220,7 +241,7 @@ function Bubble({
                 !shown && 'invisible',
             )}
         >
-            <p className="panel-label mb-1">Sprig</p>
+            <p className="panel-label mb-1">{name}</p>
             <p>{tip}</p>
             <div className="mt-2.5 flex flex-col items-start gap-1 text-xs">
                 <button
@@ -234,7 +255,7 @@ function Bubble({
                 <button
                     type="button"
                     onClick={() => setBuddy('off')}
-                    title="Turns Sprig off. Settings turns it back on."
+                    title={`Turns ${name} off. Settings turns it back on.`}
                     className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                     data-testid="buddy-dismiss"
                 >
@@ -268,27 +289,7 @@ function Bubble({
  */
 function Figure({ cue, hat, rave }: { cue: number; hat: HatId | null; rave: boolean }) {
     const figure = useRef<SVGSVGElement>(null)
-    useEffect(() => {
-        const svg = figure.current
-        if (svg === null || globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            return
-        }
-        const look = (event: PointerEvent) => {
-            for (const eye of svg.querySelectorAll<SVGGElement>('[data-eye]')) {
-                const box = eye.getBoundingClientRect()
-                const dx = event.clientX - (box.left + box.width / 2)
-                const dy = event.clientY - (box.top + box.height / 2)
-                const distance = Math.max(Math.hypot(dx, dy), 1)
-                // At most 2.5 units off center, in the drawing's own units, and less for a pointer close by.
-                const reach = 2.5 * Math.min(1, distance / 120)
-                const x = ((dx / distance) * reach).toFixed(2)
-                const y = ((dy / distance) * reach).toFixed(2)
-                eye.querySelector('[data-pupil]')?.setAttribute('transform', `translate(${x} ${y})`)
-            }
-        }
-        globalThis.addEventListener('pointermove', look, { passive: true })
-        return () => globalThis.removeEventListener('pointermove', look)
-    }, [])
+    useEyesOnPointer(figure, 2.5)
     return (
         <svg ref={figure} viewBox="0 -6 48 92" className="h-24 w-[3.25rem] overflow-visible" aria-hidden>
             {/* Drawn before the keyboard, which stays put in front of its foot while it dances. */}
@@ -344,6 +345,135 @@ function Figure({ cue, hat, rave }: { cue: number; hat: HatId | null; rave: bool
                 </g>
             </g>
             <Keyboard />
+        </svg>
+    )
+}
+
+/**
+ * Turns the pupil of each eye in `figure` (its `[data-eye]` groups, each with a `[data-pupil]`) toward the pointer, at
+ * most `most` units off center, in the drawing's own units, and less for a pointer close by. Under reduced motion they
+ * hold still.
+ */
+function useEyesOnPointer(figure: RefObject<SVGSVGElement | null>, most: number): void {
+    useEffect(() => {
+        const svg = figure.current
+        if (svg === null || globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            return
+        }
+        const look = (event: PointerEvent) => {
+            for (const eye of svg.querySelectorAll<SVGGElement>('[data-eye]')) {
+                const box = eye.getBoundingClientRect()
+                const dx = event.clientX - (box.left + box.width / 2)
+                const dy = event.clientY - (box.top + box.height / 2)
+                const distance = Math.max(Math.hypot(dx, dy), 1)
+                const reach = most * Math.min(1, distance / 120)
+                const x = ((dx / distance) * reach).toFixed(2)
+                const y = ((dy / distance) * reach).toFixed(2)
+                eye.querySelector('[data-pupil]')?.setAttribute('transform', `translate(${x} ${y})`)
+            }
+        }
+        globalThis.addEventListener('pointermove', look, { passive: true })
+        return () => globalThis.removeEventListener('pointermove', look)
+    }, [figure, most])
+}
+
+/** Where the Ghost's eye sits in its drawing, which its shell turns about. */
+const GHOST_CENTER = { x: 24, y: 40 }
+/**
+ * One of the Ghost's four great plates, pointing up from its eye: a pyramid seen from the front, its lit facet left of
+ * the ridge and its shaded one right, notched where the ridge meets the eye.
+ */
+const PLATE = { lit: 'M0 -24 L-9 -10 L0 -12.5 Z', shaded: 'M0 -24 L0 -12.5 L9 -10 Z' }
+/** One of its four lesser plates, behind the great ones on the diagonals, all in shade. */
+const SPIKE = 'M0 -20 L-5 -9 L5 -9 Z'
+
+/**
+ * The Ghost that may sit in Sprig's place: a Generalist Shell, four great faceted plates around one glowing eye, four
+ * lesser ones behind them on the diagonals, floating around its spot over its shadow, leaning as it goes. Its light
+ * swells and dims, and flares with each new tip. The eye blinks now and then and looks toward the pointer, and the
+ * great plates spread a little with each tip, as a Ghost's do when it talks. While the lightswitch rave is on, its
+ * shell turns a quarter on each beat of the lights, and its light swells in time. Under reduced motion all of it
+ * holds still.
+ */
+function GhostFigure({ cue, rave }: { cue: number; rave: boolean }) {
+    const figure = useRef<SVGSVGElement>(null)
+    useEyesOnPointer(figure, 1.8)
+    const at = (turn: number) => `translate(${GHOST_CENTER.x} ${GHOST_CENTER.y}) rotate(${turn})`
+    return (
+        <svg ref={figure} viewBox="0 -6 48 92" className="h-24 w-[3.25rem] overflow-visible" aria-hidden>
+            <g className="animate-ghost-wander">
+                <ellipse cx="24" cy="76" rx="11" ry="2" className="animate-ghost-shadow fill-buddy-ghost-facet/30" />
+                <g data-testid="ghost-body" className="animate-ghost-float">
+                    <g className="animate-ghost-lean">
+                        <g data-testid="ghost-shell" className={cn(rave && 'animate-ghost-spin')}>
+                            {[45, 135, 225, 315].map((turn) => (
+                                <path
+                                    key={turn}
+                                    d={SPIKE}
+                                    transform={at(turn)}
+                                    strokeWidth="0.6"
+                                    strokeLinejoin="round"
+                                    className="fill-buddy-ghost-facet stroke-buddy-ghost-facet"
+                                />
+                            ))}
+                            {[0, 90, 180, 270].map((turn) => (
+                                <g key={turn} transform={at(turn)}>
+                                    <g key={cue} className="animate-ghost-talk">
+                                        <path
+                                            d={PLATE.lit}
+                                            strokeWidth="0.6"
+                                            strokeLinejoin="round"
+                                            className="fill-buddy-ghost-shell stroke-buddy-ghost-facet"
+                                        />
+                                        <path
+                                            d={PLATE.shaded}
+                                            strokeWidth="0.6"
+                                            strokeLinejoin="round"
+                                            className="fill-buddy-ghost-facet stroke-buddy-ghost-facet"
+                                        />
+                                    </g>
+                                </g>
+                            ))}
+                        </g>
+                        <circle cx={GHOST_CENTER.x} cy={GHOST_CENTER.y} r="9.5" className="fill-buddy-ghost-facet" />
+                        <g className="animate-buddy-blink">
+                            <g data-eye>
+                                <circle
+                                    data-testid="ghost-glow"
+                                    cx={GHOST_CENTER.x}
+                                    cy={GHOST_CENTER.y}
+                                    r="7"
+                                    fillOpacity="0.35"
+                                    className={cn(
+                                        'fill-buddy-ghost-eye',
+                                        rave ? 'animate-ghost-glow-rave' : 'animate-ghost-glow',
+                                    )}
+                                />
+                                <circle
+                                    key={cue}
+                                    cx={GHOST_CENTER.x}
+                                    cy={GHOST_CENTER.y}
+                                    r="7"
+                                    className="animate-ghost-flare fill-buddy-ghost-eye"
+                                />
+                                <circle
+                                    cx={GHOST_CENTER.x}
+                                    cy={GHOST_CENTER.y}
+                                    r="4.6"
+                                    className="animate-ghost-light fill-buddy-ghost-eye"
+                                />
+                                <circle
+                                    data-pupil
+                                    cx={GHOST_CENTER.x}
+                                    cy={GHOST_CENTER.y}
+                                    r="2"
+                                    className="fill-buddy-ghost-core"
+                                />
+                            </g>
+                        </g>
+                    </g>
+                </g>
+            </g>
         </svg>
     )
 }

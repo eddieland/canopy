@@ -3,8 +3,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
-import { ANYWHERE, DEFAULT, nextTip, parseBuddy, RAVE, TIPS, tipsFor, typeBurst } from './buddy'
+import {
+    ANYWHERE,
+    DEFAULT,
+    DEFAULT_COMPANION,
+    nextTip,
+    parseBuddy,
+    parseCompanion,
+    RAVE,
+    TIPS,
+    tipsFor,
+    typeBurst,
+    VOICES,
+} from './buddy'
 import type { View } from './buddy'
+import { GHOST_ANYWHERE, GHOST_RAVE, GHOST_TIPS } from './ghost'
 
 // The setting is read when the module loads, so each test loads a fresh copy.
 function load() {
@@ -22,37 +35,53 @@ describe('parseBuddy', () => {
     })
 })
 
-describe('TIPS', () => {
+describe('parseCompanion', () => {
+    it('is Sprig unless the Ghost is picked', () => {
+        expect(DEFAULT_COMPANION).toBe('sprig')
+        expect(parseCompanion(null)).toBe('sprig')
+        expect(parseCompanion('sprig')).toBe('sprig')
+        expect(parseCompanion('ghost')).toBe('ghost')
+        expect(parseCompanion('exo')).toBe('sprig')
+    })
+})
+
+// Every line a companion says, on any view or at the rave.
+const everyLine = Object.values(VOICES)
+    .flatMap(({ tips, anywhere, rave }) => [Object.values(tips).flat(), anywhere, rave])
+    .flat()
+
+describe.each(Object.entries(VOICES))("%s's tips", (_, lines) => {
     it('has several tips of its own for every view', () => {
         // The type check holds every route to a list (src/components/shell/buddy.tsx); this holds each to a few.
-        for (const tips of Object.values(TIPS)) {
+        for (const tips of Object.values(lines.tips)) {
             expect(tips.length).toBeGreaterThanOrEqual(5)
         }
     })
 
-    it('never says the same thing twice, on any page', () => {
-        const all = [...Object.values(TIPS).flat(), ...ANYWHERE, ...RAVE]
-        expect(new Set(all).size).toBe(all.length)
-    })
-
     it('never follows a voice with itself in a list, the last round to the first', () => {
-        for (const tips of [...Object.values(TIPS), ANYWHERE, RAVE]) {
+        for (const tips of [...Object.values(lines.tips), lines.anywhere, lines.rave]) {
             const voices = tips.map((tip) => tip.split(' ').slice(0, 2).join(' '))
             for (const [n, voice] of voices.entries()) {
                 expect(voice).not.toBe(voices[(n + 1) % voices.length])
             }
         }
     })
+})
 
-    it('keeps every tip short enough for the bubble', () => {
+describe('every tip', () => {
+    it('is said once, by one companion, on one page', () => {
+        expect(new Set(everyLine).size).toBe(everyLine.length)
+    })
+
+    it('is short enough for the bubble', () => {
         // A longer tip makes the bubble taller, which the rail's slot must hold whole (src/components/shell/buddy.tsx).
-        for (const tip of [...Object.values(TIPS).flat(), ...ANYWHERE, ...RAVE]) {
+        for (const tip of everyLine) {
             expect(tip.length).toBeLessThanOrEqual(100)
         }
     })
 
-    it('never opens a line with "Tip:", which is for the ticker\'s real tips', () => {
-        for (const tip of [...Object.values(TIPS).flat(), ...ANYWHERE, ...RAVE]) {
+    it('never opens with "Tip:", which is for the ticker\'s real tips', () => {
+        for (const tip of everyLine) {
             expect(tip).not.toMatch(/^Tip:/u)
         }
     })
@@ -76,6 +105,15 @@ describe('nextTip', () => {
     it("draws only from the rave's while the lights rave, on any view", () => {
         expect(drawAll('/chores/$name', RAVE.length, true)).toEqual(new Set(RAVE))
         expect(drawAll(undefined, RAVE.length, true)).toEqual(new Set(RAVE))
+    })
+
+    it("draws from the Ghost's lines alone when the Ghost is named", () => {
+        const length = GHOST_TIPS['/chores/$name'].length + GHOST_ANYWHERE.length
+        const drawn = new Set(
+            Array.from({ length }, (_, n) => nextTip(tipsFor('/chores/$name', false, 'ghost'), '', () => n / length)),
+        )
+        expect(drawn).toEqual(new Set([...GHOST_TIPS['/chores/$name'], ...GHOST_ANYWHERE]))
+        expect(tipsFor(undefined, true, 'ghost')).toEqual(GHOST_RAVE)
     })
 
     it('never offers the tip just offered, on its view or another', () => {
@@ -111,6 +149,23 @@ describe('typeBurst', () => {
 
     it('types every key it has when it has fewer than a burst', () => {
         expect(typeBurst(['a', 'b'], ' ', () => 0.99)).toEqual(['b', 'a', ' '])
+    })
+})
+
+describe('useCompanion', () => {
+    beforeEach(() => localStorage.clear())
+
+    it("puts the Ghost in Sprig's place and back, and keeps the choice", async () => {
+        const buddy = await load()
+        const { result } = renderHook(() => buddy.useCompanion())
+        expect(result.current).toBe('sprig')
+
+        act(() => buddy.setCompanion('ghost'))
+        expect(result.current).toBe('ghost')
+        expect(localStorage.getItem(buddy.COMPANION_KEY)).toBe('ghost')
+
+        act(() => otherTab(buddy.COMPANION_KEY, 'sprig'))
+        expect(result.current).toBe('sprig')
     })
 })
 

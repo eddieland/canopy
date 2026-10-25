@@ -30,7 +30,10 @@ async function fixRandom(page: Page): Promise<void> {
     })
 }
 
-/** Asks Sprig for a tip from the keyboard, then lets go of the focus: no pointer moves its eyes, no ring shows. */
+/**
+ * Asks Sprig, or the Ghost in its place, for a tip from the keyboard, then lets go of the focus: no pointer moves its
+ * eyes, no ring shows.
+ */
 async function askSprig(page: Page): Promise<void> {
     const sprig = page.getByTestId('buddy-sprig')
     await sprig.press('Enter')
@@ -53,6 +56,27 @@ test('Sprig is off until Settings turns it on', async ({ page }) => {
     await page.reload()
     await settled(page)
     await expect(page.getByTestId('buddy')).toBeVisible()
+})
+
+test("picking the Ghost in Settings turns it on in Sprig's place", async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    await expect(page.getByTestId('buddy')).toHaveCount(0)
+
+    await page.getByTestId('companion-ghost').click()
+    await expect(page.getByRole('complementary', { name: 'Ghost' })).toBeVisible()
+    await expect(page.getByTestId('fun-sprig')).toBeChecked()
+    await expect(page.getByTestId('fun-sprig')).toHaveAccessibleName('Ghost')
+})
+
+test('picking Sprig, already picked, turns it on', async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    await expect(page.getByTestId('companion-sprig')).toHaveAttribute('data-state', 'on')
+
+    await page.getByTestId('companion-sprig').click()
+    await expect(page.getByRole('complementary', { name: 'Sprig' })).toBeVisible()
+    await expect(page.getByTestId('companion-sprig')).toHaveAttribute('data-state', 'on')
 })
 
 test.describe('turned on', () => {
@@ -162,6 +186,59 @@ test.describe('turned on', () => {
         await page.getByTestId('fun-sprig').click()
         await expect(buddy).toBeVisible()
         await expect(page.getByTestId('buddy-sprig')).toBeVisible()
+    })
+
+    test("Settings puts a Ghost in Sprig's place, and the rail keeps it", async ({ page }) => {
+        await page.goto('settings')
+        await settled(page)
+        await expect(page.getByRole('complementary', { name: 'Sprig' })).toBeVisible()
+
+        await page.getByTestId('companion-ghost').click()
+        const ghost = page.getByRole('complementary', { name: 'Ghost' })
+        await expect(ghost).toBeVisible()
+        await expect(page.getByTestId('fun-sprig')).toHaveAccessibleName('Ghost')
+        await page.reload()
+        await settled(page)
+        await page.getByRole('button', { name: 'Ask Ghost for a tip' }).click()
+        await expect(page.getByTestId('buddy-tip')).toContainText('Ghost')
+
+        await page.getByTestId('companion-sprig').click()
+        await expect(page.getByRole('complementary', { name: 'Sprig' })).toBeVisible()
+    })
+
+    test("the Ghost's eye follows the pointer", async ({ page }) => {
+        await page.addInitScript(() => globalThis.localStorage.setItem('canopy-companion', 'ghost'))
+        await page.goto('attention')
+        await settled(page)
+        const pupil = page.getByTestId('ghost-body').locator('[data-pupil]')
+        await page.mouse.move(0, 0)
+        await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/u)
+    })
+
+    test('the Ghost floats around, its light swells and dims, faster at the rave, still under reduced motion', async ({
+        page,
+    }) => {
+        // The Ghost's running animations, by name, and how long a round of each takes.
+        const moving = () =>
+            page.evaluate(() =>
+                Object.fromEntries(
+                    document
+                        .getAnimations()
+                        .filter((a) => a instanceof CSSAnimation && a.animationName.startsWith('ghost-'))
+                        .map((a) => [(a as CSSAnimation).animationName, a.effect?.getTiming().duration]),
+                ),
+            )
+        await page.addInitScript(() => globalThis.localStorage.setItem('canopy-companion', 'ghost'))
+        await page.goto('settings')
+        await settled(page)
+        await expect.poll(moving).toMatchObject({ 'ghost-wander': 14_000, 'ghost-glow': 4200, 'ghost-light': 4200 })
+
+        await page.getByTestId('light-switch').click()
+        await expect.poll(moving).toMatchObject({ 'ghost-glow': 1200, 'ghost-spin': 2400 })
+        await page.getByTestId('light-switch').click()
+
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await expect.poll(moving).toEqual({})
     })
 
     test("Sprig's eyes follow the pointer", async ({ page }) => {
@@ -337,6 +414,17 @@ test.describe('turned on', () => {
             await settled(page)
             await askSprig(page)
             await expect(page.getByTestId('buddy')).toHaveScreenshot(`buddy-hat-${theme}.png`)
+        })
+
+        test(`the Ghost in ${theme}`, async ({ page }) => {
+            await page.addInitScript(() => globalThis.localStorage.setItem('canopy-companion', 'ghost'))
+            await page.clock.setFixedTime(NOW)
+            await fixRandom(page)
+            await storeTheme(page, theme)
+            await page.goto('attention')
+            await settled(page)
+            await askSprig(page)
+            await expect(page.getByTestId('buddy')).toHaveScreenshot(`ghost-${theme}.png`)
         })
 
         test(`Sprig in ${theme}`, async ({ page }) => {

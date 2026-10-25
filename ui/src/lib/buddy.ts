@@ -1,3 +1,4 @@
+import { GHOST_ANYWHERE, GHOST_RAVE, GHOST_TIPS } from '@/lib/ghost'
 import { nextIndex } from '@/lib/headlines'
 import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
@@ -9,7 +10,8 @@ import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
  * voice follows itself: the paperclip's "It looks like you're...", an "Unhelpful tip:", a "Did you know?" or "Fun
  * fact:" that is not one, a "Hot take:", a "Dear diary," entry, a haiku, a riddle. While the lightswitch rave is on
  * (src/lib/rave.ts), Sprig has only the rave on its mind. It is off until Settings turns it on, which is kept in
- * localStorage like the theme, and synced across tabs.
+ * localStorage like the theme, and synced across tabs. Settings can also put a Destiny Ghost in its place, with lines
+ * of its own (src/lib/ghost.ts): the same setting turns either on and off.
  */
 
 /** Whether Sprig shows. */
@@ -23,6 +25,22 @@ export const DEFAULT: BuddySetting = 'off'
 /** The setting as stored, or the default for anything it does not recognize. */
 export function parseBuddy(raw: string | null): BuddySetting {
     return raw === 'on' || raw === 'off' ? raw : DEFAULT
+}
+
+/** Who sits at the foot of the rail while it is on: Sprig, or a Ghost in its place. */
+export type Companion = 'sprig' | 'ghost'
+
+/** Where localStorage keeps who sits there. */
+export const COMPANION_KEY = 'canopy-companion'
+/** Who sits there until the operator picks: Sprig. */
+export const DEFAULT_COMPANION: Companion = 'sprig'
+
+/** What each companion is called, on the rail and in Settings. */
+export const NAMES: Record<Companion, string> = { sprig: 'Sprig', ghost: 'Ghost' }
+
+/** Who sits there as stored, or the default for anything it does not recognize. */
+export function parseCompanion(raw: string | null): Companion {
+    return raw === 'sprig' || raw === 'ghost' ? raw : DEFAULT_COMPANION
 }
 
 /**
@@ -288,15 +306,32 @@ export const RAVE: readonly string[] = [
     'Riddle: what goes off and on all night and never makes up its mind? The lights. And me.',
 ]
 
+/** A companion's lines: its own for each view, its ones for anywhere, and its rave's. */
+export interface Voice {
+    /** Its tips for each view: every view Sprig has tips for, so a new route needs the Ghost's too. */
+    tips: Record<View, readonly string[]>
+    /** Its tips for any view, after the view's own. */
+    anywhere: readonly string[]
+    /** Its tips while the lightswitch rave is on. */
+    rave: readonly string[]
+}
+
+/** Each companion's lines. */
+export const VOICES: Record<Companion, Voice> = {
+    sprig: { tips: TIPS, anywhere: ANYWHERE, rave: RAVE },
+    ghost: { tips: GHOST_TIPS, anywhere: GHOST_ANYWHERE, rave: GHOST_RAVE },
+}
+
 /**
- * The tips Sprig picks from on a view: the view's own, then the ones for anywhere. While the lightswitch rave is on,
- * the rave's alone, on any view.
+ * The tips a companion, Sprig unless named, picks from on a view: the view's own, then the ones for anywhere. While
+ * the lightswitch rave is on, the rave's alone, on any view.
  */
-export function tipsFor(view: View | undefined, rave: boolean): readonly string[] {
+export function tipsFor(view: View | undefined, rave: boolean, companion: Companion = 'sprig'): readonly string[] {
+    const voice = VOICES[companion]
     if (rave) {
-        return RAVE
+        return voice.rave
     }
-    return [...(view === undefined ? [] : TIPS[view]), ...ANYWHERE]
+    return [...(view === undefined ? [] : voice.tips[view]), ...voice.anywhere]
 }
 
 /**
@@ -334,4 +369,20 @@ export function useBuddy(): BuddySetting {
 /** Stores the setting and applies it now. */
 export function setBuddy(next: BuddySetting): void {
     setting.set(next)
+}
+
+const companionSetting = storedSetting({
+    key: COMPANION_KEY,
+    parse: parseCompanion,
+    serialize: (value: Companion) => value,
+})
+
+/** Who sits at the foot of the rail. Re-renders on a change from this tab or another. */
+export function useCompanion(): Companion {
+    return useStoredSetting(companionSetting)
+}
+
+/** Stores who sits there and applies it now. */
+export function setCompanion(next: Companion): void {
+    companionSetting.set(next)
 }

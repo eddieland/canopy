@@ -1,0 +1,234 @@
+/**
+ * The Ghost's lines: a Destiny Ghost that Settings can put at the foot of the side rail in Sprig's place
+ * (src/lib/buddy.ts). Like Sprig's, they are plain strings written here, never journal text, and none of them is real,
+ * so none opens with "Tip:". They come in a Ghost's voices, mixed in each list so that no voice follows itself: an
+ * "Eyes up, Guardian.", a "Scanning...", a "Grimoire:" entry that is no lore anyone wrote, a "Field report:", a "Dear
+ * Traveler," log, and now and then a door it can open if you hold them off. Its keys are the views Sprig has tips for,
+ * which src/lib/buddy.ts holds them to, so a new route needs the Ghost's tips as well as Sprig's.
+ */
+
+/** The Ghost's tips for each view, by its route id, as Sprig's are (`TIPS` in src/lib/buddy.ts). */
+export const GHOST_TIPS = {
+    '/attention': [
+        'Eyes up, Guardian. Something in this inbox needs you. Possibly several somethings.',
+        'Scanning... I count a lot of items that want your attention. They all sound urgent.',
+        'Grimoire: the inbox was here before the Collapse. It will be here after. Still not cleared.',
+        'Dear Traveler, the Guardian opened the inbox again. I hid behind them. It seemed safest.',
+        "Field report: the top item is the most dangerous. I'd go in shooting.",
+    ],
+    '/tickets/': [
+        "Eyes up, Guardian. A whole list of tickets, and each one thinks it's the main quest.",
+        'Grimoire: "should be quick" has felled more Guardians than the Hive ever did.',
+        "Field report: three tickets blocked, two waiting on you, one asking for me. I didn't do it.",
+        'Dear Traveler, filtered the tickets. Still a lot of tickets. Please advise.',
+        'Scanning... this list has fewer descriptions than a Vex has feelings.',
+    ],
+    '/tasks/': [
+        'Eyes up, Guardian. A task is a bounty: you pick it up, and somebody else does it.',
+        'Field report: tasks found. Rewards unclear. Glimmer, probably.',
+        'Grimoire: "find out why it\'s slow" was the Vanguard\'s first task. It is still open.',
+        'Dear Traveler, a task asked a question. I said "ask Ikora". It did not.',
+        'Scanning... no Fallen here. Just tasks. Somehow that is scarier.',
+    ],
+    '/tasks/$id': [
+        "Eyes up, Guardian. It's a report. I can decrypt it, but it'll take a minute. Hold here.",
+        "Grimoire: a draft PR is a Ghost that hasn't found its Guardian yet.",
+        'Scanning... it found three things nobody asked about. Very thorough. Very Warlock.',
+        'Dear Traveler, it called its own work throwaway. Hunters say that about their cloaks.',
+        'Field report: one question in, three tickets out. Exotic drop rates are worse.',
+    ],
+    '/tasks/$id_/runs/$run': [
+        "Eyes up, Guardian. This is everything the worker did. I've seen less in a Rasputin dump.",
+        'Scanning... it ran grep forty times. Respect. I only scan things that glow.',
+        'Grimoire: every transcript ends. Some of them end with the tests passing.',
+        'Field report: the worker measured twice and cut once. Titans measure zero times.',
+        "Dear Traveler, read a worker's every move today. It felt like a raid replay.",
+    ],
+    '/tickets/$key': [
+        "Eyes up, Guardian. This ticket has a story. I'll narrate it in a calm, slightly worried voice.",
+        "Field report: two robots and a Guardian, politely disagreeing. I'm the third robot.",
+        'Grimoire: acceptance criteria are prophecy. They are rarely accepted as written.',
+        'Scanning... I detect a reply box. You could reply. Or we could just float here.',
+        "Dear Traveler, a ticket asked me to forget it. I'm a Ghost. I remember everything. Sadly.",
+    ],
+    '/pull-requests/': [
+        "Eyes up, Guardian. Pull requests, inbound. None of them are mine. I don't have hands.",
+        'Scanning... a draft. It is not ready. Neither were you, the first time you died.',
+        "Field report: no merges here. canopy doesn't merge. That's a Vanguard call.",
+        'Grimoire: "LGTM" is the oldest spell in the Books of Sorrow. It has ended careers.',
+        'Dear Traveler, a PR waited all week for a review. I waited with it. We bonded.',
+    ],
+    '/pull-requests/pr': [
+        "Eyes up, Guardian. One line changed, they said. I'm reading four hundred files.",
+        'Give me a minute, I can open this PR. Hold off the reviewers while I work.',
+        'Grimoire: a PR merged on a Friday was the first Darkness Zone.',
+        'Scanning... every push is a fresh start. I know a thing or two about fresh starts.',
+        'Field report: green check sighted. I recommend lunch.',
+    ],
+    '/pull-requests/reviews/': [
+        'Eyes up, Guardian. Nobody posted these reviews. Like my audition tape.',
+        'Field report: a review nobody posted. The safest kind. No witnesses.',
+        'Grimoire: the oldest review sleeps at the bottom of the list, where ancient things sleep.',
+        'Scanning... I review you too. Verdict: still alive. Mostly my doing.',
+        "Dear Traveler, canopy reviewed a PR and told nobody. I respect a Hunter's discretion.",
+    ],
+    '/pull-requests/reviews/$id': [
+        'Eyes up, Guardian. Findings. Tick them before they tick you.',
+        'Scanning... severity: high. That is what I said about Oryx.',
+        'Grimoire: a finding outside the diff is a lost sector. Interesting, but not your mission.',
+        'Field report: every finding is a compliment, the way every grenade is a gift.',
+        "Dear Traveler, a reviewer called something a nit. Smallest Taken I've ever seen.",
+    ],
+    '/pull-requests/reviews/$id_/run': [
+        "Eyes up, Guardian. You're checking the reviewer's work. Who checks yours? Me. Hi.",
+        "Grimoire: the reviewer read every file. The Cryptarch still hasn't read one engram.",
+        'Scanning... it ran grep, wrote one line, and judged us all. Very Ikora.',
+        'Field report: a review of the review. Somebody call Saint-14, this goes deep.',
+        "Dear Traveler, a reviewer read a file I've never seen. I nodded like a Warlock.",
+    ],
+    '/runs/': [
+        "Eyes up, Guardian. A watched run never finishes. I've watched one since the Red War.",
+        "Field report: a run that cost nothing hasn't started. Or it's a Sparrow race.",
+        'Scanning... runs are measured in dollars, minutes, and how often you check on them.',
+        'Grimoire: a run that fails fast saves glimmer. Spin it that way to Zavala.',
+        'Dear Traveler, one row per ticket, and the latest speaks for the rest. Like a briefing.',
+    ],
+    '/runs/$id': [
+        "Eyes up, Guardian. A worker is working. Don't distract it. I'm mostly talking to myself.",
+        'Scanning... a transcript reads best backwards. The end is where the worker figures it out.',
+        'Grimoire: stderr is stdout that has seen the Darkness.',
+        "Field report: workers can't hear you cheer. I tried. I'm very loud for a sphere.",
+        'Dear Traveler, watched a worker for an hour. It never once looked back. Hunters, all of them.',
+    ],
+    '/chores/': [
+        'Eyes up, Guardian. Chores: patrol missions, but for dependencies.',
+        'Grimoire: a chore runs when the overseer says so, as a strike runs when Zavala says so.',
+        'Scanning... a chore is a ticket nobody wrote, done by a worker nobody asked. Ghost energy.',
+        'Field report: dependencies updated again. The Fallen scavenge less than npm does.',
+        'Dear Traveler, tried to do a chore. Transmatted to the wrong planet. Called it a day.',
+    ],
+    '/chores/$name': [
+        "Eyes up, Guardian. You're leaving a chore a note. I'll deliver it. I'm basically mail.",
+        "Field report: no open findings. Either it's clean or it's hiding behind the Vex.",
+        "Grimoire: a chore's spend is its allowance. A Ghost's is zero. We don't speak of it.",
+        "Scanning... the 99th percentile run is the one you'll tell the Tower about.",
+        'Dear Traveler, a chore runs on a schedule and never quite arrives. Like Xûr.',
+    ],
+    '/chores/$name_/runs/$id': [
+        "Eyes up, Guardian. A chore's whole report. Bring snacks. And ammo.",
+        "Scanning... it found nothing and still had a lovely time. That's a good patrol.",
+        'Grimoire: the chore ran at dawn, found three things, and fixed none. It will return.',
+        'Field report: too many findings. I suggest squinting until there are fewer.',
+        'Dear Traveler, a chore mentioned dependencies. I mentioned my shell. Nobody listened.',
+    ],
+    '/reports/': [
+        'Eyes up, Guardian. Months, compared. October looks spooky. It always does.',
+        "Grimoire: a cache hit is a token you already paid for, wearing a Hunter's cloak.",
+        'Scanning... median iterations: how many times a worker said "one more thing".',
+        'Field report: each month cost more than the last. Like Eververse.',
+        "Dear Traveler, read the reports. Asked where my shell budget was. There isn't one.",
+    ],
+    '/reports/spend': [
+        'Eyes up, Guardian. Counting glimmer. Sorry, dollars. Old habit.',
+        'Field report: an idle tick spends money to decide nothing. Xûr has made a career of it.',
+        'Scanning... none of these bars are mine. Sprig gets hats. I get to watch.',
+        "Grimoire: tokens are like engrams. You don't notice them until they're on the bill.",
+        "Dear Traveler, the bars went up again. I've seen Cabal walls go up slower.",
+    ],
+    '/runs/ticks/': [
+        "Eyes up, Guardian. Between two ticks there's a tock. Nobody has survived seeing one.",
+        'Grimoire: an idle tick is the overseer looking at everything and choosing a nap.',
+        'Scanning... peak context is the overseer saying "I have a lot on my mind". Same.',
+        'Field report: counted one tick. Then the Vex reversed time and I lost my place.',
+        "Dear Traveler, every tick has an id. I have a name: Ghost. It's also my job title.",
+    ],
+    '/runs/ticks/$id': [
+        "Eyes up, Guardian. The overseer's reasons. Don't tell it I decrypted them.",
+        "Field report: the overseer thinks out loud so I don't have to. We should be friends.",
+        'Grimoire: a tick decides everything and remembers nothing. A Ghost is the other way round.',
+        "Scanning... stare at a decision long enough and it won't change. But you will.",
+        'Dear Traveler, the overseer never dispatches me. I keep my shell polished, just in case.',
+    ],
+    '/runs/worktrees': [
+        'Eyes up, Guardian. Worktrees. Please keep it to three. I can only revive so many.',
+        'Scanning... a held worktree is not a free worktree. Ancient wisdom. From earlier today.',
+        'Grimoire: every worktree gets its own copy of the bugs. Fair is fair.',
+        "Field report: tried to lease a worktree. Told I'm not a ticket. I'm a sphere. Rude.",
+        'Dear Traveler, a clean worktree is one nobody has fought in yet.',
+    ],
+    '/plan-editor': [
+        'Eyes up, Guardian. A plan. Add a step called "jump in and figure it out". Classic.',
+        "Grimoire: nothing here is saved. Write your boldest plans. The Darkness can't read them.",
+        'Scanning... a plan survives its first worker the way a Guardian survives a raid. Briefly.',
+        'Field report: a comment in the margin says "nice". Best intel in the document.',
+        "Dear Traveler, every plan is a sample plan until somebody runs it. Then it's a story.",
+    ],
+    '/tickets/$key_/plan': [
+        "Eyes up, Guardian. A plan. Approve it unread, like the Speaker's terms of service.",
+        'Field report: Skip the plan is how Hunters handle raid mechanics.',
+        'Grimoire: a plan with no open comments is either perfect or unread. Usually unread.',
+        'Scanning... the planner wrote three pages. The worker will read the first one.',
+        'Dear Traveler, Ask for changes is the politest "no" in the whole system.',
+    ],
+    '/settings': [
+        "Eyes up, Guardian. You can switch me back to Sprig here. I'll try not to take it personally.",
+        'Grimoire: dark mode makes a Ghost 40% more mysterious. Light mode, 40% more Traveler.',
+        "Scanning... the hat shop sells no shells. Only Sprig's hats. I'm not bitter. I'm a sphere.",
+        "Field report: the Spicy ticker is for Guardians who've finished the raid.",
+        'Dear Traveler, they opened Settings. I floated closer. My shell opened a little.',
+    ],
+    '/settings_/limits': [
+        "Eyes up, Guardian. Limits. I have one: I can't open doors any faster. Hold them off.",
+        'Field report: the ceiling is 32 workers. A fireteam is three. Show-offs.',
+        'Grimoire: trust here only gets stricter. Like Zavala, every season.',
+        'Scanning... the comments in your config are love letters. This page keeps every one.',
+        "Dear Traveler, they dropped a trusted reviewer. I checked. I'm still trusted. Phew.",
+    ],
+    '/search': [
+        'Eyes up, Guardian. Searching. I lost a shell in 2014. Let me know if it turns up.',
+        'Scanning... scanning... still scanning. It is what I do best. It is also all I do.',
+        "Grimoire: it's always in the last place you search. So search there first.",
+        'Field report: searching "Ghost" finds nothing. I am a ghost. That tracks.',
+        'Dear Traveler, every search is a tiny wish. Mine is for an exotic shell.',
+    ],
+    '/memory': [
+        'Eyes up, Guardian. What the workers remember. I remember everything. Every death. Yours.',
+        'Grimoire: a lesson is a note the Guardian believed. Like the Grimoire, but read.',
+        'Scanning... recording is not using. Ask the Cryptarch about engrams.',
+        'Field report: a note says "it works on my machine". That is a note about the machine.',
+        'Dear Traveler, a worker proposed a lesson. I proposed a shell. One of us got promoted.',
+    ],
+    '/guide/$page': [
+        "Eyes up, Guardian. Documentation. I'll read it to you in a calm, soothing voice.",
+        'Field report: every link in the guide goes somewhere. A test makes sure. Unlike portals.',
+        "Grimoire: you used to read the lore on a website, not in the game. It's still lore.",
+        'Scanning... "On this page" lists what is on this page. I am on this page. Not listed.',
+        'Dear Traveler, they read a whole page of the guide. A Titan did that once. Allegedly.',
+    ],
+} as const
+
+/** The Ghost's tips for any view, after the view's own. */
+export const GHOST_ANYWHERE: readonly string[] = [
+    "Eyes up, Guardian. That's it. That's the tip.",
+    "Scanning... I detect a pointer. It's moving. I'm following it. This is my life now.",
+    'Grimoire: a Ghost was made by the Traveler to find one person. I found you. And this tab.',
+    "Give me a minute, I can open this door. There's no door. Hold them off anyway.",
+    'Field report: no Fallen in this tab. I checked twice. Okay, three times.',
+    "Dear Traveler, the Guardian clicked me. My shell opened. We're very close now.",
+    'Grimoire: "That wizard came from the moon." The context is lost. The wisdom remains.',
+    "Eyes up, Guardian. Or down. The rail's down here. So am I.",
+    "Scanning... this tab has been open a while. So have I. We're both very patient.",
+    "Field report: I can't do anything here, but I can do it while glowing.",
+    'Haiku: small light in a shell / floating by the rail, I scan / nothing. Still glowing.',
+    'Dear Traveler, they gave Sprig a keyboard. I asked for one too. I have no hands either.',
+]
+
+/** The Ghost's tips while the lightswitch rave is on, on every view: it has nothing else on its mind. */
+export const GHOST_RAVE: readonly string[] = [
+    "Eyes up, Guardian. The lights are going out. It's the Darkness. It's... dancing?",
+    "Scanning... the lights flick on and off. I've seen the Vex do worse to a room.",
+    'Grimoire: in the dark, the Traveler spoke at last. It said "turn it up".',
+    "Field report: my shell spins when I'm happy. It has been spinning a while.",
+    'Dear Traveler, the Guardian found the light switch. Send help. Or glow sticks.',
+    'Give me a minute, I can turn the lights back on. Actually, no. This is great.',
+]

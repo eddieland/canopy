@@ -9,7 +9,8 @@ import {
 } from '@tanstack/react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ANYWHERE, nextTip, RAVE, STORAGE_KEY, TIPS, tipsFor } from '@/lib/buddy'
+import { ANYWHERE, nextTip, RAVE, setCompanion, STORAGE_KEY, TIPS, tipsFor, VOICES } from '@/lib/buddy'
+import { GHOST_ANYWHERE, GHOST_RAVE, GHOST_TIPS } from '@/lib/ghost'
 import { setRave } from '@/lib/rave'
 
 import { Buddy } from './buddy'
@@ -24,6 +25,7 @@ beforeEach(() => {
 afterEach(() => {
     cleanup()
     act(() => setRave('off'))
+    act(() => setCompanion('sprig'))
     vi.useRealTimers()
     vi.unstubAllGlobals()
     localStorage.clear()
@@ -75,7 +77,9 @@ function shown(): string | null {
     if (bubble.classList.contains('invisible')) {
         return null
     }
-    const all = [...Object.values(TIPS).flat(), ...ANYWHERE, ...RAVE]
+    const all = Object.values(VOICES)
+        .flatMap(({ tips, anywhere, rave }) => [Object.values(tips).flat(), anywhere, rave])
+        .flat()
     return all.find((tip) => within(bubble).queryByText(tip) !== null) ?? null
 }
 
@@ -120,6 +124,39 @@ describe('Buddy', () => {
         await renderBuddy('/attention')
         fireEvent.click(screen.getByRole('button', { name: "Don't show me tips again" }))
         expect(localStorage.getItem(STORAGE_KEY)).toBe('off')
+    })
+
+    describe("with the Ghost in Sprig's place", () => {
+        it('goes by its own name and speaks in its own voice', async () => {
+            act(() => setCompanion('ghost'))
+            await renderBuddy('/attention')
+            expect(screen.getByRole('complementary', { name: 'Ghost' })).toBeDefined()
+            expect(screen.queryByRole('complementary', { name: 'Sprig' })).toBeNull()
+
+            fireEvent.click(screen.getByRole('button', { name: 'Ask Ghost for a tip' }))
+            expect([...GHOST_TIPS['/attention'], ...GHOST_ANYWHERE]).toContain(shown())
+            expect(screen.getByTestId('ghost-body')).toBeDefined()
+            expect(screen.queryByTestId('buddy-body')).toBeNull()
+        })
+
+        it("hides a tip Sprig offered, never showing it under the Ghost's name", async () => {
+            await renderBuddy('/attention')
+            fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
+            expect([...TIPS['/attention'], ...ANYWHERE]).toContain(shown())
+
+            act(() => setCompanion('ghost'))
+            expect(shown()).toBeNull()
+            fireEvent.click(screen.getByRole('button', { name: 'Ask Ghost for a tip' }))
+            expect([...GHOST_TIPS['/attention'], ...GHOST_ANYWHERE]).toContain(shown())
+        })
+
+        it('talks of the rave alone while the lights rave', async () => {
+            act(() => setCompanion('ghost'))
+            act(() => setRave('on'))
+            await renderBuddy('/settings')
+            fireEvent.click(screen.getByRole('button', { name: 'Ask Ghost for a tip' }))
+            expect(GHOST_RAVE).toContain(shown())
+        })
     })
 
     describe('at the lightswitch rave', () => {
