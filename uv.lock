@@ -9,6 +9,7 @@ members = [
     "canopy-github",
     "canopy-jira",
     "canopy-notify-slack",
+    "canopy-review-bench",
     "canopy-sandbox",
 ]
 
@@ -80,6 +81,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "actionlint-py" },
+    { name = "canopy-review-bench" },
     { name = "editorconfig-checker" },
     { name = "httpx2" },
     { name = "hypothesis" },
@@ -117,6 +119,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "actionlint-py", specifier = ">=1.7.12.25" },
+    { name = "canopy-review-bench", editable = "packages/canopy-review-bench" },
     { name = "editorconfig-checker", specifier = ">=3.11.1" },
     { name = "httpx2", specifier = ">=2.13.1" },
     { name = "hypothesis", specifier = ">=6.170.0" },
@@ -177,6 +180,20 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "click", specifier = ">=8.5.0" }]
+
+[[package]]
+name = "canopy-review-bench"
+source = { editable = "packages/canopy-review-bench" }
+dependencies = [
+    { name = "click" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.5.0" },
+    { name = "pydantic", specifier = ">=2.14.1" },
+]
 
 [[package]]
 name = "canopy-sandbox"

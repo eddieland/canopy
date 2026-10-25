@@ -208,13 +208,13 @@ skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands, such as the Slack sink
-                 (§20) and the sandbox wrapper (§24)
+                 (§20) and the sandbox wrapper (§24); and the review bench, a dev tool canopy neither ships nor runs
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 ```
 
 `prompts/`, `personas/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository; the
 wheel bundles them with `migrations/` and the built UI. canopy installs from git with `uv tool install` (D046), which
-puts `canopy` and every workspace member's script on `PATH`. Dispatch, chores, and reviews start their detached
+puts `canopy` and every shipped workspace member's script on `PATH`. Dispatch, chores, and reviews start their detached
 processes via `sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it.
 
 Where later work goes:
