@@ -386,16 +386,15 @@ def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) ->
 
 
 @pytest.mark.parametrize("wrapper", ["canopy-sandbox", "/opt/bin/canopy-sandbox"])
-def test_an_overseer_in_the_sandbox_is_refused_until_the_tick_starts_its_runs(
+def test_an_overseer_in_the_sandbox_is_taken_since_the_tick_starts_its_runs(
     canopy_env: CanopyEnv,
     wrapper: str,
 ) -> None:
-    """The runs a dispatch starts would start in the overseer's sandbox and end with it (DESIGN §40)."""
+    """No run the overseer asks for is its descendant (DESIGN §40), so its command may start in the wrapper."""
     overseer_cmd = f"{wrapper} overseer --read {{definitions_dir}} -- env OPENCODE_CONFIG_DIR={{definitions_dir}} agent"
     canopy_env.configure(canopy_env.user_file, {"runtime": {"overseer_cmd": overseer_cmd}})
 
-    with pytest.raises(ConfigError, match=r"runtime\.overseer_cmd starts with canopy-sandbox, which canopy does not"):
-        load(canopy_env.root, canopy_env.user_file)
+    assert load(canopy_env.root, canopy_env.user_file).runtime.overseer_cmd == overseer_cmd
 
 
 def test_idle_max_minutes_defaults_to_120_and_may_equal_the_interval(canopy_env: CanopyEnv) -> None:

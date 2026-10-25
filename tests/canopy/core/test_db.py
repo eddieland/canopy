@@ -166,7 +166,7 @@ def test_migration_files_must_be_numbered_in_order(tmp_path: Path, names: list[s
 def test_journal_newer_than_code_is_an_error(tmp_path: Path, journals: Journals) -> None:
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
-    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (99, 'future')")
+    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (9999, 'future')")
     with pytest.raises(db.MigrationError, match="does not know"):
         db.migrate(conn, resources.migrations_dir())
 
@@ -374,7 +374,7 @@ def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: P
     """D068: a journal this canopy cannot open names its live runs first, so it is not moved aside under one."""
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
-    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (99, 'from_before_the_squash')")
+    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (9999, 'from_before_the_squash')")
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     db.touch_ticket(conn, "OLD-1", "/r")
     conn.execute(
@@ -385,7 +385,7 @@ def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: P
     with pytest.raises(db.MigrationError, match="run 1 is still working for the canopy before it"):
         db.migrate(conn, resources.migrations_dir())
     conn.execute("UPDATE runs SET status = 'done' WHERE id = 1")
-    with pytest.raises(db.MigrationError, match=r"migrations this canopy does not know: \[99\]"):
+    with pytest.raises(db.MigrationError, match=r"migrations this canopy does not know: \[9999\]"):
         db.migrate(conn, resources.migrations_dir())
 
 

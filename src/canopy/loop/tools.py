@@ -38,8 +38,8 @@ from pydantic import (
 )
 from pydantic_core import PydanticUndefined
 
-from canopy.core import config, contract, conversation, db, memory, vocab
-from canopy.core.vocab import ResumeReason, RunKind, TickStatus
+from canopy.core import config, contract, conversation, db, memory, recorded_runs, vocab
+from canopy.core.vocab import RecordedStatus, ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
 from canopy.loop import attention, claims, duties, harness, harness_dispatches
 from canopy.reviews import findings
@@ -73,6 +73,14 @@ DECIDED = "decided"
 RAISED = "raised"
 #: The phases the overseer sets. `split` is retired (M46): old tickets may still hold it, and nothing sets it.
 SETTABLE_PHASES = tuple(p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT)
+
+
+#: What a verb's result says of the recorded run it returns (DESIGN §40).
+RECORDED_DESCRIPTION = (
+    "The recorded run, which the tick starts once your run ends, under its guards again; none in a dry run."
+)
+#: What a verb's text says of a run it recorded.
+STARTS_AFTER = "it starts once your run ends, if its guards still allow it"
 
 
 class Refused(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
@@ -395,16 +403,16 @@ class Dispatch(Request):
 
 
 class Dispatched(Result):
-    """A worker started on a ticket, or in a dry run, one its guards would start."""
+    """A worker recorded for a ticket, which the tick starts after the overseer, or a dry run's its guards allow."""
 
     #: The ticket.
     key: Annotated[str, Field(description="The ticket.")]
     #: What the worker does.
     kind: Annotated[RunKind, Field(description="What the worker does.")]
-    #: Whether this was a dry run, which started nothing.
-    dry_run: Annotated[bool, Field(description="Whether this was a dry run, which started nothing.")]
-    #: The run that started; none in a dry run.
-    run: Annotated[int | None, Field(description="The run that started; none in a dry run.")]
+    #: Whether this was a dry run, which records nothing.
+    dry_run: Annotated[bool, Field(description="Whether this was a dry run, which records nothing.")]
+    #: The recorded run, which the tick starts once the overseer's run ends; none in a dry run.
+    recorded: Annotated[int | None, Field(description=RECORDED_DESCRIPTION)]
     #: The branch it works on; empty for a plan, which works on none.
     branch: Annotated[str, Field(description="The branch it works on; empty for a plan, which works on none.")]
     #: The repositories it works in, a unit each.
@@ -412,10 +420,13 @@ class Dispatched(Result):
 
 
 def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
-    """Start a worker on a ticket, if its guards allow one now; in a dry run, check them and start nothing (D036).
+    """Record a worker for a ticket, if its guards allow one now, for the tick to start after the overseer (§40).
+
+    In a dry run, check the guards and record nothing (D036). The tick starts the recorded run once the overseer's run
+    has ended (`spawn_dispatch`); until then it is the ticket's one run, and holds a worker.
 
     Returns:
-        What the command prints, the run that started or what a dry run would have started, and the same as fields.
+        What the command prints, the run recorded or what a dry run would have started, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or a guard refused the dispatch, which is recorded.
@@ -423,8 +434,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     current = running_tick(ctx)
     key, kind, repos, reasons = request.key, request.kind, request.repos, request.reasons
     cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
-    tracked = _comment_cursor(ctx, request.cursors)
-    unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
+    _comment_cursor(ctx, request.cursors)
     tick_id = current.id
     _refuse_decided(ctx, tick_id, key, "dispatch")
     log = logs.for_tick(tick_id)
@@ -434,7 +444,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     reserved = harness_dispatches.reserved(ctx, tick_id, kind, reasons)
     try:
         dispatch.check_kind(kind)
-        review = _review_findings(ctx.conn, key, kind, repos, request.review_run)
+        _review_findings(ctx.conn, key, kind, repos, request.review_run)
         # The claims, checked against what the connectors observed, before §8's other guards (DESIGN §35).
         claims.check(
             ctx,
@@ -464,10 +474,9 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
                 cursors=handles,
                 reserved=reserved,
             )
-            branch, queue_label, repo_names, starts = plan.branch, plan.label, plan.repos, plan.starts
-            started = None
+            recorded = None
         else:
-            started = dispatch.start(
+            recorded = dispatch.record(
                 ctx,
                 tick_id=tick_id,
                 key=key,
@@ -475,33 +484,23 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
                 label=request.label,
                 slug=request.slug,
                 base=request.base,
-                context=request.context,
+                request=request.model_dump(mode="json"),
                 repos=repos,
-                review=review,
                 reasons=reasons,
                 cursors=handles,
                 reserved=reserved,
             )
-            branch, queue_label, repo_names, starts = started.branch, started.label, started.repos, started.starts
+            plan = recorded.plan
     except dispatch.Refusal as r:
-        db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
-        if r.attention is not None:
-            # The overseer wants work a guard forbids, and only a human can lift it: the attempt limit, a retired
-            # prompt override, or a persona canopy cannot use (DESIGN §8, §14, §31). In a workspace of several, the
-            # item is about the unit it holds.
-            db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, repo=r.repo)
-        log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
+        _dispatch_refused(ctx, tick_id, key, kind, r)
         raise Refused(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    # `base` passed the guards, so it is the branch this run is stacked on. `queue_label` is the configured spelling, or
-    # empty for a private ticket, which its start record authorizes (DESIGN §22). Under `tracker.private` the label
-    # authorizes a ticket's first run, which starts it privately.
-    authorized = f"label {queue_label}" if queue_label else "private: started by the operator"
-    authorized += "; starts it privately (tracker.private)" if starts else ""
+    branch, repo_names = plan.branch, plan.repos
+    authorized = _authorized(plan.label, starts=plan.starts)
     in_repo = f" in {', '.join(repo_names)}"
     work = _work(key, kind, branch, request.base, repo_names)
     requested = f"; review run {request.review_run}" if request.review_run is not None else ""
     requested += f"; {_for(reasons)}" if reasons else ""
-    if started is None:
+    if recorded is None:
         extras = [
             *(f"cursor {name}={value}" for name, value in cursor_pairs),
             f"context={request.context}" if request.context else "",
@@ -523,21 +522,123 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
         log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
         return Outcome(
             f"dry run: recorded dispatch {kind} for {key}; nothing was started",
-            Dispatched(key=key, kind=kind, dry_run=True, run=None, branch=branch, repos=repo_names),
+            Dispatched(key=key, kind=kind, dry_run=True, recorded=None, branch=branch, repos=repo_names),
         )
+    # The decision is recorded as the run starts, or with its refusal then: cursors move only once it starts.
+    log.info("dispatch recorded", extra={"ticket": key, "kind": kind, "recorded_run_id": recorded.recorded_id})
+    return Outcome(
+        f"recorded dispatch {kind} for {key} as recorded run {recorded.recorded_id}: {work}{in_repo}; "
+        f"{authorized}{requested}; {STARTS_AFTER}",
+        Dispatched(
+            key=key,
+            kind=kind,
+            dry_run=False,
+            recorded=recorded.recorded_id,
+            branch=branch,
+            repos=repo_names,
+        ),
+    )
+
+
+def spawn_dispatch(ctx: Context, recorded: records.RecordedRun) -> None:
+    """Start the worker `recorded` names, as its tick does once the overseer's run has ended (DESIGN §40).
+
+    Every guard is checked again, and a refusal is recorded as the overseer's dispatch's would be; the run's decision
+    is recorded as it starts, its cursors moved then, so what a refused one was meant to handle is still new next tick.
+    """
+    request = Dispatch.model_validate(recorded_runs.request_of(recorded))
+    tick_id = recorded.tick_id
+    key, kind, repos, reasons = request.key, request.kind, request.repos, request.reasons
+    cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
+    tracked = ctx.config.connect.observes_tickets()
+    unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
+    log = logs.for_tick(tick_id)
+    try:
+        review = _review_findings(ctx.conn, key, kind, repos, request.review_run)
+        # The claims again too: an observation fresh at the ask may have aged past its bound since (DESIGN §35, §40).
+        claims.check(
+            ctx,
+            tick_id,
+            datetime.now(UTC),
+            key=key,
+            kind=kind,
+            label=request.label,
+            repos=repos,
+            reasons=reasons,
+            cursors=dict(cursor_pairs),
+            review_run=request.review_run,
+            base=request.base,
+        )
+        started = dispatch.start(
+            ctx,
+            tick_id=tick_id,
+            key=key,
+            kind=kind,
+            label=request.label,
+            slug=request.slug,
+            base=request.base,
+            context=request.context,
+            repos=repos,
+            review=review,
+            reasons=reasons,
+            cursors=_handles(cursor_pairs, request.review_run),
+            spawning=recorded.id,
+        )
+    except dispatch.Refusal as r:
+        recorded_runs.close(ctx.conn, recorded.id, RecordedStatus.REFUSED)
+        _dispatch_refused(ctx, tick_id, key, kind, r)
+        return
+    recorded_runs.close(ctx.conn, recorded.id, RecordedStatus.STARTED, run_id=started.run_id)
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     ticket_cursors = {name: value for name, value in cursor_pairs if name in db.TICKET_CURSORS}
     db.set_ticket(ctx.conn, key, ctx.repo, cursors=ticket_cursors, tracked=tracked)
     if unit_cursors:
         cursors = {name: value for name, value in cursor_pairs if name in db.UNIT_CURSORS}
-        db.set_unit(ctx.conn, key, ctx.repo, repo_names[0], cursors=cursors)
+        db.set_unit(ctx.conn, key, ctx.repo, started.repos[0], cursors=cursors)
+    # `base` passed the guards, so it is the branch this run is stacked on.
+    work = _work(key, kind, started.branch, request.base, started.repos)
+    requested = f"; review run {request.review_run}" if request.review_run is not None else ""
+    requested += f"; {_for(reasons)}" if reasons else ""
+    authorized = _authorized(started.label, starts=started.starts)
     rationale = f"run {started.run_id}: {work}{_where(started)}; {authorized}{requested}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
-    log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
-    return Outcome(
-        f"dispatched {kind} for {key}: {rationale}",
-        Dispatched(key=key, kind=kind, dry_run=False, run=started.run_id, branch=branch, repos=repo_names),
+    log.info(
+        "dispatched",
+        extra={
+            "ticket": key,
+            "kind": kind,
+            "run_id": started.run_id,
+            "pid": started.pid,
+            "recorded_run_id": recorded.id,
+        },
     )
+
+
+def _dispatch_refused(ctx: Context, tick_id: int, key: str, kind: str, r: dispatch.Refusal) -> None:
+    """Record a guard's refusal of a dispatch, at the ask or at the spawn, and the attention item it raises, if any."""
+    db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
+    if r.attention is not None:
+        # The overseer wants work a guard forbids, and only a human can lift it: the attempt limit, a retired
+        # prompt override, or a persona canopy cannot use (DESIGN §8, §14, §31). In a workspace of several, the
+        # item is about the unit it holds.
+        db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, repo=r.repo)
+    logs.for_tick(tick_id).info(
+        "dispatch refused",
+        extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason},
+    )
+
+
+def _authorized(label: str, *, starts: bool) -> str:
+    """What a dispatch's decision says authorized it: the queue label, or the operator's start (DESIGN §22).
+
+    `label` is the configured spelling, or empty for a private ticket, which its start record authorizes. Under
+    `tracker.private` the label authorizes a ticket's first run, which starts it privately.
+
+    Returns:
+        The words, for the decision's rationale.
+    """
+    authorized = f"label {label}" if label else "private: started by the operator"
+    return authorized + ("; starts it privately (tracker.private)" if starts else "")
 
 
 class Decide(Request):

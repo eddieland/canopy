@@ -597,6 +597,32 @@ class GcPassStatus(StrEnum):
     FAILED = "failed"
 
 
+class RecordedKind(StrEnum):
+    """What a run the overseer asked for is, `recorded_runs.kind` (DESIGN §40): the verb that recorded it."""
+
+    #: A worker on a ticket, a run in `runs` once it starts.
+    DISPATCH = "dispatch"
+    #: A review of a PR, in `review_runs`.
+    REVIEW = "review"
+    #: A revision of a review's draft, in `review_runs` too (DESIGN §34).
+    REVISION = "revision"
+    #: A chore's run, in `chore_runs`.
+    CHORE = "chore"
+
+
+class RecordedStatus(StrEnum):
+    """Where a run the overseer asked for stands, `recorded_runs.status` (DESIGN §40)."""
+
+    #: Recorded at the ask, and not yet spawned: it counts as running.
+    RECORDED = "recorded"
+    #: The tick spawned it, as `recorded_runs.run_id`.
+    STARTED = "started"
+    #: A guard refused it at the spawn, a refusal recorded as any other.
+    REFUSED = "refused"
+    #: Its tick closed, or died, before spawning it.
+    UNSTARTED = "unstarted"
+
+
 class Decider(StrEnum):
     """Who made a decision, `decisions.decider` (DESIGN §37, TRUST_MODEL T5)."""
 

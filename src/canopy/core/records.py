@@ -60,6 +60,8 @@ from canopy.core.vocab import (
     Proposal,
     PrState,
     Reaction,
+    RecordedKind,
+    RecordedStatus,
     ReplyMode,
     ResumeReason,
     ReviewDraftAuthor,
@@ -236,6 +238,29 @@ class ChoreRun(Row):
     tokens_first_call: int | None
     tokens_first_cache_write: int | None
     definitions_digest: str | None
+
+
+@dataclass(frozen=True)
+class RecordedRun(Row):
+    """A run the overseer asked for, recorded at the ask and spawned by the tick after its run (DESIGN §40)."""
+
+    TABLE: ClassVar[str] = "recorded_runs"
+
+    id: int
+    tick_id: int
+    kind: RecordedKind
+    #: The verb's request as the overseer made it, JSON, which the spawn makes again.
+    request: str
+    #: What it holds while it waits: its ticket, a review's PR and persona, a chore's name.
+    ticket_key: str | None
+    pr_url: str | None
+    persona: str | None
+    chore: str | None
+    status: RecordedStatus
+    #: The run it started as, in its kind's table; None until it starts.
+    run_id: int | None
+    recorded_at: str
+    closed_at: str | None
 
 
 @dataclass(frozen=True)

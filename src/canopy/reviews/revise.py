@@ -18,10 +18,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db, personas, prompts, review_drafts, review_revisions, review_runs
+from canopy.core import db, personas, prompts, recorded_runs, review_drafts, review_revisions, review_runs
 from canopy.core import review_result as result
 from canopy.core.conversation import printable
-from canopy.core.vocab import ReviewDraftStatus
+from canopy.core.vocab import RecordedKind, ReviewDraftStatus
 from canopy.infra import lock
 from canopy.reviews import findings, start
 
@@ -62,8 +62,35 @@ def check(ctx: Context, *, tick_id: int, run_id: int) -> Target:
         return target
 
 
-def begin(ctx: Context, *, tick_id: int, run_id: int) -> start.Started:
+def record(ctx: Context, *, tick_id: int, run_id: int) -> int:
+    """Check the guards `begin` does before it leases, and record the revision the overseer asked for (DESIGN §40).
+
+    Nothing is leased or spawned: the recorded revision counts as a review of its PR running, until the tick spawns it
+    once the overseer's run has ended, under the guards again.
+
+    Returns:
+        The recorded revision's id.
+
+    Raises:
+        start.Refusal: a guard refused.
+    """
+    with lock.hold(ctx.dispatch_lock_path, wait=True):
+        target = _guard(ctx, run_id)
+        persona = _persona(ctx, target.review)
+        return recorded_runs.record(
+            ctx.conn,
+            tick_id=tick_id,
+            kind=RecordedKind.REVISION,
+            request={"run": run_id},
+            pr_url=target.review.pr_url,
+            persona=persona.name,
+        )
+
+
+def begin(ctx: Context, *, tick_id: int, run_id: int, spawning: int | None = None) -> start.Started:
     """Check the guards, record the revision as a review run, lease a slot, render its prompt, and spawn `_review`.
+
+    `spawning` is the recorded revision this spawns, which the guards then do not count as running (DESIGN §40).
 
     Returns:
         The new revision's run id, the pid of its `canopy _review`, and the slot it leased.
@@ -73,7 +100,7 @@ def begin(ctx: Context, *, tick_id: int, run_id: int) -> start.Started:
             Nothing is left running and no slot is left leased.
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        target = _guard(ctx, run_id)
+        target = _guard(ctx, run_id, spawning=spawning)
         persona = _persona(ctx, target.review)
         review = target.review
         revision = review_runs.insert_review_run(
@@ -96,10 +123,17 @@ def begin(ctx: Context, *, tick_id: int, run_id: int) -> start.Started:
             return start.spawn(ctx, revision, lease, prompt)
 
 
-def _guard(ctx: Context, run_id: int, *, planned: Collection[records.Decision] | None = None) -> Target:
+def _guard(
+    ctx: Context,
+    run_id: int,
+    *,
+    planned: Collection[records.Decision] | None = None,
+    spawning: int | None = None,
+) -> Target:
     """Refuse unless a revision of review run `run_id`'s draft may start now.
 
-    `planned` is a dry run's decisions this tick: its reviews, revisions, and worker dispatches count as running.
+    `planned` is a dry run's decisions this tick: its reviews, revisions, and worker dispatches count as running, as
+    the runs recorded for the tick to spawn do, but `spawning`, the one being spawned (DESIGN §40).
 
     Returns:
         What the revision revises.
@@ -124,7 +158,8 @@ def _guard(ctx: Context, run_id: int, *, planned: Collection[records.Decision] |
         )
     repo = start.check_repo(ctx, review.repo)
     planned_reviews, planned_runs = start.split_planned(planned or [])
-    _check_running(ctx, review, planned_reviews)
+    held = recorded_runs.holding(ctx.conn, but=spawning)
+    _check_running(ctx, review, planned_reviews, held)
     spent = len(review_runs.revision_runs_of(ctx.conn, draft.id))
     most = review_revisions.limit(ctx.conn, ctx.config, draft.id)
     if spent >= most:
@@ -132,7 +167,7 @@ def _guard(ctx: Context, run_id: int, *, planned: Collection[records.Decision] |
             "revision_limit",
             f"review run {run_id}'s draft has had {spent} revisions and its limit is {most}",
         )
-    start.check_room(ctx, planned_reviews, planned_runs)
+    start.check_room(ctx, planned_reviews, planned_runs, held)
     return Target(review, draft, version, notes, repo, attempt=spent + 1, limit=most)
 
 
@@ -172,8 +207,9 @@ def _check_running(
     ctx: Context,
     review: records.ReviewRun,
     planned_reviews: Collection[records.Decision],
+    held: Collection[records.RecordedRun],
 ) -> None:
-    """`running`: a review or a revision of the PR is running, or this dry run already started one.
+    """`running`: a review or a revision of the PR is running or recorded, or this dry run already started one.
 
     A revision of a draft must not race another of it, and one review run of a PR at a time keeps a revision from
     reading the PR while a review of a newer commit is under way.
@@ -184,6 +220,9 @@ def _check_running(
     busy = next((r for r in db.running_runs(ctx.conn, "review_runs") if r["pr_url"] == review.pr_url), None)
     if busy is not None:
         raise start.Refusal("running", f"review run {busy['id']} of this PR is running")
+    waiting = next((r for r in held if r.kind in recorded_runs.HOLDS_REVIEW and r.pr_url == review.pr_url), None)
+    if waiting is not None:
+        raise start.Refusal("running", f"recorded review {waiting.id} of this PR starts once the overseer's run ends")
     if any(d.pr == review.pr_url for d in planned_reviews):
         raise start.Refusal("running", "this dry run already reviewed or revised this PR")
 
