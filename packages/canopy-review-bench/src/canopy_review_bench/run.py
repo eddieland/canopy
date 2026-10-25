@@ -134,19 +134,18 @@ def _review(
     slug = _SLUG.sub("-", case.title.lower()).strip("-")[:40].strip("-") or "change"
     base, head = f"main-{suffix}", f"{slug}-{suffix}"
     pr: int | None = None
-    pushed = False
     failure: str | None = None
     comments: list[Comment] = []
     try:
         commits.push(bench.source, settings.url, {base: built.base, head: built.head})
-        pushed = True
         pr = github.open_pr(base=base, head=head, title=case.title, body=case.body, draft=settings.draft)
         said(f"  opened PR {pr}, waiting for {', '.join(settings.reviewers)}")
         comments = _wait(github, pr, settings, clock)
     except BenchError as e:
         failure = str(e)
     finally:
-        left = _take_down(github, pr, (head, base) if pushed else ())
+        # Even after a failed push: one that timed out may have made its branches all the same.
+        left = _take_down(github, pr, (head, base))
     status = "failed" if failure is not None else "reviewed" if comments else "silent"
     note = "; ".join([*([failure] if failure is not None else []), *left])
     return Review(**record, status=status, note=note, pr=pr, spots=spots, comments=tuple(comments))
@@ -165,7 +164,8 @@ def _wait(github: GitHub, pr: int, settings: Settings, clock: Clock) -> list[Com
     while True:
         found = [c for c in github.comments(pr) if c.author in reviewers]
         now = clock.now()
-        if len(found) != len(seen):
+        # A bot that edits a comment in place, such as a "reviewing" placeholder, changes no count.
+        if found != seen:
             seen, changed = found, now
         if seen and now - changed >= settings.quiet_minutes * 60:
             return seen

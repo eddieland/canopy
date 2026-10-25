@@ -126,14 +126,14 @@ def build(source: Path, case: Case, overlay: Overlay) -> Built:
 
 
 def push(source: Path, url: str, refs: Mapping[str, str]) -> None:
-    """Push each commit in `refs` from `source` to `url` as the branch its key names, creating it.
+    """Push each commit in `refs` from `source` to `url` as the branch its key names, creating it: all or none.
 
     Raises:
         BenchError: the push failed.
     """
     specs = [f"{sha}:refs/heads/{branch}" for branch, sha in refs.items()]
     command.run(
-        [*_GIT, "push", "--quiet", "--no-verify", url, *specs],
+        [*_GIT, "push", "--quiet", "--atomic", "--no-verify", url, *specs],
         cwd=source,
         timeout=_PUSH_TIMEOUT_SECONDS,
     )

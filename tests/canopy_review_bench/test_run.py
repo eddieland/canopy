@@ -146,6 +146,22 @@ def test_a_review_is_done_once_the_reviewer_goes_quiet(tmp_path: Path) -> None:
     assert clock.at == 150
 
 
+def test_a_comment_edited_in_place_is_waited_for_and_kept_as_it_ends(tmp_path: Path) -> None:
+    source = source_repo(tmp_path)
+    loaded = bench.load(bench_file(tmp_path, cases(source), push_url=str(remote(tmp_path)), quiet_minutes=1))
+
+    def edits(_title: str, poll: int) -> dict[str, list[dict[str, object]]]:
+        return {"conversation": [said("Reviewing..." if poll < 2 else "Two issues found.")]}
+
+    clock = FakeClock()
+    with github_does(FakeGitHub(edits)):
+        where = run(loaded, clock, names=("retry-delay",))
+    _, reviews = score.read(where)
+    assert [c.body for c in reviews[0].comments] == ["Two issues found."]
+    # The edit came at the poll at 60 seconds; the review is done a minute after it, not after the placeholder.
+    assert clock.at == 120
+
+
 def test_a_pr_that_cannot_be_opened_fails_and_its_branches_are_deleted(tmp_path: Path) -> None:
     source = source_repo(tmp_path)
     loaded = bench.load(bench_file(tmp_path, cases(source), push_url=str(remote(tmp_path))))
@@ -158,7 +174,7 @@ def test_a_pr_that_cannot_be_opened_fails_and_its_branches_are_deleted(tmp_path:
     assert github.closed == []
 
 
-def test_a_push_that_fails_opens_nothing_and_deletes_nothing(tmp_path: Path) -> None:
+def test_a_push_that_fails_opens_nothing_and_still_tries_to_delete_its_branches(tmp_path: Path) -> None:
     source = source_repo(tmp_path)
     loaded = bench.load(bench_file(tmp_path, cases(source), push_url=str(tmp_path / "nowhere")))
     with github_does(FakeGitHub(reviewer)) as github:
@@ -166,7 +182,9 @@ def test_a_push_that_fails_opens_nothing_and_deletes_nothing(tmp_path: Path) -> 
     _, reviews = score.read(where)
     assert reviews[0].status == "failed"
     assert "git -c core.quotePath=off exited" in reviews[0].note
-    assert (github.opened, github.deleted) == ({}, [])
+    # A push that timed out may have made its branches, so both are deleted all the same.
+    assert github.opened == {}
+    assert len(github.deleted) == 2
 
 
 def test_check_shows_each_cases_pr_and_opens_nothing(tmp_path: Path) -> None:
