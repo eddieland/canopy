@@ -553,6 +553,20 @@ def spawn_dispatch(ctx: Context, recorded: records.RecordedRun) -> None:
     log = logs.for_tick(tick_id)
     try:
         review = _review_findings(ctx.conn, key, kind, repos, request.review_run)
+        # The claims again too: an observation fresh at the ask may have aged past its bound since (DESIGN §35, §40).
+        claims.check(
+            ctx,
+            tick_id,
+            datetime.now(UTC),
+            key=key,
+            kind=kind,
+            label=request.label,
+            repos=repos,
+            reasons=reasons,
+            cursors=dict(cursor_pairs),
+            review_run=request.review_run,
+            base=request.base,
+        )
         started = dispatch.start(
             ctx,
             tick_id=tick_id,

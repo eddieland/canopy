@@ -17,7 +17,7 @@ from canopy.cli.main import main
 from canopy.core import conversation, db, review_runs
 from canopy.core.vocab import NumberedItem, ReviewRunStatus
 from canopy.loop import observations
-from tests.canopy.helpers import KEY, LABEL, decisions, in_tick, mcp_session, operator, present, tool_call
+from tests.canopy.helpers import KEY, LABEL, decisions, in_tick, mcp_session, operator, present, tick_starts, tool_call
 from tests.canopy.observation_helpers import (
     HEAD,
     PR,
@@ -99,6 +99,29 @@ def test_a_dispatch_on_a_stale_subject_is_refused(
     action, reason = dispatched(conn, kind="resume", label=LABEL, reasons=["conflict"])
     assert action == "refused:stale"
     assert reason.startswith(why)
+
+
+def test_a_recorded_dispatch_whose_ticket_went_stale_before_its_start_is_refused_then(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    """The claims are checked again as the tick starts the run: fresh at the ask, stale by then, it starts nothing."""
+    canopy_env.configure(canopy_env.user_file, {**TRACKER, **TRUST})
+    held(canopy_env, conn, KEY, at=ago(hours=2))
+    with_unit(canopy_env, conn, KEY)
+    observe_ticket(conn, at=ago(hours=0.25))
+    observe_pr(conn, at=ago())
+    branches_read(conn, at=ago())
+    command = ["dispatch", KEY, "--repo", "repo", "--kind", "resume", "--label", LABEL, "--reason", "conflict"]
+    with in_tick(conn) as tick_id:
+        assert main(command) == 0
+        assert decisions(conn, tick_id) == []
+        # Its bound shrinks past the ticket's age, as an overseer run that outlasts it would leave it.
+        canopy_env.configure(canopy_env.user_file, {"connect": {"max_age_minutes": 10}})
+        tick_starts()
+        [(action, reason)] = decisions(conn, tick_id)
+    assert action == "refused:stale"
+    assert reason.startswith(f"{KEY} is stale ({KEY} last observed")
 
 
 def test_a_stacked_dispatch_on_a_blockers_stale_pr_is_refused(
