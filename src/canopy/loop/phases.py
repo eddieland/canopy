@@ -49,7 +49,7 @@ from canopy.core.vocab import (
     SourceKind,
     TicketState,
 )
-from canopy.loop import attention
+from canopy.loop import attention, harness
 from canopy.reviews import start as review_start
 from canopy.reviews.start import DISPATCH_ACTION as REVIEW_ACTION
 
@@ -245,7 +245,7 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     for d in db.decisions_for_tick(conn, tick_id):
         if d.ticket_key is None:
             continue
-        if d.decider is Decider.HARNESS and not d.action.startswith(_ATTENTION):
+        if d.decider is Decider.HARNESS and not d.action.startswith(_ATTENTION) and d.action != harness.CURSOR_ACTION:
             by_harness.add(d.ticket_key)
         elif d.decider is Decider.HARNESS and d.action.removeprefix(_ATTENTION) in attention.FROM_CAUSES:
             raised.add(d.ticket_key)

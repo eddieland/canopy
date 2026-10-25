@@ -225,13 +225,14 @@ cursor. Its PR phases are as above.
 Cursors (`comment`, `review`, `ci`, and a private ticket's `message`) hold the newest item of each kind the loop has
 handled; "newer than cursor" means not handled yet. The comment cursor is the ticket's; the review and ci cursors are
 each unit's, so a dispatch that carries one names exactly one repository. A dispatch carries the cursors of what it
-handles (§8), so they advance only if the worker starts; items handled otherwise advance with `canopy ticket set`. A
-review comment waiting on a human is not advanced past. A cursor but `message` is a journal number: each comment,
-review, review comment, and completed check run takes the next one when a source first observes it, and keeps it
-across reads, and a canopy review run takes one when it ends. So "newer" is one order for every kind, and a re-run at
-the same head is new. Rejected: the source's ids, which no tracker orders, and times, which a late submission
-backdates. The `comment` cursor of a ticket no tracker source observes stays the tracker's comment id, since its
-comments have no numbers (§35).
+handles (§8), so they advance only if the worker starts; items handled otherwise advance with `canopy ticket set`, and
+the harness passes those that need no handling directly after a cursor, a worker's comment and a reply the operator
+sent, as its own decision (§37). A review comment waiting on a human is not advanced past. A cursor but `message` is a
+journal number: each comment, review, review comment, and completed check run takes the next one when a source first
+observes it, and keeps it across reads, and a canopy review run takes one when it ends. So "newer" is one order for
+every kind, and a re-run at the same head is new. Rejected: the source's ids, which no tracker orders, and times, which
+a late submission backdates. The `comment` cursor of a ticket no tracker source observes stays the tracker's comment
+id, since its comments have no numbers (§35).
 
 The configured query runs every tick it is due, before any ticket is read: the block holds only tickets the loop has
 seen, so the query is the only way a newly labeled ticket becomes a candidate. When the block shows it `fresh` (§30),
