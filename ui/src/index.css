@@ -601,6 +601,74 @@
 }
 
 /*
+ * The Ghost that may sit in Sprig's place floats, bobbing over its shadow, which shrinks as it rises. Its shell's
+ * plates spread a little with each new tip, as a Ghost's do when it talks, each along its own point (`translateY` in
+ * the plate's own frame). At the lightswitch rave its shell turns a quarter on each of the lights' 0.6-second beats.
+ */
+@keyframes ghost-float {
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+@keyframes ghost-shadow {
+    50% {
+        transform: scale(0.8);
+        opacity: 0.6;
+    }
+}
+
+@keyframes ghost-talk {
+    30%,
+    70% {
+        transform: translateY(-1.6px);
+    }
+}
+
+@keyframes ghost-spin {
+    25% {
+        transform: rotate(90deg);
+    }
+    50% {
+        transform: rotate(180deg);
+    }
+    75% {
+        transform: rotate(270deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@utility animate-ghost-float {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-float 3.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-shadow {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-shadow 3.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-talk {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-talk 700ms cubic-bezier(0.2, 0, 0, 1) 600ms backwards;
+    }
+}
+
+@utility animate-ghost-spin {
+    transform-box: view-box;
+    transform-origin: 24px 40px;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-spin 2.4s cubic-bezier(0.6, 0, 0.2, 1) infinite;
+    }
+}
+
+/*
  * The header ticker (src/components/shell/ticker.tsx). The window clips the line and fades it out at both ends; the
  * mask's gradient is alpha only, so its color is irrelevant. The line is padded by the window's width before its text
  * (`--ticker-start`, measured as the pass starts, so a window that resizes mid-pass does not move the headline) and

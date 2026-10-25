@@ -102,6 +102,12 @@
     /* The keyboard Sprig vibe codes on: its case and its keys. A key it presses lights in the accent. */
     --buddy-keyboard: oklch(0.42 0.03 275);
     --buddy-key: oklch(0.97 0.006 275);
+    /* The Ghost that may sit in Sprig's place (src/lib/ghost.ts): its shell's lit and shaded facets, its eye's glow,
+     * and the eye's bright core. The shell is outlined in the shaded facet, to stand off a light canvas. */
+    --buddy-ghost-shell: oklch(0.93 0.008 250);
+    --buddy-ghost-facet: oklch(0.55 0.02 255);
+    --buddy-ghost-eye: oklch(0.7 0.13 205);
+    --buddy-ghost-core: oklch(0.98 0.03 205);
 
     /* The lightswitch rave's dark, when The Cheat flips the lights off: a near black, a touch of the indigo. */
     --rave-dark: oklch(0.16 0.03 275);
@@ -181,6 +187,10 @@
     --buddy-hat-blue: oklch(0.6 0.15 265);
     --buddy-keyboard: oklch(0.36 0.04 270);
     --buddy-key: oklch(0.56 0.04 268);
+    --buddy-ghost-shell: oklch(0.85 0.01 250);
+    --buddy-ghost-facet: oklch(0.52 0.02 255);
+    --buddy-ghost-eye: oklch(0.82 0.13 205);
+    --buddy-ghost-core: oklch(0.99 0.02 205);
 
     --rave-dark: oklch(0.08 0.02 275);
 }
@@ -453,6 +463,10 @@
     --color-buddy-hat-blue: var(--buddy-hat-blue);
     --color-buddy-keyboard: var(--buddy-keyboard);
     --color-buddy-key: var(--buddy-key);
+    --color-buddy-ghost-shell: var(--buddy-ghost-shell);
+    --color-buddy-ghost-facet: var(--buddy-ghost-facet);
+    --color-buddy-ghost-eye: var(--buddy-ghost-eye);
+    --color-buddy-ghost-core: var(--buddy-ghost-core);
 
     --color-rave-dark: var(--rave-dark);
 
