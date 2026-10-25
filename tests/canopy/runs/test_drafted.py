@@ -198,7 +198,8 @@ def test_drafts_on_a_merged_pr_wait_on_nobody(scenario: Scenario, github_state: 
 
 @pytest.mark.usefixtures("git_pool")
 def test_waiting_drafts_are_the_operators_item_alone(scenario: Scenario, github_state: Path) -> None:
-    scenario.configures("private", trust=APPROVE)
+    # The reviewer is trusted, so the comment raises no `untrusted_review` of the harness's (DESIGN §14).
+    scenario.configures("private", trust={**APPROVE, "trusted_reviewers": ["alice"]})
     github_has(github_state, comment(501))
     scenario.run(WORK, worker=sends_drafts([thread(501)]))
     scenario.tick(*waits(KEY, rationale="waiting on review"))
@@ -214,7 +215,7 @@ def test_dropping_drafts_takes_them_off_the_attention_list_without_a_tick(
     scenario: Scenario,
     github_state: Path,
 ) -> None:
-    scenario.configures("private", trust=APPROVE)
+    scenario.configures("private", trust={**APPROVE, "trusted_reviewers": ["alice"]})
     github_has(github_state, comment(501), comment(502, "PRRT_2"))
     run = scenario.run(WORK, worker=sends_drafts([thread(501), thread(502)]))
     scenario.tick(*waits(KEY))

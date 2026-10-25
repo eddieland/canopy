@@ -1,13 +1,13 @@
 """The attention list: what needs a human, derived from the journal (DESIGN §14).
 
 Attention items are decisions with action `attention:<reason>`, recorded every tick the cause holds: by the overseer
-for what it reads in the world, and by the harness for runs that ended in a way a human must look at (`from_runs`). The
-current list is therefore the items of the latest `ok` tick; an item disappears when a tick no longer records it. One
-the overseer recorded is held through a tick that did not give the overseer its subject, such as a ticket the harness
-decided, or any subject in a tick that ran no overseer, and goes once its ticket is done or stopped (`current`, DESIGN
-§37, §39). A tick that could not
-run the overseer because `canopy` does not work for it, or its model cannot be used (§13), adds one item of its own to
-that list, while it is the latest tick.
+for what it judges, and by the harness for runs that ended in a way a human must look at (`from_runs`) and for the
+causes it reads from the journal and the observations (`FROM_CAUSES`, `loop.harness_items`), kept while an observation
+one rests on is stale. The current list is therefore the items of the latest `ok` tick; an item disappears when a tick
+no longer records it. One the overseer recorded is held through a tick that did not give the overseer its subject, such
+as a ticket the harness decided, or any subject in a tick that ran no overseer, and goes once its ticket is done or
+stopped (`current`, DESIGN §37, §39). A tick that could not run the overseer because `canopy` does not work for it, or
+its model cannot be used (§13), adds one item of its own to that list, while it is the latest tick.
 
 A chore's open findings are on the list too, from its latest `ok` run, and a chore whose latest run failed has a
 `chore_failed` item the harness records each tick (DESIGN §19). Both are about a chore, named `chore:<name>` where a
@@ -108,8 +108,24 @@ MODEL_HALTS: frozenset[str] = frozenset({TickStatus.MODEL_MISSING, TickStatus.MO
 MAINTENANCE_ON = "auto_maintenance_on"
 #: A git on `PATH` too old to put canopy's marks on a worker's commits (TRUST_MODEL T5).
 GIT_TOO_OLD = "git_too_old"
-# What the harness records itself (`tick._record_harness_items`, and `HALTS`), so the overseer does not.
-HARNESS_REASONS = frozenset(
+#: What the harness raises from its causes in the journal (`loop.harness_items`, DESIGN §14, §37), which the overseer
+#: recorded until the harness held them: its attention tool refuses each.
+FROM_CAUSES: frozenset[str] = frozenset(
+    {
+        "needs_reviewer",
+        "ready_to_merge",
+        "untrusted_review",
+        "attempt_limit",
+        "review_failed",
+        "review_limit",
+        "plan_review",
+        "plan_changed",
+    },
+)
+#: What only the harness has ever recorded (`tick._record_harness_items`, and `HALTS`), so an item of one is the
+#: harness's whether or not its row says who recorded it. One of `FROM_CAUSES` is the harness's only when marked so: an
+#: older one the overseer recorded, or one a guard records as it refuses the overseer, is the overseer's.
+ALWAYS_HARNESS: frozenset[str] = frozenset(
     {
         *filter(None, map(run_reason, RunStatus)),
         "awaiting_reply",
@@ -128,6 +144,8 @@ HARNESS_REASONS = frozenset(
         artifact_authority.REASON,
     },
 )
+#: What the harness records itself, so the overseer does not, and the state block does not list to it.
+HARNESS_REASONS: frozenset[str] = ALWAYS_HARNESS | FROM_CAUSES
 # The window the list reads: how far back to look when working out how long an item has been open. Garbage
 # collection keeps every row of a tick inside it (DESIGN §26).
 HISTORY_TICKS = 1000
@@ -238,8 +256,8 @@ def _recorded(conn: sqlite3.Connection, ticks: Collection[int]) -> dict[int, dic
     """The attention items each of `ticks` recorded, each as its first row there words it.
 
     Returns:
-        By tick, each item, held when the overseer recorded it there: a reason the harness does not raise, recorded
-        other than by the harness.
+        By tick, each item, held when the overseer recorded it there: a reason not only the harness records, recorded
+        other than by the harness, as by a guard that refused the overseer.
     """
     rows = sql.execute(
         conn,
@@ -259,7 +277,7 @@ def _recorded(conn: sqlite3.Connection, ticks: Collection[int]) -> dict[int, dic
         repo = None if r["repo"] is None else str(r["repo"])
         reason = str(r["action"]).removeprefix(ACTION_PREFIX)
         item_id: _ItemId = (key, reason, repo)
-        held = r["decider"] != Decider.HARNESS and reason not in HARNESS_REASONS
+        held = r["decider"] != Decider.HARNESS and reason not in ALWAYS_HARNESS
         found = by_tick[int(r["tick_id"])]
         first = found.get(item_id)
         if first is None:
@@ -292,7 +310,7 @@ def _given(conn: sqlite3.Connection, ticks: Collection[int], keys: Collection[st
     ).fetchall()
     for r in rows:
         action = str(r["action"])
-        raised = action.startswith(ACTION_PREFIX) and action.removeprefix(ACTION_PREFIX) in HARNESS_REASONS
+        raised = action.startswith(ACTION_PREFIX) and action.removeprefix(ACTION_PREFIX) in ALWAYS_HARNESS
         if r["decider"] != Decider.HARNESS and not raised:
             found[int(r["tick_id"])].add(str(r["ticket_key"]))
     return found
@@ -375,8 +393,9 @@ def for_overseer(conn: sqlite3.Connection, *, decided: AbstractSet[str] = frozen
     """The open items the overseer recorded, for its state block (DESIGN §6 step 4, ROADMAP M28).
 
     An item stays open only while each tick that gives the overseer its subject records it again, so the overseer is
-    shown what it would drop by leaving one out. Items the harness raises itself, and chores', are left out: the
-    overseer never records those, nor one about no ticket and no PR, such as the item of a model tasks wait on. So
+    shown what it would drop by leaving one out. Items the harness raises itself, those it raises from their causes
+    (`FROM_CAUSES`) even where a guard recorded one, and chores', are left out: the overseer never records those, nor
+    one about no ticket and no PR, such as the item of a model tasks wait on. So
     are those about `decided`, the tickets the harness decided this tick, which the block does not list and which hold
     their items until the overseer is given them again (`current`). So is every detail, which may quote a comment: the
     item's subject, reason, and age say which one it is.

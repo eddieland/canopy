@@ -111,7 +111,8 @@ def test_one_row_of_judgment_leaves_the_whole_ticket_to_the_overseer(
     canopy_env: CanopyEnv,
     observed: sqlite3.Connection,
 ) -> None:
-    # Running, and its unit's PR is green with no reviewer: `needs_reviewer` is the overseer's to record (DESIGN §37).
+    # Running, and its unit's PR is green with no reviewer: the harness raises `needs_reviewer`, but `green_unreviewed`
+    # is not a row it decides, so the ticket's decision is the overseer's (DESIGN §37).
     running_run(context(canopy_env), KEY, private=False)
     db.set_unit(observed, KEY, str(canopy_env.root), "repo", pr_url=PR)
     observe_pr(observed)

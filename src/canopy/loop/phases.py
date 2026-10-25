@@ -219,10 +219,11 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     A ticket agrees when the phase the overseer left each subject at is one of the rows that held for it, wherever any
     did, and its decision is one those rows allow. Its decision is its dispatches, waits, skips, and done marks, or,
     with none, the attention items the overseer recorded for it; the harness's items, refusals, and mirrors are not
-    the overseer's choice. A phase the ticket's own decision moved it to this tick (`MOVES_TO`), such as `running`
-    after a dispatch, stands for the row that allowed the decision. A subject with no rows held is compared on the
-    decision only, not its phase. A ticket with a stale subject is `stale`, never a disagreement. A ticket the harness
-    decided (DESIGN §37) is not compared: the overseer decided nothing about it.
+    the overseer's choice. Where the harness raised an item from its cause on the ticket (`attention.FROM_CAUSES`), a
+    `wait` is allowed too: that item is the action its row names. A phase the ticket's own decision moved it to this
+    tick (`MOVES_TO`), such as `running` after a dispatch, stands for the row that allowed the decision. A subject with
+    no rows held is compared on the decision only, not its phase. A ticket with a stale subject is `stale`, never a
+    disagreement. A ticket the harness decided (DESIGN §37) is not compared: the overseer decided nothing about it.
 
     Returns:
         One comparison per ticket the tick derived, by key.
@@ -240,15 +241,20 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
         by_ticket.setdefault(row.ticket_key, []).append(row)
     decided: dict[str, list[str]] = {}
     by_harness: set[str] = set()
+    raised: set[str] = set()
     for d in db.decisions_for_tick(conn, tick_id):
         if d.ticket_key is None:
             continue
         if d.decider is Decider.HARNESS and not d.action.startswith(_ATTENTION):
             by_harness.add(d.ticket_key)
+        elif d.decider is Decider.HARNESS and d.action.removeprefix(_ATTENTION) in attention.FROM_CAUSES:
+            raised.add(d.ticket_key)
         elif _overseers(d):
             decided.setdefault(d.ticket_key, []).append(d.action)
     return [
-        _compared(key, subjects, decided.get(key, [])) for key, subjects in by_ticket.items() if key not in by_harness
+        _compared(key, subjects, decided.get(key, []), raised=key in raised)
+        for key, subjects in by_ticket.items()
+        if key not in by_harness
     ]
 
 
@@ -364,10 +370,16 @@ def _overseers(decision: records.Decision) -> bool:
     action = decision.action
     if decision.decider is Decider.HARNESS or action.startswith("refused:") or action == conversation.MIRROR_ACTION:
         return False
-    return not (action.startswith(_ATTENTION) and action.removeprefix(_ATTENTION) in attention.HARNESS_REASONS)
+    return not (action.startswith(_ATTENTION) and action.removeprefix(_ATTENTION) in attention.ALWAYS_HARNESS)
 
 
-def _compared(key: str, subjects: Sequence[records.Derivation], actions: Sequence[str]) -> Compared:
+def _compared(
+    key: str,
+    subjects: Sequence[records.Derivation],
+    actions: Sequence[str],
+    *,
+    raised: bool,
+) -> Compared:
     stale = [f"{_subject(s)}: {s.stale}" for s in subjects if s.stale is not None]
     if stale:
         return Compared(key, "stale", "; ".join(stale))
@@ -391,6 +403,8 @@ def _compared(key: str, subjects: Sequence[records.Derivation], actions: Sequenc
             wrong.append(f"{_subject(s)} set {s.overseer_phase or 'no phase'}, held {', '.join(held)}")
     if not allowed and not wrong:
         allowed |= NONE_ALLOWS
+    if raised:
+        allowed.add("wait")
     if not any(a in allowed for a in chosen):
         wrong.append(f"decided {', '.join(chosen) or 'nothing'}, allowed {', '.join(sorted(allowed)) or 'nothing'}")
     return Compared(key, "disagrees", "; ".join(wrong)) if wrong else Compared(key, "agrees")
@@ -711,8 +725,12 @@ class _World:
         untrusted = [r for r in new if (r.author or "").lower() not in trusted]
         if any(not any(at > (r.created_at or "") for at in operator) for r in untrusted):
             found.append(Phase.UNTRUSTED_REVIEW)
-        if self.ctx.config.review.agent_prs and CANOPY_REVIEWER in trusted and self._findings(pr, cursor):
+        reviewed = self._findings(pr, cursor) if self.ctx.config.review.agent_prs else []
+        if reviewed and CANOPY_REVIEWER in trusted:
             found.append(Phase.REVIEW_FINDINGS)
+        # Untrusted, canopy's review waits on the operator as anyone's does (DESIGN §21).
+        elif any(not any(at > (r.ended_at or r.started_at) for at in operator) for r in reviewed):
+            found.append(Phase.UNTRUSTED_REVIEW)
         return found
 
     def _operator_times(self, key: str) -> list[str]:
@@ -740,12 +758,12 @@ class _World:
             return sha is not None and not review_start.owed_by(runs, sha, chosen)
         return any(r.sha == sha and r.status is ReviewRunStatus.DONE for r in runs)
 
-    # Whether a review of the head has findings the operator did not dismiss, and ended after the `review` cursor: its
+    # The reviews of the head with findings the operator did not dismiss, which ended after the `review` cursor: its
     # latest, or each persona's when several review it (§31).
-    def _findings(self, pr: records.ObservedPr, cursor: int | None) -> bool:
+    def _findings(self, pr: records.ObservedPr, cursor: int | None) -> list[records.ReviewRun]:
         done = [r for r in self._runs_of(pr.url) if r.sha == pr.head_sha and r.status is ReviewRunStatus.DONE]
         latest = {r.persona: r for r in reversed(done)}.values()
-        return any(self._kept_findings(r) and item_numbers.newer(r.number, cursor) for r in latest)
+        return [r for r in latest if self._kept_findings(r) and item_numbers.newer(r.number, cursor)]
 
     def _kept_findings(self, run: records.ReviewRun) -> bool:
         stored = result.stored(run.result_json)

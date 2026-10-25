@@ -12,6 +12,7 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.cli import gc as gc_cli
 from canopy.cli.main import main
 from canopy.core import conversation, db, plans
+from canopy.core.vocab import Decider
 from canopy.infra import lock, logs
 from canopy.loop import attention, gc
 from tests.canopy.helpers import KEY, PLAN, earlier, ended_tick, run_with_files, write_file
@@ -142,11 +143,19 @@ def test_harness_attention_goes_only_outside_the_window_and_after_journal_days(
     ticks = [ended_tick(conn, earlier(now, 200)) for _ in range(3)]
     recent = ended_tick(conn, earlier(now, 1))
     for tick_id in [*ticks, recent]:
+        at = earlier(now, 200 if tick_id != recent else 1)
+        # The harness's own, and one it raises from its cause, marked as its own (DESIGN §37).
         conn.execute(
             "INSERT INTO decisions (tick_id, ticket_key, action, rationale, created_at) VALUES (?, ?, ?, 'r', ?)",
-            (tick_id, KEY, "attention:crashed", earlier(now, 200 if tick_id != recent else 1)),
+            (tick_id, KEY, "attention:crashed", at),
         )
-        db.record_decision(conn, tick_id, KEY, "attention:needs_review", "the overseer's")
+        conn.execute(
+            "INSERT INTO decisions (tick_id, ticket_key, action, rationale, created_at, decider) "
+            "VALUES (?, ?, ?, 'r', ?, ?)",
+            (tick_id, KEY, "attention:needs_reviewer", at, Decider.HARNESS),
+        )
+        # The overseer's, of the same reason before the harness raised it: the corpus.
+        db.record_decision(conn, tick_id, KEY, "attention:needs_reviewer", "the overseer's")
     conn.commit()
 
     # With fewer `ok` ticks than the window, nothing goes, whatever `journal_days` says.
@@ -157,8 +166,8 @@ def test_harness_attention_goes_only_outside_the_window_and_after_journal_days(
     # The window is the newest two ticks here: the two before them are outside it, and older than 90 days.
     with mock.patch.object(attention, "HISTORY_TICKS", 2):
         kinds = dry_run(capsys)
-    assert kinds["harness attention"]["count"] == 4
-    assert kinds["harness attention"]["removable"] == 2
+    assert kinds["harness attention"]["count"] == 8
+    assert kinds["harness attention"]["removable"] == 4
     assert kinds["overseer attention"]["removable"] == 0
 
 

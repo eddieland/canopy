@@ -126,6 +126,12 @@ Controls:
   derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
   model-written context: today it starts only a due chore with no `when`, whose `chore run` and `chore wait` the
   overseer is refused `decided`, and no ticket's run, since each rests on an observation.
+- The attention items that need no judgment (`needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
+  `review_failed`, `review_limit`, `plan_review`, `plan_changed`) are the harness's, raised from the journal and the
+  observations in its own words, and kept while an observation they rest on is stale (DESIGN §14). The overseer is
+  refused recording one (`raised`), through a tool and its command alike, so a steered overseer can neither drop such
+  an item nor raise a false one; a guard that refuses it a run past a limit still records the item. Residual: a
+  derivation's mistake raises or ends an item wrongly until a fresh read corrects it.
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal

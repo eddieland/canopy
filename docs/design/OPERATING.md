@@ -424,17 +424,26 @@ journal did not record, until the ticket is done or forgotten (§18), and `untru
 with a comment on its artifacts by an author the operator does not list, until the operator replies on the ticket after
 it (§38).
 
-**Recorded by the overseer.** The overseer records an item with its `attention` tool (§27), with a reason and a detail,
-every tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention
-decisions of the latest `ok` tick, so an item disappears the first tick that does not record it, and a failed or
-`skipped` tick leaves the previous list standing; a halted tick's item (§6 step 5) is added to it while it is the
-latest tick's. The harness holds the overseer's item through a tick that did not give the overseer its subject, such as
-a ticket the harness decided (§37), since the overseer cannot record again what it was not shown; the item goes the
-first tick that gives the overseer its subject and leaves it out, or once its ticket is done or stopped. The state
-block lists the overseer's open items on what it is given (§6 step 4), so it records each again until it sees the
-cause gone. An item's age runs from the first tick of its unbroken run. `attempt_limit` is recorded by the overseer when
-the state block shows a ticket at its limit, and by `canopy dispatch` with an `attempt_limit` refusal, and lasts while
-the overseer keeps asking.
+From their causes, before the overseer runs, the harness raises the phase table's items and those of reviews and plans
+(§37): `needs_reviewer` and `ready_to_merge` for a unit whose phase is `green_unreviewed` or `approved`,
+`untrusted_review` while that row holds on a unit, `attempt_limit` for a unit or a ticket's plan whose next run is past
+its limit, `review_limit` for one of the loop's PRs unreviewed at its limit, `review_failed` while a PR's latest review
+run failed, and `plan_review` and `plan_changed` while a plan waits on the operator or its file is no longer what they
+approved. Each is open while its cause holds in the journal and the observations (§30). One resting on an observation
+is kept while that observation is stale, and goes only when a fresh one shows its cause gone, or its ticket is done,
+stopped, or seen closed or unlabeled: a tick that could not read a cause drops nothing. A guard that refuses the
+overseer a dispatch or a review past its limit records `attempt_limit` or `review_limit` too.
+
+**Recorded by the overseer.** The overseer records the items that are judgment with its `attention` tool (§27), with a
+reason and a detail, every tick its cause holds; the tool refuses it a reason the harness raises. Items are stored as
+decisions, not a table of their own (D020). The current list is the attention decisions of the latest `ok` tick, so an
+item disappears the first tick that does not record it, and a failed or `skipped` tick leaves the previous list
+standing; a halted tick's item (§6 step 5) is added to it while it is the latest tick's. The harness holds the
+overseer's item, and a guard's, through a tick that did not give the overseer its subject, such as a ticket the harness
+decided (§37), since the overseer cannot record again what it was not shown; the item goes the first tick that gives
+the overseer its subject and leaves it out, or once its ticket is done or stopped. The state block lists the
+overseer's open items on what it is given (§6 step 4), so it records each again until it sees the cause gone. An
+item's age runs from the first tick of its unbroken run.
 
 **Notification.** An item is identified by its ticket, reason, and repository; rewording its detail does not make it
 new. Each sink (§20), `notify.cmd` among them, keeps its own record of what it was told, and each tick sends it the new

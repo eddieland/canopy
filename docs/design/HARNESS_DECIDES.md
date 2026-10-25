@@ -11,12 +11,12 @@ records before the overseer, each marked as its own; a ticket taken or left whol
 the tickets left (§6); the state block's `harness`, naming each ticket taken; and "Order and capacity", the order now
 in §7. The rows enabled are those read from the journal alone: `wait` for `running`, and for a private ticket's
 `needs_human`; and `chore run` for a due chore with no `when` (§19). No ticket's dispatch is enabled: each rests on an
-observation. Of the attention list held in code, built: the overseer's items held through a tick that does not give
-the overseer their subject, until one that does leaves them out or the ticket is done or stopped (§14), so a ticket
-with one is the harness's for a `wait`, though not for a run. The rest, from "The attention list, held in code" on, is
-designed, not built. Until it is, §8, §14, §21,
-and TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that finishes it changes those
-sections and cuts this one to what is left.
+observation. Of the attention list held in code, built: the items the harness raises from their causes, in §14, which
+the overseer is refused (`raised`); and the overseer's items held through a tick that does not give the overseer their
+subject, until one that does leaves them out or the ticket is done or stopped (§14), so a ticket with one is the
+harness's for a `wait`, though not for a run. The rest, from the overseer's three items on, is designed, not built.
+Until it is, §8, §21, and TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that
+finishes it changes those sections and cuts this one to what is left.
 
 Once the overseer reads the journal (§30), most of what it decides follows from the observations alone: applied by
 hand, §7's rows that are facts agreed with it on all but six of 943 decisions, and an overseer given only the tickets
@@ -77,12 +77,9 @@ dispatches it cannot foresee.
 
 ### The attention list, held in code
 
-Every item the overseer records today but three is the harness's, open while its cause holds in the journal, as the run
-reasons are (§14): `needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`, `review_failed`,
-`review_limit`, `plan_review`, and `plan_changed`. An item goes only when an observation or the operator shows its cause
-gone; a stale observation keeps it. No item hangs on a tick recording it again, so the list stops being the latest `ok`
-tick's (D020): an item cannot flap (MEASUREMENTS 2026-10-13) or go because a tick could not read its cause, and nothing
-needs to tell a partial tick from a whole one.
+Every item the overseer recorded but three is the harness's, raised from its cause and kept while an observation it
+rests on is stale (§14). No item hangs on the overseer recording it again: none can flap (MEASUREMENTS 2026-10-13) or
+go because a tick could not read its cause, and nothing needs to tell a partial tick from a whole one.
 
 The overseer keeps the three that are judgment: `needs_author`, `multi_repo`, and `notice_rerun` (§8). It records each
 once, naming what it is about, and the harness holds it until that is handled (the cursor passes the item it names, a
@@ -107,12 +104,13 @@ The prompt keeps only that judgment; its holds, order, candidates, phase table, 
 ### Trust model changes, when built
 
 - T1: text on a ticket the harness decided reaches no overseer (its workers and reviewers still read it), and the
-  harness's dispatches carry no model-written context. A steered overseer cannot overrule the harness (`decided`) or
-  drop an item it holds. Residual: a harness `resume` follows an observation without judgment, so a derivation's
-  mistake starts a run, which the evidence gate and T3's limits bound.
+  harness's dispatches carry no model-written context. A steered overseer cannot overrule the harness (`decided`).
+  Residual: a harness `resume` follows an observation without judgment, so a derivation's mistake starts a run, which
+  the evidence gate and T3's limits bound.
 - T3: every harness dispatch counts against each limit, cooldown, and capacity; `reserved` keeps new work behind work
   in flight. T5: each decision says whether the harness or the overseer made it.
-- D008 and D020 are edited in place: rows move into code on a measurement, and the attention list is held in code.
+- D008 and D020 are edited in place: rows move into code on a measurement, and the overseer's items are held until
+  what they name is handled.
 
 ### Open
 

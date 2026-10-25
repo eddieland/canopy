@@ -148,7 +148,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             pr_url=PR,
             cursors={"ci": str(item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, 5551, at=db.now()))},
         )
-        decide(conn, earlier, "PROJ-1", "attention:needs_reviewer", "no reviewer is assigned", repo="repo")
+        decide(conn, earlier, "PROJ-1", "attention:needs_author", "a reviewer asks about intent", repo="repo")
         # The operator sent a run's reply to a review comment through canopy: the block names it by id (DESIGN §29).
         conn.execute(
             "INSERT INTO drafts (run_id, number, ticket_key, kind, repo, pr_url, comment_id, stance, status, basis, "

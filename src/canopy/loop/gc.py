@@ -23,7 +23,7 @@ import canopy_sandbox
 from canopy.chores import start as chore_start
 from canopy.core import db, hostgit, review_diff, sql
 from canopy.core.context import db_path
-from canopy.core.vocab import MemoryScope, MemoryStatus, PrState, TickStatus
+from canopy.core.vocab import Decider, MemoryScope, MemoryStatus, PrState, TickStatus
 from canopy.infra import lock, logs, procs
 from canopy.loop import attention, gc_branches
 from canopy.reviews import start as review_start
@@ -251,7 +251,7 @@ def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> 
         RowKind(
             "harness attention",
             "decisions",
-            sql.in_("action", _harness()),
+            _harness(),
             _DECISION_BYTES,
             sql.frag("tick_id < ? AND created_at < ?", window.tick_id, cutoff),
             rule,
@@ -473,7 +473,7 @@ def _overseer_attention(conn: sqlite3.Connection) -> Kind:
     Returns:
         The kind, nothing of it removable.
     """
-    recorded = sql.all_of(sql.frag("action LIKE ?", f"{attention.ACTION_PREFIX}%"), sql.not_in("action", _harness()))
+    recorded = sql.all_of(sql.frag("action LIKE ?", f"{attention.ACTION_PREFIX}%"), sql.frag("NOT ({})", _harness()))
     return RowKind(
         "overseer attention",
         "decisions",
@@ -484,13 +484,21 @@ def _overseer_attention(conn: sqlite3.Connection) -> Kind:
     ).kind(conn)
 
 
-def _harness() -> list[str]:
-    """The actions of the attention items the harness raises itself.
+def _harness() -> sql.Fragment:
+    """The attention rows the harness raised itself.
+
+    An item of a reason only it records, or of one it raises from its causes and marked as its own: the overseer
+    recorded those before the harness held them, and a guard records one as it refuses the overseer (DESIGN §37).
 
     Returns:
-        Each `attention:<reason>`, in order.
+        The condition.
     """
-    return [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.HARNESS_REASONS)]
+    actions = [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.ALWAYS_HARNESS)]
+    from_causes = [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.FROM_CAUSES)]
+    return sql.any_of(
+        sql.in_("action", actions),
+        sql.all_of(sql.in_("action", from_causes), sql.frag("decider = ?", Decider.HARNESS)),
+    )
 
 
 @dataclass(frozen=True)

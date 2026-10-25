@@ -47,7 +47,7 @@ def json_messages(out: Path) -> list[dict[str, Any]]:
 
 def needing_reviewers(*keys: str) -> list[list[str]]:
     """The overseer raises each of `keys` on the attention list as needing a reviewer."""
-    return [raises(key, "needs_reviewer") for key in keys]
+    return [raises(key, "needs_author") for key in keys]
 
 
 @pytest.mark.parametrize(
@@ -99,21 +99,21 @@ def test_notify_cmd_is_the_sink_named_default(scenario: Scenario, sink_script: P
     conn = scenario.conn
     conn.execute(
         "INSERT INTO notifications (sink, fingerprint, ticket_key, reason, repo, sent_at) "
-        "VALUES ('default', ?, 'PROJ-3', 'needs_reviewer', NULL, 'x')",
-        (fingerprint("PROJ-3", "needs_reviewer"),),
+        "VALUES ('default', ?, 'PROJ-3', 'needs_author', NULL, 'x')",
+        (fingerprint("PROJ-3", "needs_author"),),
     )
     out = tmp_path / "notified.txt"
     scenario.configures(notify={"cmd": f"{sink_script} {out}"})
     scenario.tick(*needing_reviewers("PROJ-3"))
     assert messages(out) == []
     rows = [tuple(r) for r in conn.execute("SELECT sink, ticket_key, reason FROM notifications")]
-    assert rows == [("default", "PROJ-3", "needs_reviewer")]
+    assert rows == [("default", "PROJ-3", "needs_author")]
 
     # Renamed to a sink of its own, it is new there and hears about every open item once.
     scenario.configures(notify={"cmd": None, "sinks": {"mine": {"format": "text", "cmd": f"{sink_script} {out}"}}})
     scenario.tick(*needing_reviewers("PROJ-3"))
     [message] = messages(out)
-    assert "+ PROJ-3 needs_reviewer: PROJ-3 detail\n" in message
+    assert "+ PROJ-3 needs_author: PROJ-3 detail\n" in message
     assert [tuple(r) for r in conn.execute("SELECT sink FROM notifications")] == [("mine",)]
 
 
@@ -136,7 +136,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
             "ticket": "PROJ-9",
             "title": None,  # not named yet
             "repo": None,
-            "reason": "needs_reviewer",
+            "reason": "needs_author",
             "detail": "PROJ-9 detail",
             "since": message["attention"]["added"][0]["since"],
             "ui": None,  # a tick run by hand serves no web UI to link to
@@ -158,7 +158,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
     assert ended["line"].startswith("< PROJ-1 run 1 implement ended blocked: x question: Should the retry")
     assert message["omitted"] == 0
     assert message["digest"] is None
-    assert message["text"].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-9 needs_reviewer: PROJ-9 detail\n> ")
+    assert message["text"].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-9 needs_author: PROJ-9 detail\n> ")
 
     # Delivered events are not sent again.
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
@@ -402,7 +402,7 @@ def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held
         scenario.run(dispatches("PROJ-2"), worker=asks("Which?"))
     else:
         scenario.run(dispatches("PROJ-2"), worker=worker_does())
-        attention.append(raises("PROJ-8", "ready_to_merge"))
+        attention.append(raises("PROJ-8", "multi_repo"))
     scenario.tick(*attention, *waits("PROJ-1", "PROJ-2"))
     [_, sent] = json_messages(out)
     assert [(e["kind"], e["ticket"]) for e in sent["events"]] == [
@@ -629,7 +629,7 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
     since = "2026-10-19T12:00:00Z"
     pr = "https://github.test/o/r/pull/7"
     added = [
-        Item("PROJ-1", "needs_reviewer", "d", since),
+        Item("PROJ-1", "needs_author", "d", since),
         Item("chore:deps", "lodash", "d", since, finding=True),
         Item(f"pr:{pr}", "review_requested", "d", since),
         Item(None, "repo_missing", "d", since, repo="web"),
