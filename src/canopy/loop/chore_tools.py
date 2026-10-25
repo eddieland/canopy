@@ -2,7 +2,8 @@
 
 Each is a request (`loop.tools.Request`) and a function, which the `canopy chore` commands and the MCP server
 (`loop.mcp`) both call, as they do the overseer's other verbs. A chore with no `when` is the harness's, which runs it
-when it is due (DESIGN §37): either verb about one is refused `decided`.
+when it is due (DESIGN §37): either verb about one is refused `decided`. A chore run the overseer asks for is recorded,
+and the tick starts it once the overseer's run has ended (`spawn_chore`, DESIGN §40).
 """
 
 from __future__ import annotations
@@ -12,12 +13,26 @@ from typing import TYPE_CHECKING, Annotated
 from pydantic import Field
 
 from canopy.chores import start as chore_start
-from canopy.core import chore_view, config, db
+from canopy.core import chore_view, config, db, recorded_runs
+from canopy.core.vocab import RecordedStatus
 from canopy.infra import logs
 from canopy.loop import attention, harness_dispatches
-from canopy.loop.tools import DECIDED, Outcome, Refused, Request, Result, Text, matching, running_tick, truncate
+from canopy.loop.tools import (
+    DECIDED,
+    RECORDED_DESCRIPTION,
+    STARTS_AFTER,
+    Outcome,
+    Refused,
+    Request,
+    Result,
+    Text,
+    matching,
+    running_tick,
+    truncate,
+)
 
 if TYPE_CHECKING:
+    from canopy.core import records
     from canopy.core.context import Context
 
 #: A chore's name, as the operator's config names it.
@@ -37,18 +52,20 @@ class ChoreRun(Request):
 
 
 class ChoreStarted(Result):
-    """A run of a chore started, or in a dry run, one its guards would start."""
+    """A run of a chore recorded, which the tick starts after the overseer, or in a dry run, one its guards allow."""
 
     #: The chore.
     name: Annotated[str, Field(description="The chore.")]
-    #: Whether this was a dry run, which started nothing.
-    dry_run: Annotated[bool, Field(description="Whether this was a dry run, which started nothing.")]
-    #: The chore's run that started; none in a dry run.
-    run: Annotated[int | None, Field(description="The chore's run that started; none in a dry run.")]
+    #: Whether this was a dry run, which records nothing.
+    dry_run: Annotated[bool, Field(description="Whether this was a dry run, which records nothing.")]
+    #: The recorded run, which the tick starts once the overseer's run ends; none in a dry run.
+    recorded: Annotated[int | None, Field(description=RECORDED_DESCRIPTION)]
 
 
 def chore_run(ctx: Context, request: ChoreRun) -> Outcome[ChoreStarted]:
-    """Start a run of a chore, if its guards allow one now; in a dry run, check them and start nothing.
+    """Record a run of a chore, if its guards allow one now; in a dry run, check them and record nothing.
+
+    The tick starts the recorded run once the overseer's run has ended (DESIGN §40).
 
     Returns:
         What the command prints, and the same as fields.
@@ -63,31 +80,59 @@ def chore_run(ctx: Context, request: ChoreRun) -> Outcome[ChoreStarted]:
     try:
         if current.dry_run:
             chore_start.check(ctx, tick_id=tick_id, name=name)
-            started = None
+            recorded = None
         else:
-            started = chore_start.start(ctx, tick_id=tick_id, name=name, context=context)
+            recorded = chore_start.record(ctx, tick_id=tick_id, name=name, context=context)
     except chore_start.Refusal as r:
-        db.record_decision(ctx.conn, tick_id, None, f"refused:{r.guard}", r.reason, chore=name)
-        if r.attention is not None:
-            # A model the operator must fix (DESIGN §13): the item is about the chore.
-            db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, chore=name)
-        log.info("chore run refused", extra={"chore": name, "guard": r.guard, "reason": r.reason})
+        _chore_refused(ctx, tick_id, name, r)
         raise Refused(f"chore run refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    on_context = f"; context={context}" if context else ""
-    if started is None:
+    if recorded is None:
+        on_context = f"; context={context}" if context else ""
         rationale = truncate(f"dry run: not dispatched{on_context}")
         db.record_decision(ctx.conn, tick_id, None, chore_start.DISPATCH_ACTION, rationale, chore=name)
         return Outcome(
             f"dry run: recorded chore run {name}; nothing was started",
-            ChoreStarted(name=name, dry_run=True, run=None),
+            ChoreStarted(name=name, dry_run=True, recorded=None),
         )
+    # The decision is recorded as the run starts, or with its refusal then (`spawn_chore`).
+    log.info("chore run recorded", extra={"chore": name, "recorded_run_id": recorded})
+    return Outcome(
+        f"recorded chore {name} as recorded run {recorded}; {STARTS_AFTER}",
+        ChoreStarted(name=name, dry_run=False, recorded=recorded),
+    )
+
+
+def spawn_chore(ctx: Context, recorded: records.RecordedRun) -> None:
+    """Start the chore run `recorded` names, as its tick does once the overseer's run has ended (DESIGN §40).
+
+    Every guard is checked again, and the run's decision recorded as it starts, or its refusal as one at the ask would
+    be.
+    """
+    request = ChoreRun.model_validate(recorded_runs.request_of(recorded))
+    tick_id, name, context = recorded.tick_id, request.name, request.context
+    try:
+        started = chore_start.start(ctx, tick_id=tick_id, name=name, context=context, spawning=recorded.id)
+    except chore_start.Refusal as r:
+        recorded_runs.close(ctx.conn, recorded.id, RecordedStatus.REFUSED)
+        _chore_refused(ctx, tick_id, name, r)
+        return
+    recorded_runs.close(ctx.conn, recorded.id, RecordedStatus.STARTED, run_id=started.run_id)
+    on_context = f"; context={context}" if context else ""
     rationale = truncate(f"chore run {started.run_id}{on_context}")
     db.record_decision(ctx.conn, tick_id, None, chore_start.DISPATCH_ACTION, rationale, chore=name)
-    log.info("chore run started", extra={"chore": name, "chore_run_id": started.run_id, "pid": started.pid})
-    return Outcome(
-        f"started chore {name}: run {started.run_id}",
-        ChoreStarted(name=name, dry_run=False, run=started.run_id),
+    logs.for_tick(tick_id).info(
+        "chore run started",
+        extra={"chore": name, "chore_run_id": started.run_id, "pid": started.pid, "recorded_run_id": recorded.id},
     )
+
+
+def _chore_refused(ctx: Context, tick_id: int, name: str, r: chore_start.Refusal) -> None:
+    """Record a guard's refusal of a chore run, at the ask or at the spawn, and its attention item, if any."""
+    db.record_decision(ctx.conn, tick_id, None, f"refused:{r.guard}", r.reason, chore=name)
+    if r.attention is not None:
+        # A model the operator must fix (DESIGN §13): the item is about the chore.
+        db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, chore=name)
+    logs.for_tick(tick_id).info("chore run refused", extra={"chore": name, "guard": r.guard, "reason": r.reason})
 
 
 class ChoreWait(Request):

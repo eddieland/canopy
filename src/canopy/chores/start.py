@@ -16,11 +16,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import history
-from canopy.core import agent_models, chore_runs, conversation, db, notice, outbox, prompts
+from canopy.core import agent_models, chore_runs, conversation, db, notice, outbox, prompts, recorded_runs
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core import chore_window as window
-from canopy.core.vocab import ChoreRunStatus
+from canopy.core.vocab import ChoreRunStatus, RecordedKind
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
@@ -111,10 +111,35 @@ def check(ctx: Context, *, tick_id: int, name: str) -> Chore:
         return chore
 
 
-def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Started:
+def record(ctx: Context, *, tick_id: int, name: str, context: str | None) -> int:
+    """Check the guards `start` does, and record the chore run the overseer asked for, for the tick to spawn (§40).
+
+    Nothing is spawned: the recorded run counts as a run of the chore running, within `max_chores`, until the tick
+    spawns it once the overseer's run has ended, under the guards again.
+
+    Returns:
+        The recorded run's id.
+
+    Raises:
+        Refusal: a guard refused.
+    """
+    with lock.hold(ctx.dispatch_lock_path, wait=True):
+        chore = _guard(ctx, name)
+        _check_model(ctx, name, chore)
+        return recorded_runs.record(
+            ctx.conn,
+            tick_id=tick_id,
+            kind=RecordedKind.CHORE,
+            request={"name": name, "context": context},
+            chore=name,
+        )
+
+
+def start(ctx: Context, *, tick_id: int, name: str, context: str | None, spawning: int | None = None) -> Started:
     """Check the guards, record the chore run, render its prompt, and spawn `canopy _chore` for it.
 
-    Serialized with dispatches by the dispatch lock, so two cannot both pass the capacity check.
+    Serialized with dispatches by the dispatch lock, so two cannot both pass the capacity check. `spawning` is the
+    recorded run this spawns, which the guards then do not count as running (DESIGN §40).
 
     Returns:
         The new chore run's id and the pid of its `canopy _chore`.
@@ -124,7 +149,7 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
         RuntimeError: the chore run's row was gone right after it was inserted.
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        chore = _guard(ctx, name)
+        chore = _guard(ctx, name, spawning=spawning)
         # Before the run is recorded, so a model that cannot be used leaves no failed run behind it.
         _check_model(ctx, name, chore)
         try:
@@ -192,8 +217,16 @@ def read_body(config: Config, chore: Chore) -> str:
     return body + prompts.standing_section(prompts.chore_instructions(config), "chore")
 
 
-def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -> Chore:
+def _guard(
+    ctx: Context,
+    name: str,
+    *,
+    planned: Collection[str] | None = None,
+    spawning: int | None = None,
+) -> Chore:
     """Refuse unless chore `name` may run now. `planned` holds the chores a dry run already ran this tick.
+
+    A chore run recorded for the tick to spawn counts as running, but `spawning`, the one being spawned (DESIGN §40).
 
     Returns:
         The configured chore.
@@ -211,6 +244,10 @@ def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -
     mine = next((r for r in running if r["chore"] == name), None)
     if mine is not None:
         raise Refusal("running", f"chore run {mine['id']} of {name} is running")
+    held = [r for r in recorded_runs.holding(ctx.conn, but=spawning) if r.kind is RecordedKind.CHORE]
+    waiting = next((r for r in held if r.chore == name), None)
+    if waiting is not None:
+        raise Refusal("running", f"recorded run {waiting.id} of {name} starts once the overseer's run ends")
     if name in planned:
         raise Refusal("running", f"this dry run already ran {name}")
     [state] = [s for s in view.states(ctx.conn, ctx.config, ctx.workspace) if s.name == name]
@@ -225,9 +262,10 @@ def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -
         opens = window.next_open(chore, now)
         raise Refusal("outside_hours", f"{name} starts only {window.describe(chore)}; next at {db.format_time(opens)}")
     limit = ctx.config.capacity.max_chores
-    busy = len(running) + len(planned)
+    busy = len(running) + len(planned) + len(held)
     if busy >= limit:
         planned_note = f", counting {len(planned)} this dry run ran" if planned else ""
+        planned_note += f", counting {len(held)} recorded for the tick to start after the overseer" if held else ""
         raise Refusal("chore_capacity", f"{busy} of {limit} chore runs are running{planned_note}")
     return chore
 

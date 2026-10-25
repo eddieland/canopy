@@ -193,7 +193,7 @@ setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
   `private_worker_cmd` is easy to miss, and a private ticket's worker then runs outside the sandbox.
 - A chore with a `cmd` of its own (DESIGN §19) needs the prefix there too, with `--read {definitions_dir}` only if the
   command names it: `cmd = 'canopy-sandbox chore -- opencode run --agent build-health --format json'`.
-- Leave `overseer_cmd` as it is for now: canopy refuses the prefix there (below).
+- `overseer_cmd` takes a role of its own (The overseer, below).
 - The reviewer reads the checkout and writes nothing in it, not even a commit, so `review.json` allows reading the
   checkout and its git directories and writing none of them, and leaves `github.com` off the allowlist.
 - If your `PATH` has a relative entry, such as `.`, name the wrapper by its absolute path: canopy runs the template
@@ -227,11 +227,9 @@ empty.
 ### The overseer
 
 The overseer reads the most hostile text the loop sees, ticket text, and without a sandbox its OpenCode permissions are
-its only limit. `overseer.json` is its policy, for the `overseer` role, and canopy does not take it yet: it refuses an
-`overseer_cmd` that starts in `canopy-sandbox` until the tick starts every run the overseer asks for (DESIGN §40,
-ROADMAP M40's first stage). Until then a dispatch starts its run from inside the overseer's process tree, so the run
-would inherit the overseer's sandbox, and `srt` ends a process started with `setsid` when its sandbox ends: every run
-would die with the overseer. Once canopy takes it, the prefix is the same as the others':
+its only limit. `overseer.json` is its policy, for the `overseer` role. Every run the overseer asks for is started by
+the tick once the overseer's run has ended (DESIGN §40), outside its sandbox, so no run inherits the overseer's policy
+or dies with it. The prefix is the same as the others':
 
 ```toml
 [runtime]

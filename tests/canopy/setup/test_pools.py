@@ -16,7 +16,7 @@ from canopy.core import config, workspace
 from canopy.infra import lock
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools
-from tests.canopy.helpers import LABEL, InlineRunner, in_tick
+from tests.canopy.helpers import LABEL, InlineRunner, decisions, in_tick, tick_starts
 from tests.conftest import CanopyEnv, git, user_toml
 
 GIT_AUTHORS = ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL")
@@ -100,19 +100,18 @@ def test_a_full_pool_refuses_a_dispatch_without_asking_treehouse_for_another_slo
     ws: Ws,
     canopy_env: CanopyEnv,
     treehouse_state: Path,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "slots_per_repo = 1")
     set_slots(treehouse_state, ws, "api", "leased")
     conn = ws.journal()
-    with in_tick(conn):
+    with in_tick(conn) as tick_id:
         runner = InlineRunner()
-
-        assert main(dispatch("api"), runner=runner) == 1
-        assert (
-            "dispatch refused (no_slot): api: 1 of its slots are busy, and capacity declares 1"
-            in capsys.readouterr().err
-        )
+        # The slot is leased as the tick starts the run, after the overseer (DESIGN §40): refused then.
+        assert main(dispatch("api"), runner=runner) == 0
+        tick_starts(runner)
+        assert decisions(conn, tick_id) == [
+            ("refused:no_slot", "api: 1 of its slots are busy, and capacity declares 1 for this pool"),
+        ]
         assert [c[0] for c in calls(treehouse_state)] == ["status"]
         assert len(slots_of(treehouse_state, ws, "api")) == 1
         assert runner.spawned == []
@@ -122,15 +121,16 @@ def test_a_slot_treehouse_makes_past_the_declared_size_is_destroyed(
     ws: Ws,
     canopy_env: CanopyEnv,
     treehouse_state: Path,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "slots_per_repo = 1")
     stale = str(ws.root / ".treehouse" / "api-fake" / "1" / "api")
     set_slots(treehouse_state, ws, "api", "available", skip_reuse=[stale])
     conn = ws.journal()
-    with in_tick(conn):
-        assert main(dispatch("api"), runner=InlineRunner()) == 1
-        err = capsys.readouterr().err
+    with in_tick(conn) as tick_id:
+        assert main(dispatch("api"), runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
+        [(action, err)] = decisions(conn, tick_id)
+        assert action == "refused:no_slot"
         assert "no slot of the 1 could be reused, and capacity declares 1" in err
         assert "the new slot " in err
         assert " was removed" in err
@@ -142,17 +142,20 @@ def test_a_pool_declared_smaller_than_it_is_counts_its_busy_slots(
     ws: Ws,
     canopy_env: CanopyEnv,
     treehouse_state: Path,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "[capacity.repo_slots]\napi = 0\nweb = 1")
     set_slots(treehouse_state, ws, "api", "available")
     set_slots(treehouse_state, ws, "web", "leased", "available")
     conn = ws.journal()
-    with in_tick(conn):
-        assert main(dispatch("api"), runner=InlineRunner()) == 1
-        assert "api: 0 of its slots are busy, and capacity declares 0" in capsys.readouterr().err
-        assert main(dispatch("web"), runner=InlineRunner()) == 1
-        assert "web: 1 of its slots are busy, and capacity declares 1" in capsys.readouterr().err
+    with in_tick(conn) as tick_id:
+        assert main(dispatch("api"), runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
+        assert main(dispatch("web"), runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
+        assert decisions(conn, tick_id) == [
+            ("refused:no_slot", "api: 0 of its slots are busy, and capacity declares 0 for this pool"),
+            ("refused:no_slot", "web: 1 of its slots are busy, and capacity declares 1 for this pool"),
+        ]
         assert [c[0] for c in calls(treehouse_state)] == ["status", "status"]
 
 
@@ -167,6 +170,7 @@ def test_a_pool_below_its_size_grows_and_one_at_it_reuses_a_slot(
     conn = ws.journal()
     with in_tick(conn):
         assert main(dispatch("api", "web"), runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
         assert [s["status"] for s in slots_of(treehouse_state, ws, "api")] == ["leased", "leased"]
         assert [s["path"] for s in slots_of(treehouse_state, ws, "web")] == seed
 

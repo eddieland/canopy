@@ -36,19 +36,22 @@ from canopy.core import (
     plans,
     pools,
     prompts,
+    recorded_runs,
     replies,
     review_answers,
     sandboxing,
     ticket_models,
 )
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import PoolKind, ResumeReason, RunKind, RunStatus, StartStatus
+from canopy.core.vocab import PoolKind, RecordedKind, ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.infra.text import quoted
 from canopy.runs import plan_guards, policy
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from canopy.core import records
     from canopy.core.context import Context
 
@@ -74,6 +77,8 @@ REASON_CURSORS: Mapping[str, ResumeReason] = {
     "comment": ResumeReason.REPLY,
     "message": ResumeReason.REPLY,
 }
+#: What names a recorded run among the runs `_guard` counts as running, beside a dry run's tickets (DESIGN §40).
+RECORDED_PREFIX = "recorded:"
 #: The attention item a dispatch refused for a retired `fix-ci` prompt override records (DESIGN §8, §14).
 FIX_CI_OVERRIDE = "fix_ci_override"
 
@@ -111,6 +116,16 @@ class Started:
     def repos(self) -> tuple[str, ...]:
         """The repositories the run works in."""
         return tuple(s.repo or "" for s in self.slots)
+
+
+@dataclass(frozen=True)
+class Recorded:
+    """A dispatch the overseer asked for, recorded for the tick to spawn after its run (DESIGN §40)."""
+
+    #: The recorded run's id, which the tool returns.
+    recorded_id: int
+    #: What the run would do, as its guards found it at the ask.
+    plan: Plan
 
 
 @dataclass(frozen=True)
@@ -161,6 +176,7 @@ def start(
     reasons: Collection[str] = (),
     cursors: AbstractSet[str] = frozenset(),
     reserved: int = 0,
+    spawning: int | None = None,
 ) -> Started:
     """Check the guards, lease a slot in each repository, record the run, and spawn `canopy _run` for it.
 
@@ -173,6 +189,7 @@ def start(
     `review`, read from the journal (DESIGN §21). A `resume` names why it runs in `reasons`, and `cursors` names the
     cursors the dispatch moves, with `review_run` for `--review-run`: each needs its reason (DESIGN §8). `reserved` is
     the workers the harness's dispatches to come this tick hold ahead of this one, to leave free (DESIGN §37).
+    `spawning` is the recorded run this spawns, which the guards then do not count as running (DESIGN §40).
 
     Returns:
         The run that started: its id, branch, the slots it leased, the worker's pid, and its desk if it is joint.
@@ -184,24 +201,16 @@ def start(
     # One dispatch at a time, so two cannot both pass the capacity check. Held from the plan, which reads the ticket's
     # branch, across the leases and the spawn: two first implements must not each name a branch.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
-        check_kind(kind)
-        _check_notice(ctx, tick_id, kind, reasons)
-        plan = _plan(
+        guarded = _checked(
             ctx,
+            tick_id,
             key,
             kind,
-            label=label,
-            repos=repos,
-            slug=slug,
-            base=base,
-            reasons=reasons,
-            cursors=cursors,
+            _Asked(label=label, slug=slug, base=base, repos=repos, reasons=reasons, cursors=cursors),
+            reserved=reserved,
+            spawning=spawning,
         )
-        attempt, limit = _guard(ctx, key, kind, plan.repos, reasons=reasons, reserved=reserved)
-        # Fixed now, before a slot is leased: a persona that cannot be used refuses the run whole (DESIGN §31).
-        persona = _check_persona(ctx, key, kind)
-        # And its model, looked up in the runtime's list now: one it lacks refuses the run whole (DESIGN §13).
-        model = _check_model(ctx, key, kind, private=plan.private)
+        plan = guarded.plan
         leases = _lease_all(ctx, key, plan.repos)
         try:
             return _spawn(
@@ -211,17 +220,57 @@ def start(
                 kind=kind,
                 plan=plan,
                 leases=leases,
-                attempt=attempt,
-                limit=limit,
+                attempt=guarded.attempt,
+                limit=guarded.limit,
                 context=context,
                 review=review,
                 reasons=reasons,
-                persona=persona,
-                model=model,
+                persona=guarded.persona,
+                model=guarded.model,
             )
         except BaseException:
             _return_all(ctx, leases)
             raise
+
+
+def record(
+    ctx: Context,
+    *,
+    tick_id: int,
+    key: str,
+    kind: str,
+    label: str | None,
+    slug: str | None,
+    base: str | None,
+    request: Mapping[str, object],
+    repos: Sequence[str] = (),
+    reasons: Collection[str] = (),
+    cursors: AbstractSet[str] = frozenset(),
+    reserved: int = 0,
+) -> Recorded:
+    """Check the guards a live dispatch would, and record the run the overseer asked for, for the tick to spawn (§40).
+
+    Nothing is leased or spawned: the recorded run counts as running, the ticket's one run and a worker of capacity,
+    until the tick spawns it once the overseer's run has ended, under the guards again. `request` is the overseer's
+    request, which the spawn makes again. The guards are those `start` checks before it leases.
+
+    Returns:
+        The recorded run's id, and the plan of the run it would start.
+
+    Raises:
+        Refusal: a guard refused.
+    """
+    with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
+        asked = _Asked(label=label, slug=slug, base=base, repos=repos, reasons=reasons, cursors=cursors)
+        plan = _checked(ctx, tick_id, key, kind, asked, reserved=reserved).plan
+        recorded = recorded_runs.record(
+            ctx.conn,
+            tick_id=tick_id,
+            kind=RecordedKind.DISPATCH,
+            request=request,
+            ticket_key=key,
+        )
+    return Recorded(recorded, plan)
 
 
 def check(
@@ -258,23 +307,80 @@ def check(
         if d.action.startswith("dispatch:") and (d.ticket_key is not None or d.pr is not None)
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
-        check_kind(kind)
-        _check_notice(ctx, tick_id, kind, reasons)
-        plan = _plan(
-            ctx,
-            key,
-            kind,
-            label=label,
-            repos=repos,
-            slug=slug,
-            base=base,
-            reasons=reasons,
-            cursors=cursors,
-        )
-        _guard(ctx, key, kind, plan.repos, planned=planned, reasons=reasons, reserved=reserved)
-        _check_persona(ctx, key, kind)
-        _check_model(ctx, key, kind, private=plan.private)
-    return plan
+        asked = _Asked(label=label, slug=slug, base=base, repos=repos, reasons=reasons, cursors=cursors)
+        return _checked(ctx, tick_id, key, kind, asked, reserved=reserved, planned=planned).plan
+
+
+@dataclass(frozen=True)
+class _Asked:
+    """What a dispatch asks of the guards, beside its ticket and kind: the label, branch, repositories, and reasons."""
+
+    label: str | None
+    slug: str | None
+    base: str | None
+    repos: Sequence[str]
+    reasons: Collection[str]
+    cursors: AbstractSet[str]
+
+
+@dataclass(frozen=True)
+class _Guarded:
+    """What the guards fixed of a run they let start: its plan, attempt and limit, persona, and model."""
+
+    plan: Plan
+    attempt: int
+    limit: int
+    persona: personas.Persona | None
+    model: str | None
+
+
+def _checked(
+    ctx: Context,
+    tick_id: int,
+    key: str,
+    kind: str,
+    asked: _Asked,
+    *,
+    reserved: int,
+    planned: Sequence[str] = (),
+    spawning: int | None = None,
+) -> _Guarded:
+    """Check every guard of a `kind` dispatch of `key` before its leases, under the dispatch lock its caller holds.
+
+    Returns:
+        What the guards fixed of the run.
+
+    Raises:
+        Refusal: a guard refused.
+    """
+    check_kind(kind)
+    _check_notice(ctx, tick_id, kind, asked.reasons)
+    plan = _plan(
+        ctx,
+        key,
+        kind,
+        label=asked.label,
+        repos=asked.repos,
+        slug=asked.slug,
+        base=asked.base,
+        reasons=asked.reasons,
+        cursors=asked.cursors,
+    )
+    attempt, limit = _guard(
+        ctx,
+        key,
+        kind,
+        plan.repos,
+        planned=planned,
+        reasons=asked.reasons,
+        reserved=reserved,
+        spawning=spawning,
+    )
+    # Fixed now, before a slot is leased: a persona that cannot be used refuses the run whole (DESIGN §31).
+    persona = _check_persona(ctx, key, kind)
+    # And its model, looked up in the runtime's list now: one it lacks refuses the run whole (DESIGN §13).
+    model = _check_model(ctx, key, kind, private=plan.private)
+    return _Guarded(plan, attempt, limit, persona, model)
 
 
 def check_kind(kind: str) -> None:
@@ -763,30 +869,28 @@ def _guard(
     planned: Sequence[str] = (),
     reasons: Collection[str] = (),
     reserved: int = 0,
+    spawning: int | None = None,
 ) -> tuple[int, int]:
     """Refuse unless a `kind` run for `key` over `repos` may start now. Returns the run's attempt number and limit.
 
     Attempt limits and the CI cooldown are per unit: the run is refused if any unit it covers is at its limit or, for
     a `resume` whose only reason is `ci`, in its cooldown. A unit's limit is the policy's plus the runs the operator
     granted it (DESIGN §22). The run's attempt number and limit are those of the unit with the most runs of the kind.
-    `planned` holds the tickets a dry run has already dispatched this tick; each counts as a running run. `reserved`
-    workers are held for the harness's dispatches to come (DESIGN §37).
+    `planned` holds the tickets a dry run has already dispatched this tick; each counts as a running run, as each run
+    recorded for the tick to spawn does, but `spawning`, the one being spawned (DESIGN §40). `reserved` workers are
+    held for the harness's dispatches to come (DESIGN §37).
 
     Returns:
         The run's attempt number and attempt limit.
 
     Raises:
-        Refusal: a run is already working `key` or the dry run dispatched it (`running`), a unit, or the ticket for a
-            plan, is at its attempt limit (`attempt_limit`) or a unit in its CI cooldown (`cooldown`), or the workers
-            are at capacity (`capacity`), or the run would leave fewer free than `reserved` (`reserved`). A refusal
-            about one unit names its repository.
+        Refusal: a run is already working `key`, is recorded for it, or the dry run dispatched it (`running`), a unit,
+            or the ticket for a plan, is at its attempt limit (`attempt_limit`) or a unit in its CI cooldown
+            (`cooldown`), or the workers are at capacity (`capacity`), or the run would leave fewer free than
+            `reserved` (`reserved`). A refusal about one unit names its repository.
     """
     running = db.running_runs(ctx.conn, "runs")
-    for run in running:
-        if run["ticket_key"] == key:
-            raise Refusal("running", f"run {run['id']} is already working {key}")
-    if key in planned:
-        raise Refusal("running", f"this dry run already dispatched {key}")
+    planned = _check_running(ctx, key, running, planned, spawning=spawning)
     if kind == policy.FEEDBACK_PLAN:
         return _guard_feedback_plan(ctx, key, repos, running, planned, reserved=reserved)
     if kind in policy.TICKET_KINDS:
@@ -821,6 +925,39 @@ def _guard(
     _check_capacity(ctx, running, planned, reserved=reserved)
     attempt, negative_limit = max(numbered, default=(1, -policy.limits(ctx.config)[kind]))
     return attempt, -negative_limit
+
+
+def _check_running(
+    ctx: Context,
+    key: str,
+    running: Iterable[sqlite3.Row],
+    planned: Sequence[str],
+    *,
+    spawning: int | None,
+) -> list[str]:
+    """Refuse a second run of `key`: one running, one recorded for the tick to spawn, or one this dry run dispatched.
+
+    Returns:
+        `planned`, with each run recorded for the tick to spawn but `spawning`: each holds a worker as a running one
+        does (DESIGN §40).
+
+    Raises:
+        Refusal: (`running`) `key` has a run running, recorded, or dispatched by this dry run.
+    """
+    for run in running:
+        if run["ticket_key"] == key:
+            raise Refusal("running", f"run {run['id']} is already working {key}")
+    held = recorded_runs.holding(ctx.conn, but=spawning)
+    for recorded in held:
+        if recorded.kind is RecordedKind.DISPATCH and recorded.ticket_key == key:
+            raise Refusal(
+                "running",
+                f"recorded run {recorded.id} is already {key}'s one run, which the tick starts once the overseer's "
+                "run ends",
+            )
+    if key in planned:
+        raise Refusal("running", f"this dry run already dispatched {key}")
+    return [*planned, *(f"{RECORDED_PREFIX}{r.id}" for r in recorded_runs.workers(held))]
 
 
 def _guard_feedback_plan(
@@ -868,15 +1005,17 @@ def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[s
     """Refuse when `max_workers` runs, review runs, and task runs are running: each holds a slot (DESIGN §21, §36).
 
     Raises:
-        Refusal: `capacity`, when running runs, review runs, task runs, and those in `planned` number `max_workers` or
-            more; `reserved`, when the run would leave fewer free than the `reserved` workers the harness's
-            dispatches to come hold ahead of it (DESIGN §37).
+        Refusal: `capacity`, when running runs, review runs, task runs, and those in `planned`, the dry run's and the
+            recorded ones, number `max_workers` or more; `reserved`, when the run would leave fewer free than the
+            `reserved` workers the harness's dispatches to come hold ahead of it (DESIGN §37).
     """
     max_workers = ctx.config.capacity.max_workers
     others = len(db.running_runs(ctx.conn, "review_runs")) + len(db.running_runs(ctx.conn, "task_runs"))
     busy = len(running) + others + len(planned)
     if busy >= max_workers:
-        planned_note = f", counting {len(planned)} this dry run dispatched" if planned else ""
+        held = sum(p.startswith(RECORDED_PREFIX) for p in planned)
+        planned_note = f", counting {len(planned) - held} this dry run dispatched" if len(planned) > held else ""
+        planned_note += f", counting {held} recorded for the tick to start after the overseer" if held else ""
         raise Refusal("capacity", f"{busy} of {max_workers} workers are running{planned_note}")
     if busy + reserved >= max_workers:
         raise Refusal(

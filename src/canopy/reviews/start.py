@@ -29,6 +29,7 @@ from canopy.core import (
     personas,
     pools,
     prompts,
+    recorded_runs,
     records,
     review_requests,
     review_runs,
@@ -36,7 +37,7 @@ from canopy.core import (
     ticket_models,
 )
 from canopy.core import review_result as result
-from canopy.core.vocab import ReviewRunStatus
+from canopy.core.vocab import RecordedKind, ReviewRunStatus
 from canopy.infra import lock, logs, procs
 from canopy.infra.text import quoted
 from canopy.reviews import findings, grants, settle
@@ -208,8 +209,17 @@ def check(ctx: Context, *, tick_id: int, request: Request) -> str:
         return repo
 
 
-def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) -> Started:
+def start(
+    ctx: Context,
+    *,
+    tick_id: int,
+    request: Request,
+    context: str | None,
+    spawning: int | None = None,
+) -> Started:
     """Check the guards, lease a slot, record the review run, render its prompt, and spawn `canopy _review`.
+
+    `spawning` is the recorded review this spawns, which the guards then do not count as running (DESIGN §40).
 
     Returns:
         The new review run's id, the pid of its `canopy _review`, and the slot it leased.
@@ -219,7 +229,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             left running and no slot is left leased.
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        repo = _guard(ctx, request)
+        repo = _guard(ctx, request, spawning=spawning)
         # Fixed before the run is recorded, so a persona or model that cannot be used costs the PR none of its reviews.
         persona = _persona(ctx, request)
         _check_model(ctx, request)
@@ -241,6 +251,68 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
         with returned_on_failure(ctx, repo, lease):
             prompt = _prompt(ctx, run_id, request, lease, attempt=attempt, context=context, persona=persona)
             return spawn(ctx, run_id, lease, prompt)
+
+
+def record(ctx: Context, *, tick_id: int, request: Request, context: str | None) -> int:
+    """Check the guards `start` does before it leases, and record the review the overseer asked for (DESIGN §40).
+
+    Nothing is leased or spawned: the recorded review counts as running, a review of its PR and a worker of capacity,
+    until the tick spawns it once the overseer's run has ended, under the guards again.
+
+    Returns:
+        The recorded review's id.
+
+    Raises:
+        Refusal: a guard refused.
+    """
+    with lock.hold(ctx.dispatch_lock_path, wait=True):
+        repo = _guard(ctx, request)
+        persona = _persona(ctx, request)
+        _check_model(ctx, request)
+        asked = {
+            "pr": request.pr,
+            "sha": request.sha,
+            "ticket": request.ticket,
+            "repo": repo,
+            "persona": request.persona,
+            "among": sorted(request.among),
+            "context": context,
+        }
+        return recorded_runs.record(
+            ctx.conn,
+            tick_id=tick_id,
+            kind=RecordedKind.REVIEW,
+            request=asked,
+            ticket_key=request.ticket,
+            pr_url=request.pr,
+            persona=persona.name,
+        )
+
+
+def recorded_request(recorded: records.RecordedRun) -> tuple[Request, str | None]:
+    """The review a recorded one asked for, as `record` kept it, and the context the overseer gave it.
+
+    Returns:
+        The request, and its context.
+    """
+    asked = recorded_runs.request_of(recorded)
+    request = Request(
+        pr=str(asked["pr"]),
+        sha=str(asked["sha"]),
+        ticket=_text(asked.get("ticket")),
+        repo=_text(asked.get("repo")),
+        persona=_text(asked.get("persona")),
+        among=frozenset(str(name) for name in _listed(asked.get("among"))),
+    )
+    return request, _text(asked.get("context"))
+
+
+def _text(value: object) -> str | None:
+    return None if value is None else str(value)
+
+
+def _listed(value: object) -> list[object]:
+    return list(value) if isinstance(value, list) else []
 
 
 def lease_slot(ctx: Context, run_id: int, repo: str, *, base: str | None) -> pools.Lease:
@@ -507,11 +579,13 @@ def _guard(
     *,
     planned: Collection[records.Decision] | None = None,
     dry_run: bool = False,
+    spawning: int | None = None,
 ) -> str:
     """Refuse unless a review of `request` may start now. Returns the repository it leases in.
 
-    `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running. A dry run
-    records no head as seen (D036).
+    `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running, as the runs
+    recorded for the tick to spawn do, but `spawning`, the one being spawned (DESIGN §40). A dry run records no head
+    as seen (D036).
 
     Returns:
         The name of the repository the review leases in.
@@ -529,8 +603,9 @@ def _guard(
     repo = check_repo(ctx, request.repo)
     _check_ours(ctx, request, repo)
     planned_reviews, planned_runs = split_planned(planned or [])
-    _check_running(ctx, request, planned_reviews, planned_runs)
-    _check_limits(ctx, request, planned_reviews, planned_runs, record=not dry_run)
+    held = recorded_runs.holding(ctx.conn, but=spawning)
+    _check_running(ctx, request, planned_reviews, planned_runs, held)
+    _check_limits(ctx, request, planned_reviews, planned_runs, held, record=not dry_run)
     return repo
 
 
@@ -570,11 +645,12 @@ def _check_running(
     request: Request,
     planned_reviews: Iterable[records.Decision],
     planned_runs: Iterable[records.Decision],
+    held: Iterable[records.RecordedRun],
 ) -> None:
-    """`running`: a review of this PR, or a worker on its ticket, is running.
+    """`running`: a review of this PR, or a worker on its ticket, is running, or recorded to start (DESIGN §40).
 
     Raises:
-        Refusal: (`running`) a review of the PR is running or planned, or a worker on its ticket is.
+        Refusal: (`running`) a review of the PR is running, recorded, or planned, or a worker on its ticket is.
     """
     # Reviews in the personas chosen for the PR run side by side, each blocking only another in its own persona.
     running = next(
@@ -587,12 +663,26 @@ def _check_running(
     )
     if running is not None:
         raise Refusal("running", f"review run {running['id']} of this PR is running")
+    held = list(held)
+    waiting = next(
+        (
+            r
+            for r in held
+            if r.kind in recorded_runs.HOLDS_REVIEW
+            and r.pr_url == request.pr
+            and (r.persona == request.persona or r.persona not in request.among)
+        ),
+        None,
+    )
+    if waiting is not None:
+        raise Refusal("running", f"recorded review {waiting.id} of this PR starts once the overseer's run ends")
     if not request.among and any(d.pr == request.pr for d in planned_reviews):
         raise Refusal("running", "this dry run already reviewed this PR")
     if request.ticket is None:
         return
     worker = next((r for r in db.running_runs(ctx.conn, "runs") if r["ticket_key"] == request.ticket), None)
-    if worker is not None or any(d.ticket_key == request.ticket for d in planned_runs):
+    recorded = any(r.kind is RecordedKind.DISPATCH and r.ticket_key == request.ticket for r in held)
+    if worker is not None or recorded or any(d.ticket_key == request.ticket for d in planned_runs):
         # A review must not race the push it is meant to judge.
         raise Refusal("running", f"a worker run for {request.ticket} is running; review its PR once it ends")
 
@@ -602,6 +692,7 @@ def _check_limits(
     request: Request,
     planned_reviews: Collection[records.Decision],
     planned_runs: Collection[records.Decision],
+    held: Collection[records.RecordedRun],
     *,
     record: bool,
 ) -> None:
@@ -636,10 +727,12 @@ def _check_limits(
             + (f" per persona, and it was in {request.persona}" if request.persona is not None else ""),
         )
     limit = grants.limit(ctx.conn, cfg, request.pr)
-    if len(runs) >= limit:
-        raise Refusal("review_limit", f"this PR has had {len(runs)} review runs and the limit is {limit}")
+    # A recorded review of the PR counts against its limit, as one that started does.
+    reviewed = len(runs) + sum(r.kind is RecordedKind.REVIEW and r.pr_url == request.pr for r in held)
+    if reviewed >= limit:
+        raise Refusal("review_limit", f"this PR has had {reviewed} review runs and the limit is {limit}")
     _check_settled(ctx, request, record=record, now=datetime.now(UTC))
-    check_room(ctx, planned_reviews, planned_runs)
+    check_room(ctx, planned_reviews, planned_runs, held)
 
 
 def _check_settled(ctx: Context, request: Request, *, record: bool, now: datetime) -> None:
@@ -668,8 +761,11 @@ def check_room(
     ctx: Context,
     planned_reviews: Collection[records.Decision],
     planned_runs: Collection[records.Decision],
+    held: Collection[records.RecordedRun] = (),
 ) -> None:
     """`daily_limit`, `review_capacity`, and `capacity`, in that order: what holds a review and a revision alike.
+
+    `held` are the runs recorded for the tick to spawn, each counted as one that started (DESIGN §40).
 
     Raises:
         Refusal: the day's review runs, revisions among them, are used, or the review runs or the workers and reviews
@@ -677,16 +773,18 @@ def check_room(
     """
     cfg = ctx.config
     since = db.format_time(datetime.now(UTC) - _DAY)
-    today = len(review_runs.review_runs_since(ctx.conn, since, revisions=True)) + len(planned_reviews)
+    held_reviews = sum(r.kind in recorded_runs.HOLDS_REVIEW for r in held)
+    today = len(review_runs.review_runs_since(ctx.conn, since, revisions=True)) + len(planned_reviews) + held_reviews
     if today >= cfg.capacity.max_reviews_per_day:
         per_day = cfg.capacity.max_reviews_per_day
         raise Refusal("daily_limit", f"{today} review runs started in the last 24 hours; the limit is {per_day}")
-    busy_reviews = len(db.running_runs(ctx.conn, "review_runs")) + len(planned_reviews)
+    busy_reviews = len(db.running_runs(ctx.conn, "review_runs")) + len(planned_reviews) + held_reviews
     if busy_reviews >= cfg.capacity.max_reviews:
         raise Refusal("review_capacity", f"{busy_reviews} of {cfg.capacity.max_reviews} review runs are running")
     # A task's run holds a slot too (DESIGN §36).
     tasks = len(db.running_runs(ctx.conn, "task_runs"))
-    busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + tasks + len(planned_runs)
+    held_runs = sum(r.kind is RecordedKind.DISPATCH for r in held)
+    busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + tasks + len(planned_runs) + held_runs
     if busy >= cfg.capacity.max_workers:
         raise Refusal("capacity", f"{busy} of {cfg.capacity.max_workers} workers, reviews, and tasks are running")
 

@@ -74,8 +74,8 @@ starts inside the sandbox, which reads the config and the workspace and writes t
 reads the workspace and writes, of the state directory, only the journal's files: never the private config, the agent
 definitions, the chores' agents and prompts, or a directory another run starts in, which canopy and its agents load
 later. Nothing can be added to the state directory, so a lock canopy has yet to make could never be taken: the wrapper
-makes the journal's locks first, as canopy would. canopy refuses the prefix on `overseer_cmd` until the tick starts
-every run the overseer asks for (DESIGN §40): a run started inside the sandbox would inherit its policy and end with it.
+makes the journal's locks first, as canopy would. No run the overseer asks for starts inside its sandbox: the tick
+starts each once the overseer's run has ended (DESIGN §40), so none inherits this policy or ends with it.
 
 A key that starts with `#` is a comment, and is left out of the policy. The wrapper refuses a template with an unknown
 placeholder, a placeholder inside a longer string, no `filesystem.denyRead`, or no `network.allowedDomains`: `srt` runs

@@ -17,9 +17,9 @@ in order:
 
 1. Acquire the lock. If held, log and exit 0, recording no tick.
 2. Apply pending migrations, close any tick still running as abandoned (holding the lock proves its process is gone),
-   and record the tick with the canopy version running it. Its id tags all logs. Migrations wait while any detached
-   run's own process is alive, since it writes the old schema; a journal with migrations this canopy does not know is
-   refused (D068).
+   with each run it recorded and did not start (§40), and record the tick with the canopy version running it. Its id
+   tags all logs. Migrations wait while any detached run's own process is alive, since it writes the old schema; a
+   journal with migrations this canopy does not know is refused (D068).
 3. **Reconcile local state.** A run of any kind whose own process is gone is marked `crashed`, what is left of its
    agent killed, and its slots returned. A slot leased under canopy's prefix with no live run is returned, in every
    pool (§18). Memory proposals expire (§28). A live tick starts the operator's queued tasks (§36). Each source that
@@ -54,15 +54,20 @@ in order:
    exactly `CANOPY_TICK_DONE`, which catches a run that exits 0 short of the last step; otherwise the tick closes
    `overseer_failed`. A successful run that recorded a tick-wide skip, such as the tracker's MCP being down, closes the
    tick `skipped`, which leaves the attention list standing, so an outage does not resolve and re-raise every item.
-   What it started before the skip stands: an outage of one server does not hold work that needs nothing from it (§15).
+   What it asked for before the skip still starts: an outage of one server does not hold work that needs nothing from
+   it (§15).
+
+   Once its run ends, whatever it ended as, the tick starts every run it asked for, each recorded at the ask and none
+   in its process tree, with the harness's own, in §7's order, each under its guards again (§8, §40). One the tick
+   does not start is closed unstarted as it closes.
 
    **The overseer's duties.** A successful run is then checked for what a tick owes: the query when it is due (§7),
    unless a source read it fresh, when the harness records its result before the overseer runs; a decision for every
    ticket in the block and every ticket the query returned, except those stopped, recently done, or decided by the
    harness (§37); and a run, wait, or refusal for every chore due. A duty left undone closes the tick
-   `overseer_failed`, naming each, so the attention list stands and the query stays due; its dispatches stand. Why:
-   the prompt alone did not hold a cheaper overseer to the procedure, and a skipped query stalls new work with no tick
-   failing (MEASUREMENTS 2026-10-15). The check sees that a duty was done, not that it was done well.
+   `overseer_failed`, naming each, so the attention list stands and the query stays due; its dispatches still start.
+   Why: the prompt alone did not hold a cheaper overseer to the procedure, and a skipped query stalls new work with no
+   tick failing (MEASUREMENTS 2026-10-15). The check sees that a duty was done, not that it was done well.
 
    In a dry run (D036), dispatch checks the live guards (§8) and starts nothing, no cursor advances, and nothing is
    marked done. What the overseer writes is rendered into a later prompt, so its tools validate its keys, verbs,
@@ -249,7 +254,9 @@ label the ticket was found by and one or more of its units, its work in one repo
 run. A `plan` writes the ticket's plan before its first `implement`, with guards of its own (§25).
 
 1. Check the guards, which are in code and not overridable from the prompt. A refusal is recorded as a decision naming
-   the guard and why, and the command exits 1; a dry run checks them and stops (§6, D036). Dispatch is refused when:
+   the guard and why, and the command exits 1; a dry run checks them and stops (§6, D036). The overseer's dispatch,
+   through its tool or its command, is then recorded, and counts as running until the tick starts it, after the
+   overseer's run, checking these guards again before step 2 (§40). Dispatch is refused when:
    - a claim rests on a stale observation or one that does not bear it out (`stale`, `unauthorized`, `unobserved`),
      or a `resume` for CI alone has only failures a worker already had at that head (`handled`), checked first (§7).
    - the label is not a queue label, or a started ticket's (§22) start record does not allow the run; the worker checks
@@ -257,15 +264,16 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
    - the request does not fit its kind: a `resume` with no branch to continue, a cursor moved without its reason, or a
      stacked base that is not one of canopy's branches (§10). The first `implement` names the ticket's branch, which
      every later run continues in every unit (D058).
-   - a run for the ticket is running, or `max_workers` runs, review runs, and tasks' runs, together, are (§21, §36).
+   - a run for the ticket is running or recorded, or `max_workers` runs, review runs, and tasks' runs, together, are
+     (§21, §36).
    - a named unit has had `policy.max_<kind>_attempts` runs of this kind, plus what `canopy grant` gave it (§22). A run
      counts against every unit it covered, whatever it ended as, and the count never resets (D030). The refusal raises
      an `attempt_limit` attention item (§14).
    - a `resume` for CI alone falls in the CI cooldown, or a notice changed after its tick read the journal (below).
 
-   Dispatches are serialized from the guards through the spawn, so two cannot both pass a limit. Leases are all or
-   nothing, and cursors move only once the worker has started, so a refused or failed dispatch leaves no slot leased
-   and what it was meant to handle still new.
+   Dispatches are serialized from the guards through the record or the spawn, so two cannot both pass a limit. Leases
+   are all or nothing, and cursors move only once the worker has started, so a refused or failed dispatch leaves no
+   slot leased and what it was meant to handle still new.
 2. Lease a slot in each named repository's pool (§18) and record the run, its slots, and each base.
 3. Render the worker prompt for the kind, with the operator's messages (§22), standing instructions (§12), and the
    notice, and the latest runs' reports as data. A started ticket's run gets the kind's private variant (§22), with no

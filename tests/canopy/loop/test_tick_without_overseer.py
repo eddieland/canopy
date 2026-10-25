@@ -9,8 +9,7 @@ one duty no ticket is needed for.
 
 from __future__ import annotations
 
-import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -19,7 +18,7 @@ from canopy.core.vocab import Decider, TickStatus
 from canopy.loop import pacing, tick
 from tests.canopy.helpers import KEY, agent_runs, context, in_tick, present, waits
 from tests.canopy.observation_helpers import branches_read
-from tests.canopy.scenario_helpers import dispatches, raises
+from tests.canopy.scenario_helpers import chores_ended, dispatches, due_chore, raises
 
 if TYPE_CHECKING:
     import sqlite3
@@ -30,8 +29,6 @@ if TYPE_CHECKING:
 
 #: A chore with no `when`, which the harness runs (DESIGN §37), and one with a `when`, which the overseer decides.
 MINE, THEIRS = "deps", "build-health"
-#: How long a test waits on a chore run to end.
-CHORE_SECONDS = 30
 
 
 @pytest.fixture
@@ -47,7 +44,7 @@ def test_a_tick_with_nothing_left_runs_no_overseer_makes_the_harnesss_dispatches
     git_pool: GitPool,
 ) -> None:
     working = at_work_with_an_item(quiet)
-    chores(quiet, MINE)
+    due_chore(quiet, MINE)
     overseers = overseer_runs(quiet.agent_log)
     ticked = quiet.tick()
     assert overseer_runs(quiet.agent_log) == overseers
@@ -60,7 +57,7 @@ def test_a_tick_with_nothing_left_runs_no_overseer_makes_the_harnesss_dispatches
     # The overseer's item stands, and the list is published as it stands.
     assert quiet.attention() == [(KEY, "needs_author")]
     assert f"- {KEY}, " in (quiet.env.state_dir / "attention.md").read_text()
-    chore_ended(quiet.conn)
+    chores_ended(quiet.conn)
     working.finishes()
 
 
@@ -72,13 +69,13 @@ def test_a_tick_with_a_ticket_left_runs_the_overseer(quiet: Scenario) -> None:
 
 
 def test_a_tick_with_a_due_chore_with_a_when_runs_the_overseer(quiet: Scenario) -> None:
-    chores(quiet, THEIRS, when="Weekdays only.")
+    due_chore(quiet, THEIRS, when="Weekdays only.")
     ticked = quiet.tick(["canopy", "chore", "wait", THEIRS, "--rationale", "not a weekday"])
     assert ticked.tick.overseer_ran is True
 
 
 def test_a_dry_run_with_nothing_left_runs_no_overseer_and_starts_nothing(quiet: Scenario) -> None:
-    chores(quiet, MINE)
+    due_chore(quiet, MINE)
     ticked = quiet.tick(dry_run=True)
     assert (ticked.tick.status, ticked.tick.overseer_ran) == (TickStatus.OK, False)
     assert present(ticked.tick.summary).startswith(f"dry run; {tick.NO_OVERSEER}")
@@ -87,7 +84,7 @@ def test_a_dry_run_with_nothing_left_runs_no_overseer_and_starts_nothing(quiet: 
 
 
 def test_a_tick_with_nothing_left_and_too_little_disk_closes_disk_low_and_starts_nothing(quiet: Scenario) -> None:
-    chores(quiet, MINE)
+    due_chore(quiet, MINE)
     quiet.configures(loop={"min_free_disk_mib": 2**40})  # more than any disk the tests run on has free
     ticked = quiet.tick(code=1)
     assert (ticked.tick.status, ticked.tick.overseer_ran) == (TickStatus.DISK_LOW, False)
@@ -127,29 +124,6 @@ def at_work_with_an_item(scenario: Scenario) -> Working:
     return working
 
 
-def chores(scenario: Scenario, name: str, *, when: str | None = None) -> None:
-    """Configure chore `name`, due as it has never run, its command the fake agent, and its `when` if given."""
-    prompt = scenario.env.home / "chores" / f"{name}.md"
-    prompt.parent.mkdir(exist_ok=True)
-    prompt.write_text(f"# {name}\n")
-    table: dict[str, Any] = {
-        "prompt": str(prompt),
-        "cmd": "agent run --agent canopy-chore {prompt}",
-        "every_minutes": 120,
-    }
-    if when is not None:
-        table["when"] = when
-    scenario.configures(chores={name: table})
-
-
 def overseer_runs(agent_log: Path) -> int:
     """How many overseer runs the fake agent logged."""
     return sum(run["argv"][:3] == ["run", "--agent", "canopy-overseer"] for run in agent_runs(agent_log))
-
-
-def chore_ended(conn: sqlite3.Connection) -> None:
-    """Wait for every chore run to end, so none outlives the test."""
-    deadline = time.monotonic() + CHORE_SECONDS
-    while conn.execute("SELECT count(*) FROM chore_runs WHERE status = 'running'").fetchone()[0]:
-        assert time.monotonic() < deadline, "a chore run did not end"
-        time.sleep(0.05)

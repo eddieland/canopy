@@ -1,8 +1,7 @@
 {
   "#": [
     "canopy-sandbox's template for runtime.overseer_cmd, which decides through canopy's tools and writes the journal",
-    "(DESIGN §24). canopy refuses the prefix on overseer_cmd until the tick starts every run the overseer asks for",
-    "(DESIGN §40): until then, a run would start inside the overseer's sandbox and end with it. canopy sandbox setup",
+    "(DESIGN §24). The runs the overseer asks for start outside it, from the tick (DESIGN §40). canopy sandbox setup",
     "copies it to ~/.config/canopy/sandbox/overseer.json; fill in your hosts there. Keys starting with # are",
     "comments; @NAME@ strings are the paths canopy-sandbox fills in for each run."
   ],

@@ -36,7 +36,7 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import InlineRunner, decisions, in_tick, pool, present, slot_of, worker_does
+from tests.canopy.helpers import InlineRunner, decisions, in_tick, pool, present, slot_of, tick_starts, worker_does
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, git, user_toml
 
 pytestmark = pytest.mark.skipif(
@@ -351,6 +351,23 @@ def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(canary:
     assert decisions(canary.journal, tick_id) == [("skip", "mcp_unavailable: the tracker is down")]
 
 
+def test_a_dispatch_the_overseer_asks_for_is_recorded_and_started_by_no_process_in_its_sandbox(canary: Canary) -> None:
+    """A positive control: the ask lands in the journal as a run the tick starts, outside the sandbox (DESIGN §40).
+
+    Nothing in the sandbox starts it, so no run, its setup, or the harness's git inherits the sandbox, or ends with it.
+    """
+    canopy = Path(sys.executable).parent / "canopy"
+    ask = "dispatch PROJ-1 --repo repo --label agent-ready-tester --kind implement --slug work"
+
+    with in_tick(canary.journal) as tick_id:
+        done = canary.run(f'"{canopy}" {ask}', role=OVERSEER)
+
+    assert done.ok, done.stderr
+    recorded = canary.journal.execute("SELECT tick_id, kind, ticket_key, status FROM recorded_runs").fetchall()
+    assert [tuple(row) for row in recorded] == [(tick_id, "dispatch", "PROJ-1", "recorded")]
+    assert canary.journal.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+
+
 @pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("url", [ALLOWED_URL, DENIED_URL], ids=["github", "host-not-allowed"])
 def test_the_overseer_cannot_reach_a_host_off_its_allowlist(canary: Canary, route: str, url: str) -> None:
@@ -605,6 +622,7 @@ def test_canopys_sandboxed_worker_is_pushed(
         with in_tick(conn, ends_ok=True):
             args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
             assert main([*args, "--slug", "work"], runner=runner) == 0
+            tick_starts(runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 

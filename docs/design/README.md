@@ -77,8 +77,7 @@ not go in the middle of the sequence.
   - [22. Conversations](CONVERSATIONS.md#22-conversations)
 - [Flaky CI](FLAKY_CI.md): what happens to a CI failure the change did not cause.
   - [23. Flaky CI](FLAKY_CI.md#23-flaky-ci)
-- [Sandboxed runs](SANDBOXING.md): the opt-in OS sandbox around each agent run, the overseer's once the tick starts its
-  runs.
+- [Sandboxed runs](SANDBOXING.md): the opt-in OS sandbox around each agent run, the overseer's included.
   - [24. Sandboxed runs](SANDBOXING.md#24-sandboxed-runs)
 - [Plans](PLANNING.md): a plan for a ticket, approved by the operator before any `implement`.
   - [25. Plans before implementing](PLANNING.md#25-plans-before-implementing)

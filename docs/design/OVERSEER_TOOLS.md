@@ -35,8 +35,8 @@ runtime dependency with its own async stack and HTTP transports, for the few met
 - A guard's refusal or an invalid input is a tool error with the text the CLI prints, which the model reads and goes
   on. It never logs an argument's free text, which may echo a tracker's or a reviewer's.
 - It writes nothing to stderr, which OpenCode never reads, so output there cannot block it mid-call.
-- A run a tool starts is never the server's descendant, since OpenCode kills those when the overseer's run ends; it is
-  reparented, as a `canopy dispatch` run is today.
+- A run a tool asks for is recorded, and the tick starts it once the overseer's run has ended (§40), so none is the
+  server's descendant, which OpenCode kills when that run ends.
 
 A chore trials it first (ROADMAP M48, stage 1b). `canopy _mcp --chore`, a server named `canopy_chore` in a chore run's
 inline config, serves that run one tool, `history`, which the chore sees as `canopy_chore_history`: its own chore's

@@ -64,18 +64,19 @@ of MEASUREMENTS: every overseer run given one subject, no decision in any about 
 reading its prefix from the cache; overseer spend per day below M39's re-measurement for the same queue; and no action
 missed, checked against the derivation as in M36.
 
-Status: in progress. Designed 2026-10-24 (DESIGN §40); stage 2's build waits on M39 and is still taken only if M39's
-re-measurement shows the state block's size dominating what the overseer spends. The design settles what the sketch
-left open: one run per subject, a PR whose review is left to the overseer among them, and the due chores with a `when`
-in one run of their own; the prefix kept cacheable by a shared part rendered once a tick ahead of the subject; no run
-sees the queue, since the `tracker` source reads it; the duties checked per run, a failed run leaving only its subject
-undecided; each run's cost counted toward its ticket; and every run the overseer asks for recorded and spawned by the
-tick, never from the overseer's process tree, which settles issue #454's point 2. Chosen conservatively, for the
-operator to change: runs one at a time, every run on the overseer's one model, a subject of new work waited by the
-harness with no run once capacity is out, the tick's spawns all after its last run, and a tick with a failed run closing
-`overseer_failed`. Stage 1 needs neither M39 nor the measurement, so taking it ahead of them, which unblocks #454, is the
-operator's call (recommended). Open for the operator: spawning a run's asks as soon as it ends (recommended: not until
-a tick's length is measured to delay work); runs in parallel (recommended: not before a long queue is measured to hold
-up the next tick); a model per run by phase (recommended: a private key from phase to model beside `runtime.models`,
-with the ticket's override for the overseer applying to its runs); and whether a tick with a failed run closes `ok` with
-an item on that subject (recommended: yes, once M38's attention list is held in code).
+Status: in progress. Designed 2026-10-24 (DESIGN §40). Stage 1 built 2026-10-24 against the fakes, ahead of M39 at
+the operator's word: every dispatch, review, revision, and chore run the overseer asks for is recorded at the ask
+(`recorded_runs`) and started by the tick after its run, with the harness's own, so `canopy _mcp` no longer spawns
+through an intermediate, and config takes a `canopy-sandbox` prefix on `overseer_cmd` (#454, 2026-10-25). Chosen
+conservatively, for the operator to change: a run's decision recorded as it starts,
+not at the ask; the tick's spawns all after its last run; within a rank of §7's order the harness's first, and every
+chore after every run, the overseer's before the harness's; and a run's model looked up again at the spawn, so the
+runtime's list is read twice. Left: stage 1's live check, and stage 2, whose build waits on M39 and is taken only if
+M39's re-measurement shows the state block's size dominating what the overseer spends. Chosen conservatively for stage
+2: runs one at a time, every run on the overseer's one model, a subject of new work waited by the harness with no run
+once capacity is out, and a tick with a failed run closing `overseer_failed`. Open for the operator: spawning a run's
+asks as soon as it ends (recommended: not until a tick's length is measured to delay work); runs in parallel
+(recommended: not before a long queue is measured to hold up the next tick); a model per run by phase (recommended: a
+private key from phase to model beside `runtime.models`, with the ticket's override for the overseer applying to its
+runs); and whether a tick with a failed run closes `ok` with an item on that subject (recommended: yes, once M38's
+attention list is held in code).
