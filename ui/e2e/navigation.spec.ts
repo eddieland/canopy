@@ -664,6 +664,8 @@ test('a long list scrolls inside its panel, so the panels under it stay in reach
     await region.focus()
     await page.keyboard.press('End')
     await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+    // A refetch of the ticket can still be in the padding route when the page closes (padDecisions).
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
 test("a run's summary keeps its lines and lists, its first four shown until the toggle opens the rest", async ({
