@@ -1,11 +1,9 @@
 import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
 /**
- * Sprig's hats (drawn in src/components/hat.tsx), bought in Settings with what canopy has spent over its whole life
- * (`total_usd` from `GET /api/spend`): every dollar the agent runtime reported is a dollar Sprig may spend on hats. The
- * wallet is that total less the price of every hat bought, so it fills as canopy works and never empties on its own.
- * What was bought, and the hat worn, are kept in localStorage like the theme, and synced across tabs. Nothing here
- * spends anything real: the total is only read.
+ * Sprig's hats (drawn in src/components/hat.tsx), bought in Settings from the wallet the Ghost's shells share
+ * (src/lib/wallet.ts): what canopy has spent over its whole life, less everything bought. What was bought, and the hat
+ * worn, are kept in localStorage like the theme, and synced across tabs.
  */
 
 /** A hat Sprig can own. */
@@ -76,19 +74,17 @@ export function parseWardrobe(raw: string | null): Wardrobe {
     return { owned: kept, worn: kept.find((id) => id === worn) ?? null }
 }
 
-/**
- * What is left to spend: the lifetime spend, in whole cents, less every hat bought. Never below zero, so a journal
- * started afresh shows an empty wallet rather than a debt. Nothing spent yet (`null`) is nothing to spend.
- */
-export function balanceCents(totalUsd: number | null | undefined, owned: readonly HatId[]): number {
-    const earned = Math.round((totalUsd ?? 0) * 100)
-    const spent = owned.reduce((sum, id) => sum + hatById(id).price * 100, 0)
-    return Math.max(0, earned - spent)
+/** What every hat bought cost, in whole cents: what they took from the wallet. */
+export function hatsCents(owned: readonly HatId[]): number {
+    return owned.reduce((sum, id) => sum + hatById(id).price * 100, 0)
 }
 
-/** The wardrobe once `id` is bought and put on, or undefined when it is owned already or the wallet is short. */
-export function buy(wardrobe: Wardrobe, id: HatId, totalUsd: number | null | undefined): Wardrobe | undefined {
-    if (wardrobe.owned.includes(id) || balanceCents(totalUsd, wardrobe.owned) < hatById(id).price * 100) {
+/**
+ * The wardrobe once `id` is bought and put on, or undefined when it is owned already or `leftCents`, what is left in
+ * the wallet (`balanceCents` in src/lib/wallet.ts), is short.
+ */
+export function buy(wardrobe: Wardrobe, id: HatId, leftCents: number): Wardrobe | undefined {
+    if (wardrobe.owned.includes(id) || leftCents < hatById(id).price * 100) {
         return undefined
     }
     const owned = HATS.filter((h) => h.id === id || wardrobe.owned.includes(h.id)).map((h) => h.id)

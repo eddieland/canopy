@@ -10,6 +10,7 @@ import { keys, personasQuery, sessionQuery, spendQuery } from '@/api/queries'
 import { ConfigModels } from '@/components/config-models'
 import { Cost } from '@/components/cost'
 import { Disclosure } from '@/components/disclosure'
+import { ShellPreview } from '@/components/ghost-shell'
 import { HatPreview } from '@/components/hat'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
@@ -27,7 +28,7 @@ import type { Companion } from '@/lib/buddy'
 import { setClock, useClock } from '@/lib/clock'
 import type { Hours } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
-import { balanceCents, buy, HATS, setWardrobe, useWardrobe } from '@/lib/hats'
+import { buy as buyHat, HATS, hatsCents, setWardrobe, useWardrobe } from '@/lib/hats'
 import type { Hat } from '@/lib/hats'
 import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
@@ -36,10 +37,13 @@ import { dropDrafts } from '@/lib/reply-draft'
 import { setQuips, useQuips } from '@/lib/run-phase'
 import { setReviewPersonas, usablePersonas, useReviewPersonas } from '@/lib/review-personas'
 import { setSendKey, useSendKey } from '@/lib/send-key'
+import { buy as buyShell, SHELLS, setVault, shellsCents, useVault } from '@/lib/shells'
+import type { Shell } from '@/lib/shells'
 import type { SendKey } from '@/lib/send-key'
 import { stamp, useNow } from '@/lib/time'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
 import type { TickerSpeed } from '@/lib/ticker-settings'
+import { balanceCents } from '@/lib/wallet'
 import { usePalettes } from '@/theme/palette'
 import type { Palette } from '@/theme/palette'
 import type { ResolvedTheme, ThemePreference } from '@/theme/store'
@@ -346,6 +350,7 @@ function FunPanel() {
                 </fieldset>
             </div>
             <HatShop />
+            <ShellShop />
         </Panel>
     )
 }
@@ -370,16 +375,41 @@ function LightSwitch() {
 }
 
 /**
- * Sprig's hat shop, the last of the Fun panel's details, folded under its wallet until opened. The wallet is
- * everything canopy has spent, as `GET /api/spend` totals it, less every hat bought: each dollar the agent runtime
- * reports is a dollar for hats. A hat bought goes on at once; one owned goes on or comes off with a click. All sales
- * are final.
+ * The wallet the fun shops spend from (src/lib/wallet.ts): everything canopy has spent, as `GET /api/spend` totals
+ * it, less every hat and shell bought. Undefined amounts until the total is read.
+ */
+function useWallet(): { total: number | null | undefined; left: number | undefined } {
+    const total = useQuery(spendQuery).data?.total_usd
+    const { owned: hats } = useWardrobe()
+    const { owned: shells } = useVault()
+    return { total, left: total === undefined ? undefined : balanceCents(total, hatsCents(hats) + shellsCents(shells)) }
+}
+
+/** What is left in the wallet, in a shop's header, over what canopy has spent; a skeleton till the total is read. */
+function WalletReadout({ testId }: { testId: string }) {
+    const { total, left } = useWallet()
+    return (
+        <div className="flex shrink-0 flex-col items-end" data-testid={testId}>
+            {left === undefined ? (
+                <Skeleton className="h-5 w-14" />
+            ) : (
+                <Cost usd={left / 100} className="text-sm text-foreground" />
+            )}
+            <span className="text-2xs text-muted-foreground">
+                left of {total === undefined ? '…' : <Cost usd={total} />} spent
+            </span>
+        </div>
+    )
+}
+
+/**
+ * Sprig's hat shop, in the Fun panel's details, folded under its wallet until opened. Each dollar the agent runtime
+ * reports is a dollar for hats, or for the Ghost's shells: they share the wallet. A hat bought goes on at once; one
+ * owned goes on or comes off with a click. All sales are final.
  */
 function HatShop() {
-    const total = useQuery(spendQuery).data?.total_usd
-    const loaded = total !== undefined
+    const { left } = useWallet()
     const wardrobe = useWardrobe()
-    const left = balanceCents(total, wardrobe.owned)
     // Folded until asked for: eight hats are a lot of Settings for something most visits leave alone.
     const [open, setOpen] = useState(false)
     return (
@@ -390,16 +420,7 @@ function HatShop() {
                         Every dollar canopy spends is a dollar for Sprig&apos;s hats. Sprig wears the one you pick while
                         it is on. All sales are final.
                     </p>
-                    <div className="flex shrink-0 flex-col items-end" data-testid="hats-wallet">
-                        {loaded ? (
-                            <Cost usd={left / 100} className="text-sm text-foreground" />
-                        ) : (
-                            <Skeleton className="h-5 w-14" />
-                        )}
-                        <span className="text-2xs text-muted-foreground">
-                            left of {loaded ? <Cost usd={total} /> : '…'} spent
-                        </span>
-                    </div>
+                    <WalletReadout testId="hats-wallet" />
                     <Disclosure open={open} what="hats" data-testid="hats-toggle" />
                 </div>
                 <CollapsibleContent asChild>
@@ -410,9 +431,9 @@ function HatShop() {
                                 hat={hat}
                                 owned={wardrobe.owned.includes(hat.id)}
                                 worn={wardrobe.worn === hat.id}
-                                shortCents={loaded ? Math.max(0, hat.price * 100 - left) : undefined}
+                                shortCents={left === undefined ? undefined : Math.max(0, hat.price * 100 - left)}
                                 onBuy={() => {
-                                    const next = buy(wardrobe, hat.id, total)
+                                    const next = left === undefined ? undefined : buyHat(wardrobe, hat.id, left)
                                     if (next) {
                                         setWardrobe(next)
                                     }
@@ -472,6 +493,104 @@ function HatItem({
                     data-testid={`hat-${hat.id}-buy`}
                 >
                     Buy <Cost usd={hat.price} />
+                </Button>
+            )}
+        </li>
+    )
+}
+
+/**
+ * The Ghost's shell shop, the last of the Fun panel's details, folded under the wallet it shares with Sprig's hats.
+ * The Ghost always wears a shell: the Generalist Shell comes free, and a shell bought goes on at once. One owned goes
+ * on with a click, and comes off only for another. All sales are final.
+ */
+function ShellShop() {
+    const { left } = useWallet()
+    const vault = useVault()
+    // Folded until asked for, as the hats are.
+    const [open, setOpen] = useState(false)
+    return (
+        <Collapsible asChild open={open} onOpenChange={setOpen}>
+            <div className="border-t" data-testid="shells">
+                <div className="flex items-center justify-between gap-4 p-3">
+                    <p className="max-w-3xl text-sm text-muted-foreground">
+                        The same dollars buy the Ghost new shells, a Sprig Shell among them. The Ghost wears the one you
+                        pick while it sits in Sprig&apos;s place. All sales are final.
+                    </p>
+                    <WalletReadout testId="shells-wallet" />
+                    <Disclosure open={open} what="shells" data-testid="shells-toggle" />
+                </div>
+                <CollapsibleContent asChild>
+                    <ul className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-5">
+                        {SHELLS.map((shell) => (
+                            <ShellItem
+                                key={shell.id}
+                                shell={shell}
+                                owned={vault.owned.includes(shell.id)}
+                                worn={vault.worn === shell.id}
+                                shortCents={left === undefined ? undefined : Math.max(0, shell.price * 100 - left)}
+                                onBuy={() => {
+                                    const next = left === undefined ? undefined : buyShell(vault, shell.id, left)
+                                    if (next) {
+                                        setVault(next)
+                                    }
+                                }}
+                                onWear={() => setVault({ ...vault, worn: shell.id })}
+                            />
+                        ))}
+                    </ul>
+                </CollapsibleContent>
+            </div>
+        </Collapsible>
+    )
+}
+
+/** One shell in the shop: what it looks like and costs, and Buy, or Wear once owned, and Worn while it is. */
+function ShellItem({
+    shell,
+    owned,
+    worn,
+    shortCents,
+    onBuy,
+    onWear,
+}: {
+    shell: Shell
+    owned: boolean
+    worn: boolean
+    shortCents: number | undefined
+    onBuy: () => void
+    onWear: () => void
+}) {
+    return (
+        <li
+            className="flex flex-col items-center gap-1 rounded-md border p-2 text-center"
+            data-testid={`shell-${shell.id}`}
+        >
+            <ShellPreview id={shell.id} className="h-12 w-10" />
+            <span className="text-xs text-foreground">{shell.name}</span>
+            <span className="grow text-2xs text-muted-foreground">{shell.blurb}</span>
+            {owned ? (
+                <Button
+                    variant={worn ? 'secondary' : 'outline'}
+                    size="xs"
+                    disabled={worn}
+                    onClick={onWear}
+                    data-testid={`shell-${shell.id}-wear`}
+                >
+                    {worn ? 'Worn' : 'Wear'}
+                </Button>
+            ) : (
+                <Button
+                    variant="outline"
+                    size="xs"
+                    disabled={shortCents !== 0}
+                    title={
+                        shortCents !== undefined && shortCents > 0 ? `${costText(shortCents / 100)} short` : undefined
+                    }
+                    onClick={onBuy}
+                    data-testid={`shell-${shell.id}-buy`}
+                >
+                    Buy <Cost usd={shell.price} />
                 </Button>
             )}
         </li>

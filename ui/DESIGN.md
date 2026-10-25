@@ -166,13 +166,13 @@ Rules:
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, on one line, each cost in a
   small readout after its window's name, so the block takes a line's height (a cost too long to share it puts the 30
   days under the 24 hours): it is shown
-  nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer is two lines, the
-  version, a link out to canopy's releases on GitHub, with the width to itself and cut short only past a long build's
-  hash, then the guide and Settings as two filled pills alike, `foreground` on `surface-raised` with no border, in the
-  rail's body size, so they stand out from the version's print, with a little room under them so they do not sit on
-  the window's edge. It sits at the foot of the sticky column, so at the window's foot however long the page; in a
-  window too short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer
-  is Sprig's (Fun, below).
+  nowhere else, but for the lifetime total Sprig's hats and the Ghost's shells are bought with (Fun, below). The
+  footer is two lines, the version, a link out to canopy's releases on GitHub, with the width to itself and cut
+  short only past a long build's hash, then the guide and Settings as two filled pills alike, `foreground` on
+  `surface-raised` with no border, in the rail's body size, so they stand out from the version's print, with a little
+  room under them so they do not sit on the window's edge. It sits at the foot of the sticky column, so at the
+  window's foot however long the page; in a window too short for the rest, the part above it scrolls on its own. The
+  room left between the blocks and the footer is Sprig's (Fun, below).
 - **Narrower than `lg`, the rail is a strip** (`useRailMode`), since a narrow window is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to a
   screen reader, each count one number on its icon's corner, Attention's in its most severe item's color. A button
