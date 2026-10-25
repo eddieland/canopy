@@ -22,7 +22,8 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { setBuddy, useBuddy } from '@/lib/buddy'
+import { NAMES, setBuddy, setCompanion, useBuddy, useCompanion } from '@/lib/buddy'
+import type { Companion } from '@/lib/buddy'
 import { setClock, useClock } from '@/lib/clock'
 import type { Hours } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
@@ -91,6 +92,8 @@ const TOPICS: { value: TickerTopic; label: string }[] = [
     { value: 'vibes', label: 'Vibe coding' },
     { value: 'tips', label: 'Tips' },
 ]
+
+const COMPANIONS: Companion[] = ['sprig', 'ghost']
 
 const HOURS: { value: Hours; label: string }[] = [
     { value: '24', label: '24-hour' },
@@ -195,12 +198,14 @@ function PaletteRow<T extends ResolvedTheme>({
 }
 
 /**
- * The fun, in one place: an on/off for the ticker, for Sprig, and for the rail's quips, then the ticker's pace, the
- * pause between its headlines, and the topics they are drawn from. Its header hides a light switch.
+ * The fun, in one place: an on/off for the ticker, for Sprig (named for whoever sits in its place), and for the rail's
+ * quips, then who sits at the foot of the rail, picked whether it is on or not, since picking one turns it on, then the
+ * ticker's pace, the pause between its headlines, and the topics they are drawn from. Its header hides a light switch.
  */
 function FunPanel() {
     const { on, speed, gap, hidden } = useTickerSettings()
     const buddy = useBuddy()
+    const companion = useCompanion()
     const quips = useQuips()
     return (
         <Panel>
@@ -209,9 +214,9 @@ function FunPanel() {
             </PanelHeader>
             <div className="flex items-center justify-between gap-4 border-b p-3">
                 <p id="fun-items" className="max-w-3xl text-sm text-muted-foreground">
-                    The ticker crawls joke headlines across the header. Sprig, at the foot of the side rail, has a tip
-                    for every page; none of them help. Each sits out a window with no room for it. Quips say what each
-                    run in the rail is doing, in words of their own.
+                    The ticker crawls joke headlines across the header. Sprig, at the foot of the side rail, or a Ghost
+                    in its place, has a tip for every page; none of them help. Each sits out a window with no room for
+                    it. Quips say what each run in the rail is doing, in words of their own.
                 </p>
                 <fieldset aria-labelledby="fun-items" className="flex shrink-0 items-center gap-4">
                     <label htmlFor="fun-ticker" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
@@ -230,7 +235,7 @@ function FunPanel() {
                             data-testid="fun-sprig"
                             onCheckedChange={(checked) => setBuddy(checked === true ? 'on' : 'off')}
                         />
-                        Sprig
+                        {NAMES[companion]}
                     </label>
                     <label htmlFor="fun-quips" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
                         <Checkbox
@@ -242,6 +247,28 @@ function FunPanel() {
                         Quips
                     </label>
                 </fieldset>
+            </div>
+            <div className="flex items-center justify-between gap-4 border-b p-3">
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                    Who sits at the foot of the rail: Sprig, or a Ghost, who floats there instead and has seen some
+                    things. Picking one turns it on.
+                </p>
+                <ToggleGroup
+                    type="single"
+                    value={companion}
+                    aria-label="Companion"
+                    onValueChange={(value) => {
+                        // A click on the one already picked unpicks it, sending no value: it is still a pick.
+                        setCompanion(COMPANIONS.find((c) => c === value) ?? companion)
+                        setBuddy('on')
+                    }}
+                >
+                    {COMPANIONS.map((value) => (
+                        <ToggleGroupItem key={value} value={value} data-testid={`companion-${value}`}>
+                            {NAMES[value]}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
             </div>
             <div className="flex items-center justify-between gap-4 border-b p-3">
                 <p className="max-w-3xl text-sm text-muted-foreground">
