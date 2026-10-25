@@ -108,6 +108,17 @@
     --buddy-ghost-facet: oklch(0.55 0.02 255);
     --buddy-ghost-eye: oklch(0.7 0.13 205);
     --buddy-ghost-core: oklch(0.98 0.03 205);
+    /* The Ghost's other shells (src/lib/shells.ts): the Sprig Shell's leaves in shade, a pumpkin's rind lit and in
+     * shade, a gilded shell's shaded gold beside the hats' lit one, and a Vex shell's bronze, its red eye and the eye's
+     * hot core. */
+    --buddy-leaf-shade: oklch(0.45 0.12 145);
+    --buddy-ghost-pumpkin: oklch(0.72 0.17 55);
+    --buddy-ghost-pumpkin-shade: oklch(0.55 0.15 45);
+    --buddy-ghost-gilt-shade: oklch(0.62 0.12 75);
+    --buddy-ghost-vex: oklch(0.62 0.07 70);
+    --buddy-ghost-vex-shade: oklch(0.42 0.05 60);
+    --buddy-ghost-vex-eye: oklch(0.6 0.22 27);
+    --buddy-ghost-vex-core: oklch(0.95 0.06 40);
 
     /* The lightswitch rave's dark, when The Cheat flips the lights off: a near black, a touch of the indigo. */
     --rave-dark: oklch(0.16 0.03 275);
@@ -191,6 +202,14 @@
     --buddy-ghost-facet: oklch(0.52 0.02 255);
     --buddy-ghost-eye: oklch(0.82 0.13 205);
     --buddy-ghost-core: oklch(0.99 0.02 205);
+    --buddy-leaf-shade: oklch(0.55 0.13 145);
+    --buddy-ghost-pumpkin: oklch(0.75 0.16 55);
+    --buddy-ghost-pumpkin-shade: oklch(0.58 0.15 45);
+    --buddy-ghost-gilt-shade: oklch(0.64 0.12 75);
+    --buddy-ghost-vex: oklch(0.66 0.07 70);
+    --buddy-ghost-vex-shade: oklch(0.46 0.05 60);
+    --buddy-ghost-vex-eye: oklch(0.68 0.22 27);
+    --buddy-ghost-vex-core: oklch(0.97 0.05 40);
 
     --rave-dark: oklch(0.08 0.02 275);
 }
@@ -467,6 +486,14 @@
     --color-buddy-ghost-facet: var(--buddy-ghost-facet);
     --color-buddy-ghost-eye: var(--buddy-ghost-eye);
     --color-buddy-ghost-core: var(--buddy-ghost-core);
+    --color-buddy-leaf-shade: var(--buddy-leaf-shade);
+    --color-buddy-ghost-pumpkin: var(--buddy-ghost-pumpkin);
+    --color-buddy-ghost-pumpkin-shade: var(--buddy-ghost-pumpkin-shade);
+    --color-buddy-ghost-gilt-shade: var(--buddy-ghost-gilt-shade);
+    --color-buddy-ghost-vex: var(--buddy-ghost-vex);
+    --color-buddy-ghost-vex-shade: var(--buddy-ghost-vex-shade);
+    --color-buddy-ghost-vex-eye: var(--buddy-ghost-vex-eye);
+    --color-buddy-ghost-vex-core: var(--buddy-ghost-vex-core);
 
     --color-rave-dark: var(--rave-dark);
 

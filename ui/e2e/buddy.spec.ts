@@ -392,6 +392,60 @@ test.describe('turned on', () => {
         await expect(page.getByTestId('hat-party-wear')).toHaveText('Wear')
     })
 
+    test("the Ghost's shells are bought from the hats' wallet, and one is always worn", async ({ page }) => {
+        // $450 in all buys a party hat, then a Sprig Shell and a Pumpkin Shell, but not a Gilded Shell.
+        await page.addInitScript(() => globalThis.localStorage.setItem('canopy-companion', 'ghost'))
+        await spentInAll(page, 450)
+        await page.goto('settings')
+        await settled(page)
+        await page.getByTestId('hats-toggle').click()
+        await page.getByTestId('hat-party-buy').click()
+        const wallet = page.getByTestId('shells-wallet')
+        await expect(wallet).toContainText('$400.00')
+        await expect(page.getByTestId('shell-generalist')).toHaveCount(0)
+        await page.getByTestId('shells-toggle').click()
+        // The Generalist Shell comes free and worn, and comes off only for another.
+        await expect(page.getByTestId('shell-generalist-wear')).toHaveText('Worn')
+        await expect(page.getByTestId('shell-generalist-wear')).toBeDisabled()
+        await expect(page.locator('[data-testid=buddy] [data-shell=generalist]')).toHaveCount(1)
+        await expect(page.getByTestId('shell-gilded-buy')).toBeDisabled()
+
+        await page.getByTestId('shell-sprig-buy').click()
+        await expect(wallet).toContainText('$300.00')
+        await expect(page.getByTestId('hats-wallet')).toContainText('$300.00')
+        await expect(page.locator('[data-testid=buddy] [data-shell=sprig]')).toHaveCount(1)
+        await page.getByTestId('shell-pumpkin-buy').click()
+        await expect(wallet).toContainText('$0.00')
+        await expect(page.locator('[data-testid=buddy] [data-shell=pumpkin]')).toHaveCount(1)
+        await expect(page.getByTestId('hat-beanie-buy')).toBeDisabled()
+
+        // Owned, a shell goes back on without spending again, and the vault outlasts a reload.
+        await page.getByTestId('shell-sprig-wear').click()
+        await expect(page.locator('[data-testid=buddy] [data-shell=sprig]')).toHaveCount(1)
+        await page.reload()
+        await settled(page)
+        await expect(wallet).toContainText('$0.00')
+        await expect(page.locator('[data-testid=buddy] [data-shell=sprig]')).toHaveCount(1)
+        await page.getByTestId('shells-toggle').click()
+        await page.getByTestId('shell-generalist-wear').click()
+        await expect(page.locator('[data-testid=buddy] [data-shell=generalist]')).toHaveCount(1)
+        await expect(page.getByTestId('shell-sprig-wear')).toHaveText('Wear')
+    })
+
+    test('the Ghost in the Sprig Shell', async ({ page }) => {
+        await page.addInitScript(() => {
+            globalThis.localStorage.setItem('canopy-companion', 'ghost')
+            globalThis.localStorage.setItem('canopy-shells', JSON.stringify({ owned: ['sprig'], worn: 'sprig' }))
+        })
+        await page.clock.setFixedTime(NOW)
+        await fixRandom(page)
+        await storeTheme(page, 'dark')
+        await page.goto('attention')
+        await settled(page)
+        await askSprig(page)
+        await expect(page.getByTestId('buddy')).toHaveScreenshot('ghost-sprig-dark.png')
+    })
+
     test('the mock has spent enough for a party hat and nothing dearer', async ({ page }) => {
         await page.goto('settings')
         await settled(page)
