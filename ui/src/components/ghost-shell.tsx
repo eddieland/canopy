@@ -13,11 +13,14 @@ const GHOST_CENTER = { x: 24, y: 40 }
 
 /** How a shell looks: its plates' shapes, each part's color class, and what it wears on top. */
 interface Look {
-    /** One great plate, pointing up from the eye: its lit facet left of the ridge and its shaded one right. */
-    plate: { lit: string; shaded: string }
+    /**
+     * One great plate, pointing up from the eye: its lit facet left of the ridge and its shaded one right, or a bent
+     * wire drawn as a line.
+     */
+    plate: { lit: string; shaded: string } | { wire: string }
     /** One lesser plate, behind the great ones on the diagonals, all in shade. */
     spike: string
-    /** The fill of a plate's lit facet. */
+    /** The fill of a plate's lit facet, or a wire plate's stroke. */
     lit: string
     /** The fill of a plate's shaded facet, and of the lesser plates. */
     shaded: string
@@ -50,12 +53,13 @@ const LOOKS: Record<ShellId, Look> = {
         eye: 'fill-buddy-ghost-eye',
         core: 'fill-buddy-ghost-core',
     },
-    // Sprig, as a Ghost: leaves for plates, its paperclip's wire for the ring, one googly eye, and its sprig on top.
+    // Sprig, as a Ghost: a paperclip of Sprig's wire for each great plate, its innermost turn on the eye, a leaf
+    // between each two, one googly eye in a ring of the same wire, and its sprig growing from the top clip.
     sprig: {
-        plate: { lit: 'M0 -25 C-7 -21 -8 -14 0 -11 Z', shaded: 'M0 -25 L0 -11 C8 -14 7 -21 0 -25 Z' },
-        spike: 'M0 -20 C-4 -17 -4 -11 0 -9 C4 -11 4 -17 0 -20 Z',
-        lit: 'fill-buddy-leaf',
-        shaded: 'fill-buddy-leaf-shade',
+        plate: { wire: 'M-1 -15 V-21 A1 1 0 0 1 1 -21 V-12 A2 2 0 0 1 -3 -12 V-22 A3 3 0 0 1 3 -22 V-15' },
+        spike: 'M0 -19 C-3.5 -16 -3.5 -11 0 -9 C3.5 -11 3.5 -16 0 -19 Z',
+        lit: 'stroke-muted-foreground',
+        shaded: 'fill-buddy-leaf',
         edge: 'stroke-buddy-leaf-shade',
         ring: 'fill-buddy-eye stroke-muted-foreground',
         eye: 'fill-buddy-eye',
@@ -141,18 +145,31 @@ export function ShellPlates({ id, cue, rave = false }: { id: ShellId; cue?: numb
             {PLATE_TURNS.map((turn) => (
                 <g key={turn} transform={at(turn)}>
                     <g key={cue} className={cn(cue !== undefined && 'animate-ghost-talk')}>
-                        <path
-                            d={look.plate.lit}
-                            strokeWidth="0.6"
-                            strokeLinejoin="round"
-                            className={cn(look.lit, look.edge)}
-                        />
-                        <path
-                            d={look.plate.shaded}
-                            strokeWidth="0.6"
-                            strokeLinejoin="round"
-                            className={cn(look.shaded, look.edge)}
-                        />
+                        {'wire' in look.plate ? (
+                            <path
+                                d={look.plate.wire}
+                                fill="none"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className={look.lit}
+                            />
+                        ) : (
+                            <>
+                                <path
+                                    d={look.plate.lit}
+                                    strokeWidth="0.6"
+                                    strokeLinejoin="round"
+                                    className={cn(look.lit, look.edge)}
+                                />
+                                <path
+                                    d={look.plate.shaded}
+                                    strokeWidth="0.6"
+                                    strokeLinejoin="round"
+                                    className={cn(look.shaded, look.edge)}
+                                />
+                            </>
+                        )}
                     </g>
                 </g>
             ))}
