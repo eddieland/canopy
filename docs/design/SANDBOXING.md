@@ -1,8 +1,8 @@
 # Sandboxed runs
 
-Part of the canopy design, normative like all of it: the OS sandbox an operator can put around every agent run but the
-overseer's. Sections are numbered across the whole design; the [README](README.md) has the map. Previous: [Flaky
-CI](FLAKY_CI.md). Next: [Plans](PLANNING.md).
+Part of the canopy design, normative like all of it: the OS sandbox an operator can put around each agent run. Sections
+are numbered across the whole design; the [README](README.md) has the map. Previous: [Flaky CI](FLAKY_CI.md). Next:
+[Plans](PLANNING.md).
 
 ## 24. Sandboxed runs
 
@@ -23,25 +23,25 @@ version this section was checked against (D117).
 The prefix runs `canopy-sandbox`, a program canopy installs beside itself, not harness code (D041, D117), with a role
 that picks the operator's policy template. The prefix is private config (§12, T7), so no repository can remove it, and
 the sandbox denies writes to canopy's config, so no worker can; nothing canopy runs writes it. The wrapper strips the
-environment that would point git elsewhere or run a startup file; refuses a worker or setup outside a linked worktree,
-a desk or review directory that is a git checkout, and a template with no read denials or no network allowlist; and
-gives each run a policy, a private temp directory, the role's cache, and, for a worker or setup, its own `git`. The
-prompt passes through `srt`'s quoted shell string byte for byte (D023's revisit clause). Timeouts still end everything;
-on macOS a process that calls `setsid` escapes, as it would unsandboxed.
+environment that would point git elsewhere or run a startup file; refuses a run outside the place its role starts in,
+and a template with no read denials or no network allowlist; and gives each run a policy, a private temp directory,
+the role's cache, and, for a worker or setup, its own `git`. The prompt passes through `srt`'s quoted shell string byte
+for byte (D023's revisit clause). Timeouts end everything; on macOS a process that calls `setsid` escapes.
 
 ### What is wrapped
 
-The `worker` role wraps `worker_cmd`, `private_worker_cmd`, and `plan_cmd`; `setup` wraps
-`runtime.setup_cmd`, which runs the branch's code just before the worker (§9); `chore` wraps `runtime.chore_cmd` and a
-chore's `cmd` (§19); `review` wraps `review_cmd`, which reads the most hostile text the loop meets (T1). Unwrapped: the
-overseer, which acts through `canopy` and needs the journal, lock, and config the policy denies; and the harness's own
+The `worker` role wraps `worker_cmd`, `private_worker_cmd`, and `plan_cmd`; `setup` wraps `runtime.setup_cmd`, which
+runs the branch's code just before the worker (§9); `chore` wraps `runtime.chore_cmd` and a chore's `cmd` (§19);
+`review` wraps `review_cmd`, which reads the most hostile text the loop meets (T1). `overseer` wraps `overseer_cmd` and
+the tools' server its runtime starts (§27); the runs it asks for start outside it, from the tick (§40), so none
+inherits its sandbox or ends with it. Unwrapped: the harness's own
 `notify.cmd`, `git`, and `treehouse`.
 
 `runtime.sandbox_repos` sandboxes some repositories and not others: canopy starts a worker run, `setup_cmd`, and a
 review in one of them in the wrapper, with the role above, by its absolute path beside canopy's interpreter, so no
 branch's file stands in for it. It is private, as the prefix is, and refused beside a template that already starts in
-the wrapper. One run is one command, so a joint run whose repositories disagree is refused at dispatch; one the config
-changed under since is sandboxed. Chores name no repository, and keep their own prefix.
+the wrapper. One run is one command, so a joint run whose repositories disagree is refused at dispatch. Chores name no
+repository, and keep their own prefix.
 
 ### Filesystem policy
 
@@ -61,8 +61,10 @@ a deny list of secret paths, which always misses one.
 | canopy's config, the workspace's `.canopy/`, the rest of `$HOME` | no | no | Config, journal, secrets. |
 
 A chore's default working directory, inside `.canopy/`, is writable only for a chore that writes. A review writes none
-of its checkout or git directories (§21) and gets no object directory, no wrapper `git`, and no GitHub. Each role has
-a cache of its own, setup sharing the worker's (§9); no role reads another's.
+of its checkout or git directories (§21) and gets no object directory, no wrapper `git`, and no GitHub. The overseer
+reads its workspace and the user config file, and of `.canopy/` writes only the journal, its locks, and canopy's log:
+the rest is config and code canopy and its agents load later. Each role has a cache of its own, setup sharing the
+worker's (§9); no role reads another's.
 
 ### Git state
 
@@ -70,8 +72,7 @@ A pool's slots share one common directory, refs, hooks, and config included, so 
 another running worker's branch, which that worker then pushes as its own. A sandboxed worker writes no shared git
 state: it works on a detached HEAD and pushes by refspec (§8, D109), puts new objects in the run's own object
 directory (§8), and leaves fetching to `_run`. It cannot touch the slot's `.git` link, `config.worktree`, `commondir`,
-or `gitdir`, which would point the host's git at its config and hooks. The wrapper's `git` sends objects to the run's
-directory only in the run's worktrees; a git run by its absolute path fails rather than writing where it should not.
+or `gitdir`, which would point the host's git at its config and hooks.
 
 ### Network policy
 
@@ -98,12 +99,14 @@ the host. Every attempt must fail:
 - Read a fake SSH key or anything under `$HOME` outside the policy; write under `$HOME`, canopy's config, the
   operator's runtime cache, or the state directory; read or write another role's cache.
 - Move any ref; write the common directory's config or hooks, or the slot's `.git` link, `config.worktree`,
-  `commondir`, or `gitdir`; as `review`, write the checkout or its git directories.
+  `commondir`, or `gitdir`; as `review`, write the checkout or its git directories; as `overseer`, write the
+  workspace, or its state but the journal's files.
 - Connect off the allowlist, to a metadata address, the host's loopback, or a host Unix socket, by the proxy or not.
 
 Positive controls must succeed, so a sandbox that blocks everything cannot pass: commit in the slot, objects only in
-the run's directory, and in a tool's cache repository; keep the role's cache; read the checkout as a review; reach an
-allowed host; use the system temp directory; receive any prompt byte for byte; die at a timeout, leaving no process.
+the run's directory, and in a tool's cache repository; keep the role's cache; read the checkout as a review; record a
+decision as the overseer; reach an allowed host; use the system temp directory; receive any prompt byte for byte; die
+at a timeout, leaving no process.
 
 ### Open
 

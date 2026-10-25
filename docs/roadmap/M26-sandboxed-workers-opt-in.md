@@ -91,5 +91,9 @@ and a planted snapshot git directory each make the overseer's OpenCode, or the o
 the state directory is not (DESIGN §24, Open).
 CI dropped its macOS canary job 2026-10-17, at the operator's request: macOS is left to the live check on the
 operator's machine.
+The unwrapped overseer, a residual above, has a role of its own now, `overseer`, outside this milestone's Accept, for
+issue #454: its template writes, of the workspace's state, only the journal, its locks, and canopy's log, with canary
+cases that pass under `srt` 0.0.79 and bubblewrap 0.9. canopy takes it on `overseer_cmd` since M40's first stage has
+the tick start every run (2026-10-25), with a canary case for a dispatch the sandboxed overseer asks for.
 Next: data of the sandbox's own, once the operator settles how sandboxed runs get their credentials; then the canary on
 the operator's Linux and macOS machines.

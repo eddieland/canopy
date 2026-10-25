@@ -30,7 +30,7 @@ A write the policy refuses under `$HOME` may look as if it worked: `srt` puts an
 directory, and what is written there is gone when the run ends. Nothing reaches the host.
 
 What it does not cover: a worker can still send anything to a host you allowed, with the credentials it has, such as
-your GitHub token; the overseer is not wrapped; and the sandbox shares the kernel,
+your GitHub token; the overseer is not wrapped yet ([The overseer](#the-overseer)); and the sandbox shares the kernel,
 so it is no defense against an exploit written to escape it (DESIGN §24).
 
 **Not yet closed:** the templates let a run write OpenCode's data directory, `~/.local/share/opencode`, and what a run
@@ -92,6 +92,7 @@ template for its role from `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy
 | `setup.json` | `setup_cmd` |
 | `chore.json` | `chore_cmd` and each chore's own `cmd` |
 | `review.json` | `review_cmd` |
+| `overseer.json` | `overseer_cmd`, once canopy takes the prefix there ([The overseer](#the-overseer)) |
 
 It runs the `srt` in `~/.local/share/canopy/sandbox-runtime/` (under `$XDG_DATA_HOME` when that is set), or else the
 first on `PATH`. It drops every relative entry from `PATH`, so `git`, and any other `srt`, must be on `PATH` through
@@ -102,7 +103,8 @@ Each role caches in a directory of its own, `~/.cache/canopy/sandbox/<role>/` (u
 set), which the wrapper makes, and setup in the worker's, so that what it installs is there for the worker. The
 wrapper points the command's `XDG_CACHE_HOME` there, and `npm_config_cache`, `GOCACHE`, `GOMODCACHE`, and
 `PIP_CACHE_DIR` under it, whatever you set them to. The first sandboxed run of each role fills its cache from nothing.
-Nothing empties them but `canopy gc --caches`, which skips a role's while a run of it is live.
+Nothing empties them but `canopy gc --caches`, which skips a role's while a run of it is live, and the overseer's
+while a tick runs.
 
 `srt` is a beta. canopy pins the version DESIGN §24 was checked against; to try another, install it on `PATH`
 and remove canopy's, and re-read DESIGN §24's claims first.
@@ -191,7 +193,7 @@ setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
   `private_worker_cmd` is easy to miss, and a private ticket's worker then runs outside the sandbox.
 - A chore with a `cmd` of its own (DESIGN §19) needs the prefix there too, with `--read {definitions_dir}` only if the
   command names it: `cmd = 'canopy-sandbox chore -- opencode run --agent build-health --format json'`.
-- Leave `overseer_cmd` as it is. The overseer needs the journal and the config the sandbox denies.
+- `overseer_cmd` takes a role of its own (The overseer, below).
 - The reviewer reads the checkout and writes nothing in it, not even a commit, so `review.json` allows reading the
   checkout and its git directories and writing none of them, and leaves `github.com` off the allowlist.
 - If your `PATH` has a relative entry, such as `.`, name the wrapper by its absolute path: canopy runs the template
@@ -221,6 +223,35 @@ wrapped commands too.
 A sandboxed worker's new commits go to a per-run object directory, which canopy reads to push and then deletes, after
 putting each slot back on the commit the run started from (DESIGN §8). An unsandboxed run leaves that directory
 empty.
+
+### The overseer
+
+The overseer reads the most hostile text the loop sees, ticket text, and without a sandbox its OpenCode permissions are
+its only limit. `overseer.json` is its policy, for the `overseer` role. Every run the overseer asks for is started by
+the tick once the overseer's run has ended (DESIGN §40), outside its sandbox, so no run inherits the overseer's policy
+or dies with it. The prefix is the same as the others':
+
+```toml
+[runtime]
+overseer_cmd = '''canopy-sandbox overseer --read {definitions_dir} --
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json --thinking
+    --title={title}'''
+```
+
+The overseer starts in the workspace root, and acts through canopy's tools, a server its OpenCode starts inside the same
+sandbox. Under the shipped template it:
+
+- reads the workspace and its `.canopy/`, the user config file `~/.config/canopy/config.toml` and no other file
+  beside it (the web UI's `listener-secret` is there), canopy's install, and OpenCode's files;
+- writes, of `.canopy/`, only the journal, its locks, and `canopy.log`: not the private config, the agent definitions,
+  the chores' agents and prompts, or any new file, such as an OpenCode config a chore or review that starts under
+  `.canopy/` would load. The wrapper makes the journal's locks first, if canopy has yet to;
+- reaches your model provider, your tracker's MCP endpoint, and GitHub's API hosts, not `github.com`.
+
+Fill in `overseer.json` as the others: your model provider and tracker hosts, and, if canopy is installed anywhere
+but `uv tool install`'s `~/.local/share/uv` and `~/.local/bin`, or `XDG_CONFIG_HOME` moves the user file, those
+paths. A command `runtime.allow_bash` grants the overseer runs in the sandbox too, and needs what it reads in
+`allowRead`.
 
 ## 6. Check that it works
 

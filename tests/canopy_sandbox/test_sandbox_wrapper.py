@@ -22,13 +22,14 @@ import canopy_sandbox
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, review_runs, tasks
-from canopy.infra import logs, procs
+from canopy.core import config, context, db, review_runs, tasks
+from canopy.infra import lock, logs, procs
 from canopy.infra.procs import SubprocessRunner
 from canopy.runs import tasks as task_starts
 from tests.canopy.helpers import (
     DEAD_PID,
     InlineRunner,
+    decisions,
     in_tick,
     inline_context,
     operator,
@@ -45,7 +46,7 @@ from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, executable, git, us
 # The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
 # slot's own directory first on the import path.
 WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
-ROLES = ("worker", "setup", "chore", "review")
+ROLES = ("worker", "setup", "chore", "review", "overseer")
 FAKES = Path(__file__).resolve().parents[1] / "fakes"
 SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
 # Quotes, a line break, and what a shell would expand: the command must receive it as it was given (§5 item 3).
@@ -458,6 +459,149 @@ def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp
     assert filesystem["denyWrite"] == []
     assert "github.com" not in call["settings"]["network"]["allowedDomains"]  # it pushes and fetches nothing
     assert call["env"] == {"CLAUDE_CODE_TMPDIR": tmp, "PATH": os.environ["PATH"], "TMPDIR": tmp, **caching(cache)}
+
+
+def state_as_a_tick_leaves_it(canopy_env: CanopyEnv) -> sqlite3.Connection:
+    """The workspace's state as the overseer finds it: its journal open, and what canopy keeps beside it.
+
+    The tick holds its journal open, so the WAL and shared-memory files are there, and has written canopy's log. Beside
+    them are the private config, a snapshot of the agent definitions, and a chore's agent, which the overseer reads and
+    must not write. No lock is there yet, as in a workspace that has never dispatched.
+    """
+    conn = canopy_env.journal()
+    state = canopy_env.state_dir
+    (state / "canopy.log").write_text("")
+    canopy_env.write_private("# the operator's\n")
+    (state / "runtime" / "0123abcd").mkdir(parents=True)
+    (state / "chore-agents" / "introspect").mkdir(parents=True)
+    return conn
+
+
+def test_the_overseer_reads_its_workspace_and_writes_only_the_journal(
+    canopy_env: CanopyEnv,
+    sandbox: Sandbox,
+) -> None:
+    """The overseer's policy: the journal's files writable, and nothing else of the state, which canopy loads later.
+
+    Not the private config, the agent definitions, a chore's agent, or the state directory itself, where a file the
+    overseer added could be an OpenCode config another run loads. Of the operator's config, the user file alone: the
+    listener's secret sits beside it. No `~/.ssh`, no host off the allowlist, and no GitHub but its API.
+    """
+    state_as_a_tick_leaves_it(canopy_env)
+    definitions = canopy_env.state_dir / "runtime" / "0123abcd"
+
+    done = wrap("overseer", "--read", str(definitions), "--", *PRINT_ARG, PROMPT, cwd=canopy_env.root)
+
+    assert done.ok, done.stderr
+    assert done.stdout == PROMPT
+    call = sandbox.only_call()
+    filesystem = call["settings"]["filesystem"]
+    state, tmp = canopy_env.state_dir, call["env"]["TMPDIR"]
+    journal = [str(state / name) for name in canopy_sandbox.JOURNAL]
+    cache = sandbox.caches() / "overseer"
+    assert filesystem["allowWrite"] == [*journal, tmp, "~/.local/share/opencode", "~/.local/state/opencode", str(cache)]
+    # The wrapper made the locks the overseer may take, as canopy would: the operator's alone.
+    assert all((state / name).stat().st_mode & 0o777 == 0o600 for name in canopy_sandbox.LOCKS)
+    # Entry by entry, so that no read-only bind of a directory covers the journal's files.
+    root = canopy_env.root
+    entries = [root / "canopy-workspace.toml", root / "repos"]
+    entries += [state / "chore-agents", state / "config.toml", state / "runtime"]
+    assert filesystem["allowRead"][: len(entries) + 2] == [*map(str, entries), tmp, str(definitions)]
+    assert not {str(root), str(state), *journal} & set(filesystem["allowRead"])
+    # The operator's own config, the user file alone; and no state directory denied, as it is to every other role.
+    assert "~/.config/canopy/config.toml" in filesystem["allowRead"]
+    assert not [p for p in filesystem["allowRead"] if p.startswith(("~/.ssh", "~/.config/canopy/listener"))]
+    assert "~/.config/canopy" not in filesystem["allowRead"]
+    assert filesystem["denyRead"] == ["~", str(sandbox.runs_root()), str(sandbox.caches())]
+    assert call["settings"]["network"]["allowedDomains"] == [
+        "api.anthropic.com",
+        "api.github.com",
+        "api.githubcopilot.com",
+    ]
+    call["env"].pop(canopy_sandbox.SOCAT_LISTEN, None)  # as this host has IPv6 or not
+    assert call["env"] == {"CLAUDE_CODE_TMPDIR": tmp, "PATH": os.environ["PATH"], "TMPDIR": tmp, **caching(cache)}
+
+
+def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(
+    canopy_env: CanopyEnv,
+    sandbox: Sandbox,
+) -> None:
+    """`canopy --version`, which the tick checks before the overseer starts, and a decision that lands in the journal.
+
+    The fake srt sandboxes nothing: the canary checks the same under the real one.
+    """
+    canopy = str(Path(sys.executable).parent / "canopy")
+    conn = state_as_a_tick_leaves_it(canopy_env)
+    with in_tick(conn) as tick_id:
+        version = wrap("overseer", "--", canopy, "--version", cwd=canopy_env.root)
+        skip = ["decide", "skip", "--rationale", "mcp_unavailable: the tracker is down"]
+        decided = wrap("overseer", "--", canopy, *skip, cwd=canopy_env.root)
+        recorded = decisions(conn, tick_id)
+
+    assert version.ok, version.stderr
+    assert version.stdout.startswith("canopy ")
+    assert decided.ok, decided.stderr
+    assert recorded == [("skip", "mcp_unavailable: the tracker is down")]
+
+
+@pytest.mark.parametrize(
+    ("place", "error"),
+    [
+        ("no-workspace-file", "holds no canopy-workspace.toml"),
+        ("no-state", "holds no .canopy"),
+        ("open-state", "is not a directory private to this user"),
+        ("no-journal", "holds no journal"),
+        ("linked-log", "canopy.log is not a regular file"),
+    ],
+)
+def test_an_overseer_outside_a_workspace_root_runs_nothing(
+    canopy_env: CanopyEnv,
+    sandbox: Sandbox,
+    tmp_path: Path,
+    place: str,
+    error: str,
+) -> None:
+    """The overseer runs in the workspace root, whose state canopy made private to the operator, with its journal.
+
+    A journal file that is a link would have the policy let the overseer write what it points at.
+    """
+    state = canopy_env.state_dir
+    if place not in {"no-state", "no-journal"}:
+        state_as_a_tick_leaves_it(canopy_env)
+    match place:
+        case "no-workspace-file":
+            canopy_env.shared_file.unlink()
+        case "no-state":
+            state.rmdir()
+        case "open-state":
+            state.chmod(0o755)
+        case "linked-log":
+            (state / "canopy.log").unlink()
+            (state / "canopy.log").symlink_to(canopy_env.home / ".bashrc")
+        case _:
+            pass
+
+    done = wrap("overseer", "true", cwd=canopy_env.root)
+
+    assert done.returncode == 2
+    assert error in done.stderr
+    assert not sandbox.log.exists()
+
+
+def test_the_journals_files_are_canopys() -> None:
+    """The wrapper names what canopy writes, by canopy's names, without importing canopy (D041)."""
+    canopys = (
+        db.DB_FILE_NAME,
+        f"{db.DB_FILE_NAME}-wal",
+        f"{db.DB_FILE_NAME}-shm",
+        lock.LOCK_FILE_NAME,
+        context.DISPATCH_LOCK,
+        logs.LOG_FILE_NAME,
+    )
+    assert canopys == canopy_sandbox.JOURNAL
+    assert canopy_sandbox.LOCKS == (lock.LOCK_FILE_NAME, context.DISPATCH_LOCK)
+    assert canopy_sandbox.WORKSPACE_FILE == config.WORKSPACE_FILE_NAME
+    assert canopy_sandbox.STATE_DIR == config.WORKSPACE_STATE_DIR
 
 
 @pytest.mark.parametrize("place", ["empty", "slot"])

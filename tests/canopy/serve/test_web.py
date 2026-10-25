@@ -821,14 +821,14 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     result = {"status": "blocked", "summary": "half done\x1b[2J", "question": "Red <b>or</b> blue?"}
     assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.BLOCKED, json.dumps(result))
     tick_id = db.start_tick(ctx.conn, dry_run=False)
-    db.record_decision(ctx.conn, tick_id, KEY, "attention:needs_reviewer", "https://example.test/pr/9")
+    db.record_decision(ctx.conn, tick_id, KEY, "attention:needs_author", "https://example.test/pr/9")
     db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
 
     [item] = c.get("/api/attention").json()
     assert (item["ticket_key"], item["ticket_title"], item["reason"], item["detail"]) == (
         KEY,
         "Pick a color",
-        "needs_reviewer",
+        "needs_author",
         "https://example.test/pr/9",
     )
 
@@ -1124,7 +1124,7 @@ def test_a_loop_that_serves_the_ui_links_its_notifications_to_it(
     serve_on(canopy_env, port, f"{moved}[notify.sinks.slack]\ncmd = '{sink_script} {out}'\n")
     secret.create(secret.path(), rotate=False)
     term, _ = console()
-    with overseer_does(raises(KEY, "needs_reviewer")):
+    with overseer_does(raises(KEY, "needs_author")):
         statuses = repeat.run(
             context(canopy_env),
             dry_run=True,

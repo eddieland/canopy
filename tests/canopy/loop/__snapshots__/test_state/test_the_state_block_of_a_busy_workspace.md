@@ -272,7 +272,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
     {
       "ticket": "PROJ-1",
       "repo": "repo",
-      "reason": "needs_reviewer",
+      "reason": "needs_author",
       "since": "2026-10-16T09:40:00.000Z"
     }
   ],

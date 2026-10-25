@@ -88,4 +88,6 @@ test('a long conversation scrolls in its panel, opening at its newest end, which
     await page.getByTestId('order-conversation').click()
     await expect(region).toHaveJSProperty('scrollTop', 0)
     await expect(page.getByTestId('message-1029')).toBeInViewport()
+    // A refetch of the ticket can still be in the padding route when the page closes (padMessages).
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
 })

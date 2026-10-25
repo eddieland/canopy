@@ -153,6 +153,8 @@ such as a shipped migration, may still cite one, and git history has its text.
   those go, refuse without a running tick, so the journal holds only what the loop did.
 - Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's, with the
   overseer's items held through a tick that did not give it their subject (DESIGN §14). No own table.
+- The harness raises the items that need no judgment from their causes, keeping one while an observation it rests on
+  is stale, and the overseer's tools refuse it those reasons (`raised`, DESIGN §37).
 
 ## D021. How OpenCode enforces permissions under `opencode run`
 
@@ -441,7 +443,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - The harness never learns whether a run is sandboxed, beyond adding the prefix itself for a repository the private
   `runtime.sandbox_repos` names (the operator's ask, 2026-10-23); it passes only `CANOPY_GIT_OBJECTS`, which an
-  unsandboxed run ignores. Every agent command but the overseer's can be wrapped: the overseer needs what it denies.
+  unsandboxed run ignores. Every agent command can be wrapped, the overseer's too, since the tick starts every run it
+  asks for (DESIGN §40); its role writes, of the state, the journal's files alone.
 - What the harness runs on the host after a run (git, treehouse) reads nothing a sandboxed run can write (TRUST_MODEL
   T4): a new step in a slot keeps D107's flags and runs after `_run`'s link and `commondir` check.
 - Revisit: making it the default, once the canary passes on the operator's machines and a day of sandboxed runs.
