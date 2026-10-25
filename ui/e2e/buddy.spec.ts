@@ -58,6 +58,27 @@ test('Sprig is off until Settings turns it on', async ({ page }) => {
     await expect(page.getByTestId('buddy')).toBeVisible()
 })
 
+test("picking the Ghost in Settings turns it on in Sprig's place", async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    await expect(page.getByTestId('buddy')).toHaveCount(0)
+
+    await page.getByTestId('companion-ghost').click()
+    await expect(page.getByRole('complementary', { name: 'Ghost' })).toBeVisible()
+    await expect(page.getByTestId('fun-sprig')).toBeChecked()
+    await expect(page.getByTestId('fun-sprig')).toHaveAccessibleName('Ghost')
+})
+
+test('picking Sprig, already picked, turns it on', async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    await expect(page.getByTestId('companion-sprig')).toHaveAttribute('data-state', 'on')
+
+    await page.getByTestId('companion-sprig').click()
+    await expect(page.getByRole('complementary', { name: 'Sprig' })).toBeVisible()
+    await expect(page.getByTestId('companion-sprig')).toHaveAttribute('data-state', 'on')
+})
+
 test.describe('turned on', () => {
     // As if turned on in Settings on an earlier visit; a choice made since, in the page, stands.
     test.beforeEach(async ({ page }) => {

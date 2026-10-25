@@ -199,8 +199,8 @@ function PaletteRow<T extends ResolvedTheme>({
 
 /**
  * The fun, in one place: an on/off for the ticker, for Sprig (named for whoever sits in its place), and for the rail's
- * quips, then the ticker's pace, the pause between its headlines, the topics they are drawn from, and who sits at the
- * foot of the rail. Its header hides a light switch.
+ * quips, then who sits at the foot of the rail, picked whether it is on or not, since picking one turns it on, then the
+ * ticker's pace, the pause between its headlines, and the topics they are drawn from. Its header hides a light switch.
  */
 function FunPanel() {
     const { on, speed, gap, hidden } = useTickerSettings()
@@ -247,6 +247,28 @@ function FunPanel() {
                         Quips
                     </label>
                 </fieldset>
+            </div>
+            <div className="flex items-center justify-between gap-4 border-b p-3">
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                    Who sits at the foot of the rail: Sprig, or a Ghost, who floats there instead and has seen some
+                    things. Picking one turns it on.
+                </p>
+                <ToggleGroup
+                    type="single"
+                    value={companion}
+                    aria-label="Companion"
+                    onValueChange={(value) => {
+                        // A click on the one already picked unpicks it, sending no value: it is still a pick.
+                        setCompanion(COMPANIONS.find((c) => c === value) ?? companion)
+                        setBuddy('on')
+                    }}
+                >
+                    {COMPANIONS.map((value) => (
+                        <ToggleGroupItem key={value} value={value} data-testid={`companion-${value}`}>
+                            {NAMES[value]}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
             </div>
             <div className="flex items-center justify-between gap-4 border-b p-3">
                 <p className="max-w-3xl text-sm text-muted-foreground">
@@ -303,7 +325,7 @@ function FunPanel() {
                     <span className="readout text-xs text-muted-foreground">s</span>
                 </span>
             </div>
-            <div className="flex items-center justify-between gap-4 border-b p-3">
+            <div className="flex items-center justify-between gap-4 p-3">
                 <p id="ticker-topics" className="max-w-3xl text-sm text-muted-foreground">
                     Which headlines the ticker shows. Tips about canopy are mixed in with the jokes.
                 </p>
@@ -322,30 +344,6 @@ function FunPanel() {
                         </label>
                     ))}
                 </fieldset>
-            </div>
-            <div className="flex items-center justify-between gap-4 p-3">
-                <p className="max-w-3xl text-sm text-muted-foreground">
-                    Who sits at the foot of the rail: Sprig, or a Ghost, who floats there instead and has seen some
-                    things. Eyes up.
-                </p>
-                <ToggleGroup
-                    type="single"
-                    value={companion}
-                    aria-label="Companion"
-                    disabled={buddy !== 'on'}
-                    onValueChange={(value) => {
-                        const picked = COMPANIONS.find((c) => c === value)
-                        if (picked) {
-                            setCompanion(picked)
-                        }
-                    }}
-                >
-                    {COMPANIONS.map((value) => (
-                        <ToggleGroupItem key={value} value={value} data-testid={`companion-${value}`}>
-                            {NAMES[value]}
-                        </ToggleGroupItem>
-                    ))}
-                </ToggleGroup>
             </div>
             <HatShop />
         </Panel>
