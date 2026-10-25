@@ -194,6 +194,32 @@ test.describe('turned on', () => {
         await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/u)
     })
 
+    test('the Ghost floats around, its light swells and dims, faster at the rave, still under reduced motion', async ({
+        page,
+    }) => {
+        // The Ghost's running animations, by name, and how long a round of each takes.
+        const moving = () =>
+            page.evaluate(() =>
+                Object.fromEntries(
+                    document
+                        .getAnimations()
+                        .filter((a) => a instanceof CSSAnimation && a.animationName.startsWith('ghost-'))
+                        .map((a) => [(a as CSSAnimation).animationName, a.effect?.getTiming().duration]),
+                ),
+            )
+        await page.addInitScript(() => globalThis.localStorage.setItem('canopy-companion', 'ghost'))
+        await page.goto('settings')
+        await settled(page)
+        await expect.poll(moving).toMatchObject({ 'ghost-wander': 14_000, 'ghost-glow': 4200, 'ghost-light': 4200 })
+
+        await page.getByTestId('light-switch').click()
+        await expect.poll(moving).toMatchObject({ 'ghost-glow': 1200, 'ghost-spin': 2400 })
+        await page.getByTestId('light-switch').click()
+
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await expect.poll(moving).toEqual({})
+    })
+
     test("Sprig's eyes follow the pointer", async ({ page }) => {
         await page.goto('attention')
         await settled(page)

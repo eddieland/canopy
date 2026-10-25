@@ -389,10 +389,11 @@ const SPIKE = 'M0 -20 L-5 -9 L5 -9 Z'
 
 /**
  * The Ghost that may sit in Sprig's place: a Generalist Shell, four great faceted plates around one glowing eye, four
- * lesser ones behind them on the diagonals, floating over its shadow. The eye blinks now and then and looks toward
- * the pointer, and the great plates spread a little with each new tip, as a Ghost's do when it talks. While the
- * lightswitch rave is on, its shell turns a quarter on each beat of the lights. Under reduced motion all of it holds
- * still.
+ * lesser ones behind them on the diagonals, floating around its spot over its shadow, leaning as it goes. Its light
+ * swells and dims, and flares with each new tip. The eye blinks now and then and looks toward the pointer, and the
+ * great plates spread a little with each tip, as a Ghost's do when it talks. While the lightswitch rave is on, its
+ * shell turns a quarter on each beat of the lights, and its light swells in time. Under reduced motion all of it
+ * holds still.
  */
 function GhostFigure({ cue, rave }: { cue: number; rave: boolean }) {
     const figure = useRef<SVGSVGElement>(null)
@@ -400,56 +401,76 @@ function GhostFigure({ cue, rave }: { cue: number; rave: boolean }) {
     const at = (turn: number) => `translate(${GHOST_CENTER.x} ${GHOST_CENTER.y}) rotate(${turn})`
     return (
         <svg ref={figure} viewBox="0 -6 48 92" className="h-24 w-[3.25rem] overflow-visible" aria-hidden>
-            <ellipse cx="24" cy="76" rx="11" ry="2" className="animate-ghost-shadow fill-buddy-ghost-facet/30" />
-            <g data-testid="ghost-body" className="animate-ghost-float">
-                <g data-testid="ghost-shell" className={cn(rave && 'animate-ghost-spin')}>
-                    {[45, 135, 225, 315].map((turn) => (
-                        <path
-                            key={turn}
-                            d={SPIKE}
-                            transform={at(turn)}
-                            strokeWidth="0.6"
-                            strokeLinejoin="round"
-                            className="fill-buddy-ghost-facet stroke-buddy-ghost-facet"
-                        />
-                    ))}
-                    {[0, 90, 180, 270].map((turn) => (
-                        <g key={turn} transform={at(turn)}>
-                            <g key={cue} className="animate-ghost-talk">
+            <g className="animate-ghost-wander">
+                <ellipse cx="24" cy="76" rx="11" ry="2" className="animate-ghost-shadow fill-buddy-ghost-facet/30" />
+                <g data-testid="ghost-body" className="animate-ghost-float">
+                    <g className="animate-ghost-lean">
+                        <g data-testid="ghost-shell" className={cn(rave && 'animate-ghost-spin')}>
+                            {[45, 135, 225, 315].map((turn) => (
                                 <path
-                                    d={PLATE.lit}
-                                    strokeWidth="0.6"
-                                    strokeLinejoin="round"
-                                    className="fill-buddy-ghost-shell stroke-buddy-ghost-facet"
-                                />
-                                <path
-                                    d={PLATE.shaded}
+                                    key={turn}
+                                    d={SPIKE}
+                                    transform={at(turn)}
                                     strokeWidth="0.6"
                                     strokeLinejoin="round"
                                     className="fill-buddy-ghost-facet stroke-buddy-ghost-facet"
                                 />
+                            ))}
+                            {[0, 90, 180, 270].map((turn) => (
+                                <g key={turn} transform={at(turn)}>
+                                    <g key={cue} className="animate-ghost-talk">
+                                        <path
+                                            d={PLATE.lit}
+                                            strokeWidth="0.6"
+                                            strokeLinejoin="round"
+                                            className="fill-buddy-ghost-shell stroke-buddy-ghost-facet"
+                                        />
+                                        <path
+                                            d={PLATE.shaded}
+                                            strokeWidth="0.6"
+                                            strokeLinejoin="round"
+                                            className="fill-buddy-ghost-facet stroke-buddy-ghost-facet"
+                                        />
+                                    </g>
+                                </g>
+                            ))}
+                        </g>
+                        <circle cx={GHOST_CENTER.x} cy={GHOST_CENTER.y} r="9.5" className="fill-buddy-ghost-facet" />
+                        <g className="animate-buddy-blink">
+                            <g data-eye>
+                                <circle
+                                    data-testid="ghost-glow"
+                                    cx={GHOST_CENTER.x}
+                                    cy={GHOST_CENTER.y}
+                                    r="7"
+                                    fillOpacity="0.35"
+                                    className={cn(
+                                        'fill-buddy-ghost-eye',
+                                        rave ? 'animate-ghost-glow-rave' : 'animate-ghost-glow',
+                                    )}
+                                />
+                                <circle
+                                    key={cue}
+                                    cx={GHOST_CENTER.x}
+                                    cy={GHOST_CENTER.y}
+                                    r="7"
+                                    className="animate-ghost-flare fill-buddy-ghost-eye"
+                                />
+                                <circle
+                                    cx={GHOST_CENTER.x}
+                                    cy={GHOST_CENTER.y}
+                                    r="4.6"
+                                    className="animate-ghost-light fill-buddy-ghost-eye"
+                                />
+                                <circle
+                                    data-pupil
+                                    cx={GHOST_CENTER.x}
+                                    cy={GHOST_CENTER.y}
+                                    r="2"
+                                    className="fill-buddy-ghost-core"
+                                />
                             </g>
                         </g>
-                    ))}
-                </g>
-                <circle cx={GHOST_CENTER.x} cy={GHOST_CENTER.y} r="9.5" className="fill-buddy-ghost-facet" />
-                <g className="animate-buddy-blink">
-                    <g data-eye>
-                        <circle
-                            cx={GHOST_CENTER.x}
-                            cy={GHOST_CENTER.y}
-                            r="7"
-                            fillOpacity="0.35"
-                            className="fill-buddy-ghost-eye"
-                        />
-                        <circle cx={GHOST_CENTER.x} cy={GHOST_CENTER.y} r="4.6" className="fill-buddy-ghost-eye" />
-                        <circle
-                            data-pupil
-                            cx={GHOST_CENTER.x}
-                            cy={GHOST_CENTER.y}
-                            r="2"
-                            className="fill-buddy-ghost-core"
-                        />
                     </g>
                 </g>
             </g>
