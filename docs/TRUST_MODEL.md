@@ -126,6 +126,12 @@ Controls:
   derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
   model-written context: today it starts only a due chore with no `when`, whose `chore run` and `chore wait` the
   overseer is refused `decided`, and no ticket's run, since each rests on an observation.
+- The attention items that need no judgment (`needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
+  `review_failed`, `review_limit`, `plan_review`, `plan_changed`) are the harness's, raised from the journal and the
+  observations in its own words, and kept while an observation they rest on is stale (DESIGN §14). The overseer is
+  refused recording one (`raised`), through a tool and its command alike, so a steered overseer can neither drop such
+  an item nor raise a false one; a guard that refuses it a run past a limit still records the item. Residual: a
+  derivation's mistake raises or ends an item wrongly until a fresh read corrects it.
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
@@ -541,7 +547,7 @@ Controls now:
 - The overseer starts no run. Each one it asks for is recorded, and the tick starts it once the overseer's run has
   ended (DESIGN §40), so no run, its setup, or the harness's git and treehouse calls is the overseer's descendant, and
   a sandbox around `overseer_cmd` would confine the overseer alone; wrapping it is a change of its own (DESIGN §24).
-- Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
+- Opt-in: an OS sandbox around each agent run (HOST_ISOLATION, docs/SANDBOX.md, D117, D118), the overseer's below. The
   operator prefixes `worker_cmd`, `private_worker_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
   each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
   it writes for the run from the operator's template for that role; or names repositories in `runtime.sandbox_repos`,
@@ -553,6 +559,16 @@ Controls now:
   data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on the host later
   reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
+- The overseer has a role of its own, `overseer`, for `overseer_cmd` and the server of canopy's tools its runtime
+  starts inside the same sandbox (DESIGN §24, §27). canopy refuses that prefix until the tick starts every run the
+  overseer asks for (DESIGN §40): until then a dispatch starts its run from the overseer's process tree, where it, its
+  setup, and the harness's git would inherit the overseer's sandbox and end with it. Under the shipped template a
+  sandboxed overseer reads, under `$HOME`, its workspace, the user config file and nothing beside it (not the web UI's
+  listener secret), canopy's install, and the runtime's files; of the workspace's `.canopy/` it writes only the
+  journal, its locks, and canopy's log: never the private config, the agent definitions, the chores' agents and
+  prompts, or a new file there, such as an OpenCode config a run that starts under `.canopy/` would load. Its own
+  allowlist leaves `github.com` off. For a sandboxed overseer the sandbox is the boundary, and its definition's
+  permissions, no edits and no shell but what `runtime.allow_bash` names, stay as defense in depth.
 - The prefix and `runtime.sandbox_repos` are in the user file or the workspace's private file, which no repository or
   workspace file can set (T7) and no sandboxed run can write, so neither removes them. Beyond adding the wrapper for
   the repositories that key names, the harness never learns whether a run is sandboxed: it runs the template (D023,
@@ -569,11 +585,13 @@ Controls now:
 
 Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in; such a run could
 give the snapshot its write permission back, as it could do anything else the operator can. A sandboxed one
-shares the kernel, so code written to escape it is not contained. The overseer, `notify.cmd`, and the harness's own
-git and treehouse calls run outside it (HOST_ISOLATION §4.4). Every process `srt` sandboxes can write `/tmp/claude`,
-so two runs can pass files through it. A filter driver the operator's own git config defines still runs on whatever a
-branch's `.gitattributes` selects, on a slot's return as on any checkout. A template the operator edits can allow
-anything; canopy checks only that it denies some reads and lists an allowlist.
+shares the kernel, so code written to escape it is not contained. `notify.cmd` and the harness's own git and treehouse
+calls run outside it, and so does the overseer until canopy takes its prefix (DESIGN §40). A sandboxed overseer writes
+the journal itself, not only through canopy's commands, so a steered one can write any row there, as an unsandboxed
+one can (T5). Every process `srt` sandboxes can write `/tmp/claude`, so two runs can pass files through it. A filter
+driver the operator's own git config defines still runs on whatever a branch's `.gitattributes` selects, on a slot's
+return as on any checkout. A template the operator edits can allow anything; canopy checks only that it denies some
+reads and lists an allowlist.
 
 ### T5. Attribution and audit
 
@@ -759,24 +777,25 @@ Controls:
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.
-  It cannot open a Unix socket, so it reaches neither the SSH agent nor the Docker daemon. The review template leaves
-  `github.com` off its allowlist. The canary checks each, through the proxy and around it.
+  It cannot open a Unix socket, so it reaches neither the SSH agent nor the Docker daemon. The review and overseer
+  templates leave `github.com` off their allowlists. The canary checks each, through the proxy and around it.
 
 Residual: real. An unsandboxed run can send anything it reads to any host. A sandboxed one can still send what it
 reads, the worktree and whatever its template re-allows, to any allowed host, with the credentials it holds: with
-`github.com` allowed and a push credential in reach, it can push or post anywhere the operator can. Scoping those
-credentials is the next step (HOST_ISOLATION §8); until then this risk is accepted and documented. Behind a corporate
-proxy, which `srt` forwards through, `srt` makes no address checks and the proxy's rules are the only ones. A chore
-steered by what it read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`,
-wherever that sends them, and a finding's link can carry data in its URL. A steered agent likewise chooses up to 500
-characters per attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads
-its destination. A steered reviewer can put what it read into
-its findings, which reach the operator and, through `resume`, a worker on that ticket, who can push and comment; the
-worker reads them as data, as it reads any review comment. A write tool the operator's runtime grants anyway, on
-GitHub's server or another the tracker's rules do not cover, under a name the deny patterns miss, would let a steered
-reviewer post; that is noise, not authority, since the loop reads reviews only from its journal. A steered reviewer
-can put a link carrying data in a comment of a review's draft, which reaches GitHub if the operator publishes it
-unread.
+`github.com` allowed and a push credential in reach, it can push or post anywhere the operator can. A sandboxed
+overseer reads the workspace's whole state, private tickets' conversations and plans among it, and can send it to its
+model provider, its tracker, or GitHub's API with the tokens its MCP servers hold. Scoping those credentials is the
+next step (HOST_ISOLATION §8); until then this risk is accepted and documented. Behind a corporate proxy, which `srt`
+forwards through, `srt` makes no address checks and the proxy's rules are the only ones. A chore steered by what it
+read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`, wherever that sends
+them, and a finding's link can carry data in its URL. A steered agent likewise chooses up to 500 characters per
+attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads its destination.
+A steered reviewer can put what it read into its findings, which reach the operator and, through `resume`, a worker on
+that ticket, who can push and comment; the worker reads them as data, as it reads any review comment. A write tool
+the operator's runtime grants anyway, on GitHub's server or another the tracker's rules do not cover, under a name the
+deny patterns miss, would let a steered reviewer post; that is noise, not authority, since the loop reads reviews only
+from its journal. A steered reviewer can put a link carrying data in a comment of a review's draft, which reaches
+GitHub if the operator publishes it unread.
 With a store configured, a public worker steered by what it read can publish the worktree, the ticket, or anything
 else it reads to the store, under any title, where whoever can read canopy's namespace reads it; it can reply on or
 resolve any thread there, and comment on any artifact of the namespace. The namespace bounds where (Louvre's token,

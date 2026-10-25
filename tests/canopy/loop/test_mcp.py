@@ -220,18 +220,18 @@ RECORDS = [
     pytest.param(
         Verb(
             "attention",
-            {"key": "PROJ-1", "reason": "needs_reviewer", "detail": "no one owns it", "repo": "repo"},
-            ["attention", "PROJ-1", "needs_reviewer", "--detail", "no one owns it", "--repo", "repo"],
-            result={"reason": "needs_reviewer", "key": "PROJ-1", "repo": "repo", "pr": None},
+            {"key": "PROJ-1", "reason": "needs_author", "detail": "no one owns it", "repo": "repo"},
+            ["attention", "PROJ-1", "needs_author", "--detail", "no one owns it", "--repo", "repo"],
+            result={"reason": "needs_author", "key": "PROJ-1", "repo": "repo", "pr": None},
         ),
         id="attention",
     ),
     pytest.param(
         Verb(
             "attention",
-            {"reason": "review_limit", "detail": "reviewed often", "pr": PR},
-            ["attention", "review_limit", "--detail", "reviewed often", "--pr", PR],
-            result={"reason": "review_limit", "key": None, "repo": None, "pr": PR},
+            {"reason": "needs_author", "detail": "asks about intent", "pr": PR},
+            ["attention", "needs_author", "--detail", "asks about intent", "--pr", PR],
+            result={"reason": "needs_author", "key": None, "repo": None, "pr": PR},
         ),
         id="attention-pr",
     ),
@@ -409,8 +409,8 @@ REFUSALS = [
     pytest.param(
         Verb(
             "attention",
-            {"reason": "needs_reviewer", "detail": "d"},
-            ["attention", "needs_reviewer", "--detail", "d"],
+            {"reason": "needs_author", "detail": "d"},
+            ["attention", "needs_author", "--detail", "d"],
         ),
         "key or pr is required (KEY, or --pr)",
         2,
@@ -419,8 +419,8 @@ REFUSALS = [
     pytest.param(
         Verb(
             "attention",
-            {"key": "PROJ-1", "reason": "needs_reviewer", "detail": "d", "repo": "nope"},
-            ["attention", "PROJ-1", "needs_reviewer", "--detail", "d", "--repo", "nope"],
+            {"key": "PROJ-1", "reason": "needs_author", "detail": "d", "repo": "nope"},
+            ["attention", "PROJ-1", "needs_author", "--detail", "d", "--repo", "nope"],
         ),
         "'nope' is not a repository in this workspace (repo)",
         1,

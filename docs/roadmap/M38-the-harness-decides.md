@@ -108,9 +108,27 @@ ticket with an item the overseer holds is the harness's for a `wait`, the item s
 only once the overseer is given the ticket again; D020 is edited in place. Chosen conservatively, for the operator to
 change: the harness's run is still held off a ticket with an item the overseer holds, since what the item says may be
 why not to run; an item about a PR or the workspace stands only through a tick that ran no overseer; and done and
-stopped are the only ends decided in code. Left: every other row, each on its measurement; the rest of the attention
-list held in code, the eight reasons raised from their causes and the overseer's three recorded once and ended by what
-they name; cursors moved by the harness; the prompt cut to the judgment; and the design folded into the sections it
+stopped are the only ends decided in code. Built (2026-10-24): the fifth bullet's first half. None of the eight was
+raised by code before; guards recorded `attempt_limit` and `review_limit` on refusing the overseer, and still do. Each
+tick, after the derivation and before the overseer, the harness raises the eight from their causes, marked as its own
+(`loop/harness_items.py`): `needs_reviewer` and `ready_to_merge` for a unit whose first row is `green_unreviewed` or
+`approved` (`review_limit` with it at its review limit), `untrusted_review` while that row holds, `attempt_limit` for
+the run a ticket's rows want past its limit, `review_failed` while a PR's latest review run in the state block's window
+failed, and `plan_review` and `plan_changed` from the plans' rows and files. One resting on an observation is recorded
+again, as the latest `ok` tick listed it, while that observation is stale or the derivation raised, and goes once a
+fresh read shows its cause gone or the journal shows a limit lifted; a ticket seen closed or unlabeled, done, or
+stopped holds none. So an outage tick that closes `ok` resolves nothing (#219). The overseer's attention tool and its
+command refuse the eight (`raised`); the prompt records `wait` where a row names one, and its re-recording rule covers
+only its own items; the comparison takes a `wait` beside the harness's item as agreeing; and garbage collection keeps
+the overseer's older rows of the eight as corpus. The derivation now reads untrusted `canopy:review` findings as
+`untrusted_review`, as the prompt's table does. D020 and TRUST_MODEL T1 are edited. Chosen conservatively, for the
+operator to change: a public ticket whose own row is stale, such as every one where no `tracker` source runs, still
+gets its units' items from their fresh PRs, and keeps its plan's and a branchless unit's `attempt_limit`; an
+`attempt_limit` is raised for each unit the rows want resumed, every unit of a `ready` ticket (or the workspace's one
+repository), and every unit on `human_replied`, never for `blocked` or a running ticket; a PR the review query found
+gets its `review_limit` only from the guard, since no source reads its head; a guard's item is held as the overseer's
+is. Left: every other row, each on its measurement; the overseer's three items recorded once and ended by what they
+name; cursors moved by the harness; the prompt cut to the judgment; and the design folded into the sections it
 names. Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations,
 each disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a
 PR (recommended: yes).

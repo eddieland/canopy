@@ -51,6 +51,7 @@ from canopy.loop import (
     gc_pass,
     harness,
     harness_dispatches,
+    harness_items,
     mcp,
     observations,
     phases,
@@ -450,8 +451,9 @@ def _steps(
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
     db.set_tick_read(ctx.conn, tick_id)
     _record_harness_items(ctx, tick_id, archive_unpushed)
+    _record_from_causes(ctx, tick_id, derived, log)
     # Before the overseer, which is then shown only the tickets left to it (DESIGN §37).
-    _harness_decides(ctx, tick_id, derived, log)
+    _harness_decides(ctx, tick_id, derived or [], log)
 
     now = datetime.now(UTC)
     query_due = _query(ctx, tick_id, now, log)
@@ -522,21 +524,21 @@ def _overseer(
     return _run_overseer(ctx, tick_id, rendered.block, rendered.title, dry_run=dry_run, log=log)
 
 
-def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[phases.Derived]:
+def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[phases.Derived] | None:
     """Derive §7's table from what the connectors observed, and record it beside the decisions (DESIGN §30).
 
-    What it raises is logged, never the tick's outcome: the harness then decides nothing, and every ticket is the
-    overseer's.
+    What it raises is logged, never the tick's outcome: the harness then decides nothing, every ticket is the
+    overseer's, and every item the harness holds on an observation is kept.
 
     Returns:
-        What it derived; nothing when it raised.
+        What it derived; None when it raised.
     """
     try:
         derived = phases.derive(ctx, datetime.now(UTC))
         phases.record(ctx.conn, tick_id, derived)
     except Exception as e:
         log.exception("deriving the phases raised", extra={"error": str(e)})
-        return []
+        return None
     stale = sum(d.stale is not None for d in derived)
     log.info("phases derived", extra={"subjects": len(derived), "stale": stale})
     return derived
@@ -639,6 +641,26 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
     if archive_unpushed is not None:
         _harness_item(ctx, tick_id, None, archive.REASON, archive_unpushed)
     _record_git_items(ctx, tick_id)
+
+
+def _record_from_causes(
+    ctx: Context,
+    tick_id: int,
+    derived: Sequence[phases.Derived] | None,
+    log: logs.TickAdapter,
+) -> None:
+    """Record the items the harness raises from their causes, from the tick's derivation `derived` (DESIGN §37).
+
+    What it raises is logged, never the tick's outcome: every such item open is then recorded again as it was listed,
+    so a fault of the harness's drops none.
+    """
+    try:
+        found = harness_items.raised(ctx, derived, datetime.now(UTC))
+    except Exception as e:
+        log.exception("the harness's items from their causes raised", extra={"error": str(e)})
+        found = harness_items.kept(ctx.conn)
+    for item in found:
+        _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail, repo=item.repo, pr=item.pr)
 
 
 def _record_git_items(ctx: Context, tick_id: int) -> None:

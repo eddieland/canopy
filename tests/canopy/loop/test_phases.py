@@ -18,7 +18,7 @@ import pytest
 
 from canopy.core import conversation, db, item_numbers, records, sql
 from canopy.core.config import CANOPY_REVIEWER
-from canopy.core.vocab import NumberedItem, Phase
+from canopy.core.vocab import Decider, NumberedItem, Phase
 from canopy.loop import phases
 from tests.canopy.helpers import KEY, canopy, context, in_tick, seen
 from tests.canopy.observation_helpers import artifact_comment
@@ -505,6 +505,38 @@ def test_a_ticket_agrees_when_the_overseer_set_a_row_that_held_and_decided_what_
         db.set_unit(conn, KEY, str(canopy_env.root), "repo", phase=phase)
         for action in actions:
             db.record_decision(conn, tick_id, KEY, action, "because")
+        phases.record_overseer(conn, tick_id)
+    [compared] = phases.compare(conn, tick_id)
+    assert compared.verdict == verdict, compared.why
+
+
+@pytest.mark.parametrize(
+    ("decided", "verdict"),
+    [
+        ([("wait", Decider.OVERSEER), ("attention:needs_reviewer", Decider.HARNESS)], "agrees"),
+        ([("wait", Decider.OVERSEER)], "disagrees"),
+        ([("attention:needs_reviewer", Decider.OVERSEER)], "agrees"),
+    ],
+    ids=["wait-on-the-harnesss-item", "wait-alone", "the-item-an-older-overseer-recorded"],
+)
+def test_a_wait_agrees_where_the_harness_raised_the_item_the_row_names(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    decided: list[tuple[str, Decider]],
+    verdict: str,
+) -> None:
+    # The harness raises `green_unreviewed`'s item from its cause (DESIGN §37), and the overseer waits on it.
+    unit(canopy_env, conn)
+    with in_tick(conn) as tick_id:
+        recorded(
+            conn,
+            tick_id,
+            phases.Derived(KEY, None, (), candidate=True, closed=False),
+            phases.Derived(KEY, "repo", (phases.Phase.GREEN_UNREVIEWED,)),
+        )
+        db.set_unit(conn, KEY, str(canopy_env.root), "repo", phase=phases.Phase.GREEN_UNREVIEWED)
+        for action, by in decided:
+            db.record_decision(conn, tick_id, KEY, action, "because", decider=by)
         phases.record_overseer(conn, tick_id)
     [compared] = phases.compare(conn, tick_id)
     assert compared.verdict == verdict, compared.why
