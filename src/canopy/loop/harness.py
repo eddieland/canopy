@@ -12,7 +12,8 @@ evidence gate). A row that rests on what a connector observed joins them only by
 the derivation right on it; no switch in config turns one on.
 
 Whatever the overseer records about a ticket the harness decided, through a tool or its command, is refused `decided`
-(`loop.tools`), and the duties check owes it nothing about one (§6).
+(`loop.tools`), and the duties check owes it nothing about one (§6). A cursor the harness moves past what needs no
+handling (`loop.harness_cursors`) is its decision too, `CURSOR_ACTION`, but decides nothing about the ticket.
 """
 
 from __future__ import annotations
@@ -30,6 +31,11 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
     from canopy.loop.phases import Derived
+
+
+#: The decision a cursor the harness moved past what needs no handling is recorded as (`loop.harness_cursors`): its
+#: own, about the ticket, yet no decision of the ticket's, which stays the overseer's.
+CURSOR_ACTION = "cursor"
 
 
 @dataclass(frozen=True)
@@ -102,7 +108,7 @@ def record(conn: sqlite3.Connection, tick_id: int, repo: str, decisions: Iterabl
 
 
 def recorded(conn: sqlite3.Connection, tick_id: int) -> list[records.Decision]:
-    """The decisions the harness recorded about tickets in tick `tick_id`: its own, not the attention items it raises.
+    """The decisions the harness recorded about tickets in tick `tick_id`: not its attention items, nor cursors moved.
 
     Returns:
         Them, in the order they were recorded.
@@ -113,7 +119,7 @@ def recorded(conn: sqlite3.Connection, tick_id: int) -> list[records.Decision]:
         sql.select("*")
         .from_("decisions")
         .where("tick_id = ? AND decider = ? AND ticket_key IS NOT NULL", tick_id, Decider.HARNESS)
-        .where("action NOT LIKE ?", f"{attention.ACTION_PREFIX}%")
+        .where("action NOT LIKE ? AND action != ?", f"{attention.ACTION_PREFIX}%", CURSOR_ACTION)
         .order_by("id"),
     )
 

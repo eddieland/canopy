@@ -127,8 +127,17 @@ gets its units' items from their fresh PRs, and keeps its plan's and a branchles
 `attempt_limit` is raised for each unit the rows want resumed, every unit of a `ready` ticket (or the workspace's one
 repository), and every unit on `human_replied`, never for `blocked` or a running ticket; a PR the review query found
 gets its `review_limit` only from the guard, since no source reads its head; a guard's item is held as the overseer's
-is. Left: every other row, each on its measurement; the overseer's three items recorded once and ended by what they
-name; cursors moved by the harness; the prompt cut to the judgment; and the design folded into the sections it
-names. Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations,
-each disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a
-PR (recommended: yes).
+is. Built (2026-10-25): the sixth bullet's cursors past what needs no handling. Each live tick, after the connectors
+and before the derivation, the harness moves a ticket's `comment` cursor and each unit's `review` cursor across the
+items directly after it that carry the workers' marks or that the operator sent through canopy (and an empty review
+holding only such comments, as GitHub wraps a reply), stopping at the first item that is anything else, never moving
+back; each move is its decision `cursor`, marked as its own, which decides nothing about the ticket
+(`loop/harness_cursors.py`); a dry run moves none. Chosen conservatively, for the operator to change: only a subject
+the block shows fresh moves, a fresh candidate's comments and a fresh PR's reviews, not a stale or unobserved one's;
+a ticket's draft the operator sent is a tracker comment in their name, left to the overseer; and a canopy review run,
+with findings or none, stops the `review` cursor. Left: every other row, each on its measurement; the overseer's three
+items recorded once and ended by what they name; a dispatch's cursors defaulting to what the block showed, and cursors
+moved past what the harness's own decisions handle; the prompt cut to the judgment; and the design folded into the
+sections it names. Open for the operator: the bar a row clears in the measurement (recommended: at least three
+distinct situations, each disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of
+PR labels that hold a PR (recommended: yes).

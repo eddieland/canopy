@@ -47,6 +47,7 @@ from canopy.loop import (
     duties,
     gc_pass,
     harness,
+    harness_cursors,
     harness_dispatches,
     harness_items,
     mcp,
@@ -436,6 +437,8 @@ def _steps(
     drafted.reconcile(ctx, connectors.run(ctx, tick_id, log, dry_run=dry_run).read, log)
     # What moved on a waiting feedback plan's PRs, first seen now: its quiet period runs from the newest (§32).
     feedback_plans.note_moves(ctx.conn, ctx.config)
+    # Before the derivation and the block, so both read each cursor past what needs no handling (DESIGN §37).
+    _harness_cursors(ctx, tick_id, log, dry_run=dry_run)
     derived = _derive(ctx, tick_id, log)
     # Before anything reads a message or a run: the harness items and the state block see at least every message, and
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
@@ -511,6 +514,23 @@ def _overseer(
         return None, None
     # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
     return _run_overseer(ctx, tick_id, rendered.block, rendered.title, dry_run=dry_run, log=log)
+
+
+def _harness_cursors(ctx: Context, tick_id: int, log: logs.TickAdapter, *, dry_run: bool) -> None:
+    """Move the cursors past what needs no handling, a worker's comment and a reply the operator sent (DESIGN §37).
+
+    A dry run moves none (D036). What it raises is logged, never the tick's outcome: what it recorded is undone with it,
+    so every cursor is where the overseer left it.
+    """
+    if dry_run:
+        return
+    try:
+        moved = harness_cursors.record(ctx.conn, tick_id, harness_cursors.moves(ctx, datetime.now(UTC)))
+    except Exception as e:
+        log.exception("the harness's cursor moves raised", extra={"error": str(e)})
+        return
+    if moved:
+        log.info("harness moved cursors", extra={"cursors": [m.rationale() for m in moved]})
 
 
 def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[phases.Derived] | None:

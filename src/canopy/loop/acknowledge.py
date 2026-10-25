@@ -1,8 +1,9 @@
 """What a tick did about the operator's messages, said in each ticket's conversation (DESIGN §22, Messages).
 
 The first `ok` tick to read an operator message on a ticket records a note there, in canopy's words: what it decided
-about the ticket, each decision with its reason. Without it, a message the overseer handled by waiting, or could not
-act on yet, stays the last word in the conversation until a run ends, with nothing saying it was read.
+about the ticket, each decision with its reason, but a cursor the harness moved past what needs no handling. Without
+it, a message the overseer handled by waiting, or could not act on yet, stays the last word in the conversation until a
+run ends, with nothing saying it was read.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, sql
 from canopy.core.items import one_line
+from canopy.loop import harness
 
 if TYPE_CHECKING:
     import sqlite3
@@ -56,7 +58,8 @@ def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:
     read: defaultdict[str, list[int]] = defaultdict(list)
     for row in rows:
         read[str(row["subject_id"])].append(int(row["id"]))
-    decisions = db.decisions_for_tick(conn, tick_id)
+    # A cursor the harness moved decided nothing about the ticket, so the note leaves it out.
+    decisions = [d for d in db.decisions_for_tick(conn, tick_id) if d.action != harness.CURSOR_ACTION]
     return {
         key: conversation.note(
             conn,

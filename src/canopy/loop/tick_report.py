@@ -16,7 +16,7 @@ from rich.table import Table
 from rich.text import Text
 
 from canopy.core import db, pause
-from canopy.loop import attention, duties, loop_view, phases
+from canopy.loop import attention, duties, harness, loop_view, phases
 
 if TYPE_CHECKING:
     from collections import Counter
@@ -27,9 +27,9 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.loop import tick
 
-#: Decisions every tick repeats, and an older tick's copies of tracker comments. The tick's summary counts them;
-#: `canopy decisions` lists them.
-_QUIET_ACTIONS = ("wait", "mirror", duties.QUERIED_ACTION)
+#: Decisions every tick repeats, an older tick's copies of tracker comments, and the cursors the harness moved past what
+#: needs no handling. The tick's summary counts them; `canopy decisions` lists them.
+_QUIET_ACTIONS = ("wait", "mirror", duties.QUERIED_ACTION, harness.CURSOR_ACTION)
 #: How a terminal draws each tick status.
 _STATUS_STYLES = {
     "ok": "bold green",
