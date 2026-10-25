@@ -118,12 +118,15 @@ Sprig starts off and the rest starts on. None of it does anything useful, by des
   **Ghost**, in the row under the checkboxes, puts a Destiny Ghost in its place and turns it on: it floats around
   Sprig's corner of the rail, its light swelling and dimming, with a tip for every page in a voice of its own, and
   helps exactly as much. **Sprig** there brings Sprig back. The checkbox takes the name of whoever is sitting there.
-  Sprig keeps the hats.
+  Sprig keeps the hats; the Ghost gets shells.
 - **Quips**: a worker run's row in the rail says what it's doing as a quip, `planning in pencil`, instead of plain
   `planning`. Each ticket keeps its quip for a phase and gets a new one with the next, in every tab, so nothing
   changes its story while you watch. A run waiting on you gets the plain words; it isn't doing anything. Hover a
   quip for the plain words too.
 - **The hat shop**: every dollar canopy spends is a dollar towards Sprig's hats. All sales are final.
+- **The shell shop**: the same dollars dress the Ghost. It comes in a Generalist Shell and always wears one, so a
+  shell comes off only for another. The Sprig Shell is for anyone who wanted both and couldn't choose. One wallet
+  pays for both shops, so a crown and a Vex Shell are a real decision.
 
 The switch in the panel's header does exactly what you'd fear. Sprig, if it's on, brought glow sticks.
 

@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { CSSProperties, RefObject } from 'react'
 
+import { ShellCrest, ShellEye, ShellPlates, ShellRing } from '@/components/ghost-shell'
 import { HatDrawing } from '@/components/hat'
 import { useFits } from '@/hooks/use-fits'
 import { NAMES, nextTip, setBuddy, tipsFor, typeBurst, useCompanion } from '@/lib/buddy'
@@ -10,6 +11,8 @@ import type { Companion, View } from '@/lib/buddy'
 import { useWardrobe } from '@/lib/hats'
 import type { HatId } from '@/lib/hats'
 import { onRaveStart, useRave } from '@/lib/rave'
+import { useVault } from '@/lib/shells'
+import type { ShellId } from '@/lib/shells'
 import { cn } from '@/lib/utils'
 import type { FileRoutesById } from '@/routeTree.gen'
 
@@ -80,6 +83,7 @@ export function Buddy() {
     }))
     const [slot, room] = useFits(roomFor)
     const { worn } = useWardrobe()
+    const shell = useVault().worn
     // Offers the next tip, about the view on screen or the rave, never the one just offered.
     const offerNext = (asked: boolean, raving: boolean) =>
         setOffer({
@@ -158,7 +162,7 @@ export function Buddy() {
                     )}
                 >
                     {companion === 'ghost' ? (
-                        <GhostFigure cue={offer.n} rave={rave} />
+                        <GhostFigure cue={offer.n} rave={rave} shell={shell} />
                     ) : (
                         <Figure cue={offer.n} hat={worn} rave={rave} />
                     )}
@@ -377,100 +381,27 @@ function useEyesOnPointer(figure: RefObject<SVGSVGElement | null>, most: number)
     }, [figure, most])
 }
 
-/** Where the Ghost's eye sits in its drawing, which its shell turns about. */
-const GHOST_CENTER = { x: 24, y: 40 }
 /**
- * One of the Ghost's four great plates, pointing up from its eye: a pyramid seen from the front, its lit facet left of
- * the ridge and its shaded one right, notched where the ridge meets the eye.
+ * The Ghost that may sit in Sprig's place, in the shell it wears (bought in Settings; src/components/ghost-shell.tsx):
+ * four great plates around one glowing eye, four lesser ones behind them on the diagonals, floating around its spot
+ * over its shadow, leaning as it goes. Its light swells and dims, and flares with each new tip. The eye blinks now and
+ * then and looks toward the pointer, and the great plates spread a little with each tip, as a Ghost's do when it talks.
+ * While the lightswitch rave is on, its shell turns a quarter on each beat of the lights, and its light swells in time.
+ * Under reduced motion all of it holds still.
  */
-const PLATE = { lit: 'M0 -24 L-9 -10 L0 -12.5 Z', shaded: 'M0 -24 L0 -12.5 L9 -10 Z' }
-/** One of its four lesser plates, behind the great ones on the diagonals, all in shade. */
-const SPIKE = 'M0 -20 L-5 -9 L5 -9 Z'
-
-/**
- * The Ghost that may sit in Sprig's place: a Generalist Shell, four great faceted plates around one glowing eye, four
- * lesser ones behind them on the diagonals, floating around its spot over its shadow, leaning as it goes. Its light
- * swells and dims, and flares with each new tip. The eye blinks now and then and looks toward the pointer, and the
- * great plates spread a little with each tip, as a Ghost's do when it talks. While the lightswitch rave is on, its
- * shell turns a quarter on each beat of the lights, and its light swells in time. Under reduced motion all of it
- * holds still.
- */
-function GhostFigure({ cue, rave }: { cue: number; rave: boolean }) {
+function GhostFigure({ cue, rave, shell }: { cue: number; rave: boolean; shell: ShellId }) {
     const figure = useRef<SVGSVGElement>(null)
     useEyesOnPointer(figure, 1.8)
-    const at = (turn: number) => `translate(${GHOST_CENTER.x} ${GHOST_CENTER.y}) rotate(${turn})`
     return (
         <svg ref={figure} viewBox="0 -6 48 92" className="h-24 w-[3.25rem] overflow-visible" aria-hidden>
             <g className="animate-ghost-wander">
                 <ellipse cx="24" cy="76" rx="11" ry="2" className="animate-ghost-shadow fill-buddy-ghost-facet/30" />
                 <g data-testid="ghost-body" className="animate-ghost-float">
                     <g className="animate-ghost-lean">
-                        <g data-testid="ghost-shell" className={cn(rave && 'animate-ghost-spin')}>
-                            {[45, 135, 225, 315].map((turn) => (
-                                <path
-                                    key={turn}
-                                    d={SPIKE}
-                                    transform={at(turn)}
-                                    strokeWidth="0.6"
-                                    strokeLinejoin="round"
-                                    className="fill-buddy-ghost-facet stroke-buddy-ghost-facet"
-                                />
-                            ))}
-                            {[0, 90, 180, 270].map((turn) => (
-                                <g key={turn} transform={at(turn)}>
-                                    <g key={cue} className="animate-ghost-talk">
-                                        <path
-                                            d={PLATE.lit}
-                                            strokeWidth="0.6"
-                                            strokeLinejoin="round"
-                                            className="fill-buddy-ghost-shell stroke-buddy-ghost-facet"
-                                        />
-                                        <path
-                                            d={PLATE.shaded}
-                                            strokeWidth="0.6"
-                                            strokeLinejoin="round"
-                                            className="fill-buddy-ghost-facet stroke-buddy-ghost-facet"
-                                        />
-                                    </g>
-                                </g>
-                            ))}
-                        </g>
-                        <circle cx={GHOST_CENTER.x} cy={GHOST_CENTER.y} r="9.5" className="fill-buddy-ghost-facet" />
-                        <g className="animate-buddy-blink">
-                            <g data-eye>
-                                <circle
-                                    data-testid="ghost-glow"
-                                    cx={GHOST_CENTER.x}
-                                    cy={GHOST_CENTER.y}
-                                    r="7"
-                                    fillOpacity="0.35"
-                                    className={cn(
-                                        'fill-buddy-ghost-eye',
-                                        rave ? 'animate-ghost-glow-rave' : 'animate-ghost-glow',
-                                    )}
-                                />
-                                <circle
-                                    key={cue}
-                                    cx={GHOST_CENTER.x}
-                                    cy={GHOST_CENTER.y}
-                                    r="7"
-                                    className="animate-ghost-flare fill-buddy-ghost-eye"
-                                />
-                                <circle
-                                    cx={GHOST_CENTER.x}
-                                    cy={GHOST_CENTER.y}
-                                    r="4.6"
-                                    className="animate-ghost-light fill-buddy-ghost-eye"
-                                />
-                                <circle
-                                    data-pupil
-                                    cx={GHOST_CENTER.x}
-                                    cy={GHOST_CENTER.y}
-                                    r="2"
-                                    className="fill-buddy-ghost-core"
-                                />
-                            </g>
-                        </g>
+                        <ShellPlates id={shell} cue={cue} rave={rave} />
+                        <ShellCrest id={shell} />
+                        <ShellRing id={shell} />
+                        <ShellEye id={shell} cue={cue} rave={rave} />
                     </g>
                 </g>
             </g>
