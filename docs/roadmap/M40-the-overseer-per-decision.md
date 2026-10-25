@@ -67,7 +67,8 @@ missed, checked against the derivation as in M36.
 Status: in progress. Designed 2026-10-24 (DESIGN §40). Stage 1 built 2026-10-24 against the fakes, ahead of M39 at
 the operator's word: every dispatch, review, revision, and chore run the overseer asks for is recorded at the ask
 (`recorded_runs`) and started by the tick after its run, with the harness's own, so `canopy _mcp` no longer spawns
-through an intermediate. Chosen conservatively, for the operator to change: a run's decision recorded as it starts,
+through an intermediate, and config takes a `canopy-sandbox` prefix on `overseer_cmd` (#454, 2026-10-25). Chosen
+conservatively, for the operator to change: a run's decision recorded as it starts,
 not at the ask; the tick's spawns all after its last run; within a rank of §7's order the harness's first, and every
 chore after every run, the overseer's before the harness's; and a run's model looked up again at the spawn, so the
 runtime's list is read twice. Left: stage 1's live check, and stage 2, whose build waits on M39 and is taken only if
