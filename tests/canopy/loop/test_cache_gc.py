@@ -14,6 +14,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.infra import lock
 from canopy.loop import cache_gc
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv, GitPool
@@ -117,6 +118,26 @@ def test_gc_caches_skips_every_cache_when_it_cannot_read_the_runs(
     assert (caches / "worker" / "npm" / "_cacache" / "blob").exists()
 
 
+def test_gc_caches_empties_the_overseers_cache_only_between_ticks(
+    canopy_env: CanopyEnv,
+    caches: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The overseer's runs are ticks: its cache goes under the tick lock, never while a tick holds it."""
+    fill(caches / "overseer" / "opencode", 20)
+
+    with lock.hold(canopy_env.state_dir / lock.LOCK_FILE_NAME):
+        assert main(["gc", "--caches"]) == 0
+    printed = capsys.readouterr().out
+    assert "overseer: skipped: a tick is running, whose overseer may be using it; run it again later" in printed
+    assert "worker: emptied: 300 B freed" in printed
+    assert (caches / "overseer" / "opencode" / "blob").exists()
+
+    assert main(["gc", "--caches"]) == 0
+    assert "overseer: emptied: 20 B freed" in capsys.readouterr().out
+    assert list((caches / "overseer").iterdir()) == []
+
+
 def test_gc_caches_says_when_there_is_no_cache(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     with mock.patch.dict(os.environ, {"XDG_CACHE_HOME": str(canopy_env.home / "none")}):
         assert main(["gc", "--caches"]) == 0
@@ -127,6 +148,7 @@ def test_every_role_of_the_wrappers_has_the_runs_that_start_as_it() -> None:
     assert set(cache_gc.ROLE_TABLES) == set(canopy_sandbox.ROLES) == set(canopy_sandbox.CACHES)
     assert {name: cache_gc.tables_of(name) for name in sorted(set(canopy_sandbox.CACHES.values()))} == {
         "chore": ("chore_runs",),
+        "overseer": (),
         "review": ("review_runs",),
         "worker": ("runs", "task_runs"),
     }

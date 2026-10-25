@@ -3,9 +3,11 @@
 The wrapper gives every sandboxed run its role's cache directory, `$XDG_CACHE_HOME/canopy/sandbox/<cache>/`, setup
 sharing the worker's, and nothing else ever empties one. This removes what is in each, leaving the directory, which
 the wrapper keeps as it made it. A cache goes only while no run that could be using it is live, under the dispatch
-lock, which every run's start takes, so none starts while its cache is emptied; a dispatch waits for it. A cache canopy
-cannot match to its runs, or whose runs it cannot read, is left as it is. Nothing is followed through a link, so
-nothing outside a cache directory is removed, the operator's own caches included. The loop never runs it on its own.
+lock, which every run's start takes, so none starts while its cache is emptied; a dispatch waits for it. The overseer's
+goes only while no tick runs, under the tick lock, which a tick holds for its whole life; a tick that starts meanwhile
+is skipped as busy. A cache canopy cannot match to its runs, or whose runs it cannot read, is left as it is. Nothing is
+followed through a link, so nothing outside a cache directory is removed, the operator's own caches included. The loop
+never runs it on its own.
 """
 
 from __future__ import annotations
@@ -34,13 +36,17 @@ if TYPE_CHECKING:
 Outcome = Literal["emptied", "skipped", "failed"]
 
 #: The run tables whose runs start in the wrapper as each role (DESIGN §24): a worker or plan run's agent as `worker`
-#: and its `setup_cmd` as `setup`, a task's agent as `worker`, a chore's as `chore`, and a review's as `review`.
+#: and its `setup_cmd` as `setup`, a task's agent as `worker`, a chore's as `chore`, and a review's as `review`. The
+#: overseer's runs are ticks, in no run table: `TICK_ROLES` says how its cache is held.
 ROLE_TABLES: Mapping[str, tuple[RunTable, ...]] = {
     "worker": ("runs", "task_runs"),
     "setup": ("runs",),
     "chore": ("chore_runs",),
     "review": ("review_runs",),
+    "overseer": (),
 }
+#: The roles that run only inside a tick, whose cache goes only while canopy holds the tick lock.
+TICK_ROLES = frozenset({"overseer"})
 
 
 @dataclass(frozen=True)
@@ -67,7 +73,7 @@ def empty(ctx: Context) -> list[Emptied]:
     done: list[Emptied] = []
     for entry in _entries(root):
         with lock.hold(ctx.dispatch_lock_path, wait=True):
-            result = _empty_one(ctx.conn, entry)
+            result = _between_ticks(ctx, entry) if _in_ticks(entry.name) else _empty_one(ctx.conn, entry)
         log.info(
             "sandbox cache",
             extra={"cache": result.cache, "outcome": result.outcome, "detail": result.detail, "freed": result.freed},
@@ -86,6 +92,29 @@ def tables_of(cache: str) -> tuple[RunTable, ...] | None:
     if not roles or any(role not in ROLE_TABLES for role in roles):
         return None
     return tuple(dict.fromkeys(table for role in roles for table in ROLE_TABLES[role]))
+
+
+def _in_ticks(cache: str) -> bool:
+    """Whether a role that runs inside a tick caches in the directory named `cache`.
+
+    Returns:
+        True for the overseer's.
+    """
+    return any(role in TICK_ROLES for role, name in canopy_sandbox.CACHES.items() if name == cache)
+
+
+def _between_ticks(ctx: Context, directory: Path) -> Emptied:
+    """Empty `directory`, the overseer's cache, under the tick lock, or skip it while a tick holds that.
+
+    Returns:
+        What `_empty_one` did, or `skipped` while a tick runs.
+    """
+    try:
+        with lock.hold(ctx.lock_path):
+            return _empty_one(ctx.conn, directory)
+    except lock.LockBusyError:
+        busy = "a tick is running, whose overseer may be using it; run it again later"
+        return Emptied(directory.name, "skipped", busy)
 
 
 def _entries(root: Path) -> list[Path]:

@@ -443,7 +443,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - The harness never learns whether a run is sandboxed, beyond adding the prefix itself for a repository the private
   `runtime.sandbox_repos` names (the operator's ask, 2026-10-23); it passes only `CANOPY_GIT_OBJECTS`, which an
-  unsandboxed run ignores. Every agent command but the overseer's can be wrapped: the overseer needs what it denies.
+  unsandboxed run ignores. Every agent command can be wrapped; the overseer's only once the tick starts every run it
+  asks for (DESIGN §40), and its role writes, of the state, the journal's files alone.
 - What the harness runs on the host after a run (git, treehouse) reads nothing a sandboxed run can write (TRUST_MODEL
   T4): a new step in a slot keeps D107's flags and runs after `_run`'s link and `commondir` check.
 - Revisit: making it the default, once the canary passes on the operator's machines and a day of sandboxed runs.

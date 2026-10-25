@@ -41,7 +41,8 @@ Non-goals:
   tools, not a targeted attacker with a local privilege escalation.
 - Hiding from the worker the credentials it legitimately needs (the model API key, the MCP tokens, git push). Scoping
   those is a separate step (§8).
-- Sandboxing the overseer (§4.4).
+- Sandboxing the overseer (§4.4). It has since got a role of its own, `overseer`, which canopy refuses on
+  `overseer_cmd` until the tick starts every run the overseer asks for (DESIGN §24, §40).
 - Remote or multi-machine workers.
 
 ## 3. Options

@@ -819,6 +819,20 @@ class Runtime(Section):
                 )
         return self
 
+    @model_validator(mode="after")
+    def _overseer_unwrapped(self) -> Runtime:
+        # Until the tick starts every run the overseer asks for (DESIGN §40), a dispatch starts its run from inside the
+        # overseer's process tree: in its sandbox, the run, its setup, and the harness's git would inherit the policy,
+        # and end when the overseer does. Lifted by the change that makes the tick start them.
+        words = shlex.split(self.overseer_cmd)
+        if words and Path(words[0]).name == SANDBOX_WRAPPER:
+            raise ValueError(
+                f"runtime.overseer_cmd starts with {SANDBOX_WRAPPER}, which canopy does not run yet: the runs the "
+                "overseer starts would start inside its sandbox and end with it (DESIGN §40). Leave overseer_cmd "
+                "unwrapped",
+            )
+        return self
+
     def worker_template(self, template: str) -> str:
         """Return `template`, one of a worker run's commands, between `worker_cmd_prefix` and `worker_cmd_suffix`.
 

@@ -17,7 +17,8 @@ inherit its sandbox.
   asks serialized through the record as they are through the spawn today.
 - The tick spawns every recorded run once the overseer's run ends, with the harness's own dispatches, in §7's order,
   each under every guard again; a refusal then is recorded like any other. Then it leases and `_run` starts as before.
-  `canopy _mcp`'s spawn through an intermediate (M48) goes, since no run is the server's descendant.
+  `canopy _mcp`'s spawn through an intermediate (M48) goes, since no run is the server's descendant, and so does
+  config's refusal of a `canopy-sandbox` prefix on `overseer_cmd`, which waits on this (#454).
 - A recorded run belongs to its tick: one not spawned by the tick's close, or by its process's death, is closed
   unstarted then or by the next tick's step 2, counting toward no limit, never spawned by a later tick. A dry run
   records and spawns none.
