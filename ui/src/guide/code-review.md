@@ -129,7 +129,61 @@ forward, each with the line its bug was on, and a few you know are clean. `canop
 its commit and reports how many of the bugs it found and how many alarms it raised on the clean ones; `--persona` and
 `--model` try something else on the same cases. Run it when you change the reviewer's prompt, persona, or model, before
 you decide the change helped. It's a measurement, not a gate: nothing it finds reaches the loop, and each result lands
-in `.canopy/review-evals/` with what it ran on, so the next run has a number to beat.
+in `.canopy/review-evals/` with what it ran on, so the next run has a number to beat. [Adding eval
+cases](#adding-eval-cases) says how to pick them.
+
+## Adding eval cases
+
+An eval case is a real PR at a real commit, not one made up for the test. That's the point: a bug planted to be found
+is the kind a reviewer finds, and the ones worth measuring are the ones that got past people. Your history already
+holds them, in every revert and every "fix:" that names a PR.
+
+A case is a table in `.canopy/config.toml`, the workspace's private config. Nowhere else will take one, since a case
+asks for a review of a PR as `review.query` does:
+
+```toml
+[[review.eval_cases]]
+name = "retry-forever"
+pr = "https://github.com/acme/api/pull/412"
+repo = "api"
+sha = "3f9c2e..."     # the PR's head as it merged, all 40 characters
+base = "a71d04..."    # where it left main
+kind = "bug"
+lines = ["src/retry.py:42", "src/retry.py:57-61"]
+```
+
+- **`name`** names the case's files and `canopy review eval --case NAME`: lowercase letters, digits, and dashes.
+- **`sha`** is the commit the reviewer reads, the PR's head as it merged, or as it stood when the bug was in it.
+  canopy fetches it from origin, so it has to be a commit origin still has; GitHub keeps a PR's commits after its
+  branch is deleted.
+- **`base`** is where the PR left its base branch. A merged PR's commit is on main now, so `git merge-base SHA main`
+  gives back the commit itself; ask the main it landed on instead, `git merge-base SHA LANDED^`, where `LANDED` is
+  its merge or squash commit. Pinning it means every eval of the case reads the same diff.
+- **`lines`**, for a bug, is where the bug is, as `path:line` or `path:first-last` from the repository's root,
+  numbered as the file stood at `sha`, not after the fix. The fix's diff shows you where to look. A finding within 3
+  lines of any one of them finds the bug, so name every spot a fair reviewer might point to, and nothing else.
+
+A **clean** case has `kind = "clean"` and no `lines`, and every finding on it counts as a false alarm. Pick PRs that
+have run in production for a while without a revert or a fix, and that look like they might not have: a clean case
+that's a one-line docs change tests nothing.
+
+Some habits make the score mean something:
+
+- **Keep both kinds.** Bugs alone reward a reviewer that flags everything; clean cases alone reward one that says
+  nothing.
+- **Mix the shapes.** Small and large PRs, more than one repository, and the parts of the code you'd least like a bug
+  in. Five bugs that are all off-by-ones measure the reviewer on off-by-ones.
+- **Mind the thread.** The reviewer reads the PR's description and comments, so a PR whose thread ends "this broke
+  prod, reverting" hands it the answer. Prefer cases whose conversation doesn't, or expect a flattering score.
+- **Start small.** Each case is a full review, on your spend, so a handful of each kind is plenty to begin with.
+
+Check a new case with `canopy review eval --dry-run`, which lists every case and flags one whose repository canopy
+doesn't know or hasn't cloned, then `canopy review eval --case NAME` to review it alone. Run evals while the loop is
+idle: an eval leases slots from the loop's pools, and a case the review guards refuse (the daily limit, review
+capacity, `max_workers`) is skipped, not scored.
+
+If you don't have history yet, a PR you open on purpose with a bug you know about works the same way. Score it lower in
+your own head, though: you wrote that bug knowing it would be looked for.
 
 ## Review has to converge
 
@@ -189,6 +243,6 @@ you're about to sign.
 
 Something will get through. When it does, ask what the reviewer didn't have in front of it, and put the answer where
 the next review will read it: a rule in `AGENTS.md` or `REVIEW.md`, a test, or a lint rule. Then add the PR as a bug
-case, so the next eval says whether the rule worked ([Measure the noise](#measure-the-noise)). A [chore](chores) can
+case, so the next eval says whether the rule worked ([Adding eval cases](#adding-eval-cases)). A [chore](chores) can
 read your existing code through GitHub on a schedule, too, and report the old bugs no PR's review was ever going to
 look at.
