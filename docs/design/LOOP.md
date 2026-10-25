@@ -220,11 +220,13 @@ cursor. Its PR phases are as above.
 Cursors (`comment`, `review`, `ci`, and a private ticket's `message`) hold the newest item of each kind the loop has
 handled; "newer than cursor" means not handled yet. The comment cursor is the ticket's; the review and ci cursors are
 each unit's, so a dispatch that carries one names exactly one repository. A dispatch carries the cursors of what it
-handles (§8), so they advance only if the worker starts; items handled otherwise advance with `canopy ticket set`. A
-`resume` moves each cursor of its reasons it leaves out to the newest item of that kind the block showed, short of the
-first the checks above would refuse it to cover, on a public ticket and from fresh observations alone; the overseer
-passes one to stop shorter (§37). A review comment waiting on a human is not advanced past. A cursor but `message` is
-a journal number: each comment, review, review comment, and completed check run takes the next one when a source first
+handles (§8), so they advance only if the worker starts; items handled otherwise advance with `canopy ticket set`, and
+the harness passes those that need no handling directly after a cursor, a worker's comment and a reply the operator
+sent, as its own decision (§37). A `resume` moves each cursor of its reasons it leaves out to the newest item of that
+kind the block showed, short of the first the checks above would refuse it to cover, on a public ticket and from fresh
+observations alone; the overseer passes one to stop shorter (§37). A review comment waiting on a human is not advanced
+past. A cursor but `message` is a journal number: each comment, review, review comment, and completed check run takes
+the next one when a source first
 observes it, and keeps it across reads, and a canopy review run takes one when it ends. So "newer" is one order for
 every kind, and a re-run at the same head is new. Rejected: the source's ids, which no tracker orders, and times, which
 a late submission backdates. The `comment` cursor of a ticket no tracker source observes stays the tracker's comment

@@ -14,10 +14,11 @@ in §7. The rows enabled are those read from the journal alone: `wait` for `runn
 observation. Of the attention list held in code, built: the items the harness raises from their causes, in §14, which
 the overseer is refused (`raised`); and the overseer's items held through a tick that does not give the overseer their
 subject, until one that does leaves them out or the ticket is done or stopped (§14), so a ticket with one is the
-harness's for a `wait`, though not for a run. Of what the overseer is left, built: a dispatch's default cursors, for
-a `resume` of a public ticket, read from fresh observations. The rest, from the overseer's three items on, is
-designed, not built. Until it is, §8, §21, and TRUST_MODEL describe canopy as it is; this section says what changes,
-and the PR that finishes it changes those sections and cuts this one to what is left.
+harness's for a `wait`, though not for a run. Of the cursors, built: the harness's moves past what needs no handling,
+and a dispatch's default cursors, for a `resume` of a public ticket, read from fresh observations (What the overseer is
+left). The rest, from the overseer's three items on, is designed, not built. Until it is, §8, §21, and TRUST_MODEL
+describe canopy as it is; this section says what changes, and the PR that finishes it changes those sections and cuts
+this one to what is left.
 
 Once the overseer reads the journal (§30), most of what it decides follows from the observations alone: applied by
 hand, §7's rows that are facts agreed with it on all but six of 943 decisions, and an overseer given only the tickets
