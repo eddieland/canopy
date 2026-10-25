@@ -203,7 +203,8 @@ text runs nothing.
   naming what it is about, with every item a reply under it; chores' results stay in the channel. The threads are the
   sink's own state, never in canopy's journal; a retry after a partial delivery posts only the rest.
 - Journal text is escaped for Slack markup and every text object is `verbatim`, so no `@here`, mention, or disguised
-  link gets through. A web UI page canopy sent is linked under the sink's own word, `open`, only if it is a plain URL.
+  link gets through. A web UI page canopy sent is linked under the sink's own word, `open`, only if it is a plain URL;
+  a GitHub PR's link shows only the `owner/repo#N` its own URL spells.
 
 Lint keeps the network out of the harness, as D015 keeps processes in one module: `urllib.request`, `http.client`, and
 `socket` are banned everywhere in `src/canopy`, and so is any import of the Slack sink.

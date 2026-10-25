@@ -40,7 +40,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -270,7 +270,10 @@ def _lines(value: object) -> list[str]:
 
 
 def render(message: Mapping[str, object]) -> str:
-    """Return the Slack text for one canopy `json` message: a header with counts, a line per item or event, a digest.
+    """Return the Slack text for one canopy `json` message, what Slack shows in a notification.
+
+    A line naming the repository with counts, then a line per item or event, each as its block's first line shows it,
+    and a digest. A message of one item or event leads with it, so the notification says what happened.
 
     Returns:
         The escaped text, its lines joined by newlines, at most 45 lines, the last saying how many were left out.
@@ -285,22 +288,19 @@ def render(message: Mapping[str, object]) -> str:
         if added or resolved:
             counts.append(f"{len(added)} new, {len(resolved)} resolved, {attention.get('open', 0)} open")
         for a in added:
-            what = _named(_subject(a.get("ticket"), a.get("repo")), a.get("title"))
-            lines.append(f"+ {what} · {_reason(a.get('reason'))}: {escape(a.get('detail'))}")
-        lines += [
-            f"- {_named(_subject(r.get('ticket'), r.get('repo')), r.get('title'))} · {_reason(r.get('reason'))}"
-            + (" (dismissed)" if r.get("dismissed") is True else "")
-            for r in resolved
-        ]
+            what = _added_shown(a).lines[0]
+            lines.append(f"{what}: {escape(a.get('detail'))}" if a.get("detail") else what)
+        lines += [_resolved(r) for r in resolved]
     events = _dicts(message.get("events"))
     if events:
         counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
-    # Each event's first line as its block shows it, so a notification reads as the message does.
-    lines += [_event_lines(e)[0] for e in events]
+    lines += [_event_shown(e).lines[0] for e in events]
     omitted = message.get("omitted")
+    digest = message.get("digest")
+    if len(lines) == 1 and not omitted and not isinstance(digest, dict):
+        return "\n".join([lines[0], f"*canopy* · {escape(repo)}"])
     if isinstance(omitted, int) and omitted:
         lines.append(f"_... and {omitted} more: see `canopy status`_")
-    digest = message.get("digest")
     if isinstance(digest, dict):
         counts.append("digest")
         lines += ["", "*Digest*", *(escape(line) for line in _lines(digest.get("lines")))]
@@ -351,8 +351,23 @@ _STATUS_EMOJI = {
     "stopped": ":octagonal_sign:",
 }
 
+# A pull request on GitHub, which its link shows by the name its own URL spells, `acme/api#7`: an owner, a repository,
+# and a number, in characters that need no escaping, so the label cannot say anything the URL does not.
+_GITHUB_PR = re.compile(r"https://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/pull/([0-9]{1,10})/?")
+
 type Block = dict[str, object]
 _DIVIDER: Block = {"type": "divider"}
+
+
+@dataclass(frozen=True)
+class _Shown:
+    """One attention item or event as the message shows it."""
+
+    #: Its lines, the first naming what happened, each escaped; an empty one is left out.
+    lines: Sequence[str]
+    #: What only adds to it, such as how long it has been open or which branch a run is on: in smaller type under the
+    #: lines, each part escaped; an empty one is left out.
+    aside: Sequence[str] = ()
 
 
 def _mrkdwn(text: str) -> Block:
@@ -431,6 +446,19 @@ def _with_open(first: str, page: object) -> str:
     return f"{first} · {link}" if link else first
 
 
+def _pr(url: object) -> str:
+    """A link to a pull request: one on GitHub shows the name its URL spells, `acme/api#7`; another shows its URL.
+
+    Returns:
+        The Slack link, or `url` as `_linked` shows text when it is no GitHub PR.
+    """
+    text = str(url)
+    if (match := _GITHUB_PR.fullmatch(text)) is None:
+        return _linked(text)
+    owner, repo, number = match.groups()
+    return f"<{text}|{owner}/{repo}#{number}>"
+
+
 def _when(at: object) -> str:
     """`at`, an ISO time, as a Slack date in the reader's own time zone, falling back to `at` as written.
 
@@ -472,25 +500,29 @@ def _counted(counts: object) -> str:
     return ", ".join(f"{escape(v)} {_reason(k)}" for k, v in ordered)
 
 
-def _run_started(e: Mapping[str, object]) -> list[str]:
-    return [
-        (
-            f":arrow_forward: {_named(e.get('ticket'), e.get('title'))} · {escape(e.get('run_kind'))} run "
-            f"{escape(e.get('run'))} started"
-        ),
-        f"attempt {escape(e.get('attempt'))} of {escape(e.get('limit'))} on `{escape(e.get('branch') or '-')}`",
-    ]
+def _run_started(e: Mapping[str, object]) -> _Shown:
+    return _Shown(
+        [
+            (
+                f":arrow_forward: {_named(e.get('ticket'), e.get('title'))} · {escape(e.get('run_kind'))} run "
+                f"{escape(e.get('run'))} started"
+            ),
+        ],
+        [f"attempt {escape(e.get('attempt'))} of {escape(e.get('limit'))}", f"`{escape(e.get('branch') or '-')}`"],
+    )
 
 
-def _run_ended(e: Mapping[str, object]) -> list[str]:
+def _run_ended(e: Mapping[str, object]) -> _Shown:
     prs = _lines(e.get("prs")) or ([str(e["pr"])] if e.get("pr") else [])
     run = f"{escape(e.get('run_kind'))} run {escape(e.get('run'))}"
-    return [
-        _ended(e, f"{_named(e.get('ticket'), e.get('title'))} · {run}"),
-        *(_linked(pr) for pr in prs),
-        _linked(e.get("summary")) if e.get("summary") else "",
-        _quote("Question", e.get("question")),
-    ]
+    return _Shown(
+        [
+            _ended(e, f"{_named(e.get('ticket'), e.get('title'))} · {run}"),
+            " · ".join(_pr(pr) for pr in prs),
+            _linked(e.get("summary")) if e.get("summary") else "",
+            _quote("Question", e.get("question")),
+        ],
+    )
 
 
 def _findings(count: object) -> str:
@@ -499,25 +531,28 @@ def _findings(count: object) -> str:
     return f"{escape(count)} finding{'s' if count != 1 else ''}"
 
 
-def _plan_proposed(e: Mapping[str, object]) -> list[str]:
-    return [
-        f":clipboard: {_named(e.get('ticket'), e.get('title'))} · plan {escape(e.get('plan'))} waits on your approval",
-        f"_read it with_ `canopy show {escape(e.get('ticket'))}`",
-    ]
+def _plan_proposed(e: Mapping[str, object]) -> _Shown:
+    what = f"{_named(e.get('ticket'), e.get('title'))} · plan {escape(e.get('plan'))}"
+    return _Shown(
+        [f":clipboard: {what} waits on your approval"],
+        [f"read it with `canopy show {escape(e.get('ticket'))}`"],
+    )
 
 
-def _plan_approved(e: Mapping[str, object]) -> list[str]:
+def _plan_approved(e: Mapping[str, object]) -> _Shown:
     which = "feedback plan" if e.get("feedback") is True else "plan"
-    return [
-        (
-            f":ballot_box_with_check: {_named(e.get('ticket'), e.get('title'))} · {which} {escape(e.get('plan'))} "
-            "approved by its planner"
-        ),
-        _quote("Why", e.get("reason")),
-    ]
+    return _Shown(
+        [
+            (
+                f":ballot_box_with_check: {_named(e.get('ticket'), e.get('title'))} · {which} {escape(e.get('plan'))} "
+                "approved by its planner"
+            ),
+            _quote("Why", e.get("reason")),
+        ],
+    )
 
 
-def _follow_ups_filed(e: Mapping[str, object]) -> list[str]:
+def _follow_ups_filed(e: Mapping[str, object]) -> _Shown:
     given = e.get("follow_ups")
     filed: list[tuple[str, object]] = [(str(k), v) for k, v in given.items()] if isinstance(given, dict) else []
     count = e.get("count")
@@ -525,95 +560,105 @@ def _follow_ups_filed(e: Mapping[str, object]) -> list[str]:
     named = [f"*{escape(k)}*" + (f" ({escape(v)})" if v else "") for k, v in filed]
     if total > len(filed):
         named.append(f"{total - len(filed)} more")
-    return [
-        (
-            f":seedling: {_named(e.get('ticket'), e.get('title'))} · run {escape(e.get('run'))} filed {total} "
-            f"follow-up{'s' if total != 1 else ''}"
-        ),
-        ", ".join(named),
-        "_label or `canopy start` each one you want worked_",
-    ]
+    return _Shown(
+        [
+            (
+                f":seedling: {_named(e.get('ticket'), e.get('title'))} · run {escape(e.get('run'))} filed {total} "
+                f"follow-up{'s' if total != 1 else ''}"
+            ),
+            ", ".join(named),
+        ],
+        ["label or `canopy start` each one you want worked"],
+    )
 
 
-def _task_ended(e: Mapping[str, object]) -> list[str]:
+def _task_ended(e: Mapping[str, object]) -> _Shown:
     head = str(e.get("head") or "")[:12]
     tickets = _lines(e.get("tickets"))
-    return [
-        _ended(e, f"*task {escape(e.get('task'))}* · run {escape(e.get('run'))}"),
-        _linked(e.get("pr")) if e.get("pr") else "",
-        _linked(e.get("summary")) if e.get("summary") else "",
-        _quote("Question", e.get("question")),
-        f"`{escape(e.get('branch'))}` at `{escape(head)}`" if e.get("branch") and head else "",
-        f"filed {', '.join(f'*{escape(t)}*' for t in tickets)}" if tickets else "",
-    ]
+    return _Shown(
+        [
+            _ended(e, f"*task {escape(e.get('task'))}* · run {escape(e.get('run'))}"),
+            _pr(e.get("pr")) if e.get("pr") else "",
+            _linked(e.get("summary")) if e.get("summary") else "",
+            _quote("Question", e.get("question")),
+            f"filed {', '.join(f'*{escape(t)}*' for t in tickets)}" if tickets else "",
+        ],
+        [f"`{escape(e.get('branch'))}` at `{escape(head)}`" if e.get("branch") and head else ""],
+    )
 
 
-def _chore_ended(e: Mapping[str, object]) -> list[str]:
-    return [
-        _ended(e, f"*chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}")
-        + f" · {_findings(e.get('findings'))}",
-        _linked(e.get("summary")) if e.get("summary") else "",
-    ]
+def _chore_ended(e: Mapping[str, object]) -> _Shown:
+    return _Shown(
+        [
+            _ended(e, f"*chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}")
+            + f" · {_findings(e.get('findings'))}",
+            _linked(e.get("summary")) if e.get("summary") else "",
+        ],
+    )
 
 
-def _review_ended(e: Mapping[str, object]) -> list[str]:
+def _review_ended(e: Mapping[str, object]) -> _Shown:
     ticket = f"{_named(e.get('ticket'), e.get('title'))} · " if e.get("ticket") else ""
     verdict = " ".join(escape(x) for x in (e.get("verdict"), e.get("impact")) if x)
     counted = f" · {_findings(e.get('findings'))}" if verdict else ""
-    return [
-        _ended(e, f"{ticket}review run {escape(e.get('run'))}") + (f": {verdict}{counted}" if verdict else ""),
-        _linked(e.get("pr")) if e.get("pr") else "",
-    ]
+    return _Shown(
+        [
+            _ended(e, f"{ticket}review run {escape(e.get('run'))}") + (f": {verdict}{counted}" if verdict else ""),
+            _pr(e.get("pr")) if e.get("pr") else "",
+        ],
+    )
 
 
-def _loop_failing(e: Mapping[str, object]) -> list[str]:
-    return [
-        f":rotating_light: *The loop is failing:* {escape(e.get('count'))} ticks in a row ended other than ok",
-        f"latest tick {escape(e.get('tick'))} ended {escape(e.get('status'))}; log `{escape(e.get('log'))}`",
-    ]
+def _loop_failing(e: Mapping[str, object]) -> _Shown:
+    return _Shown(
+        [f":rotating_light: *The loop is failing:* {escape(e.get('count'))} ticks in a row ended other than ok"],
+        [f"latest tick {escape(e.get('tick'))} ended {escape(e.get('status'))}", f"log `{escape(e.get('log'))}`"],
+    )
 
 
-def _loop_recovered(e: Mapping[str, object]) -> list[str]:
-    return [f":white_check_mark: *The loop recovered* after {escape(e.get('failed'))} failed ticks"]
+def _loop_recovered(e: Mapping[str, object]) -> _Shown:
+    return _Shown([f":white_check_mark: *The loop recovered* after {escape(e.get('failed'))} failed ticks"])
 
 
-def _sink_failing(e: Mapping[str, object]) -> list[str]:
-    return [
-        f":warning: *Sink {escape(e.get('sink'))} is failing:* 3 deliveries in a row",
-        f"`{escape(e.get('error'))}`",
-    ]
+def _sink_failing(e: Mapping[str, object]) -> _Shown:
+    return _Shown(
+        [f":warning: *Sink {escape(e.get('sink'))} is failing:* 3 deliveries in a row"],
+        [f"`{escape(e.get('error'))}`"],
+    )
 
 
-def _budget_reached(e: Mapping[str, object]) -> list[str]:
+def _budget_reached(e: Mapping[str, object]) -> _Shown:
     spent, projected, percent = e.get("spent"), e.get("projected"), e.get("percent")
     so_far = _usd(spent) if isinstance(spent, int | float) else "-"
     pace = f"; on pace for {_usd(projected)}" if isinstance(projected, int | float) else ""
     month, budget = escape(e.get("month")), escape(e.get("budget"))
     what = "its budget" if percent == 100 else f"{escape(percent)}% of its budget"  # noqa: PLR2004  (the budget whole)
-    return [f":moneybag: *Spend for {month} reached {what}:* {so_far} of ${budget}{pace}"]
+    return _Shown([f":moneybag: *Spend for {month} reached {what}:* {so_far} of ${budget}{pace}"])
 
 
-def _test(e: Mapping[str, object]) -> list[str]:
-    return [f":test_tube: {_linked(e.get('text'))}"]
+def _test(e: Mapping[str, object]) -> _Shown:
+    return _Shown([f":test_tube: {_linked(e.get('text'))}"])
 
 
-def _reply_recorded(e: Mapping[str, object]) -> list[str]:
-    return [
-        f":speech_balloon: Your reply from Slack is on {_named(e.get('ticket'), e.get('title'))}",
-        _quote("Reply", e.get("body")),
-    ]
+def _reply_recorded(e: Mapping[str, object]) -> _Shown:
+    return _Shown(
+        [
+            f":speech_balloon: Your reply from Slack is on {_named(e.get('ticket'), e.get('title'))}",
+            _quote("Reply", e.get("body")),
+        ],
+    )
 
 
-def _reply_refused(e: Mapping[str, object]) -> list[str]:
+def _reply_refused(e: Mapping[str, object]) -> _Shown:
     on = f" on *{escape(e.get('ticket'))}*" if e.get("ticket") else ""
-    return [
-        f":no_entry_sign: canopy took nothing from this reply{on}: {_linked(e.get('reason'))}",
-        f"_({escape(e.get('guard'))})_",
-    ]
+    return _Shown(
+        [f":no_entry_sign: canopy took nothing from this reply{on}: {_linked(e.get('reason'))}"],
+        [f"({escape(e.get('guard'))})"],
+    )
 
 
-# Each event kind's lines, the first naming what happened: the event's page in the web UI is linked after it.
-_EVENTS: dict[str, Callable[[Mapping[str, object]], list[str]]] = {
+# Each event kind as shown, its first line naming what happened: the event's page in the web UI is linked after it.
+_EVENTS: dict[str, Callable[[Mapping[str, object]], _Shown]] = {
     "run.started": _run_started,
     "run.ended": _run_ended,
     "plan.proposed": _plan_proposed,
@@ -632,49 +677,70 @@ _EVENTS: dict[str, Callable[[Mapping[str, object]], list[str]]] = {
 }
 
 
-def _event(e: Mapping[str, object]) -> Block:
-    """One event as a section built from its fields. A kind this sink does not know shows its text-format line.
+def _event(e: Mapping[str, object], *, fold: bool) -> list[Block]:
+    """One event as blocks built from its fields. A kind this sink does not know shows its text-format line.
 
     Returns:
-        The section block, its first line linking to the event's page in the web UI when canopy sent one.
+        The blocks, the first line linking to the event's page in the web UI when canopy sent one.
     """
-    first, *rest = _event_lines(e)
-    return _section(_with_open(first, e.get("ui")), *rest)
+    return _shown_blocks(_event_shown(e), e.get("ui"), fold=fold)
 
 
-def _event_lines(e: Mapping[str, object]) -> list[str]:
-    """One event's lines, the first naming what happened. A kind this sink does not know shows its text-format line.
+def _event_shown(e: Mapping[str, object]) -> _Shown:
+    """One event as shown, its first line naming what happened. A kind this sink does not know shows its text line.
 
     Returns:
-        The escaped Slack lines, at least one.
+        The escaped Slack lines, at least one, and what is set aside under them.
     """
     build = _EVENTS.get(str(e.get("kind")))
-    return build(e) if build is not None else [_linked(e.get("line") or e.get("kind"))]
+    return build(e) if build is not None else _Shown([_linked(e.get("line") or e.get("kind"))])
 
 
-def _attention(attention: Mapping[str, object]) -> list[Block]:
-    out = [_added(a) for a in _dicts(attention.get("added"))]
-    resolved = [
-        f":heavy_check_mark: ~{_titled(_subject(r.get('ticket'), r.get('repo')), r.get('title'))}~ "
-        f"{_reason(r.get('reason'))}" + (" (dismissed)" if r.get("dismissed") is True else "")
-        for r in _dicts(attention.get("resolved"))
-    ]
+def _shown_blocks(shown: _Shown, page: object, *, fold: bool) -> list[Block]:
+    """`shown` as a section, its aside as a context under it in smaller type, or, with `fold`, its section's last line.
+
+    Returns:
+        The section, and the context when there is an aside and it is not folded.
+    """
+    first, *rest = shown.lines
+    aside = " · ".join(part for part in shown.aside if part)
+    section = _section(_with_open(first, page), *rest, *([aside] if aside and fold else []))
+    return [section, _context(aside)] if aside and not fold else [section]
+
+
+def _attention(attention: Mapping[str, object], *, fold: bool) -> list[Block]:
+    out = [block for a in _dicts(attention.get("added")) for block in _added(a, fold=fold)]
+    resolved = [_resolved(r) for r in _dicts(attention.get("resolved"))]
     if resolved:
         out.append(_section("*Resolved*", *resolved))
     return out
 
 
-def _added(a: Mapping[str, object]) -> Block:
+def _resolved(r: Mapping[str, object]) -> str:
+    """A resolved attention item, struck through, `(dismissed)` when the operator dismissed it.
+
+    Returns:
+        The escaped Slack line.
+    """
+    subject = _titled(_subject(r.get("ticket"), r.get("repo")), r.get("title"))
+    dismissed = " (dismissed)" if r.get("dismissed") is True else ""
+    return f":heavy_check_mark: ~{subject}~ {_reason(r.get('reason'))}{dismissed}"
+
+
+def _added(a: Mapping[str, object], *, fold: bool) -> list[Block]:
     """A new attention item: what it is about and why, linking to its page in the web UI, then its detail and age.
 
     Returns:
-        The section block.
+        The blocks.
     """
+    return _shown_blocks(_added_shown(a), a.get("ui"), fold=fold)
+
+
+def _added_shown(a: Mapping[str, object]) -> _Shown:
     what = f":bell: {_named(_subject(a.get('ticket'), a.get('repo')), a.get('title'))} · {_reason(a.get('reason'))}"
-    return _section(
-        _with_open(what, a.get("ui")),
-        _linked(a.get("detail")) if a.get("detail") else "",
-        f"_open since {_when(a.get('since'))}_" if a.get("since") else "",
+    return _Shown(
+        [what, _linked(a.get("detail")) if a.get("detail") else ""],
+        [f"open since {_when(a.get('since'))}" if a.get("since") else ""],
     )
 
 
@@ -708,7 +774,7 @@ def _digest(digest: Mapping[str, object]) -> list[Block]:
     ]
     runs = [
         f"{_STATUS_EMOJI['done']} {_named(d.get('ticket'), d.get('title'))}"
-        + (f" · {_linked(d.get('pr'))}" if d.get("pr") else "")
+        + (f" · {_pr(d.get('pr'))}" if d.get("pr") else "")
         for d in _dicts(digest.get("done"))[:_DIGEST_LISTED]
     ]
     runs += [
@@ -743,38 +809,21 @@ def _usd(usd: float) -> str:
 def blocks(message: Mapping[str, object], *, header: bool = True) -> list[Block]:
     """Return Block Kit blocks for one canopy `json` message, built from its fields rather than its text lines.
 
-    A header with the repository directory name and counts, a section per attention item and per event, the resolved
-    items together, and the digest as fields. At most Slack's 50 blocks, the last saying how many were left out.
-    Without `header`, as a post in a ticket's thread is, the message starts at its first item.
+    A line in small type naming the repository directory and counting what follows, a section per attention item and
+    per event with what only adds to it in small type under it, the resolved items together, and the digest as
+    fields. At most Slack's 50 blocks: what would be set under an item goes in its section instead when that keeps
+    every item, and the last block says how many were left out when nothing does. Without `header`, as a post in a
+    ticket's thread is, the message starts at its first item.
 
     Returns:
         The blocks, in the order Slack shows them.
     """
+    counts, body = _body(message, fold=False)
+    if len(body) + 1 > _MAX_BLOCKS:
+        counts, body = _body(message, fold=True)
     repo = Path(str(message.get("repo") or "")).name or "canopy"
-    title: Block = {"type": "plain_text", "text": f"canopy · {repo}"[:_MAX_HEADER]}
-    out: list[Block] = [{"type": "header", "text": title}] if header else []
-    counts: list[str] = []
-    given = message.get("attention")
-    body: list[Block] = []
-    if isinstance(given, dict):
-        attention: dict[str, object] = {str(k): v for k, v in given.items()}
-        added, resolved = _dicts(attention.get("added")), _dicts(attention.get("resolved"))
-        if added or resolved:
-            counts.append(f"{len(added)} new · {len(resolved)} resolved · {escape(attention.get('open', 0))} open")
-        body = _attention(attention)
-    events = _dicts(message.get("events"))
-    if events:
-        counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
-        body += [_DIVIDER] if body else []
-        body += [_event(e) for e in events]
-    digest = message.get("digest")
-    if isinstance(digest, dict):
-        counts.append("digest")
-        body += [_DIVIDER] if body else []
-        body += _digest({str(k): v for k, v in digest.items()})
-    if counts and header:
-        out.append(_context(_with_open(" · ".join(counts), message.get("ui"))))
-    out += body
+    byline = _with_open(" · ".join([f"*canopy* · {escape(repo)}", *counts]), message.get("ui"))
+    out = [_context(byline), *body] if header else body
     omitted = message.get("omitted")
     more = omitted if isinstance(omitted, int) else 0
     if len(out) + (1 if more else 0) > _MAX_BLOCKS:
@@ -783,6 +832,34 @@ def blocks(message: Mapping[str, object], *, header: bool = True) -> list[Block]
     if more:
         out.append(_context(f"_… and {more} more: see `canopy status`_"))
     return out
+
+
+def _body(message: Mapping[str, object], *, fold: bool) -> tuple[list[str], list[Block]]:
+    """The counts the byline shows, and the blocks after it: attention, then events, then the digest.
+
+    Returns:
+        The counts, and the blocks, each item's aside folded into its section with `fold`.
+    """
+    counts: list[str] = []
+    given = message.get("attention")
+    body: list[Block] = []
+    if isinstance(given, dict):
+        attention: dict[str, object] = {str(k): v for k, v in given.items()}
+        added, resolved = _dicts(attention.get("added")), _dicts(attention.get("resolved"))
+        if added or resolved:
+            counts.append(f"{len(added)} new · {len(resolved)} resolved · {escape(attention.get('open', 0))} open")
+        body = _attention(attention, fold=fold)
+    events = _dicts(message.get("events"))
+    if events:
+        counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
+        body += [_DIVIDER] if body else []
+        body += [block for e in events for block in _event(e, fold=fold)]
+    digest = message.get("digest")
+    if isinstance(digest, dict):
+        counts.append("digest")
+        body += [_DIVIDER] if body else []
+        body += _digest({str(k): v for k, v in digest.items()})
+    return counts, body
 
 
 def post(url: str, text: str, blocks: list[Block]) -> tuple[bool, str]:
@@ -1200,9 +1277,23 @@ def _starter(part: Part, message: Mapping[str, object], day: str) -> tuple[str, 
     subject = (f"review of {ticket}" if ticket else "review") if pr else str(part.thread)
     named = " ".join((f"{subject} · {title}" if title else subject).split()) or "canopy"
     repo = Path(str(message.get("repo") or "")).name or "canopy"
-    about = [f"canopy · {escape(repo)} · updates from {escape(day)} in the thread", _linked(pr) if pr else ""]
+    about = [f"*canopy* · {escape(repo)} · updates from {_day_named(day)} in the thread", _pr(pr) if pr else ""]
     header: Block = {"type": "header", "text": {"type": "plain_text", "text": named[:_MAX_HEADER]}}
     return escape(named), [header, _context(*(a for a in about if a))]
+
+
+def _day_named(day: str) -> str:
+    """`day`, an ISO date, as a person names it: `Thu, Sep 24`.
+
+    Returns:
+        The day, or `day` escaped if it is not an ISO date.
+    """
+    try:
+        named = date.fromisoformat(day)
+    except ValueError:
+        return escape(day)
+    # The C locale's names, since the sink never sets one: the same words on every machine.
+    return f"{named:%a, %b} {named.day}"
 
 
 def split(message: Mapping[str, object], skip: AbstractSet[str] = frozenset()) -> list[Part]:
