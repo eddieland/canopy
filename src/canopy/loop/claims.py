@@ -43,7 +43,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import artifact_authority, conversation, db, item_numbers, observe, records, review_runs, sql
+from canopy.core import artifact_authority, conversation, db, item_numbers, notice, observe, records, review_runs, sql
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
 from canopy.loop import observations, phases
@@ -192,6 +192,7 @@ def default_cursors(
             record,
             one,
             reasons,
+            now=now,
             message=found.get("message"),
             review_run=review_run,
         )
@@ -232,10 +233,14 @@ def _unit_defaults(
     repo: str,
     reasons: Collection[str],
     *,
+    now: datetime,
     message: str | None,
     review_run: int | None,
 ) -> dict[str, str]:
     """A `resume`'s default `ci` and `review` cursors of its unit in `repo`, while its PR is observed fresh.
+
+    No `ci` default while a notice is in force or lately ended: whether it explains a failure, and so holds the check,
+    is the overseer's judgment (§8), which a default must not pass.
 
     Returns:
         Each its reasons move that has an item to move to: the newest failed check at the head, newer than the `ci`
@@ -248,7 +253,7 @@ def _unit_defaults(
     found: dict[str, str] = {}
     failed = [c.number for c in _failed_at_head(ctx, reader, pr, repo) if c.number is not None]
     newer = [n for n in failed if item_numbers.newer(n, unit.ci_cursor)]
-    if ResumeReason.CI in reasons and newer:
+    if ResumeReason.CI in reasons and newer and not notice.recent(ctx.conn, now):
         found["ci"] = str(max(newer))
     if ResumeReason.REVIEW in reasons:
         newest = _newest_review(ctx, reader, record, pr, unit, message=message, review_run=review_run)

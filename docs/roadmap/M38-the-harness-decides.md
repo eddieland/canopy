@@ -137,8 +137,9 @@ comment by someone else still passes; TRUST_MODEL T1 is edited. The prompt names
 shorter. Chosen conservatively, for the operator to change: no default on a private ticket, for a joint `resume`, or
 for another kind (an `implement` carrying a message still names its cursor); no `comment` or `message` default unless
 the ticket is observed a fresh candidate, and no `ci` or `review` default unless its PR is observed fresh; a message
-sent after the tick read the journal is not passed; and a `review` cursor stops short of untrusted feedback with
-feedback plans on too. Left: every other row, each on its measurement; the overseer's three
+sent after the tick read the journal is not passed; no `ci` default while a notice is in force or lately ended, since
+whether it holds a check is judgment; and a `review` cursor stops short of untrusted feedback with feedback plans on
+too. Left: every other row, each on its measurement; the overseer's three
 items recorded once and ended by what they name; the harness moving cursors past what its decisions handle and what
 needs no handling; the prompt cut to the judgment; and the design folded into the sections it names. Open for the
 operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each disagreement

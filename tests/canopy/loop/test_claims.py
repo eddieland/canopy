@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, review_runs
+from canopy.core import conversation, db, notice, review_runs
 from canopy.core.vocab import NumberedItem, ResumeReason, ReviewRunStatus, RunKind
 from canopy.loop import observations
 from tests.canopy.helpers import (
@@ -399,6 +399,15 @@ def test_a_resume_moves_no_cursor_of_a_reason_it_does_not_name(observed: sqlite3
     action, rationale = dispatched(observed, kind="resume", label=LABEL, reasons=["ci"])
     assert action == "dispatch:resume"
     assert moved(rationale) == {"ci": str(number_of(observed, NumberedItem.CHECK_RUN, 11))}
+
+
+def test_a_ci_cursor_has_no_default_while_a_notice_may_hold_a_check(observed: sqlite3.Connection) -> None:
+    # Whether the notice explains the failure is the overseer's judgment (DESIGN §8), so it names the cursor itself.
+    check(observed, "build", "completed", "failure", run_id=11)
+    notice.set_notice(observed, "Artifactory is down.", minutes=60, channel="cli")
+    action, rationale = dispatched(observed, kind="resume", label=LABEL, reasons=["ci"])
+    assert action == "dispatch:resume"
+    assert moved(rationale) == {}
 
 
 def test_a_message_the_tick_had_not_read_is_not_passed(observed: sqlite3.Connection) -> None:
