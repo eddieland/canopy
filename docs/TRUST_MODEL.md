@@ -93,12 +93,14 @@ Controls:
   reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from it, and
   reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut and marked. `canopy dispatch`
   checks the overseer's claims against them in code (DESIGN §7), before its other guards: the label must be one observed
-  on the ticket, a `resume` for `reply` must point at a new comment by an authorized replier that is not a worker's or
-  at a new operator message, a `resume` for `review` must cover a trusted reviewer's item, or anyone else's only with an
+  on the ticket, a `resume` for `reply` must cover a new comment by an authorized replier that is not a worker's or a
+  new operator message, a `resume` for `review` must cover a trusted reviewer's item, or anyone else's only with an
   operator message after it (`unauthorized`), and each cursor, a tick's `canopy ticket set` included, must name an item
-  observed and shown (`unobserved`). A dispatch resting on a public ticket or a PR observed past that age is refused
-  `stale`. A private ticket and a subject no source covers keep their claims, checked by the worker as before. Residual:
-  the guards trust what a connector printed, and a label removed since its read authorizes until the worker's check.
+  observed and shown (`unobserved`). A `resume`'s cursors the overseer leaves out default in code to the newest items
+  shown that these checks let it cover (DESIGN §37). A dispatch resting on a public ticket or a PR observed past that
+  age is refused `stale`. A private ticket and a subject no source covers keep their claims, checked by the worker as
+  before. Residual: the guards trust what a connector printed, and a label removed since its read authorizes until the
+  worker's check.
 - An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own, cut
   as a tracker comment is, with the store's id for each author and whether the comment is an agent's or carries every
   comment mark. A comment on an artifact whose origin names a ticket the journal holds is also recorded once in that

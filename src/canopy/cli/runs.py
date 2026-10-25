@@ -77,8 +77,9 @@ from canopy.runs import dispatch, policy, task_run, worker
     "cursor_pairs",
     type=CursorType(),
     multiple=True,
-    help="Advance a cursor, only if the worker starts: what this dispatch handles. A review or ci cursor is its "
-    "unit's, so the dispatch names one repository.",
+    help="Advance a cursor, only if the worker starts: what this dispatch handles. A resume moves each cursor of its "
+    "reasons left out to the newest item of that kind the state block shows, short of one it may not cover, so pass "
+    "one only to stop shorter. A review or ci cursor is its unit's, so the dispatch names one repository.",
 )
 @click.pass_context
 def cmd_dispatch(
