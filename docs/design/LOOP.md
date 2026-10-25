@@ -201,8 +201,8 @@ that starts. What a dispatch claims of a public ticket's subjects a source obser
 block showed, checked in code before §8's other guards; a private ticket, which its start record authorizes (§22), and
 a subject no source observes keep their claims, checked again by the worker (D051). A refusal is a decision:
 
-- `unauthorized`: a `label` not observed on the ticket; a `resume` for `reply` with no cursor to a new authorized
-  reply, operator message, or artifact comment that is authority (§38); a `resume` for `review` covering no trusted
+- `unauthorized`: a `label` not observed on the ticket; a `resume` for `reply` covering no new authorized reply,
+  operator message, or artifact comment that is authority (§38); a `resume` for `review` covering no trusted
   reviewer's item, nor the canopy review it names with `canopy:review` trusted, or covering anyone else's with no
   operator message after it. With feedback plans on, §32's approval is the gate instead.
 - `unobserved`: a cursor naming no item observed for its subject, or passing one the block left out for its bound. A
@@ -221,12 +221,14 @@ Cursors (`comment`, `review`, `ci`, and a private ticket's `message`) hold the n
 handled; "newer than cursor" means not handled yet. The comment cursor is the ticket's; the review and ci cursors are
 each unit's, so a dispatch that carries one names exactly one repository. A dispatch carries the cursors of what it
 handles (§8), so they advance only if the worker starts; items handled otherwise advance with `canopy ticket set`. A
-review comment waiting on a human is not advanced past. A cursor but `message` is a journal number: each comment,
-review, review comment, and completed check run takes the next one when a source first observes it, and keeps it
-across reads, and a canopy review run takes one when it ends. So "newer" is one order for every kind, and a re-run at
-the same head is new. Rejected: the source's ids, which no tracker orders, and times, which a late submission
-backdates. The `comment` cursor of a ticket no tracker source observes stays the tracker's comment id, since its
-comments have no numbers (§35).
+`resume` moves each cursor of its reasons it leaves out to the newest item of that kind the block showed, short of the
+first the checks above would refuse it to cover, on a public ticket and from fresh observations alone; the overseer
+passes one to stop shorter (§37). A review comment waiting on a human is not advanced past. A cursor but `message` is
+a journal number: each comment, review, review comment, and completed check run takes the next one when a source first
+observes it, and keeps it across reads, and a canopy review run takes one when it ends. So "newer" is one order for
+every kind, and a re-run at the same head is new. Rejected: the source's ids, which no tracker orders, and times, which
+a late submission backdates. The `comment` cursor of a ticket no tracker source observes stays the tracker's comment
+id, since its comments have no numbers (§35).
 
 The configured query runs every tick it is due, before any ticket is read: the block holds only tickets the loop has
 seen, so the query is the only way a newly labeled ticket becomes a candidate. When the block shows it `fresh` (§30),

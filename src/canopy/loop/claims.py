@@ -7,9 +7,9 @@ a decision, as every guard's is:
 
 - `stale`: a subject the dispatch rests on was not observed within `connect.max_age_minutes`: a public ticket, the PR of
   each unit a `resume` names, and the PRs of the ticket a stacked dispatch's `base` is the branch of.
-- `unauthorized`: the label was not observed on the ticket; a `resume` for `reply` carries no cursor to a new comment
-  by an authorized replier that is not a worker's, nor to a new operator message or comment on one of the ticket's
-  artifacts that is authority (DESIGN §38); a `resume` for `review` covers no
+- `unauthorized`: the label was not observed on the ticket; a `resume` for `reply` covers no new comment by an
+  authorized replier that is not a worker's, nor a new operator message or comment on one of the ticket's artifacts
+  that is authority (DESIGN §38); a `resume` for `review` covers no
   feedback by a trusted reviewer, nor the canopy review it names with `canopy:review` trusted, or covers someone else's
   feedback with no operator message after it among those it carries (D089). With feedback plans on, the approval of
   the plan is the gate instead (§32), so the review check is not made; nor is it on a joint `resume`, which carries
@@ -19,13 +19,19 @@ a decision, as every guard's is:
   the unit's `ci` cursor, or repeats, at the same head and context, one that is, so a re-run that went red to red
   starts nothing (PRIOR_ART, CI newness).
 
+A `resume` moves each cursor of its reasons it leaves out to the newest item of that kind the block showed, short of the
+first one these checks would refuse it to cover (`default_cursors`, DESIGN §37): an item past the block's bound, or an
+untrusted reviewer's feedback with no operator message after it among those it carries. A cursor passed is kept, so the
+overseer passes one only to stop shorter, and the checks above hold it to the same bounds.
+
 `canopy ticket set` moves cursors too, so its cursors are checked the same way in a tick (`check_cursors`), refused
 `unobserved` alone: it starts nothing, so a stale subject is not refused, but the block shows none of a stale subject's
 items, so a cursor on one may move no further than the items it already passed. A unit with no PR is unobserved, since
 no source reads checks or reviews but a PR's.
 
 A private ticket, which its start record authorizes (§22), is not checked; nor is a subject no source covers, such as
-every ticket without a `tracker` source: its claims stay claims, checked again by the worker (D051). A cursor is a
+every ticket without a `tracker` source: its claims stay claims, checked again by the worker (D051). Neither, nor a
+stale subject, gets a default cursor, since none can be read from a fresh observation. A cursor is a
 journal number (§35): it names an item by the number it took when first observed, or a review run by the one it took
 when it ended.
 """
@@ -46,6 +52,7 @@ from canopy.runs.dispatch import Refusal
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from canopy.core.config import Trust
     from canopy.core.context import Context
 
 
@@ -141,6 +148,113 @@ def check_cursors(
         )
     _check_ci(reader, pr, cursors.get("ci"))
     _Review.read(reader, pr, unit, cursors.get("review"), None, any_run=True).check_named()
+
+
+def default_cursors(
+    ctx: Context,
+    tick: records.Tick,
+    now: datetime,
+    *,
+    key: str,
+    kind: str,
+    repos: Sequence[str],
+    reasons: Collection[str],
+    cursors: Mapping[str, str],
+    review_run: int | None,
+) -> dict[str, str]:
+    """Add each cursor of a `resume`'s reasons it leaves out: the newest item of its kind the block showed (DESIGN §37).
+
+    `reply` moves `comment` and `message`, `ci` moves `ci`, and `review` moves `review`, each short of the first item
+    the dispatch may not cover: one past the block's bound, or an untrusted reviewer's feedback with no operator message
+    after it among those the dispatch carries. A message counts once the tick had read it (`ticks.message_id`), as the
+    block shows them; a `review` cursor may stop at the end of the review run the dispatch names. A cursor defaults only
+    from a fresh observation: a ticket's of a fresh candidate, a unit's of the one repository `repos` names, with a
+    fresh PR. A private ticket's cursors, and any other kind's, are the overseer's alone.
+
+    Returns:
+        `cursors`, with each default added; a cursor passed is kept as it is.
+    """
+    found = dict(cursors)
+    if kind != RunKind.RESUME or conversation.start_of(ctx.conn, key) is not None:
+        return found
+    record = db.get_ticket(ctx.conn, key)
+    if record is None:
+        return found
+    reader = observations.Reader.read(ctx, phases.recorded(ctx.conn, tick.id), now, [record])
+    if ResumeReason.REPLY in reasons:
+        found = {**_ticket_defaults(ctx, reader, record, tick.message_id), **found}
+    one = repos[0] if len(set(repos)) == 1 else None
+    if one is not None:
+        # A review cursor's go-ahead is an operator message the dispatch carries, its own default included.
+        defaults = _unit_defaults(
+            ctx,
+            reader,
+            record,
+            one,
+            reasons,
+            message=found.get("message"),
+            review_run=review_run,
+        )
+        found = {**defaults, **found}
+    return found
+
+
+def _ticket_defaults(
+    ctx: Context,
+    reader: observations.Reader,
+    record: records.Ticket,
+    read: int | None,
+) -> dict[str, str]:
+    """A `resume` for `reply`'s default `comment` and `message` cursors, of a fresh candidate alone.
+
+    Returns:
+        Each that has a new item: the newest comment the block showed, and the newest operator message or authorized
+        artifact comment the tick had read, up to message `read`.
+    """
+    ticket = reader.ticket(record.key)
+    if ticket["observed"] != "fresh" or not ticket.get("candidate"):
+        return {}
+    found: dict[str, str] = {}
+    shown = [c["number"] for c in ticket.get("comments", []) if c["number"] is not None]
+    if shown:
+        found["comment"] = str(max(shown))
+    if read is not None:
+        said = [*_operator_messages(ctx, record, str(read)), *_artifact_comments(ctx, record, str(read))]
+        if said:
+            found["message"] = str(max(m.id for m in said))
+    return found
+
+
+def _unit_defaults(
+    ctx: Context,
+    reader: observations.Reader,
+    record: records.Ticket,
+    repo: str,
+    reasons: Collection[str],
+    *,
+    message: str | None,
+    review_run: int | None,
+) -> dict[str, str]:
+    """A `resume`'s default `ci` and `review` cursors of its unit in `repo`, while its PR is observed fresh.
+
+    Returns:
+        Each its reasons move that has an item to move to: the newest failed check at the head, newer than the `ci`
+        cursor, and the newest review item it may cover (`_newest_review`).
+    """
+    pr = _fresh_pr(next((u for u in reader.units(record.key) if u["repo"] == repo), None))
+    unit = next((u for u in reader.units_of.get(record.key, []) if u.repo == repo), None)
+    if pr is None or unit is None:
+        return {}
+    found: dict[str, str] = {}
+    failed = [c.number for c in _failed_at_head(ctx, reader, pr, repo) if c.number is not None]
+    newer = [n for n in failed if item_numbers.newer(n, unit.ci_cursor)]
+    if ResumeReason.CI in reasons and newer:
+        found["ci"] = str(max(newer))
+    if ResumeReason.REVIEW in reasons:
+        newest = _newest_review(ctx, reader, record, pr, unit, message=message, review_run=review_run)
+        if newest is not None:
+            found["review"] = str(newest)
+    return found
 
 
 def _check_subjects(
@@ -307,16 +421,7 @@ def _check_handled(
     cursor = unit.ci_cursor
     if cursor is None:
         return
-    found = ctx.workspace.repo(unit.repo)
-    human = found.human_checks if found is not None else frozenset[str]()
-    failed = [
-        c
-        for c in reader.checks.get(pr["url"], [])
-        if c.head_sha == pr["head"]
-        and c.name not in human
-        and c.status is CheckStatus.COMPLETED
-        and c.conclusion in observe.FAILED
-    ]
+    failed = _failed_at_head(ctx, reader, pr, unit.repo)
     query = (
         sql.select("*")
         .from_("observed_check_runs")
@@ -334,12 +439,38 @@ def _check_handled(
     )
 
 
-def _check_reply(ctx: Context, reader: observations.Reader, record: records.Ticket, cursors: Mapping[str, str]) -> None:
-    """Refuse a `resume` for `reply` that carries neither a new authorized reply nor a new operator message (§7).
+def _failed_at_head(
+    ctx: Context,
+    reader: observations.Reader,
+    pr: observations.PrObservation,
+    repo: str | None,
+) -> list[records.ObservedCheck]:
+    """The CI checks that failed at a PR's head, less those the repository's `human_checks` names.
 
-    An authorized reply is a comment by an account in `trust.authorized_repliers`, by its number, that is not a worker's
-    (D069), past the ticket's `comment` cursor. An operator message is past its `message` cursor, up to the one carried,
-    and so is a comment on one of its artifacts that is authority (`artifact_authority`, §38).
+    A check `human_checks` names waits on a person, so it is not CI.
+
+    Returns:
+        The checks, in the order the block reads them.
+    """
+    found = ctx.workspace.repo(repo) if repo is not None else None
+    human = found.human_checks if found is not None else frozenset[str]()
+    return [
+        c
+        for c in reader.checks.get(pr["url"], [])
+        if c.head_sha == pr["head"]
+        and c.name not in human
+        and c.status is CheckStatus.COMPLETED
+        and c.conclusion in observe.FAILED
+    ]
+
+
+def _check_reply(ctx: Context, reader: observations.Reader, record: records.Ticket, cursors: Mapping[str, str]) -> None:
+    """Refuse a `resume` for `reply` that covers neither a new authorized reply nor a new operator message (§7).
+
+    An authorized reply is a comment by an account in `trust.authorized_repliers` that is not a worker's (D069). It is
+    covered past the ticket's `comment` cursor and up to the one carried, by their numbers. An operator message is past
+    its `message` cursor, up to the one carried, and so is a comment on one of its artifacts that is authority
+    (`artifact_authority`, §38).
 
     Raises:
         Refusal: `unauthorized`.
@@ -348,15 +479,17 @@ def _check_reply(ctx: Context, reader: observations.Reader, record: records.Tick
     if comment is not None:
         repliers = set(ctx.config.trust.authorized_repliers)
         new = observations.past_comments(reader.comments.get(record.key, []), record.comment_cursor)
-        if any(c.number == comment and c.author in repliers and c.source != "worker" for c in new):
+        covered = [c for c in new if c.number is not None and c.number <= comment]
+        if any(c.author in repliers and c.source != "worker" for c in covered):
             return
     message = cursors.get("message")
     if _operator_messages(ctx, record, message) or _artifact_comments(ctx, record, message):
         return
     raise Refusal(
         "unauthorized",
-        f"a resume for reply needs a cursor to what authorizes it: comment= at a new comment on {record.key} by an "
-        "authorized replier that is not a worker's, or message= at a new operator message or artifact comment",
+        f"a resume for reply needs a cursor past what authorizes it: comment= at or past a new comment on {record.key} "
+        "by an authorized replier that is not a worker's, or message= at or past a new operator message or artifact "
+        "comment",
     )
 
 
@@ -384,6 +517,66 @@ def _artifact_comments(ctx: Context, record: records.Ticket, cursor: str | None)
     authors = frozenset(ctx.config.artifacts.authorized_authors)
     found = artifact_authority.authorized(ctx.conn, record.key, authors, after=record.last_message_id or 0)
     return [m for m in found if m.id <= int(cursor)]
+
+
+def _newest_review(
+    ctx: Context,
+    reader: observations.Reader,
+    record: records.Ticket,
+    pr: observations.PrObservation,
+    unit: records.TicketUnit,
+    *,
+    message: str | None,
+    review_run: int | None,
+) -> int | None:
+    """The newest review item the block showed on a unit's PR that a `resume` for `review` may cover, by its number.
+
+    It stops short of the first new item past the block's bound, and of the first untrusted reviewer's feedback with no
+    operator message after it among those up to `message` (D089). The end of `review_run`, a canopy review run of the
+    PR, counts as an item when it comes before that.
+
+    Returns:
+        The number; None when none is new, or the first new item is one it may not cover.
+    """
+    trust = ctx.config.trust
+    trusted = {t.lower() for t in trust.trusted_reviewers}
+    said = [db.parse_time(m.at) for m in _operator_messages(ctx, record, message)]
+    new = observations.new_reviews(reader.reviews.get(pr["url"], []), unit.review_cursor)
+    covered: list[int] = []
+    stop: int | None = None
+    for n, r in enumerate(new):
+        if r.number is None:
+            # No cursor passes it: an item with no number stays newer than any.
+            continue
+        if n >= observations.MAX_NEW_ITEMS or (_feedback(r, pr, trust) and not _go_ahead(r, trusted, said)):
+            stop = r.number
+            break
+        covered.append(r.number)
+    run = None if review_run is None else review_runs.get_review_run(ctx.conn, review_run)
+    end = run.number if run is not None and run.pr_url == pr["url"] else None
+    if end is not None and item_numbers.newer(end, unit.review_cursor) and (stop is None or end < stop):
+        covered.append(end)
+    return max(covered, default=None)
+
+
+def _feedback(r: records.ObservedReview, pr: observations.PrObservation, trust: Trust) -> bool:
+    """Whether a review item is feedback, and neither the PR author's, under whom workers post, nor a worker's (D069).
+
+    Returns:
+        True for a review comment, a change request, or a review that says something, by anyone else.
+    """
+    author = (pr["author"] or "").lower()
+    marked = conversation.worker_marked(r.body, trust.comment_prefix, trust.comment_suffix)
+    return phases.is_feedback(r) and (r.author or "").lower() != author and not marked
+
+
+def _go_ahead(r: records.ObservedReview, trusted: AbstractSet[str], said: Collection[datetime]) -> bool:
+    """Whether a worker may address a review item: a trusted reviewer's, or one an operator message in `said` follows.
+
+    Returns:
+        True if it may.
+    """
+    return (r.author or "").lower() in trusted or _after_any(said, r.created_at)
 
 
 @dataclass(frozen=True)
@@ -497,17 +690,11 @@ class _Review:
         """
         trust = ctx.config.trust
         trusted = {t.lower() for t in trust.trusted_reviewers}
-        author = ((self.pr["author"] if self.pr is not None else None) or "").lower()
-        feedback = [
-            r
-            for r in self.covered
-            if phases.is_feedback(r)
-            and (r.author or "").lower() != author
-            and not conversation.worker_marked(r.body, trust.comment_prefix, trust.comment_suffix)
-        ]
+        pr = self.pr
+        feedback = [] if pr is None else [r for r in self.covered if _feedback(r, pr, trust)]
         said = [db.parse_time(m.at) for m in _operator_messages(ctx, record, message)]
         for r in feedback:
-            if (r.author or "").lower() not in trusted and not _after_any(said, r.created_at):
+            if not _go_ahead(r, trusted, said):
                 raise Refusal(
                     "unauthorized",
                     f"review {r.item.value} {r.id} on {self.subject} is not a trusted reviewer's: a resume addresses "

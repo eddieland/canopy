@@ -380,8 +380,16 @@ class Dispatch(Request):
         Text | None,
         Field(description="What the worker should read or do. Never quoted ticket or PR text."),
     ] = None
-    #: The cursors to advance, only if the worker starts.
-    cursors: Cursors = Field(default_factory=dict)
+    #: The cursors to advance, only if the worker starts; a resume's reasons move theirs to the newest item shown.
+    cursors: Annotated[
+        Cursors,
+        Field(
+            description="Cursors to advance, only if the worker starts, by name, each the number of the newest item "
+            "handled as the state block shows it. A resume moves each cursor of its reasons it leaves out to the "
+            "newest item of that kind the state block shows, short of one it may not cover: pass one only to stop "
+            "shorter. comment and message are the ticket's; review and ci a unit's, one repository's.",
+        ),
+    ] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _one_unit(self) -> Self:
@@ -422,13 +430,26 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     """
     current = running_tick(ctx)
     key, kind, repos, reasons = request.key, request.kind, request.repos, request.reasons
-    cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
     tracked = _comment_cursor(ctx, request.cursors)
-    unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
     tick_id = current.id
     _refuse_decided(ctx, tick_id, key, "dispatch")
     log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
+    now = datetime.now(UTC)
+    # A resume's reasons move their cursors to the newest item the block showed, unless it passed one (DESIGN §37).
+    cursors = claims.default_cursors(
+        ctx,
+        current,
+        now,
+        key=key,
+        kind=kind,
+        repos=repos,
+        reasons=reasons,
+        cursors=dict[str, str](request.cursors.items()),
+        review_run=request.review_run,
+    )
+    cursor_pairs: list[tuple[str, str]] = list(cursors.items())
+    unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
     handles = _handles(cursor_pairs, request.review_run)
     # The workers the harness's runs to come hold ahead of this one, in §7's order (DESIGN §37).
     reserved = harness_dispatches.reserved(ctx, tick_id, kind, reasons)
@@ -439,13 +460,13 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
         claims.check(
             ctx,
             tick_id,
-            datetime.now(UTC),
+            now,
             key=key,
             kind=kind,
             label=request.label,
             repos=repos,
             reasons=reasons,
-            cursors=dict(cursor_pairs),
+            cursors=cursors,
             review_run=request.review_run,
             base=request.base,
         )

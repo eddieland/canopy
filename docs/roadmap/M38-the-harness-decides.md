@@ -127,8 +127,20 @@ gets its units' items from their fresh PRs, and keeps its plan's and a branchles
 `attempt_limit` is raised for each unit the rows want resumed, every unit of a `ready` ticket (or the workspace's one
 repository), and every unit on `human_replied`, never for `blocked` or a running ticket; a PR the review query found
 gets its `review_limit` only from the guard, since no source reads its head; a guard's item is held as the overseer's
-is. Left: every other row, each on its measurement; the overseer's three items recorded once and ended by what they
-name; cursors moved by the harness; the prompt cut to the judgment; and the design folded into the sections it
-names. Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations,
-each disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a
-PR (recommended: yes).
+is. Built (2026-10-25): the sixth bullet's default cursors. A `resume` moves each cursor of its reasons it leaves out,
+once its worker starts, to the newest item of that kind the state block showed (the newest comment shown, operator
+message the tick had read, failed check at the head, review item shown, or the end of the review run it names), short
+of the first it may not cover: one past the block's bound, or an untrusted reviewer's feedback with no go-ahead it
+carries (`claims.default_cursors`). A cursor passed is kept, and M37's checks bound it as before. A `resume` for `reply`
+is now checked to cover an authorized reply, as one for `review` is, rather than to name it, so a default at a newer
+comment by someone else still passes; TRUST_MODEL T1 is edited. The prompt names a `resume`'s cursors only to stop
+shorter. Chosen conservatively, for the operator to change: no default on a private ticket, for a joint `resume`, or
+for another kind (an `implement` carrying a message still names its cursor); no `comment` or `message` default unless
+the ticket is observed a fresh candidate, and no `ci` or `review` default unless its PR is observed fresh; a message
+sent after the tick read the journal is not passed; and a `review` cursor stops short of untrusted feedback with
+feedback plans on too. Left: every other row, each on its measurement; the overseer's three
+items recorded once and ended by what they name; the harness moving cursors past what its decisions handle and what
+needs no handling; the prompt cut to the judgment; and the design folded into the sections it names. Open for the
+operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each disagreement
+the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR (recommended:
+yes).

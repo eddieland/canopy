@@ -2,12 +2,15 @@
 
 Each case writes what the connectors observed by hand, at the real time, since a dispatch reads them at it, and
 dispatches through the `canopy dispatch` command and the `dispatch` tool, each in a dry-run tick of its own: both must
-record the same decision, a refusal or the run the dispatch would have started. A ticket set goes through `canopy
-ticket set` and the `ticket-set` tool the same way, and records a decision only when it is refused.
+record the same decision, a refusal or the run the dispatch would have started, with the cursors it would move. A
+ticket set goes through `canopy ticket set` and the `ticket-set` tool the same way, and records a decision only when it
+is refused. A dispatch's default cursors (DESIGN §37) are read from the dry run's decision, and seen moved by a live
+one once its worker starts.
 """
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -15,9 +18,20 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, review_runs
-from canopy.core.vocab import NumberedItem, ReviewRunStatus
+from canopy.core.vocab import NumberedItem, ResumeReason, ReviewRunStatus, RunKind
 from canopy.loop import observations
-from tests.canopy.helpers import KEY, LABEL, decisions, in_tick, mcp_session, operator, present, tool_call
+from tests.canopy.helpers import (
+    KEY,
+    LABEL,
+    decisions,
+    in_tick,
+    last_run,
+    mcp_session,
+    operator,
+    present,
+    tool_call,
+    wait_for_run,
+)
 from tests.canopy.observation_helpers import (
     HEAD,
     PR,
@@ -33,6 +47,7 @@ from tests.canopy.observation_helpers import (
     observe_ticket,
     review,
 )
+from tests.canopy.scenario_helpers import dispatches, pushes
 
 if TYPE_CHECKING:
     import sqlite3
@@ -355,6 +370,151 @@ def test_an_unobserved_ticket_keeps_its_claims(canopy_env: CanopyEnv, conn: sqli
     assert found[0] == "dispatch:resume"
 
 
+def test_a_resume_moves_each_cursor_of_its_reasons_to_the_newest_item_shown(observed: sqlite3.Connection) -> None:
+    # It passes none: each defaults to the newest item of its kind the block showed (DESIGN §37).
+    comment(observed, "101", "acc-1", EARLIER, "Go ahead.")
+    said = comment(observed, "102", "acc-9", LATER, "Me too.")
+    check(observed, "build", "completed", "failure", run_id=11)
+    check(observed, "lint", "completed", "failure", run_id=12)
+    check(observed, "docs", "completed", "success", run_id=13)
+    review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    newest = review(observed, 2, "octocat", None, LATER, "Use a map.", item="comment")
+    assert operator("reply", KEY, "And bump the version.") == 0
+    [message] = conversation.operator_messages_after(observed, KEY, 0)
+    action, rationale = dispatched(observed, kind="resume", label=LABEL, reasons=["reply", "ci", "review"])
+    assert action == "dispatch:resume"
+    assert moved(rationale) == {
+        # The newest comment, an authorized reply's or not, since one before it authorizes the run.
+        "comment": str(said),
+        "message": str(message.id),
+        "ci": str(number_of(observed, NumberedItem.CHECK_RUN, 12)),
+        "review": str(newest),
+    }
+
+
+def test_a_resume_moves_no_cursor_of_a_reason_it_does_not_name(observed: sqlite3.Connection) -> None:
+    comment(observed, "101", "acc-1", EARLIER, "Go ahead.")
+    check(observed, "build", "completed", "failure", run_id=11)
+    review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    action, rationale = dispatched(observed, kind="resume", label=LABEL, reasons=["ci"])
+    assert action == "dispatch:resume"
+    assert moved(rationale) == {"ci": str(number_of(observed, NumberedItem.CHECK_RUN, 11))}
+
+
+def test_a_message_the_tick_had_not_read_is_not_passed(observed: sqlite3.Connection) -> None:
+    # The block shows the messages the tick read before the overseer ran; one sent since waits for the next tick.
+    assert operator("reply", KEY, "Go ahead.") == 0
+    [message] = conversation.operator_messages_after(observed, KEY, 0)
+    with in_tick(observed, dry_run=True) as tick_id:
+        db.set_tick_read(observed, tick_id)
+        assert operator("reply", KEY, "And bump the version.") == 0
+        main(["dispatch", KEY, "--repo", "repo", "--kind", "resume", "--label", LABEL, "--reason", "reply"])
+        [(action, rationale)] = decisions(observed, tick_id)
+    assert action == "dispatch:resume"
+    assert moved(rationale) == {"message": str(message.id)}
+
+
+def test_a_review_cursor_stops_short_of_untrusted_feedback(observed: sqlite3.Connection) -> None:
+    trusted = review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    untrusted = review(observed, 2, "stranger", None, LATER, "Why not a map?", item="comment")
+    after = review(observed, 3, "octocat", None, LATER, "And a test.", item="comment")
+    action, rationale = dispatched(observed, kind="resume", label=LABEL, reasons=["review"])
+    assert action == "dispatch:resume"
+    assert moved(rationale) == {"review": str(trusted)}
+    # An operator message after it, which the dispatch carries, is the go-ahead to cover it.
+    assert operator("reply", KEY, "Take the map suggestion.") == 0
+    [message] = conversation.operator_messages_after(observed, KEY, 0)
+    action, rationale = dispatched(observed, kind="resume", label=LABEL, reasons=["review", "reply"])
+    assert action == "dispatch:resume"
+    assert moved(rationale) == {"message": str(message.id), "review": str(after)}
+    assert untrusted < after
+
+
+def test_a_review_cursor_covering_nothing_it_may_moves_nowhere(observed: sqlite3.Connection) -> None:
+    # The first new item waits on the operator, so nothing defaults, and the resume covers nothing it may address.
+    review(observed, 1, "stranger", "changes_requested", EARLIER, "Why not a map?")
+    action, reason = dispatched(observed, kind="resume", label=LABEL, reasons=["review"])
+    assert action == "refused:unauthorized"
+    assert reason.startswith(f"a resume for review covers no feedback by a trusted reviewer on {KEY} in repo")
+
+
+def test_a_review_cursor_moves_to_the_end_of_the_review_run_it_names(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    canopy_env.configure(canopy_env.user_file, {"trust": {"trusted_reviewers": ["canopy:review"]}})
+    run = reviewed(observed)
+    end = present(review_runs.get_review_run(observed, run)).number
+    action, rationale = dispatched(observed, kind="resume", label=LABEL, reasons=["review"], review_run=run)
+    assert action == "dispatch:resume"
+    assert moved(rationale) == {"review": str(end)}
+
+
+@pytest.mark.parametrize("kind", ["comment", "review"])
+def test_a_default_cursor_passes_nothing_the_block_left_out(observed: sqlite3.Connection, kind: str) -> None:
+    numbers = [
+        comment(observed, f"{200 + n}", "acc-1", f"2026-10-01T10:{n:02}:00Z", f"Comment {n}.")
+        if kind == "comment"
+        else review(observed, 200 + n, "octocat", None, f"2026-10-01T10:{n:02}:00Z", f"Fix {n}.", item="comment")
+        for n in range(observations.MAX_NEW_ITEMS + 1)
+    ]
+    reason = "reply" if kind == "comment" else "review"
+    action, rationale = dispatched(observed, kind="resume", label=LABEL, reasons=[reason])
+    assert action == "dispatch:resume"
+    assert moved(rationale) == {kind: str(numbers[-2])}
+
+
+def test_a_cursor_passed_stops_shorter(observed: sqlite3.Connection) -> None:
+    first = comment(observed, "101", "acc-1", EARLIER, "Go ahead.")
+    comment(observed, "102", "acc-1", LATER, "Wait, I need to ask the team first.")
+    passed = {"comment": str(first)}
+    action, rationale = dispatched(observed, kind="resume", label=LABEL, reasons=["reply"], cursors=passed)
+    assert action == "dispatch:resume"
+    assert moved(rationale) == passed
+
+
+def test_a_private_ticket_gets_no_default_cursor(observed: sqlite3.Connection) -> None:
+    # Its start record authorizes it, not an observation, so no default rests on one: the overseer names its cursors.
+    assert operator("start", KEY) == 0
+    assert operator("reply", KEY, "Go ahead.") == 0
+    action, rationale = dispatched(observed, kind="resume", reasons=["reply"])
+    assert action == "dispatch:resume"
+    assert moved(rationale) == {}
+
+
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize("door", ["command", "tool"])
+def test_default_cursors_move_once_the_worker_starts(scenario: Scenario, door: str) -> None:
+    conn = with_a_fresh_pr(scenario)
+    comment(conn, "101", "acc-1", EARLIER, "Go ahead.")
+    said = comment(conn, "102", "acc-1", LATER, "Also the docs.")
+    check(conn, "build", "completed", "failure", run_id=11)
+    reviewed_item = review(conn, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    reasons = [ResumeReason.REPLY, ResumeReason.CI, ResumeReason.REVIEW]
+    if door == "command":
+        scenario.run(dispatches(kind=RunKind.RESUME, reasons=reasons), worker=pushes())
+    else:
+        resumed(conn, reasons)
+    assert cursors_of(conn) == (said, number_of(conn, NumberedItem.CHECK_RUN, 11), reviewed_item)
+
+
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize("door", ["command", "tool"])
+def test_a_refused_dispatch_moves_no_default_cursor(scenario: Scenario, door: str) -> None:
+    conn = with_a_fresh_pr(scenario)
+    comment(conn, "101", "acc-1", EARLIER, "Go ahead.")
+    check(conn, "build", "completed", "failure", run_id=11)
+    review(conn, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    reasons = [ResumeReason.REPLY, ResumeReason.CI, ResumeReason.REVIEW]
+    # A label not on the ticket: the claims refuse it after its cursors defaulted.
+    if door == "command":
+        [(action, _)] = scenario.refuses(dispatches(kind=RunKind.RESUME, reasons=reasons, label="bug"))
+        assert action == "refused:unauthorized"
+    else:
+        resumed(conn, reasons, label="bug", refused=True)
+    assert cursors_of(conn) == (None, None, None)
+
+
 @pytest.mark.parametrize(
     ("cursors", "why"),
     [
@@ -461,8 +621,11 @@ def dispatched(
     reasons: Sequence[str] = (),
     cursors: Mapping[str, str] | None = None,
     base: str | None = None,
+    review_run: int | None = None,
 ) -> tuple[str, str]:
     """Dispatch KEY in `repo` through its command, then its tool, each in a dry-run tick of its own.
+
+    Each tick has read the journal, as a tick does before its overseer runs, so it shows every message sent before.
 
     Returns:
         The one decision both recorded.
@@ -470,14 +633,18 @@ def dispatched(
     found = cursors or {}
     command = ["dispatch", KEY, "--repo", "repo", "--kind", kind]
     command += [*(["--label", label] if label else []), *(["--base", base] if base else [])]
+    command += ["--review-run", str(review_run)] if review_run is not None else []
     command += [arg for reason in reasons for arg in ("--reason", reason)]
     command += [arg for name, value in found.items() for arg in ("--cursor", f"{name}={value}")]
     with in_tick(conn, dry_run=True) as tick_id:
+        db.set_tick_read(conn, tick_id)
         main(command)
         by_command = decisions(conn, tick_id)
     arguments: dict[str, object] = {"key": KEY, "kind": kind, "repos": ["repo"], "reasons": list(reasons)}
     arguments |= {"cursors": dict(found)} | ({"label": label} if label else {}) | ({"base": base} if base else {})
+    arguments |= {"review_run": review_run} if review_run is not None else {}
     with in_tick(conn, dry_run=True) as tick_id:
+        db.set_tick_read(conn, tick_id)
         mcp_session(tool_call("dispatch", **arguments))
         by_tool = decisions(conn, tick_id)
     assert by_command == by_tool
@@ -517,3 +684,72 @@ def with_unit(env: CanopyEnv, conn: sqlite3.Connection, key: str, *, pr: str | N
 def ago(*, hours: float = 0) -> str:
     """The journal's form of the time `hours` ago: now, without any."""
     return db.format_time(datetime.now(UTC) - timedelta(hours=hours))
+
+
+def moved(rationale: str) -> dict[str, str]:
+    """The cursors a dry-run dispatch's rationale says it would move, by name."""
+    found: dict[str, str] = {}
+    for part in rationale.split("; "):
+        if part.startswith("cursor "):
+            name, _, value = part.removeprefix("cursor ").partition("=")
+            found[name] = value
+    return found
+
+
+def reviewed(conn: sqlite3.Connection) -> int:
+    """A canopy review run of KEY's PR at HEAD, ended done with a finding, so it took its number; return its id."""
+    result = {
+        "status": "done",
+        "verdict": "findings",
+        "impact": "normal",
+        "findings": [{"severity": "major", "title": "X"}],
+    }
+    run = conn.execute(
+        "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, started_at, status, log_path) "
+        "VALUES (?, ?, ?, ?, ?, 'running', 'x')",
+        (db.start_tick(conn, dry_run=False), PR, HEAD, KEY, ago()),
+    ).lastrowid
+    assert run is not None
+    assert db.finish_run(conn, "review_runs", run, ReviewRunStatus.DONE, json.dumps(result))
+    return run
+
+
+def with_a_fresh_pr(scenario: Scenario) -> sqlite3.Connection:
+    """KEY observed fresh and labeled, implemented in `repo` with PR its pull request, and PR observed fresh at HEAD.
+
+    Returns:
+        The journal.
+    """
+    env, conn = scenario.env, scenario.conn
+    scenario.configures(**TRACKER, **TRUST)
+    held(env, conn, KEY, at=ago(hours=1))
+    observe_ticket(conn, at=ago())
+    branches_read(conn, at=ago())
+    scenario.run(dispatches(), worker=pushes(prs={"repo": PR}))
+    observe_pr(conn, at=ago())
+    return conn
+
+
+def resumed(
+    conn: sqlite3.Connection,
+    reasons: Sequence[ResumeReason],
+    *,
+    label: str = LABEL,
+    refused: bool = False,
+) -> None:
+    """The overseer resumes KEY in `repo` for `reasons` through the `dispatch` tool, passing no cursor.
+
+    It runs in a tick of its own, and the run it started is waited for; with `refused`, the tool must refuse it.
+    """
+    arguments = {"key": KEY, "kind": "resume", "label": label, "repos": ["repo"], "reasons": [str(r) for r in reasons]}
+    with in_tick(conn, ends_ok=True):
+        said = mcp_session(tool_call("dispatch", **arguments)).said()
+    assert said.error == refused, said.text
+    if not refused:
+        wait_for_run(conn, int(last_run(conn)["id"]))
+
+
+def cursors_of(conn: sqlite3.Connection) -> tuple[int | None, int | None, int | None]:
+    """KEY's `comment` cursor, and its unit's in `repo` `ci` and `review` cursors."""
+    [unit] = conn.execute("SELECT ci_cursor, review_cursor FROM ticket_units WHERE ticket_key = ?", (KEY,)).fetchall()
+    return present(db.get_ticket(conn, KEY)).comment_cursor, unit["ci_cursor"], unit["review_cursor"]
