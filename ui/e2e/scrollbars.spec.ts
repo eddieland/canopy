@@ -22,5 +22,7 @@ for (const theme of THEMES) {
         await settled(page)
         await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/u : /^(?!.*\bdark\b)/u)
         await expect(page.getByTestId('ticket-decisions')).toHaveScreenshot(`long-list-${theme}.png`)
+        // A refetch of the ticket can still be in the padding route when the page closes (padDecisions).
+        await page.unrouteAll({ behavior: 'ignoreErrors' })
     })
 }
