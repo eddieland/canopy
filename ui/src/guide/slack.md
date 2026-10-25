@@ -9,20 +9,28 @@ installed with canopy. This page sets it up, picks what it hears, and explains w
 Each delivery is one Slack message, or, with [threads](#threads), one post per ticket. It's built in Block Kit from the
 fields canopy sends, so it reads like a status board rather than a log:
 
-- A header naming the workspace, `canopy · acme`, and a line counting what's in it:
-  `2 new · 1 resolved · 4 open · 3 events`.
+- A line in small type naming the workspace and counting what's in it:
+  `canopy · acme · 2 new · 1 resolved · 4 open · 3 events`. No big heading, so a busy channel reads as news rather
+  than a column of titles.
 - Each new [attention item](attention) on its own, after a bell: the ticket and its title in bold, the reason in words
-  (`needs reviewer`), its detail, and how long it's been open, in the reader's own time zone.
+  (`needs reviewer`), its detail, and, in small type under it, how long it's been open, in the reader's own time zone.
 - The items that resolved, together, struck through, with `(dismissed)` on the ones you dismissed.
 - Each event, led by an emoji for how it ended, so a channel scans by outcome: a check for `done`, a raised hand for a
   run waiting on you, with its question quoted, a cross for `failed`, an hourglass for a timeout. A proposed plan, an
   approved one, follow-ups filed, a chore's or a review's run, a task's, and the loop's own trouble each get a line of
-  their own.
+  their own. The details you rarely need, such as a run's attempt and branch, sit in small type under it, and a run
+  starting is one line of small type altogether: it's news, not a request.
+- A pull request on GitHub by its short name, `acme/api#7`, linked to it; any other link shows its whole address.
 - A [digest](#digests), when one is due, as a grid: ticks, workers running, runs started and ended, what needs you,
   and what it all cost.
 - An `open` link after each item, to its page in this UI, while the loop serves it ([below](#links-back-here)).
 
-The same message goes along as plain lines too, which is what Slack shows in a notification and on a lock screen.
+What needs you comes first, above a divider: new attention items, a run or task waiting on your answer, a plan to
+approve, and the loop or a sink failing, the same things that make a [batching](#batching) sink send at once. The
+rest follows in the order it happened, so a question doesn't sit under five runs starting.
+
+The same message goes along as plain lines too, in the same order, which is what Slack shows in a notification and on
+a lock screen. A message about one thing leads with it, so the lock screen says `run 41 ended failed`, not `1 event`.
 
 ## Webhook or bot token
 
@@ -101,7 +109,7 @@ Every `notify` key is yours alone, so a sink goes in `~/.config/canopy/config.to
 it belongs: whoever can commit to a shared file shouldn't get to choose where your loop's news goes.
 [Config files](config-files) has the rest of the keys.
 
-A sink in your own config hears from every workspace you run a loop in. The header names the workspace, and threads
+A sink in your own config hears from every workspace you run a loop in. Each message names the workspace, and threads
 are kept apart per workspace, so two loops sharing a channel don't share threads. You can have up to five sinks in
 all, each a table of its own, named as you like: `[notify.sinks.team]` beside `[notify.sinks.slack]` is how one loop
 posts to two channels.
@@ -264,8 +272,9 @@ only at a channel whose readers may read all of that, and keep the secret file y
 
 None of it can do anything in Slack. The sink escapes every piece of journal text, so an `@channel`, a mention, or a
 link dressed up as another can't get through, even if a ticket's title tries. A URL in the text stays a plain link that
-shows itself. And the people in the channel can see what the loop does but can't steer it: nothing they write in
-Slack reaches canopy, unless you list them as [operators](#replying-from-slack), which you shouldn't.
+shows itself, and a PR's short name, `acme/api#7`, is read off its own address, never off the journal. And the people
+in the channel can see what the loop does but can't steer it: nothing they write in Slack reaches canopy, unless you
+list them as [operators](#replying-from-slack), which you shouldn't.
 
 ## Checking it works
 
