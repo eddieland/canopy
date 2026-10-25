@@ -90,6 +90,11 @@ A **clean** case is a PR that has run for months without a fix, and every inline
 some that look risky and are right, a large refactor or tricky concurrency, as well as plain ones: a reviewer that
 flags everything scores well on bugs alone.
 
+To find cases in a history with few reverts, give an agent [prompts/find-cases.md](prompts/find-cases.md) in a
+clone of the repository. It finds fix-shaped commits by your team's own signals (hotfix branches, labels, incident
+links, fast merges), traces each one to the PR that wrote the lines it fixed with `git blame`, and writes a catalogue
+of candidates with their evidence and their cases as TOML, for you to read before any goes in a bench file.
+
 ## Scoring
 
 A bug is found when one of the bot's inline comments that opens a thread is within `tolerance` lines of where the bug
