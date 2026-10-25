@@ -159,7 +159,7 @@ def summary(settings: dict[str, object], reviews: Sequence[Review], tolerance: i
         f"## Review bench: {settings.get('label') or 'unlabelled'}, {str(settings.get('started_at', ''))[:16]}",
         "",
         (
-            f"Mirror `{settings.get('mirror')}`, reviewers {reviewers}, overlay {_overlay(settings)}. "
+            f"Repository `{settings.get('repo')}`, reviewers {reviewers}, overlay {_overlay(settings)}. "
             f"A bug is found by an inline comment within {tolerance} lines of it."
         ),
         "",
@@ -224,5 +224,8 @@ def _strings(settings: dict[str, object], key: str) -> list[str]:
 
 
 def _overlay(settings: dict[str, object]) -> str:
-    digest = settings.get("overlay_digest")
-    return f"`{settings.get('overlay')!s}` at {str(digest)[:12]}" if settings.get("overlay") else "none"
+    digest = str(settings.get("overlay_digest"))[:12]
+    files = f"`{settings.get('overlay')!s}`" if settings.get("overlay") else ""
+    strip = ", ".join(f"`{p}`" for p in _strings(settings, "strip"))
+    laid = " and ".join(part for part in (files, f"stripping {strip}" if strip else "") if part)
+    return f"{laid} at {digest}" if laid else "none"

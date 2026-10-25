@@ -2,7 +2,7 @@
 name = "canopy-review-bench"
 # From the latest v* tag, as canopy's is (D085), so every package in the workspace carries its version.
 dynamic = ["version"]
-description = "Score any code review bot on blind PRs whose bugs you know, in a private copy of your repository."
+description = "Score any code review bot on blind PRs whose bugs you know, opened in a repository it reviews."
 license = "MIT"
 authors = [{ name = "eddieland" }]
 keywords = ["code review", "evaluation", "github", "review bot"]

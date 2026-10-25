@@ -89,6 +89,28 @@ def test_an_undone_fix_has_no_history_and_brings_the_bug_back(tmp_path: Path) ->
     assert built.spots == (Spot("src/retry.py", 4, 4, Side.HEAD), Spot("src/retry.py", 5, 6, Side.BASE))
 
 
+def test_stripped_paths_are_in_neither_tree_and_not_in_the_diff(tmp_path: Path) -> None:
+    source = source_repo(tmp_path)
+    overlay = commits.Overlay({}, (".github/CODEOWNERS", ".github/workflows"))
+    for case in (replay(source), undo(source, paths=())):
+        built = commits.build(source.path, case, overlay)
+        for commit in (built.base, built.head):
+            assert ".github" not in git("ls-tree", "--name-only", commit, cwd=source.path).splitlines()
+        assert "src/retry.py" in git("diff", "--name-only", built.base, built.head, cwd=source.path)
+        assert ".github" not in git("diff", "--name-only", built.base, built.head, cwd=source.path)
+    # The replay's base is a commit on the original, so the stripped files are only gone from the branch's tip.
+    assert git("rev-parse", f"{commits.build(source.path, replay(source), overlay).base}^", cwd=source.path) == (
+        source.base
+    )
+    assert overlay.digest != commits.NO_OVERLAY.digest
+
+
+def test_an_undone_fix_leaves_its_part_of_a_stripped_path_alone(tmp_path: Path) -> None:
+    source = source_repo(tmp_path)
+    built = commits.build(source.path, undo(source, paths=()), commits.Overlay({}, ("tests",)))
+    assert git("diff", "--name-only", built.base, built.head, cwd=source.path) == "src/retry.py"
+
+
 def test_an_undone_fix_with_no_paths_undoes_all_of_it(tmp_path: Path) -> None:
     source = source_repo(tmp_path)
     built = commits.build(source.path, undo(source, paths=()), commits.NO_OVERLAY)

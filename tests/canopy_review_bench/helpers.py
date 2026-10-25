@@ -17,8 +17,8 @@ from tests.conftest import git
 
 #: The reviewer whose comments count.
 BOT = "review-bot[bot]"
-#: The mirror the PRs are opened in.
-MIRROR = "acme/api-bench"
+#: The repository the PRs are opened in.
+REPO = "acme/api-bench"
 
 BEFORE = """\
 def fetch(get, attempts):
@@ -70,7 +70,10 @@ def test_no_attempts():
 
 @dataclass(frozen=True)
 class Source:
-    """A source repository: a base, a PR's head on it, and a fix after it that adds a guard and its test."""
+    """A source repository: a base, a PR's head on it, and a fix after it that adds a guard and its test.
+
+    Its base has a CODEOWNERS file and a CI workflow, as a shared repository would.
+    """
 
     path: Path
     base: str
@@ -87,9 +90,10 @@ def source_repo(tmp_path: Path) -> Source:
     path = tmp_path / "source"
     path.mkdir()
     git("init", "--quiet", "--initial-branch=main", cwd=path)
-    (path / "src").mkdir()
-    (path / "tests").mkdir()
-    base = _commit(path, {"src/retry.py": BEFORE}, "Add fetch")
+    for directory in ("src", "tests", ".github/workflows"):
+        (path / directory).mkdir(parents=True)
+    shared = {".github/CODEOWNERS": "* @acme/api\n", ".github/workflows/ci.yml": "on: [push, pull_request]\n"}
+    base = _commit(path, {"src/retry.py": BEFORE, **shared}, "Add fetch")
     head = _commit(path, {"src/retry.py": PR_HEAD}, "Wait between attempts")
     fix = _commit(path, {"src/retry.py": FIXED, "tests/test_retry.py": FIX_TEST}, "fix: refuse zero attempts")
     return Source(path, base, head, fix)
@@ -111,7 +115,7 @@ def bench_file(tmp_path: Path, cases: str, **settings: object) -> Path:
     Returns:
         Its path.
     """
-    keys: dict[str, object] = {"source": "source", "mirror": MIRROR, "reviewers": [BOT], **settings}
+    keys: dict[str, object] = {"source": "source", "repo": REPO, "reviewers": [BOT], **settings}
     lines = ["[bench]", *(f"{k} = {_toml(v)}" for k, v in keys.items()), "", cases]
     path = tmp_path / "bench.toml"
     path.write_text("\n".join(lines) + "\n")
@@ -119,6 +123,8 @@ def bench_file(tmp_path: Path, cases: str, **settings: object) -> Path:
 
 
 def _toml(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
     if isinstance(value, str):
         return f'"{value}"'
     if isinstance(value, list):
@@ -168,13 +174,13 @@ Reviewer = Callable[[str, int], Mapping[str, Sequence[dict[str, object]]]]
 
 @dataclass
 class FakeGitHub:
-    """GitHub's REST API for the mirror, as the bench calls it through gh."""
+    """GitHub's REST API for the repository, as the bench calls it through gh."""
 
     reviewer: Reviewer
     #: Fails a call whose method and path start with this, as gh failing would.
     fails: str | None = None
     #: Each PR opened, by number: the fields it was opened with.
-    opened: dict[int, Mapping[str, str]] = field(default_factory=dict)
+    opened: dict[int, Mapping[str, str | bool]] = field(default_factory=dict)
     closed: list[int] = field(default_factory=list)
     deleted: list[str] = field(default_factory=list)
     _polls: dict[int, int] = field(default_factory=dict)
@@ -185,7 +191,7 @@ class FakeGitHub:
         method: str,
         path: str,
         *,
-        fields: Mapping[str, str] | None = None,
+        fields: Mapping[str, str | bool] | None = None,
         paginate: bool = False,
     ) -> object:
         """Answer one call, as `GitHub._api` would.
@@ -197,7 +203,7 @@ class FakeGitHub:
 
         if self.fails is not None and f"{method} {path}".startswith(self.fails):
             raise BenchError(f"gh api {path} exited 1: HTTP 422")
-        repo = f"repos/{MIRROR}"
+        repo = f"repos/{REPO}"
         if method == "POST" and path == f"{repo}/pulls":
             number = len(self.opened) + 1
             self.opened[number] = dict(fields or {})
@@ -218,7 +224,7 @@ class FakeGitHub:
         if kind == "inline":
             self._polls[number] = self._polls.get(number, 0) + 1
         poll = self._polls[number] - 1
-        return [list(self.reviewer(self.opened[number]["title"], poll).get(kind, ()))]
+        return [list(self.reviewer(str(self.opened[number]["title"]), poll).get(kind, ()))]
 
 
 @contextmanager

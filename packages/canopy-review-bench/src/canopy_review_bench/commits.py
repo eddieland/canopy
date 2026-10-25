@@ -8,8 +8,9 @@ written as objects alone, which a push names by their hashes.
 - An `undo_fix` has no history at all. Its base is the fix's tree, as a commit with no parent, since any history
   would hold the fix's own commit and its message; its head reverses the fix, or its `paths` part of it.
 
-An overlay, files such as the reviewer's instructions, is written into both trees at its paths, so the reviewer reads
-it on every case and the PR's diff never shows it.
+An overlay is laid on both trees, so the PR's diff never shows it: paths it strips, such as CODEOWNERS and the CI
+workflows when the PRs are opened in a shared repository, are removed, and then its files, such as the reviewer's
+instructions, are written at their paths, so the reviewer reads them on every case.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from canopy_review_bench.bench import BenchError, Case, Side, Spot
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-#: The message of a base commit the bench writes: an `undo_fix`'s, or a `replay`'s with an overlay on it.
+#: The message of a base commit the bench writes: an `undo_fix`'s, or a `replay`'s with an overlay laid on it.
 BASE_MESSAGE = "Update repository settings"
 #: Git's settings for every command here: no paths quoted in a diff, and no driver or filter a repository can name.
 _GIT = ("git", "-c", "core.quotePath=off", "-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false")
@@ -38,15 +39,24 @@ _PUSH_TIMEOUT_SECONDS = 1800
 
 @dataclass(frozen=True)
 class Overlay:
-    """Files written into every case's two trees, at their paths in the repository."""
+    """What is laid on every case's two trees: paths removed, then files written, at their paths in the repository."""
 
     #: Each file's bytes, and whether it is executable, by its path.
     files: Mapping[str, tuple[bytes, bool]]
+    #: Paths removed, files or whole directories.
+    removed: Sequence[str] = ()
+
+    @property
+    def empty(self) -> bool:
+        """Whether it changes nothing."""
+        return not self.files and not self.removed
 
     @property
     def digest(self) -> str:
-        """The sha256 of every file's path and bytes, in hex: so two runs can say whether they read the same."""
+        """The sha256 of what it removes and writes, in hex: so two runs can say whether they read the same."""
         h = hashlib.sha256()
+        for path in sorted(self.removed):
+            h.update(f"-{path}\0".encode())
         for path in sorted(self.files):
             data, _ = self.files[path]
             h.update(f"{path}\0{len(data)}\0".encode())
@@ -70,8 +80,8 @@ class Built:
     stat: str
 
 
-def read_overlay(directory: Path) -> Overlay:
-    """Read every file under `directory` as an overlay, at its path relative to it.
+def read_overlay(directory: Path, removed: Sequence[str] = ()) -> Overlay:
+    """Read every file under `directory` as an overlay, at its path relative to it, that also removes `removed`.
 
     Returns:
         The overlay.
@@ -90,7 +100,7 @@ def read_overlay(directory: Path) -> Overlay:
                 files[path.relative_to(directory).as_posix()] = (path.read_bytes(), os.access(path, os.X_OK))
             except OSError as e:
                 raise BenchError(f"overlay {path}: {e}") from e
-    return Overlay(files)
+    return Overlay(files, removed)
 
 
 def build(source: Path, case: Case, overlay: Overlay) -> Built:
@@ -144,7 +154,7 @@ class _Git:
         """
         self._commit_exists(base)
         self._commit_exists(head)
-        if overlay.files:
+        if not overlay.empty:
             base = self._commit(self._tree_of(base, overlay), parent=base, message=BASE_MESSAGE)
         return base, self._commit(self._tree_of(head, overlay), parent=base, message=title)
 
@@ -162,7 +172,9 @@ class _Git:
         if len(parents) < 2:  # noqa: PLR2004 - the commit, then its first parent.
             raise BenchError(f"{fix} has no parent, so it cannot be undone")
         base = self._commit(self._tree_of(fix, overlay), parent=None, message=BASE_MESSAGE)
-        patch = self._git("diff", "--binary", "--no-ext-diff", "--no-textconv", parents[1], fix, "--", *paths)
+        # The base has no stripped path, so the fix's part of them is not undone either.
+        spec = [*(paths or ["."]), *(f":(exclude){p}" for p in overlay.removed)]
+        patch = self._git("diff", "--binary", "--no-ext-diff", "--no-textconv", parents[1], fix, "--", *spec)
         if not patch.strip():
             raise BenchError(f"{fix} changes nothing under {', '.join(paths)}, so its PR changes nothing")
         self._git("read-tree", base)
@@ -190,6 +202,8 @@ class _Git:
 
     def _tree_of(self, commit: str, overlay: Overlay) -> str:
         self._git("read-tree", commit)
+        if overlay.removed:
+            self._git("rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", *overlay.removed)
         self._write_overlay(overlay)
         return self._git("write-tree").strip()
 

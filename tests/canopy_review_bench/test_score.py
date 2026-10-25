@@ -5,7 +5,7 @@ from canopy_review_bench.bench import Side
 from canopy_review_bench.github import Comment
 from canopy_review_bench.score import Rate, Review, SpotRecord, summary
 
-SETTINGS: dict[str, object] = {"label": "bot 2.3", "mirror": "acme/api-bench", "reviewers": ["review-bot[bot]"]}
+SETTINGS: dict[str, object] = {"label": "bot 2.3", "repo": "acme/api-bench", "reviewers": ["review-bot[bot]"]}
 BUG = SpotRecord(path="src/retry.py", first=5, last=6, side=Side.BASE)
 
 

@@ -1,6 +1,6 @@
-"""The mirror on GitHub, through `gh api`: open a case's PR, read what was said on it, close it, delete its branches.
+"""The repository on GitHub, through `gh api`: open a case's PR, read what was said on it, close it, delete branches.
 
-gh holds the token, so the bench never does: sign in with `gh auth login`, on the mirror's host.
+gh holds the token, so the bench never does: sign in with `gh auth login`, on the repository's host.
 """
 
 from __future__ import annotations
@@ -41,15 +41,15 @@ class Comment(BaseModel):
 
 
 class GitHub:
-    """The mirror, `owner/name` on `host`."""
+    """The repository the PRs are opened in, `owner/name` on `host`."""
 
     def __init__(self, repo: str, host: str) -> None:
-        """Name the mirror: `repo`, `owner/name`, on `host`."""
+        """Name the repository: `repo`, `owner/name`, on `host`."""
         self._repo = repo
         self._host = host
 
-    def open_pr(self, *, base: str, head: str, title: str, body: str) -> int:
-        """Open a PR from branch `head` into branch `base`.
+    def open_pr(self, *, base: str, head: str, title: str, body: str, draft: bool = False) -> int:
+        """Open a PR from branch `head` into branch `base`, as a draft if `draft`.
 
         Returns:
             Its number.
@@ -57,7 +57,7 @@ class GitHub:
         Raises:
             BenchError: gh failed, or said something that is not a PR.
         """
-        fields = {"base": base, "head": head, "title": title, "body": body}
+        fields: dict[str, str | bool] = {"base": base, "head": head, "title": title, "body": body, "draft": draft}
         made = _parse(_Pull, self._api("POST", f"repos/{self._repo}/pulls", fields=fields))
         return made.number
 
@@ -110,7 +110,7 @@ class GitHub:
         self._api("PATCH", f"repos/{self._repo}/pulls/{number}", fields={"state": "closed"})
 
     def delete_branch(self, branch: str) -> None:
-        """Delete `branch` from the mirror.
+        """Delete `branch` from the repository.
 
         Raises:
             BenchError: gh failed.
@@ -133,7 +133,7 @@ class GitHub:
         method: Literal["GET", "POST", "PATCH", "DELETE"],
         path: str,
         *,
-        fields: Mapping[str, str] | None = None,
+        fields: Mapping[str, str | bool] | None = None,
         paginate: bool = False,
     ) -> object:
         """Call GitHub's REST API through gh, and return what it answered, `--slurp`ed into a list of pages if paged.
@@ -146,7 +146,12 @@ class GitHub:
         """
         argv = ["gh", "api", "--hostname", self._host, "--method", method, path]
         for key, value in (fields or {}).items():
-            argv += ["--raw-field", f"{key}={value}"]
+            # gh sends a `--field` of true or false as JSON's, and every `--raw-field` as a string.
+            argv += (
+                ["--field", f"{key}={str(value).lower()}"]
+                if isinstance(value, bool)
+                else ["--raw-field", f"{key}={value}"]
+            )
         if paginate:
             argv += ["--paginate", "--slurp"]
         out = command.run(argv)

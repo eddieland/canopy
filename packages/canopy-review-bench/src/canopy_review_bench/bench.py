@@ -1,4 +1,4 @@
-"""The bench file: where each case's PR comes from, the private copy its PR is opened in, and whose comments count.
+"""The bench file: where each case's PR comes from, the repository it is opened in, and whose comments count.
 
 A case is a `replay` of a PR as it was, from its base to its head, or an `undo_fix`: a commit that fixed a bug,
 reversed on top of itself, so the PR brings back a bug that shipped once. A `bug` case names where its bug is, as
@@ -111,6 +111,13 @@ def _repo(value: str) -> str:
     return value
 
 
+def _relative(value: str) -> str:
+    parts = value.strip("/").split("/")
+    if not value or value.startswith("/") or any(p in {"", ".", ".."} for p in parts):
+        raise ValueError(f"{value!r} must be a path in the repository, such as .github/workflows")
+    return value.strip("/")
+
+
 Commit = Annotated[str, AfterValidator(_commit)]
 SpotText = Annotated[str, AfterValidator(_spot)]
 
@@ -186,11 +193,12 @@ class Settings(_Model):
 
     #: A clone of the repository the cases come from, which holds every commit they name; relative to the bench file.
     source: Annotated[str, Field(min_length=1)]
-    #: The private copy on GitHub the PRs are opened in, `owner/name`, with the reviewer installed on it.
-    mirror: Annotated[str, AfterValidator(_repo)]
+    #: The repository on GitHub the PRs are opened in, `owner/name`, with the reviewer installed on it: a private
+    #: copy if you can make one the reviewer covers, or the real repository.
+    repo: Annotated[str, AfterValidator(_repo)]
     #: The GitHub host, for GitHub Enterprise.
     host: Annotated[str, Field(min_length=1)] = "github.com"
-    #: Where the case's branches are pushed; `https://HOST/MIRROR.git` when unset.
+    #: Where the case's branches are pushed; `https://HOST/REPO.git` when unset.
     push_url: str | None = None
     #: The logins whose comments count as the reviewer's, such as `acme-review[bot]`.
     reviewers: Annotated[tuple[str, ...], Field(min_length=1)]
@@ -202,11 +210,17 @@ class Settings(_Model):
     quiet_minutes: Annotated[int, Field(ge=0, le=60)] = 3
     #: How often GitHub is asked for the reviewer's comments while waiting.
     poll_seconds: Annotated[int, Field(ge=5, le=600)] = 30
+    #: Paths, files or directories, removed from both of every case's commits, so a PR in a shared repository asks no
+    #: code owner for a review and starts no workflow: such as `.github/CODEOWNERS` and `.github/workflows`.
+    strip: tuple[Annotated[str, AfterValidator(_relative)], ...] = ()
+    #: Whether each PR is opened as a draft, which asks no code owner for a review; only for a reviewer that reviews
+    #: drafts.
+    draft: bool = False
 
     @property
     def url(self) -> str:
         """Where the case's branches are pushed."""
-        return self.push_url or f"https://{self.host}/{self.mirror}.git"
+        return self.push_url or f"https://{self.host}/{self.repo}.git"
 
 
 class BenchFile(_Model):

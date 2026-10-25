@@ -90,6 +90,13 @@ def test_two_cases_of_one_name_are_refused(tmp_path: Path) -> None:
         bench.load(bench_file(tmp_path, case + case))
 
 
+@pytest.mark.parametrize("path", ["../outside", "/etc", "a/../b", ""])
+def test_a_strip_path_outside_the_repository_is_refused(tmp_path: Path, path: str) -> None:
+    case = f'[[cases]]\nname = "c"\nkind = "bug"\ntitle = "T"\nundo_fix = {{ fix = "{SHA}" }}\n'
+    with pytest.raises(BenchError, match="must be a path in the repository"):
+        bench.load(bench_file(tmp_path, case, strip=[path]))
+
+
 def test_a_bench_with_no_reviewer_is_refused(tmp_path: Path) -> None:
     case = f'[[cases]]\nname = "c"\nkind = "bug"\ntitle = "T"\nundo_fix = {{ fix = "{SHA}" }}\n'
     with pytest.raises(BenchError, match="reviewers"):

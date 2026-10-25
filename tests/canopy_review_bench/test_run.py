@@ -26,9 +26,9 @@ BUG_TITLE = "Simplify fetch"
 CLEAN_TITLE = "Wait between attempts"
 
 
-def mirror(tmp_path: Path) -> Path:
-    """Make a bare repository to push to, as the mirror's git remote."""
-    path = tmp_path / "mirror.git"
+def remote(tmp_path: Path) -> Path:
+    """Make a bare repository to push to, as the repository's git remote."""
+    path = tmp_path / "remote.git"
     git("init", "--quiet", "--bare", str(path), cwd=tmp_path)
     return path
 
@@ -60,8 +60,8 @@ def reviewer(title: str, poll: int) -> dict[str, list[dict[str, object]]]:
 
 def test_a_run_reviews_each_case_takes_its_pr_down_and_scores_it(tmp_path: Path) -> None:
     source = source_repo(tmp_path)
-    remote = mirror(tmp_path)
-    path = bench_file(tmp_path, cases(source), push_url=str(remote), quiet_minutes=0)
+    pushed = remote(tmp_path)
+    path = bench_file(tmp_path, cases(source), push_url=str(pushed), quiet_minutes=0)
     with github_does(FakeGitHub(reviewer)) as github:
         result = invoke(canopy_review_bench.main, ["run", str(path), "--label", "bot 2.3"])
     assert result.exit_code == 0, result.output
@@ -71,13 +71,13 @@ def test_a_run_reviews_each_case_takes_its_pr_down_and_scores_it(tmp_path: Path)
     opened = sorted(github.opened.values(), key=operator.itemgetter("title"))
     assert [f["title"] for f in opened] == [BUG_TITLE, CLEAN_TITLE]
     assert opened[0]["body"] == "Less code in fetch."
-    assert opened[0]["head"].startswith("simplify-fetch-")
-    assert opened[0]["base"].startswith("main-")
+    head, base = str(opened[0]["head"]), str(opened[0]["base"])
+    assert head.startswith("simplify-fetch-")
+    assert base.startswith("main-")
     assert github.closed == [1, 2]
-    assert sorted(github.deleted) == sorted(b for f in opened for b in (f["base"], f["head"]))
+    assert sorted(github.deleted) == sorted(str(b) for f in opened for b in (f["base"], f["head"]))
     # What was pushed is the case's PR: the bug case's head undoes the fix on a base with no history.
-    head = opened[0]["head"]
-    assert git("log", "--format=%s", head, cwd=remote).splitlines() == [BUG_TITLE, commits.BASE_MESSAGE]
+    assert git("log", "--format=%s", head, cwd=pushed).splitlines() == [BUG_TITLE, commits.BASE_MESSAGE]
     saved = sorted((tmp_path / "results").iterdir())
     assert len(saved) == 1
     meta, reviews = score.read(saved[0])
@@ -91,10 +91,35 @@ def test_a_run_reviews_each_case_takes_its_pr_down_and_scores_it(tmp_path: Path)
     assert [c.body for c in reviews[1].comments] == ["Looks good."]
 
 
+def test_a_run_in_a_shared_repository_opens_drafts_and_records_what_it_strips(tmp_path: Path) -> None:
+    source = source_repo(tmp_path)
+    pushed = remote(tmp_path)
+    path = bench_file(
+        tmp_path,
+        cases(source),
+        push_url=str(pushed),
+        quiet_minutes=0,
+        draft=True,
+        strip=[".github/CODEOWNERS"],
+    )
+    with github_does(FakeGitHub(reviewer)) as github:
+        result = invoke(canopy_review_bench.main, ["run", str(path), "--case", "retry-delay"])
+    assert result.exit_code == 0, result.output
+    assert github.opened[1]["draft"] is True
+    head = str(github.opened[1]["head"])
+    assert git("ls-tree", "-r", "--name-only", head, cwd=pushed).splitlines() == [
+        ".github/workflows/ci.yml",
+        "src/retry.py",
+    ]
+    (saved,) = (tmp_path / "results").iterdir()
+    assert json.loads((saved / score.RUN_FILE).read_text())["strip"] == [".github/CODEOWNERS"]
+    assert "stripping `.github/CODEOWNERS`" in result.stdout
+
+
 def test_a_silent_reviewer_is_waited_for_until_the_wait_is_over(tmp_path: Path) -> None:
     source = source_repo(tmp_path)
     loaded = bench.load(
-        bench_file(tmp_path, cases(source), push_url=str(mirror(tmp_path)), wait_minutes=2, poll_seconds=30),
+        bench_file(tmp_path, cases(source), push_url=str(remote(tmp_path)), wait_minutes=2, poll_seconds=30),
     )
     clock = FakeClock()
     with github_does(FakeGitHub(lambda _title, _poll: {})) as github:
@@ -107,7 +132,7 @@ def test_a_silent_reviewer_is_waited_for_until_the_wait_is_over(tmp_path: Path) 
 
 def test_a_review_is_done_once_the_reviewer_goes_quiet(tmp_path: Path) -> None:
     source = source_repo(tmp_path)
-    loaded = bench.load(bench_file(tmp_path, cases(source), push_url=str(mirror(tmp_path)), quiet_minutes=1))
+    loaded = bench.load(bench_file(tmp_path, cases(source), push_url=str(remote(tmp_path)), quiet_minutes=1))
 
     def slow(_title: str, poll: int) -> dict[str, list[dict[str, object]]]:
         return {"inline": [inline("src/a.py", n) for n in range(1, min(poll, 3) + 1)]}
@@ -123,7 +148,7 @@ def test_a_review_is_done_once_the_reviewer_goes_quiet(tmp_path: Path) -> None:
 
 def test_a_pr_that_cannot_be_opened_fails_and_its_branches_are_deleted(tmp_path: Path) -> None:
     source = source_repo(tmp_path)
-    loaded = bench.load(bench_file(tmp_path, cases(source), push_url=str(mirror(tmp_path))))
+    loaded = bench.load(bench_file(tmp_path, cases(source), push_url=str(remote(tmp_path))))
     with github_does(FakeGitHub(reviewer, fails="POST")) as github:
         where = run(loaded, FakeClock(), names=("retry-delay",))
     _, reviews = score.read(where)
@@ -158,7 +183,7 @@ def test_check_shows_each_cases_pr_and_opens_nothing(tmp_path: Path) -> None:
 
 def test_score_scores_a_saved_run_again_with_another_tolerance(tmp_path: Path) -> None:
     source = source_repo(tmp_path)
-    path = bench_file(tmp_path, cases(source), push_url=str(mirror(tmp_path)), quiet_minutes=0)
+    path = bench_file(tmp_path, cases(source), push_url=str(remote(tmp_path)), quiet_minutes=0)
 
     def far(title: str, _poll: int) -> dict[str, list[dict[str, object]]]:
         return {"inline": [inline("src/retry.py", 12, side="LEFT")]} if title == BUG_TITLE else {}
@@ -176,5 +201,5 @@ def test_score_scores_a_saved_run_again_with_another_tolerance(tmp_path: Path) -
 def run(loaded: bench.Loaded, clock: FakeClock, *, names: tuple[str, ...]) -> Path:
     """Run the cases `names` names, with no overlay, once each."""
     plan = run_module.Plan(bench.chosen(loaded.file.cases, names, None), commits.NO_OVERLAY, None, 1, "")
-    github = GitHub(loaded.file.bench.mirror, loaded.file.bench.host)
+    github = GitHub(loaded.file.bench.repo, loaded.file.bench.host)
     return run_module.run(loaded, plan, github, said=lambda _line: None, clock=clock.clock)

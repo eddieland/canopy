@@ -1,4 +1,4 @@
-"""A run: each case's PR opened in the mirror, one at a time, waited on until its review is done, then taken down.
+"""A run: each case's PR opened in the repository, one at a time, waited on until its review is done, then taken down.
 
 One at a time, and every branch deleted once its review is read, so no case's PR can read another's future: a later
 case's branches hold the fixes of an earlier one. Each review is saved as it ends, so a run stopped halfway keeps what
@@ -54,7 +54,7 @@ class Plan:
 
 
 def run(bench: Loaded, plan: Plan, github: GitHub, *, said: Callable[[str], None], clock: Clock) -> Path:
-    """Review each case of `plan`, `plan.repeats` times, in the mirror, saving each review as it ends.
+    """Review each case of `plan`, `plan.repeats` times, in the repository, saving each review as it ends.
 
     `said` is told what the run is doing, a line at a time.
 
@@ -67,13 +67,15 @@ def run(bench: Loaded, plan: Plan, github: GitHub, *, said: Callable[[str], None
     meta = {
         "started_at": started.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "label": plan.label,
-        "mirror": settings.mirror,
+        "repo": settings.repo,
         "host": settings.host,
         "reviewers": list(settings.reviewers),
         "tolerance": settings.tolerance,
         "overlay": str(plan.overlay_dir) if plan.overlay_dir is not None else None,
-        "overlay_digest": plan.overlay.digest if plan.overlay.files else None,
+        "overlay_digest": plan.overlay.digest if not plan.overlay.empty else None,
         "overlay_files": sorted(plan.overlay.files),
+        "strip": list(plan.overlay.removed),
+        "draft": settings.draft,
         "cases": [c.name for c in plan.cases],
         "repeats": plan.repeats,
     }
@@ -138,7 +140,7 @@ def _review(
     try:
         commits.push(bench.source, settings.url, {base: built.base, head: built.head})
         pushed = True
-        pr = github.open_pr(base=base, head=head, title=case.title, body=case.body)
+        pr = github.open_pr(base=base, head=head, title=case.title, body=case.body, draft=settings.draft)
         said(f"  opened PR {pr}, waiting for {', '.join(settings.reviewers)}")
         comments = _wait(github, pr, settings, clock)
     except BenchError as e:
