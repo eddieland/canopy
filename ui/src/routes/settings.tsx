@@ -420,8 +420,11 @@ function HatShop() {
                         Every dollar canopy spends is a dollar for Sprig&apos;s hats. Sprig wears the one you pick while
                         it is on. All sales are final.
                     </p>
-                    <WalletReadout testId="hats-wallet" />
-                    <Disclosure open={open} what="hats" data-testid="hats-toggle" />
+                    {/* The wallet at the row's end, so the two shops' wallets line up. */}
+                    <div className="flex shrink-0 items-center gap-4">
+                        <Disclosure open={open} what="hats" data-testid="hats-toggle" />
+                        <WalletReadout testId="hats-wallet" />
+                    </div>
                 </div>
                 <CollapsibleContent asChild>
                     <ul className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-4">
@@ -517,8 +520,11 @@ function ShellShop() {
                         The same dollars buy the Ghost new shells, a Sprig Shell among them. The Ghost wears the one you
                         pick while it sits in Sprig&apos;s place. All sales are final.
                     </p>
-                    <WalletReadout testId="shells-wallet" />
-                    <Disclosure open={open} what="shells" data-testid="shells-toggle" />
+                    {/* The wallet at the row's end, so the two shops' wallets line up. */}
+                    <div className="flex shrink-0 items-center gap-4">
+                        <Disclosure open={open} what="shells" data-testid="shells-toggle" />
+                        <WalletReadout testId="shells-wallet" />
+                    </div>
                 </div>
                 <CollapsibleContent asChild>
                     <ul className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-5">
