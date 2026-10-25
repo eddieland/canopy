@@ -33,8 +33,8 @@ for byte (D023's revisit clause). Timeouts end everything; on macOS a process th
 The `worker` role wraps `worker_cmd`, `private_worker_cmd`, and `plan_cmd`; `setup` wraps `runtime.setup_cmd`, which
 runs the branch's code just before the worker (§9); `chore` wraps `runtime.chore_cmd` and a chore's `cmd` (§19);
 `review` wraps `review_cmd`, which reads the most hostile text the loop meets (T1). `overseer` wraps `overseer_cmd` and
-the tools' server its runtime starts (§27), once the tick starts every run the overseer asks for (§40); until then
-canopy refuses it, since a run started in its sandbox would inherit it and end with it. Unwrapped: the harness's own
+the tools' server its runtime starts (§27); the runs it asks for start outside it, from the tick (§40), so none
+inherits its sandbox or ends with it. Unwrapped: the harness's own
 `notify.cmd`, `git`, and `treehouse`.
 
 `runtime.sandbox_repos` sandboxes some repositories and not others: canopy starts a worker run, `setup_cmd`, and a

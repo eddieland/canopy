@@ -132,7 +132,8 @@ def tool[R: BaseModel, O: tools.Result](
 TOOLS = (
     tool(
         "dispatch",
-        "Start a worker on a ticket, if its guards allow one now. A dry run checks them and starts nothing.",
+        "Record a worker for a ticket, if its guards allow one now; it starts once your run ends, if they still do. A "
+        "dry run checks them and records nothing.",
         tools.Dispatch,
         tools.Dispatched,
         tools.dispatch_run,
@@ -170,7 +171,8 @@ TOOLS = (
     ),
     tool(
         "review-run",
-        "Start a review of a PR at a commit, if its guards allow one now. A dry run checks them and starts nothing.",
+        "Record a review of a PR at a commit, if its guards allow one now; it starts once your run ends, if they still "
+        "do. A dry run checks them and records nothing.",
         review_tools.ReviewRun,
         review_tools.ReviewsStarted,
         review_tools.review_run,
@@ -191,15 +193,16 @@ TOOLS = (
     ),
     tool(
         "review-revise",
-        "Start a revision of a review's draft that the operator's note asks for, if its guards allow one now. A dry "
-        "run checks them and starts nothing.",
+        "Record a revision of a review's draft that the operator's note asks for, if its guards allow one now; it "
+        "starts once your run ends, if they still do. A dry run checks them and records nothing.",
         review_tools.ReviewRevise,
         review_tools.RevisionStarted,
         review_tools.review_revise,
     ),
     tool(
         "chore-run",
-        "Start a run of a chore, if its guards allow one now. A dry run checks them and starts nothing.",
+        "Record a run of a chore, if its guards allow one now; it starts once your run ends, if they still do. A dry "
+        "run checks them and records nothing.",
         chore_tools.ChoreRun,
         chore_tools.ChoreStarted,
         chore_tools.chore_run,

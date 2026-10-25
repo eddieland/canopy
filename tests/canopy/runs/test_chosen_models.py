@@ -40,8 +40,9 @@ def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
     digest = definitions.digest(load(scenario.env.root, scenario.env.user_file))
     snapshot = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest
     assert f'\nmodel: "{MODEL}"\n' in (snapshot / "agents" / "canopy-worker.md").read_text()
-    # The list is read in the workspace root, not in the run's slot, whose own runtime config could change it.
-    assert calls(opencode_state) == [(["models"], str(scenario.env.root))]
+    # The list is read in the workspace root, not in the run's slot, whose own runtime config could change it: at the
+    # ask, and again as the tick starts the run (DESIGN §40).
+    assert calls(opencode_state) == [(["models"], str(scenario.env.root))] * 2
     assert f"  model {MODEL}  log {run.row['log_path']}\n" in scenario.operator("status").out
     # Its commits credit the model that did the work (TRUST_MODEL T5).
     assert f"`Co-authored-by: {MODEL} (canopy worker) <noreply@canopy.invalid>`" in run.prompt_file.read_text()
@@ -144,7 +145,7 @@ def test_a_run_at_a_variant_records_it_and_its_definition_names_it(
     worker = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest / "agents" / "canopy-worker.md"
     assert f'\nmodel: "{MODEL}"\nvariant: "high"\n' in worker.read_text()
     # The variants are read only when one is chosen: the runtime drops one its model lacks without a word.
-    assert calls(opencode_state) == [(["models", "--verbose"], str(scenario.env.root))]
+    assert calls(opencode_state) == [(["models", "--verbose"], str(scenario.env.root))] * 2
     assert f"`Co-authored-by: {MODEL}@high (canopy worker) <noreply@canopy.invalid>`" in run.prompt_file.read_text()
 
 

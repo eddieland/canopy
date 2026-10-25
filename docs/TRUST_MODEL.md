@@ -435,6 +435,11 @@ Controls in code, not prompts:
   holds a `resume` whose only reason is `ci`, so a PR that keeps going red still gets one run per cooldown window; one
   with review feedback or a reply is not held, and fixes the build along the way.
 - One running worker per ticket.
+- Runs the overseer asks for (DESIGN §40), a dispatch, review, revision, or chore's run: each is recorded at the ask
+  under every guard, and holds its ticket and its capacity in every guard's count from the ask until the tick starts
+  it, after the overseer's run, under every guard again. One its tick did not start, because the tick ended early or
+  its process died, is closed unstarted as that tick closes or by the next tick, counts toward no limit, and is never
+  started by a later tick. A dry run records none.
 - Workers exit when their work is pushed. They may push again for a fix found after a push (D116), but do not poll
   CI or retry a rejected push; the run timeout bounds the rest.
 - The clock (DESIGN §33) is advice, not a limit: near its timeout an agent hears the minutes left, from the same clock
@@ -541,6 +546,9 @@ Controls now:
   every hidden character named. Residual: they read any commit the checkout's git directory holds, which a pool's
   slots share, so a branch another run left there unpushed too; the GitHub tools already read what is pushed. Every
   other definition denies the tools.
+- The overseer starts no run. Each one it asks for is recorded, and the tick starts it once the overseer's run has
+  ended (DESIGN §40), so no run, its setup, or the harness's git and treehouse calls is the overseer's descendant, and
+  a sandbox around `overseer_cmd` confines the overseer alone.
 - Opt-in: an OS sandbox around each agent run (HOST_ISOLATION, docs/SANDBOX.md, D117, D118), the overseer's below. The
   operator prefixes `worker_cmd`, `private_worker_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
   each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
@@ -554,9 +562,8 @@ Controls now:
   reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
 - The overseer has a role of its own, `overseer`, for `overseer_cmd` and the server of canopy's tools its runtime
-  starts inside the same sandbox (DESIGN §24, §27). canopy refuses that prefix until the tick starts every run the
-  overseer asks for (DESIGN §40): until then a dispatch starts its run from the overseer's process tree, where it, its
-  setup, and the harness's git would inherit the overseer's sandbox and end with it. Under the shipped template a
+  starts inside the same sandbox (DESIGN §24, §27). Every run the overseer asks for starts outside that sandbox,
+  from the tick (above), so none inherits the overseer's policy or ends with it. Under the shipped template a
   sandboxed overseer reads, under `$HOME`, its workspace, the user config file and nothing beside it (not the web UI's
   listener secret), canopy's install, and the runtime's files; of the workspace's `.canopy/` it writes only the
   journal, its locks, and canopy's log: never the private config, the agent definitions, the chores' agents and
@@ -580,9 +587,9 @@ Controls now:
 Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in; such a run could
 give the snapshot its write permission back, as it could do anything else the operator can. A sandboxed one
 shares the kernel, so code written to escape it is not contained. `notify.cmd` and the harness's own git and treehouse
-calls run outside it, and so does the overseer until canopy takes its prefix (DESIGN §40). A sandboxed overseer writes
-the journal itself, not only through canopy's commands, so a steered one can write any row there, as an unsandboxed
-one can (T5). Every process `srt` sandboxes can write `/tmp/claude`, so two runs can pass files through it. A filter
+calls run outside it. A sandboxed overseer writes the journal itself, not only through canopy's commands, so a
+steered one can write any row there, as an unsandboxed one can (T5). Every process `srt` sandboxes can write
+`/tmp/claude`, so two runs can pass files through it. A filter
 driver the operator's own git config defines still runs on whatever a branch's `.gitattributes` selects, on a slot's
 return as on any checkout. A template the operator edits can allow anything; canopy checks only that it denies some
 reads and lists an allowlist.

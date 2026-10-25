@@ -97,8 +97,9 @@ def test_instructions_that_cannot_be_used_refuse_the_dispatch(
     path = instruct(canopy_env, text if text is not None else "")
     if text is None:
         path.unlink()
+    # The prompt is rendered as the tick starts the run, after the overseer (DESIGN §40): it is refused then.
     code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
-    assert code == 1
+    assert code == 0
     [(action, rationale)] = decisions
     assert action == "refused:bad_prompt"
     assert error in rationale
@@ -122,7 +123,7 @@ def test_an_override_without_the_placeholder_fails_closed_once_instructions_are_
     if not instructed:
         assert code == 0, decisions
         return
-    assert code == 1
+    assert code == 0
     [(action, rationale)] = decisions
     assert action == "refused:bad_prompt"
     assert "missing required placeholder {{STANDING_SECTION}} or {{STANDING_INSTRUCTIONS}}" in rationale

@@ -36,7 +36,8 @@ keeps to its timer until a poll reads everything again, and that poll ends the w
 
 ## Runs
 
-A run is a worker agent doing one piece of work on one ticket. The overseer starts it; the run leases a worktree from
+A run is a worker agent doing one piece of work on one ticket. The overseer asks for it, and the tick starts it once the
+overseer has finished, so nothing the overseer asked for goes down with it. The run leases a worktree from
 its repository's pool, does the work, pushes a branch, opens or updates a PR, and hands the worktree back. Runs
 outlive the tick that started them, so a long one spans many ticks. Each run has a kind:
 
