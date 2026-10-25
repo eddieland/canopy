@@ -198,10 +198,12 @@ def message_lines(m: records.Message) -> list[str]:
 def _message_head(m: records.Message) -> str:
     who = {"worker": "worker", "operator": "you", "tracker": "tracker"}.get(m.source, m.source)
     if m.comment_id is not None:
-        # A tracker or artifact comment a source observed, or the overseer mirrored before M37 (§22, §38).
+        # A tracker or artifact comment a source observed, the operator's own on a private ticket among them, or one
+        # the overseer mirrored before M37 (§22, §38).
         cut = ", truncated" if m.truncated else ""
+        whose = "your" if m.source == "operator" else who
         return (
-            f"  #{m.id}  {attention.age(m.at)} ago  {who} comment {m.comment_id} by {m.author}, "
+            f"  #{m.id}  {attention.age(m.at)} ago  {whose} comment {m.comment_id} by {m.author}, "
             f"written {m.commented_at}{cut}"
         )
     about = f" (run:{m.run_id})" if m.run_id else ""

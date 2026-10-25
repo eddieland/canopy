@@ -94,6 +94,11 @@ A ticket is **private** when you start it in canopy, from [Tickets](tickets#star
 `canopy start KEY`. It needs no label, and its conversation stays in canopy: workers read the ticket and write nothing
 to it. That's how you deliver a ticket a client filed without them reading the agent's working notes.
 
+You can still answer a private ticket's worker on the tracker, if you'd rather. List your own tracker account id in your
+`tracker` source's `operators`, and a comment you write on a private ticket after starting it counts as your reply, as
+if you'd sent it from canopy. Anyone else's comment there stays something its worker reads, never an instruction, and
+so does yours without the list.
+
 You can reply to either kind in canopy. On a public ticket your reply reaches its workers and never the ticket. That's
 also how you answer a review from someone outside `trust.trusted_reviewers`, whose comments wait for your word before
 any worker acts on them.

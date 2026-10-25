@@ -1296,9 +1296,10 @@ class Source(Section):
     # Posts what the operator approved: for `vcs`, a PR's drafts; for `tracker`, a ticket's.
     post_cmd: NotifyCommand = ""
     timeout_minutes: Minutes = 2
-    #: For a `slack` source, the Slack user ids whose replies in the sink's ticket threads are the operator's own
-    #: messages, as `canopy reply` records one (DESIGN §22, TRUST_MODEL T1).
-    operators: tuple[Annotated[StrictStr, AfterValidator(_slack_user)], ...] = ()
+    #: The ids whose words are the operator's own messages, as `canopy reply` records one (DESIGN §22, TRUST_MODEL
+    #: T1): for a `slack` source, the Slack user ids whose replies in the sink's ticket threads are; for a `tracker`
+    #: source, the tracker account ids whose comments on a private ticket are. Empty for none.
+    operators: tuple[NonBlank, ...] = ()
 
     @model_validator(mode="after")
     def _a_command(self) -> Source:
@@ -1310,8 +1311,14 @@ class Source(Section):
             raise ValueError("an artifacts source needs cmd, and takes no post_cmd: workers reply through the store")
         if self.kind == "slack" and (not notify_words(self.cmd) or notify_words(self.post_cmd) or not self.operators):
             raise ValueError("a slack source needs cmd and operators, and takes no post_cmd: the sink posts")
-        if self.kind != "slack" and self.operators:
-            raise ValueError("operators is a slack source's: whose replies in the sink's threads are the operator's")
+        if self.kind not in ("slack", "tracker") and self.operators:
+            raise ValueError(
+                "operators is a slack or tracker source's: whose replies in the sink's threads, or comments on a "
+                "private ticket, are the operator's",
+            )
+        if self.kind == "slack":
+            for user in self.operators:
+                _slack_user(user)
         return self
 
 

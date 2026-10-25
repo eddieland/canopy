@@ -698,7 +698,8 @@ def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_then_the_slack_
     canopy_env.append_user(
         '\n[connect.sources.a-slack]\nkind = "slack"\ncmd = "canopy-connect-slack --channel C1"\noperators = ["U1A"]\n'
         '\n[connect.sources.a-feed]\nkind = "artifacts"\ncmd = "canopy-artifacts feed --store /s"\n'
-        '\n[connect.sources.b-jira]\nkind = "tracker"\ncmd = "canopy-connect-jira --site acme.atlassian.net"\n',
+        '\n[connect.sources.b-jira]\nkind = "tracker"\ncmd = "canopy-connect-jira --site acme.atlassian.net"\n'
+        'operators = ["557058:f58131cb"]\n',
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert [(name, s.kind) for name, s in cfg.connect.named().items()] == [
@@ -708,6 +709,8 @@ def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_then_the_slack_
         ("a-slack", "slack"),
     ]
     assert cfg.connect.sources["a-slack"].operators == ("U1A",)
+    # A tracker source's are account ids, whatever the tracker's shape: no Slack id is asked of them.
+    assert cfg.connect.sources["b-jira"].operators == ("557058:f58131cb",)
 
 
 @pytest.mark.parametrize(
@@ -733,7 +736,10 @@ def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_then_the_slack_
         ('[connect.sources.a]\nkind = "slack"\ncmd = "r"\n', "a slack source needs cmd and operators"),
         ('[connect.sources.a]\nkind = "slack"\ncmd = "r"\noperators = ["U1A"]\npost_cmd = "p"\n', "takes no post_cmd"),
         ('[connect.sources.a]\nkind = "slack"\ncmd = "r"\noperators = ["@me"]\n', "is not a Slack user id"),
-        ('[connect.sources.a]\nkind = "vcs"\ncmd = "r"\noperators = ["U1A"]\n', "operators is a slack source's"),
+        (
+            '[connect.sources.a]\nkind = "vcs"\ncmd = "r"\noperators = ["U1A"]\n',
+            "operators is a slack or tracker source's",
+        ),
     ],
 )
 def test_review_replies_and_sources_are_checked(canopy_env: CanopyEnv, toml: str, message: str) -> None:

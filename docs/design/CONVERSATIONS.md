@@ -9,7 +9,8 @@ notifications, and reviews](CHORES_NOTIFICATIONS_REVIEWS.md). Next: [Flaky CI](F
 The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied, and
 where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and Slack.
 Each proves the operator its own way: the tracker by `trust.authorized_repliers`, matched in code on what a tracker
-source observed (§7), else by agents; the CLI by the operator's shell (T1); the web UI by the listener secret
+source observed (§7), else by agents, and on a private ticket by the accounts a `tracker` source's `operators` lists
+(§30); the CLI by the operator's shell (T1); the web UI by the listener secret
 (TRUST_MODEL T8); Slack by the user ids a `slack` source lists, checked in code, for replies in the sink's ticket
 threads and mentions of canopy's bot in its channel (§20). Outbound, every channel uses §20's events. The overseer and
 workers never see which channel a message came from, so adding one changes no prompt.
@@ -38,7 +39,10 @@ has one.
   which is how they answer an untrusted reviewer (§7); the message is canopy's own fact and stays in the journal.
 - **Private ticket.** The journal is the source. Its start record and the operator's messages are canopy's own facts,
   written after a channel authenticated the operator, so the harness checks them in code without reading the tracker
-  (D003). Tracker comments on a private ticket are data, whoever wrote them.
+  (D003). Tracker comments on a private ticket are data, whoever wrote them, but for one a `tracker` source's
+  `operators` lists wrote without the workers' marks (D069): that one is the operator's message, so the operator can
+  answer a worker there though the worker posts nothing there. One written before the ticket's latest start, or past
+  an operator message's bound, stays data.
 
 ### Private tickets
 
