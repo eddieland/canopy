@@ -18,6 +18,20 @@ one up. A question for you is `waiting on you`, never `blocked`.
 The box beside them filters by key or title, and the count reads `6 of 41` while anything narrows the list. Every word
 you type must appear somewhere, in any case, so `abc-1` finds ABC-101 and ABC-102. Escape leaves the box.
 
+## The board
+
+**list** and **board**, at the head of the list, switch how it's laid out. The board puts each ticket in a column for
+the stage it's at, left to right as work moves: `to do`, `plan` (a plan waits on your approval), `working` (a run is on
+it now, or its branch is pushed and waits for a PR), `CI`, `review`, `approved` (yours to merge), and `done`. Hover a
+column's name for the phases it holds. A ticket a run is on sits in `working` whatever phase it was in, so the card says
+which: `ci red` under `working` is a worker fixing CI. Each card is the ticket's key, its age, its title, where it
+stands, its phase, and `private` when it is.
+
+The chips and the box narrow the board as they do the list, and the toggle above it flips the order within each column.
+`done` shows its most recent eight and links to the rest, since nobody needs a column scrolling back to spring. The
+board only reads: a ticket moves when the loop moves it, so there's nothing to drag, and canopy never marks a ticket
+done because you dropped it somewhere. It stays in the URL (`?view=board`), so bookmark it if it's how you like to look.
+
 ## Starting a ticket
 
 Type a key in **Start a ticket** and press **Start privately**. This is `canopy start KEY`. canopy starts the ticket
