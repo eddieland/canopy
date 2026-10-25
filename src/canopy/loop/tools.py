@@ -505,7 +505,8 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
                 label=request.label,
                 slug=request.slug,
                 base=request.base,
-                request=request.model_dump(mode="json"),
+                # With its default cursors, so the spawn moves what the block showed at the ask (DESIGN §37, §40).
+                request=request.model_copy(update={"cursors": cursors}).model_dump(mode="json"),
                 repos=repos,
                 reasons=reasons,
                 cursors=handles,
