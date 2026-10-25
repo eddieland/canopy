@@ -146,19 +146,21 @@ asks for a review of a PR as `review.query` does:
 name = "retry-forever"
 pr = "https://github.com/acme/api/pull/412"
 repo = "api"
-sha = "3f9c2e..."     # the PR's head as it merged, all 40 characters
+sha = "3f9c2e..."     # the PR's head as it merged, the full hash
 base = "a71d04..."    # where it left main
 kind = "bug"
 lines = ["src/retry.py:42", "src/retry.py:57-61"]
 ```
 
 - **`name`** names the case's files and `canopy review eval --case NAME`: lowercase letters, digits, and dashes.
+- **`pr`** is the PR's plain `https://` URL, and **`repo`** the repository's name in the workspace file.
 - **`sha`** is the commit the reviewer reads, the PR's head as it merged, or as it stood when the bug was in it.
   canopy fetches it from origin, so it has to be a commit origin still has; GitHub keeps a PR's commits after its
   branch is deleted.
-- **`base`** is where the PR left its base branch. A merged PR's commit is on main now, so `git merge-base SHA main`
-  gives back the commit itself; ask the main it landed on instead, `git merge-base SHA LANDED^`, where `LANDED` is
-  its merge or squash commit. Pinning it means every eval of the case reads the same diff.
+- **`base`** is where the PR left its base branch: `git merge-base SHA LANDED^`, where `LANDED` is the commit it
+  merged as, its merge or squash commit. That works however it merged. Asking `main` alone does not after a merge
+  commit, since the PR's head is on main now and you get the head back. Pinning it means every eval of the case reads
+  the same diff.
 - **`lines`**, for a bug, is where the bug is, as `path:line` or `path:first-last` from the repository's root,
   numbered as the file stood at `sha`, not after the fix. The fix's diff shows you where to look. A finding within 3
   lines of any one of them finds the bug, so name every spot a fair reviewer might point to, and nothing else.
