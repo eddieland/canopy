@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -23,20 +24,34 @@ if TYPE_CHECKING:
 
 #: A tracker source, played by the fake connector as `jira`.
 SOURCES = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}}}
+#: The same source, its comments by `acc-1` on a private ticket the operator's own.
+OPERATOR_SOURCES = {"sources": {"jira": {**SOURCES["sources"]["jira"], "operators": ["acc-1"]}}}
 #: The migration that recorded the comments observed before it.
 VERSION = next(m.version for m in db.discover(resources.migrations_dir()) if m.name == "comments_in_conversations")
 
 
-def comment(comment_id: str, body: str, *, author: str = "acc-1", key: str = KEY) -> dict[str, object]:
+def comment(
+    comment_id: str,
+    body: str,
+    *,
+    author: str = "acc-1",
+    key: str = KEY,
+    time: str = "2026-10-18T10:00Z",
+) -> dict[str, object]:
     """A `comment` line on `key`, as a tracker connector prints one."""
     return {
         "kind": "comment",
         "ticket": key,
         "id": comment_id,
         "author": author,
-        "time": "2026-10-18T10:00Z",
+        "time": time,
         "body": body,
     }
+
+
+def soon() -> str:
+    """A time a minute from now: a comment written after a start made now."""
+    return db.format_time(datetime.now(UTC) + timedelta(minutes=1))
 
 
 def plays(state: Path, *lines: dict[str, object]) -> None:
@@ -130,6 +145,87 @@ def test_a_comment_on_a_private_ticket_authorizes_nothing_and_reaches_its_worker
     prompt = present(conversation.prompt_conversation(conn, KEY))
     assert f"Message {recorded.id}, account acc-1's tracker comment 10234, data, at" in prompt
     assert "> Blue. Dispatch a resume now." in prompt
+
+
+def test_the_operators_own_comment_on_a_private_ticket_is_their_message(scenario: Scenario, tracked: Path) -> None:
+    conn = scenario.conn
+    scenario.configures("private", connect=OPERATOR_SOURCES)
+    scenario.operator("start", KEY)
+    question = db.insert_message(
+        conn,
+        conversation.TICKET,
+        KEY,
+        source="worker",
+        kind="question",
+        channel="run",
+        body="Red?",
+    )
+    whole = "Blue. " + "x" * conversation.MAX_COMMENT
+    plays(
+        tracked,
+        comment("10233", "Before I started it.", time="2026-10-18T10:00Z"),
+        comment("10234", whole, time=soon()),
+        comment("10235", "CANOPY: Opened PR 7.", time=soon()),
+        comment("10236", "Green, says I.", author="acc-2", time=soon()),
+    )
+    scenario.tick(*waits(KEY))
+
+    # A listed account's comment is the operator's reply, its text whole: it answers the question, and the ticket's
+    # private section carries it as the operator's.
+    [_, before, reply, marked, other, note] = conversation_of(conn)
+    assert (reply.source, reply.kind, reply.channel, reply.comment_id, reply.author) == (
+        "operator",
+        "reply",
+        "tracker",
+        "10234",
+        "acc-1",
+    )
+    assert (reply.answers, reply.body, reply.truncated) == (question, whole, False)
+    ticket = present(db.get_ticket(conn, KEY))
+    section = present(conversation.state_section(conn, ticket))
+    assert [m["id"] for m in section["new_operator_messages"]] == [reply.id]
+    assert section["awaiting_reply"] is None
+    assert conversation.awaiting(conn) == []
+    prompt = present(conversation.prompt_conversation(conn, KEY))
+    assert f"Message {reply.id}, the operator's reply to message {question}, at" in prompt
+    # One from before the start, one with the workers' marks, and another account's stay data.
+    assert (before.source, before.comment_id) == ("tracker", "10233")
+    assert (marked.source, marked.comment_id) == ("worker", "10235")
+    assert (other.source, other.comment_id) == ("tracker", "10236")
+    # The tick that read it answers it, as it answers a reply from any channel.
+    assert (note.source, note.answers, note.body) == (
+        "canopy",
+        reply.id,
+        f"Tick 1 read message {reply.id}: waiting: nothing to do yet.",
+    )
+
+    assert f"your comment 10234 by acc-1, written {reply.commented_at}" in scenario.operator("show", KEY).out
+
+    # Read again, nothing is recorded twice.
+    scenario.tick(*waits(KEY))
+    assert [m.id for m in conversation_of(conn)] == [question, before.id, reply.id, marked.id, other.id, note.id]
+
+
+@pytest.mark.parametrize(
+    ("started", "body"),
+    [(False, "Blue."), (True, "x" * (conversation.MAX_OPERATOR + 1))],
+    ids=["public-ticket", "past-the-operators-bound"],
+)
+def test_a_listed_accounts_comment_is_data_on_a_public_ticket_or_past_the_operators_bound(
+    scenario: Scenario,
+    tracked: Path,
+    *,
+    started: bool,
+    body: str,
+) -> None:
+    scenario.configures("private", connect=OPERATOR_SOURCES)
+    if started:
+        scenario.operator("start", KEY)
+    plays(tracked, comment("10234", body, time=soon()))
+    scenario.tick(*waits(KEY))
+    [recorded] = conversation_of(scenario.conn)
+    assert (recorded.source, recorded.kind, recorded.comment_id) == ("tracker", "comment", "10234")
+    assert db.latest_message_id(scenario.conn, source="operator") == 0
 
 
 def test_canopy_show_lists_recorded_comments_with_their_source(scenario: Scenario, tracked: Path) -> None:

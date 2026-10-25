@@ -190,7 +190,12 @@ Controls:
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
   `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8), and for a reply, a listed
-  Slack id's in the sink's thread (above). With `tracker.private`
+  Slack id's in the sink's thread (above), or a comment on the ticket by an account a `tracker` source's `operators`
+  lists (private, T7), checked in code against the author the source observed, and only without the workers' marks
+  (D069). Residual: the check trusts the author the connector printed, as an authorized replier's does; whoever
+  controls a listed tracker account can answer and resume the ticket's worker as the operator; the words are on the
+  tracker, where the operator wrote them; and an edit after canopy read the comment keeps the first words. With
+  `tracker.private`
   set (private), a labeled ticket canopy never ran is started by its first dispatch instead, on the overseer's
   `label` claim, which the harness checks against config as for any public dispatch (D119). No worker re-reads the
   labels for it, then or later, and removing the label does not stop it: an overseer that claims a label a ticket
@@ -198,10 +203,10 @@ Controls:
   That is the switch's residual, beside D051's; `canopy show` and the dispatch's decision name such a start.
   A dispatch checks the start record in code, in the transaction that inserts the run, so it needs no `label`, and
   `_run` reads it again before the worker starts. A stopped ticket is dispatched by nothing, whatever
-  labels it carries. Tracker comments on a private ticket are data, whoever wrote them; only the operator's messages
-  are instructions, and the harness renders them into the worker's prompt itself. `canopy forget` is the operator's
-  too: it clears what the journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit
-  or cooldown (D030, D086).
+  labels it carries. Tracker comments on a private ticket are data, whoever wrote them, but a listed account's above,
+  which is the operator's message; only the operator's messages are instructions, and the harness renders them into
+  the worker's prompt itself. `canopy forget` is the operator's too: it clears what the journal knows of a ticket's
+  branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
   `canopy grant` is the operator's alone as well, from the shell or the web UI behind the listener secret (T8): it
   raises one unit's attempt limit for one kind, or one PR's review limit, and resets no count (DESIGN §22). `start`,
   `stop`, `reply`, `forget`, and `grant` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent
@@ -1119,7 +1124,8 @@ loop's terminal would.
   Slack sink's webhook or token file readable only by you. Give a bot token only the `chat:write` scope, and for a
   `slack` source the one history scope its channel needs, `channels:history` or `groups:history`: the file holds
   whatever the token can do. People who can read the channel see what the loop does; only the Slack accounts a `slack`
-  source's `operators` lists can steer it, as you, by replying in a ticket's thread. List only your own.
+  source's `operators` lists can steer it, as you, by replying in a ticket's thread. List only your own. The same
+  holds for a `tracker` source's `operators`: those accounts steer a private ticket's worker, as you, by commenting.
 - If you allow a tool in a chore's agent definition, you are responsible for what that tool can do. canopy's controls
   assume chore tools only read.
 - If you sandbox runs (T4), prefix every command docs/SANDBOX.md lists, `private_worker_cmd` included, or name the

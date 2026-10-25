@@ -72,6 +72,8 @@ INSTRUCTION = "instruction/"
 MAX_COMMENT = 2000
 #: The channel of a comment on an artifact a source observed (DESIGN §38), apart from a tracker comment's `tracker`.
 ARTIFACTS = "artifacts"
+#: The channel of a tracker comment a source observed, the operator's own on a private ticket included (§22, §35).
+TRACKER = "tracker"
 #: The decision each `mirror` recorded, before M37 retired the overseer's mirror of tracker comments: a copy of one,
 #: which decided nothing. Older ticks hold them.
 MIRROR_ACTION = "mirror"
@@ -424,13 +426,15 @@ def write_reply(
     channel: str,
     submission: str | None,
     answers: bool = True,
+    comment: db.Comment | None = None,
 ) -> Replied:
     """Record an operator message `reply` checked, or another verb of the operator's writes. Call inside a transaction.
 
     Approving a feedback plan writes its message so, in the transaction that approves it (DESIGN §32): the caller has
     checked the operator, the subject, and the body's bound. Without `answers`, the message is the verb's instruction
     and answers no question: a question asked before it still waits on a reply (`latest_question`), and `submission`,
-    which the verb makes distinct for each message it means to write, is recorded marked so (`INSTRUCTION`).
+    which the verb makes distinct for each message it means to write, is recorded marked so (`INSTRUCTION`). With
+    `comment`, the message is the operator's own tracker comment, and names it (`record_operator_comment`).
 
     Returns:
         What `reply` returns.
@@ -453,6 +457,7 @@ def write_reply(
         body=text,
         answers=answered,
         submission=stored,
+        comment=comment,
     )
     new = message_id > before
     if not new:
@@ -788,6 +793,31 @@ def record_comment(
     if db.comment_message(conn, TICKET, key, comment.id) is not None:
         return False
     db.insert_message(conn, TICKET, key, source=source, kind="comment", channel=channel, body=body, comment=comment)
+    return True
+
+
+def record_operator_comment(conn: sqlite3.Connection, key: str, comment: db.Comment, text: str) -> bool:
+    """Record the operator's own comment on private ticket `key` as their message, as `canopy reply` records one (§22).
+
+    The tracker source decided, in code, that a listed account of the operator's wrote it without the workers' marks
+    (D069), as a `slack` source decides a reply is theirs. Only a comment written since the ticket's latest start
+    counts: a ticket's first read brings its whole history, and what the operator wrote before starting it was not
+    said to its workers. It answers the ticket's latest question, and names the comment, whose id is its submission,
+    so a second read records nothing new. Call inside the transaction that records the observation.
+
+    Returns:
+        True if it is the operator's message; False, for the caller to record the comment as data, on a ticket that is
+        not started, for a comment written before its start or already in the conversation, or for an empty text or
+        one past `MAX_OPERATOR`, which `reply` would refuse.
+    """
+    record = start_of(conn, key)
+    if record is None or not is_started(record) or comment.at <= record.started_at:
+        return False
+    if db.comment_message(conn, TICKET, key, comment.id) is not None:
+        return False
+    if not text or len(text) > MAX_OPERATOR:
+        return False
+    write_reply(conn, Ref(TICKET, key), text, channel=TRACKER, submission=comment.id, comment=comment)
     return True
 
 
