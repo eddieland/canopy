@@ -67,3 +67,25 @@ test('a text filter in the URL fills the field and filters the list on load', as
     await expect(page.getByRole('searchbox', { name: 'Filter tickets by key or title' })).toHaveValue('sso')
     await expect.poll(() => keys(page)).toEqual(['ABC-101'])
 })
+
+test('the board lays the tickets out by stage, in the URL, under the same filters', async ({ page }) => {
+    await page.goto('tickets?show=open')
+    await settled(page)
+    await page.getByRole('radiogroup', { name: 'Lay out as' }).getByRole('radio', { name: 'board' }).click()
+    await expect(page).toHaveURL(/[?&]view=board/u)
+    await expect(page).toHaveURL(/[?&]show=open/u)
+
+    const board = page.getByRole('region', { name: 'Tickets by stage' })
+    // A ticket a run is on is working, whatever phase it was in; one with a red PR is in CI.
+    await expect(board.getByRole('region', { name: /^working \d+$/u }).getByTestId('ticket-ABC-104')).toBeVisible()
+    await expect(board.getByRole('region', { name: /^CI \d+$/u }).getByTestId('ticket-ABC-100')).toBeVisible()
+    await expect(board.getByRole('region', { name: 'done 0' })).toBeVisible()
+
+    await page.getByRole('searchbox', { name: 'Filter tickets by key or title' }).fill('csv')
+    await expect(board.getByRole('listitem')).toHaveCount(1)
+    await expect(board.getByTestId('ticket-ABC-102')).toBeVisible()
+
+    await page.getByRole('radiogroup', { name: 'Lay out as' }).getByRole('radio', { name: 'list' }).click()
+    await expect(page).not.toHaveURL(/view=/u)
+    await expect(page.getByTestId('tickets').getByTestId('ticket-ABC-102')).toBeVisible()
+})

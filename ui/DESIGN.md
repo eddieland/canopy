@@ -774,6 +774,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   word, its age, then where it stands; a worktree's what holds it, before its branch is cut, since the branch names the
   ticket too, then its age. At half a monitor (an 820px window, a list about 44rem wide) a run keeps its age and a
   slot its branch. Money and tokens go before what names a row. Each kind's order is in `ROW_COLUMNS`.
+- **The tickets board** (`?view=board`, `TicketBoard`): the tickets list's tickets, under its filters and order, in a
+  column per stage (`BOARD_COLUMNS` in `src/lib/ticket-board.ts`), every column shown, an empty one saying `none`. A
+  column is a well on `background`, its name an h3 with its count as a readout and its phases in the name's `title`;
+  a card is on `surface`: its key and age, its title, then where it stands, its phase, and `private`. Done shows its
+  most recent few and links to the done list. It only reads: no drag, since the loop moves a ticket. Past the panel's
+  width the columns scroll sideways inside it, a focusable region; a `list`/`board` `ToggleGroup` heads the panel.
 - **The tasks list**: where the task stands (`TASK_LOOK` in `src/lib/tasks.ts`, a run state's dot and color: `waiting
   on you` in blocked's, `queued` muted, else its latest run's status), `task:N` (opening its page), the repository,
   the text's first line in the free column, and the age since it was submitted; under the text, the first line of
