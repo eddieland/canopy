@@ -166,6 +166,9 @@ of `attention.md` and the `text` format, and the Slack sink escapes it (§20).
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
 | `human_replied` | authorized reply newer than the label, or an operator message newer than the message cursor | dispatch `resume` pointing at the reply; the worker removes the label |
 
+The attention these rows name, but `needs_author`'s and `flaky_rerun`'s, which are judgment, is the harness's, raised
+from its cause (§14); the overseer records `wait` there.
+
 A PR's checks are its head commit's check runs and commit statuses. GitHub runs no checks on a PR that conflicts with
 its base, so `conflicted` comes before every CI and review phase; the `resume` attempt limit bounds its repeats (D030).
 
@@ -185,8 +188,9 @@ own review findings (§21). `trust.trusted_reviewers`, private, lists whose feed
 operator's go-ahead: VCS host logins, matched in full and case-insensitively, and `canopy:review` for canopy's own
 reviews. It is empty by default, so a review bot's comment never starts a fixup on its own.
 
-- Anyone else's feedback is `untrusted_review`: the overseer records the attention item every tick, does not move the
-  `review` cursor past it, and never dispatches for it on its own judgment. An untrusted approval is not feedback.
+- Anyone else's feedback is `untrusted_review`: the harness raises its attention item (§14), and the overseer does not
+  move the `review` cursor past it and never dispatches for it on its own judgment. An untrusted approval is not
+  feedback.
 - The operator answers in canopy, with `canopy reply KEY` or the web UI (§22), never on the ticket. An operator message
   newer than the message cursor is an instruction, like an authorized reply.
 - The worker's prompt names the trusted reviewers, and the worker addresses anyone else's comment only as an operator

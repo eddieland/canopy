@@ -42,7 +42,7 @@ from canopy.core import config, contract, conversation, db, memory, vocab
 from canopy.core.vocab import ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
 from canopy.loop import attention, claims, duties, harness, harness_dispatches
-from canopy.reviews import findings, grants
+from canopy.reviews import findings
 from canopy.runs import dispatch, policy
 
 if TYPE_CHECKING:
@@ -69,6 +69,8 @@ MAX_PR_URL = 300
 DECIDE_ACTIONS = ("wait", "skip", "done")
 #: The guard that refuses what the overseer records about a ticket the harness decided (DESIGN §37).
 DECIDED = "decided"
+#: The guard that refuses an attention item of a reason the harness raises from its causes (DESIGN §37).
+RAISED = "raised"
 #: The phases the overseer sets. `split` is retired (M46): old tickets may still hold it, and nothing sets it.
 SETTABLE_PHASES = tuple(p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT)
 
@@ -691,8 +693,9 @@ def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
         What the command prints, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick, `repo` is not a repository in this workspace, or the item is about a ticket
-            the harness decided this tick, which is recorded.
+        Refused: Outside a running tick, `repo` is not a repository in this workspace, the item is about a ticket the
+            harness decided this tick, or its reason is one the harness raises from its causes, each of which is
+            recorded.
     """
     current = running_tick(ctx)
     key, pr, detail = request.key, request.pr, request.detail
@@ -700,9 +703,7 @@ def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
     if key is not None:
         _refuse_decided(ctx, current.id, key, "attention")
         db.touch_ticket(ctx.conn, key, ctx.repo)
-    if request.reason == "review_limit" and pr is not None:
-        # However the overseer words it, the item names what lifts the limit (DESIGN §21).
-        detail = f"{detail}; {grants.hint(pr)}"
+    _refuse_raised(ctx, current.id, request.reason, key=key, repo=unit, pr=pr)
     action = f"{attention.ACTION_PREFIX}{request.reason}"
     db.record_decision(ctx.conn, current.id, key, action, detail, repo=unit, pr=pr)
     return Outcome(
@@ -925,6 +926,31 @@ def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
     db.record_decision(ctx.conn, tick_id, key, attention.REFUSED_DECIDED, reason)
     logs.for_tick(tick_id).info("refused: decided by the harness", extra={"ticket": key, "verb": verb})
     raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")
+
+
+def _refuse_raised(
+    ctx: Context,
+    tick_id: int,
+    reason: str,
+    *,
+    key: str | None,
+    repo: str | None,
+    pr: str | None,
+) -> None:
+    """Refuse the overseer an attention item of `reason` when the harness raises it from its causes (DESIGN §37).
+
+    The harness raises it while its cause holds and ends it when the cause is gone, so the overseer neither records nor
+    drops one (TRUST_MODEL T1). The refusal is recorded, as a guard's is, and counts as the ticket's decision.
+
+    Raises:
+        Refused: `reason` is one the harness raises.
+    """
+    if reason not in attention.FROM_CAUSES:
+        return
+    why = f"the harness raises {reason} itself while its cause holds, and ends it when the cause is gone"
+    db.record_decision(ctx.conn, tick_id, key, f"refused:{RAISED}", why, repo=repo, pr=pr)
+    logs.for_tick(tick_id).info("refused: raised by the harness", extra={"ticket": key, "reason": reason})
+    raise Refused(f"attention refused ({RAISED}): {why}; the refusal was recorded")
 
 
 # How the verbs above do their parts.

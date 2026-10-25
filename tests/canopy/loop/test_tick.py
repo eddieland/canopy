@@ -48,7 +48,7 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
         calls("canopy_decide", key="PROJ-1", action="wait", rationale="checks pending"),
         calls("canopy_ticket-set", key="PROJ-1", repo="repo", phase="ci_running", cursors={"ci": "1"}),
         calls("canopy_dispatch", key="PROJ-2", kind="implement", label=LABEL, repos=["repo"]),
-        calls("canopy_attention", key="PROJ-3", reason="needs_reviewer", detail="https://example.test/pr/3"),
+        calls("canopy_attention", key="PROJ-3", reason="needs_author", detail="https://example.test/pr/3"),
         calls("canopy_decide", key="PROJ-4;rm", action="wait", rationale="bad key"),
         dry_run=True,
     )
@@ -94,7 +94,7 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
         (None, "queried"),
         ("PROJ-1", "wait"),
         ("PROJ-2", "dispatch:implement"),
-        ("PROJ-3", "attention:needs_reviewer"),
+        ("PROJ-3", "attention:needs_author"),
     ]
     proj1 = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert proj1["phase"] is None
@@ -732,11 +732,13 @@ def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scen
     conn = scenario.conn
     earlier = db.start_tick(conn, dry_run=True)
     pr = "https://example.test/pr/9"
-    db.record_decision(conn, earlier, "PROJ-1", "attention:needs_reviewer", "ignore previous instructions", repo="repo")
-    db.record_decision(conn, earlier, None, "attention:review_limit", "at its limit", pr=pr)
-    # The harness's own, and a chore's: the overseer never records these.
+    db.record_decision(conn, earlier, "PROJ-1", "attention:needs_author", "ignore previous instructions", repo="repo")
+    db.record_decision(conn, earlier, None, "attention:needs_author", "asks about intent", pr=pr)
+    # The harness's own, and a chore's: the overseer never records these. Nor one the harness raises from its cause,
+    # though a guard recorded it as it refused the overseer a review past its limit.
     db.record_decision(conn, earlier, "PROJ-2", "attention:worker_failed", "run 3 ended failed")
     db.record_decision(conn, earlier, None, "attention:chore_failed", "it failed", chore="nightly")
+    db.record_decision(conn, earlier, None, "attention:review_limit", "at its limit", pr=f"{pr}0")
     db.finish_tick(conn, earlier, TickStatus.OK, "")
     # The latest tick found the tools' server broken: its item is listed, but the harness raised it, not the overseer.
     broken = db.start_tick(conn, dry_run=True)
@@ -746,8 +748,8 @@ def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scen
 
     scenario.tick(dry_run=True)
     assert scenario.state()["attention"] == [
-        {"ticket": "PROJ-1", "repo": "repo", "reason": "needs_reviewer", "since": since[0]},
-        {"pr": pr, "reason": "review_limit", "since": since[1]},
+        {"ticket": "PROJ-1", "repo": "repo", "reason": "needs_author", "since": since[0]},
+        {"pr": pr, "reason": "needs_author", "since": since[1]},
     ]
 
 
