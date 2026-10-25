@@ -68,12 +68,36 @@ describe('TicketBoard', () => {
     })
 
     it('shows the most recent done tickets and links to the rest in the done list', async () => {
-        const done = Array.from({ length: DONE_SHOWN + 3 }, (_, i) => ticket({ key: `D-${i}`, done: true }))
+        // Newest first, as the server sends them: D-0 is the most recent.
+        const done = Array.from({ length: DONE_SHOWN + 3 }, (_, i) =>
+            ticket({
+                key: `D-${i}`,
+                done: true,
+                active_at: new Date(Date.UTC(2026, 9, 8) - i * 3_600_000).toISOString(),
+            }),
+        )
         const { router } = await renderBoard(<TicketBoard tickets={done} />)
         expect(cards('done')).toEqual(done.slice(0, DONE_SHOWN).map((t) => t.key))
         fireEvent.click(screen.getByRole('link', { name: '+3 more done' }))
         await waitFor(() => {
             expect(router.state.location.search).toEqual({ show: 'done' })
         })
+    })
+
+    it('keeps the most recent done tickets when the order is flipped, oldest of them first', async () => {
+        const done = Array.from({ length: DONE_SHOWN + 3 }, (_, i) =>
+            ticket({
+                key: `D-${i}`,
+                done: true,
+                active_at: new Date(Date.UTC(2026, 9, 8) - i * 3_600_000).toISOString(),
+            }),
+        )
+        await renderBoard(<TicketBoard tickets={done.toReversed()} />)
+        expect(cards('done')).toEqual(
+            done
+                .slice(0, DONE_SHOWN)
+                .toReversed()
+                .map((t) => t.key),
+        )
     })
 })

@@ -40,6 +40,15 @@ export const BOARD_COLUMN_HELP: Record<BoardColumn, string> = {
 /** How many tickets the done column shows, the most recent; the rest are a link to the done list. */
 export const DONE_SHOWN = 8
 
+/**
+ * The `count` most recently active of `tickets`, in the order given, so the done column keeps its newest whichever way
+ * the list is flipped.
+ */
+export function mostRecent(tickets: readonly TicketSummary[], count: number): TicketSummary[] {
+    const kept = new Set(tickets.toSorted((a, b) => Date.parse(b.active_at) - Date.parse(a.active_at)).slice(0, count))
+    return tickets.filter((ticket) => kept.has(ticket))
+}
+
 /** The tickets of each column, in the order they were given. */
 export type Board = Record<BoardColumn, TicketSummary[]>
 

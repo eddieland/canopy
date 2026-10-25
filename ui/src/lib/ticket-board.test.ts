@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mockTickets } from '@/api/mocks'
 import type { TicketSummary } from '@/api/types'
 
-import { BOARD_COLUMNS, boardColumn, boardOf } from './ticket-board'
+import { BOARD_COLUMNS, boardColumn, boardOf, mostRecent } from './ticket-board'
 
 const base = mockTickets[0] as TicketSummary
 const ticket = (fields: Partial<TicketSummary>): TicketSummary => ({ ...base, ...fields })
@@ -50,5 +50,14 @@ describe('boardOf', () => {
         expect(board.ci.map((t) => t.key)).toEqual(['A-1', 'A-3'])
         expect(board.review.map((t) => t.key)).toEqual(['A-2'])
         expect(board.todo).toEqual([])
+    })
+})
+
+describe('mostRecent', () => {
+    it('keeps the most recently active, in the order given, whichever end that is', () => {
+        const days = [1, 2, 3, 4, 5].map((day) => ticket({ key: `D-${day}`, active_at: `2026-10-0${day}T12:00:00Z` }))
+        expect(mostRecent(days.toReversed(), 2).map((t) => t.key)).toEqual(['D-5', 'D-4'])
+        expect(mostRecent(days, 2).map((t) => t.key)).toEqual(['D-4', 'D-5'])
+        expect(mostRecent(days, 9)).toHaveLength(5)
     })
 })

@@ -8,14 +8,22 @@ import { TicketState } from '@/components/ticket-state'
 import { TicketTitle } from '@/components/ticket-title'
 import { Tip } from '@/components/tip'
 import { phaseLabel, phaseWord } from '@/lib/phase'
-import { BOARD_COLUMN_HELP, BOARD_COLUMN_LABEL, BOARD_COLUMNS, boardOf, DONE_SHOWN } from '@/lib/ticket-board'
+import {
+    BOARD_COLUMN_HELP,
+    BOARD_COLUMN_LABEL,
+    BOARD_COLUMNS,
+    boardOf,
+    DONE_SHOWN,
+    mostRecent,
+} from '@/lib/ticket-board'
 import type { BoardColumn } from '@/lib/ticket-board'
 
 /**
  * The tickets as a board (`?view=board`): a column for each stage, left to right as a ticket moves (`boardColumn`),
  * each its count and its tickets as cards in the order given. Every column shows, an empty one saying so, so a stage
- * stays in its place. The done column shows its most recent `DONE_SHOWN` and links to the rest. It only reads: a
- * ticket moves when the loop moves it, never by a drag. Wider than the panel, it scrolls sideways inside it.
+ * stays in its place. The done column shows its most recent `DONE_SHOWN`, in the order given, and links to the rest.
+ * It only reads: a ticket moves when the loop moves it, never by a drag. Wider than the panel, it scrolls sideways
+ * inside it.
  */
 export function TicketBoard({ tickets }: { tickets: Iterable<TicketSummary> }) {
     const board = boardOf(tickets)
@@ -40,7 +48,7 @@ export function TicketBoard({ tickets }: { tickets: Iterable<TicketSummary> }) {
 /** One stage's column: its name and count, what it holds on the name's hover, then its cards. */
 function Column({ column, tickets }: { column: BoardColumn; tickets: TicketSummary[] }) {
     const id = `board-${column}`
-    const shown = column === 'done' ? tickets.slice(0, DONE_SHOWN) : tickets
+    const shown = column === 'done' ? mostRecent(tickets, DONE_SHOWN) : tickets
     const more = tickets.length - shown.length
     return (
         <section
