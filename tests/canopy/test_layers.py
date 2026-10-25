@@ -40,8 +40,11 @@ CONFINED = {
 PROGRAMS = frozenset({"notify/desktop.py", "serve/__main__.py"})
 # Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink, the GitHub
 # programs, and the Jira connector hold secrets and open connections, which the harness never does (DESIGN §20, §29,
-# §30), and the local artifact store holds what workers publish, which stays out of the journal (§38).
-SEPARATE = frozenset({"canopy_artifacts", "canopy_github", "canopy_jira", "canopy_notify_slack"})
+# §30), and the local artifact store holds what workers publish, which stays out of the journal (§38). The review bench
+# is a dev tool canopy never runs, which scores another reviewer through git and gh.
+SEPARATE = frozenset(
+    {"canopy_artifacts", "canopy_github", "canopy_jira", "canopy_notify_slack", "canopy_review_bench"},
+)
 # The package that alone knows the agent runtime (D009), and the name that must appear in no string outside it.
 RUNTIME = "runtime"
 RUNTIME_NAME = re.compile(r"opencode", re.IGNORECASE)
