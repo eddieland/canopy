@@ -118,7 +118,10 @@ credentials (TRUST_MODEL T2). `canopy-connect-github`, §29's reader, is the `vc
 What a `slack` source reads is no observation: a reply from one of its `operators`, on a ticket canopy knows, is the
 operator's message, recorded as `canopy reply` records one, once per Slack message (§22, TRUST_MODEL T1); the harness
 checks the id against config in code, whatever the connector printed. The connector prints no one else's, and a dry
-run records none (D036).
+run records none (D036). A `tracker` source's `operators` are tracker account ids: a comment one of them wrote on a
+private ticket since its latest start, without the workers' marks, is recorded the same way, as the operator's
+message rather than as data, when the source first observes it (§22). A dry run records it too, since the source
+reads each comment once.
 
 Rejected: the harness calling the APIs (D003, TRUST_MODEL T2: the process that holds the journal and enforces the
 guards never opens a connection or reads a token); an agent as the connector (a model run as a poll, against §4

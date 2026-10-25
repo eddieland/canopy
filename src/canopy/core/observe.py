@@ -223,7 +223,7 @@ def observe(
             whole = Whole()
         case _:
             assert_never(kind)
-    recorded = _record(conn, config, kind, read, whole)
+    recorded = _record(conn, config, kind, read, whole, operators=frozenset(source.operators))
     query = list(read.end.query) if request.query is not None and read.end.query is not None else None
     review = (
         list(read.end.review_query) if request.review_query is not None and read.end.review_query is not None else None
@@ -658,8 +658,18 @@ def _take(found: _Output, raw: Mapping[str, object], kind: SourceKind, prefix: s
         found.unread.add(what)
 
 
-def _record(conn: sqlite3.Connection, config: Config, kind: SourceKind, read: _Output, whole: Whole) -> dict[str, int]:
+def _record(
+    conn: sqlite3.Connection,
+    config: Config,
+    kind: SourceKind,
+    read: _Output,
+    whole: Whole,
+    *,
+    operators: AbstractSet[str],
+) -> dict[str, int]:
     """Replace what the journal holds of each subject read whole with what the run read of it, in one transaction.
+
+    `operators` are the source's: the tracker accounts whose comments on a private ticket are the operator's messages.
 
     Returns:
         The lines recorded of each kind.
@@ -682,12 +692,20 @@ def _record(conn: sqlite3.Connection, config: Config, kind: SourceKind, read: _O
         for line in read.lines:
             if line.of not in (whole.tickets | whole.prs | whole.repositories):
                 continue
-            if _insert(conn, config, line, now, known):
+            if _insert(conn, config, line, now, known, operators=operators):
                 recorded[line.kind] += 1
     return dict(recorded)
 
 
-def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: str, known: Collection[str]) -> bool:
+def _insert(
+    conn: sqlite3.Connection,
+    config: Config,
+    line: _Observation,
+    now: str,
+    known: Collection[str],
+    *,
+    operators: AbstractSet[str],
+) -> bool:
     """Record one line of a subject read whole.
 
     Returns:
@@ -713,7 +731,7 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
         case _Comment():
             if line.ticket not in known:
                 return False
-            return _record_comment(conn, config, line, now)
+            return _record_comment(conn, config, line, now, operators=operators)
         case _Pr():
             sql.execute(
                 conn,
@@ -767,12 +785,21 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
     return True
 
 
-def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, now: str) -> bool:
+def _record_comment(
+    conn: sqlite3.Connection,
+    config: Config,
+    line: _Comment,
+    now: str,
+    *,
+    operators: AbstractSet[str],
+) -> bool:
     """Record a comment the tracker connector read in `observed_comments`, once per ticket and comment id.
 
     One new to the journal is recorded in its ticket's conversation too, in the same transaction and with the same text,
     source `worker` when it carries the workers' marks, else `tracker` (DESIGN §35). Its body is cut and marked, and an
-    edit after is not followed, here or in the conversation.
+    edit after is not followed, here or in the conversation. One by an account in `operators` on a private ticket, with
+    none of the workers' marks, is the operator's message instead, its text whole (§22,
+    `conversation.record_operator_comment`).
 
     Returns:
         True if the comment was new to the journal.
@@ -804,7 +831,11 @@ def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, no
     the_comment = sql.update("observed_comments").where("ticket = ? AND id = ?", line.ticket, line.id)
     sql.execute(conn, the_comment.set(number=number))
     comment = db.Comment(id=line.id, author=line.author, at=line.time, truncated=truncated)
-    conversation.record_comment(conn, line.ticket, comment, source=source, body=body, channel="tracker")
+    if source == "tracker" and line.author in operators:
+        whole = db.Comment(id=line.id, author=line.author, at=line.time, truncated=False)
+        if conversation.record_operator_comment(conn, line.ticket, whole, line.body.strip()):
+            return True
+    conversation.record_comment(conn, line.ticket, comment, source=source, body=body, channel=conversation.TRACKER)
     return True
 
 
