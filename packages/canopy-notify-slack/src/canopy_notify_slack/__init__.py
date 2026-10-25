@@ -272,8 +272,9 @@ def _lines(value: object) -> list[str]:
 def render(message: Mapping[str, object]) -> str:
     """Return the Slack text for one canopy `json` message, what Slack shows in a notification.
 
-    A line naming the repository with counts, then a line per item or event, each as its block's first line shows it,
-    and a digest. A message of one item or event leads with it, so the notification says what happened.
+    A line naming the repository with counts, then a line per item or event in the order the blocks show them, each as
+    its block's first line shows it, and a digest. A message of one item or event leads with it, so the notification
+    says what happened.
 
     Returns:
         The escaped text, its lines joined by newlines, at most 45 lines, the last saying how many were left out.
@@ -290,11 +291,13 @@ def render(message: Mapping[str, object]) -> str:
         for a in added:
             what = _added_shown(a).lines[0]
             lines.append(f"{what}: {escape(a.get('detail'))}" if a.get("detail") else what)
-        lines += [_resolved(r) for r in resolved]
     events = _dicts(message.get("events"))
     if events:
         counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
-    lines += [_event_shown(e).lines[0] for e in events]
+    lines += [_event_shown(e).lines[0] for e in events if _needs_you(e)]
+    if isinstance(attention, dict):
+        lines += [_resolved(r) for r in _dicts(attention.get("resolved"))]
+    lines += [_event_shown(e).lines[0] for e in events if not _needs_you(e)]
     omitted = message.get("omitted")
     digest = message.get("digest")
     if len(lines) == 1 and not omitted and not isinstance(digest, dict):
@@ -355,6 +358,12 @@ _STATUS_EMOJI = {
 # and a number, in characters that need no escaping, so the label cannot say anything the URL does not.
 _GITHUB_PR = re.compile(r"https://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/pull/([0-9]{1,10})/?")
 
+#: The events that need the operator, shown before the rest: the loop or a sink failing, and a plan waiting on them.
+#: The same as canopy sends a batching sink at once (DESIGN §20), with a new attention item and a blocked run.
+_NEEDS_YOU = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed"})
+#: The events whose `blocked` run asked the operator a question: a ticket's run's, and a task's.
+_ASKING = frozenset({"run.ended", "task.ended"})
+
 type Block = dict[str, object]
 _DIVIDER: Block = {"type": "divider"}
 
@@ -368,6 +377,8 @@ class _Shown:
     #: What only adds to it, such as how long it has been open or which branch a run is on: in smaller type under the
     #: lines, each part escaped; an empty one is left out.
     aside: Sequence[str] = ()
+    #: Whether it is routine, such as a run starting: one line in small type, so what needs the operator stands out.
+    quiet: bool = False
 
 
 def _mrkdwn(text: str) -> Block:
@@ -509,6 +520,7 @@ def _run_started(e: Mapping[str, object]) -> _Shown:
             ),
         ],
         [f"attempt {escape(e.get('attempt'))} of {escape(e.get('limit'))}", f"`{escape(e.get('branch') or '-')}`"],
+        quiet=True,
     )
 
 
@@ -699,21 +711,27 @@ def _event_shown(e: Mapping[str, object]) -> _Shown:
 def _shown_blocks(shown: _Shown, page: object, *, fold: bool) -> list[Block]:
     """`shown` as a section, its aside as a context under it in smaller type, or, with `fold`, its section's last line.
 
+    A quiet one is a context alone, its aside on its first line.
+
     Returns:
-        The section, and the context when there is an aside and it is not folded.
+        The section, and the context when there is an aside and it is not folded; or, quiet, the context.
     """
     first, *rest = shown.lines
     aside = " · ".join(part for part in shown.aside if part)
+    if shown.quiet:
+        return [_context("\n".join([_with_open(" · ".join(x for x in (first, aside) if x), page), *rest]))]
     section = _section(_with_open(first, page), *rest, *([aside] if aside and fold else []))
     return [section, _context(aside)] if aside and not fold else [section]
 
 
-def _attention(attention: Mapping[str, object], *, fold: bool) -> list[Block]:
-    out = [block for a in _dicts(attention.get("added")) for block in _added(a, fold=fold)]
-    resolved = [_resolved(r) for r in _dicts(attention.get("resolved"))]
-    if resolved:
-        out.append(_section("*Resolved*", *resolved))
-    return out
+def _needs_you(e: Mapping[str, object]) -> bool:
+    """Whether an event needs the operator: the loop or a sink failing, a plan to approve, or a run's question.
+
+    Returns:
+        True when it does.
+    """
+    kind = e.get("kind")
+    return kind in _NEEDS_YOU or (kind in _ASKING and e.get("status") == "blocked")
 
 
 def _resolved(r: Mapping[str, object]) -> str:
@@ -835,25 +853,28 @@ def blocks(message: Mapping[str, object], *, header: bool = True) -> list[Block]
 
 
 def _body(message: Mapping[str, object], *, fold: bool) -> tuple[list[str], list[Block]]:
-    """The counts the byline shows, and the blocks after it: attention, then events, then the digest.
+    """The counts the byline shows, and the blocks after it: what needs the operator, the rest, then the digest.
+
+    What needs the operator is the new attention items, then the events `_needs_you` names, in the order canopy sent
+    them; the rest is the resolved items, then the other events.
 
     Returns:
         The counts, and the blocks, each item's aside folded into its section with `fold`.
     """
     counts: list[str] = []
     given = message.get("attention")
-    body: list[Block] = []
-    if isinstance(given, dict):
-        attention: dict[str, object] = {str(k): v for k, v in given.items()}
-        added, resolved = _dicts(attention.get("added")), _dicts(attention.get("resolved"))
-        if added or resolved:
-            counts.append(f"{len(added)} new · {len(resolved)} resolved · {escape(attention.get('open', 0))} open")
-        body = _attention(attention, fold=fold)
+    attention: dict[str, object] = {str(k): v for k, v in given.items()} if isinstance(given, dict) else {}
+    added, resolved = _dicts(attention.get("added")), _dicts(attention.get("resolved"))
+    if added or resolved:
+        counts.append(f"{len(added)} new · {len(resolved)} resolved · {escape(attention.get('open', 0))} open")
     events = _dicts(message.get("events"))
     if events:
         counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
-        body += [_DIVIDER] if body else []
-        body += [block for e in events for block in _event(e, fold=fold)]
+    first = [block for a in added for block in _added(a, fold=fold)]
+    first += [block for e in events if _needs_you(e) for block in _event(e, fold=fold)]
+    rest = [_section("*Resolved*", *(_resolved(r) for r in resolved))] if resolved else []
+    rest += [block for e in events if not _needs_you(e) for block in _event(e, fold=fold)]
+    body = [*first, *([_DIVIDER] if first and rest else []), *rest]
     digest = message.get("digest")
     if isinstance(digest, dict):
         counts.append("digest")

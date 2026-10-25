@@ -18,14 +18,19 @@ fields canopy sends, so it reads like a status board rather than a log:
 - Each event, led by an emoji for how it ended, so a channel scans by outcome: a check for `done`, a raised hand for a
   run waiting on you, with its question quoted, a cross for `failed`, an hourglass for a timeout. A proposed plan, an
   approved one, follow-ups filed, a chore's or a review's run, a task's, and the loop's own trouble each get a line of
-  their own. The details you rarely need, such as a run's attempt and branch, sit in small type under it.
+  their own. The details you rarely need, such as a run's attempt and branch, sit in small type under it, and a run
+  starting is one line of small type altogether: it's news, not a request.
 - A pull request on GitHub by its short name, `acme/api#7`, linked to it; any other link shows its whole address.
 - A [digest](#digests), when one is due, as a grid: ticks, workers running, runs started and ended, what needs you,
   and what it all cost.
 - An `open` link after each item, to its page in this UI, while the loop serves it ([below](#links-back-here)).
 
-The same message goes along as plain lines too, which is what Slack shows in a notification and on a lock screen. A
-message about one thing leads with it, so the lock screen says `run 41 ended failed`, not `1 event`.
+What needs you comes first, above a divider: new attention items, a run or task waiting on your answer, a plan to
+approve, and the loop or a sink failing, the same things that make a [batching](#batching) sink send at once. The
+rest follows in the order it happened, so a question doesn't sit under five runs starting.
+
+The same message goes along as plain lines too, in the same order, which is what Slack shows in a notification and on
+a lock screen. A message about one thing leads with it, so the lock screen says `run 41 ended failed`, not `1 event`.
 
 ## Webhook or bot token
 

@@ -231,7 +231,8 @@ def test_slack_marks_a_finding_the_operator_dismissed() -> None:
 def test_slack_blocks_are_built_from_the_fields() -> None:
     blocks = slack.blocks(MESSAGE)
     # No header: a line in small type names the repository, so a busy channel is not a column of headings.
-    assert [b["type"] for b in blocks] == ["context", "section", "context", "section", "divider", "section"]
+    # What needs you, the new item, before a divider and the rest.
+    assert [b["type"] for b in blocks] == ["context", "section", "context", "divider", "section", "section"]
     assert _texts(blocks) == [
         "*canopy* · api · 1 new · 1 resolved · 4 open · 1 event",
         ":bell: *PROJ-3* Retry &lt;@U1&gt; checkout · needs reviewer\n&lt;!channel&gt; <https://x.test/1>",
@@ -324,21 +325,45 @@ def test_slack_blocks_for_each_event_kind() -> None:
         {"kind": "test", "text": "canopy test message"},
         {"kind": "kind.from.a.newer.canopy", "line": "x <y>"},
     ]
+    # What needs you first, in the order canopy sent it; a run starting is one line in small type.
     assert _texts(slack.blocks({"repo": "/r/api", "events": events}))[1:] == [
-        ":arrow_forward: *P-1* Fix the build · fix_ci run 2 started",
-        "attempt 1 of 3 · `agent/P-1`",
         ":raising_hand: *P-2* · implement run 3 ended *blocked*\n> *Question:* Which table?",
-        ":x: *chore:deps* · run 4 ended *failed* · 1 finding",
-        ":white_check_mark: review run 5 ended *done*: findings low · 2 findings\n<https://x.test/pr/9>",
         ":rotating_light: *The loop is failing:* 3 ticks in a row ended other than ok",
         "latest tick 9 ended error · log `/w/.canopy/canopy.log`",
-        ":white_check_mark: *The loop recovered* after 3 failed ticks",
         ":warning: *Sink phone is failing:* 3 deliveries in a row",
         "`exit 7`",
+        ":arrow_forward: *P-1* Fix the build · fix_ci run 2 started · attempt 1 of 3 · `agent/P-1`",
+        ":x: *chore:deps* · run 4 ended *failed* · 1 finding",
+        ":white_check_mark: review run 5 ended *done*: findings low · 2 findings\n<https://x.test/pr/9>",
+        ":white_check_mark: *The loop recovered* after 3 failed ticks",
         ":moneybag: *Spend for 2026-10 reached 80% of its budget:* $240.00 of $300",
         ":moneybag: *Spend for 2026-10 reached its budget:* $301.50 of $300; on pace for $410.25",
         ":test_tube: canopy test message",
         "x &lt;y&gt;",
+    ]
+
+
+def test_what_needs_you_leads_the_message_and_its_notification() -> None:
+    events: list[dict[str, Any]] = [
+        _run("P-1", 1),
+        {**_run("P-2", 2, "done"), "ui": "http://localhost:9000/runs/2"},
+        _run("P-3", 3, "blocked"),
+    ]
+    resolved = [{"ticket": "P-4", "reason": "ci_red"}]
+    message: dict[str, Any] = {"repo": "/r/api", "attention": {"resolved": resolved, "open": 0}, "events": events}
+    blocks = slack.blocks(message)
+    # The run waiting on you, then a divider, then the rest in the order canopy sent it: the run starting in small
+    # type, its page linked after its line.
+    assert [b["type"] for b in blocks] == ["context", "section", "divider", "section", "context", "section"]
+    assert _texts(blocks)[1:] == [
+        ":raising_hand: *P-3* · implement run 3 ended *blocked*",
+        "*Resolved*\n:heavy_check_mark: ~P-4~ ci red",
+        ":arrow_forward: *P-1* · implement run 1 started · attempt 1 of 3 · `agent/P-1`",
+        ":white_check_mark: *P-2* · implement run 2 ended *done* · <http://localhost:9000/runs/2|open>",
+    ]
+    assert slack.render(message).splitlines()[1:3] == [
+        ":raising_hand: *P-3* · implement run 3 ended *blocked*",
+        ":heavy_check_mark: ~P-4~ ci red",
     ]
 
 
@@ -364,14 +389,14 @@ def test_slack_blocks_for_plans_follow_ups_and_tasks() -> None:
     assert _texts(slack.blocks({"repo": "/r/api", "events": events}))[1:] == [
         ":clipboard: *P-1* Fix the build · plan 7 waits on your approval",
         "read it with `canopy show P-1`",
-        ":ballot_box_with_check: *P-1* · feedback plan 8 approved by its planner\n> *Why:* One &lt;file&gt;",
-        ":seedling: *P-2* · run 3 filed 3 follow-ups\n*P-9* (api), *P-10*, 1 more",
-        "label or `canopy start` each one you want worked",
         (
             ":raising_hand: *task 4* · run 5 ended *blocked*\n<https://x.test/pr/3>\n> *Question:* Which branch?\n"
             "filed *P-11*"
         ),
         "`task/4` at `0123456789ab`",
+        ":ballot_box_with_check: *P-1* · feedback plan 8 approved by its planner\n> *Why:* One &lt;file&gt;",
+        ":seedling: *P-2* · run 3 filed 3 follow-ups\n*P-9* (api), *P-10*, 1 more",
+        "label or `canopy start` each one you want worked",
         ":white_check_mark: *chore:deps* · run 6 ended *ok* · no findings",
     ]
 
@@ -706,7 +731,7 @@ def test_threads_hold_tickets_and_reviews_for_a_day_chores_stay_out(threaded: _T
         (
             "1790.000002",
             False,
-            [":arrow_forward: *PROJ-1* · implement run 1 started", "attempt 1 of 3 · `agent/PROJ-1`"],
+            [":arrow_forward: *PROJ-1* · implement run 1 started · attempt 1 of 3 · `agent/PROJ-1`"],
         ),
         (None, False, _starts("review of PROJ-1", "<https://x.test/pr/9>")),
         ("1790.000004", False, [":white_check_mark: *PROJ-1* · review run 4 ended *done*\n<https://x.test/pr/9>"]),
