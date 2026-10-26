@@ -65,8 +65,9 @@
     --proposal-decline: oklch(0.46 0.06 115);
     --proposal-ask: oklch(0.465 0.065 245);
 
-    /* The spend page's chart (src/lib/spend.ts): a series per kind of agent run, as fills, never text and never state.
-     * Idle overseer spend is the overseer's own hue, lighter, so it reads as a part of it. */
+    /* The spend page's chart (src/lib/spend.ts): a series per kind of agent run, and the sessions outside canopy, as
+     * fills, never text and never state. Idle overseer spend is the overseer's own hue, lighter, so it reads as a part
+     * of it. */
     --spend-overseer: oklch(0.45 0.15 265);
     --spend-idle: oklch(0.62 0.12 265);
     --spend-workers: oklch(0.55 0.1 185);
@@ -75,6 +76,7 @@
     --spend-reviews: oklch(0.55 0.18 330);
     --spend-tasks: oklch(0.58 0.13 115);
     --spend-dry-run: oklch(0.6 0.02 275);
+    --spend-outside: oklch(0.52 0.09 25);
 
     /* A transcript's context chart (src/components/context-chart.tsx), as fills: what a model call carried from the
      * one before it, or the runtime's own overhead, in a neutral; what it added, canopy's prompt first, in a hue. */
@@ -177,6 +179,7 @@
     --spend-reviews: oklch(0.72 0.16 330);
     --spend-tasks: oklch(0.8 0.14 115);
     --spend-dry-run: oklch(0.6 0.02 270);
+    --spend-outside: oklch(0.7 0.09 25);
 
     --context-carried: oklch(0.58 0.035 270);
     --context-added: oklch(0.78 0.12 195);
@@ -462,6 +465,7 @@
     --color-spend-reviews: var(--spend-reviews);
     --color-spend-tasks: var(--spend-tasks);
     --color-spend-dry-run: var(--spend-dry-run);
+    --color-spend-outside: var(--spend-outside);
     --color-context-carried: var(--context-carried);
     --color-context-added: var(--context-added);
 

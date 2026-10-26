@@ -39,6 +39,7 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
     ("reviews", "reviews"),
     ("tasks", "tasks"),
     ("dry run", "dry_run"),
+    ("outside", "outside"),
     ("total", "total"),
 )
 _DAY_WIDTH = 10

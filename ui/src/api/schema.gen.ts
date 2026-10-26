@@ -7226,6 +7226,8 @@ export type components = {
              * @default []
              */
             pull_requests: components["schemas"]["SpendPullRequest"][];
+            /** @description What every session the runtime keeps that started in the window cost, canopy's apart from the rest. */
+            sessions: components["schemas"]["SpendSessions"] | null;
             /**
              * Since
              * Format: date-time
@@ -7283,6 +7285,11 @@ export type components = {
              */
             idle: number | null;
             /**
+             * Outside
+             * @description No run of canopy's: the runtime's sessions outside canopy, the operator's own and other workspaces' runs.
+             */
+            outside: number | null;
+            /**
              * Overseer
              * @description The live ticks' overseers.
              */
@@ -7305,7 +7312,7 @@ export type components = {
             tasks: number | null;
             /**
              * Total
-             * @description Everything, dry runs included, as the 24 hour and 30 day counters count it.
+             * @description Everything, dry runs and the sessions outside canopy included, as the 24 hour and 30 day counters count it.
              */
             total: number | null;
             /**
@@ -7338,6 +7345,27 @@ export type components = {
              * @description When it starts: the day's local midnight, or the hour's start, so a page can write it in its own zone.
              */
             start: string;
+        };
+        /**
+         * SpendDirectory
+         * @description What the sessions outside canopy that ran in one directory cost.
+         */
+        SpendDirectory: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars.
+             */
+            cost_usd: number;
+            /**
+             * Directory
+             * @description The directory, as the runtime recorded it.
+             */
+            directory: string;
+            /**
+             * Sessions
+             * @description How many started in the window.
+             */
+            sessions: number;
         };
         /**
          * @description What a tick that ended bought (DESIGN §6, Idle pacing; §11): `idle` and `busy` are the loop's word on an `ok` tick, `hand_run` an `ok` tick no loop ran, `not_ok` a live one that closed otherwise, and `dry_run` a dry run, whatever the loop said of it.
@@ -7482,6 +7510,50 @@ export type components = {
              * @description The PR.
              */
             url: string;
+        };
+        /**
+         * SpendSessions
+         * @description What every session the runtime keeps that started in the window cost, canopy's apart from the rest (DESIGN §13).
+         *
+         *     As `canopy loop` last read the runtime's record of them.
+         */
+        SpendSessions: {
+            /** @description This workspace's runs' sessions, their subagents', and those that ran in its state directory. */
+            canopy: components["schemas"]["SpendShare"];
+            /**
+             * Directories
+             * @description Where the sessions outside canopy ran, the costliest first, at most ten.
+             */
+            directories: components["schemas"]["SpendDirectory"][];
+            /** @description Every other session: the operator's own, and other workspaces' canopy runs. */
+            outside: components["schemas"]["SpendShare"];
+            /**
+             * Read At
+             * @description When the record was last read; None when it never was, and the window's sessions are not known.
+             */
+            read_at: string | null;
+            /**
+             * Status
+             * @description How that read ended: `found`, `missing` when the runtime has kept no session yet, or `failed`; None before any
+             *     read.
+             */
+            status: ("found" | "missing" | "failed") | null;
+        };
+        /**
+         * SpendShare
+         * @description What a set of the runtime's sessions cost: how many there were, and their cost.
+         */
+        SpendShare: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars.
+             */
+            cost_usd: number;
+            /**
+             * Sessions
+             * @description How many started in the window.
+             */
+            sessions: number;
         };
         /**
          * SpendTicket

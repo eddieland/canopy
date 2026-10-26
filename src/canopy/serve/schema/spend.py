@@ -80,8 +80,49 @@ class SpendCosts(Model):
     """Review runs."""
     tasks: float | None = None
     """The operator's one-off tasks' runs (DESIGN §36)."""
+    outside: float | None = None
+    """No run of canopy's: the runtime's sessions outside canopy, the operator's own and other workspaces' runs."""
     total: float | None = None
-    """Everything, dry runs included, as the 24 hour and 30 day counters count it."""
+    """Everything, dry runs and the sessions outside canopy included, as the 24 hour and 30 day counters count it."""
+
+
+class SpendShare(Model):
+    """What a set of the runtime's sessions cost: how many there were, and their cost."""
+
+    sessions: int
+    """How many started in the window."""
+    cost_usd: float
+    """What they cost, in US dollars."""
+
+
+class SpendDirectory(Model):
+    """What the sessions outside canopy that ran in one directory cost."""
+
+    directory: str
+    """The directory, as the runtime recorded it."""
+    sessions: int
+    """How many started in the window."""
+    cost_usd: float
+    """What they cost, in US dollars."""
+
+
+class SpendSessions(Model):
+    """What every session the runtime keeps that started in the window cost, canopy's apart from the rest (DESIGN §13).
+
+    As `canopy loop` last read the runtime's record of them.
+    """
+
+    canopy: SpendShare
+    """This workspace's runs' sessions, their subagents', and those that ran in its state directory."""
+    outside: SpendShare
+    """Every other session: the operator's own, and other workspaces' canopy runs."""
+    directories: list[SpendDirectory]
+    """Where the sessions outside canopy ran, the costliest first, at most ten."""
+    read_at: datetime | None = None
+    """When the record was last read; None when it never was, and the window's sessions are not known."""
+    status: Literal["found", "missing", "failed"] | None = None
+    """How that read ended: `found`, `missing` when the runtime has kept no session yet, or `failed`; None before any
+    read."""
 
 
 class SpendDay(Model):
@@ -286,3 +327,5 @@ class SpendBreakdown(Model):
     month: SpendMonth | None = None
     """The local calendar month so far against the operator's monthly budget, whatever the window; None when no budget
     is set."""
+    sessions: SpendSessions | None = None
+    """What every session the runtime keeps that started in the window cost, canopy's apart from the rest."""

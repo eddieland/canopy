@@ -67,9 +67,11 @@ budget show as ticks under the bar. A month that jumps past several at once hear
 message saying 80% beats two saying 50% and then 80%. The 100% alert always goes out. With no budget set, the panel says
 where to set one.
 
-The **Totals** split it by who spent it: the overseer, then the part of that its idle ticks spent,
-then the workers, plans, chores, reviews, your one-off tasks, and dry runs. Beside them are the tickets the loop marked
-done in that window, and what each cost on average, the overseer and chores included.
+The **Totals** split it by who spent it: the overseer, then the part of that its idle ticks spent, then the workers,
+plans, chores, reviews, your one-off tasks, and dry runs, and last **outside canopy**, the sessions none of canopy's
+runs started. The total counts them all. Beside them are the tickets the loop marked done in that window, and what each
+cost on average, the overseer and chores included and your own sessions not, since they landed nothing canopy knows
+of.
 
 Each split has one name everywhere on the page, in the totals, the chart's legend, and the table: **overseer** is all
 the overseer spent, idle ticks included, as `canopy spend` counts it, and **idle ticks** is the part of it that went
@@ -80,7 +82,8 @@ A day runs midnight to midnight on the clock of the machine canopy runs on, so y
 not on a UTC tomorrow. The dearest day has its total printed over its bar, so you can read the scale without hovering;
 hover any bar for that day's figures. A day that cost nothing is a flat line on the baseline, not a gap. Idle ticks sit
 at the bottom of each bar, under the rest of the overseer's spend in a deeper shade of its color, and at real prices
-they're a sliver beside a worker's run, so read their trend from the table. A window where nothing reported a cost says
+they're a sliver beside a worker's run, so read their trend from the table. The sessions outside canopy sit on top, no
+part of canopy's work but very much part of the bill. A window where nothing reported a cost says
 so in one line rather than draw you an empty chart.
 
 **24 hours** does the same by the hour: 24 clock hours ending with this one, so the newest bar fills in as the hour
@@ -103,6 +106,11 @@ rail's. Then:
   summed or one kind's, with the same filter. Every later model call of the run reads those again, so a chatty tool
   costs more than once. The filters stay put when you switch the window, so you can watch the workers' `bash` habit
   across a month without picking it again.
+- **Every session**: every session the runtime keeps that started in the window, in any directory: **canopy's
+  runs**, a subagent's counted with the session it ran for, and **outside canopy**, then where those ran, the
+  costliest directory first. Another workspace's canopy counts as outside, since its runs are in another journal. The
+  header says when `canopy loop` last read the runtime's record; it reads it between ticks, so with the loop stopped,
+  the list waits.
 - **Ticks by what they bought** and **Ticks by what woke them**: the ticks counted and costed by whether they were idle,
   and by their cause. The **no overseer** column counts the ones that ran no overseer, because nothing was left for it
   or the tick halted first. They cost nothing and count as nothing, never as a run that forgot to report its cost, so
