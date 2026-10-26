@@ -2,8 +2,10 @@
 // the server's (`canopy.core.monthly`); this lays them out.
 
 import type { ReportMonth, ReportTokens } from '@/api/types'
+import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
+import { stamp } from '@/lib/time'
 
 /** How many months the page opens on: a year. */
 export const DEFAULT_MONTHS = 12
@@ -43,6 +45,17 @@ export function reportLine(months: readonly ReportMonth[]): string {
     }
     const spent = `${costText(latest.cost_usd)} in ${monthLabel(latest.month, 'long')}`
     return `${spent} · ${counted(latest.landed.length, 'ticket')} landed · ${counted(latest.pull_requests, 'PR')}`
+}
+
+/**
+ * What the month's row of the sessions outside canopy counts, on its name's hover: the runtime's sessions none of
+ * canopy's runs started, as of `canopy loop`'s last read of them, or that it has read none yet.
+ */
+export function outsideHint(readAt: string | null, clock: Clock): string {
+    const what = "The runtime's sessions none of canopy's runs started, yours among them, counted in sessions, not runs"
+    return readAt === null
+        ? `${what}. canopy loop has not read them yet, so none is counted.`
+        : `${what}, as of ${stamp(readAt, clock)}.`
 }
 
 /** What the model calls were sent, read from the cache or not, as the transcript counts a call's `sent`. */

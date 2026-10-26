@@ -2,9 +2,10 @@
 
 import pytest
 
-from canopy.core import monthly
+from canopy.core import db, monthly, runtime_sessions
+from canopy.runtime.report import SessionPage, SessionSpend
 from canopy.serve.backend import Backend
-from canopy.serve.mock import history
+from canopy.serve.mock import T0, history
 from tests.canopy.web_helpers import client
 
 
@@ -33,3 +34,27 @@ def test_the_monthly_report_reads_local_months_oldest_first(backend: Backend) ->
     assert (year[0]["month"], year[0]["runs"], year[0]["cost_usd"]) == ("2025-11", 0, None)
     assert c.get("/api/reports/monthly", params={"months": monthly.MAX_MONTHS + 1}).status_code == 422
     assert c.get("/api/reports/monthly", params={"months": 0}).status_code == 422
+
+
+def test_each_month_counts_the_sessions_outside_canopy_as_the_budget_does(backend: Backend) -> None:
+    c = client(None, backend)
+    before = c.get("/api/reports/monthly", params={"months": 1}).json()
+    assert before["sessions_read_at"] is None
+    assert before["months"][0]["outside"]["sessions"] == 0
+    ms = int(T0.timestamp() * 1000)
+    mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 100, 20, 5, 300, 40)
+    with backend.open() as ctx:
+        runtime_sessions.record(
+            ctx.conn,
+            SessionPage("found", (mine,), cursor=(ms, "ses_mine")),
+            now=db.format_time(T0),
+        )
+    after = c.get("/api/reports/monthly", params={"months": 1}).json()
+    [october] = after["months"]
+    assert (october["outside"]["sessions"], october["outside"]["cost_usd"]) == (1, 1.5)
+    assert october["cost_usd"] - before["months"][0]["cost_usd"] == pytest.approx(1.5)
+    assert october["tokens"]["input"] - before["months"][0]["tokens"]["input"] == 100
+    assert october["per_landed_usd"] == before["months"][0]["per_landed_usd"]
+    assert after["sessions_read_at"] == "2026-10-08T12:00:00Z"
+    spent = c.get("/api/spend/breakdown", params={"days": 30}).json()["month"]["spent_usd"]
+    assert october["cost_usd"] == pytest.approx(spent)

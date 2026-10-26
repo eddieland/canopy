@@ -48,6 +48,7 @@ context is measured in characters it returned, since the runtime does not attrib
 labeled an estimate wherever shown (MEASUREMENTS 2026-10-13).
 
 The web UI's reports page reads the same figures by local calendar month, dollars and tokens by kind and by model,
+and the sessions outside canopy beside the kinds, so a month's total is all agent spend, as the budget's is,
 beside what each month landed: a ticket the loop marked done as merged, with its worker runs, the comments and reviews
 people other than its PR's author left, and how long it took. The journal keeps no merge time and no phase history, so
 a ticket lands when the loop marks it done, and its review wait runs from its first worker run that ended `done`; the

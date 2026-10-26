@@ -42,6 +42,17 @@ class ReportKind(Model):
     """Their tokens."""
 
 
+class ReportOutside(Model):
+    """What the runtime's sessions outside canopy cost in a month: the operator's own, and other workspaces' runs."""
+
+    sessions: int
+    """How many started in the month."""
+    cost_usd: float | None = None
+    """What they cost, in US dollars; None when none started."""
+    tokens: ReportTokens
+    """Their tokens."""
+
+
 class ReportModel(Model):
     """What one model's replies cost in a month, over every kind of run, as each run's session says (DESIGN §13)."""
 
@@ -96,11 +107,14 @@ class ReportMonth(Model):
     runs: int
     """How many runs of every kind started in it, a tick each for the overseer."""
     cost_usd: float | None = None
-    """What every kind cost, dry runs included, as the budget counts a month, in US dollars; None when none reported."""
+    """What every kind and the sessions outside canopy cost, dry runs included, as the budget counts a month, in US
+    dollars; None when none reported."""
     tokens: ReportTokens
-    """Every kind's tokens, summed."""
+    """Every kind's tokens and the sessions outside canopy's, summed."""
     kinds: list[ReportKind]
     """A row per kind of run, in a fixed order: overseer, workers, plans, chores, reviews, tasks."""
+    outside: ReportOutside
+    """The runtime's sessions outside canopy, as the last read of them found."""
     models: list[ReportModel]
     """The costliest first, the runs no session named a model for last."""
     landed: list[ReportTicket]
@@ -110,7 +124,8 @@ class ReportMonth(Model):
     pull_requests: int
     """How many PRs a run first named in it."""
     per_landed_usd: float | None = None
-    """The month's whole cost over the tickets it landed, in US dollars; None with none landed, or no cost."""
+    """What canopy's runs cost over the tickets it landed, the sessions outside canopy left out, in US dollars; None
+    with none landed, or no cost."""
     median_iterations: float | None = None
     """The median of its landed tickets' iterations; None with none landed."""
     median_pr_comments: float | None = None
@@ -126,3 +141,6 @@ class MonthlyReport(Model):
 
     months: list[ReportMonth]
     """Every month, oldest first, those with nothing in them included."""
+    sessions_read_at: datetime | None = None
+    """When `canopy loop` last read the runtime's sessions, which each month counts outside canopy; None when it never
+    did, and they count none."""

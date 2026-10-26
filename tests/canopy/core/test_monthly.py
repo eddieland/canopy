@@ -7,11 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from canopy.core import db, monthly, spend
+from canopy.core import db, monthly, runtime_sessions, spend
+from canopy.runtime.report import SessionPage, SessionSpend
 from tests.canopy.helpers import in_zone
 from tests.conftest import Journals
 
 NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
+#: A workspace state directory none of these journals' sessions ran in.
+STATE_DIR = Path("/work/.canopy")
 PR = "https://github.com/acme/api/pull/7"
 
 
@@ -88,16 +91,16 @@ def test_the_months_are_local_calendar_months_the_oldest_first(tmp_path: Path, j
     conn = journals.open(tmp_path / "canopy.db")
     tick(conn, at(9, 30, 23), 2.0)  # Sep 30 in UTC, Oct 1 in Tokyo
     tick(conn, at(10, 1, 12), 1.0)
-    found = monthly.months(conn, NOW, 3)
+    found = monthly.months(conn, NOW, 3, state_dir=STATE_DIR)
     assert [m.month for m in found] == ["2026-08", "2026-09", "2026-10"]
     assert [m.cost_usd for m in found] == [None, 2.0, 1.0]
     assert found[0].since == at(8, 1, 0)
     assert found[-1].until == at(11, 1, 0)
     with in_zone("Asia/Tokyo"):
-        tokyo = monthly.months(conn, NOW, 3)
+        tokyo = monthly.months(conn, NOW, 3, state_dir=STATE_DIR)
     assert [m.cost_usd for m in tokyo] == [None, None, 3.0]
     # A year turns over between months.
-    january = monthly.months(conn, datetime(2026, 1, 15, tzinfo=UTC), 3)
+    january = monthly.months(conn, datetime(2026, 1, 15, tzinfo=UTC), 3, state_dir=STATE_DIR)
     assert [m.month for m in january] == ["2025-11", "2025-12", "2026-01"]
 
 
@@ -117,7 +120,7 @@ def test_a_months_kinds_carry_their_runs_cost_and_tokens(tmp_path: Path, journal
         "INSERT INTO run_models (run_table, run_id, model, replies, cost_usd) VALUES ('ticks', ?, 'opus', 3, 0.5)",
         (first,),
     )
-    september, october = monthly.months(conn, NOW, 2)
+    september, october = monthly.months(conn, NOW, 2, state_dir=STATE_DIR)
     by_kind = {k.kind: k for k in october.kinds}
     assert [k.kind for k in october.kinds] == list(spend.KINDS)
     assert by_kind["overseer"].runs == 1
@@ -135,6 +138,38 @@ def test_a_months_kinds_carry_their_runs_cost_and_tokens(tmp_path: Path, journal
     assert [(m.model, m.runs, m.cost_usd) for m in october.models] == [("opus", 1, 0.5), (None, 3, 2.75)]
     assert september.cost_usd == 0.25
     assert monthly.Tokens().cache_hit is None
+
+
+def test_a_month_counts_the_sessions_outside_canopy_beside_its_runs(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    first = tick(conn, at(10, 2), 0.5, tokens=1000)
+    conn.execute("UPDATE ticks SET session_id = 'ses_overseer' WHERE id = ?", (first,))
+    ticket(conn, "PROJ-1")
+    run(conn, first, "PROJ-1", at(10, 3), cost=2.0)
+    decide(conn, first, "PROJ-1", at(10, 4))
+
+    def session(session_id: str, started: str, cost: float, directory: str) -> SessionSpend:
+        ms = int(db.parse_time(started).timestamp() * 1000)
+        return SessionSpend(session_id, None, directory, ms, ms, cost, 100, 20, 5, 300, 40)
+
+    sessions = (
+        session("ses_overseer", at(10, 2), 0.5, "/work"),  # the tick's: counted once, as the tick
+        session("ses_notes", at(10, 5), 1.25, "/home/me/notes"),
+        session("ses_try", at(10, 6), 9.0, "/work/.canopy/chores/deps"),  # an unrecorded try: canopy's
+        session("ses_old", at(9, 5), 0.75, "/home/me/notes"),
+    )
+    runtime_sessions.record(conn, SessionPage("found", sessions, cursor=(0, "ses_old")))
+    september, october = monthly.months(conn, NOW, 2, state_dir=STATE_DIR)
+    assert october.outside == monthly.Outside(
+        sessions=1,
+        cost_usd=1.25,
+        tokens=monthly.Tokens(input=100, output=20, reasoning=5, cache_read=300, cache_write=40),
+    )
+    assert (october.runs_cost_usd, october.cost_usd) == (2.5, pytest.approx(3.75))
+    assert october.tokens.input == 1000 + 100 + 100
+    # What canopy's runs cost to land a ticket: the operator's own sessions landed nothing canopy knows of.
+    assert october.per_landed == 2.5
+    assert (september.outside.sessions, september.cost_usd) == (1, 0.75)
 
 
 def test_a_landed_ticket_counts_its_iterations_reviews_and_waits(tmp_path: Path, journals: Journals) -> None:
@@ -162,7 +197,7 @@ def test_a_landed_ticket_counts_its_iterations_reviews_and_waits(tmp_path: Path,
     decide(conn, t, "PROJ-1", at(10, 4, 11))
     decide(conn, t, "PROJ-2", at(10, 5), rationale=db.CLOSED_RATIONALE)
     decide(conn, t, "PROJ-3", at(9, 30))
-    september, october = monthly.months(conn, NOW, 2)
+    september, october = monthly.months(conn, NOW, 2, state_dir=STATE_DIR)
     [landed] = october.landed
     assert landed.key == "PROJ-1"
     assert landed.title == "Title of PROJ-1"
