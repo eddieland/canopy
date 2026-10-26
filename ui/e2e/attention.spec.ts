@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { settled, signIn } from './helpers.ts'
+import { padMessages, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -174,6 +174,38 @@ test('choosing an item shows its thread and keeps the choice in the URL', async 
     await expect(
         list.getByRole('link').filter({ hasText: 'awaiting reply' }).filter({ hasText: 'ABC-102' }),
     ).toHaveAttribute('aria-current', 'page')
+})
+
+test("a long thread in the item's conversation stretches the page no further than its end", async ({ page }) => {
+    // Each message's time is an sr-only span, positioned absolutely: unless the thread's scroll box holds it, it sits
+    // where the unscrolled thread would end, and the page scrolls on that far, past its content, to blank.
+    await padMessages(page, 'ABC-102', 30)
+    await page.goto('attention')
+    await settled(page)
+    await page
+        .getByTestId('attention-list')
+        .getByRole('link')
+        .filter({ hasText: 'awaiting reply' })
+        .filter({ hasText: 'ABC-102' })
+        .click()
+    // The thread opens at its newest end: measured once it is there, as the operator would scroll the page.
+    const thread = page.getByTestId('attention-detail').getByRole('region', { name: 'Conversation' })
+    await expect
+        .poll(() => thread.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop))
+        .toBeLessThanOrEqual(1)
+    // And once the page's arrival has played: until then the spans sit inside what is still rising into place.
+    await page.evaluate(async () => {
+        const finite = document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        await Promise.all(finite.map((a) => a.finished))
+    })
+    const overrun = await page.evaluate(() => {
+        const scroller = document.querySelector<HTMLElement>('.page-scroll')
+        const main = document.querySelector('main')
+        return scroller === null || main === null ? null : scroller.scrollHeight - main.offsetHeight
+    })
+    expect(overrun).toBe(0)
+    // A refetch of the ticket can still be in the padding route when the page closes (padMessages).
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
 test("a chore's finding opens the chore's notes and an open form for another", async ({ page }) => {
