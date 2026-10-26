@@ -106,7 +106,9 @@ as `canopy notice` would, so a run already going keeps the words it started with
 ## The rail
 
 The strip beside the nav, on every page. From the top: a search box over the whole journal (below), everything working
-right now, and what the last 24 hours and the last 30 days cost, each a link to the spend page. **Working** lists every
+right now, and what the last 24 hours and the last 30 days cost, each a link to the spend page. Those count every
+agent session on this machine, canopy's runs and the sessions outside canopy alike; hover one to see when the outside
+ones were last read. **Working** lists every
 agent on the clock: worker runs by their ticket, reviews by their PR, chore runs by their chore, and task runs as
 `task:N#M` over your text's first line, with the runs waiting on you after them. A worker run's row says what it's
 doing under its ticket's title: `planning`, `implementing`, `fixing CI`. While it works, that comes as a quip of the

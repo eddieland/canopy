@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockChores, mockReviews, mockRuns, mockTasks } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { ChoreSummary, Meta, ReviewSummary, Run, Spend, TaskSummary } from '@/api/types'
+import { DEFAULT_CLOCK } from '@/lib/clock'
 import { QUIPS, setQuips } from '@/lib/run-phase'
+import { stamp } from '@/lib/time'
 import { renderRouted } from '@/test-utils'
 
 import { RailFooter, RailSpend, RailWorking } from './rail'
@@ -173,6 +175,7 @@ describe('RailSpend', () => {
         day: { hours: 24, since: '2026-10-07T12:03:00Z', cost_usd: 1.5 },
         month: { hours: 720, since: '2026-09-08T12:03:00Z', cost_usd: null },
         total_usd: 12,
+        sessions_read_at: '2026-10-08T11:55:00Z',
     }
 
     it("shows each window's cost after its name, a dash where nothing reported one", async () => {
@@ -180,6 +183,23 @@ describe('RailSpend', () => {
         expect(screen.getByRole('link', { name: '24h $1.50' })).toBeDefined()
         expect(screen.getByRole('link', { name: '30d –' })).toBeDefined()
         expect(screen.getByTitle('none reported').textContent).toBe('–')
+    })
+
+    it('says on hover that the counters count the sessions outside canopy, as of their last read', async () => {
+        await renderRouted(<RailSpend />, { client: seeded(keys.spend, SPEND) })
+        const hint = screen.getByRole('link', { name: '24h $1.50' }).getAttribute('title')
+        expect(hint).toBe(
+            "Spent in the last 24 hours, canopy's runs and the sessions outside canopy as of " +
+                `${stamp('2026-10-08T11:55:00Z', DEFAULT_CLOCK)}: the day by hour`,
+        )
+    })
+
+    it("says on hover that the counters count canopy's runs alone before the sessions are read", async () => {
+        await renderRouted(<RailSpend />, { client: seeded(keys.spend, { ...SPEND, sessions_read_at: null }) })
+        expect(screen.getByRole('link', { name: '30d –' }).getAttribute('title')).toBe(
+            "Spent in the last 30 days, canopy's runs alone until canopy loop reads the sessions outside canopy: " +
+                'the month by day',
+        )
     })
 
     it('shows no cost before the spend arrives', async () => {

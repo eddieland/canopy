@@ -187,7 +187,7 @@ def _record_budget_event(ctx: Context, now: datetime) -> None:
     last told this month: a budget raised, or an alert added, past the month's spend is heard of once the spend reaches
     it, while one lowered or added below it is not, since the sink already heard of more.
     """
-    found = spend.budget_month(ctx.conn, now, ctx.config.spend)
+    found = spend.budget_month(ctx.conn, now, ctx.config.spend, state_dir=ctx.state_dir)
     if found is None or found.reached is None:
         return
     # Pruning always keeps the newest of these (journal.prune_events), so a month already told is never taken for new.

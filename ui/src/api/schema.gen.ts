@@ -7122,8 +7122,15 @@ export type components = {
             /** @description The last 30 days. */
             month: components["schemas"]["SpendWindow"];
             /**
+             * Sessions Read At
+             * @description When `canopy loop` last read the runtime's sessions, which the figures count outside canopy; None when it never
+             *     did, and they count none.
+             */
+            sessions_read_at: string | null;
+            /**
              * Total Usd
-             * @description What every run in the journal cost, whenever it started, in US dollars; None when none reported a cost.
+             * @description What every run in the journal and every session outside canopy cost, whenever it started, in US dollars; None
+             *     when none reported a cost.
              */
             total_usd: number | null;
         };
@@ -7371,11 +7378,28 @@ export type components = {
              */
             month: string;
             /**
+             * Outside Usd
+             * @description What the runtime's sessions outside canopy that started in the month cost, in US dollars.
+             * @default 0
+             */
+            outside_usd: number;
+            /**
              * Projected Usd
              * @description What the month will cost if the rest of it spends as it has so far, in US dollars; None in its first day, or
              *     when nothing reported a cost.
              */
             projected_usd: number | null;
+            /**
+             * Runs Usd
+             * @description What every run of canopy's that started in the month so far cost, dry runs included, in US dollars; None when
+             *     none reported a cost.
+             */
+            runs_usd: number | null;
+            /**
+             * Sessions Read At
+             * @description When `canopy loop` last read the runtime's sessions; None when it never did, and `outside_usd` counts none.
+             */
+            sessions_read_at: string | null;
             /**
              * Since
              * Format: date-time
@@ -7384,7 +7408,7 @@ export type components = {
             since: string;
             /**
              * Spent Usd
-             * @description What every run that started in the month so far cost, dry runs included, in US dollars; None when none reported
+             * @description What the month has cost so far, `runs_usd` and `outside_usd` together, in US dollars; None when neither reported
              *     a cost.
              */
             spent_usd: number | null;
@@ -7572,7 +7596,8 @@ export type components = {
          * SpendWindow
          * @description What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
          *
-         *     Worker, split, chore, review, and task runs and each tick's overseer, by when they started.
+         *     Worker, split, chore, review, and task runs and each tick's overseer, and the runtime's sessions outside canopy, by
+         *     when they started.
          */
         SpendWindow: {
             /**

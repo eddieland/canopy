@@ -53,8 +53,10 @@ people other than its PR's author left, and how long it took. The journal keeps 
 a ticket lands when the loop marks it done, and its review wait runs from its first worker run that ended `done`; the
 page says so, rather than pass a proxy off as GitHub's own clock. The spend page, by day, sits under it.
 
-`spend.monthly_budget_usd` is what the operator means a local calendar month of runs to cost. `canopy spend` and the
-spend page track the month so far against it, with the pace it is on once its first day is over, and a sink that takes
+`spend.monthly_budget_usd` is what the operator means a local calendar month of agent spend to cost: canopy's runs and
+the runtime's sessions outside canopy (§13, Every session's spend), canopy's share shown beside the whole. `canopy
+spend` and the spend page track the month so far against it, with the pace it is on once its first day is over, and a
+sink that takes
 `loop` hears once when the month reaches it, again only for a budget raised past it. `spend.budget_alerts` adds other
 percentages of the budget, each told once a month: one message for the highest reached, and only for more dollars than
 the sink was last told, so a raised budget or an added alert is news when the month reaches it and a lowered one is not.
@@ -379,7 +381,9 @@ runtime summed them, each model's share, its directory, and the session it ran f
 canopy's to trust, since a run can write the runtime's data, so a session canopy cannot read is passed over and
 counted. `canopy spend` splits the window's sessions into canopy's, a session one of the journal's runs names or that
 ran in the workspace's state directory, where only canopy starts agents, and its subagents', and the rest, by
-directory; another workspace's runs are outside, since its journal is another. Rejected:
+directory; another workspace's runs are outside, since its journal is another. The budget and the web UI's counters
+are all agent spend: canopy's runs and the sessions outside canopy, each canopy session counted once, as its run, and
+each says when the sessions were last read, since with the loop stopped none is. Rejected:
 listing sessions through the runtime's commands, which list one project's top-level sessions only.
 
 ### The operator's skill

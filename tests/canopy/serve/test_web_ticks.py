@@ -7,13 +7,14 @@ import re
 
 import pytest
 
-from canopy.core import db
+from canopy.core import db, runtime_sessions
 from canopy.core import spend as spending
 from canopy.core.context import Context
 from canopy.loop import attention
+from canopy.runtime.report import SessionPage, SessionSpend
 from canopy.serve import tick_views
 from canopy.serve.backend import Backend
-from canopy.serve.mock import history
+from canopy.serve.mock import T0, history
 from tests.canopy.helpers import present
 from tests.canopy.web_helpers import client
 
@@ -135,6 +136,27 @@ def test_the_spend_breakdown_carries_the_month_against_its_budget_whatever_the_w
     assert found["spent_usd"] == pytest.approx(c.get("/api/spend").json()["day"]["cost_usd"])
     assert found["projected_usd"] == pytest.approx(found["spent_usd"] / found["elapsed"])
     assert c.get("/api/spend/breakdown", params={"days": 30}).json()["month"] == found
+
+
+def test_the_spend_counters_add_the_sessions_outside_canopy_and_say_when_they_were_read(backend: Backend) -> None:
+    c = client(None, backend)
+    before = c.get("/api/spend").json()
+    assert before["sessions_read_at"] is None
+    ms = int(T0.timestamp() * 1000)
+    mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
+    with backend.open() as ctx:
+        runtime_sessions.record(
+            ctx.conn,
+            SessionPage("found", (mine,), cursor=(ms, "ses_mine")),
+            now=db.format_time(T0),
+        )
+    after = c.get("/api/spend").json()
+    assert [after[w]["cost_usd"] - before[w]["cost_usd"] for w in ("day", "month")] == [pytest.approx(1.5)] * 2
+    assert after["total_usd"] - before["total_usd"] == pytest.approx(1.5)
+    assert after["sessions_read_at"] == "2026-10-08T12:00:00Z"
+    month = c.get("/api/spend/breakdown", params={"days": 1}).json()["month"]
+    assert (month["outside_usd"], month["sessions_read_at"]) == (1.5, "2026-10-08T12:00:00Z")
+    assert month["spent_usd"] == pytest.approx(month["runs_usd"] + 1.5)
 
 
 def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(backend: Backend) -> None:

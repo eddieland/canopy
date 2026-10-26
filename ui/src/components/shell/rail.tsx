@@ -4,19 +4,22 @@ import { BookOpen, SlidersHorizontal } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { choresQuery, metaQuery, reviewsQuery, runsQuery, spendQuery, tasksQuery } from '@/api/queries'
-import type { Run, RunState, SpendWindow } from '@/api/types'
+import type { Run, RunState, Spend, SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
 import { RunDot } from '@/components/status'
 import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLoopDown } from '@/hooks/use-loop-down'
+import { useClock } from '@/lib/clock'
+import type { Clock } from '@/lib/clock'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { choreRunRef, reviewRef, runRef, taskRunRef } from '@/lib/refs'
 import { runPhase, useQuips } from '@/lib/run-phase'
 import { railWork } from '@/lib/run-state'
 import type { RailItem } from '@/lib/run-state'
 import { taskTitle } from '@/lib/tasks'
+import { stamp } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 // Where the version links: every release's notes, newest first.
@@ -232,11 +235,23 @@ function Under({ children }: { children: string }) {
  */
 export function RailSpend() {
     const spend = useQuery(spendQuery).data
+    const clock = useClock()
+    const outside = outsideHint(spend, clock)
     return (
         <section aria-label="Spent" className={SECTION} data-testid="rail-spend">
             <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 px-2.5">
-                <Spent window={spend?.day} label="24h" hint="Spent in the last 24 hours: the day by hour" hours={24} />
-                <Spent window={spend?.month} label="30d" hint="Spent in the last 30 days: the month by day" days={30} />
+                <Spent
+                    window={spend?.day}
+                    label="24h"
+                    hint={`Spent in the last 24 hours${outside}: the day by hour`}
+                    hours={24}
+                />
+                <Spent
+                    window={spend?.month}
+                    label="30d"
+                    hint={`Spent in the last 30 days${outside}: the month by day`}
+                    days={30}
+                />
             </div>
         </section>
     )
@@ -343,6 +358,19 @@ function RailSection({
             {children}
         </section>
     )
+}
+
+/**
+ * What the counters count besides canopy's runs, for their hover: the runtime's sessions outside canopy, as of when
+ * `canopy loop` last read them, or that it has not yet. Empty before the spend arrives.
+ */
+function outsideHint(spend: Spend | undefined, clock: Clock): string {
+    if (spend === undefined) {
+        return ''
+    }
+    return spend.sessions_read_at === null
+        ? ", canopy's runs alone until canopy loop reads the sessions outside canopy"
+        : `, canopy's runs and the sessions outside canopy as of ${stamp(spend.sessions_read_at, clock)}`
 }
 
 /**

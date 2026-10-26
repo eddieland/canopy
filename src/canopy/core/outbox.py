@@ -193,7 +193,8 @@ class BudgetReached(TypedDict):
     budget: int
     #: The alert reached, as a percentage of the budget: 100 for the budget itself.
     percent: int
-    #: What the month's runs cost so far, in US dollars, rounded to the cent.
+    #: What the month's agent spend cost so far, canopy's runs and the sessions outside canopy, in US dollars,
+    #: rounded to the cent.
     spent: float
     #: What the month will cost at this pace, in US dollars, rounded to the cent; None in its first day.
     projected: float | None

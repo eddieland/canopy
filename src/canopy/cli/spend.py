@@ -80,7 +80,7 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
         click.echo(reports.read_spend(ctx, reports.Spend(days=days)))
         return 0
     now = datetime.now(UTC)
-    month = spend.budget_month(ctx.conn, now, ctx.config.spend)
+    month = spend.budget_month(ctx.conn, now, ctx.config.spend, state_dir=ctx.state_dir)
     for line in render(spend.breakdown(ctx.conn, now, days, state_dir=ctx.state_dir), month):
         click.echo(line)
     return 0
@@ -124,13 +124,20 @@ def budget_text(month: Month) -> str:
     """The month so far against its budget, as `canopy spend` says it.
 
     Returns:
-        One sentence: `This month, 2026-10: $123.45 of a $300 budget (41%), on pace for $280.00.`
+        The month's spend, then its parts: `This month, 2026-10: $123.45 of a $300 budget (41%), on pace for $280.00.
+        Canopy's runs $100.00, outside canopy $23.45.`
     """
     pace = f", on pace for {cost_text(month.projected_usd)}" if month.projected_usd is not None else ""
     over = " Over budget." if month.over else ""
+    runs = f"Canopy's runs {cost_text(month.runs_usd or 0.0)}"
+    outside = (
+        f", outside canopy {cost_text(month.outside_usd)}"
+        if month.sessions_read_at is not None
+        else "; outside canopy is not counted until canopy loop reads the runtime's sessions"
+    )
     return (
         f"This month, {month.month}: {cost_text(month.spent_usd or 0.0)} of a ${month.budget_usd} budget "
-        f"({month.percent}%){pace}.{over}"
+        f"({month.percent}%){pace}. {runs}{outside}.{over}"
     )
 
 

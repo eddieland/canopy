@@ -812,7 +812,7 @@ def test_the_month_is_the_local_calendar_month_against_its_budget(tmp_path: Path
         "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path, cost_usd) "
         "VALUES (NULL, 'deps', '2026-10-08T10:00:00.000Z', 'ok', 'l', 1.5)",
     )
-    found = spend.month(conn, NOW, 10)
+    found = spend.month(conn, NOW, 10, state_dir=STATE_DIR)
     assert (found.month, found.since, found.until) == (
         "2026-10",
         "2026-10-01T00:00:00.000Z",
@@ -822,10 +822,10 @@ def test_the_month_is_the_local_calendar_month_against_its_budget(tmp_path: Path
     assert found.elapsed == pytest.approx(7.5 / 31)
     assert found.projected_usd == pytest.approx(3.0 / (7.5 / 31))
     assert (found.share, found.over) == (pytest.approx(0.3), False)
-    assert spend.month(conn, NOW, 3).over
+    assert spend.month(conn, NOW, 3, state_dir=STATE_DIR).over
     # In Los Angeles, September's last evening is September's still, and October starts at its midnight.
     with in_zone("America/Los_Angeles"):
-        there = spend.month(conn, NOW, 10)
+        there = spend.month(conn, NOW, 10, state_dir=STATE_DIR)
     assert there.since == "2026-10-01T07:00:00.000Z"
     assert there.spent_usd == pytest.approx(3.0)
 
@@ -833,11 +833,16 @@ def test_the_month_is_the_local_calendar_month_against_its_budget(tmp_path: Path
 def test_a_month_has_no_pace_in_its_first_day(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     tick(conn, "2026-10-01T01:00:00.000Z", 4.0)
-    morning = spend.month(conn, datetime(2026, 10, 1, 9, tzinfo=UTC), 100)
+    morning = spend.month(conn, datetime(2026, 10, 1, 9, tzinfo=UTC), 100, state_dir=STATE_DIR)
     assert (morning.spent_usd, morning.projected_usd) == (4.0, None)
-    assert spend.month(conn, datetime(2026, 10, 2, 0, tzinfo=UTC), 100).projected_usd == pytest.approx(124.0)
+    assert spend.month(
+        conn,
+        datetime(2026, 10, 2, 0, tzinfo=UTC),
+        100,
+        state_dir=STATE_DIR,
+    ).projected_usd == pytest.approx(124.0)
     # Nothing reported a cost: nothing spent, and no pace to read.
-    empty = spend.month(conn, datetime(2026, 12, 15, tzinfo=UTC), 100)
+    empty = spend.month(conn, datetime(2026, 12, 15, tzinfo=UTC), 100, state_dir=STATE_DIR)
     assert (empty.spent_usd, empty.projected_usd, empty.share) == (None, None, 0.0)
 
 
@@ -851,7 +856,8 @@ def test_canopy_spend_prints_the_month_against_its_budget(
     assert main(["spend", "--days", "1"]) == 0
     line = capsys.readouterr().out.splitlines()[1]
     assert re.fullmatch(
-        rf"This month, {now:%Y-%m}: \$2\.00 of a \$5 budget \(40%\)(, on pace for \$\d+\.\d\d)?\.",
+        rf"This month, {now:%Y-%m}: \$2\.00 of a \$5 budget \(40%\)(, on pace for \$\d+\.\d\d)?\. Canopy's runs "
+        r"\$2\.00; outside canopy is not counted until canopy loop reads the runtime's sessions\.",
         line,
     )
     assert main(["spend", "--json"]) == 0
@@ -892,12 +898,12 @@ def test_a_month_s_alerts_are_100_and_the_operator_s_and_it_names_the_highest_re
 ) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     tick(conn, "2026-10-02T09:00:00.000Z", 8.5)
-    found = spend.month(conn, NOW, 10, (150, 50, 80))
+    found = spend.month(conn, NOW, 10, (150, 50, 80), state_dir=STATE_DIR)
     assert (found.alerts, found.reached) == ((50, 80, 100, 150), 80)
-    assert spend.month(conn, NOW, 10).alerts == (100,)
-    assert spend.month(conn, NOW, 10).reached is None
-    assert spend.month(conn, NOW, 5, (50,)).reached == 100
-    assert spend.month(conn, NOW, 100, (50,)).reached is None
+    assert spend.month(conn, NOW, 10, state_dir=STATE_DIR).alerts == (100,)
+    assert spend.month(conn, NOW, 10, state_dir=STATE_DIR).reached is None
+    assert spend.month(conn, NOW, 5, (50,), state_dir=STATE_DIR).reached == 100
+    assert spend.month(conn, NOW, 100, (50,), state_dir=STATE_DIR).reached is None
 
 
 def test_a_month_s_percent_is_floored_in_whole_cents(tmp_path: Path, journals: Journals) -> None:
@@ -905,11 +911,39 @@ def test_a_month_s_percent_is_floored_in_whole_cents(tmp_path: Path, journals: J
     tick(conn, "2026-10-02T09:00:00.000Z", 0.1)
     tick(conn, "2026-10-02T10:00:00.000Z", 0.19)
     # 0.1 + 0.19 is 0.29000000000000004, and 0.29 * 100 a hair under 29: in cents it is 29, of a $1 budget.
-    assert spend.month(conn, NOW, 1).percent == 29
+    assert spend.month(conn, NOW, 1, state_dir=STATE_DIR).percent == 29
     tick(conn, "2026-10-02T11:00:00.000Z", 0.7)
-    assert (spend.month(conn, NOW, 1).percent, spend.month(conn, NOW, 1).over) == (99, False)
+    assert (
+        spend.month(conn, NOW, 1, state_dir=STATE_DIR).percent,
+        spend.month(conn, NOW, 1, state_dir=STATE_DIR).over,
+    ) == (99, False)
     tick(conn, "2026-10-02T12:00:00.000Z", 0.01)
-    assert (spend.month(conn, NOW, 1).percent, spend.month(conn, NOW, 1).over) == (100, True)
+    assert (
+        spend.month(conn, NOW, 1, state_dir=STATE_DIR).percent,
+        spend.month(conn, NOW, 1, state_dir=STATE_DIR).over,
+    ) == (100, True)
+
+
+def test_the_month_and_the_counters_add_the_sessions_outside_canopy_to_canopys_runs(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_sessions(conn, NOW)
+    # The overseer's session is the tick's: its cost is counted once, as the tick's.
+    conn.execute("UPDATE ticks SET cost_usd = 1.0")
+    found = spend.month(conn, NOW, 10, state_dir=STATE_DIR)
+    assert (found.runs_usd, found.outside_usd, found.sessions_read_at) == (1.0, 2.25, db.format_time(NOW))
+    assert found.spent_usd == pytest.approx(3.25)
+    assert spend.spent_since(conn, "", state_dir=STATE_DIR) == pytest.approx(3.25)
+    assert spend.spent_since(conn, earlier(NOW, -1), state_dir=STATE_DIR) is None
+
+
+def test_a_month_before_the_sessions_are_read_is_canopys_runs_alone(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, "2026-10-02T09:00:00.000Z", 1.0)
+    found = spend.month(conn, NOW, 10, state_dir=STATE_DIR)
+    assert (found.spent_usd, found.runs_usd, found.outside_usd, found.sessions_read_at) == (1.0, 1.0, 0.0, None)
 
 
 def journal_of_sessions(conn: sqlite3.Connection, now: datetime) -> None:
@@ -960,6 +994,25 @@ def test_canopy_spend_prints_every_runtime_session_canopys_apart(
         out[start + 6]
         == "A subagent's session counts with the session it ran for; another workspace's runs are outside."
     )
+
+
+def test_canopy_spend_s_month_names_canopys_runs_and_the_sessions_outside_canopy(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    now = noon_today()
+    journal_of_sessions(canopy_env.journal(), now)
+    canopy_env.append_user("[spend]\nmonthly_budget_usd = 5\n")
+    assert main(["spend", "--days", "1"]) == 0
+    line = capsys.readouterr().out.splitlines()[1]
+    assert re.fullmatch(
+        rf"This month, {now:%Y-%m}: \$2\.25 of a \$5 budget \(45%\)(, on pace for \$\d+\.\d\d)?\. Canopy's runs "
+        r"\$0\.00, outside canopy \$2\.25\.",
+        line,
+    )
+    assert main(["spend", "--json"]) == 0
+    month = json.loads(capsys.readouterr().out)["month"]
+    assert (month["spent_usd"], month["runs_usd"], month["outside_usd"]) == (2.25, None, 2.25)
 
 
 def test_canopy_spend_json_has_every_runtime_session_canopys_apart(

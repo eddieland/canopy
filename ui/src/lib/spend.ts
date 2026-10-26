@@ -355,3 +355,16 @@ export function budgetText(month: SpendMonth): string {
     const pace = month.projected_usd === null ? '' : `, on pace for ${costText(month.projected_usd)}`
     return `${spent}${pace}.`
 }
+
+/**
+ * What the month's spend is made of: `Canopy's runs $12.50, outside canopy $3.26, as of Oct 8 11:55.` Outside canopy is
+ * the runtime's sessions none of canopy's runs started, as `canopy loop` last read them, so the time says how fresh it
+ * is; before the first read, that it counts none yet.
+ */
+export function budgetPartsText(month: SpendMonth, clock: Clock): string {
+    const runs = `Canopy's runs ${costText(month.runs_usd ?? 0)}`
+    if (month.sessions_read_at === null) {
+        return `${runs}. Sessions outside canopy count once canopy loop has read them.`
+    }
+    return `${runs}, outside canopy ${costText(month.outside_usd)}, as of ${stamp(month.sessions_read_at, clock)}.`
+}

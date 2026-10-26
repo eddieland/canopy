@@ -1,6 +1,7 @@
 """What agent runs cost, as the API sends it (DESIGN §11): the last day's and 30 days' spend, and the breakdown.
 
 The figures are `canopy spend`'s, by the backend's clock, with the idle ticks in the window as the ticks list has them.
+The last day's, 30 days', and all time's are all agent spend: canopy's runs and the runtime's sessions outside canopy.
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from datetime import timedelta
 from itertools import starmap
 from typing import TYPE_CHECKING
 
-from canopy.core import db
+from canopy.core import db, runtime_sessions
 from canopy.core import spend as spending
 from canopy.serve.schema.spend import (
     Spend,
@@ -43,16 +44,22 @@ def spend(backend: Backend, ctx: Context) -> Spend:
         The cost the journal recorded in each window, with the window's start, and its total.
     """
     now = backend.clock()
-    return Spend(
-        day=_spent(ctx, now, SPEND_DAY_HOURS),
-        month=_spent(ctx, now, SPEND_MONTH_HOURS),
-        total_usd=db.spent_ever(ctx.conn),
-    )
+    # One snapshot, so a month never shows less than its day.
+    with db.read_snapshot(ctx.conn):
+        read = runtime_sessions.last_read(ctx.conn)
+        return Spend(
+            day=_spent(ctx, now, SPEND_DAY_HOURS),
+            month=_spent(ctx, now, SPEND_MONTH_HOURS),
+            # Every recorded time sorts after the empty string.
+            total_usd=spending.spent_since(ctx.conn, "", state_dir=ctx.state_dir),
+            sessions_read_at=db.parse_time(read.read_at) if read is not None else None,
+        )
 
 
 def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:
     since = now - timedelta(hours=hours)
-    return SpendWindow(since=since, hours=hours, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
+    spent = spending.spent_since(ctx.conn, db.format_time(since), state_dir=ctx.state_dir)
+    return SpendWindow(since=since, hours=hours, cost_usd=spent)
 
 
 def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown:
@@ -76,7 +83,7 @@ def spend_breakdown_hours(backend: Backend, ctx: Context, hours: int) -> SpendBr
 
 
 def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> SpendBreakdown:
-    month = spending.budget_month(ctx.conn, now, ctx.config.spend)
+    month = spending.budget_month(ctx.conn, now, ctx.config.spend, state_dir=ctx.state_dir)
     return SpendBreakdown(
         since=db.parse_time(found.since),
         days=found.days,
@@ -152,6 +159,9 @@ def _spend_month(found: spending.Month) -> SpendMonth:
         elapsed=found.elapsed,
         projected_usd=found.projected_usd,
         alerts=list(found.alerts),
+        runs_usd=found.runs_usd,
+        outside_usd=found.outside_usd,
+        sessions_read_at=db.parse_time(found.sessions_read_at) if found.sessions_read_at is not None else None,
     )
 
 

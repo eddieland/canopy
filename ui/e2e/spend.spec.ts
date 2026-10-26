@@ -446,6 +446,10 @@ test('this month reads against the budget whatever the window, and is headed ove
     await expect(budget).toContainText('October 2026')
     await expect(page.getByTestId('spend-budget-text')).toContainText('Headed over')
     await expect(page.getByTestId('spend-budget-text')).toContainText('$15.76 of $40 (39%), on pace for')
+    // The mock's loop never read the runtime's sessions, so the month is canopy's runs alone, and says so.
+    await expect(page.getByTestId('spend-budget-parts')).toHaveText(
+        "Canopy's runs $15.76. Sessions outside canopy count once canopy loop has read them.",
+    )
     await page.getByTestId('spend-window-30').click()
     await expect(page.getByTestId('spend-budget-text')).toContainText('$15.76 of $40 (39%)')
     // The mock alerts at half and four fifths of the budget too: each a tick under the bar, and named under it.

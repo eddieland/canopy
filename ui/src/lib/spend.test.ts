@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import type { SpendCosts, SpendDay, SpendModel, SpendMonth, SpendTool } from '@/api/types'
 import type { Clock } from '@/lib/clock'
+import { stamp } from '@/lib/time'
 
 import {
     alertMarks,
     alertsText,
     budgetPercent,
     budgetState,
+    budgetPartsText,
     budgetText,
     chartTop,
     dayHint,
@@ -219,6 +221,9 @@ function month(spent: number | null, projected: number | null): SpendMonth {
         elapsed: 0.25,
         projected_usd: projected,
         alerts: [50, 80, 100],
+        runs_usd: spent,
+        outside_usd: 0,
+        sessions_read_at: null,
     }
 }
 
@@ -238,6 +243,21 @@ describe('monthly budget', () => {
         expect(budgetPercent(month(39.84, null))).toBe(99)
         expect(budgetPercent({ ...month(29, null), budget_usd: 100 })).toBe(29)
         expect(budgetPercent({ ...month(0.29, null), budget_usd: 1 })).toBe(29)
+    })
+
+    it("names canopy's runs and the sessions outside canopy as of their last read, or that none counts yet", () => {
+        const read = {
+            ...month(15.76, null),
+            runs_usd: 12.5,
+            outside_usd: 3.26,
+            sessions_read_at: '2026-10-08T11:55:00Z',
+        }
+        expect(budgetPartsText(read, H24)).toBe(
+            `Canopy's runs $12.50, outside canopy $3.26, as of ${stamp('2026-10-08T11:55:00Z', H24)}.`,
+        )
+        expect(budgetPartsText({ ...month(null, null), runs_usd: null }, H24)).toBe(
+            "Canopy's runs $0.00. Sessions outside canopy count once canopy loop has read them.",
+        )
     })
 
     it('names each alert, and marks those short of the budget on the bar', () => {
