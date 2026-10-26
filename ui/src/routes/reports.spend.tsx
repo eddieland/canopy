@@ -25,6 +25,7 @@ import { costText } from '@/lib/cost-total'
 import {
     alertMarks,
     alertsText,
+    budgetPartsText,
     budgetPercent,
     budgetState,
     budgetText,
@@ -363,11 +364,13 @@ function rangeOf(search: SpendSearch): SpendBreakdownRange {
 }
 
 /**
- * The local month so far against the monthly budget, whatever the window: a sentence with the numbers, and a bar of
- * the budget spent, its fill the state's, beside a mark at how much of the month has gone by. The bar is for the eye,
- * so it is hidden from a screen reader, which reads the sentence. With no budget set, where to set one.
+ * The local month so far against the monthly budget, whatever the window: a sentence with the numbers, what they are
+ * made of, canopy's runs and the sessions outside canopy, and a bar of the budget spent, its fill the state's, beside a
+ * mark at how much of the month has gone by. The bar is for the eye, so it is hidden from a screen reader, which reads
+ * the sentences. With no budget set, where to set one.
  */
 function Budget({ month }: { month: SpendMonth | null }) {
+    const clock = useClock()
     if (month === null) {
         return (
             <p className="p-3 text-sm text-muted-foreground" data-testid="spend-budget-none">
@@ -386,6 +389,9 @@ function Budget({ month }: { month: SpendMonth | null }) {
             <p className="text-sm text-foreground" data-testid="spend-budget-text">
                 <span className={cn('font-medium', BUDGET_TEXT[state])}>{BUDGET_WORD[state]}</span>:{' '}
                 <span className="readout">{budgetText(month)}</span>
+            </p>
+            <p className="text-xs text-muted-foreground" data-testid="spend-budget-parts">
+                {budgetPartsText(month, clock)}
             </p>
             <div aria-hidden className="relative h-2 rounded-full bg-surface-raised" data-testid="spend-budget-meter">
                 <div
