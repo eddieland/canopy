@@ -4735,6 +4735,12 @@ export type components = {
              * @description Every month, oldest first, those with nothing in them included.
              */
             months: components["schemas"]["ReportMonth"][];
+            /**
+             * Sessions Read At
+             * @description When `canopy loop` last read the runtime's sessions, which each month counts outside canopy; None when it never
+             *     did, and they count none.
+             */
+            sessions_read_at: string | null;
         };
         /**
          * NoticeChanged
@@ -5606,7 +5612,8 @@ export type components = {
             closed: number;
             /**
              * Cost Usd
-             * @description What every kind cost, dry runs included, as the budget counts a month, in US dollars; None when none reported.
+             * @description What every kind and the sessions outside canopy cost, dry runs included, as the budget counts a month, in US
+             *     dollars; None when none reported.
              */
             cost_usd: number | null;
             /**
@@ -5649,9 +5656,12 @@ export type components = {
              * @description The month, `YYYY-MM`, in the local time of the machine canopy runs on.
              */
             month: string;
+            /** @description The runtime's sessions outside canopy, as the last read of them found. */
+            outside: components["schemas"]["ReportOutside"];
             /**
              * Per Landed Usd
-             * @description The month's whole cost over the tickets it landed, in US dollars; None with none landed, or no cost.
+             * @description What canopy's runs cost over the tickets it landed, the sessions outside canopy left out, in US dollars; None
+             *     with none landed, or no cost.
              */
             per_landed_usd: number | null;
             /**
@@ -5670,7 +5680,7 @@ export type components = {
              * @description When it starts: local midnight on its first day.
              */
             since: string;
-            /** @description Every kind's tokens, summed. */
+            /** @description Every kind's tokens and the sessions outside canopy's, summed. */
             tokens: components["schemas"]["ReportTokens"];
             /**
              * Until
@@ -5678,6 +5688,24 @@ export type components = {
              * @description When it ends: local midnight on the next month's first day.
              */
             until: string;
+        };
+        /**
+         * ReportOutside
+         * @description What the runtime's sessions outside canopy cost in a month: the operator's own, and other workspaces' runs.
+         */
+        ReportOutside: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars; None when none started.
+             */
+            cost_usd: number | null;
+            /**
+             * Sessions
+             * @description How many started in the month.
+             */
+            sessions: number;
+            /** @description Their tokens. */
+            tokens: components["schemas"]["ReportTokens"];
         };
         /**
          * @description Why a kept report's file is not a report any more, as a plan's is read (DESIGN §25, §36).

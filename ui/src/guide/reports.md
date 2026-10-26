@@ -9,12 +9,14 @@ is what the agent runtime reported, so if a runtime under-reports, so does this 
 narrow or widen it. A month runs midnight to midnight on the clock of the machine canopy runs on, like the spend
 page's days. The line under the title is the month so far: what it cost, the tickets it landed, and its PRs.
 
-**Month by month** is the bill. For each month: what it **spent**, with a bar against the dearest month so the trend
-reads at a glance; its **runs**, a tick each for the overseer; the tokens the models were **sent** and **wrote**; the
-**cache hit**, the share of what was sent that came from the cache; the tickets **landed** and **closed**; the **PRs**
-a run first named in it; and the cost **per landed** ticket, the overseer and chores included. A cache hit that drops
-from one month to the next is the first place to look when the bill grows and the work didn't: a changed prompt or a
-new tool list can turn every run cold.
+**Month by month** is the bill, the whole of it: canopy's runs and the sessions outside canopy alike, so a month you
+spent pairing with an agent by hand doesn't pass for a cheap one. For each month: what it **spent**, with a bar against
+the dearest month so the trend reads at a glance; its **runs**, a tick each for the overseer; the tokens the models were
+**sent** and **wrote**; the **cache hit**, the share of what was sent that came from the cache; the tickets **landed**
+and **closed**; the **PRs** a run first named in it; and the cost **per landed** ticket, the overseer and chores
+included, but not your own sessions, which landed nothing canopy knows of. A cache hit that drops from one month to the
+next is the first place to look when the bill grows and the work didn't: a changed prompt or a new tool list can turn
+every run cold.
 
 **Delivery** is what the months got done, as a median per landed ticket:
 
@@ -31,9 +33,11 @@ new tool list can turn every run cold.
 Click a month to see it in detail below; the page opens on the latest.
 
 **By kind** splits the month by who spent it, the same kinds as the spend page: the overseer, dry runs included, then
-workers, plans, chores, reviews, and your tasks, each with its runs, cost, tokens, and cache hit. **By model** is what
-each model's replies cost over every kind of run, the dearest first, with the runs canopy hasn't read a model for yet
-last as **none**.
+workers, plans, chores, reviews, and your tasks, each with its runs, cost, tokens, and cache hit. Under them, **outside
+canopy** is the runtime's sessions none of canopy's runs started, counted in sessions, not runs: yours, and another
+workspace's canopy, as of when `canopy loop` last read them (hover it for when). **By model** is what each model's
+replies cost over every kind of run, the dearest first, with the runs canopy hasn't read a model for yet last as
+**none**.
 
 **Landed** lists the month's tickets the loop marked done as merged, the latest first, with each one's iterations, PR
 comments, reviews (the ones that asked for changes in brackets), time to land, review wait, and what its own runs cost.

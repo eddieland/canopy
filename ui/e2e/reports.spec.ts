@@ -22,6 +22,8 @@ test('the nav opens Reports, a year of months newest first with the latest in de
     // latest first (canopy/serve/mock/history.py).
     await expect(page.getByTestId('reports-kinds')).toContainText('October 2026')
     await expect(page.getByTestId('reports-kind')).toHaveCount(6)
+    // The mock's loop never read the runtime's sessions: none outside canopy.
+    await expect(page.getByTestId('reports-outside')).toContainText('outside canopy')
     await expect(page.getByTestId('reports-model').first()).toBeVisible()
     const landed = page.getByTestId('reports-landed-ticket')
     await expect(landed).toHaveCount(2)
