@@ -11,12 +11,14 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useClock } from '@/lib/clock'
 import {
     costPercent,
     DEFAULT_MONTHS,
     hoursText,
     medianText,
     monthLabel,
+    outsideHint,
     pickedMonth,
     REPORT_SPANS,
     reportLine,
@@ -148,7 +150,7 @@ function ReportsPage() {
                             {picked === undefined ? (
                                 <PanelSkeleton rows={6} className="min-h-40" />
                             ) : (
-                                <Kinds month={picked} />
+                                <Kinds month={picked} readAt={query.data?.sessions_read_at ?? null} />
                             )}
                         </Panel>
                         <Panel data-testid="reports-models">
@@ -321,9 +323,14 @@ function Delivery({ months, picked }: { months: readonly ReportMonth[]; picked: 
     )
 }
 
-/** The picked month's kinds of run: their runs, cost, and tokens. */
-function Kinds({ month }: { month: ReportMonth }) {
-    if (month.runs === 0) {
+/**
+ * The picked month's kinds of run: their runs, cost, and tokens; and under them the sessions outside canopy, as of
+ * `readAt`, when the runtime's sessions were last read.
+ */
+function Kinds({ month, readAt }: { month: ReportMonth; readAt: string | null }) {
+    const clock = useClock()
+    const outside = month.outside
+    if (month.runs === 0 && outside.sessions === 0) {
         return <Empty size="panel">nothing ran in {monthLabel(month.month, 'long')}</Empty>
     }
     return (
@@ -360,6 +367,18 @@ function Kinds({ month }: { month: ReportMonth }) {
                             <Readout>{shareText(k.tokens.cache_hit ?? null)}</Readout>
                         </tr>
                     ))}
+                    <tr className="border-t border-border text-right" data-testid="reports-outside">
+                        <th scope="row" className="py-0.5 text-left font-normal" title={outsideHint(readAt, clock)}>
+                            outside canopy
+                        </th>
+                        <Readout>{outside.sessions}</Readout>
+                        <td className="readout pl-3">
+                            <Cost usd={outside.cost_usd ?? null} />
+                        </td>
+                        <Readout>{tokenCount(sentTokens(outside.tokens))}</Readout>
+                        <Readout>{tokenCount(wroteTokens(outside.tokens))}</Readout>
+                        <Readout>{shareText(outside.tokens.cache_hit ?? null)}</Readout>
+                    </tr>
                 </tbody>
             </table>
         </PanelScroll>

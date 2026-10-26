@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ReportMonth, ReportTokens } from '@/api/types'
+import { DEFAULT_CLOCK } from '@/lib/clock'
+import { stamp } from '@/lib/time'
 
 import {
     costPercent,
     hoursText,
     medianText,
     monthLabel,
+    outsideHint,
     pickedMonth,
     reportLine,
     reportMonth,
@@ -33,6 +36,11 @@ function month(name: string, cost: number | null, extra: Partial<ReportMonth> = 
         cost_usd: cost,
         tokens: TOKENS,
         kinds: [],
+        outside: {
+            sessions: 0,
+            cost_usd: null,
+            tokens: { ...TOKENS, input: 0, output: 0, reasoning: 0, cache_read: 0, cache_write: 0, cache_hit: null },
+        },
         models: [],
         landed: [],
         closed: 0,
@@ -123,5 +131,16 @@ describe('costPercent', () => {
         const months = [month('2026-08', null), month('2026-09', 1), month('2026-10', 4)]
         expect(months.map((m) => costPercent(m, months))).toEqual([0, 25, 100])
         expect(costPercent(month('2026-08', null), [month('2026-08', null)])).toBe(0)
+    })
+})
+
+describe('outsideHint', () => {
+    it('says what the row counts, as of the last read of the sessions, or that none is read yet', () => {
+        const at = '2026-10-08T11:55:00Z'
+        expect(outsideHint(at, DEFAULT_CLOCK)).toBe(
+            "The runtime's sessions none of canopy's runs started, yours among them, counted in sessions, not runs, " +
+                `as of ${stamp(at, DEFAULT_CLOCK)}.`,
+        )
+        expect(outsideHint(null, DEFAULT_CLOCK)).toMatch(/canopy loop has not read them yet, so none is counted\.$/u)
     })
 })

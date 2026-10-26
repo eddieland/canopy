@@ -2,7 +2,9 @@
 
 Reads only. A month's cost and tokens are what the agent runtime reported (§13) of each kind of run that started in
 it, as `spend` counts them: the overseer of each tick, dry runs' among them, worker runs, plan runs, chore runs, review
-runs, and task runs. Beside them, what the month got done: the tickets marked done as merged in it, each with the
+runs, and task runs; and beside them the runtime's sessions outside canopy, as `runtime_sessions` tells them from
+canopy's, so a month's cost and tokens are all its agent spend, as the budget counts it. Beside them, what the month
+got done: the tickets marked done as merged in it, each with the
 worker runs it took, the comments and reviews people other than the PR's author left on its PRs, how long it took
 from its first worker run, and how long its PR waited for its first review. The journal keeps no merge time and no
 history of a ticket's phase, so a ticket lands when the loop marks it done, and its PR is ready for review when its
@@ -17,13 +19,14 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, sql
+from canopy.core import contract, db, runtime_sessions, sql
 from canopy.core.spend import KIND_TABLES, KINDS, done_in
 from canopy.core.vocab import RunKind, RunStatus
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Iterable, Mapping, Sequence
+    from pathlib import Path
 
     from canopy.core.spend import Kind
 
@@ -88,6 +91,17 @@ class KindMonth:
 
 
 @dataclass(frozen=True)
+class Outside:
+    """What the runtime's sessions outside canopy cost in a month: the operator's own, and other workspaces' runs."""
+
+    #: How many started in the month.
+    sessions: int = 0
+    #: What they cost, in US dollars; None when none started.
+    cost_usd: float | None = None
+    tokens: Tokens = Tokens()
+
+
+@dataclass(frozen=True)
 class ModelMonth:
     """What one model's replies cost in a month, over every kind of run, as the runs' sessions name it (§13)."""
 
@@ -143,6 +157,8 @@ class Month:
     closed: int
     #: How many PRs a run first named in it.
     pull_requests: int
+    #: The runtime's sessions outside canopy that started in it.
+    outside: Outside = Outside()
 
     @property
     def runs(self) -> int:
@@ -150,27 +166,37 @@ class Month:
         return sum(k.runs for k in self.kinds)
 
     @property
-    def cost_usd(self) -> float | None:
-        """What every kind cost, dry runs included, as the budget counts a month; None when none reported."""
+    def runs_cost_usd(self) -> float | None:
+        """What every kind of canopy's runs cost, dry runs included; None when none reported."""
         return _sum(k.cost_usd for k in self.kinds)
 
     @property
+    def cost_usd(self) -> float | None:
+        """What every kind and the sessions outside canopy cost, as the budget counts a month; None when none did."""
+        return _sum([self.runs_cost_usd, self.outside.cost_usd])
+
+    @property
     def tokens(self) -> Tokens:
-        """Every kind's tokens, summed."""
-        total = Tokens()
+        """Every kind's tokens and the sessions outside canopy's, summed."""
+        total = self.outside.tokens
         for k in self.kinds:
             total = total.plus(k.tokens)
         return total
 
     @property
     def per_landed(self) -> float | None:
-        """The month's whole cost over the tickets it landed; None with none landed, or no cost."""
-        cost = self.cost_usd
+        """What canopy's runs cost over the tickets the month landed; None with none landed, or no cost.
+
+        The sessions outside canopy are left out: they landed nothing canopy knows of.
+        """
+        cost = self.runs_cost_usd
         return cost / len(self.landed) if self.landed and cost is not None else None
 
 
-def months(conn: sqlite3.Connection, now: datetime, count: int = DEFAULT_MONTHS) -> list[Month]:
+def months(conn: sqlite3.Connection, now: datetime, count: int = DEFAULT_MONTHS, *, state_dir: Path) -> list[Month]:
     """The last `count` local calendar months, the one holding `now` so far included, the oldest first.
+
+    `state_dir` is the workspace's: a session of the runtime's that ran in it is canopy's, not outside.
 
     Returns:
         Each month, one with nothing in it among them.
@@ -184,6 +210,7 @@ def months(conn: sqlite3.Connection, now: datetime, count: int = DEFAULT_MONTHS)
         prs = _pull_requests(conn, until)
         done = done_in(conn, since, until)
         landed = _landed(conn, {k: at for k, (how, at) in done.items() if how == "merged"})
+        outside = _outside(conn, since, until, state_dir)
     closed = [_month_of(at) for how, at in done.values() if how == "closed"]
     return [
         Month(
@@ -201,6 +228,7 @@ def months(conn: sqlite3.Connection, now: datetime, count: int = DEFAULT_MONTHS)
             ),
             closed=closed.count(name),
             pull_requests=sum(1 for first in prs.values() if _month_of(first) == name),
+            outside=outside.get(name, Outside()),
         )
         for name, start, end in bounds
     ]
@@ -265,6 +293,34 @@ def _kinds(conn: sqlite3.Connection, since: str, until: str) -> dict[tuple[str, 
             )
             found[str(month), kind] = KindMonth(kind=kind, runs=int(runs), cost_usd=cost, tokens=tokens)
     return found
+
+
+# The runtime's sessions outside canopy by the month they started in.
+def _outside(conn: sqlite3.Connection, since: str, until: str, state_dir: Path) -> dict[str, Outside]:
+    by_month = (
+        sql.select(
+            "{} AS month, count(*), SUM(cost_usd), TOTAL(tokens_input), TOTAL(tokens_output), "
+            "TOTAL(tokens_reasoning), TOTAL(tokens_cache_read), TOTAL(tokens_cache_write)",
+            _bucket(sql.frag("started_at")),
+        )
+        .from_("({}) AS s", runtime_sessions.sessions_in(since, until, state_dir))
+        .where("NOT ours")
+        .group_by("month")
+    )
+    return {
+        str(month): Outside(
+            sessions=int(count),
+            cost_usd=cost,
+            tokens=Tokens(
+                input=int(sent),
+                output=int(out),
+                reasoning=int(thought),
+                cache_read=int(read),
+                cache_write=int(written),
+            ),
+        )
+        for month, count, cost, sent, out, thought, read, written in sql.execute(conn, by_month)
+    }
 
 
 # Each month's spend by model, every kind's summed, read as `spend` reads a kind's: the run table leads, and

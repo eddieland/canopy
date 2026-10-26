@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, monthly
+from canopy.core import db, monthly, runtime_sessions
 from canopy.serve.schema.reports import (
     MonthlyReport,
     ReportKind,
     ReportModel,
     ReportMonth,
+    ReportOutside,
     ReportTicket,
     ReportTokens,
 )
@@ -27,7 +28,13 @@ def monthly_report(backend: Backend, ctx: Context, months: int) -> MonthlyReport
     Returns:
         Each month, oldest first.
     """
-    return MonthlyReport(months=[_month(m) for m in monthly.months(ctx.conn, backend.clock(), months)])
+    with db.read_snapshot(ctx.conn):
+        found = monthly.months(ctx.conn, backend.clock(), months, state_dir=ctx.state_dir)
+        read = runtime_sessions.last_read(ctx.conn)
+    return MonthlyReport(
+        months=[_month(m) for m in found],
+        sessions_read_at=db.parse_time(read.read_at) if read is not None else None,
+    )
 
 
 def _month(found: monthly.Month) -> ReportMonth:
@@ -41,6 +48,11 @@ def _month(found: monthly.Month) -> ReportMonth:
         kinds=[
             ReportKind(kind=k.kind, runs=k.runs, cost_usd=k.cost_usd, tokens=_tokens(k.tokens)) for k in found.kinds
         ],
+        outside=ReportOutside(
+            sessions=found.outside.sessions,
+            cost_usd=found.outside.cost_usd,
+            tokens=_tokens(found.outside.tokens),
+        ),
         models=[ReportModel(model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd) for m in found.models],
         landed=[_ticket(t) for t in found.landed],
         closed=found.closed,

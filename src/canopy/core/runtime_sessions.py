@@ -151,7 +151,7 @@ def spend(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) 
         for directory, count, cost in sql.execute(
             conn,
             sql.select("directory, count(*), total(cost_usd)")
-            .from_("({}) AS c", _sessions_in(since, until, state_dir))
+            .from_("({}) AS c", sessions_in(since, until, state_dir))
             .where("NOT ours")
             .group_by("directory")
             .order_by("total(cost_usd) DESC, directory")
@@ -180,7 +180,7 @@ def outside(conn: sqlite3.Connection, since: str, until: str | None = None, *, s
     count, cost = sql.execute(
         conn,
         sql.select("count(*), total(cost_usd)")
-        .from_("({}) AS c", _sessions_in(since, until, state_dir))
+        .from_("({}) AS c", sessions_in(since, until, state_dir))
         .where(
             "NOT ours",
         ),
@@ -211,6 +211,45 @@ def models_of(conn: sqlite3.Connection, session_id: str) -> list[records.Runtime
         .order_by("cost_usd DESC, model")
     )
     return records.fetch_all(conn, records.RuntimeSessionModel, query)
+
+
+def sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:
+    """Each of the runtime's sessions that started in `[since, until)`, and whether it is canopy's, as `spend` reads it.
+
+    `until` None reads to the newest. Its columns are the session's `started_at`, `directory`, `cost_usd`, and
+    `tokens_*`, and `ours`, true for canopy's.
+
+    Returns:
+        The select, for a caller to sum as it needs.
+    """
+    ran = sql.union(
+        *(sql.select("session_id").from_("{}", sql.name(t)).where("session_id IS NOT NULL") for t in _RUN_TABLES),
+    )
+    # The runtime records the directory a session started in as the process's working directory, its real path.
+    home = str(state_dir.resolve())
+    below = f"{home.rstrip('/')}/"
+    found = (
+        sql.select(
+            "s.started_at, s.directory, s.cost_usd, s.tokens_input, s.tokens_output, s.tokens_reasoning,"
+            " s.tokens_cache_read, s.tokens_cache_write, s.session_id IN (SELECT session_id FROM ours) AS ours",
+        )
+        .with_("ran(session_id) AS ({})", ran)
+        .with_(
+            "home(session_id) AS (SELECT session_id FROM runtime_sessions"
+            " WHERE directory = ? OR substr(directory, 1, ?) = ?)",
+            home,
+            len(below),
+            below,
+        )
+        .with_(
+            "ours(session_id) AS (SELECT session_id FROM ran UNION SELECT session_id FROM home"
+            " UNION SELECT s.session_id FROM runtime_sessions s JOIN ours o ON s.parent_id = o.session_id)",
+            recursive=True,
+        )
+        .from_("runtime_sessions s")
+        .where("s.started_at >= ?", since)
+    )
+    return found if until is None else found.where("s.started_at < ?", until)
 
 
 def _kept(was: records.RuntimeSessionRead | None) -> tuple[int | None, str | None]:
@@ -249,35 +288,6 @@ def _journal_time(ms: int) -> str:
     return db.format_time(datetime.fromtimestamp(ms / 1000, UTC))
 
 
-# Each session that started in the window, its directory and cost, and whether it is canopy's.
-def _sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:
-    ran = sql.union(
-        *(sql.select("session_id").from_("{}", sql.name(t)).where("session_id IS NOT NULL") for t in _RUN_TABLES),
-    )
-    # The runtime records the directory a session started in as the process's working directory, its real path.
-    home = str(state_dir.resolve())
-    below = f"{home.rstrip('/')}/"
-    found = (
-        sql.select("s.directory, s.cost_usd, s.session_id IN (SELECT session_id FROM ours) AS ours")
-        .with_("ran(session_id) AS ({})", ran)
-        .with_(
-            "home(session_id) AS (SELECT session_id FROM runtime_sessions"
-            " WHERE directory = ? OR substr(directory, 1, ?) = ?)",
-            home,
-            len(below),
-            below,
-        )
-        .with_(
-            "ours(session_id) AS (SELECT session_id FROM ran UNION SELECT session_id FROM home"
-            " UNION SELECT s.session_id FROM runtime_sessions s JOIN ours o ON s.parent_id = o.session_id)",
-            recursive=True,
-        )
-        .from_("runtime_sessions s")
-        .where("s.started_at >= ?", since)
-    )
-    return found if until is None else found.where("s.started_at < ?", until)
-
-
-# The window's sessions, as `_sessions_in` reads them, to be grouped by whether each is canopy's.
+# The window's sessions, as `sessions_in` reads them, to be grouped by whether each is canopy's.
 def _classified(since: str, until: str, state_dir: Path) -> sql.Select:
-    return sql.select("ours, count(*), total(cost_usd)").from_("({}) AS c", _sessions_in(since, until, state_dir))
+    return sql.select("ours, count(*), total(cost_usd)").from_("({}) AS c", sessions_in(since, until, state_dir))
