@@ -14,11 +14,12 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, runtime_sessions
 from canopy.core.config import ConfigError, load
 from canopy.core.items import Item, fingerprint
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
+from canopy.runtime.report import SessionPage, SessionSpend
 from tests.canopy.helpers import (
     InlineRunner,
     canopy,
@@ -320,6 +321,27 @@ def test_a_month_past_several_alerts_at_once_hears_only_the_highest(
     scenario.configures(spend={"budget_alerts": [30, 50, 80]})
     scenario.tick()
     assert len(messages(out)) == 1
+
+
+def test_the_sessions_outside_canopy_count_toward_the_budget(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 3})
+    chore_cost(scenario.conn, 2.0)
+    scenario.tick()
+    assert messages(out) == []  # $2 of $3
+    # The operator's own session, outside canopy, as canopy loop reads it between ticks.
+    ms = int(datetime.now(UTC).timestamp() * 1000)
+    mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
+    runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
+    scenario.tick()
+    month = f"{datetime.now().astimezone():%Y-%m}"
+    [over] = messages(out)
+    assert over.startswith(f"canopy: 1 event\n! spend for {month} reached its budget: $3.50 of $3")
 
 
 def chore_cost(conn: sqlite3.Connection, usd: float) -> None:

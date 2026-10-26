@@ -168,6 +168,26 @@ def spend(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) 
     )
 
 
+def outside(conn: sqlite3.Connection, since: str, until: str | None = None, *, state_dir: Path) -> Share:
+    """What the runtime's sessions outside canopy that started in `[since, until)` cost, as `spend` counts them.
+
+    `until` None reads to the newest session; `since` the empty string, from the first, since every time sorts after
+    it.
+
+    Returns:
+        How many there were and what they cost: none and 0 before any read.
+    """
+    count, cost = sql.execute(
+        conn,
+        sql.select("count(*), total(cost_usd)")
+        .from_("({}) AS c", _sessions_in(since, until, state_dir))
+        .where(
+            "NOT ours",
+        ),
+    ).fetchone()
+    return Share(sessions=int(count), cost_usd=float(cost))
+
+
 def of_session(conn: sqlite3.Connection, session_id: str) -> records.RuntimeSession | None:
     """The journal's row of one of the runtime's sessions.
 
@@ -230,14 +250,14 @@ def _journal_time(ms: int) -> str:
 
 
 # Each session that started in the window, its directory and cost, and whether it is canopy's.
-def _sessions_in(since: str, until: str, state_dir: Path) -> sql.Select:
+def _sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:
     ran = sql.union(
         *(sql.select("session_id").from_("{}", sql.name(t)).where("session_id IS NOT NULL") for t in _RUN_TABLES),
     )
     # The runtime records the directory a session started in as the process's working directory, its real path.
     home = str(state_dir.resolve())
     below = f"{home.rstrip('/')}/"
-    return (
+    found = (
         sql.select("s.directory, s.cost_usd, s.session_id IN (SELECT session_id FROM ours) AS ours")
         .with_("ran(session_id) AS ({})", ran)
         .with_(
@@ -253,8 +273,9 @@ def _sessions_in(since: str, until: str, state_dir: Path) -> sql.Select:
             recursive=True,
         )
         .from_("runtime_sessions s")
-        .where("s.started_at >= ? AND s.started_at < ?", since, until)
+        .where("s.started_at >= ?", since)
     )
+    return found if until is None else found.where("s.started_at < ?", until)
 
 
 # The window's sessions, as `_sessions_in` reads them, to be grouped by whether each is canopy's.
