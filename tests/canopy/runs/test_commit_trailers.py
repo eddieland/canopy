@@ -36,6 +36,14 @@ def test_a_trailer_the_worker_wrote_itself_is_not_added_again(scenario: Scenario
     assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER]]
 
 
+def test_a_commit_with_trailers_of_its_own_is_not_named(scenario: Scenario, git_pool: GitPool) -> None:
+    """A trailer of the worker's own beside canopy's: git separates them with a character `splitlines` splits on."""
+    run = scenario.run(worker=pushes(message="PROJ-1: the change\n\nSigned-off-by: someone <someone@example.test>"))
+    assert run.status == "done"
+    assert trailers_on(git_pool.origin, BRANCH) == [["Signed-off-by: someone <someone@example.test>", TRAILER]]
+    assert "harness" not in json.loads(run.row["result_json"])
+
+
 def test_a_commit_made_around_the_hooks_is_named_and_left_as_it_is(scenario: Scenario, git_pool: GitPool) -> None:
     around = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: around"]
     run = scenario.run(worker=worker_does(around, *commit_and_push(BRANCH)))
