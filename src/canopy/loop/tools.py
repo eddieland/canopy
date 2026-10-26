@@ -880,10 +880,13 @@ class TicketSet(Request):
 
     #: The ticket.
     key: Key
-    #: The unit a phase about a PR, and the review and ci cursors, are for.
+    #: The unit a phase about a PR, and the review and ci cursors, are for; left out, the ticket's one unit.
     repo: Annotated[
         Repo | None,
-        Field(description="The unit a phase about a PR, and the review and ci cursors, are for."),
+        Field(
+            description="The unit a phase about a PR, and the review and ci cursors, are for. Left out, the ticket's "
+            "one unit, or the workspace's one repository while the ticket has none.",
+        ),
     ] = None
     #: The ticket's phase, or a unit's with `repo`.
     phase: Annotated[
@@ -909,15 +912,6 @@ class TicketSet(Request):
         Field(description="A short name for the ticket, from its own title: shown beside its key."),
     ] = None
 
-    @model_validator(mode="after")
-    def _units(self) -> Self:
-        unit_pairs = [name for name in self.cursors if name in db.UNIT_CURSORS]
-        unit_phase = self.phase if self.phase in vocab.UNIT_PHASES else None
-        if self.repo is None and (unit_pairs or unit_phase is not None):
-            what = f"a {unit_pairs[0]} cursor" if unit_pairs else f"the {unit_phase} phase"
-            raise ValueError(f"repo is required (--repo): {what} belongs to one unit")
-        return self
-
 
 class TicketUpdated(Result):
     """What was recorded of a ticket, or of one of its units."""
@@ -940,22 +934,25 @@ def ticket_set(ctx: Context, request: TicketSet) -> Outcome[TicketUpdated]:
     """Record a ticket's phase, cursors, done flag, or title, or a unit's phase and cursors.
 
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
-    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in. It runs
-    outside a tick too, where the operator runs it and its cursors are not checked.
+    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in; a call
+    that sets one and names no `repo` is about the ticket's one unit. It runs outside a tick too, where the operator
+    runs it and its cursors are not checked.
 
     Returns:
         What the command prints, naming what a dry run did not do, and the same as fields.
 
     Raises:
-        Refused: CANOPY_TICK_ID names no running tick, `repo` is not a repository in this workspace, or inside a tick
-            the harness decided the ticket in, or a cursor names no item observed or passes one the state block left
-            out, each of which is recorded.
+        Refused: CANOPY_TICK_ID names no running tick, `repo` is not a repository in this workspace, a unit's phase or
+            cursor names no `repo` and the ticket has no one unit, or inside a tick the harness decided the ticket in,
+            or a cursor names no item observed or passes one the state block left out, each of which is recorded.
     """
     key, phase, done = request.key, request.phase, request.done
     cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
     unit_pairs = [(name, value) for name, value in cursor_pairs if name in db.UNIT_CURSORS]
     unit_phase = phase if phase in vocab.UNIT_PHASES else None
     unit = _unit(ctx, request.repo)
+    if unit is None and (unit_pairs or unit_phase is not None):
+        unit = _only_unit(ctx, key, f"a {unit_pairs[0][0]} cursor" if unit_pairs else f"the {unit_phase} phase")
     tracked = _comment_cursor(ctx, request.cursors)
     current = current_tick(ctx)
     if current is not None:
@@ -988,7 +985,7 @@ def ticket_set(ctx: Context, request: TicketSet) -> Outcome[TicketUpdated]:
         db.set_unit(ctx.conn, key, ctx.repo, unit, phase=unit_phase, cursors=unit_cursors)
     note = f"; dry run, {' and '.join(ignored)}" if ignored else ""
     return Outcome(
-        f"updated {key if request.repo is None else attention.subject(key, unit)}{note}",
+        f"updated {key if unit is None else attention.subject(key, unit)}{note}",
         TicketUpdated(
             key=key,
             repo=unit,
@@ -1127,6 +1124,24 @@ def _refuse_raised(
 
 
 # How the verbs above do their parts.
+
+
+def _only_unit(ctx: Context, key: str, what: str) -> str:
+    """Return the unit a `ticket set` that names no repository is about: the ticket's one unit.
+
+    A ticket with no unit yet has the workspace's one repository, if it has one.
+
+    Raises:
+        Refused: The ticket has several units, or none in a workspace of several repositories.
+    """
+    units = [u.repo for u in db.units(ctx.conn, key) if u.repo is not None]
+    names = units or [r.name for r in ctx.workspace.repos]
+    if len(names) == 1:
+        return names[0]
+    has = (
+        f"{key} has units in {', '.join(units)}" if units else f"{key} has no unit yet: name one of {', '.join(names)}"
+    )
+    raise Refused(f"repo is required (--repo): {what} belongs to one unit, and {has}")
 
 
 def _unit(ctx: Context, repo: str | None) -> str | None:

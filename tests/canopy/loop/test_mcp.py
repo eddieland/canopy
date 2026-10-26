@@ -471,16 +471,6 @@ REFUSALS = [
     ),
     pytest.param(
         Verb(
-            "ticket-set",
-            {"key": "PROJ-1", "cursors": {"review": "41"}},
-            ["ticket", "set", "PROJ-1", "--cursor", "review=41"],
-        ),
-        "repo is required (--repo): a review cursor belongs to one unit",
-        2,
-        id="ticket-set-a-units-cursor",
-    ),
-    pytest.param(
-        Verb(
             "dispatch",
             {"key": "PROJ-1", "kind": "implement", "repos": ["api", "web"], "cursors": {"ci": "99"}},
             ["dispatch", "PROJ-1", "--kind", "implement", "--repo", "api", "--repo", "web", "--cursor", "ci=99"],
