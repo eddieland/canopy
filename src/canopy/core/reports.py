@@ -181,7 +181,7 @@ def read_spend(ctx: Context, request: Spend) -> str:
     """
     now = datetime.now(UTC)
     month = spend.budget_month(ctx.conn, now, ctx.config.spend)
-    return report_json(spend_dict(spend.breakdown(ctx.conn, now, request.days), month))
+    return report_json(spend_dict(spend.breakdown(ctx.conn, now, request.days, state_dir=ctx.state_dir), month))
 
 
 def read_lessons(ctx: Context, request: MemoryLessons) -> str:
