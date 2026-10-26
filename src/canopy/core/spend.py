@@ -10,7 +10,9 @@ And what each kind of run's first model call was sent, by the definitions snapsh
 how often it started cold. And what each kind's tool calls put into its context, by tool: the reads that each later
 model call reads again. And what each kind spent on each model, as the runs' own sessions say (§13). And the local
 calendar month so far against the operator's monthly budget, which nothing enforces. And what every session the runtime
-keeps cost, canopy's apart from the rest, as the runtime's record says (`runtime_sessions`).
+keeps cost, canopy's apart from the rest, as the runtime's record says (`runtime_sessions`). A figure of all spend, the
+month's against its budget and `spent_since`'s, is canopy's runs and the sessions outside canopy together: canopy's own
+sessions are its runs, so they are counted once.
 """
 
 from __future__ import annotations
@@ -286,8 +288,7 @@ class Month:
     until: str
     #: The budget, in whole US dollars.
     budget_usd: int
-    #: What every run that started in it so far cost, dry runs included, as `Costs.total` counts it; None when none
-    #: reported a cost.
+    #: What it has cost so far: `runs_usd` and `outside_usd` together; None when neither reported a cost.
     spent_usd: float | None
     #: How much of the month has gone by, from 0 to 1.
     elapsed: float
@@ -296,6 +297,13 @@ class Month:
     projected_usd: float | None
     #: The percentages of the budget a sink hears the month reach, lowest first: 100 and `spend.budget_alerts`.
     alerts: Sequence[int] = (FULL,)
+    #: What every run that started in it so far cost, dry runs included, as `Costs.total` counts it; None when none
+    #: reported a cost.
+    runs_usd: float | None = None
+    #: What the runtime's sessions outside canopy that started in it cost, as `runtime_sessions.spend` counts them.
+    outside_usd: float = 0.0
+    #: When the runtime's sessions were last read, a journal time; None when they never were, and `outside_usd` is 0.
+    sessions_read_at: str | None = None
 
     @property
     def share(self) -> float:
@@ -331,19 +339,30 @@ class Month:
         return round((self.spent_usd or 0.0) * 100)
 
 
-def budget_month(conn: sqlite3.Connection, now: datetime, budget: config.Spend) -> Month | None:
+def budget_month(conn: sqlite3.Connection, now: datetime, budget: config.Spend, *, state_dir: Path) -> Month | None:
     """The local month holding `now` against the operator's budget and alerts, from their `[spend]` table.
+
+    `state_dir` is the workspace's, as `month` takes it.
 
     Returns:
         The month, or None when no budget is set.
     """
     if budget.monthly_budget_usd is None:
         return None
-    return month(conn, now, budget.monthly_budget_usd, budget.budget_alerts)
+    return month(conn, now, budget.monthly_budget_usd, budget.budget_alerts, state_dir=state_dir)
 
 
-def month(conn: sqlite3.Connection, now: datetime, budget_usd: int, alerts: Iterable[int] = ()) -> Month:
+def month(
+    conn: sqlite3.Connection,
+    now: datetime,
+    budget_usd: int,
+    alerts: Iterable[int] = (),
+    *,
+    state_dir: Path,
+) -> Month:
     """What the local calendar month holding `now` has cost so far, against `budget_usd`.
+
+    Its runs, and the runtime's sessions outside canopy: `state_dir` is the workspace's, whose sessions are canopy's.
 
     Returns:
         The month, its spend so far, where that spend is headed, and the percentages of the budget a sink hears of:
@@ -353,7 +372,12 @@ def month(conn: sqlite3.Connection, now: datetime, budget_usd: int, alerts: Iter
     first = today.replace(day=1)
     following = (first + timedelta(days=32)).replace(day=1)
     start, end = _midnight(first), _midnight(following)
-    spent = costs(conn, db.format_time(start), db.format_time(end)).total
+    since, until = db.format_time(start), db.format_time(end)
+    with db.read_snapshot(conn):
+        runs = costs(conn, since, until).total
+        outside = runtime_sessions.outside(conn, since, until, state_dir=state_dir)
+        read = runtime_sessions.last_read(conn)
+    spent = _sum([runs, outside.cost_usd if outside.sessions else None])
     gone = now - start
     elapsed = min(1.0, max(0.0, gone / (end - start)))
     projected = spent / elapsed if spent is not None and gone >= timedelta(days=1) else None
@@ -366,7 +390,25 @@ def month(conn: sqlite3.Connection, now: datetime, budget_usd: int, alerts: Iter
         elapsed=elapsed,
         projected_usd=projected,
         alerts=tuple(sorted({FULL, *alerts})),
+        runs_usd=runs,
+        outside_usd=outside.cost_usd,
+        sessions_read_at=read.read_at if read is not None else None,
     )
+
+
+def spent_since(conn: sqlite3.Connection, since: str, *, state_dir: Path) -> float | None:
+    """What every agent session that started at or after `since`, a journal time, cost: the web UI's counters.
+
+    canopy's runs, as `db.spent_since` sums them, and the runtime's sessions outside canopy, as `month` adds them;
+    `since` the empty string sums everything.
+
+    Returns:
+        The total in US dollars; None when nothing reported a cost.
+    """
+    with db.read_snapshot(conn):
+        runs = db.spent_since(conn, since)
+        outside = runtime_sessions.outside(conn, since, state_dir=state_dir)
+    return _sum([runs, outside.cost_usd if outside.sessions else None])
 
 
 def window(now: datetime, days: int) -> tuple[datetime, datetime]:

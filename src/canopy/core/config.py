@@ -1000,8 +1000,9 @@ def _distinct_alerts(value: tuple[int, ...]) -> tuple[int, ...]:
 class Spend(Section):
     """The `[spend]` table: what the operator means to spend on agent runs (DESIGN §11). Read, never enforced."""
 
-    #: In whole US dollars: what the local calendar month's runs may cost, as `canopy spend` and the spend page track
-    #: it. A sink that takes `loop` hears once when the month's spend reaches it. None tracks no budget.
+    #: In whole US dollars: what the local calendar month's agent spend may cost, canopy's runs and the runtime's
+    #: sessions outside canopy, as `canopy spend` and the spend page track it, canopy's share beside it. A sink that
+    #: takes `loop` hears once when the month's spend reaches it. None tracks no budget.
     monthly_budget_usd: Annotated[Annotated[StrictInt, Field(ge=1)] | None, Scope.PRIVATE] = None
     #: Percentages of the budget, besides the 100 always sent, at which that sink also hears the month reached it:
     #: `[50, 80]` warns at half and at four fifths, `[150]` when the month runs well past it.
