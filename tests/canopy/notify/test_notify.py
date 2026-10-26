@@ -509,6 +509,25 @@ def test_a_digest_says_what_its_runs_cost_by_kind(
     assert "  spent: $0.25 (workers $0.25)\n" in message["text"]
 
 
+def test_a_digest_names_the_sessions_outside_canopy_last(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "digest.txt"
+    add_sink(scenario, sink_script, "daily", out, events=[], digest_every_minutes=60)
+    ms = int(datetime.now(UTC).timestamp() * 1000)
+    mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
+    runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
+    chore_cost(scenario.conn, 0.5)
+    scenario.tick()
+
+    [message] = json_messages(out)
+    spent = message["digest"]["spend"]
+    assert (spent["total"], spent["chores"], spent["outside"]) == (2.0, 0.5, 1.5)
+    assert "  spent: $2.00 (chores $0.50, outside canopy $1.50)\n" in message["text"]
+
+
 def test_a_digest_under_a_spend_floor_waits_until_the_runs_since_the_last_cost_that_much(
     scenario: Scenario,
     git_pool: GitPool,

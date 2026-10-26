@@ -17,9 +17,12 @@ from canopy.serve.schema.spend import (
     SpendBreakdown,
     SpendCosts,
     SpendDay,
+    SpendDirectory,
     SpendModel,
     SpendMonth,
     SpendPullRequest,
+    SpendSessions,
+    SpendShare,
     SpendTicket,
     SpendTicks,
     SpendTool,
@@ -146,6 +149,19 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> 
             for m in found.models
         ],
         month=_spend_month(month) if month is not None else None,
+        sessions=_spend_sessions(found.sessions) if found.sessions is not None else None,
+    )
+
+
+def _spend_sessions(found: runtime_sessions.SessionsSpend) -> SpendSessions:
+    return SpendSessions(
+        canopy=SpendShare(sessions=found.canopy.sessions, cost_usd=found.canopy.cost_usd),
+        outside=SpendShare(sessions=found.outside.sessions, cost_usd=found.outside.cost_usd),
+        directories=[
+            SpendDirectory(directory=d.directory, sessions=d.sessions, cost_usd=d.cost_usd) for d in found.directories
+        ],
+        read_at=db.parse_time(found.read_at) if found.read_at is not None else None,
+        status=found.status.value if found.status is not None else None,
     )
 
 
@@ -175,5 +191,6 @@ def _spend_costs(costs: spending.Costs) -> SpendCosts:
         chores=costs.chores,
         reviews=costs.reviews,
         tasks=costs.tasks,
+        outside=costs.outside,
         total=costs.total,
     )

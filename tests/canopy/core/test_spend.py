@@ -308,11 +308,24 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
     out = capsys.readouterr().out.splitlines()
     start = spend.window(now, 3)[0]
     assert out[0] == f"Spend over 3 days, since {start:%Y-%m-%d} UTC, as the runtime reported it."
-    header = ["day", "overseer", "idle", "workers", "plans", "chores", "reviews", "tasks", "dry", "run", "total"]
+    header = [
+        "day",
+        "overseer",
+        "idle",
+        "workers",
+        "plans",
+        "chores",
+        "reviews",
+        "tasks",
+        "dry",
+        "run",
+        "outside",
+        "total",
+    ]
     assert out[2].split() == header
     days = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
     assert [line.split()[0] for line in out[3:6]] == days  # a line per day, oldest first
-    assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "$0.75", "$1.50", "-", "$0.30", "$7.05"]
+    assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "-", "$0.75", "$1.50", "-", "$0.30", "-", "$7.05"]
     words = [line.split() for line in out]
     assert ["ticks", "count", "spent", "no", "overseer"] in words
     assert ["idle", "3", "$0.50", "0"] in words
@@ -421,10 +434,10 @@ def test_costs_sum_each_kind_that_started_in_any_span(tmp_path: Path, journals: 
     tick(conn, earlier(NOW, 0, 0.1), 0.5, dry_run=True)
     run(conn, tick_id, "A-1", earlier(NOW, 0, 0.5), 2.0, None)
     review(conn, tick_id, "https://example.test/pr/1", "A-1", earlier(NOW, 0, 0.5), 0.75)
-    found = spend.costs(conn, since, until)
+    found = spend.costs(conn, since, until, state_dir=STATE_DIR)
     assert found == spend.Costs(overseer=1.25, idle=0.25, dry_run=0.5, workers=2.0, reviews=0.75)
     assert found.total == 4.5
-    assert spend.costs(conn, until, db.format_time(NOW + timedelta(seconds=1))) == spend.Costs()
+    assert spend.costs(conn, until, db.format_time(NOW + timedelta(seconds=1)), state_dir=STATE_DIR) == spend.Costs()
 
 
 def test_idle_share_is_of_the_live_ticks_that_ended(tmp_path: Path, journals: Journals) -> None:
@@ -922,6 +935,30 @@ def test_a_month_s_percent_is_floored_in_whole_cents(tmp_path: Path, journals: J
         spend.month(conn, NOW, 1, state_dir=STATE_DIR).percent,
         spend.month(conn, NOW, 1, state_dir=STATE_DIR).over,
     ) == (100, True)
+
+
+def test_a_breakdown_counts_the_sessions_outside_canopy_by_day_but_not_per_ticket_done(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_sessions(conn, NOW)
+    conn.execute("UPDATE ticks SET cost_usd = 1.0")
+    [t] = [int(r[0]) for r in conn.execute("SELECT id FROM ticks")]
+    ticket(conn, "A-1", done=True)
+    decide(conn, t, "A-1", earlier(NOW, 0), "done", "every PR merged")
+    found = spend.breakdown(conn, NOW, 2, state_dir=STATE_DIR)
+    assert [(d.costs.outside, d.costs.runs, d.costs.total) for d in found.per_day] == [
+        (None, None, None),
+        (2.25, 1.0, 3.25),
+    ]
+    assert (found.totals.outside, found.totals.total) == (2.25, 3.25)
+    assert found.per_done == 1.0  # canopy's runs alone: the operator's own sessions got nothing done
+    hours = spend.breakdown_hours(conn, NOW, 2, state_dir=STATE_DIR)
+    assert hours.totals.outside == 2.25
+    assert spend.costs(conn, earlier(NOW, 1), db.format_time(NOW + timedelta(hours=1)), state_dir=STATE_DIR) == (
+        spend.Costs(overseer=1.0, outside=2.25)
+    )
 
 
 def test_the_month_and_the_counters_add_the_sessions_outside_canopy_to_canopys_runs(

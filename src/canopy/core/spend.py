@@ -88,7 +88,7 @@ class Costs:
     """What each kind of agent run cost, in US dollars; None for a kind none of whose runs reported a cost.
 
     `overseer` is the live ticks' overseers, `idle` the part of it idle ticks spent, and `dry_run` the dry runs'
-    overseers, apart from it.
+    overseers, apart from it. `outside` is no run of canopy's but the runtime's sessions outside canopy.
     """
 
     overseer: float | None = None
@@ -100,11 +100,21 @@ class Costs:
     reviews: float | None = None
     #: The operator's one-off tasks' runs (DESIGN §36).
     tasks: float | None = None
+    #: The runtime's sessions outside canopy, as `runtime_sessions.spend` tells them from canopy's; None when none.
+    outside: float | None = None
+
+    @property
+    def runs(self) -> float | None:
+        """Every kind of canopy's runs, dry runs included; None when none reported a cost."""
+        return _sum([self.overseer, self.dry_run, self.workers, self.plans, self.chores, self.reviews, self.tasks])
 
     @property
     def total(self) -> float | None:
-        """Everything, dry runs included, as the web UI's 24 hour and 30 day counters count it; None when none did."""
-        return _sum([self.overseer, self.dry_run, self.workers, self.plans, self.chores, self.reviews, self.tasks])
+        """Everything, canopy's runs and the sessions outside canopy, as the budget and the web UI's counters count it.
+
+        None when nothing reported a cost.
+        """
+        return _sum([self.runs, self.outside])
 
 
 @dataclass(frozen=True)
@@ -247,7 +257,7 @@ class Breakdown:
 
     The window is `[since, until)`, each a journal time: local midnight on its first day, and after its last. A window
     in `hours` has `days` None and lists each hour in `per_day`, from its first hour's start to the end of its last.
-    What it got done is `done`, the tickets marked done in it, and `per_done`, its whole spend over them: the overseer,
+    What it got done is `done`, the tickets marked done in it, and `per_done`, its runs' spend over them: the overseer,
     chores, and the runs of tickets still open are what it cost to get those done. `tickets` and `pull_requests` list
     what each one's own runs cost, the most first. `first_calls` is each kind's first model calls by snapshot, the
     kinds in `KINDS` order and each kind's snapshots by when their first run started; the overseer's include dry runs,
@@ -374,10 +384,9 @@ def month(
     start, end = _midnight(first), _midnight(following)
     since, until = db.format_time(start), db.format_time(end)
     with db.read_snapshot(conn):
-        runs = costs(conn, since, until).total
-        outside = runtime_sessions.outside(conn, since, until, state_dir=state_dir)
+        found = costs(conn, since, until, state_dir=state_dir)
         read = runtime_sessions.last_read(conn)
-    spent = _sum([runs, outside.cost_usd if outside.sessions else None])
+    spent = found.total
     gone = now - start
     elapsed = min(1.0, max(0.0, gone / (end - start)))
     projected = spent / elapsed if spent is not None and gone >= timedelta(days=1) else None
@@ -390,8 +399,8 @@ def month(
         elapsed=elapsed,
         projected_usd=projected,
         alerts=tuple(sorted({FULL, *alerts})),
-        runs_usd=runs,
-        outside_usd=outside.cost_usd,
+        runs_usd=found.runs,
+        outside_usd=found.outside or 0.0,
         sessions_read_at=read.read_at if read is not None else None,
     )
 
@@ -473,10 +482,11 @@ def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int, *, stat
     return _breakdown(conn, start, end, buckets, state_dir=state_dir, hours=hours)
 
 
-def costs(conn: sqlite3.Connection, since: str, until: str) -> Costs:
+def costs(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) -> Costs:
     """What each kind of agent run that started in `[since, until)`, each a journal time, cost: a sink's digest (§20).
 
-    Summed as a breakdown's `totals` are, but over any span rather than whole local days or hours.
+    Summed as a breakdown's `totals` are, but over any span rather than whole local days or hours, the sessions outside
+    canopy among them: `state_dir` is the workspace's, whose sessions are canopy's.
 
     Returns:
         The costs; a kind none of whose runs in the span reported a cost is None.
@@ -492,6 +502,8 @@ def costs(conn: sqlite3.Connection, since: str, until: str) -> Costs:
                 .where("started_at >= ? AND started_at < ?", since, until)
             )
             found[kind] = sql.execute(conn, summed).fetchone()[0]
+        outside = runtime_sessions.outside(conn, since, until, state_dir=state_dir)
+    found["outside"] = outside.cost_usd if outside.sessions else None
     for name in _SERIES:
         found[name] = _sum([r.cost_usd for r in rows if _in_series(r, name)])
     return _costs(found)
@@ -540,6 +552,14 @@ def _breakdown(
             )
             for day, cost in sql.execute(conn, costs):
                 by_day.setdefault(str(day), {})[kind] = cost
+        outside = (
+            sql.select("{} AS day, SUM(cost_usd)", buckets.expression)
+            .from_("({}) AS s", runtime_sessions.sessions_in(since, until, state_dir))
+            .where("NOT ours")
+            .group_by("day")
+        )
+        for day, cost in sql.execute(conn, outside):
+            by_day.setdefault(str(day), {})["outside"] = cost
         unpriced = _unpriced(conn, since, until, rows)
         done = done_in(conn, since, until)
         tickets = _tickets(conn, since, until, done)
@@ -556,9 +576,10 @@ def _breakdown(
     starts = buckets.starts
     done_on = Counter(buckets.name_of(at) for _, at in done.values())
     per_day = [Day(day=d, start=s, costs=_costs(by_day.get(d, {})), done=done_on[d]) for d, s in starts.items()]
-    totals = _costs({n: _sum([by_day.get(d, {}).get(n) for d in starts]) for n in (*_SERIES, *_TABLES)})
+    totals = _costs({n: _sum([by_day.get(d, {}).get(n) for d in starts]) for n in (*_SERIES, *_TABLES, "outside")})
     ticks = _groups(rows)
-    total = totals.total
+    # What canopy's runs cost to get them done: the sessions outside canopy did nothing canopy knows of.
+    runs = totals.runs
     return Breakdown(
         since=since,
         until=until,
@@ -570,7 +591,7 @@ def _breakdown(
         unpriced=unpriced,
         idle_share=_idle_share(ticks),
         done=len(done),
-        per_done=total / len(done) if done and total is not None else None,
+        per_done=runs / len(done) if done and runs is not None else None,
         tickets=tickets,
         pull_requests=pull_requests,
         first_calls=first_calls,
@@ -974,6 +995,7 @@ def _costs(found: Mapping[str, float | None]) -> Costs:
         chores=found.get("chores"),
         reviews=found.get("reviews"),
         tasks=found.get("tasks"),
+        outside=found.get("outside"),
     )
 
 

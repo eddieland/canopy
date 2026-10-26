@@ -41,6 +41,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
+| `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
@@ -86,10 +87,10 @@ Rules:
   new one may mean moving another. They go on the nav's icons and highlight, the first step of the page header's trail,
   and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no
   section (the 404) takes the accent.
-- **Spend series** (`src/lib/spend.ts`) color a kind of agent run in the spend page's chart and its legend, and
-  nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
-  spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
-  bar for a graphic, which `tokens.test.ts` measures.
+- **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the spend page's
+  chart and its legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
+  beside a swatch. Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on
+  `surface` in both themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the

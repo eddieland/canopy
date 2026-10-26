@@ -250,7 +250,7 @@ def _deliver(
         if sink.digest_min_usd is not None:
             first = min(first, row.created_at)
         since = row.last_digest_at or first
-        digest = message.digest(ctx.conn, items, since=since, now=now)
+        digest = message.digest(ctx.conn, items, since=since, now=now, state_dir=ctx.state_dir)
         if sink.digest_min_usd is not None and (digest.costs.total or 0.0) < sink.digest_min_usd:
             # It waits: `since` stays, so the next tick's digest counts this spend and whatever comes after it.
             digest = None

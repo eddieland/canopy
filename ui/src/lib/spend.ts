@@ -11,6 +11,7 @@ import type {
     SpendKind,
     SpendModel,
     SpendMonth,
+    SpendSessions,
     SpendTicket,
     SpendTool,
 } from '@/api/types'
@@ -29,7 +30,16 @@ export const SPEND_WINDOWS: readonly SpendBreakdownRange[] = [{ hours: 24 }, DEF
 const CHARS_PER_TOKEN = 4
 
 /** A series of the by-day chart: a part of a day's spend no other series counts. */
-export type SeriesKey = 'idle' | 'overseer' | 'workers' | 'plans' | 'chores' | 'reviews' | 'tasks' | 'dry_run'
+export type SeriesKey =
+    | 'idle'
+    | 'overseer'
+    | 'workers'
+    | 'plans'
+    | 'chores'
+    | 'reviews'
+    | 'tasks'
+    | 'dry_run'
+    | 'outside'
 
 /**
  * One series: what it counts, its name, what that name means on hover, and its fill, written out so Tailwind finds
@@ -49,8 +59,9 @@ export interface Series {
 /**
  * The series bottom up. Idle ticks first, on the baseline under the rest of the overseer's, a deeper shade of the same
  * hue, so the two read as one: together they are the overseer's bar, and idle ticks a part of it. Then the runs the
- * overseer started, the plans among them, then your tasks' runs, then dry runs. Idle spend is a sliver beside a
- * worker's, so its trend across days is read from the table, not the bars.
+ * overseer started, the plans among them, then your tasks' runs, then dry runs, then the sessions outside canopy, on
+ * top as no part of canopy's work. Idle spend is a sliver beside a worker's, so its trend across days is read from the
+ * table, not the bars.
  */
 export const SERIES: readonly Series[] = [
     {
@@ -81,6 +92,12 @@ export const SERIES: readonly Series[] = [
     { key: 'reviews', label: 'reviews', hint: "canopy's reviews of PRs", fill: 'bg-spend-reviews' },
     { key: 'tasks', label: 'tasks', hint: 'The runs of the one-off tasks you submitted', fill: 'bg-spend-tasks' },
     { key: 'dry_run', label: 'dry runs', hint: 'Dry-run ticks, apart from the live ones', fill: 'bg-spend-dry-run' },
+    {
+        key: 'outside',
+        label: 'outside canopy',
+        hint: "The runtime's sessions none of canopy's runs started: yours, and other workspaces' canopy",
+        fill: 'bg-spend-outside',
+    },
 ]
 
 /** Each group of ticks in words, as `canopy spend` prints it. */
@@ -354,6 +371,18 @@ export function budgetText(month: SpendMonth): string {
     const spent = `${costText(month.spent_usd ?? 0)} of $${month.budget_usd} (${budgetPercent(month)}%)`
     const pace = month.projected_usd === null ? '' : `, on pace for ${costText(month.projected_usd)}`
     return `${spent}${pace}.`
+}
+
+/**
+ * When the runtime's sessions were last read, for the sessions panel's header: `read Oct 8 11:55`, with how the latest
+ * read ended when it did not find the record, `read Oct 8 11:55, last failed`; `never read` before the first.
+ */
+export function sessionsReadText(sessions: SpendSessions, clock: Clock): string {
+    if (sessions.read_at === null) {
+        return 'never read'
+    }
+    const read = `read ${stamp(sessions.read_at, clock)}`
+    return sessions.status === null || sessions.status === 'found' ? read : `${read}, last ${sessions.status}`
 }
 
 /**
