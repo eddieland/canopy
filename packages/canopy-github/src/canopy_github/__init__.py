@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -27,8 +28,13 @@ TIMEOUT_SECONDS = 30
 MERGE_INFO_PREVIEW = "application/vnd.github.merge-info-preview+json"
 # How much of a comment's or review's body is printed. canopy bounds what it records again.
 MAX_BODY = 8000
+#: How long a query GitHub answered with a server error, such as its unicorn page, waits before each new try: one
+#: try, then one more for each pause. A mutation is sent once, as one GitHub failed to answer may have been carried out.
+RETRY_PAUSES: Sequence[float] = (1.0, 3.0)
 # How much of GitHub's reply an error quotes.
 _MAX_REPLY = 500
+# A query, which reads and so may be sent again, as a mutation may not: the operation each document names first.
+_QUERY = re.compile(r"\s*query\b")
 _HOST = r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?"
 _NAME = r"[A-Za-z0-9_.-]{1,100}"
 _NUMBER = r"[1-9][0-9]{0,9}"
@@ -63,6 +69,13 @@ class GitHubError(Exception):
         super().__init__(message)
         self.certain = certain
         self.types = types
+
+
+class ServerError(GitHubError):
+    """GitHub answered with a server error, as when it shows its unicorn, or with what is not JSON.
+
+    It may have carried the request out, so it is never `certain`. A query too heavy to answer in time gets one.
+    """
 
 
 @dataclass(frozen=True)
@@ -224,7 +237,8 @@ class Client:
             The reply's `data`, and its errors.
 
         Raises:
-            GitHubError: GitHub refused it whole, or could not be reached.
+            GitHubError: GitHub refused it whole, could not be reached, or answered with a server error, a query each
+                time it was sent.
         """
         payload = json.dumps({"query": document, "variables": dict(variables)}).encode()
         headers = {
@@ -235,25 +249,60 @@ class Client:
             "User-Agent": "canopy-github",
         }
         request = urllib.request.Request(self._url, data=payload, headers=headers, method="POST")  # noqa: S310
-        try:
-            with self._opener.open(request, timeout=TIMEOUT_SECONDS) as response:
-                reply = response.read().decode(errors="replace")
-        except urllib.error.HTTPError as e:
-            text = e.read().decode(errors="replace")[:_MAX_REPLY]
-            # A server error may come after the request was carried out; a refusal comes before.
-            raise GitHubError(f"HTTP {e.code}: {text}", certain=e.code < 500) from e  # noqa: PLR2004
-        except (urllib.error.URLError, TimeoutError, OSError) as e:
-            raise GitHubError(f"cannot reach {self._url}: {e}", certain=False) from e
-        try:
-            parsed: object = json.loads(reply)
-        except json.JSONDecodeError as e:
-            raise GitHubError(f"GitHub's reply is not JSON: {reply[:_MAX_REPLY]}", certain=False) from e
+        parsed = self._send(request, RETRY_PAUSES if _QUERY.match(document) else ())
         body = obj(parsed, "reply")
         errors = items(body.get("errors"))
         data = body.get("data")
         if errors and not isinstance(data, dict):
             raise GitHubError(refusal(errors), certain=True, types=error_types(errors))
         return Reply(obj(data, "data"), tuple(errors))
+
+    def _send(self, request: urllib.request.Request, pauses: Iterable[float]) -> object:
+        """Send `request`, and again after each of `pauses` while GitHub answers with a server error.
+
+        Returns:
+            GitHub's reply, parsed.
+
+        Raises:
+            GitHubError: GitHub refused it, could not be reached, or answered its last try with a server error.
+        """
+        for pause in pauses:
+            try:
+                return self._post(request)
+            except ServerError:
+                time.sleep(pause)
+        return self._post(request)
+
+    def _post(self, request: urllib.request.Request) -> object:
+        """Send `request` once.
+
+        Returns:
+            GitHub's reply, parsed.
+
+        Raises:
+            GitHubError: GitHub refused it, or could not be reached.
+            ServerError: GitHub answered with a server error, or with what is not JSON, as its error pages are.
+        """
+        try:
+            with self._opener.open(request, timeout=TIMEOUT_SECONDS) as response:
+                reply = response.read().decode(errors="replace")
+        except urllib.error.HTTPError as e:
+            # GitHub's error page is HTML, its unicorn's image among it: naming the page says more than quoting it.
+            text = e.read().decode(errors="replace")[:_MAX_REPLY]
+            if "html" in (e.headers.get("Content-Type") or ""):
+                text = "GitHub's error page"
+            if e.code >= 500:  # noqa: PLR2004
+                # A server error may come after the request was carried out; a refusal comes before.
+                raise ServerError(f"HTTP {e.code}: {text}", certain=False) from e
+            raise GitHubError(f"HTTP {e.code}: {text}", certain=True) from e
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            # Not tried again: a try that timed out has waited `TIMEOUT_SECONDS`, which a connector's run cannot spend
+            # many times over.
+            raise GitHubError(f"cannot reach {self._url}: {e}", certain=False) from e
+        try:
+            return json.loads(reply)
+        except json.JSONDecodeError as e:
+            raise ServerError(f"GitHub's reply is not JSON: {reply[:_MAX_REPLY]}", certain=False) from e
 
 
 @dataclass(frozen=True)
