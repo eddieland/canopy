@@ -250,8 +250,9 @@ def _deliver(
         if sink.digest_min_usd is not None:
             first = min(first, row.created_at)
         since = row.last_digest_at or first
-        digest = message.digest(ctx.conn, items, since=since, now=now)
-        if sink.digest_min_usd is not None and (digest.costs.total or 0.0) < sink.digest_min_usd:
+        digest = message.digest(ctx.conn, items, since=since, now=now, state_dir=ctx.state_dir)
+        # canopy's runs alone: the operator's own sessions outside canopy are no news of the loop's to send.
+        if sink.digest_min_usd is not None and (digest.costs.runs or 0.0) < sink.digest_min_usd:
             # It waits: `since` stays, so the next tick's digest counts this spend and whatever comes after it.
             digest = None
     msg = message.Message(

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { SpendCosts, SpendDay, SpendModel, SpendMonth, SpendTool } from '@/api/types'
+import type { SpendCosts, SpendDay, SpendModel, SpendMonth, SpendSessions, SpendTool } from '@/api/types'
 import type { Clock } from '@/lib/clock'
 import { stamp } from '@/lib/time'
 
@@ -11,6 +11,7 @@ import {
     budgetState,
     budgetPartsText,
     budgetText,
+    sessionsReadText,
     chartTop,
     dayHint,
     dayLabel,
@@ -44,6 +45,7 @@ const NONE: SpendCosts = {
     chores: null,
     reviews: null,
     tasks: null,
+    outside: null,
     total: null,
 }
 
@@ -65,10 +67,19 @@ function tool(kind: SpendTool['kind'], name: string, chars: number): SpendTool {
 
 describe('spend', () => {
     it("takes idle ticks' part out of the overseer's, so the series sum to the day's total", () => {
-        const costs: SpendCosts = { ...NONE, overseer: 1.5, idle: 0.5, workers: 2, dry_run: 0.25, total: 3.75 }
+        const costs: SpendCosts = {
+            ...NONE,
+            overseer: 1.5,
+            idle: 0.5,
+            workers: 2,
+            dry_run: 0.25,
+            outside: 1.25,
+            total: 5,
+        }
         expect(seriesCost(costs, 'idle')).toBe(0.5)
         expect(seriesCost(costs, 'overseer')).toBe(1)
-        expect(SERIES.reduce((sum, s) => sum + seriesCost(costs, s.key), 0)).toBe(3.75)
+        expect(seriesCost(costs, 'outside')).toBe(1.25)
+        expect(SERIES.reduce((sum, s) => sum + seriesCost(costs, s.key), 0)).toBe(5)
         expect(seriesCost(NONE, 'overseer')).toBe(0)
     })
 
@@ -82,6 +93,9 @@ describe('spend', () => {
         expect(
             dayHint(day('2026-10-07', { overseer: 1, idle: 0.25, reviews: 0.5, tasks: 0.75, total: 2.25 }), H24),
         ).toBe('Oct 7: $2.25, overseer $1.00 (idle ticks $0.25), reviews $0.50, tasks $0.75')
+        expect(dayHint(day('2026-10-06', { workers: 1, outside: 0.5, total: 1.5 }), H24)).toBe(
+            'Oct 6: $1.50, workers $1.00, outside canopy $0.50',
+        )
         expect(dayHint(day('2026-10-02', {}), H24)).toBe('Oct 2: nothing reported')
         expect(dayHint(hourOf(14, { workers: 2, total: 2 }), H24)).toMatch(/^\S+ 8 14:00: \$2\.00, workers \$2\.00$/u)
         expect(dayHint(hourOf(14, { workers: 2, total: 2 }), H12)).toMatch(/^\S+ 8 2:00 PM: \$2\.00/u)
@@ -161,7 +175,17 @@ describe('spend', () => {
     it('names each series once, the same in the totals, the legend, and the table', () => {
         const labels = SERIES.map((s) => s.label)
         expect(new Set(labels).size).toBe(labels.length)
-        expect(labels).toEqual(['idle ticks', 'overseer', 'workers', 'plans', 'chores', 'reviews', 'tasks', 'dry runs'])
+        expect(labels).toEqual([
+            'idle ticks',
+            'overseer',
+            'workers',
+            'plans',
+            'chores',
+            'reviews',
+            'tasks',
+            'dry runs',
+            'outside canopy',
+        ])
     })
 
     it("sums each model's runs over every kind, the costliest first and the unnamed last, or keeps one kind's", () => {
@@ -268,5 +292,21 @@ describe('monthly budget', () => {
 
     it('names the month as a calendar does', () => {
         expect(monthName(month(1, null))).toBe('October 2026')
+    })
+})
+
+describe('sessionsReadText', () => {
+    it('says when the sessions were read, how the latest read ended when it found nothing, or that none was', () => {
+        const at = '2026-10-08T11:55:00Z'
+        const sessions: SpendSessions = {
+            canopy: { sessions: 2, cost_usd: 1.5 },
+            outside: { sessions: 1, cost_usd: 2 },
+            directories: [{ directory: '/home/me/notes', sessions: 1, cost_usd: 2 }],
+            read_at: at,
+            status: 'found',
+        }
+        expect(sessionsReadText(sessions, H24)).toBe(`read ${stamp(at, H24)}`)
+        expect(sessionsReadText({ ...sessions, status: 'failed' }, H24)).toBe(`read ${stamp(at, H24)}, last failed`)
+        expect(sessionsReadText({ ...sessions, read_at: null, status: null }, H24)).toBe('never read')
     })
 })

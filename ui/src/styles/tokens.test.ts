@@ -71,6 +71,7 @@ const SERIES = [
     'spend-reviews',
     'spend-tasks',
     'spend-dry-run',
+    'spend-outside',
 ]
 // A transcript's context chart: fills on a panel's surface, and on the raised one behind the call picked.
 const CONTEXT = ['context-carried', 'context-added']

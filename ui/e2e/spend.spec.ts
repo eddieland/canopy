@@ -73,7 +73,17 @@ test("each series has one name in the totals, the legend, and the table, and the
     await expect(page.locator('main header p')).toHaveText(`${total ?? ''} over 7 days · no tickets done`)
     await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('title', /canopy spend --days N/u)
 
-    const series = ['idle ticks', 'overseer', 'workers', 'plans', 'chores', 'reviews', 'tasks', 'dry runs']
+    const series = [
+        'idle ticks',
+        'overseer',
+        'workers',
+        'plans',
+        'chores',
+        'reviews',
+        'tasks',
+        'dry runs',
+        'outside canopy',
+    ]
     await expect(page.getByTestId('spend-legend').getByRole('listitem')).toHaveText(series)
     await expect(page.getByTestId('spend-table').locator('thead th')).toHaveText(['day', ...series, 'total', 'done'])
     // The totals name the overseer's whole before idle ticks' part of it, as canopy spend's columns do.
@@ -88,6 +98,7 @@ test("each series has one name in the totals, the legend, and the table, and the
         'reviews',
         'tasks',
         'dry runs',
+        'outside canopy',
         'tickets done',
         'per ticket done',
     ])
@@ -314,7 +325,7 @@ test("the dearest day's total is over its bar, which stops short of the chart's 
     await page.goto('reports/spend?days=30')
     await settled(page)
     // The mock prices today alone: its total is the dearest.
-    const total = await page.getByTestId('spend-day-2026-10-08').locator('td').nth(8).textContent()
+    const total = await page.getByTestId('spend-day-2026-10-08').locator('td').nth(9).textContent()
     const peak = page.getByTestId('spend-bar-2026-10-08').getByTestId('spend-peak')
     await expect(peak).toHaveText(total ?? '')
     await expect(peak).toHaveText(/^\$\d+\.\d\d$/u)
@@ -452,6 +463,11 @@ test('this month reads against the budget whatever the window, and is headed ove
     )
     await page.getByTestId('spend-window-30').click()
     await expect(page.getByTestId('spend-budget-text')).toContainText('$15.76 of $40 (39%)')
+    // Nor does the panel of every session list any: it says why.
+    await expect(page.getByTestId('spend-sessions')).toContainText(
+        "canopy loop has not read the runtime's sessions yet",
+    )
+    await expect(page.getByTestId('spend-total-outside')).toHaveText('–')
     // The mock alerts at half and four fifths of the budget too: each a tick under the bar, and named under it.
     await expect(page.getByTestId('spend-budget-alert-50')).toBeAttached()
     await expect(page.getByTestId('spend-budget-alert-80')).toBeAttached()

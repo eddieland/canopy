@@ -154,7 +154,12 @@ def test_the_spend_counters_add_the_sessions_outside_canopy_and_say_when_they_we
     assert [after[w]["cost_usd"] - before[w]["cost_usd"] for w in ("day", "month")] == [pytest.approx(1.5)] * 2
     assert after["total_usd"] - before["total_usd"] == pytest.approx(1.5)
     assert after["sessions_read_at"] == "2026-10-08T12:00:00Z"
-    month = c.get("/api/spend/breakdown", params={"days": 1}).json()["month"]
+    found = c.get("/api/spend/breakdown", params={"days": 1}).json()
+    assert found["totals"]["outside"] == 1.5
+    assert found["sessions"]["outside"] == {"sessions": 1, "cost_usd": 1.5}
+    assert found["sessions"]["directories"] == [{"directory": "/home/me/notes", "sessions": 1, "cost_usd": 1.5}]
+    assert (found["sessions"]["read_at"], found["sessions"]["status"]) == ("2026-10-08T12:00:00Z", "found")
+    month = found["month"]
     assert (month["outside_usd"], month["sessions_read_at"]) == (1.5, "2026-10-08T12:00:00Z")
     assert month["spent_usd"] == pytest.approx(month["runs_usd"] + 1.5)
 

@@ -5,7 +5,15 @@ import type { ReactNode } from 'react'
 import { spendBreakdownQuery } from '@/api/queries'
 import type { SpendBreakdownRange } from '@/api/queries'
 import { SPEND_KINDS } from '@/api/types'
-import type { SpendBreakdown, SpendDay, SpendKind, SpendMonth, SpendPullRequest, SpendTicket } from '@/api/types'
+import type {
+    SpendBreakdown,
+    SpendDay,
+    SpendKind,
+    SpendMonth,
+    SpendPullRequest,
+    SpendSessions,
+    SpendTicket,
+} from '@/api/types'
 import { Cost } from '@/components/cost'
 import { None } from '@/components/none'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
@@ -29,6 +37,7 @@ import {
     budgetPercent,
     budgetState,
     budgetText,
+    sessionsReadText,
     chartTop,
     dayHint,
     dayLabel,
@@ -75,10 +84,15 @@ const HELP =
     "the tickets the loop marked done, and what each ticket's and PR's own runs cost; what each kind spent on each " +
     "model; and which tools put the most into the runs' context. As canopy spend --days N prints it."
 
+// What each share of the sessions panel counts, said when the operator hovers its name.
+const SESSIONS_CANOPY_HINT =
+    "The sessions this workspace's runs ran in, their subagents', and any that ran in its own .canopy directory"
+const SESSIONS_OUTSIDE_HINT = "Every other session: yours, by hand, and other workspaces' canopy, by where it ran"
+
 // What the window's spend per ticket done counts, on hover.
 const PER_DONE_HINT =
-    "The window's whole spend, the overseer's and chores' included, over the tickets marked done in it: what getting " +
-    'them done cost, the runs of tickets still open included'
+    "canopy's whole spend in the window, the overseer's and chores' included, over the tickets marked done in it: " +
+    'what getting them done cost, the runs of tickets still open included, the sessions outside canopy left out'
 
 // What a tool's returned characters and its estimated tokens count, on hover.
 const RETURNED_HINT =
@@ -123,7 +137,17 @@ const BUDGET_FILL: Record<BudgetState, string> = {
 
 // The order the totals name the series in: the overseer's whole, then idle ticks' part of it, as `canopy spend`'s
 // columns read.
-const TOTALS_ORDER = ['overseer', 'idle', 'workers', 'plans', 'chores', 'reviews', 'tasks', 'dry_run'] as const
+const TOTALS_ORDER = [
+    'overseer',
+    'idle',
+    'workers',
+    'plans',
+    'chores',
+    'reviews',
+    'tasks',
+    'dry_run',
+    'outside',
+] as const
 
 // What the ticks' tables' last column counts, said when the operator hovers its name.
 const NO_OVERSEER_HINT =
@@ -170,6 +194,7 @@ function SpendPage() {
     const shown = rangeOf(search)
     const navigate = Route.useNavigate()
     const query = useQuery(spendBreakdownQuery(shown))
+    const clock = useClock()
     // What the empty panels say they looked over: `these 24 hours`, `these 7 days`.
     const span = windowName(shown)
     const { data } = query
@@ -311,6 +336,20 @@ function SpendPage() {
                             <Tools tools={toolRows(data.tools, search.tool_kind)} kind={search.tool_kind} span={span} />
                         )}
                     </Panel>
+                    <Panel data-testid="spend-sessions">
+                        <PanelHeader label="Every session">
+                            <span className="readout text-xs text-muted-foreground" data-testid="spend-sessions-read">
+                                {data?.sessions === undefined || data.sessions === null
+                                    ? ''
+                                    : sessionsReadText(data.sessions, clock)}
+                            </span>
+                        </PanelHeader>
+                        {data === undefined ? (
+                            <PanelSkeleton rows={3} className="min-h-24" />
+                        ) : (
+                            <Sessions sessions={data.sessions ?? null} span={span} />
+                        )}
+                    </Panel>
                     <div className="grid gap-6 xl:grid-cols-2">
                         <Panel data-testid="spend-ticks">
                             <PanelHeader label="Ticks by what they bought" />
@@ -447,7 +486,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
     const ended = found.unpriced.some((u) => u.runs > 0)
     return (
         <div className="flex flex-col gap-3 p-3">
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-3 @4xl:grid-cols-9">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-3 @4xl:grid-cols-10">
                 {cells.map(({ label, hint, usd, testId }) => (
                     <div key={testId} className="flex flex-col gap-0.5">
                         <dt className="panel-label" title={hint}>
@@ -459,7 +498,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
                     </div>
                 ))}
             </dl>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 @md:grid-cols-3 @4xl:grid-cols-9">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 @md:grid-cols-3 @4xl:grid-cols-10">
                 <div className="flex flex-col gap-0.5">
                     <dt
                         className="panel-label"
@@ -1040,6 +1079,69 @@ function Woken({ found, span }: { found: SpendBreakdown; span: string }) {
             }))}
             testId="spend-woken-table"
         />
+    )
+}
+
+/**
+ * Every session the runtime keeps that started in the window, canopy's apart from the rest, and where the rest ran,
+ * the costliest directory first, as `canopy spend` lists them. Before `canopy loop` first reads them, why there are
+ * none.
+ */
+function Sessions({ sessions, span }: { sessions: SpendSessions | null; span: string }) {
+    if (typeof sessions?.read_at !== 'string') {
+        return (
+            <Empty size="panel">
+                canopy loop has not read the runtime&apos;s sessions yet: it reads them, canopy&apos;s and yours,
+                between ticks
+            </Empty>
+        )
+    }
+    if (sessions.canopy.sessions === 0 && sessions.outside.sessions === 0) {
+        return <Empty size="panel">no session started in these {span}</Empty>
+    }
+    const shares = [
+        { key: 'canopy', label: "canopy's runs", hint: SESSIONS_CANOPY_HINT, share: sessions.canopy },
+        { key: 'outside', label: 'outside canopy', hint: SESSIONS_OUTSIDE_HINT, share: sessions.outside },
+    ]
+    return (
+        <div className="flex flex-col gap-2 p-3">
+            <table className="w-full border-collapse text-sm" data-testid="spend-sessions-table">
+                <thead>
+                    <tr className="text-right">
+                        <th className="panel-label pb-1.5 text-left font-normal">sessions</th>
+                        <th className="panel-label pb-1.5 font-normal">count</th>
+                        <th className="panel-label pb-1.5 font-normal">spent</th>
+                    </tr>
+                </thead>
+                <tbody className="font-mono text-xs">
+                    {shares.map(({ key, label, hint, share }) => (
+                        <tr key={key} className="text-right" data-testid={`spend-sessions-${key}`}>
+                            <th scope="row" className="py-0.5 text-left font-normal" title={hint}>
+                                {label}
+                            </th>
+                            <td className="readout">{share.sessions}</td>
+                            <td className="readout">
+                                <Cost usd={share.cost_usd} />
+                            </td>
+                        </tr>
+                    ))}
+                    {sessions.directories.map((d) => (
+                        <tr key={d.directory} className="text-right" data-testid="spend-sessions-directory">
+                            <th scope="row" className="min-w-0 py-0.5 pl-4 text-left font-normal text-muted-foreground">
+                                <Clipped text={d.directory} mono className="block" />
+                            </th>
+                            <td className="readout">{d.sessions}</td>
+                            <td className="readout">
+                                <Cost usd={d.cost_usd} />
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+            <p className="text-xs text-muted-foreground">
+                A subagent&apos;s session counts with the session it ran for; another workspace&apos;s runs are outside.
+            </p>
+        </div>
     )
 }
 

@@ -252,7 +252,7 @@ class DigestSpend(TypedDict):
     """What the runs that started in a digest's span cost, in US dollars, in total and by kind (DESIGN §11).
 
     Each is None when none of its runs reported a cost. `idle` is the part of `overseer` that idle ticks spent, and
-    `dry_run` the dry runs' overseers, apart from it.
+    `dry_run` the dry runs' overseers, apart from it. `total` counts the sessions outside canopy too.
     """
 
     total: float | None
@@ -265,6 +265,8 @@ class DigestSpend(TypedDict):
     reviews: float | None
     #: The operator's one-off tasks' runs (DESIGN §36).
     tasks: float | None
+    #: No run of canopy's: the runtime's sessions outside canopy, as `canopy loop` last read them.
+    outside: float | None
 
 
 class DigestJson(TypedDict):
@@ -358,13 +360,15 @@ class Digest:
                 "chores": self.costs.chores,
                 "reviews": self.costs.reviews,
                 "tasks": self.costs.tasks,
+                "outside": self.costs.outside,
             },
             "lines": self.lines(),
         }
 
 
 # The digest's line for what its span cost: the total, then each kind that reported a cost, the idle ticks' part of
-# the overseer's beside it, and the dry runs' last, since they are no part of the loop's work.
+# the overseer's beside it, the dry runs', since they are no part of the loop's work, and the sessions outside canopy
+# last, since they are none of canopy's.
 def _spend_line(costs: spend.Costs) -> str:
     total = costs.total
     if total is None:
@@ -380,7 +384,8 @@ def _spend_line(costs: spend.Costs) -> str:
         ("tasks", costs.tasks),
     ]
     parts = [overseer] if overseer is not None else []
-    parts += [f"{name} {_usd(usd)}" for name, usd in (*kinds, ("dry runs", costs.dry_run)) if usd is not None]
+    rest = (*kinds, ("dry runs", costs.dry_run), ("outside canopy", costs.outside))
+    parts += [f"{name} {_usd(usd)}" for name, usd in rest if usd is not None]
     return f"  spent: {_usd(total)} ({', '.join(parts)})"
 
 
@@ -398,7 +403,14 @@ def titles(conn: sqlite3.Connection) -> dict[str, str]:
     return {str(r[0]): str(r[1]) for r in sql.execute(conn, q)}
 
 
-def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now: datetime) -> Digest:
+def digest(
+    conn: sqlite3.Connection,
+    items: Collection[Item],
+    *,
+    since: str,
+    now: datetime,
+    state_dir: Path,
+) -> Digest:
     """Build the digest for the time since `since`: ticks, runs and what they cost, the open attention list, workers.
 
     Returns:
@@ -439,7 +451,7 @@ def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now
         attention=dict(Counter(i.reason for i in items)),
         oldest=age(oldest, now) if oldest is not None else None,
         running=len(db.running_runs(conn, "runs")),
-        costs=spend.costs(conn, since, db.format_time(now)),
+        costs=spend.costs(conn, since, db.format_time(now), state_dir=state_dir),
     )
 
 

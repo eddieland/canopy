@@ -121,6 +121,8 @@ export type SpendTool = Schemas['SpendTool']
 export type SpendModel = Schemas['SpendModel']
 /** The local month so far against the operator's monthly budget. */
 export type SpendMonth = Schemas['SpendMonth']
+/** What every session the runtime keeps that started in a spend window cost, canopy's apart from the rest. */
+export type SpendSessions = Schemas['SpendSessions']
 /** A kind of agent run, as the spend breakdown counts it: the overseer, workers, plans, chores, reviews, or tasks. */
 export type SpendKind = Schemas['SpendKind']
 /** The last months, oldest first, as the reports page shows them. */
