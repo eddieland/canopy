@@ -119,8 +119,13 @@
     scroll-padding-bottom: 8rem;
 }
 
-/* A panel body that scrolls past its height (PanelScroll): thin, not to crowd the rows; its color is the root's. */
+/*
+ * A panel body that scrolls past its height (PanelScroll): thin, not to crowd the rows; its color is the root's.
+ * Positioned, as the page's scroller is, so it holds and clips what is absolute inside it, such as each message's
+ * `sr-only` time: else that box sits where the unscrolled list would end and stretches the page past its content.
+ */
 @utility panel-scroll {
+    position: relative;
     overflow-y: auto;
     scrollbar-width: thin;
 }
