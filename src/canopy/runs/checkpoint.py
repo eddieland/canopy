@@ -194,7 +194,8 @@ def unmarked(git: Git, branch: str, start: Start, base: str, marks: commit_hooks
         return []
     untrailed: list[str] = []
     unprefixed: list[str] = []
-    for line in listed.stdout.splitlines():
+    # Split on newlines alone: `splitlines` also splits on the separator between a commit's trailers.
+    for line in filter(None, listed.stdout.split("\n")):
         commit, subject, found = [*line.split("\x1f"), "", ""][:3]
         if not set(marks.trailers) <= set(found.split("\x1e")):
             untrailed.append(commit)
@@ -291,7 +292,8 @@ def _left_behind(git: Git, branch: str, start: Start, remote: str) -> list[str]:
     That is commits that neither HEAD, origin's `branch` now or when the run started, nor any of origin's branches
     holds, less those whose own change origin's `branch` already has (`_on_origin`). A worker that rebased, could not
     push the copies, and pushed the same work another way left nothing behind; one that rebased and pushed with a lease
-    (`trust.rebase`) replaced the commits origin had, which were pushed before the run.
+    (`trust.rebase`) replaced the commits origin had, which were pushed before the run; one that aborted a rebase and
+    made it again left the first attempt's copies of commits the second one pushed.
 
     Read from HEAD's reflog, the slot's own, so a worker that cleared it hides what it left; this catches a worker that
     checked something else out, not one that tried to hide its work.
@@ -319,13 +321,18 @@ def _on_origin(git: Git, commit: str, remote: str, tree: str) -> bool:
 
     A rebased copy of a commit origin has, or a commit whose change went up in another one, is not lost. It is a
     three-way merge of `commit` into `remote` on `commit`'s first parent, so a change made again by hand counts too, and
-    a change origin has only in part does not. A root commit counts as not on origin, and so does every commit under
-    git older than 2.40, which lacks `--merge-base`.
+    a change origin has only in part does not. A commit with the same patch as one of `remote`'s counts too, though a
+    later commit there changed the same lines again, so the merge conflicts. A root commit counts as not on origin, and
+    so does every commit under git older than 2.40, which lacks `--merge-base`.
 
     Returns:
-        True if the merge is clean and leaves `remote`'s tree as it is.
+        True if the merge is clean and leaves `remote`'s tree as it is, or `remote` holds a commit of the same patch.
     """
     if not git.ok("rev-parse", "--verify", "--quiet", f"{commit}^"):
         return False
     merged = git.result("merge-tree", "--write-tree", f"--merge-base={commit}^", remote, commit)
-    return merged.ok and merged.stdout.split()[:1] == [tree]
+    if merged.ok and merged.stdout.split()[:1] == [tree]:
+        return True
+    # `-` marks a commit of `commit^..commit` whose patch one of `remote`'s commits that `commit` lacks has too.
+    cherry = git.result("cherry", remote, commit, f"{commit}^")
+    return cherry.ok and cherry.stdout.split()[:1] == ["-"]

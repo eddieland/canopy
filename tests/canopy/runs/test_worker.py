@@ -291,6 +291,28 @@ def test_a_rebase_dropped_with_work_of_its_own_is_unpushed(scenario: Scenario, g
     assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run.row["result_json"])["harness"]
 
 
+def test_a_rebase_aborted_and_made_again_leaves_nothing_behind(scenario: Scenario, git_pool: GitPool) -> None:
+    """A copy the aborted attempt made is left behind, with the same patch as one the second attempt pushed.
+
+    `fix` changed the copy's file since, so merging the copy into origin's branch conflicts.
+    """
+    scenario.configures(trust={"rebase": True})
+    branch_behind_main(git_pool)
+    # Dated, so the first attempt's copy is not the commit the second makes.
+    first = "GIT_COMMITTER_DATE=2001-01-01T00:00:00 git rebase --quiet --exec false origin/main; git rebase --abort"
+    run = scenario.run(
+        worker=worker_does(
+            ["sh", "-c", "echo fix > a.txt && git commit --quiet -am 'PROJ-1: fix'"],
+            ["sh", "-c", first],
+            ["git", "rebase", "--quiet", "origin/main"],
+            ["git", "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
+        ),
+    )
+    assert run.status == "done", run.row["result_json"]
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
+    assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
+
+
 def test_without_rebase_a_rebased_branch_is_never_forced(scenario: Scenario, git_pool: GitPool) -> None:
     branch_behind_main(git_pool)
     before = git_pool.remote_head("agent/PROJ-1-work")
