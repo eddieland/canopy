@@ -84,12 +84,12 @@ const HELP =
     "the tickets the loop marked done, and what each ticket's and PR's own runs cost; what each kind spent on each " +
     "model; and which tools put the most into the runs' context. As canopy spend --days N prints it."
 
-// What the window's spend per ticket done counts, on hover.
 // What each share of the sessions panel counts, said when the operator hovers its name.
 const SESSIONS_CANOPY_HINT =
     "The sessions this workspace's runs ran in, their subagents', and any that ran in its own .canopy directory"
 const SESSIONS_OUTSIDE_HINT = "Every other session: yours, by hand, and other workspaces' canopy, by where it ran"
 
+// What the window's spend per ticket done counts, on hover.
 const PER_DONE_HINT =
     "canopy's whole spend in the window, the overseer's and chores' included, over the tickets marked done in it: " +
     'what getting them done cost, the runs of tickets still open included, the sessions outside canopy left out'

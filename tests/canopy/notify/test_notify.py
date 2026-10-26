@@ -548,8 +548,12 @@ def test_a_digest_under_a_spend_floor_waits_until_the_runs_since_the_last_cost_t
     [message] = json_messages(out)
     assert message["digest"]["spend"]["workers"] == 0.5
     scenario.time_passes(minutes=61)
+    # The operator's own session outside canopy is no run of the loop's: however dear, it meets no floor.
+    ms = int(datetime.now(UTC).timestamp() * 1000)
+    mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 9.0, 1, 1, 0, 0, 0)
+    runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
     scenario.tick(*waits("PROJ-1", "PROJ-2"))
-    assert len(messages(out)) == 1  # due again, but nothing spent since
+    assert len(messages(out)) == 1  # due again, but no run of canopy's spent anything since
 
 
 def test_bounds_count_what_they_leave_out(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:
