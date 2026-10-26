@@ -161,8 +161,9 @@ def pull_requests(client: Client, refs: Sequence[Ref]) -> dict[str, Pulled]:
     """Read each of `refs`, all on `client`'s host, whole: `BATCH` to a query, then any page past each one's first.
 
     The lines are DESIGN §30's: ids, states, times, and bodies cut at `MAX_BODY`, never a diff or a log. A PR GitHub
-    does not return, or one a later page of fails, is not read whole, and the rest still are. A query GitHub answers
-    with a server error is read again in halves, as one too heavy to answer in time would be.
+    does not return, or one a later page of fails, is not read whole, and the rest still are. A query of many PRs
+    GitHub answers with a server error is read again in halves rather than sent again whole, as one too heavy to answer
+    in time would fail each time; a query of one PR is sent again.
 
     Returns:
         Each PR's read, by its URL.
@@ -187,8 +188,10 @@ def threads(client: Client, ref: Ref) -> list[Thread]:
 
 
 def _ask(client: Client, refs: Sequence[Ref]) -> Reply | GitHubError:
+    # A batch's halves are its new tries: sending it again whole would spend the connector's time on what may fail
+    # each time.
     try:
-        return client.ask(_batch(len(refs)), _variables(refs))
+        return client.ask(_batch(len(refs)), _variables(refs), retry=len(refs) == 1)
     except GitHubError as e:
         return e
 
@@ -216,7 +219,7 @@ def _halves(client: Client, refs: Sequence[Ref]) -> dict[str, Pulled]:
     """Read `refs`, whose query GitHub answered with a server error, in two halves, a half that fails split again.
 
     When both halves fail, GitHub is failing whatever it is asked rather than one PR too heavy for a query, and neither
-    is split again: a GitHub that is down is sent three queries a batch.
+    is split again: a GitHub that is down is sent three queries a batch, or more for a batch of two or three.
 
     Returns:
         Each PR's read, by its URL.

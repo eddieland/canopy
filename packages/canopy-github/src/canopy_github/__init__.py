@@ -230,8 +230,10 @@ class Client:
             raise GitHubError(refusal(reply.errors), certain=True, types=error_types(reply.errors))
         return reply.data
 
-    def ask(self, document: str, variables: Mapping[str, object]) -> Reply:
+    def ask(self, document: str, variables: Mapping[str, object], *, retry: bool = True) -> Reply:
         """Send one query, which GitHub may answer in part: an error about one field leaves the rest of `data`.
+
+        A query GitHub answers with a server error is sent again, after each of `RETRY_PAUSES`, unless `retry` is false.
 
         Returns:
             The reply's `data`, and its errors.
@@ -249,7 +251,7 @@ class Client:
             "User-Agent": "canopy-github",
         }
         request = urllib.request.Request(self._url, data=payload, headers=headers, method="POST")  # noqa: S310
-        parsed = self._send(request, RETRY_PAUSES if _QUERY.match(document) else ())
+        parsed = self._send(request, RETRY_PAUSES if retry and _QUERY.match(document) else ())
         body = obj(parsed, "reply")
         errors = items(body.get("errors"))
         data = body.get("data")
@@ -286,10 +288,10 @@ class Client:
         try:
             with self._opener.open(request, timeout=TIMEOUT_SECONDS) as response:
                 reply = response.read().decode(errors="replace")
+                page = _page(response.headers)
         except urllib.error.HTTPError as e:
-            # GitHub's error page is HTML, its unicorn's image among it: naming the page says more than quoting it.
             text = e.read().decode(errors="replace")[:_MAX_REPLY]
-            if "html" in (e.headers.get("Content-Type") or ""):
+            if _page(e.headers):
                 text = "GitHub's error page"
             if e.code >= 500:  # noqa: PLR2004
                 # A server error may come after the request was carried out; a refusal comes before.
@@ -302,7 +304,13 @@ class Client:
         try:
             return json.loads(reply)
         except json.JSONDecodeError as e:
-            raise ServerError(f"GitHub's reply is not JSON: {reply[:_MAX_REPLY]}", certain=False) from e
+            text = "GitHub's error page" if page else reply[:_MAX_REPLY]
+            raise ServerError(f"GitHub's reply is not JSON: {text}", certain=False) from e
+
+
+def _page(headers: Message) -> bool:
+    # GitHub's error page is HTML, its unicorn's image among it: naming the page says more than quoting it.
+    return "html" in (headers.get("Content-Type") or "")
 
 
 @dataclass(frozen=True)

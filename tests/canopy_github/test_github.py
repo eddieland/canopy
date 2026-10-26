@@ -99,7 +99,8 @@ def status(context: str, state: str, url: str | None = "https://ci.example.com/b
 class Fake:
     """GitHub's state, and what each operation should do.
 
-    `fail` maps an operation to `refuse`, `500`, or `lost`: carried out, but answered with a 502.
+    `fail` maps an operation to `refuse`, `500`, `lost` (carried out, but answered with a 502), or `page` (an HTML page
+    answered with a 200).
     """
 
     pulls: dict[tuple[str, str, int], Pull] = field(default_factory=dict)
@@ -366,6 +367,12 @@ class _Api(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html")
             self.end_headers()
             self.wfile.write(b"<html><body><img alt='unicorn' src='data:image/png;base64,iVBORw0'></body></html>")
+            return
+        if _Api.fake.fail.get(op.group(1)) == "page":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><body>Service unavailable</body></html>")
             return
         if _Api.fake.fail.get(op.group(1)) == "lost":
             _Api.fake.handle(request["query"], request["variables"])
@@ -667,6 +674,15 @@ def test_a_unicorn_is_named_rather_than_quoted(github: tuple[Fake, str]) -> None
     assert "<html>" not in err
 
 
+def test_an_error_page_answered_as_a_success_is_named_and_sent_again(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.fail["PullRequests"] = "page"
+    code, _, err = read(url, {"prs": [PR]})
+    assert code == 1
+    assert f"cannot read {PR}: GitHub's reply is not JSON: GitHub's error page" in err
+    assert fake.ops().count("PullRequests") == 3
+
+
 def test_a_batch_github_cannot_answer_is_read_in_halves_down_to_the_pr_it_cannot(github: tuple[Fake, str]) -> None:
     fake, url = github
     numbers = range(8, 14)
@@ -678,8 +694,22 @@ def test_a_batch_github_cannot_answer_is_read_in_halves_down_to_the_pr_it_cannot
     assert code == 1
     assert lines[-1]["prs"] == [p for p in prs if not p.endswith("/12")]
     assert "cannot read https://github.com/acme/api/pull/12: HTTP 502" in err
-    # Seven PRs, then 7 into 3 and 4, 4 into 2 and 2, 2 into 1 and 1: each query that names #12 is tried three times.
-    assert fake.ops().count("PullRequests") == 4 * 3 + 3
+    # Seven PRs, then 7 into 3 and 4, 4 into 2 and 2, 2 into 1 and 1: only the query of #12 alone is tried three times.
+    assert fake.ops().count("PullRequests") == 7 + 2
+
+
+def test_a_batch_github_answers_with_its_unicorn_is_read_in_halves_rather_than_sent_again(
+    github: tuple[Fake, str],
+) -> None:
+    fake, url = github
+    for n in (8, 9):
+        fake.pulls["acme", "api", n] = Pull(node=f"PR_{n}")
+    prs = [PR, *(f"https://github.com/acme/api/pull/{n}" for n in (8, 9))]
+    fake.unicorns = 1
+    code, lines, _ = read(url, {"prs": prs})
+    assert code == 0
+    assert lines[-1]["prs"] == prs
+    assert [len(variables) // 3 for op, _, variables in fake.seen if op == "PullRequests"] == [3, 1, 2]
 
 
 def test_a_batch_whose_halves_both_fail_is_not_split_again(github: tuple[Fake, str]) -> None:
@@ -689,7 +719,7 @@ def test_a_batch_whose_halves_both_fail_is_not_split_again(github: tuple[Fake, s
     fake.fail["PullRequests"] = "500"
     code, lines, _ = read(url, {"prs": [PR, *(f"https://github.com/acme/api/pull/{n}" for n in range(8, 12))]})
     assert (code, lines) == (1, [{"kind": "end", "prs": []}])
-    assert fake.ops().count("PullRequests") == 3 * 3
+    assert fake.ops().count("PullRequests") == 3
 
 
 def test_the_reader_asks_each_prs_own_host(github: tuple[Fake, str]) -> None:
