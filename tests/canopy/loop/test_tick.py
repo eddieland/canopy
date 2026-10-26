@@ -45,11 +45,11 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
     env = scenario.env
     before = time.time()
     ticked = scenario.tick(
-        calls("canopy_decide", key="PROJ-1", action="wait", rationale="checks pending"),
+        calls("canopy_decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "checks pending"}]),
         calls("canopy_ticket-set", key="PROJ-1", repo="repo", phase="ci_running", cursors={"ci": "1"}),
         calls("canopy_dispatch", key="PROJ-2", kind="implement", label=LABEL, repos=["repo"]),
         calls("canopy_attention", key="PROJ-3", reason="needs_author", detail="https://example.test/pr/3"),
-        calls("canopy_decide", key="PROJ-4;rm", action="wait", rationale="bad key"),
+        calls("canopy_decide", decisions=[{"key": "PROJ-4;rm", "action": "wait", "rationale": "bad key"}]),
         dry_run=True,
     )
     assert ticked.printed.out.startswith("tick 1: ok: dry run; 4 decisions")
@@ -128,7 +128,7 @@ def _acted_through_its_tools(run: Mapping[str, object]) -> None:
     assert made[0]["arguments"] == {"keys": []}  # the query was due, and found nothing
     # A refusal is a tool error naming the field, and the overseer goes on: nothing recorded it.
     assert [c["error"] for c in made] == [False] * 5 + [True], made
-    assert made[-1]["text"].startswith("key: invalid ticket key 'PROJ-4;rm'")
+    assert made[-1]["text"].startswith("decisions.0.key: invalid ticket key 'PROJ-4;rm'")
 
 
 @pytest.mark.parametrize(

@@ -193,20 +193,44 @@ RECORDS = [
     pytest.param(
         Verb(
             "decide",
-            {"key": "PROJ-1", "action": "wait", "rationale": "  checks still running  "},
+            {"decisions": [{"key": "PROJ-1", "action": "wait", "rationale": "  checks still running  "}]},
             ["decide", "PROJ-1", "wait", "--rationale", "  checks still running  "],
-            result={"key": "PROJ-1", "action": "wait"},
+            result={"decisions": [{"key": "PROJ-1", "action": "wait"}]},
         ),
         id="decide",
     ),
     pytest.param(
         Verb(
             "decide",
-            {"action": "skip", "rationale": "mcp_unavailable: the tracker"},
+            {"decisions": [{"action": "skip", "rationale": "mcp_unavailable: the tracker"}]},
             ["decide", "skip", "--rationale", "mcp_unavailable: the tracker"],
-            result={"key": None, "action": "skip"},
+            result={"decisions": [{"key": None, "action": "skip"}]},
         ),
         id="decide-tick-wide",
+    ),
+    pytest.param(
+        Verb(
+            "decide",
+            {
+                "decisions": [
+                    {"key": "PROJ-1", "action": "wait", "rationale": "checks still running"},
+                    {"key": "PROJ-2", "action": "done", "rationale": "merged"},
+                ],
+            },
+            [
+                "decide",
+                "PROJ-1",
+                "wait",
+                "--rationale",
+                "checks still running",
+                "PROJ-2",
+                "done",
+                "--rationale",
+                "merged",
+            ],
+            result={"decisions": [{"key": "PROJ-1", "action": "wait"}, {"key": "PROJ-2", "action": "done"}]},
+        ),
+        id="decide-several",
     ),
     pytest.param(
         Verb(
@@ -350,7 +374,7 @@ REFUSALS = [
     pytest.param(
         Verb(
             "decide",
-            {"key": "PROJ-1", "action": "wait", "rationale": "r"},
+            {"decisions": [{"key": "PROJ-1", "action": "wait", "rationale": "r"}]},
             ["decide", "PROJ-1", "wait", "--rationale", "r"],
             ticking=False,
         ),
@@ -359,13 +383,17 @@ REFUSALS = [
         id="no-tick",
     ),
     pytest.param(
-        Verb("decide", {"action": "wait", "rationale": "r"}, ["decide", "wait", "--rationale", "r"]),
+        Verb("decide", {"decisions": [{"action": "wait", "rationale": "r"}]}, ["decide", "wait", "--rationale", "r"]),
         "'wait' needs a ticket key; only a tick-wide 'skip' may omit it",
         2,
         id="decide-without-a-key",
     ),
     pytest.param(
-        Verb("decide", {"action": "skip", "rationale": "relabel"}, ["decide", "skip", "--rationale", "relabel"]),
+        Verb(
+            "decide",
+            {"decisions": [{"action": "skip", "rationale": "relabel"}]},
+            ["decide", "skip", "--rationale", "relabel"],
+        ),
         "a skip about one ticket names its key",
         2,
         id="decide-a-tick-wide-skip-without-its-reason",
@@ -373,7 +401,7 @@ REFUSALS = [
     pytest.param(
         Verb(
             "decide",
-            {"key": "PROJ-1", "action": "skip", "rationale": "mcp_unavailable: down"},
+            {"decisions": [{"key": "PROJ-1", "action": "skip", "rationale": "mcp_unavailable: down"}]},
             ["decide", "PROJ-1", "skip", "--rationale", "mcp_unavailable: down"],
         ),
         "'mcp_unavailable' skips the whole tick, so it names no key: leave key out",
@@ -383,12 +411,27 @@ REFUSALS = [
     pytest.param(
         Verb(
             "decide",
-            {"key": "PROJ-1", "action": "wait", "rationale": "   "},
+            {"decisions": [{"key": "PROJ-1", "action": "wait", "rationale": "   "}]},
             ["decide", "PROJ-1", "wait", "--rationale", "   "],
         ),
         "must not be empty",
         2,
         id="decide-with-no-rationale",
+    ),
+    pytest.param(
+        Verb(
+            "decide",
+            {
+                "decisions": [
+                    {"key": "PROJ-1", "action": "wait", "rationale": "r"},
+                    {"key": "PROJ-1", "action": "done", "rationale": "r"},
+                ],
+            },
+            ["decide", "PROJ-1", "wait", "--rationale", "r", "PROJ-1", "done", "--rationale", "r"],
+        ),
+        "decide each ticket once in a call: PROJ-1 decided twice",
+        2,
+        id="decide-a-ticket-twice",
     ),
     pytest.param(
         Verb(
@@ -559,16 +602,16 @@ def test_a_refusal_is_a_tool_error_and_the_server_goes_on(overseen: CanopyEnv) -
     conn = overseen.journal()
     with in_tick(conn) as tick_id:
         served = mcp_session(
-            tool_call("decide", action="wait", rationale="r"),
-            tool_call("decide", key="PROJ-1", action="wait", rationale="r", colour="blue"),
-            tool_call("decide", key="PROJ-1", action="wait", rationale="checks still running"),
+            tool_call("decide", decisions=[{"action": "wait", "rationale": "r"}]),
+            tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r", "colour": "blue"}]),
+            tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "checks still running"}]),
             {"method": "tools/call", "params": {"name": "decide_wait", "arguments": {}}},
             {"method": "resources/list"},
             {"method": "ping"},
         )
-    assert served.said(1) == ("'wait' needs a ticket key; only a tick-wide 'skip' may omit it", True)
+    assert served.said(1) == ("decisions.0: 'wait' needs a ticket key; only a tick-wide 'skip' may omit it", True)
     # An unknown field is refused, not dropped: named, with nothing recorded for the call.
-    assert served.said(2) == ("colour: Extra inputs are not permitted", True)
+    assert served.said(2) == ("decisions.0.colour: Extra inputs are not permitted", True)
     assert served.said(3) == ("recorded wait for PROJ-1", False)
     assert served.responses[4]["error"] == {"code": -32602, "message": "no tool named 'decide_wait'"}
     assert served.responses[5]["error"]["code"] == -32601
@@ -578,9 +621,31 @@ def test_a_refusal_is_a_tool_error_and_the_server_goes_on(overseen: CanopyEnv) -
     ]
 
 
+def test_a_batch_of_decisions_is_refused_whole_for_its_form(overseen: CanopyEnv) -> None:
+    """A tick-wide skip among other decisions, or no decision at all, records nothing."""
+    conn = overseen.journal()
+    with in_tick(conn) as tick_id:
+        served = mcp_session(
+            tool_call(
+                "decide",
+                decisions=[
+                    {"key": "PROJ-1", "action": "wait", "rationale": "r"},
+                    {"action": "skip", "rationale": "mcp_unavailable: down"},
+                ],
+            ),
+            tool_call("decide", decisions=[]),
+        )
+    assert served.said(1) == (
+        "a skip with no key skips the whole tick, so it is the only decision in its call",
+        True,
+    )
+    assert served.said(2) == ("name at least one decision", True)
+    assert db.decisions_for_tick(conn, tick_id) == []
+
+
 def test_the_server_lists_each_tool_only_inside_a_running_tick_and_never_inside_a_run(overseen: CanopyEnv) -> None:
     conn = overseen.journal()
-    decide = tool_call("decide", key="PROJ-1", action="wait", rationale="r")
+    decide = tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r"}])
     outside = mcp_session(LIST_TOOLS, decide, tool_call("ticket-set", key="PROJ-1", title="Login"))
     assert outside.listed() == []
     assert outside.said(2) == (
@@ -722,7 +787,7 @@ def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
         with in_run(run):
             served = mcp_session(
                 LIST_TOOLS,
-                tool_call("decide", key="PROJ-1", action="wait", rationale="r"),
+                tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r"}]),
                 chore=True,
             )
         assert served.listed() == ["history"], run
@@ -980,7 +1045,7 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
             tool_call("show", rev="feature", path="../seed/retry.py"),
             tool_call("show", rev="--output=x", path="retry.py"),
             tool_call("show", rev="feature", path="retry.py", repo="web"),
-            tool_call("decide", key="PROJ-1", action="wait", rationale="r"),
+            tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r"}]),
             tool_call("blame", rev="feature", path="retry.py", start=1, end=2),
             tool_call("log", range="feature", search="call()"),
             git=[f"checkout={seed}"],

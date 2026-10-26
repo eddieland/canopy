@@ -73,6 +73,40 @@ def test_decide_needs_a_key_except_for_skip(scenario: Scenario) -> None:
         scenario.overseer("decide", "PROJ-1", "wait", "extra", "--rationale", "r", code=2)
 
 
+def test_decide_records_several_in_one_call(scenario: Scenario) -> None:
+    with scenario.ticking() as tick_id:
+        said = scenario.overseer(
+            "decide",
+            "PROJ-1",
+            "wait",
+            "--rationale",
+            "checks pending",
+            "PROJ-2",
+            "done",
+            "--rationale",
+            "merged",
+        )
+        assert said.out == "recorded wait for PROJ-1\nrecorded done for PROJ-2\n"
+        # Each KEY ACTION pair needs its own --rationale, and a tick-wide skip goes alone.
+        scenario.overseer("decide", "PROJ-3", "wait", "PROJ-4", "wait", "--rationale", "r", code=2)
+        scenario.overseer("decide", "PROJ-3", "wait", "--rationale", "r", "--rationale", "s", code=2)
+        scenario.overseer(
+            "decide",
+            "PROJ-3",
+            "wait",
+            "--rationale",
+            "r",
+            "skip",
+            "--rationale",
+            "mcp_unavailable: x",
+            code=2,
+        )
+        scenario.overseer("decide", "PROJ-3", "wait", "--rationale", "r", "PROJ-4", "later", "--rationale", "s", code=2)
+    rows = [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(scenario.conn, tick_id)]
+    assert rows == [("PROJ-1", "wait", "checks pending"), ("PROJ-2", "done", "merged")]
+    assert {row["key"] for row in scenario.conn.execute("SELECT key FROM tickets")} == {"PROJ-1", "PROJ-2"}
+
+
 def test_only_a_tick_wide_reason_skips_the_tick(scenario: Scenario) -> None:
     with scenario.ticking() as tick_id:
         refused = scenario.overseer("decide", "skip", "--rationale", "wanted to relabel PROJ-1", code=2)
