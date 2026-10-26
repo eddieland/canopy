@@ -21,29 +21,48 @@ from canopy.loop import tools
 
 
 @click.command("decide", cls=OverseerCommand)
-# click has no optional positional before a required one, so `[KEY] ACTION` is parsed by hand.
+# click has no optional positional before a required one, nor groups of arguments, so `[KEY] ACTION`, once for each
+# --rationale, is parsed by hand: the Nth KEY ACTION pair is the Nth --rationale's.
 @click.argument("words", nargs=-1, required=True, metavar="[KEY] ACTION")
 @click.option(
     "--rationale",
+    "rationales",
     required=True,
+    multiple=True,
     type=TextType(),
-    help="Why, in your own words: `canopy decisions` shows it.",
+    help="Why, in your own words: `canopy decisions` shows it. One for each decision.",
 )
 @click.pass_context
-def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str) -> int:
-    """Record a decision (overseer only).
+def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationales: tuple[str, ...]) -> int:
+    """Record a decision, or several, all or none (overseer only).
 
     ACTION is wait, skip, or done. KEY may be omitted only for a tick-wide skip, whose rationale starts
-    `mcp_unavailable:` or `tracker_unsupported:`; a skip with KEY may not give either.
+    `mcp_unavailable:` or `tracker_unsupported:`; a skip with KEY may not give either. Decide several tickets at once
+    as `KEY ACTION --rationale WHY`, repeated.
     """
-    if len(words) > 2:  # noqa: PLR2004
-        raise click.UsageError(f"expected [KEY] ACTION, got {len(words)} arguments", click_ctx)
-    key, action = (None, words[0]) if len(words) == 1 else words
-    if action not in tools.DECIDE_ACTIONS:
-        raise click.UsageError(f"invalid action {action!r}: choose from {', '.join(tools.DECIDE_ACTIONS)}", click_ctx)
-    if key is not None and not valid_key(key):
-        raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
-    return verb(click_ctx, tools.decide, tools.Decide, key=key, action=action, rationale=rationale)
+    if len(rationales) == 1 and len(words) <= 2:  # noqa: PLR2004
+        pairs = [(None, words[0]) if len(words) == 1 else (words[0], words[1])]
+    elif len(words) == 2 * len(rationales):
+        pairs = list(zip(words[::2], words[1::2], strict=True))
+    else:
+        raise click.UsageError(
+            f"expected [KEY] ACTION, or KEY ACTION for each of {len(rationales)} --rationale; "
+            f"got {len(words)} arguments",
+            click_ctx,
+        )
+    for key, action in pairs:
+        if action not in tools.DECIDE_ACTIONS:
+            raise click.UsageError(
+                f"invalid action {action!r}: choose from {', '.join(tools.DECIDE_ACTIONS)}",
+                click_ctx,
+            )
+        if key is not None and not valid_key(key):
+            raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
+    decisions = [
+        {"key": key, "action": action, "rationale": rationale}
+        for (key, action), rationale in zip(pairs, rationales, strict=True)
+    ]
+    return verb(click_ctx, tools.decide, tools.Decisions, decisions=decisions)
 
 
 @click.command("queried", cls=OverseerCommand)

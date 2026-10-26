@@ -702,7 +702,33 @@ class Decide(Request):
         return self
 
 
-class Decided(Result):
+class Decisions(Request):
+    """One or more decisions, recorded together or not at all."""
+
+    #: Each decision, in the order it is recorded.
+    decisions: Annotated[
+        tuple[Decide, ...],
+        # Its one item is checked below, not by `min_length`, which would also refuse a call whose only item is wrong.
+        Field(
+            json_schema_extra={"minItems": 1},
+            description="Each decision, one per ticket, recorded together or not at all. A tick-wide skip is the "
+            "only one in its call.",
+        ),
+    ]
+
+    @model_validator(mode="after")
+    def _batch(self) -> Self:
+        if not self.decisions:
+            raise ValueError("name at least one decision")
+        if len(self.decisions) > 1 and any(d.key is None for d in self.decisions):
+            raise ValueError("a skip with no key skips the whole tick, so it is the only decision in its call")
+        keys = [d.key for d in self.decisions]
+        if twice := sorted({key for key in keys if key is not None and keys.count(key) > 1}):
+            raise ValueError(f"decide each ticket once in a call: {', '.join(twice)} decided twice")
+        return self
+
+
+class Decision(Result):
     """A decision recorded about a ticket, or about the whole tick."""
 
     #: The ticket; none for a tick-wide skip.
@@ -711,23 +737,37 @@ class Decided(Result):
     action: Annotated[Literal["wait", "skip", "done"], Field(description="What was decided.")]
 
 
-def decide(ctx: Context, request: Decide) -> Outcome[Decided]:
-    """Record a decision.
+class Decided(Result):
+    """The decisions a call recorded."""
+
+    #: Each decision recorded, in the order given.
+    decisions: Annotated[tuple[Decision, ...], Field(description="Each decision recorded, in the order given.")]
+
+
+def decide(ctx: Context, request: Decisions) -> Outcome[Decided]:
+    """Record decisions, all of them or none.
 
     Returns:
         What the command prints, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick, or about a ticket the harness decided this tick, which is recorded.
+        Refused: Outside a running tick, or about a ticket the harness decided this tick, whose refusal is recorded and
+            leaves every decision of the call unrecorded.
     """
     current = running_tick(ctx)
-    if request.key is not None:
-        _refuse_decided(ctx, current.id, request.key, "decide")
-        db.touch_ticket(ctx.conn, request.key, ctx.repo)
-    db.record_decision(ctx.conn, current.id, request.key, request.action, request.rationale)
+    keys = [d.key for d in request.decisions if d.key is not None]
+    if refused := [r for key in keys if (r := _decided_by_harness(ctx, current.id, key, "decide")) is not None]:
+        recorded = "the refusal was recorded" if len(refused) == 1 else "the refusals were recorded"
+        unrecorded = "" if len(request.decisions) == 1 else ", and nothing else in the call: decide the rest again"
+        raise Refused(f"decide refused ({DECIDED}): {'; '.join(refused)}; {recorded}{unrecorded}")
+    with db.transaction(ctx.conn):
+        for d in request.decisions:
+            if d.key is not None:
+                db.touch_ticket(ctx.conn, d.key, ctx.repo)
+            db.record_decision(ctx.conn, current.id, d.key, d.action, d.rationale)
     return Outcome(
-        f"recorded {request.action} for {request.key or 'this tick'}",
-        Decided(key=request.key, action=request.action),
+        "\n".join(f"recorded {d.action} for {d.key or 'this tick'}" for d in request.decisions),
+        Decided(decisions=tuple(Decision(key=d.key, action=d.action) for d in request.decisions)),
     )
 
 
@@ -1037,6 +1077,16 @@ def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
     Raises:
         Refused: The harness decided the ticket this tick.
     """
+    if (reason := _decided_by_harness(ctx, tick_id, key, verb)) is not None:
+        raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")
+
+
+def _decided_by_harness(ctx: Context, tick_id: int, key: str, verb: str) -> str | None:
+    """Record the refusal of `verb` about `key` if the harness decided the ticket in tick `tick_id`.
+
+    Returns:
+        The refusal's reason, or None when the ticket is the overseer's to decide.
+    """
     if harness.decided(ctx.conn, tick_id, key):
         where = "decided"
         shown = "harness"
@@ -1044,11 +1094,11 @@ def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
         where = "dispatches"
         shown = "dispatches_to_come"
     else:
-        return
+        return None
     reason = f"the harness {where} {key} this tick (the state block's `{shown}`); record nothing about it"
     db.record_decision(ctx.conn, tick_id, key, attention.REFUSED_DECIDED, reason)
     logs.for_tick(tick_id).info("refused: decided by the harness", extra={"ticket": key, "verb": verb})
-    raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")
+    return reason
 
 
 def _refuse_raised(

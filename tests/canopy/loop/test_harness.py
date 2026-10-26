@@ -174,7 +174,10 @@ def test_its_attention_items_are_marked_its_own_and_are_not_its_decisions(scenar
 
 #: What the overseer records about a ticket, through each verb's command and its tool.
 VERBS = {
-    "decide": (["decide", KEY, "wait", "--rationale", "r"], {"key": KEY, "action": "wait", "rationale": "r"}),
+    "decide": (
+        ["decide", KEY, "wait", "--rationale", "r"],
+        {"decisions": [{"key": KEY, "action": "wait", "rationale": "r"}]},
+    ),
     "dispatch": (
         ["dispatch", KEY, "--repo", "repo", "--kind", "implement", "--label", LABEL],
         {"key": KEY, "kind": "implement", "repos": ["repo"], "label": LABEL},
@@ -219,6 +222,33 @@ def test_another_ticket_and_the_operators_ticket_set_are_not_refused(
         assert main(["decide", "PROJ-2", "wait", "--rationale", "r"]) == 0
         assert operator("ticket", "set", KEY, "--title", "Retry uploads") == 0
     assert [a for a, _ in decisions(conn, tick_id)] == ["wait", "wait"]
+
+
+def test_decisions_in_one_call_are_refused_together_when_the_harness_decided_one(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    batch = ["decide", "PROJ-2", "wait", "--rationale", "r", KEY, "wait", "--rationale", "r"]
+    arguments = [
+        {"key": "PROJ-2", "action": "wait", "rationale": "r"},
+        {"key": KEY, "action": "wait", "rationale": "r"},
+    ]
+    for through in ("command", "tool"):
+        with in_tick(conn) as tick_id:
+            harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
+            if through == "command":
+                assert main(batch) == 1
+            else:
+                said = mcp_session(tool_call("decide", decisions=arguments)).said()
+                assert said.error
+                assert said.text.endswith(
+                    "the refusal was recorded, and nothing else in the call: decide the rest again",
+                )
+            # Only the refusal is recorded: PROJ-2's wait is not, and is the overseer's to decide again.
+            [_, (action, reason)] = decisions(conn, tick_id)
+            assert action == "refused:decided"
+            assert reason.startswith(f"the harness decided {KEY} this tick")
+    assert conn.execute("SELECT count(*) FROM tickets WHERE key = 'PROJ-2'").fetchone()[0] == 0
 
 
 def test_a_tick_leaves_a_running_ticket_to_the_harness_and_the_overseer_only_the_rest(

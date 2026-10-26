@@ -140,8 +140,9 @@ TOOLS = (
     ),
     tool(
         "decide",
-        "Record a decision about a ticket: wait, skip, or done. Omit key only for a skip of the whole tick.",
-        tools.Decide,
+        "Record decisions, one per ticket: wait, skip, or done, each with its rationale, all or none. Omit key only "
+        "for a skip of the whole tick, the only decision in its call.",
+        tools.Decisions,
         tools.Decided,
         tools.decide,
     ),
