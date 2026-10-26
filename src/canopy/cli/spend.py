@@ -81,7 +81,7 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
         return 0
     now = datetime.now(UTC)
     month = spend.budget_month(ctx.conn, now, ctx.config.spend)
-    for line in render(spend.breakdown(ctx.conn, now, days), month):
+    for line in render(spend.breakdown(ctx.conn, now, days, state_dir=ctx.state_dir), month):
         click.echo(line)
     return 0
 

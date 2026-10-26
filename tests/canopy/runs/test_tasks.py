@@ -374,7 +374,7 @@ def test_a_task_run_s_models_and_tool_calls_are_recorded_as_it_ends(
         ("anthropic/claude-x", 1),
     ]
     assert tools_of(inline.conn, "task_runs", run.id) == [("bash", 1, 0, len("read it\n"))]
-    spent = spend.breakdown(inline.conn, datetime.now(UTC), 1)
+    spent = spend.breakdown(inline.conn, datetime.now(UTC), 1, state_dir=inline.state_dir)
     assert [(m.model, m.runs, m.cost_usd) for m in spent.models if m.kind == "tasks"] == [
         ("anthropic/claude-x", 1, 0.25),
     ]

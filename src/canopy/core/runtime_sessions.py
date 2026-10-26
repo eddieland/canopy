@@ -3,7 +3,9 @@
 The runtime's record is read a page at a time, from where the last read stopped (`read_next`), by the loop while it
 waits between ticks (`canopy.loop.sessions`), and each session read is recorded as the runtime last saw it, in place of
 any row before (`record`). A session is canopy's when one of this journal's agent runs names it, or when it ran, as a
-subagent, for one that is, however deep; every other session is spend outside canopy (`spend`).
+subagent, for one that is, however deep, or when it ran in the workspace's state directory, which only canopy runs
+agents in: a chore's own directory is there, and `canopy chore try --no-record` names its run nowhere. Every other
+session is spend outside canopy (`spend`).
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from canopy.runtime.report import MAX_SESSIONS
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Sequence
+    from pathlib import Path
 
     from canopy.core.run_models import RunTable
     from canopy.runtime.implementation import Version
@@ -52,8 +55,9 @@ class DirectorySpend:
 class SessionsSpend:
     """What the runtime's sessions that started in a window cost, canopy's apart from the rest.
 
-    `canopy` counts this journal's runs' sessions and their subagents'; `outside`, every other session, among them
-    another workspace's canopy runs, whose journal is not this one. `directories` is where `outside` ran, the costliest
+    `canopy` counts this journal's runs' sessions and their subagents', and the sessions that ran in the workspace's
+    state directory; `outside`, every other session, among them another workspace's canopy runs, whose journal is not
+    this one. `directories` is where `outside` ran, the costliest
     first, at most `DIRECTORIES`. `read_at` is when the record was last read, and `status` how that read ended; both
     None when it never was, and then the window's sessions are not known, only none recorded.
     """
@@ -127,8 +131,10 @@ def record(conn: sqlite3.Connection, page: SessionPage, *, now: str | None = Non
         )
 
 
-def spend(conn: sqlite3.Connection, since: str, until: str) -> SessionsSpend:
+def spend(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) -> SessionsSpend:
     """What the runtime's sessions that started in `[since, until)`, each a journal time, cost, canopy's apart.
+
+    `state_dir` is the workspace's state directory: a session that ran in it or below it is canopy's.
 
     Returns:
         Canopy's sessions, the rest, and where the rest ran.
@@ -137,7 +143,7 @@ def spend(conn: sqlite3.Connection, since: str, until: str) -> SessionsSpend:
         bool(ours): Share(sessions=int(count), cost_usd=float(cost))
         for ours, count, cost in sql.execute(
             conn,
-            _classified(since, until).group_by("ours"),
+            _classified(since, until, state_dir).group_by("ours"),
         )
     }
     directories = [
@@ -145,7 +151,7 @@ def spend(conn: sqlite3.Connection, since: str, until: str) -> SessionsSpend:
         for directory, count, cost in sql.execute(
             conn,
             sql.select("directory, count(*), total(cost_usd)")
-            .from_("({}) AS c", _sessions_in(since, until))
+            .from_("({}) AS c", _sessions_in(since, until, state_dir))
             .where("NOT ours")
             .group_by("directory")
             .order_by("total(cost_usd) DESC, directory")
@@ -224,16 +230,26 @@ def _journal_time(ms: int) -> str:
 
 
 # Each session that started in the window, its directory and cost, and whether it is canopy's.
-def _sessions_in(since: str, until: str) -> sql.Select:
+def _sessions_in(since: str, until: str, state_dir: Path) -> sql.Select:
     ran = sql.union(
         *(sql.select("session_id").from_("{}", sql.name(t)).where("session_id IS NOT NULL") for t in _RUN_TABLES),
     )
+    # The runtime records the directory a session started in as the process's working directory, its real path.
+    home = str(state_dir.resolve())
+    below = f"{home.rstrip('/')}/"
     return (
         sql.select("s.directory, s.cost_usd, s.session_id IN (SELECT session_id FROM ours) AS ours")
         .with_("ran(session_id) AS ({})", ran)
         .with_(
-            "ours(session_id) AS (SELECT session_id FROM ran UNION SELECT s.session_id FROM runtime_sessions s"
-            " JOIN ours o ON s.parent_id = o.session_id)",
+            "home(session_id) AS (SELECT session_id FROM runtime_sessions"
+            " WHERE directory = ? OR substr(directory, 1, ?) = ?)",
+            home,
+            len(below),
+            below,
+        )
+        .with_(
+            "ours(session_id) AS (SELECT session_id FROM ran UNION SELECT session_id FROM home"
+            " UNION SELECT s.session_id FROM runtime_sessions s JOIN ours o ON s.parent_id = o.session_id)",
             recursive=True,
         )
         .from_("runtime_sessions s")
@@ -242,5 +258,5 @@ def _sessions_in(since: str, until: str) -> sql.Select:
 
 
 # The window's sessions, as `_sessions_in` reads them, to be grouped by whether each is canopy's.
-def _classified(since: str, until: str) -> sql.Select:
-    return sql.select("ours, count(*), total(cost_usd)").from_("({}) AS c", _sessions_in(since, until))
+def _classified(since: str, until: str, state_dir: Path) -> sql.Select:
+    return sql.select("ours, count(*), total(cost_usd)").from_("({}) AS c", _sessions_in(since, until, state_dir))

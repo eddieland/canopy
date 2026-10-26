@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
 
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
 #: 2026-10-24T12:00:00Z, in milliseconds since the epoch.
 NOON_MS = 1_792_843_200_000
 DAY = ("2026-10-24T00:00:00.000Z", "2026-10-25T00:00:00.000Z")
+#: The workspace's state directory, where its chores run by default.
+STATE_DIR = Path("/work/.canopy")
 
 
 def session(
@@ -123,7 +126,7 @@ def test_spend_tells_canopys_sessions_and_their_subagents_from_the_rest(conn: sq
         ),
     )
 
-    spent = runtime_sessions.spend(conn, *DAY)
+    spent = runtime_sessions.spend(conn, *DAY, state_dir=STATE_DIR)
 
     assert spent.canopy == runtime_sessions.Share(sessions=3, cost_usd=1.375)
     assert spent.outside == runtime_sessions.Share(sessions=3, cost_usd=3.25)
@@ -134,7 +137,26 @@ def test_spend_tells_canopys_sessions_and_their_subagents_from_the_rest(conn: sq
     assert spent.status is SessionsRead.FOUND
 
 
+def test_spend_counts_the_sessions_in_the_state_directory_as_canopys(conn: sqlite3.Connection) -> None:
+    """A chore tried with --no-record runs in its own directory there, and no run of the journal names its session."""
+    runtime_sessions.record(
+        conn,
+        found(
+            session("ses_try", cost=1.0, directory="/work/.canopy/chores/build-health"),
+            session("ses_try_sub", cost=0.25, parent="ses_try", directory="/home/me/notes"),
+            session("ses_state", cost=0.5, directory="/work/.canopy"),
+            session("ses_beside", cost=2.0, directory="/work/.canopy-old/chores/build-health"),
+            session("ses_other", cost=0.75, directory="/other/.canopy/chores/build-health"),
+        ),
+    )
+
+    spent = runtime_sessions.spend(conn, *DAY, state_dir=STATE_DIR)
+
+    assert spent.canopy == runtime_sessions.Share(sessions=3, cost_usd=1.75)
+    assert spent.outside == runtime_sessions.Share(sessions=2, cost_usd=2.75)
+
+
 def test_spend_before_any_read_says_so(conn: sqlite3.Connection) -> None:
-    spent = runtime_sessions.spend(conn, *DAY)
+    spent = runtime_sessions.spend(conn, *DAY, state_dir=STATE_DIR)
 
     assert (spent.canopy.sessions, spent.outside.sessions, spent.read_at, spent.status) == (0, 0, None, None)

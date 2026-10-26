@@ -28,6 +28,7 @@ from canopy.core.vocab import RunKind
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+    from pathlib import Path
 
     from canopy.core import config
 
@@ -398,8 +399,10 @@ def hour_window(now: datetime, hours: int) -> tuple[datetime, datetime]:
     return this_hour - timedelta(hours=hours - 1), this_hour + timedelta(hours=1)
 
 
-def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
+def breakdown(conn: sqlite3.Connection, now: datetime, days: int, *, state_dir: Path) -> Breakdown:
     """What the last `days` local days cost, today's so far included, by day, by kind, and by what the ticks bought.
+
+    `state_dir` is the workspace's: a session of the runtime's that ran in it is canopy's (`runtime_sessions.spend`).
 
     Returns:
         The breakdown; a window with nothing in it lists each day with no costs.
@@ -408,10 +411,11 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
     first = start.astimezone().date()
     each = [first + timedelta(days=i) for i in range(days)]
     starts = {day.isoformat(): db.format_time(_midnight(day)) for day in each}
-    return _breakdown(conn, start, end, _Buckets(expression=_DAY, starts=starts, name_of=local_day), days=days)
+    buckets = _Buckets(expression=_DAY, starts=starts, name_of=local_day)
+    return _breakdown(conn, start, end, buckets, state_dir=state_dir, days=days)
 
 
-def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int) -> Breakdown:
+def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int, *, state_dir: Path) -> Breakdown:
     """What the last `hours` clock hours cost, the current one's so far included, by local hour, as `breakdown` does.
 
     An hour the clock goes back over is one local hour twice, so the window lists it once, with both in it.
@@ -424,7 +428,7 @@ def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int) -> Brea
     for at in (start + timedelta(hours=i) for i in range(hours)):
         starts.setdefault(_local_hour(at), db.format_time(at))
     buckets = _Buckets(expression=_HOUR, starts=starts, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
-    return _breakdown(conn, start, end, buckets, hours=hours)
+    return _breakdown(conn, start, end, buckets, state_dir=state_dir, hours=hours)
 
 
 def costs(conn: sqlite3.Connection, since: str, until: str) -> Costs:
@@ -473,6 +477,7 @@ def _breakdown(
     end: datetime,
     buckets: _Buckets,
     *,
+    state_dir: Path,
     days: int | None = None,
     hours: int | None = None,
 ) -> Breakdown:
@@ -500,7 +505,7 @@ def _breakdown(
         first_calls = _first_calls(conn, since, until)
         tools = _tools(conn, since, until)
         models = _models(conn, since, until)
-        sessions = runtime_sessions.spend(conn, since, until)
+        sessions = runtime_sessions.spend(conn, since, until, state_dir=state_dir)
     for row in rows:
         day = by_day.setdefault(row.day, {})
         for name in _SERIES:

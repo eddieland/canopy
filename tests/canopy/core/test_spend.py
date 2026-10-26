@@ -16,6 +16,8 @@ from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
 
 NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
+#: A workspace state directory no session in these journals ran in.
+STATE_DIR = Path("/work/.canopy")
 
 
 def noon_today() -> datetime:
@@ -155,7 +157,7 @@ def test_a_run_counts_on_the_local_day_it_started(tmp_path: Path, journals: Jour
             (db.format_time(at),),
         )
     with in_zone("America/Los_Angeles"):
-        found = spend.breakdown(conn, evening, 2)
+        found = spend.breakdown(conn, evening, 2, state_dir=STATE_DIR)
     assert [(d.day, d.costs.overseer, d.costs.chores) for d in found.per_day] == [
         ("2026-10-07", None, None),
         ("2026-10-08", 2.0, 1.0),
@@ -174,7 +176,7 @@ def test_a_window_in_hours_is_whole_clock_hours_ending_with_this_one(tmp_path: P
         "VALUES (NULL, 'deps', ?, 'ok', 'l', 0.75)",
         (earlier(now, 0, 2),),
     )
-    found = spend.breakdown_hours(conn, now, 24)
+    found = spend.breakdown_hours(conn, now, 24, state_dir=STATE_DIR)
 
     assert (found.since, found.until) == ("2026-10-07T13:00:00.000Z", "2026-10-08T13:00:00.000Z")
     assert (found.days, found.hours) == (None, 24)
@@ -200,7 +202,7 @@ def test_a_window_in_hours_is_whole_local_hours_in_a_zone_a_half_hour_off_utc(
     tick(conn, db.format_time(datetime(2026, 10, 7, 12, 45, tzinfo=UTC)), 1.0, idle=False, woken_by="start")
     tick(conn, db.format_time(datetime(2026, 10, 6, 12, 40, tzinfo=UTC)), 5.0, idle=False, woken_by="start")
     with in_zone("Asia/Kolkata"):
-        found = spend.breakdown_hours(conn, now, 24)
+        found = spend.breakdown_hours(conn, now, 24, state_dir=STATE_DIR)
     assert (found.since, found.until) == ("2026-10-07T12:30:00.000Z", "2026-10-08T12:30:00.000Z")
     assert (found.per_day[0].day, found.per_day[-1].day) == ("2026-10-07T18", "2026-10-08T17")
     assert found.per_day[0].start == "2026-10-07T12:30:00.000Z"
@@ -214,7 +216,7 @@ def test_an_hour_the_clock_goes_back_over_is_listed_once(tmp_path: Path, journal
     for at in (datetime(2026, 11, 1, 8, 30, tzinfo=UTC), datetime(2026, 11, 1, 9, 30, tzinfo=UTC)):
         tick(conn, db.format_time(at), 1.0, idle=False, woken_by="start")
     with in_zone("America/Los_Angeles"):
-        found = spend.breakdown_hours(conn, datetime(2026, 11, 1, 20, tzinfo=UTC), 24)
+        found = spend.breakdown_hours(conn, datetime(2026, 11, 1, 20, tzinfo=UTC), 24, state_dir=STATE_DIR)
     names = [d.day for d in found.per_day]
     assert len(names) == 23
     assert len(set(names)) == len(names)
@@ -226,7 +228,7 @@ def test_an_hour_the_clock_goes_back_over_is_listed_once(tmp_path: Path, journal
 def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     journal_of_a_week(conn, NOW)
-    found = spend.breakdown(conn, NOW, 7)
+    found = spend.breakdown(conn, NOW, 7, state_dir=STATE_DIR)
 
     assert (found.since, found.until, found.days) == ("2026-10-02T00:00:00.000Z", "2026-10-09T00:00:00.000Z", 7)
     assert [d.day for d in found.per_day] == [f"2026-10-0{n}" for n in range(2, 9)]
@@ -277,7 +279,7 @@ def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: P
 
 
 def test_an_empty_journal_lists_each_day_with_nothing_spent(canopy_env: CanopyEnv) -> None:
-    found = spend.breakdown(canopy_env.journal(), NOW, 3)
+    found = spend.breakdown(canopy_env.journal(), NOW, 3, state_dir=STATE_DIR)
     assert [d.day for d in found.per_day] == ["2026-10-06", "2026-10-07", "2026-10-08"]
     assert found.totals == spend.Costs()
     assert found.idle_share is None
@@ -288,14 +290,14 @@ def test_an_empty_journal_lists_each_day_with_nothing_spent(canopy_env: CanopyEn
 def test_idle_ticks_are_the_newest_live_idle_ones_in_the_window(canopy_env: CanopyEnv) -> None:
     conn = canopy_env.journal()
     journal_of_a_week(conn, NOW)
-    week = spend.breakdown(conn, NOW, 7)
+    week = spend.breakdown(conn, NOW, 7, state_dir=STATE_DIR)
     rows = spend.idle_ticks(conn, week.since, week.until)
     assert [(r.started_at, r.cost_usd) for r, _ in rows] == [
         (earlier(NOW, 1, 2), None),
         (earlier(NOW, 1), 0.25),
         (earlier(NOW, 2, 1), 0.25),
     ]
-    today = spend.breakdown(conn, NOW, 1)
+    today = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR)
     assert spend.idle_ticks(conn, today.since, today.until) == []  # today's one idle tick is dry
 
 
@@ -350,7 +352,7 @@ def test_a_tick_that_ran_no_overseer_counts_at_nothing_and_is_split_from_those_t
     tick(conn, earlier(now, 0, 2), 0.25, idle=True, woken_by="timer", overseer_ran=True)
     tick(conn, earlier(now, 0, 1), None, idle=True, woken_by="timer", overseer_ran=False)
     tick(conn, earlier(now, 0, 3), None, idle=True, woken_by="run", overseer_ran=False)
-    found = spend.breakdown(conn, now, 1)
+    found = spend.breakdown(conn, now, 1, state_dir=STATE_DIR)
     [idle] = [g for g in found.ticks if g.group == "idle"]
     assert (idle.ticks, idle.cost_usd, idle.without_overseer) == (3, 0.25, 2)
     assert [(w.by, w.ticks, w.cost_usd, w.without_overseer) for w in found.woken] == [
@@ -377,7 +379,7 @@ def test_a_running_dry_run_is_never_the_live_overseers(tmp_path: Path, journals:
     conn = journals.open(tmp_path / "canopy.db")
     tick(conn, earlier(NOW, 0, 1), 0.5, status="running", dry_run=True)
     tick(conn, earlier(NOW, 0, 2), 0.25, status="running")
-    found = spend.breakdown(conn, NOW, 1)
+    found = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR)
     assert (found.totals.dry_run, found.totals.overseer) == (0.5, 0.25)
     assert [g.ticks for g in found.ticks] == [0] * len(spend.GROUPS)  # neither has ended
     assert found.unpriced[0] == spend.Unpriced(kind="overseer", runs=0, unpriced=0)
@@ -399,7 +401,7 @@ def test_a_row_after_the_window_is_in_no_figure(tmp_path: Path, journals: Journa
     conn = journals.open(tmp_path / "canopy.db")
     tick(conn, db.format_time(NOW + timedelta(days=1)), 9.0, idle=True, woken_by="timer")
     tick(conn, earlier(NOW, 0), 1.0, idle=False, woken_by="start")
-    found = spend.breakdown(conn, NOW, 1)
+    found = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR)
     assert (found.totals.overseer, found.totals.idle) == (1.0, None)
     assert [(g.group, g.ticks) for g in found.ticks if g.ticks] == [("busy", 1)]
     assert [w.by for w in found.woken] == ["start"]
@@ -431,7 +433,7 @@ def test_idle_share_is_of_the_live_ticks_that_ended(tmp_path: Path, journals: Jo
     tick(conn, earlier(NOW, 0, 2), 0.25, idle=True, woken_by="timer")
     tick(conn, earlier(NOW, 0, 1), 0.75, idle=False, woken_by="message")
     tick(conn, earlier(NOW, 0), 2.0, status="running")
-    found = spend.breakdown(conn, NOW, 1)
+    found = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR)
     assert found.totals.overseer == 3.0  # the running tick's cost counts, as the rail's counters count it
     assert found.idle_share == 0.25
 
@@ -461,7 +463,7 @@ def test_what_each_ticket_and_pr_cost_and_what_the_window_got_done(tmp_path: Pat
     decide(conn, t, "A-2", earlier(NOW, 1), "done", db.CLOSED_RATIONALE)  # the newest says how
     decide(conn, t, "A-4", earlier(NOW, 8), "done", "every PR merged")
     decide(conn, t, "A-5", earlier(NOW, 0), "done", "every PR merged")
-    found = spend.breakdown(conn, NOW, 7)
+    found = spend.breakdown(conn, NOW, 7, state_dir=STATE_DIR)
 
     assert found.done == 3
     assert [d.done for d in found.per_day] == [0, 0, 0, 0, 0, 2, 1]
@@ -489,7 +491,7 @@ def test_a_ticket_forgotten_or_reopened_since_it_was_done_is_not_done(tmp_path: 
     decide(conn, t, "A-1", earlier(NOW, 1), "done", "every PR merged")
     decide(conn, t, "A-2", earlier(NOW, 1), "done", "every PR merged")
     conn.execute("UPDATE tickets SET forgotten_at = ? WHERE key = 'A-1'", (earlier(NOW, 0),))
-    found = spend.breakdown(conn, NOW, 7)
+    found = spend.breakdown(conn, NOW, 7, state_dir=STATE_DIR)
     assert (found.done, found.per_done, found.tickets) == (0, None, [])
 
 
@@ -566,7 +568,7 @@ def test_plan_runs_are_a_kind_of_their_own_with_old_triages_among_them(
     plan_run(conn, t, "A-2", earlier(now, 0, 1), 0.5)
     triage(conn, t, "A-3", earlier(now, 0, 1), None, status="failed")
 
-    found = spend.breakdown(conn, now, 1)
+    found = spend.breakdown(conn, now, 1, state_dir=STATE_DIR)
     assert (found.totals.workers, found.totals.plans) == (2.0, pytest.approx(0.59))
     assert found.totals.total == pytest.approx(3.59)  # each dollar once, in its own kind
     assert [(u.kind, u.runs, u.unpriced) for u in found.unpriced][1:3] == [("workers", 1, 0), ("plans", 4, 1)]
@@ -606,7 +608,7 @@ def test_first_calls_are_by_kind_and_snapshot_with_their_median_and_cold_share(
     run_id = conn.execute("SELECT max(id) FROM runs").fetchone()[0]
     db.set_run_report(conn, "runs", run_id, "s", first_call(30_000, 1_000), digest="new")
 
-    found = spend.breakdown(conn, NOW, 1)
+    found = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR)
     assert found.first_calls == [
         spend.FirstCalls("overseer", "old", 3, 51_000, 1 / 3, earlier(NOW, 0, 5), earlier(NOW, 0, 3)),
         spend.FirstCalls("overseer", "new", 3, 61_000, 1 / 3, earlier(NOW, 0, 2), earlier(NOW, 0, 0.5)),
@@ -658,7 +660,7 @@ def tools_journal(conn: sqlite3.Connection, now: datetime) -> None:
 def test_tools_are_by_kind_and_tool_the_most_returned_first(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     tools_journal(conn, NOW)
-    found = spend.breakdown(conn, NOW, 1)
+    found = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR)
     assert found.tools == [
         # Both ticks' reads, the dry run's among them; not the tick before the window.
         spend.ToolSpend("overseer", "github_pull_request_read", 2, 6, 0, 80_000, 20_000),
@@ -667,7 +669,7 @@ def test_tools_are_by_kind_and_tool_the_most_returned_first(tmp_path: Path, jour
         spend.ToolSpend("reviews", "bash", 1, 1, 0, 900, 225),
         spend.ToolSpend("chores", "read", 1, 1, 0, 10, 2),
     ]
-    assert spend.breakdown(conn, NOW - timedelta(days=30), 1).tools == []
+    assert spend.breakdown(conn, NOW - timedelta(days=30), 1, state_dir=STATE_DIR).tools == []
 
 
 def test_canopy_spend_prints_the_tools_that_returned_the_most(
@@ -751,7 +753,7 @@ def journal_of_models(conn: sqlite3.Connection, now: datetime) -> None:
 def test_each_kind_s_spend_is_split_by_the_models_its_sessions_name(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     journal_of_models(conn, NOW)
-    found = spend.breakdown(conn, NOW, 1).models
+    found = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR).models
     assert [(m.kind, m.model, m.runs, m.replies, m.cost_usd) for m in found] == [
         ("overseer", "anthropic/claude-haiku", 1, 4, 0.5),
         # The tick not read yet, at what it reported.

@@ -62,7 +62,7 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
         The breakdown, with the newest idle ticks in the window, and the month against its budget.
     """
     now = backend.clock()
-    return _spend_breakdown(ctx, spending.breakdown(ctx.conn, now, days), now)
+    return _spend_breakdown(ctx, spending.breakdown(ctx.conn, now, days, state_dir=ctx.state_dir), now)
 
 
 def spend_breakdown_hours(backend: Backend, ctx: Context, hours: int) -> SpendBreakdown:
@@ -72,7 +72,7 @@ def spend_breakdown_hours(backend: Backend, ctx: Context, hours: int) -> SpendBr
         The breakdown, with the newest idle ticks in the window, and the month against its budget.
     """
     now = backend.clock()
-    return _spend_breakdown(ctx, spending.breakdown_hours(ctx.conn, now, hours), now)
+    return _spend_breakdown(ctx, spending.breakdown_hours(ctx.conn, now, hours, state_dir=ctx.state_dir), now)
 
 
 def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> SpendBreakdown:
