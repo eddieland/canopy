@@ -125,7 +125,6 @@ def test_one_row_of_judgment_leaves_the_whole_ticket_to_the_overseer(
 @pytest.mark.parametrize(
     "statement",
     [
-        pytest.param("UPDATE observed_tickets SET observed_at = '2026-10-20T10:00:00.000Z'", id="stale"),
         pytest.param("UPDATE observed_tickets SET labels = '[]'", id="not-a-candidate"),
         pytest.param("UPDATE observed_tickets SET state = 'closed'", id="closed"),
     ],
@@ -138,6 +137,52 @@ def test_a_running_ticket_not_fresh_open_and_labeled_is_left_to_the_overseer(
     running_run(context(canopy_env), KEY, private=False)
     observed.execute(statement)
     observed.commit()
+    assert decided(canopy_env) == []
+
+
+@pytest.mark.parametrize("running", [False, True])
+def test_a_ticket_the_tracker_source_left_stale_is_the_harnesss_wait_naming_what_is_old(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    *,
+    running: bool,
+) -> None:
+    """The overseer reads no tracker where a source does (DESIGN §39): the ticket waits for a whole read."""
+    if running:
+        running_run(context(canopy_env), KEY, private=False)
+    db.change_ticket(observed, KEY, "phase", Phase.CI_RED)
+    observed.execute("UPDATE observed_tickets SET observed_at = '2026-10-20T10:00:00.000Z'")
+    observed.commit()
+    [decision] = decided(canopy_env)
+    assert (decision.key, decision.phase, decision.action) == (KEY, None, "wait")
+    assert decision.rationale.startswith(f"stale: {KEY} last observed 2026-10-20T10:00:00.000Z")
+    assert decision.rationale.endswith("; it waits for the tracker source to read it again")
+    # No row was derived, so its phase stays as it was.
+    with in_tick(observed, ends_ok=True) as tick_id:
+        harness.record(observed, tick_id, str(canopy_env.root), [decision])
+    assert observed.execute("SELECT phase FROM tickets WHERE key = ?", (KEY,)).fetchone()[0] == Phase.CI_RED
+    assert [d.ticket_key for d in harness.recorded(observed, tick_id)] == [KEY]
+
+
+def test_a_ticket_marked_done_is_not_waited_on_though_the_query_finds_it_stale(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """Owed nothing, as `recently_done` is (DESIGN §7)."""
+    db.set_ticket(observed, KEY, str(canopy_env.root), done=True)
+    query_read(observed, [KEY])
+    observed.execute("UPDATE observed_tickets SET observed_at = '2026-10-20T10:00:00.000Z'")
+    observed.commit()
+    assert decided(canopy_env) == []
+
+
+def test_a_ticket_no_source_observes_is_left_to_the_overseer_to_read(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    """With no `tracker` source the overseer still reads the tracker itself, so the harness does not wait it."""
+    held(canopy_env, conn, KEY)
+    conn.commit()
     assert decided(canopy_env) == []
 
 
