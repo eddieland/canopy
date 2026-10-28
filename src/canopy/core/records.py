@@ -21,7 +21,7 @@ import typing
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import Field, asdict, dataclass, fields
 from enum import StrEnum
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Final
 
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
 from canopy.core import sql
@@ -83,7 +83,7 @@ from canopy.core.vocab import (
 # What a column's value is converted with, by its field's type.
 _Convert = Callable[[object], object]
 # The field types a column's value is checked against as is. A float field also takes an int, as REAL columns may.
-_EXACT: dict[object, type] = {int: int, str: str, bytes: bytes}
+_EXACT: Final[dict[object, type]] = {int: int, str: str, bytes: bytes}
 
 
 class Row:

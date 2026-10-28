@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+from typing import Final
 
 import pytest
 from canopy_artifacts.text import CONTEXT, Anchor, collapse, locate, visible_text
@@ -10,9 +11,9 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 
 #: A word: letters, digits, punctuation, and symbols, `<` and `&` among them, and no whitespace.
-WORDS = st.text(st.characters(categories=["L", "N", "P", "S"]), min_size=1, max_size=12)
+WORDS: Final = st.text(st.characters(categories=["L", "N", "P", "S"]), min_size=1, max_size=12)
 #: Text whose whitespace is collapsed, as a version's is.
-TEXTS = st.lists(WORDS, min_size=1, max_size=40).map(" ".join)
+TEXTS: Final = st.lists(WORDS, min_size=1, max_size=40).map(" ".join)
 
 
 @pytest.mark.parametrize(

@@ -15,7 +15,7 @@ the reviewer's prompt carries (`reviews.start`), and the personas it is reviewed
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import contract, conversation, db, personas, records, sql
 
@@ -27,19 +27,19 @@ if TYPE_CHECKING:
     from canopy.core.review_result import ReviewResult
 
 #: `review_runs.purpose` of a review that answers the operator's request, rather than one the loop started on its own.
-PURPOSE = "request"
+PURPOSE: Final = "request"
 
 # Why a request ended: a `done` review of its PR; the PR merged or closed before one, or is in none of the
 # workspace's repositories (the overseer's reading); or the operator stopped it.
-REVIEWED = "reviewed"
-MERGED = "merged"
-CLOSED = "closed"
-UNKNOWN_REPO = "unknown_repo"
-STOPPED = "stopped"
+REVIEWED: Final = "reviewed"
+MERGED: Final = "merged"
+CLOSED: Final = "closed"
+UNKNOWN_REPO: Final = "unknown_repo"
+STOPPED: Final = "stopped"
 # The reasons the overseer may give `canopy review end`: what it read on the PR, never the operator's own.
-OVERSEER_REASONS = (MERGED, CLOSED, UNKNOWN_REPO)
+OVERSEER_REASONS: Final = (MERGED, CLOSED, UNKNOWN_REPO)
 #: The most characters a request's notes may hold, after stripping: the operator's bound on what they write (§22).
-MAX_NOTES = conversation.MAX_OPERATOR
+MAX_NOTES: Final = conversation.MAX_OPERATOR
 
 
 def reviews_on(conn: sqlite3.Connection, config: Config) -> bool:

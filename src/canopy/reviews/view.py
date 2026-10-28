@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
 from canopy.core import db, personas, review_requests, review_revisions, review_runs
 from canopy.core import review_result as result
@@ -20,8 +20,8 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 # PRs reviewed this recently are in the state block, newest first, at most this many.
-RECENT = timedelta(days=14)
-MAX_PRS = 50
+RECENT: Final = timedelta(days=14)
+MAX_PRS: Final = 50
 
 
 class Limits(TypedDict):
@@ -280,7 +280,7 @@ def _pr_summary(conn: sqlite3.Connection, config: Config, url: str) -> ReviewedP
 
 
 #: How grave each impact is, for the gravest of reviews read together.
-_IMPACTS = ("low", "normal", "high")
+_IMPACTS: Final = ("low", "normal", "high")
 
 
 def _latest(

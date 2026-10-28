@@ -4,6 +4,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -12,7 +13,7 @@ from canopy.core import health
 from tests.canopy.helpers import earlier
 from tests.conftest import CanopyEnv, Journals
 
-NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
+NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
 
 
 def tick(

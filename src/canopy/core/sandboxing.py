@@ -10,14 +10,14 @@ from __future__ import annotations
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
 
 from canopy.core import config
 
 #: The wrapper, by its absolute path beside the interpreter canopy runs on, where the install puts it: never looked up
 #: on PATH, where a relative entry would find what a branch committed, and never `python -m`, which would put the
 #: run's directory first on the import path.
-WRAPPER = Path(sys.executable).parent / config.SANDBOX_WRAPPER
+WRAPPER: Final = Path(sys.executable).parent / config.SANDBOX_WRAPPER
 
 #: The wrapper's roles canopy starts a run in: a worker run's, `setup_cmd`'s, and a review's.
 Role = Literal["worker", "setup", "review"]

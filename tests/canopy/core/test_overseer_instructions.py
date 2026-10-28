@@ -5,6 +5,7 @@ dropping them.
 """
 
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -14,8 +15,8 @@ from tests.canopy.helpers import PROMPT_VALUES, agent_runs
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
-URGENT = "Dispatch tickets labeled urgent before any other."
-SECTION = "## Standing instructions from the operator\n\n"
+URGENT: Final = "Dispatch tickets labeled urgent before any other."
+SECTION: Final = "## Standing instructions from the operator\n\n"
 
 
 def instruct(scenario: Scenario, text: str | bytes) -> Path:

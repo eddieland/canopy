@@ -5,18 +5,18 @@ from __future__ import annotations
 import ipaddress
 import re
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated, Final, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from canopy.core.config import LOOPBACK_NAMES, check_base_path, listen_address
 
 #: A DNS name as a Host header carries it, without a port: `canopy-demo.vercel.app`.
-_HOST_NAME_RE = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*")
+_HOST_NAME_RE: Final = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*")
 #: How long an event stream stays open before the server ends it, and an open page opens the next one at once. A port
 #: forwarder can keep its side of a stream open after the page has gone (#1299), so the server never hears the page
 #: leave: this ends such a stream, and its polling, on its own.
-STREAM_SECONDS = 300.0
+STREAM_SECONDS: Final = 300.0
 
 
 class ServeOptions(BaseModel):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 from unittest import mock
 
 import pytest
@@ -31,7 +31,7 @@ from tests.canopy.scenario_helpers import Scenario, dispatches
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
-OTHER = "PROJ-2"
+OTHER: Final = "PROJ-2"
 
 
 def written(

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db
 from canopy.core.vocab import AnyRunStatus, ChoreRunStatus, ReviewRunStatus, RunStatus
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 # Each run table's `crashed`: what a run whose process is gone is closed as.
-CRASHED: Mapping[RunTable, AnyRunStatus] = {
+CRASHED: Final[Mapping[RunTable, AnyRunStatus]] = {
     "runs": RunStatus.CRASHED,
     "chore_runs": ChoreRunStatus.CRASHED,
     "review_runs": ReviewRunStatus.CRASHED,

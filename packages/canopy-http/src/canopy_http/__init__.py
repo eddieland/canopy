@@ -27,20 +27,21 @@ import urllib.parse
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Final
 
 import httpx2
 
 #: How long a request waits on its reply, between reads of it.
-TIMEOUT_SECONDS = 30.0
+TIMEOUT_SECONDS: Final = 30.0
 #: How long it waits to connect: a host that has not answered by then is not going to.
-CONNECT_SECONDS = 10.0
+CONNECT_SECONDS: Final = 10.0
 #: How much of a reply an error quotes.
-MAX_QUOTE = 500
+MAX_QUOTE: Final = 500
 #: The refusals that ask for a wait, when they name one: a rate limit, and GitHub's secondary rate limit, a 403.
-_WAIT_STATUSES = frozenset({403, 429})
-_TOO_MANY = 429
+_WAIT_STATUSES: Final = frozenset({403, 429})
+_TOO_MANY: Final = 429
 #: How far down the errors one was raised from `_untrusted` looks: httpx2's wraps its transport's, which wraps TLS's.
-_MAX_CHAIN = 10
+_MAX_CHAIN: Final = 10
 
 
 class HttpError(Exception):

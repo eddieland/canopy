@@ -9,7 +9,7 @@ runs on one config from its start to its end.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import config, workspace
 
@@ -19,9 +19,9 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 # How a reload names a change to the workspace file's map, its `[workspace]` and `[repos]` tables.
-WORKSPACE_MAP = "workspace map"
+WORKSPACE_MAP: Final = "workspace map"
 # Keys whose change takes effect only when the loop restarts: the web UI's listener is started once, with the loop.
-RESTART_PREFIX = "serve."
+RESTART_PREFIX: Final = "serve."
 
 
 @dataclass

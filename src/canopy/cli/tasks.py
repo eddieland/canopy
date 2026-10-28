@@ -8,7 +8,7 @@ starts a run, before the overseer, which never sees it; `canopy _task` (`cli/run
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -27,11 +27,11 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.context import Context
 
-CLI = "cli"
+CLI: Final = "cli"
 #: How much of a task's text `canopy task list` shows on its line.
-LIST_TEXT = 80
+LIST_TEXT: Final = 80
 #: How much of a commit `canopy show task:N` shows.
-SHORT_SHA = 12
+SHORT_SHA: Final = 12
 
 
 @click.group("task", cls=Group)

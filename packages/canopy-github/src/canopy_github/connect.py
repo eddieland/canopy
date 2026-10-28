@@ -25,7 +25,7 @@ import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TextIO
+from typing import Final, TextIO
 
 import click
 
@@ -48,14 +48,14 @@ from canopy_github.read import Pulled, pull_requests
 from canopy_github.repository import branches, search
 
 #: More than any one request needs: canopy names every PR of a ticket not marked done, and those drafts wait on.
-MAX_PRS = 1000
+MAX_PRS: Final = 1000
 #: More than any workspace's map holds.
-MAX_REPOSITORIES = 100
+MAX_REPOSITORIES: Final = 100
 #: The host a review query runs on when no repository names one.
-DEFAULT_HOST = "github.com"
+DEFAULT_HOST: Final = "github.com"
 #: A repository's name as canopy sends it, and a branch prefix: plain, printable, one line.
-_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}")
-_PREFIX = re.compile(r"[A-Za-z0-9][A-Za-z0-9_./-]{0,254}")
+_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}")
+_PREFIX: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_./-]{0,254}")
 
 
 @dataclass(frozen=True)

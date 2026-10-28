@@ -10,6 +10,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -22,7 +23,7 @@ from canopy.loop import daemon, repeat
 from tests.canopy.helpers import context, live_run, overseer_does
 from tests.conftest import CanopyEnv
 
-DEADLINE_SECONDS = 30.0
+DEADLINE_SECONDS: Final = 30.0
 
 
 @pytest.fixture

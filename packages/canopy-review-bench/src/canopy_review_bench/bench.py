@@ -14,18 +14,18 @@ import tomllib
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 #: A case's name: it names the case in results and in `--case`.
-NAME_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+NAME_RE: Final = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
 #: Where a bug is: `path:line`, or `path:first-last` for a range of lines.
-SPOT_RE = re.compile(r"(?P<path>[^\s:][^:]*):(?P<first>[1-9][0-9]{0,6})(?:-(?P<last>[1-9][0-9]{0,6}))?")
+SPOT_RE: Final = re.compile(r"(?P<path>[^\s:][^:]*):(?P<first>[1-9][0-9]{0,6})(?:-(?P<last>[1-9][0-9]{0,6}))?")
 #: A full commit, as git names one: sha-1 or sha-256.
-COMMIT_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+COMMIT_RE: Final = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 #: A GitHub repository, `owner/name`.
-REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+REPO_RE: Final = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
 
 class BenchError(Exception):

@@ -10,7 +10,7 @@ import contextlib
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 from click.shell_completion import BashComplete, FishComplete, ShellComplete, ZshComplete
@@ -30,12 +30,12 @@ if TYPE_CHECKING:
 
 # The shells `canopy completion` writes a script for. The script runs canopy with `_CANOPY_COMPLETE` set, which click
 # answers before any command runs.
-SHELLS: dict[str, type[ShellComplete]] = {"bash": BashComplete, "zsh": ZshComplete, "fish": FishComplete}
-COMPLETE_VAR = "_CANOPY_COMPLETE"
+SHELLS: Final[dict[str, type[ShellComplete]]] = {"bash": BashComplete, "zsh": ZshComplete, "fish": FishComplete}
+COMPLETE_VAR: Final = "_CANOPY_COMPLETE"
 
 # Where `canopy skill --install` saves the skill when given no directory: the home skills directory shared by agent
 # runtimes (DESIGN §13).
-SKILLS_DIR = "~/.agents/skills"
+SKILLS_DIR: Final = "~/.agents/skills"
 
 
 @click.command("init")

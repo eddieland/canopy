@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 
@@ -143,7 +143,7 @@ class Resolve(_Request):
     resolved: Annotated[StrictBool, Field(description="true to resolve it, false to reopen it.")]
 
 
-TOOLS = (
+TOOLS: Final = (
     tool(
         "artifact_publish",
         "Publish a page for people to read and comment on: a new artifact, or with artifact_id a new version of one, "

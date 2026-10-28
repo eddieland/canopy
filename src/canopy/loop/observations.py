@@ -22,7 +22,7 @@ import json
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict, assert_never
+from typing import TYPE_CHECKING, Final, Literal, NotRequired, TypedDict, assert_never
 
 from canopy.core import conversation, db, item_numbers, observe, records, sql
 from canopy.core.vocab import CheckStatus, ReviewItem, ReviewState, SourceKind, TicketState
@@ -39,9 +39,9 @@ if TYPE_CHECKING:
 #: reviews and review comments together. The rest stay new, so a later tick shows them. Chosen conservatively, for the
 #: operator to set from the measurement's ticks (ROADMAP M37, Open): ten comments at their bound are about
 #: 5,000 tokens, and a busier subject waits a tick rather than swelling every tick's block.
-MAX_NEW_ITEMS = 10
+MAX_NEW_ITEMS: Final = 10
 #: Why a ticket's subject is unobserved when no source reads tickets.
-NO_TRACKER = "no tracker source observes tickets"
+NO_TRACKER: Final = "no tracker source observes tickets"
 #: How fresh a subject's observation is (DESIGN §35).
 type Freshness = Literal["fresh", "stale", "unobserved"]
 

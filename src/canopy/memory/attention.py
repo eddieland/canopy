@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, memory, sql
 from canopy.core.vocab import MemoryMode
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 # The most ids one item names; the rest are counted, so a workspace with many lessons due raises one short item.
-MAX_NAMED = 10
+MAX_NAMED: Final = 10
 
 
 @dataclass(frozen=True)

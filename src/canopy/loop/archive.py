@@ -25,7 +25,7 @@ from __future__ import annotations
 import itertools
 import operator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import hostgit, plan_export
 from canopy.infra import procs
@@ -39,16 +39,16 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 #: The attention item raised while the plan archive is not all on its upstream.
-REASON = "archive_unpushed"
+REASON: Final = "archive_unpushed"
 #: The most plan files one tick exports, commits, and pushes, so a push of a long history fits its timeout.
-PER_TICK = 1000
-_GIT_TIMEOUT_SECONDS = 60
+PER_TICK: Final = 1000
+_GIT_TIMEOUT_SECONDS: Final = 60
 # The most of git's own message an item's detail carries.
-_MAX_ERROR = 300
+_MAX_ERROR: Final = 300
 # The most ticket keys a commit's subject names before it counts the rest.
-_SUBJECT_KEYS = 3
+_SUBJECT_KEYS: Final = 3
 # How each change `git diff --name-status` reports is headed in a commit's body, in the body's order.
-_CHANGES = {"A": "New", "M": "Changed", "R": "Changed", "D": "Removed"}
+_CHANGES: Final = {"A": "New", "M": "Changed", "R": "Changed", "D": "Removed"}
 
 
 def run(ctx: Context, log: logs.TickAdapter, *, dry_run: bool) -> str | None:

@@ -16,8 +16,9 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Final
 
-RECORDED = (
+RECORDED: Final = (
     "BASH_ENV",
     "ENV",
     "CANOPY_GIT_OBJECTS",

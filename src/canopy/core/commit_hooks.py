@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import hostgit, prompts
 from canopy.infra import procs
@@ -33,18 +33,18 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 #: The directory in canopy's snapshot that holds the hooks.
-HOOKS_DIR = "git-hooks"
+HOOKS_DIR: Final = "git-hooks"
 #: The trailers the hooks add, one to a line.
-TRAILERS_ENV = "CANOPY_COMMIT_TRAILERS"
+TRAILERS_ENV: Final = "CANOPY_COMMIT_TRAILERS"
 #: The text the hooks put before a commit's subject.
-PREFIX_ENV = "CANOPY_COMMIT_PREFIX"
+PREFIX_ENV: Final = "CANOPY_COMMIT_PREFIX"
 #: The oldest git that reads `GIT_CONFIG_COUNT`, through which a worker's git finds the hooks.
-MIN_GIT = (2, 31)
+MIN_GIT: Final = (2, 31)
 #: How `git --version` names its version, as Linux, macOS, and Windows builds print it.
-_GIT_VERSION_RE = re.compile(r"git version (\d+)\.(\d+)")
-_GIT_VERSION_TIMEOUT_SECONDS = 30
+_GIT_VERSION_RE: Final = re.compile(r"git version (\d+)\.(\d+)")
+_GIT_VERSION_TIMEOUT_SECONDS: Final = 30
 #: The client-side hooks git runs from its hooks directory, each of which canopy's must hand on to the repository's.
-NAMES = (
+NAMES: Final = (
     "applypatch-msg",
     "commit-msg",
     "post-applypatch",
@@ -64,7 +64,7 @@ NAMES = (
     "sendemail-validate",
 )
 #: Each hook, under each name: POSIX sh, so a hook costs a shell and one git, not a Python start.
-SCRIPT = r"""#!/bin/sh
+SCRIPT: Final = r"""#!/bin/sh
 # canopy's git hook (TRUST_MODEL T5): puts canopy's prefix and trailers on the message, as prepare-commit-msg, then
 # runs the repository's own hook of this name.
 name=${0##*/}
@@ -130,7 +130,7 @@ class Marks:
 
 
 #: No marks: what a run that makes no commit gets.
-NONE = Marks()
+NONE: Final = Marks()
 
 
 def marks(

@@ -12,7 +12,7 @@ offers: an open page's event stream keeps an instance up, and the free plan mete
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.infra.resources import ui_dir
 from canopy.serve import mock
@@ -27,10 +27,10 @@ if TYPE_CHECKING:
 
 #: How long the demo keeps an event stream open: under the shortest limit Vercel sets on a request, so the stream ends
 #: on its own rather than being cut.
-STREAM_SECONDS = 60.0
+STREAM_SECONDS: Final = 60.0
 #: The variables naming the demo's public host names: Vercel's own, for this deployment, its branch, and the
 #: project's production domain, and `CANOPY_DEMO_HOSTS` for any other domain, comma-separated.
-HOST_VARIABLES = ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL", "CANOPY_DEMO_HOSTS")
+HOST_VARIABLES: Final = ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL", "CANOPY_DEMO_HOSTS")
 
 
 def create(environ: Mapping[str, str], directory: Path) -> FastAPI:

@@ -6,20 +6,21 @@ a snapshot test renders it and `HELD_BY` names that snapshot.
 """
 
 from pathlib import Path
+from typing import Final
 
 from canopy.runtime import definitions as runtime_definitions
 
 #: Where the bundled files sit in a checkout. `HELD_BY` names each by its path relative to this.
-AGENTS = Path(__file__).resolve().parents[2] / ".agents"
+AGENTS: Final = Path(__file__).resolve().parents[2] / ".agents"
 #: The directories whose every file has a snapshot: what agent runs read as their prompt and their definition.
-HELD = ("agents", "prompts")
+HELD: Final = ("agents", "prompts")
 #: Where the snapshots sit. `HELD_BY` names each by its path relative to this.
-TESTS = Path(__file__).resolve().parent
+TESTS: Final = Path(__file__).resolve().parent
 #: The snapshot of an agent's definition as rendered, by the agent's name.
-DEFINITION = "core/__snapshots__/test_definitions/test_each_agent_definition_as_rendered[{}].md"
+DEFINITION: Final = "core/__snapshots__/test_definitions/test_each_agent_definition_as_rendered[{}].md"
 #: Each bundled prompt and agent definition, and a snapshot that holds it rendered. The overseer's prompt reaches its
 #: agent only inside its definition, so the definition's snapshot holds it.
-HELD_BY: dict[str, str] = {
+HELD_BY: Final[dict[str, str]] = {
     "prompts/overseer.md": DEFINITION.format("canopy-overseer"),
     "prompts/worker-feedback-plan.md": "runs/__snapshots__/test_feedback_plans/test_the_feedback_planner_prompt.md",
     "prompts/reviewer.md": "reviews/__snapshots__/test_reviews/test_the_reviewer_prompt[defaults].md",

@@ -28,7 +28,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
+from typing import TYPE_CHECKING, Final, NotRequired, TypedDict, assert_never
 
 from canopy.core import (
     artifact_authority,
@@ -58,15 +58,15 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.context import Context
 
-ACTION_PREFIX = "attention:"
+ACTION_PREFIX: Final = "attention:"
 # Where a ticket key would be, an item about a chore names it so, and one about a PR with no ticket. A ticket key has
 # no colon (DESIGN §17), so neither can equal one.
-CHORE_PREFIX = "chore:"
-PR_PREFIX = "pr:"
+CHORE_PREFIX: Final = "chore:"
+PR_PREFIX: Final = "pr:"
 #: Where a ticket key would be, an item about a one-off task names it so (DESIGN §36).
-TASK_PREFIX = "task:"
+TASK_PREFIX: Final = "task:"
 #: What the overseer's verb about a ticket the harness decided records, refused (DESIGN §37, `loop.tools`).
-REFUSED_DECIDED = "refused:decided"
+REFUSED_DECIDED: Final = "refused:decided"
 
 
 def run_reason(status: RunStatus) -> str | None:
@@ -95,25 +95,25 @@ def run_reason(status: RunStatus) -> str | None:
 
 
 # A tick that found `canopy` not working for the overseer closes with this status and raises this item (DESIGN §6).
-UNAVAILABLE: str = TickStatus.CANOPY_UNAVAILABLE
+UNAVAILABLE: Final[str] = TickStatus.CANOPY_UNAVAILABLE
 #: A tick that found too little free disk closes with this status and raises this item (DESIGN §6).
-DISK_LOW: str = TickStatus.DISK_LOW
+DISK_LOW: Final[str] = TickStatus.DISK_LOW
 #: The statuses of a tick that did not run the overseer for a cause of canopy's own, each raising an item of its name.
-HALTS = frozenset({UNAVAILABLE, DISK_LOW})
+HALTS: Final = frozenset({UNAVAILABLE, DISK_LOW})
 #: The statuses of a tick that did not run the overseer because its chosen model cannot be used (DESIGN §13), each
 #: raising an item of its name. Kept out of `HALTS` and `HARNESS_REASONS`: a dispatch's refusal raises an item of the
 #: same name about its ticket, which the overseer recorded.
-MODEL_HALTS: frozenset[str] = frozenset({TickStatus.MODEL_MISSING, TickStatus.MODEL_LIST_FAILED})
+MODEL_HALTS: Final[frozenset[str]] = frozenset({TickStatus.MODEL_MISSING, TickStatus.MODEL_LIST_FAILED})
 #: A primary clone whose own config leaves git's automatic maintenance on, which sync turns off (DESIGN §18).
-MAINTENANCE_ON = "auto_maintenance_on"
+MAINTENANCE_ON: Final = "auto_maintenance_on"
 #: A git on `PATH` too old to put canopy's marks on a worker's commits (TRUST_MODEL T5).
-GIT_TOO_OLD = "git_too_old"
+GIT_TOO_OLD: Final = "git_too_old"
 #: A check still pending at a PR's head long after its other checks there finished, which may not be CI: the harness
 #: raises it from its cause beside `FROM_CAUSES` (`loop.harness_items`, DESIGN §30).
-CHECK_STUCK = "check_stuck"
+CHECK_STUCK: Final = "check_stuck"
 #: What the harness raises from its causes in the journal (`loop.harness_items`, DESIGN §14, §37), which the overseer
 #: recorded until the harness held them: its attention tool refuses each.
-FROM_CAUSES: frozenset[str] = frozenset(
+FROM_CAUSES: Final[frozenset[str]] = frozenset(
     {
         "needs_reviewer",
         "ready_to_merge",
@@ -128,7 +128,7 @@ FROM_CAUSES: frozenset[str] = frozenset(
 #: What only the harness has ever recorded (`tick._record_harness_items`, and `HALTS`), so an item of one is the
 #: harness's whether or not its row says who recorded it. One of `FROM_CAUSES` is the harness's only when marked so: an
 #: older one the overseer recorded, or one a guard records as it refuses the overseer, is the overseer's.
-ALWAYS_HARNESS: frozenset[str] = frozenset(
+ALWAYS_HARNESS: Final[frozenset[str]] = frozenset(
     {
         *filter(None, map(run_reason, RunStatus)),
         "awaiting_reply",
@@ -149,11 +149,11 @@ ALWAYS_HARNESS: frozenset[str] = frozenset(
     },
 )
 #: What the harness records itself, so the overseer does not, and the state block does not list to it.
-HARNESS_REASONS: frozenset[str] = ALWAYS_HARNESS | FROM_CAUSES
+HARNESS_REASONS: Final[frozenset[str]] = ALWAYS_HARNESS | FROM_CAUSES
 # The window the list reads: how far back to look when working out how long an item has been open. Garbage
 # collection keeps every row of a tick inside it (DESIGN §26).
-HISTORY_TICKS = 1000
-FILE_NAME = "attention.md"
+HISTORY_TICKS: Final = 1000
+FILE_NAME: Final = "attention.md"
 # Kept importable from here: tests and the CLI name items through this module.
 __all__ = [
     "ACTION_PREFIX",

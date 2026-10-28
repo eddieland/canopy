@@ -3,6 +3,7 @@
 import json
 import sqlite3
 from pathlib import Path
+from typing import Final
 
 from canopy.core import conversation, db
 from canopy.core.vocab import ResumeReason, RunKind, RunStatus
@@ -18,7 +19,7 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool
 
-PR = "https://example.test/pr/1"
+PR: Final = "https://example.test/pr/1"
 
 
 def result(status: RunStatus, summary: str, **extra: str) -> str:

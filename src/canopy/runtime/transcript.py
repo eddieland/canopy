@@ -23,7 +23,7 @@ from __future__ import annotations
 import os
 import stat
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.infra.text import printable
 from canopy.runtime import entries
@@ -38,14 +38,14 @@ if TYPE_CHECKING:
     from canopy.runtime.implementation import Version
 
 #: How much of a log is read: far more than a long run prints, and little enough to read on each request.
-MAX_BYTES = 32 * 1024 * 1024
+MAX_BYTES: Final = 32 * 1024 * 1024
 #: How many entries a transcript holds, and how many characters all of them hold together.
-MAX_ENTRIES = 2000
-MAX_CHARS = 2_000_000
+MAX_ENTRIES: Final = 2000
+MAX_CHARS: Final = 2_000_000
 #: How much of the end of a file `tail` reads: far more than an overseer prints on stderr, and little enough to send.
-MAX_TAIL = 1024 * 1024
+MAX_TAIL: Final = 1024 * 1024
 #: How much of a prompt `prompt` reads: far more than canopy renders, a tick's state block included.
-MAX_PROMPT = 1024 * 1024
+MAX_PROMPT: Final = 1024 * 1024
 
 
 @dataclass(frozen=True)

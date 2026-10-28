@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 #: What OpenCode 2.1.2 exported, sanitized, of the recorded run in `recorded/run.jsonl`: five replies of one model.
-RECORDED = Path(__file__).parent / "recorded" / "export.json"
+RECORDED: Final = Path(__file__).parent / "recorded" / "export.json"
 
 
 def assistant(provider: str, model: str, cost: float, *, variant: str | None = None) -> dict[str, object]:
@@ -29,7 +29,7 @@ def assistant(provider: str, model: str, cost: float, *, variant: str | None = N
 
 
 #: The prompt and a model switch, which name no model that served.
-OTHERS: tuple[dict[str, object], ...] = (
+OTHERS: Final[tuple[dict[str, object], ...]] = (
     {"id": "msg_0", "type": "model-switched", "model": {"id": "asked", "providerID": "anthropic"}},
     {"id": "msg_1", "type": "user", "text": "[redacted:text]", "files": []},
 )

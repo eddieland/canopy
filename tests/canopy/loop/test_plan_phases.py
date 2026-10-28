@@ -6,6 +6,7 @@ sinks a plan waits, without its text.
 """
 
 import json
+from typing import Final
 
 from canopy.core import db, plans
 from canopy.core.config import Policy
@@ -23,8 +24,8 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches, raises, sets_phase
 from tests.conftest import GitPool
 
-TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
-PLAN = dispatches(kind=RunKind.PLAN)
+TEXT: Final = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
+PLAN: Final = dispatches(kind=RunKind.PLAN)
 
 
 def plan_of(scenario: Scenario) -> dict[str, object]:

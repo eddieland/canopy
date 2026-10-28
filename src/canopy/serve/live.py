@@ -25,7 +25,7 @@ from collections.abc import AsyncIterator, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import sql, tasks
 from canopy.infra import logs
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 # Reading one pragma costs next to nothing, and a server has a handful of streams open, so a change shows within a
 # quarter of a second rather than within one. A stream whose page left unheard polls only until its lifetime ends
 # (`ServeOptions.stream_seconds`).
-POLL_SECONDS = 0.25
+POLL_SECONDS: Final = 0.25
 
 
 class Stream:

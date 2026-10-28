@@ -9,7 +9,7 @@ review on the commit the review read.
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -263,8 +263,8 @@ def test_discarding_from_the_page_posts_nothing_and_takes_a_requested_review_off
 
 
 #: What the operator's note asks of a revision, and what the reviser reports on it: the body alone, gentler.
-NOTE = "Say it more gently."
-GENTLER: dict[str, object] = {"status": "done", "body": "One defect, gently put.", "comments": []}
+NOTE: Final = "Say it more gently."
+GENTLER: Final[dict[str, object]] = {"status": "done", "body": "One defect, gently put.", "comments": []}
 
 
 def test_the_page_asks_for_a_revision_with_a_note_and_shows_it_asked_running_and_made(

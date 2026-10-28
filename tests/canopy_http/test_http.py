@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, ClassVar, override
+from typing import Any, ClassVar, Final, override
 from unittest import mock
 
 import canopy_http
@@ -28,9 +28,9 @@ from canopy_http import (
 )
 
 #: Set when a `slow` answer may be given: the server holds it until the test that asked for one is done with it.
-RELEASED = threading.Event()
+RELEASED: Final = threading.Event()
 #: No pause between tries, so a test that sends again takes no time over it.
-QUICK = Retry(pauses=(0.0, 0.0))
+QUICK: Final = Retry(pauses=(0.0, 0.0))
 
 
 @dataclass

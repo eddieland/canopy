@@ -15,12 +15,13 @@ import tomllib
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Final
 
 from canopy.core import config, hostgit
 from canopy.infra import procs
 
 # A provider name becomes a directory name; keep it to one plain path component.
-PROVIDER_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")
+PROVIDER_RE: Final = re.compile(r"[a-z0-9][a-z0-9_-]*")
 
 
 def valid_provider(provider: str) -> bool:
@@ -28,12 +29,12 @@ def valid_provider(provider: str) -> bool:
     return PROVIDER_RE.fullmatch(provider) is not None
 
 
-EXAMPLE_QUERIES = {
+EXAMPLE_QUERIES: Final = {
     "jira": "project = PROJ AND statusCategory != Done ORDER BY priority DESC, created ASC",
     "github": "repo:OWNER/NAME is:issue is:open",
 }
 
-BRANCH_PROTECTION = """\
+BRANCH_PROTECTION: Final = """\
 Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the repository host:
   - Protect the default branch and every release branch: no direct pushes, no force pushes.
   - Require pull request reviews before merging, and do not let authors approve their own PRs.
@@ -42,9 +43,9 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
 """
 
 # The wrapper canopy installs beside itself, and the prefix it gives a worker run's commands (DESIGN §24).
-SANDBOX_WRAPPER = config.SANDBOX_WRAPPER
-SANDBOX_PREFIX = f"{SANDBOX_WRAPPER} worker --read {config.DEFINITIONS_DIR} --"
-SANDBOX_SUGGESTION = """\
+SANDBOX_WRAPPER: Final = config.SANDBOX_WRAPPER
+SANDBOX_PREFIX: Final = f"{SANDBOX_WRAPPER} worker --read {config.DEFINITIONS_DIR} --"
+SANDBOX_SUGGESTION: Final = """\
 Optional: run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config. Run
 `canopy sandbox setup` (https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md), then set this in
 {user_file}, which prefixes worker_cmd, private_worker_cmd, and plan_cmd:
@@ -52,7 +53,7 @@ Optional: run workers in a sandbox, so a steered worker cannot read your secrets
   {line}
 """
 # What `canopy sandbox setup` prints instead, having just done that.
-SANDBOX_NEXT = """\
+SANDBOX_NEXT: Final = """\
 Then set this in {user_file}, which prefixes worker_cmd, private_worker_cmd, and plan_cmd
 (https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md, step 5):
   [runtime]
@@ -60,7 +61,7 @@ Then set this in {user_file}, which prefixes worker_cmd, private_worker_cmd, and
 """
 
 # Transports git runs over ssh. Anything else with `://` (https, git, file) is not SSH.
-_SSH_SCHEMES = ("ssh://", "git+ssh://", "ssh+git://")
+_SSH_SCHEMES: Final = ("ssh://", "git+ssh://", "ssh+git://")
 
 
 def is_ssh_url(url: str) -> bool:

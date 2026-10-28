@@ -8,6 +8,7 @@ import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import jsonschema
@@ -42,11 +43,11 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, executable, git
 
 #: One of the loop's own PRs, PROJ-1's in `repo`, which reviews are on for.
-PR = "https://github.com/acme/api/pull/7"
+PR: Final = "https://github.com/acme/api/pull/7"
 #: A PR the operator asked canopy to review.
-REQUESTED = "https://github.com/acme/api/pull/8"
+REQUESTED: Final = "https://github.com/acme/api/pull/8"
 #: Every tool, by name, as the overseer's definition will allow each one.
-TOOL_NAMES = [
+TOOL_NAMES: Final = [
     "dispatch",
     "decide",
     "queried",
@@ -60,7 +61,7 @@ TOOL_NAMES = [
     "chore-wait",
 ]
 #: What a chore reports, for a run a tool starts.
-CHORE_OK: Mapping[str, object] = {"status": "ok", "summary": "nothing found", "findings": []}
+CHORE_OK: Final[Mapping[str, object]] = {"status": "ok", "summary": "nothing found", "findings": []}
 
 
 @pytest.fixture
@@ -109,7 +110,16 @@ class Done:
 
 
 #: The tables a verb writes, which a tool and its command must leave alike.
-RECORDED = ("decisions", "tickets", "ticket_units", "messages", "review_requests", "chore_runs", "runs", "review_runs")
+RECORDED: Final = (
+    "decisions",
+    "tickets",
+    "ticket_units",
+    "messages",
+    "review_requests",
+    "chore_runs",
+    "runs",
+    "review_runs",
+)
 
 
 def by_tool(env: CanopyEnv, verb: Verb) -> Done:
@@ -161,7 +171,7 @@ def recorded(conn: sqlite3.Connection) -> dict[str, list[dict[str, object]]]:
     }
 
 
-RECORDS = [
+RECORDS: Final = [
     pytest.param(
         Verb(
             "dispatch",
@@ -396,7 +406,7 @@ def test_each_tool_records_what_its_command_records(
         validator(tool.schema).validate(tool.structured)
 
 
-REFUSALS = [
+REFUSALS: Final = [
     pytest.param(
         Verb(
             "decide",
@@ -844,7 +854,7 @@ def test_a_chores_run_is_served_its_history_alone(overseen: CanopyEnv) -> None:
 
 
 #: Arguments each report needs, for a call that a guard, not the request, refuses.
-REPORT_ARGUMENTS: Mapping[str, Mapping[str, object]] = {
+REPORT_ARGUMENTS: Final[Mapping[str, Mapping[str, object]]] = {
     reports.SHOW_RUN: {"run": 1},
     reports.SHOW_CHORE: {"name": "build-health"},
 }
@@ -931,7 +941,7 @@ def test_a_chores_history_tool_refuses_what_its_command_refuses(
 
 
 #: Each of canopy's reports a chore reads, as a tool's call and the command that prints the same.
-REPORT_READS: list[tuple[str, Mapping[str, object], list[str]]] = [
+REPORT_READS: Final[list[tuple[str, Mapping[str, object], list[str]]]] = [
     (reports.HEALTH, {}, ["health", "--json"]),
     (reports.HEALTH, {"days": 30}, ["health", "--json", "--days", "30"]),
     (reports.SPEND, {"days": 1}, ["spend", "--json", "--days", "1"]),

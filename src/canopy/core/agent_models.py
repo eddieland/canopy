@@ -24,7 +24,7 @@ the canary's.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from canopy.runtime import agents, invocation
 from canopy.runtime import models as runtime_models
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 type Role = Literal["worker", "planner", "reviewer", "overseer", "chore"]
 #: Each key of `[runtime.models]`, the role it chooses a model for, and the agents that role is, by the names the
 #: runtime runs them by: a worker is the public or the private one, and a task's run is the private one.
-AGENTS: Mapping[Role, tuple[str, ...]] = {
+AGENTS: Final[Mapping[Role, tuple[str, ...]]] = {
     "worker": (agents.WORKER, agents.PRIVATE_WORKER),
     "planner": (agents.PLANNER,),
     "reviewer": (agents.REVIEWER,),
@@ -52,15 +52,15 @@ AGENTS: Mapping[Role, tuple[str, ...]] = {
     "chore": (agents.CHORE,),
 }
 #: The guard and attention reason of a run whose model, or the variant of it, the runtime does not list.
-MISSING = "model_missing"
+MISSING: Final = "model_missing"
 #: The guard and attention reason of a run whose model could not be looked up, the list not read.
-LIST_FAILED = "model_list_failed"
+LIST_FAILED: Final = "model_list_failed"
 #: Where config's choice of an agent's model comes from: `[runtime.models]` (`config`), a chore's own `model`
 #: (`chore`), the definition of an agent of the operator's own that a chore runs, which canopy does not write
 #: (`agent`), or nothing, the runtime's default (`default`).
 type Source = Literal["config", "chore", "agent", "default"]
 # The most variants a refusal names of those the model lists.
-_MAX_NAMED = 8
+_MAX_NAMED: Final = 8
 
 
 @dataclass(frozen=True)

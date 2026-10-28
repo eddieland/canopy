@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -58,10 +58,10 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import CanopyEnv
 
-BRANCH = f"agent/{KEY}-work"
+BRANCH: Final = f"agent/{KEY}-work"
 #: When the comments and review items here were written: long before the observations, which are the real time's.
-EARLIER = "2026-10-01T10:00:00Z"
-LATER = "2026-10-01T11:00:00Z"
+EARLIER: Final = "2026-10-01T10:00:00Z"
+LATER: Final = "2026-10-01T11:00:00Z"
 
 
 @pytest.fixture

@@ -3,6 +3,7 @@
 import json
 import re
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -14,8 +15,8 @@ from canopy.runtime.agents import Model
 from canopy.runtime.implementation import Version
 from tests.conftest import CanopyEnv
 
-MODEL = "acme/fake-model-1"
-OTHER = "acme/fake-model-2"
+MODEL: Final = "acme/fake-model-1"
+OTHER: Final = "acme/fake-model-2"
 
 
 def test_each_role_chooses_for_its_agents(canopy_env: CanopyEnv) -> None:
@@ -195,8 +196,8 @@ def test_a_model_not_listed_or_a_list_not_read_is_refused(opencode_state: Path, 
     assert "`opencode models --verbose` exited 1" in failed.value.reason
 
 
-CHORE_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json {prompt}"
-OWN_CMD = "opencode run --agent sentry-triage --format json {prompt}"
+CHORE_CMD: Final = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json {prompt}"
+OWN_CMD: Final = "opencode run --agent sentry-triage --format json {prompt}"
 
 
 def chore(**keys: object) -> dict[str, object]:

@@ -5,6 +5,7 @@ with an attention item, spending no attempt and leasing no slot.
 """
 
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -17,10 +18,10 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import GitPool
 
-PLAN = dispatches(kind=RunKind.PLAN)
-TEXT = "# Plan for PROJ-1\n\nAdd the button.\n"
+PLAN: Final = dispatches(kind=RunKind.PLAN)
+TEXT: Final = "# Plan for PROJ-1\n\nAdd the button.\n"
 #: A resume that needs no cursor and no review: its PR conflicts with its base.
-RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
+RESUME: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
 
 
 def test_each_run_records_the_persona_its_prompt_carried(scenario: Scenario) -> None:

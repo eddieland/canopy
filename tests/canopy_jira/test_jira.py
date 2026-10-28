@@ -9,7 +9,7 @@ from collections.abc import Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, ClassVar, override
+from typing import Any, ClassVar, Final, override
 from unittest import mock
 
 import canopy_jira
@@ -24,9 +24,9 @@ from canopy.infra import logs, procs
 from tests.conftest import CanopyEnv, invoke
 
 #: What the stand-in pages by: smaller than the connector asks for, so every read crosses a page.
-PAGE = 2
-EMAIL = "op@example.com"
-TOKEN = "ATATT-secret-token"  # noqa: S105
+PAGE: Final = 2
+EMAIL: Final = "op@example.com"
+TOKEN: Final = "ATATT-secret-token"  # noqa: S105
 
 
 def doc(*paragraphs: str) -> dict[str, Any]:

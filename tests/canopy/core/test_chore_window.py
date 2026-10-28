@@ -3,6 +3,7 @@
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 
 import pytest
 from pydantic import ValidationError
@@ -15,7 +16,7 @@ from tests.canopy.helpers import chore_decisions, chore_toml, in_zone
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
-NY = "America/New_York"
+NY: Final = "America/New_York"
 
 
 def chore(**window_keys: object) -> Chore:

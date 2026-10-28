@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 
@@ -32,13 +32,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: How long the list may take: it starts OpenCode, which reads its config and plugins, then its catalog.
-TIMEOUT_SECONDS = 30
+TIMEOUT_SECONDS: Final = 30
 #: The command, as canopy's words for a failure name it.
-COMMAND = "opencode models"
+COMMAND: Final = "opencode models"
 #: The option that prints each model's JSON after its line, its variants among it.
-VERBOSE = "--verbose"
+VERBOSE: Final = "--verbose"
 # The blank space between a model's line and its JSON.
-_SPACE_RE = re.compile(r"\s*")
+_SPACE_RE: Final = re.compile(r"\s*")
 
 
 class _Model(BaseModel):

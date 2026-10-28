@@ -12,7 +12,7 @@ import json
 from collections import Counter
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -33,15 +33,15 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: The time each case is derived at; an observation since `FRESH` is fresh, one at `OLD` stale.
-NOW = datetime(2026, 10, 20, 12, tzinfo=UTC)
-FRESH = "2026-10-20T11:59:00.000Z"
-OLD = "2026-10-20T10:00:00.000Z"
-PR = "https://github.com/acme/repo/pull/7"
-HEAD = "abc1234"
+NOW: Final = datetime(2026, 10, 20, 12, tzinfo=UTC)
+FRESH: Final = "2026-10-20T11:59:00.000Z"
+OLD: Final = "2026-10-20T10:00:00.000Z"
+PR: Final = "https://github.com/acme/repo/pull/7"
+HEAD: Final = "abc1234"
 #: canopy_env's queue label.
-LABEL = "agent-ready-tester"
+LABEL: Final = "agent-ready-tester"
 #: A tracker source, so tickets are observed.
-TRACKER = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira"}}}
+TRACKER: Final = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira"}}}
 
 type Case = Callable[[CanopyEnv, sqlite3.Connection], None]
 
@@ -272,7 +272,7 @@ def case_human_replied(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     comment(conn, "2026-10-20T11:59:30.000Z")
 
 
-CASES: Mapping[str, Case] = {
+CASES: Final[Mapping[str, Case]] = {
     "ready": case_ready,
     "plan_proposed": case_plan_proposed,
     "blocked": case_blocked,

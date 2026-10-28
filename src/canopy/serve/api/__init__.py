@@ -12,7 +12,7 @@ private file, and then asks for a reload.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 from fastapi import APIRouter, Depends
 
@@ -49,7 +49,7 @@ from canopy.serve.api import (
 
 # A new resource's module goes here, so it needs a session like the rest and its tag is described; its router has
 # that tag, and each route a summary, a docstring, and every error it answers (test_serve.py checks).
-_RESOURCES = (
+_RESOURCES: Final = (
     overview,
     tickets,
     plans,
@@ -74,7 +74,7 @@ _RESOURCES = (
 )
 
 # Each resource's tag, described by its module's docstring, in the order the schema lists them.
-TAGS: list[dict[str, Any]] = [{"name": m.TAG, "description": m.__doc__} for m in (session, *_RESOURCES)]
+TAGS: Final[list[dict[str, Any]]] = [{"name": m.TAG, "description": m.__doc__} for m in (session, *_RESOURCES)]
 
 _signed_in = APIRouter(dependencies=[Depends(deps.signed_in)], responses=refs.SIGNED_IN)
 for _resource in _RESOURCES:

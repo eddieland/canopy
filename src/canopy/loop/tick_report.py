@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, Final, Literal, assert_never
 
 from rich.table import Table
 from rich.text import Text
@@ -29,9 +29,9 @@ if TYPE_CHECKING:
 
 #: Decisions every tick repeats, an older tick's copies of tracker comments, and the cursors the harness moved past what
 #: needs no handling. The tick's summary counts them; `canopy decisions` lists them.
-_QUIET_ACTIONS = ("wait", "mirror", duties.QUERIED_ACTION, harness.CURSOR_ACTION)
+_QUIET_ACTIONS: Final = ("wait", "mirror", duties.QUERIED_ACTION, harness.CURSOR_ACTION)
 #: How a terminal draws each tick status.
-_STATUS_STYLES = {
+_STATUS_STYLES: Final = {
     "ok": "bold green",
     "skipped": "bold yellow",
     "lock_busy": "bold yellow",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -30,13 +30,13 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
 #: The overseer dispatches KEY's implement on its `work` branch.
-WORK = dispatches(slug="work")
+WORK: Final = dispatches(slug="work")
 #: The overseer dispatches a resume of KEY to fix CI.
-FIX_CI = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
+FIX_CI: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
 #: Ticket notes at `record`, in the workspace's private file.
-RECORDING = {"ticket_notes": "record"}
-NOTE = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
-CONTRACT = "That JSON object may also carry these fields"
+RECORDING: Final = {"ticket_notes": "record"}
+NOTE: Final = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
+CONTRACT: Final = "That JSON object may also carry these fields"
 
 
 def test_with_memory_off_a_note_a_worker_sends_is_stored_nowhere(scenario: Scenario, git_pool: GitPool) -> None:

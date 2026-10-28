@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -18,10 +18,10 @@ from canopy.runtime.opencode2.offerings import matches
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
 
-URL = "http://127.0.0.1:41234"
+URL: Final = "http://127.0.0.1:41234"
 #: `config.get`: canopy's definitions directory, a project file with a secret, and inline config, as OpenCode normalized
 #: them. A later definition of `github` replaces the earlier one whole.
-CONFIG: list[object] = [
+CONFIG: Final[list[object]] = [
     {"type": "directory", "path": "/defs"},
     {
         "type": "document",
@@ -45,7 +45,9 @@ CONFIG: list[object] = [
     },
 ]
 #: `skill.list`: OpenCode's two built in, and two of canopy's.
-SKILLS = [{"id": s, "name": s, "description": "d"} for s in ("opencode", "report", "tracker-jira", "tracker-github")]
+SKILLS: Final = [
+    {"id": s, "name": s, "description": "d"} for s in ("opencode", "report", "tracker-jira", "tracker-github")
+]
 
 
 def rule(action: str, effect: str = "deny", resource: str = "*") -> dict[str, str]:
@@ -53,7 +55,7 @@ def rule(action: str, effect: str = "deny", resource: str = "*") -> dict[str, st
 
 
 #: Every built-in tool OpenCode 2.1.2 sends an agent whose rules keep none from it.
-EVERY_TOOL = (
+EVERY_TOOL: Final = (
     "edit",
     "execute",
     "glob",
@@ -68,9 +70,9 @@ EVERY_TOOL = (
     "write",
 )
 #: The rules OpenCode 2 starts every agent from.
-DEFAULTS = [rule("*", "allow"), rule("read", "ask", "*.env"), rule("read", "ask", "*.env.*")]
+DEFAULTS: Final = [rule("*", "allow"), rule("read", "ask", "*.env"), rule("read", "ask", "*.env.*")]
 #: What OpenCode writes of its stdout to a pipe before it exits: what the pipe's buffer holds.
-PIPE_BUFFER = 64 * 1024
+PIPE_BUFFER: Final = 64 * 1024
 
 
 @dataclass

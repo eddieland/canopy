@@ -9,7 +9,7 @@ the database is read here too, by OpenCode 1's reader, with OpenCode 2's queries
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.runtime.opencode import sessions as opencode1
 from canopy.runtime.report import MAX_SESSIONS
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from canopy.runtime.report import SessionCursor, SessionPage
 
 #: A page of sessions updated after a cursor, as OpenCode 1's reader takes it (`opencode1.SESSIONS_SQL`).
-SESSIONS_SQL = """
+SESSIONS_SQL: Final = """
 SELECT id, parent_id, directory, time_created, time_updated,
        cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write
 FROM session_v2
@@ -28,7 +28,7 @@ ORDER BY time_updated, id
 LIMIT ?
 """
 #: Each model's replies in the sessions a JSON array of ids names, and their cost, as `opencode1.MODELS_SQL` reads them.
-MODELS_SQL = """
+MODELS_SQL: Final = """
 SELECT session_id, json_extract(data, '$.model.providerID'), json_extract(data, '$.model.id'),
        json_extract(data, '$.model.variant'), count(*), total(json_extract(data, '$.cost'))
 FROM session_message
@@ -41,7 +41,7 @@ WHERE session_id IN (SELECT value FROM json_each(?))
 GROUP BY 1, 2, 3, 4
 """
 #: Between a model and its variant, as `canopy.runtime.opencode2.session_models` names a model run at one.
-VARIANT_MARK = "#"
+VARIANT_MARK: Final = "#"
 
 
 def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS) -> SessionPage:

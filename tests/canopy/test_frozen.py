@@ -10,13 +10,14 @@ stack of open blocks, is not frozen. The test reads the annotations, as the type
 import ast
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Final
 
 #: The repository's root in a checkout.
-ROOT = Path(__file__).resolve().parents[2]
+ROOT: Final = Path(__file__).resolve().parents[2]
 #: Where canopy's own code is: the harness, its separate programs, and the tests.
-SOURCES = (ROOT / "src", ROOT / "packages", ROOT / "tests")
+SOURCES: Final = (ROOT / "src", ROOT / "packages", ROOT / "tests")
 #: The names of the collections a frozen dataclass's field may not be, wherever in its annotation they appear.
-MUTABLE = frozenset(
+MUTABLE: Final = frozenset(
     {
         "list",
         "dict",

@@ -12,7 +12,7 @@ checks, as without kicks.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, flaky_kicks
 from canopy.core.vocab import ResumeReason, RunKind, RunStatus
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 #: The key that sets how many kicks a head gets, as a note names it.
-KEY = "trust.max_flaky_kicks"
+KEY: Final = "trust.max_flaky_kicks"
 
 
 @dataclass(frozen=True)

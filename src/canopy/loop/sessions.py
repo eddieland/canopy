@@ -10,7 +10,7 @@ logged, and the next read is `EVERY_SECONDS` later.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import pause, runtime_sessions
 from canopy.core.vocab import SessionsRead
@@ -23,9 +23,9 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 #: How long after one read the next starts once the reading has caught up: sessions outside canopy run on their own.
-EVERY_SECONDS = 300.0
+EVERY_SECONDS: Final = 300.0
 #: How long after a full page the next starts, while the history is read.
-GAP_SECONDS = 10.0
+GAP_SECONDS: Final = 10.0
 
 
 @dataclass

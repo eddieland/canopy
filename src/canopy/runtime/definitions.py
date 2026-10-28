@@ -7,7 +7,7 @@ to load (D040). The format, and the names the runtime gives tools and skills, ar
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.runtime.implementation import one, pick, two
 
@@ -22,24 +22,24 @@ if TYPE_CHECKING:
 _shared = one.definitions
 
 #: The directory of a config directory the runtime reads agent definitions from, and the one it reads skills from.
-AGENTS_SUBDIR = _shared.AGENTS_SUBDIR
-SKILLS_SUBDIR = _shared.SKILLS_SUBDIR
+AGENTS_SUBDIR: Final = _shared.AGENTS_SUBDIR
+SKILLS_SUBDIR: Final = _shared.SKILLS_SUBDIR
 
 #: A part of a tool's name as the runtime gives it: an MCP server's name or one of its tools'. They are rendered into
 #: definitions, so nothing else may reach them.
-TOOL_PART_RE = _shared.TOOL_PART_RE
+TOOL_PART_RE: Final = _shared.TOOL_PART_RE
 #: The runtime's rule for a skill's name, and the longest one it takes.
-SKILL_NAME_RE = _shared.SKILL_NAME_RE
-MAX_SKILL_NAME = _shared.MAX_SKILL_NAME
+SKILL_NAME_RE: Final = _shared.SKILL_NAME_RE
+MAX_SKILL_NAME: Final = _shared.MAX_SKILL_NAME
 #: A bash rule canopy renders from config, `runtime.allow_bash`: a command's name, a literal word, then arguments of
 #: plain characters and the runtime's wildcards. Its first word is the command it allows.
-BASH_ALLOW_RE = _shared.BASH_ALLOW_RE
+BASH_ALLOW_RE: Final = _shared.BASH_ALLOW_RE
 #: The runtime's own commands, which run an agent with rules of their own.
-RUNTIME_COMMANDS = _shared.RUNTIME_COMMANDS
+RUNTIME_COMMANDS: Final = _shared.RUNTIME_COMMANDS
 #: A model as the runtime names one, which canopy renders into an agent's definition (DESIGN §13).
-MODEL_RE = _shared.MODEL_RE
+MODEL_RE: Final = _shared.MODEL_RE
 #: A variant of a model as the runtime names one, which canopy renders beside the model (DESIGN §13).
-VARIANT_RE = _shared.VARIANT_RE
+VARIANT_RE: Final = _shared.VARIANT_RE
 
 
 def agent_names() -> list[str]:

@@ -6,6 +6,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from itertools import starmap
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -18,7 +19,7 @@ from tests.canopy.helpers import KEY, context, in_tick, messages, operator, seen
 from tests.canopy.scenario_helpers import Scenario, raises, skips_tick
 from tests.conftest import CanopyEnv
 
-NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
+NOW: Final = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
 
 
 def item(key: str, reason: str, detail: str, age: timedelta) -> attention.Item:

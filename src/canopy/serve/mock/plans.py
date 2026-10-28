@@ -8,7 +8,7 @@ for changes; each comment's passage is in the one waiting.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import plans, sql
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-_FIRST_PLAN = """# Schedule report exports
+_FIRST_PLAN: Final = """# Schedule report exports
 
 ## What changes
 
@@ -28,7 +28,7 @@ and emails the CSV.
 
 - [ ] a daily schedule runs once a day
 """
-_PLAN = """# Schedule report exports
+_PLAN: Final = """# Schedule report exports
 
 ## What changes
 
@@ -59,7 +59,7 @@ In **api**, `ReportQuery` gains `owner_timezone()`, so an hour means the owner's
 
 > The job runner retries a failed job three times. A report that always fails would email nothing, and say nothing.
 """
-_PLAN_THREADS = (
+_PLAN_THREADS: Final = (
     # quote, prefix, suffix, body, minutes, resolved, replies
     (
         "emails a link to the file, never the file itself",

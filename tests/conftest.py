@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -29,18 +29,20 @@ if TYPE_CHECKING:
 
     import click
 
-FAKES_DIR = Path(__file__).parent / "fakes"
+FAKES_DIR: Final = Path(__file__).parent / "fakes"
 # Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
-SCRIPTS_DIR = Path(sys.executable).parent
+SCRIPTS_DIR: Final = Path(sys.executable).parent
 # The prefixes tests/fakes/agent records in its log's `env`. Keep in sync with it.
-RECORDED_ENV_PREFIXES = ("CANOPY_", "OPENCODE_")
+RECORDED_ENV_PREFIXES: Final = ("CANOPY_", "OPENCODE_")
 # What tests/fakes/agent reads its behavior from, for each role it plays. Keep in sync with it.
-FAKE_AGENT_PREFIXES = tuple(f"FAKE_{role}_" for role in ("AGENT", "OVERSEER", "WORKER", "PLANNER", "CHORE", "REVIEWER"))
+FAKE_AGENT_PREFIXES: Final = tuple(
+    f"FAKE_{role}_" for role in ("AGENT", "OVERSEER", "WORKER", "PLANNER", "CHORE", "REVIEWER")
+)
 
 # Commits made under test have a fixed author, and git reads no config of the operator's or the machine's. Nor does it
 # start automatic maintenance: newer git (2.55 on CI) runs it in the background after a commit or a fetch, where it
 # can prune a worktree that `git worktree add` has made but not yet locked, or leave a `maintenance.lock` a test sees.
-HERMETIC_GIT = {
+HERMETIC_GIT: Final = {
     "GIT_AUTHOR_NAME": "canopy test",
     "GIT_COMMITTER_NAME": "canopy test",
     "GIT_AUTHOR_EMAIL": "test@example.test",
@@ -259,7 +261,7 @@ class CanopyEnv:
 
 
 #: A key TOML writes bare; any other it quotes.
-_BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
+_BARE_KEY: Final = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def _merged(old: Mapping[str, object], new: Mapping[str, object]) -> dict[str, object]:
@@ -317,8 +319,8 @@ def _toml_value(value: object) -> str:
             raise TypeError(f"no TOML for {value!r} in a test's config")
 
 
-REPO_NAME = "repo"
-SHARED_TOML = f"""\
+REPO_NAME: Final = "repo"
+SHARED_TOML: Final = f"""\
 [workspace]
 name = "acme"
 

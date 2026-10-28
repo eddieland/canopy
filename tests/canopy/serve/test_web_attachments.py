@@ -4,13 +4,15 @@ An upload and a removal write through the functions `canopy attach` and `canopy 
 their guards refuse them as they refuse the CLI's.
 """
 
+from typing import Final
+
 from canopy.core import attachments, conversation, db
 from canopy.core.context import Context
 from tests.canopy.helpers import in_run
 from tests.canopy.web_helpers import refused, signed_in_client
 
-DOC = "# Importer\n\nShard the queue by tenant.\n"
-TASK = conversation.Ref(conversation.TASK, "1")
+DOC: Final = "# Importer\n\nShard the queue by tenant.\n"
+TASK: Final = conversation.Ref(conversation.TASK, "1")
 
 
 def test_a_file_uploaded_to_a_task_is_kept_and_shown_on_its_page(ctx: Context) -> None:

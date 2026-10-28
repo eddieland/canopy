@@ -9,7 +9,7 @@ replies and never drops them.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import drafts, drafts_manage, observe, review_drafts_manage, sql
 from canopy.core.vocab import DraftStatus, PrState
@@ -65,7 +65,7 @@ def _check(ctx: Context, whole: Collection[str], log: logs.TickAdapter) -> None:
 
 
 # The attention reason drafts waiting on the operator raise (DESIGN §14, §29): the harness's, and the operator's alone.
-WAITING_REASON = "drafts_waiting"
+WAITING_REASON: Final = "drafts_waiting"
 
 
 @dataclass(frozen=True)

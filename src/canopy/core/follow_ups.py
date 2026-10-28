@@ -14,7 +14,7 @@ import json
 import sqlite3
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from pydantic import BaseModel, ConfigDict
 
@@ -24,13 +24,13 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 #: Where a run's stored result keeps the entries `_run` refused: the valid keys, and how many were not valid keys.
-STORED = "follow_ups_unrecorded"
+STORED: Final = "follow_ups_unrecorded"
 #: The attention item a refused entry raises, about the run's ticket (DESIGN §14).
-REASON = "follow_up_unrecorded"
+REASON: Final = "follow_up_unrecorded"
 #: How many refused keys a note or an item names; the rest are counted.
-MAX_NAMED = 20
+MAX_NAMED: Final = 20
 #: How long an attention item's detail may be.
-MAX_DETAIL = 2000
+MAX_DETAIL: Final = 2000
 
 
 class _Reported(BaseModel):

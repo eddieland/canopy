@@ -3,6 +3,7 @@
 import json
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -15,7 +16,7 @@ from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.conftest import CanopyEnv, GitPool, git
 
 #: The note on a review the harness raised for a change to CI's workflow.
-RAISED = (
+RAISED: Final = (
     "reported {impact} impact, but the change touches .github/workflows/ci.yml, which the high-impact path "
     ".github/workflows/ covers; recorded as high"
 )

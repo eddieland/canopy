@@ -1,6 +1,7 @@
 """The bench file: what it accepts, what it refuses, and how cases are chosen."""
 
 from pathlib import Path
+from typing import Final
 
 import pytest
 from canopy_review_bench import bench
@@ -8,8 +9,8 @@ from canopy_review_bench.bench import BenchError, Side, Spot
 
 from tests.canopy_review_bench.helpers import bench_file
 
-SHA = "a" * 40
-OTHER = "b" * 40
+SHA: Final = "a" * 40
+OTHER: Final = "b" * 40
 
 
 def test_a_bench_file_with_each_kind_of_case_loads(tmp_path: Path) -> None:

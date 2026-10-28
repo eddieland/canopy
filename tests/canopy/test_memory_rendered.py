@@ -8,7 +8,7 @@ snapshots are syrupy's, in `__snapshots__/test_memory_rendered/`; `make snapshot
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
 
 # Every pair of modes but both off, which renders no contract.
-MODES = [
+MODES: Final = [
     (notes, proposals)
     for notes in MemoryMode
     for proposals in MemoryMode

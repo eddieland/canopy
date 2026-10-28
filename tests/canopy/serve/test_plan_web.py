@@ -8,6 +8,7 @@ show` prints the newest plan as its file stands, and `--plans` every plan and th
 import hashlib
 import sqlite3
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -27,8 +28,8 @@ from tests.canopy.helpers import (
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
-TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button to `ui/form.tsx`, red.\n"
-PLAN = ("--label", LABEL, "--kind", "plan")
+TEXT: Final = "# Plan for PROJ-1\n\n## repo\n\nAdd the button to `ui/form.tsx`, red.\n"
+PLAN: Final = ("--label", LABEL, "--kind", "plan")
 
 
 def proposed(ctx: Context, text: str = TEXT) -> int:

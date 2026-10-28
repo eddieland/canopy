@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Final
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
@@ -11,7 +12,7 @@ from canopy.serve.api.deps import SessionsDep
 from canopy.serve.auth import AUTHORIZED, FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
 from canopy.serve.schema import ErrorResponse, Session, SignIn
 
-TAG = "session"
+TAG: Final = "session"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

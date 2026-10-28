@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Collection, Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from canopy.core import contract, conversation, db, pr_list, review_drafts, review_requests, review_runs
 from canopy.serve import threads
@@ -33,9 +33,9 @@ if TYPE_CHECKING:
     from canopy.serve.backend import Backend
 
 # The PRs list, by most recent activity, and how many runs and decisions a PR's page carries.
-PULL_REQUESTS = 100
-PR_RUNS = 20
-PR_DECISIONS = 20
+PULL_REQUESTS: Final = 100
+PR_RUNS: Final = 20
+PR_DECISIONS: Final = 20
 
 
 def pull_requests(ctx: Context) -> list[PullRequest]:

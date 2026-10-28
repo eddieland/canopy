@@ -6,7 +6,7 @@ A PR is known by a ticket's unit, by a review run, or by the operator's review r
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, LiteralString
+from typing import TYPE_CHECKING, Final, LiteralString
 
 from canopy.core import db, sql
 
@@ -60,7 +60,7 @@ def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> l
 # changed, its review runs by when each ended, or started while it runs (`db.finish_run` sets the end), and its
 # review requests by when each ended, or was made while it is open.
 # CROSS JOIN keeps SQLite reading the tickets in order and each one's units after, rather than sorting every unit.
-_PR_ACTIVITY = (
+_PR_ACTIVITY: Final = (
     sql.select("u.pr_url, t.changed_at")
     .from_("tickets t CROSS JOIN ticket_units u ON u.ticket_key = t.key")
     .where("u.pr_url IS NOT NULL")

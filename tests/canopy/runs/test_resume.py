@@ -8,6 +8,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -17,10 +18,12 @@ from tests.canopy.helpers import KEY, WORKER_DONE, canopy, in_tick, present, uni
 from tests.canopy.scenario_helpers import Scenario, asks, dispatches, fails, pushes
 from tests.conftest import CanopyEnv, GitPool, git
 
-LABEL = ("--label", "agent-ready-tester")
-RESUME = (*LABEL, "--kind", "resume")
-CI, REVIEW, CONFLICT = ResumeReason.CI, ResumeReason.REVIEW, ResumeReason.CONFLICT
-CHECK = "Check unit-tests failed on run 77: https://example.test/runs/77"
+LABEL: Final = ("--label", "agent-ready-tester")
+RESUME: Final = (*LABEL, "--kind", "resume")
+CI: Final = ResumeReason.CI
+REVIEW: Final = ResumeReason.REVIEW
+CONFLICT: Final = ResumeReason.CONFLICT
+CHECK: Final = "Check unit-tests failed on run 77: https://example.test/runs/77"
 
 
 def resumes(*reasons: ResumeReason) -> list[str]:

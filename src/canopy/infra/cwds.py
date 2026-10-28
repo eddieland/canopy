@@ -14,14 +14,15 @@ import time
 from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from canopy.infra import procs
 
-PROC = Path("/proc")
+PROC: Final = Path("/proc")
 # How long `end` waits for the processes it signalled, after SIGTERM and again after SIGKILL, as treehouse does.
-GRACE_SECONDS = 2.0
-_POLL_SECONDS = 0.05
-_LSOF_TIMEOUT_SECONDS = 30
+GRACE_SECONDS: Final = 2.0
+_POLL_SECONDS: Final = 0.05
+_LSOF_TIMEOUT_SECONDS: Final = 30
 
 
 class CwdError(Exception):

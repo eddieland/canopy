@@ -5,6 +5,7 @@ import sys
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -254,7 +255,7 @@ def test_sandbox_suggestion_puts_the_wrapper_before_the_prefix(prefix: str, tmp_
     assert shlex.split(_suggested_prefix(out)) == [*SANDBOX_PREFIX, *shlex.split(prefix)]
 
 
-SANDBOX_PREFIX = ["canopy-sandbox", "worker", "--read", "{definitions_dir}", "--"]
+SANDBOX_PREFIX: Final = ["canopy-sandbox", "worker", "--read", "{definitions_dir}", "--"]
 
 
 def _suggested_prefix(out: str) -> str:

@@ -5,6 +5,8 @@ Only the operator chooses one, from a ticket's page or a review request; this li
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter
 
 from canopy.core import personas
@@ -12,7 +14,7 @@ from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.persona import PersonaList
 
-TAG = "personas"
+TAG: Final = "personas"
 router = APIRouter(tags=[TAG])
 
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Final, Literal, cast
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import ConnectorRunStatus, SourceKind
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from canopy.core.observe import Observed, Request
 
 #: The attention reason a source's run that read less than it was asked raises (DESIGN §14, §30): the harness's.
-FAILED_REASON = "connector_failed"
+FAILED_REASON: Final = "connector_failed"
 
 
 #: A table of what a connector observed.

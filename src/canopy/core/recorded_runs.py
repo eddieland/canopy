@@ -11,7 +11,7 @@ counts toward no limit then, since only a run that started does.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import RecordedKind, RecordedStatus
@@ -21,9 +21,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
 #: The kinds that hold a worker, within `capacity.max_workers`, while recorded: each leases a slot once it starts.
-HOLDS_WORKER = frozenset({RecordedKind.DISPATCH, RecordedKind.REVIEW, RecordedKind.REVISION})
+HOLDS_WORKER: Final = frozenset({RecordedKind.DISPATCH, RecordedKind.REVIEW, RecordedKind.REVISION})
 #: The kinds that hold a review run, within `capacity.max_reviews` and the day's reviews, while recorded.
-HOLDS_REVIEW = frozenset({RecordedKind.REVIEW, RecordedKind.REVISION})
+HOLDS_REVIEW: Final = frozenset({RecordedKind.REVIEW, RecordedKind.REVISION})
 
 
 def record(

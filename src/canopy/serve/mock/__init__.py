@@ -25,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import chore_runs, chore_view, config, conversation, db, pools, records, review_runs, sql, workspace
 from canopy.core.context import db_path
@@ -53,11 +53,11 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-T0 = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+T0: Final = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
 # The run whose cost `changes` moves.
-LIVE_RUN = 41
+LIVE_RUN: Final = 41
 
-_MAP_TOML = """\
+_MAP_TOML: Final = """\
 [workspace]
 name = "acme"
 
@@ -83,7 +83,7 @@ max_resume_attempts = 1
 max_reviews_per_pr = 2
 """
 
-_USER_TOML = """\
+_USER_TOML: Final = """\
 [tracker]
 labels = ["agent-ready-mock"]
 
@@ -130,11 +130,11 @@ prompt = "{chores}/build-health.md"
 every_minutes = 120
 """
 # The chore whose finding the attention list shows.
-CHORE = "deps"
+CHORE: Final = "deps"
 # Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
-_POOLS = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
+_POOLS: Final = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
 # The variants the mock's runtime lists for each provider's models, which a ticket's page may choose one at.
-_VARIANTS = {"anthropic": frozenset({"high", "max"}), "openai": frozenset({"minimal", "low", "medium", "high"})}
+_VARIANTS: Final = {"anthropic": frozenset({"high", "max"}), "openai": frozenset({"minimal", "low", "medium", "high"})}
 
 
 def at(minutes: int) -> str:
@@ -146,7 +146,7 @@ def at(minutes: int) -> str:
     return db.format_time(T0 + timedelta(minutes=minutes))
 
 
-ATTENTION: tuple[Item, ...] = (
+ATTENTION: Final[tuple[Item, ...]] = (
     Item(
         "ABC-100",
         "worker_failed",

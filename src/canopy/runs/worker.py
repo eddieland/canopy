@@ -26,7 +26,7 @@ import sqlite3
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
+from typing import TYPE_CHECKING, Annotated, Final, Literal, Self, TextIO, assert_never
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, StrictStr
 
@@ -70,14 +70,14 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.context import Context
 
-MAX_TEXT = 2000
+MAX_TEXT: Final = 2000
 #: A planner's reason for saying its plan needs no review: a sentence, as a sink's line carries it.
-MAX_REVIEW_REASON = 300
-MAX_PR_URL = 500
+MAX_REVIEW_REASON: Final = 300
+MAX_PR_URL: Final = 500
 # The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
 # checked out detached (DESIGN §8).
-SETUP_REPO_ENV = "CANOPY_REPO"
-SETUP_BRANCH_ENV = "CANOPY_BRANCH"
+SETUP_REPO_ENV: Final = "CANOPY_REPO"
+SETUP_BRANCH_ENV: Final = "CANOPY_BRANCH"
 
 
 class WorkerError(Exception):

@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -10,9 +11,9 @@ from canopy.runtime.report import AgentOutput, ToolUse, Usage
 
 #: What OpenCode 2.1.2 printed for canopy's worker on a stand-in model, its paths replaced (2026-10-22): a shell call,
 #: a skill loaded, a forced push and a read outside the worktree denied, and two texts.
-RECORDED = Path(__file__).parent / "recorded"
-RESULT = '{"status":"done","summary":"did it"}'
-TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
+RECORDED: Final = Path(__file__).parent / "recorded"
+RESULT: Final = '{"status":"done","summary":"did it"}'
+TOKENS: Final = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
 
 
 def event(kind: str, part: object, session: object = "ses_abc123") -> str:

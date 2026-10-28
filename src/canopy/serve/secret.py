@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import secrets
 import stat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import config
 from canopy.infra import logs
@@ -18,10 +18,10 @@ from canopy.infra import logs
 if TYPE_CHECKING:
     from pathlib import Path
 
-FILE_NAME = "listener-secret"
-MIN_LENGTH = 32
+FILE_NAME: Final = "listener-secret"
+MIN_LENGTH: Final = 32
 # Anything longer is not a secret canopy wrote, and is refused rather than read whole.
-MAX_LENGTH = 512
+MAX_LENGTH: Final = 512
 
 
 class SecretError(Exception):

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import db, recorded_runs, review_requests
 from canopy.core.vocab import RecordedKind, RecordedStatus, ResumeReason, RunKind
@@ -29,9 +29,9 @@ if TYPE_CHECKING:
     from canopy.infra import logs
 
 #: The guard a recorded run is refused under when starting it raised; what it was for is decided again next tick.
-SPAWN_FAILED = "spawn_failed"
+SPAWN_FAILED: Final = "spawn_failed"
 #: Where the chores go in the order: after every run, as the harness's own always have.
-CHORES = len(Rank)
+CHORES: Final = len(Rank)
 
 
 def make(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:

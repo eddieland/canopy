@@ -21,7 +21,7 @@ Its stdout is captured through a file, not a pipe, as the other questions of Ope
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError
 
@@ -34,9 +34,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: How long the list may take: it starts OpenCode's server, which reads its config, then its catalog.
-TIMEOUT_SECONDS = 60
+TIMEOUT_SECONDS: Final = 60
 #: The command, as canopy's words for a failure name it.
-COMMAND = "opencode api model.list"
+COMMAND: Final = "opencode api model.list"
 
 
 class _Variant(BaseModel):

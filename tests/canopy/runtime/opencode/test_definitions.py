@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import replace
+from typing import Final
 
 import pytest
 
@@ -9,14 +10,14 @@ from canopy.infra import resources
 from canopy.runtime import agents
 from canopy.runtime.opencode import definitions
 
-PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
-SKILL_MARKER = "    # canopy: skill rule\n"
-READS_MARKER = "  # canopy: tracker reads\n"
-ISSUES_MARKER = "  # canopy: github issue tools\n"
-ARTIFACT_TOOLS_MARKER = "  # canopy: artifact tools\n"
-ARTIFACT_SKILL_MARKER = "    # canopy: artifact skill\n"
+PROMPT_MARKER: Final = "<!-- canopy: overseer prompt -->\n"
+SKILL_MARKER: Final = "    # canopy: skill rule\n"
+READS_MARKER: Final = "  # canopy: tracker reads\n"
+ISSUES_MARKER: Final = "  # canopy: github issue tools\n"
+ARTIFACT_TOOLS_MARKER: Final = "  # canopy: artifact tools\n"
+ARTIFACT_SKILL_MARKER: Final = "    # canopy: artifact skill\n"
 #: The denial of GitHub's issue tools, as rendered for both workers and the planner off a GitHub tracker.
-ISSUE_DENIALS = "".join(
+ISSUE_DENIALS: Final = "".join(
     f'  "*{tool}*": deny\n'
     for tool in (
         "issue_read",
@@ -29,8 +30,8 @@ ISSUE_DENIALS = "".join(
     )
 )
 #: The agents that deny GitHub's issue tools off a GitHub tracker.
-ISSUE_AGENTS = [agents.WORKER, agents.PRIVATE_WORKER, agents.PLANNER]
-TEMPERATURE_AGENTS = [agents.REVIEWER, agents.OVERSEER]
+ISSUE_AGENTS: Final = [agents.WORKER, agents.PRIVATE_WORKER, agents.PLANNER]
+TEMPERATURE_AGENTS: Final = [agents.REVIEWER, agents.OVERSEER]
 
 
 def test_the_bundled_files_are_the_agents_skills_and_plugins_by_their_place_in_a_config_directory() -> None:
@@ -47,7 +48,7 @@ def test_the_bundled_files_are_the_agents_skills_and_plugins_by_their_place_in_a
 
 
 #: Rules that render nothing but the overseer's prompt; a test replaces what it renders.
-PLAIN = agents.Rules(
+PLAIN: Final = agents.Rules(
     tracker_tools=None,
     rebase=False,
     worker_drafts=agents.Drafts(approve=False, ticket_comments=True),
@@ -155,7 +156,7 @@ def test_an_overseer_definition_without_its_tracker_reads_line_is_refused(tools:
 
 
 #: The agents whose tracker reads are rendered as the reviewer's, and the function that renders them.
-READERS: dict[str, Callable[[str, agents.McpTools | None, str], str]] = {
+READERS: Final[dict[str, Callable[[str, agents.McpTools | None, str], str]]] = {
     agents.REVIEWER: definitions.render_reviewer_reads,
     agents.CHORE: definitions.render_chore_reads,
 }
@@ -211,7 +212,7 @@ def test_a_worker_definition_without_its_reply_lines_is_refused() -> None:
         )
 
 
-BASH_ALLOWS_MARKER = "    # canopy: bash allows\n"
+BASH_ALLOWS_MARKER: Final = "    # canopy: bash allows\n"
 
 
 def test_bash_allows_are_the_last_of_the_overseers_bash_rules() -> None:
@@ -306,7 +307,7 @@ def test_a_pattern_that_matches_a_known_tracker_tool_is_left_out(agent: str) -> 
 
 
 #: A store on a server called `louvre` that the public worker publishes to (DESIGN §38).
-STORE = agents.Publishing("louvre", ("artifact_publish", "thread_resolve"), frozenset({agents.WORKER}))
+STORE: Final = agents.Publishing("louvre", ("artifact_publish", "thread_resolve"), frozenset({agents.WORKER}))
 
 
 @pytest.mark.parametrize("agent", definitions.agent_names())

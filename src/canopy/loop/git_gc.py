@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, Final, Literal, assert_never
 
 from canopy.core import hostgit, pool, pools, workspace
 from canopy.core.vocab import PoolKind
@@ -31,12 +31,12 @@ if TYPE_CHECKING:
 Outcome = Literal["packed", "skipped", "failed"]
 
 #: The step that combines packs, which git refuses in a clone with no pack, as an empty repository's is.
-REPACK = ("maintenance", "run", "--quiet", "--task=incremental-repack")
+REPACK: Final = ("maintenance", "run", "--quiet", "--task=incremental-repack")
 #: The steps in each clone, in order: none deletes an object that is not also in a pack.
-STEPS = (("maintenance", "run", "--quiet", "--task=loose-objects"), REPACK, ("prune-packed", "--quiet"))
-_STEP_TIMEOUT_SECONDS = 3600
-_REV_PARSE_TIMEOUT_SECONDS = 30
-_MAINTENANCE_LOCK = "objects/maintenance.lock"
+STEPS: Final = (("maintenance", "run", "--quiet", "--task=loose-objects"), REPACK, ("prune-packed", "--quiet"))
+_STEP_TIMEOUT_SECONDS: Final = 3600
+_REV_PARSE_TIMEOUT_SECONDS: Final = 30
+_MAINTENANCE_LOCK: Final = "objects/maintenance.lock"
 
 
 @dataclass(frozen=True)

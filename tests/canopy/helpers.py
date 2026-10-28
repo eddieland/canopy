@@ -15,7 +15,7 @@ from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, NamedTuple, TypedDict, Unpack, cast
+from typing import Any, Final, Literal, NamedTuple, TypedDict, Unpack, cast
 from unittest import mock
 
 from rich.console import Console
@@ -29,34 +29,36 @@ from canopy.loop import connectors, mcp, spawns
 from canopy.runs import drafted
 from tests.conftest import CanopyEnv, Journals, git
 
-KEY = "PROJ-1"
+KEY: Final = "PROJ-1"
 #: A plan as a planner writes one, for a test that needs any.
-PLAN = "# Plan\n\n## api\n\nAdd the endpoint.\n"
+PLAN: Final = "# Plan\n\n## api\n\nAdd the endpoint.\n"
 #: The prompt `prompted` gives its plan's planner.
-PLAN_PROMPT = "You are planning PROJ-1.\n\nThe operator said: keep it small.\n"
+PLAN_PROMPT: Final = "You are planning PROJ-1.\n\nThe operator said: keep it small.\n"
 # The branch an `implement` of KEY with slug `work` pushes.
-BRANCH = f"agent/{KEY}-work"
+BRANCH: Final = f"agent/{KEY}-work"
 # The label the test operator's tickets carry (`user_toml`), and the arguments of an `implement` dispatch of one.
-LABEL = "agent-ready-tester"
-IMPLEMENT = ("--label", LABEL, "--kind", "implement")
+LABEL: Final = "agent-ready-tester"
+IMPLEMENT: Final = ("--label", LABEL, "--kind", "implement")
 # An `implement` on the branch WORKER_DONE names.
-WORK = (*IMPLEMENT, "--slug", "work")
-WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": "https://example.test/pr/1", "summary": "did it"})
+WORK: Final = (*IMPLEMENT, "--slug", "work")
+WORKER_DONE: Final = json.dumps(
+    {"status": "done", "branch": BRANCH, "pr": "https://example.test/pr/1", "summary": "did it"},
+)
 #: The PR a worker that sends drafts opens (`sends_drafts`).
-DRAFTS_PR = "https://github.com/acme/api/pull/7"
+DRAFTS_PR: Final = "https://github.com/acme/api/pull/7"
 #: The `trust` keys of the private file that hold a worker's drafts for the operator to approve:
 #: `scenario.configures("private", trust=APPROVE)`.
-APPROVE = {"review_replies": "approve"}
+APPROVE: Final = {"review_replies": "approve"}
 #: The `connect` keys of a source that posts to the tracker, for drafts on a ticket.
-TRACKER_POSTS = {"sources": {"issues": {"kind": "tracker", "post_cmd": "canopy-post-github"}}}
+TRACKER_POSTS: Final = {"sources": {"issues": {"kind": "tracker", "post_cmd": "canopy-post-github"}}}
 # What a blocked worker asks (`blocked_result`).
-QUESTION = "Should the button be red or blue?"
+QUESTION: Final = "Should the button be red or blue?"
 # The last line an overseer prints when it has finished its tick.
-TICK_DONE = "CANOPY_TICK_DONE"
+TICK_DONE: Final = "CANOPY_TICK_DONE"
 # Above Linux's largest pid_max, so never a live process.
-DEAD_PID = 4_194_305
+DEAD_PID: Final = 4_194_305
 # A value for every placeholder the worker prompts take.
-PROMPT_VALUES = {
+PROMPT_VALUES: Final = {
     "KEY": "PROJ-1",
     "SLOT": "/pool/1/repo",
     "BRANCH": "agent/PROJ-1-work",
@@ -91,7 +93,7 @@ PROMPT_VALUES = {
     **replies.posted_values("In every comment and reply you post, start it with `CANOPY:` and a space.", "needs-human"),
 }
 #: A private ticket's worker prompts take the same, but for how they file follow-ups (DESIGN §18, §22).
-PRIVATE_PROMPT_VALUES = {
+PRIVATE_PROMPT_VALUES: Final = {
     **PROMPT_VALUES,
     "FOLLOW_UPS": prompts.follow_ups(
         "PROJ-1",
@@ -530,7 +532,7 @@ class Behavior(TypedDict, total=False):
 
 
 # The fake's name for each of Behavior's keys, after its FAKE_<ROLE>_ prefix.
-BEHAVIOR_SETTINGS = {
+BEHAVIOR_SETTINGS: Final = {
     "says": "SAYS",
     "exit_code": "EXIT",
     "sleep": "SLEEP",
@@ -890,9 +892,9 @@ def json_block(text: str) -> dict[str, Any]:
 # The overseer's tools over MCP (DESIGN §27)
 
 #: How a test starts `canopy _mcp`, as the runtime starts it for the overseer: this interpreter's canopy, here.
-MCP_SERVER = (sys.executable, "-m", "canopy", "_mcp")
+MCP_SERVER: Final = (sys.executable, "-m", "canopy", "_mcp")
 #: What a client says first, and the notification it sends once the server has answered.
-MCP_OPENING: tuple[Mapping[str, object], ...] = (
+MCP_OPENING: Final[tuple[Mapping[str, object], ...]] = (
     {
         "jsonrpc": "2.0",
         "id": 0,
@@ -906,7 +908,7 @@ MCP_OPENING: tuple[Mapping[str, object], ...] = (
     {"jsonrpc": "2.0", "method": "notifications/initialized"},
 )
 #: A `tools/list` request, for `mcp_session`.
-LIST_TOOLS: Mapping[str, object] = {"method": "tools/list"}
+LIST_TOOLS: Final[Mapping[str, object]] = {"method": "tools/list"}
 
 
 def logged(text: str) -> git_tools.Commits:

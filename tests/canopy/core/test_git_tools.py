@@ -5,6 +5,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -14,7 +15,7 @@ from canopy.core import git_tools
 from canopy.infra import procs
 from tests.conftest import HERMETIC_GIT, executable, git
 
-RUNNER = procs.SubprocessRunner()
+RUNNER: Final = procs.SubprocessRunner()
 
 
 @dataclass(frozen=True)

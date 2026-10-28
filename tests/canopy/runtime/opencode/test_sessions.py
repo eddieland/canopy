@@ -6,7 +6,7 @@ import contextlib
 import json
 import os
 import sqlite3
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 from canopy.runtime.opencode import sessions
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The columns of OpenCode 1.19.3's tables that the reader reads, and those it must fill to write a row.
-SCHEMA = """
+SCHEMA: Final = """
 CREATE TABLE session (
     id text PRIMARY KEY, project_id text NOT NULL, parent_id text, slug text NOT NULL, directory text NOT NULL,
     title text NOT NULL, version text NOT NULL, cost real DEFAULT 0 NOT NULL,

@@ -8,21 +8,21 @@ offered once the runtime has merged the operator's own config into canopy's (`ca
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
-WORKER = "canopy-worker"
-PRIVATE_WORKER = "canopy-worker-private"
-PLANNER = "canopy-planner"
-REVIEWER = "canopy-reviewer"
-OVERSEER = "canopy-overseer"
-CHORE = "canopy-chore"
+WORKER: Final = "canopy-worker"
+PRIVATE_WORKER: Final = "canopy-worker-private"
+PLANNER: Final = "canopy-planner"
+REVIEWER: Final = "canopy-reviewer"
+OVERSEER: Final = "canopy-overseer"
+CHORE: Final = "canopy-chore"
 #: What a chore's own copy of `CHORE` is named after: a chore with a model of its own runs `canopy-chore-<chore>`,
 #: rendered as `CHORE` is but for its model (DESIGN §19, §13). No other agent's name starts so.
-CHORE_COPY_PREFIX = f"{CHORE}-"
+CHORE_COPY_PREFIX: Final = f"{CHORE}-"
 
 
 def chore_agent(chore: str) -> str:

@@ -17,7 +17,7 @@ comment naming an agent is a false positive, which only asks the operator to rew
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.runtime.agents import CHORE_COPY_PREFIX
 from canopy.runtime.opencode2 import definitions
@@ -27,11 +27,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The directory of a project's OpenCode config, the patterns of the agent files in it, and its JSON config files.
-CONFIG_DIR = ".opencode"
-_AGENT_PATTERNS = ("agent/**/*.md", "agents/**/*.md", "mode/*.md", "modes/*.md")
-_CONFIG_FILES = ("opencode.json", "opencode.jsonc")
+CONFIG_DIR: Final = ".opencode"
+_AGENT_PATTERNS: Final = ("agent/**/*.md", "agents/**/*.md", "mode/*.md", "modes/*.md")
+_CONFIG_FILES: Final = ("opencode.json", "opencode.jsonc")
 #: A key named `canopy` in a JSON config file, which is how one names an MCP server `canopy`, canopy's own (DESIGN §27).
-_CANOPY_KEY_RE = re.compile(r'"canopy"\s*:')
+_CANOPY_KEY_RE: Final = re.compile(r'"canopy"\s*:')
 
 
 def shadowing(root: Path, names: Collection[str] | None = None) -> list[Path]:

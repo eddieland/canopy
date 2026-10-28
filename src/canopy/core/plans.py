@@ -27,7 +27,7 @@ import re
 import secrets
 import stat
 from dataclasses import dataclass
-from typing import IO, TYPE_CHECKING, Literal, TypedDict
+from typing import IO, TYPE_CHECKING, Final, Literal, TypedDict
 
 from canopy.core import conversation, db, records, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
@@ -42,32 +42,32 @@ if TYPE_CHECKING:
     from canopy.core.config import Policy
 
 # What a planner can write in one message and an operator can read before approving (DESIGN §25, The prompt).
-MAX_CHARS = 100_000
-DIR_NAME = "plans"
+MAX_CHARS: Final = 100_000
+DIR_NAME: Final = "plans"
 # A copy of a plan in a run's working directory: in a worker's, the approved plan it follows, and in a plan run's desk,
 # the plan it replaces (DESIGN §25, Workers follow the plan). Written fresh for each run and removed before its slots
 # go back.
-COPY = ".canopy-plan.md"
-REPLACED = COPY
+COPY: Final = ".canopy-plan.md"
+REPLACED: Final = COPY
 # The file a planner writes its plan to in its desk, the one file its definition lets it edit (DESIGN §25).
 # `.agents/agents/canopy-planner.md` names it too.
-WRITTEN = ".canopy-new-plan.md"
+WRITTEN: Final = ".canopy-new-plan.md"
 # A plan's outline in a worker's prompt: its markdown headings outside fenced code, at most this many, each cut at
 # `MAX_HEADING` characters (DESIGN §25, Workers follow the plan).
-MAX_OUTLINE = 200
-MAX_HEADING = 200
+MAX_OUTLINE: Final = 200
+MAX_HEADING: Final = 200
 # The most bytes `MAX_CHARS` characters of UTF-8 can take: one more and the file is over the bound however it decodes.
-_MAX_BYTES = 4 * MAX_CHARS
-_CHUNK = 64 * 1024
+_MAX_BYTES: Final = 4 * MAX_CHARS
+_CHUNK: Final = 64 * 1024
 
 # CommonMark's: an ATX heading, and a fence's opening or closing marker, each indented at most three spaces.
-_HEADING_RE = re.compile(r"#{1,6}(?:[ \t]|$)")
-_FENCE_RE = re.compile(r"(`{3,}|~{3,})")
-_MAX_INDENT = 3
+_HEADING_RE: Final = re.compile(r"#{1,6}(?:[ \t]|$)")
+_FENCE_RE: Final = re.compile(r"(`{3,}|~{3,})")
+_MAX_INDENT: Final = 3
 
 #: The channel a plan's approval names when the harness approved it on its planner's word that it needs no review,
 #: under `policy.planner_may_approve`: the planner's approval, never the operator's (DESIGN §25).
-PLANNER = "planner"
+PLANNER: Final = "planner"
 
 # Why a file is not a plan, as `canopy show` and the refusals say it.
 type Problem = Literal["missing", "not a regular file", "unreadable", "not UTF-8", "empty", "over the bound"]

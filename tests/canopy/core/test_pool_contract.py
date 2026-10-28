@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 import pytest
@@ -38,10 +38,10 @@ from tests.canopy.helpers import KEY, present
 from tests.conftest import HERMETIC_GIT, Journals, git
 
 # Found before any fixture puts the fake first on PATH.
-REAL_TREEHOUSE = shutil.which("treehouse")
+REAL_TREEHOUSE: Final = shutil.which("treehouse")
 # Set by `make pool-contract`: real treehouse must run, so a missing one fails the run instead of skipping it.
-REQUIRED = os.environ.get("CANOPY_POOL_CONTRACT") == "1"
-REPO = "repo"
+REQUIRED: Final = os.environ.get("CANOPY_POOL_CONTRACT") == "1"
+REPO: Final = "repo"
 
 
 class Impl(StrEnum):

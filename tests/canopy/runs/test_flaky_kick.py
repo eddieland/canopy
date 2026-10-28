@@ -4,6 +4,7 @@ import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Final
 from unittest import mock
 
 from canopy.core import contract
@@ -13,9 +14,9 @@ from tests.canopy.helpers import KEY, WORKER_DONE, waits, worker_does
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes
 from tests.conftest import GitPool, git
 
-BRANCH = "agent/PROJ-1-work"
+BRANCH: Final = "agent/PROJ-1-work"
 #: A `resume` worker's result that leaves a failed check as flaky, changing nothing.
-LEAVES_FLAKY = json.dumps(
+LEAVES_FLAKY: Final = json.dumps(
     json.loads(WORKER_DONE) | {"branch": BRANCH, "summary": "unit-tests lost its runner", "flaky": True},
 )
 

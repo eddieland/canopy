@@ -13,7 +13,7 @@ import secrets
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy_review_bench import commits
 from canopy_review_bench.bench import BenchError, Case, Loaded
@@ -27,8 +27,8 @@ if TYPE_CHECKING:
     from canopy_review_bench.github import Comment, GitHub
 
 #: Where runs are saved, under the bench file's directory.
-RESULTS_DIR = "results"
-_SLUG = re.compile(r"[^a-z0-9]+")
+RESULTS_DIR: Final = "results"
+_SLUG: Final = re.compile(r"[^a-z0-9]+")
 
 
 @dataclass(frozen=True)

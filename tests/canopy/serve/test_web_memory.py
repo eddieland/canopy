@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
@@ -197,9 +197,9 @@ def test_the_overview_lists_pinned_lessons_first_then_those_reported_wrong_then_
 
 
 # A write to the mock needs no session, but an Origin naming the server (guard.py).
-WRITE = {"origin": ORIGIN}
+WRITE: Final = {"origin": ORIGIN}
 #: The mock's pinned lessons (mock/memory.py), which lead its lessons, by key, before lesson 8.
-PINNED = [10, 9]
+PINNED: Final = [10, 9]
 
 
 def lesson_of(c: TestClient, lesson_id: int) -> dict[str, Any]:

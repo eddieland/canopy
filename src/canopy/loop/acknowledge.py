@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, sql
 from canopy.core.items import one_line
@@ -23,11 +23,11 @@ if TYPE_CHECKING:
     from canopy.core import records
 
 #: The most characters of one decision's reason a note carries; the tick's page has it whole.
-MAX_REASON = 300
+MAX_REASON: Final = 300
 # What a note says the overseer's own decisions did (`canopy decide`).
-_SAID: Mapping[str, str] = {"wait": "waiting", "done": "done", "skip": "skipped"}
+_SAID: Final[Mapping[str, str]] = {"wait": "waiting", "done": "done", "skip": "skipped"}
 # A dispatch's rationale is canopy's own, and starts with the run it started (`canopy dispatch`).
-_STARTED = re.compile(r"run (\d+):")
+_STARTED: Final = re.compile(r"run (\d+):")
 
 
 def note(conn: sqlite3.Connection, tick_id: int) -> dict[str, int]:

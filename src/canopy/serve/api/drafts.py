@@ -8,7 +8,7 @@ string with slashes in it, so it is a query parameter, never a path.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
@@ -28,7 +28,7 @@ from canopy.serve.schema.draft import (
     PullRequestThreads,
 )
 
-TAG = "review replies"
+TAG: Final = "review replies"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

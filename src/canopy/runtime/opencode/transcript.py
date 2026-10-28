@@ -16,7 +16,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, StrictInt, StrictStr, ValidationError
 
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
 
 # Milliseconds since the epoch, as OpenCode stamps events: up to the year 9999.
-_MAX_MS = 253_402_300_799_999
+_MAX_MS: Final = 253_402_300_799_999
 
 Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MS)]
 

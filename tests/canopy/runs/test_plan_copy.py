@@ -7,6 +7,7 @@ again before the worker starts, and a pushed branch that holds the copy gets a h
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -31,8 +32,10 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches
 from tests.conftest import GitPool
 
-PLAN = dispatches(kind=RunKind.PLAN)
-TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n\n```sh\n# not a heading\n```\n\n### Tests\n\nOne test.\n"
+PLAN: Final = dispatches(kind=RunKind.PLAN)
+TEXT: Final = (
+    "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n\n```sh\n# not a heading\n```\n\n### Tests\n\nOne test.\n"
+)
 
 
 def approved(scenario: Scenario) -> int:

@@ -1,6 +1,7 @@
 """`canopy forget` (DESIGN §22): a ticket's branch and PRs forgotten, so its next implement starts over."""
 
 import json
+from typing import Final
 
 from canopy.core import conversation, db
 from canopy.core.vocab import StartStatus
@@ -19,10 +20,10 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import GitPool
 
-OLD = f"agent/{KEY}-work"
-NEW = f"agent/{KEY}-again"
-OLD_PR = "https://example.test/pr/1"
-NEW_PR = "https://example.test/pr/2"
+OLD: Final = f"agent/{KEY}-work"
+NEW: Final = f"agent/{KEY}-again"
+OLD_PR: Final = "https://example.test/pr/1"
+NEW_PR: Final = "https://example.test/pr/2"
 
 
 def done(branch: str, pr: str) -> str:

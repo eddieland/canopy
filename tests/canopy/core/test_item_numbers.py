@@ -6,7 +6,7 @@ form a reader read; a `ci` cursor by check run id, named or not.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import NumberedItem
@@ -20,9 +20,9 @@ if TYPE_CHECKING:
     from tests.conftest import Journals
 
 #: The migration that numbered the journal.
-VERSION = next(m.version for m in db.discover(resources.migrations_dir()) if m.name == "journal_numbers")
-PR = "https://github.com/acme/api/pull/7"
-OTHER = "https://github.com/acme/api/pull/8"
+VERSION: Final = next(m.version for m in db.discover(resources.migrations_dir()) if m.name == "journal_numbers")
+PR: Final = "https://github.com/acme/api/pull/7"
+OTHER: Final = "https://github.com/acme/api/pull/8"
 
 
 def test_each_old_cursor_becomes_the_number_of_the_item_it_names(tmp_path: Path, journals: Journals) -> None:

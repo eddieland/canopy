@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 #: A fake `opencode` that plays `debug config`, `skill`, and `agent NAME` as 1.19.3 prints them. It answers only when
 #: OpenCode's config directory holds canopy's agent, and denies github to the chore, as an operator's rule would.
-FAKE = f"""#!{sys.executable}
+FAKE: Final = f"""#!{sys.executable}
 import json, os, sys
 from pathlib import Path
 agents = Path(os.environ["OPENCODE_CONFIG_DIR"]) / "agents"

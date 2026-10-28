@@ -8,7 +8,7 @@ whatever printed it.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from canopy.infra.text import printable
 
@@ -16,10 +16,10 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 #: Each text: the agent's text or reasoning, a tool's output or error, and a tool's input as indented JSON.
-MAX_TEXT = 20_000
-MAX_INPUT = 5_000
+MAX_TEXT: Final = 20_000
+MAX_INPUT: Final = 5_000
 #: A tool's name, a call's title, a step's reason, and an error's name: one line each.
-MAX_NAME = 200
+MAX_NAME: Final = 200
 
 
 @dataclass(frozen=True)

@@ -9,17 +9,18 @@ no list to keep.
 import ast
 import importlib
 from pathlib import Path
+from typing import Final
 
 import pytest
 
 from canopy.runtime import implementation
 from canopy.runtime.implementation import Version, pick
 
-RUNTIME = Path(implementation.__file__).parent
+RUNTIME: Final = Path(implementation.__file__).parent
 #: Each runtime canopy can run: OpenCode 1's, the default, and OpenCode 2's.
-IMPLEMENTATIONS = ("canopy.runtime.opencode", "canopy.runtime.opencode2")
+IMPLEMENTATIONS: Final = ("canopy.runtime.opencode", "canopy.runtime.opencode2")
 #: The names the binding gives the implementations.
-BOUND = frozenset({"one", "two"})
+BOUND: Final = frozenset({"one", "two"})
 
 
 def used() -> set[tuple[str, str]]:

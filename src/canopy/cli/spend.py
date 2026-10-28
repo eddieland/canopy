@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -14,14 +14,14 @@ from canopy.runtime.report import count_text
 if TYPE_CHECKING:
     from canopy.core.spend import Breakdown, Costs, Month
 
-GROUP_LABELS: dict[spend.Group, str] = {
+GROUP_LABELS: Final[dict[spend.Group, str]] = {
     "idle": "idle",
     "busy": "not idle",
     "hand_run": "hand-run",
     "not_ok": "not ok",
     "dry_run": "dry run",
 }
-KIND_LABELS: dict[spend.Kind, str] = {
+KIND_LABELS: Final[dict[spend.Kind, str]] = {
     "overseer": "overseer runs",
     "workers": "worker runs",
     "plans": "plan runs",
@@ -30,7 +30,7 @@ KIND_LABELS: dict[spend.Kind, str] = {
     "tasks": "task runs",
 }
 # The per-day table's columns: a heading and the cost it shows.
-_COLUMNS: tuple[tuple[str, str], ...] = (
+_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("overseer", "overseer"),
     ("idle", "idle"),
     ("workers", "workers"),
@@ -42,18 +42,18 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
     ("outside", "outside"),
     ("total", "total"),
 )
-_DAY_WIDTH = 10
-_COST_WIDTH = 9
+_DAY_WIDTH: Final = 10
+_COST_WIDTH: Final = 9
 #: The ticks' tables' last column: how many ran no overseer, left nothing to judge or halted before it (DESIGN §39).
-_NO_OVERSEER = "no overseer"
-_KEY_WIDTH = 16
+_NO_OVERSEER: Final = "no overseer"
+_KEY_WIDTH: Final = 16
 # The costliest tickets the text lists; `--json` lists every one.
-_TICKETS = 10
+_TICKETS: Final = 10
 # The tools that returned the most the text lists, and the width of their names' column; `--json` lists every one.
-_TOOLS = 10
-_TOOL_WIDTH = 32
+_TOOLS: Final = 10
+_TOOL_WIDTH: Final = 32
 # What `canopy spend` says for a kind's runs whose sessions named no model.
-NO_MODEL = "(no model read)"
+NO_MODEL: Final = "(no model read)"
 
 
 @click.command("spend")

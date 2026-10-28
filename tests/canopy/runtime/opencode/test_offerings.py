@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -18,14 +18,14 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
 #: `opencode debug config` with two servers, one turned off, and a secret OpenCode redacts.
-CONFIG = {
+CONFIG: Final = {
     "mcp": {
         "github": {"type": "remote", "url": "https://api.example.test/mcp/", "headers": {"Authorization": "***"}},
         "sentry.io": {"type": "local", "command": ["sentry-mcp"], "enabled": False},
     },
 }
 #: `opencode debug skill`: one built in, two of canopy's.
-SKILLS = [
+SKILLS: Final = [
     {"name": "customize-opencode", "description": "d", "location": "<built-in>", "content": "x"},
     {"name": "tracker-jira", "description": "d", "location": "/defs/skills/tracker-jira/SKILL.md", "content": "x"},
     {"name": "tracker-github", "description": "d", "location": "/defs/skills/tracker-github/SKILL.md", "content": "x"},
@@ -37,9 +37,9 @@ def rule(permission: str, action: str = "deny", pattern: str = "*") -> dict[str,
 
 
 #: The rules OpenCode starts every agent from, as `opencode debug agent` prints them first.
-DEFAULTS = [rule("*", "allow"), rule("doom_loop", "ask"), rule("external_directory", "ask")]
+DEFAULTS: Final = [rule("*", "allow"), rule("doom_loop", "ask"), rule("external_directory", "ask")]
 #: What OpenCode writes of its stdout to a pipe before it exits: what the pipe's buffer holds.
-PIPE_BUFFER = 64 * 1024
+PIPE_BUFFER: Final = 64 * 1024
 
 
 @dataclass

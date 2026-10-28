@@ -14,10 +14,10 @@ import termios
 import tty
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import IO, Any
+from typing import IO, Any, Final
 
 # Enough for anything a person types between two of the countdown's redraws.
-_READ_BYTES = 1024
+_READ_BYTES: Final = 1024
 
 
 @contextmanager

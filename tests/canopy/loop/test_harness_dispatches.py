@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from unittest import mock
 
 import pytest
@@ -50,12 +50,13 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
 #: Two rows a measurement might enable, each with its fixed context.
-ENABLED = {
+ENABLED: Final = {
     Phase.CONFLICTED: harness_dispatches.Row(ResumeReason.CONFLICT, "The PR conflicts with its base: bring it in."),
     Phase.PUSHED_NO_PR: harness_dispatches.Row(ResumeReason.NO_PR, "The branch has no PR: open one."),
 }
 #: A chore with no `when`, which the harness runs, and one with a `when`, which the overseer decides.
-MINE, THEIRS = "deps", "build-health"
+MINE: Final = "deps"
+THEIRS: Final = "build-health"
 
 
 def test_no_ticket_row_is_enabled() -> None:

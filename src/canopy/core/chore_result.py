@@ -9,25 +9,25 @@ null or "" is read as missing, so it takes its default.
 from __future__ import annotations
 
 import re
-from typing import Annotated, Literal, cast
+from typing import Annotated, Final, Literal, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 
 from canopy.core import contract
 from canopy.core.contract import bounded, one_line
 
-MAX_SUMMARY = 2000
-MAX_DETAIL = 2000
-MAX_TITLE = 200
-MAX_ID = 200
-MAX_LINK = 500
-MAX_FINDINGS = 20
+MAX_SUMMARY: Final = 2000
+MAX_DETAIL: Final = 2000
+MAX_TITLE: Final = 200
+MAX_ID: Final = 200
+MAX_LINK: Final = 500
+MAX_FINDINGS: Final = 20
 # The findings a run lists unless its chore's `max_findings` says otherwise: as many as a person reads at a glance.
-DEFAULT_MAX_FINDINGS = 5
+DEFAULT_MAX_FINDINGS: Final = 5
 # How many findings a run may say it left out. A count, so bounded only to keep nonsense out.
-MAX_MORE_FINDINGS = 100_000
+MAX_MORE_FINDINGS: Final = 100_000
 # Stable across runs for the same problem, so it identifies the finding on the attention list and in notifications.
-FINDING_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]*")
+FINDING_ID_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]*")
 
 
 # What a chore reports, field by field.
@@ -124,7 +124,7 @@ def stored(result_json: object) -> ChoreResult | None:
     return contract.stored(ChoreResult, result_json)
 
 
-CONTRACT = (
+CONTRACT: Final = (
     '{"status":"ok|failed","summary":"a paragraph, line breaks sparingly",'
     '"findings":[{"id":"stable/id","title":"one line","detail":"a paragraph","link":"https://..."}],"more_findings":0}'
 )

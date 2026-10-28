@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import records, review_drafts, review_requests, sql
 from canopy.core.vocab import HoldKind, PrState, ReviewDraftStatus, ReviewRunStatus
@@ -24,19 +24,19 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 #: A requested review that landed with its draft unpublished.
-WAITING_REASON = "review_waiting"
+WAITING_REASON: Final = "review_waiting"
 #: A review's draft staged on GitHub, or of unknown outcome, until a read settles it.
-UNSETTLED_REASON = "review_unsettled"
+UNSETTLED_REASON: Final = "review_unsettled"
 #: A finding canopy holds for the operator: a later review's rebuttal of a finding the worker declined.
-REBUTTAL_REASON = "review_rebuttal"
+REBUTTAL_REASON: Final = "review_rebuttal"
 #: A finding canopy holds for the operator: a later review's, on code unchanged since the PR's first reviewed commit.
-LATE_REASON = "review_late"
+LATE_REASON: Final = "review_late"
 #: All four, which the harness records and the overseer does not.
-REASONS = frozenset({WAITING_REASON, UNSETTLED_REASON, REBUTTAL_REASON, LATE_REASON})
+REASONS: Final = frozenset({WAITING_REASON, UNSETTLED_REASON, REBUTTAL_REASON, LATE_REASON})
 #: The reason each kind of hold raises.
-_HELD_REASONS: Mapping[HoldKind, str] = {HoldKind.REBUTTAL: REBUTTAL_REASON, HoldKind.LATE: LATE_REASON}
+_HELD_REASONS: Final[Mapping[HoldKind, str]] = {HoldKind.REBUTTAL: REBUTTAL_REASON, HoldKind.LATE: LATE_REASON}
 #: What the operator may do with a held finding of each kind, closing its item's detail.
-_HELD_ASK: Mapping[HoldKind, str] = {
+_HELD_ASK: Final[Mapping[HoldKind, str]] = {
     HoldKind.REBUTTAL: (
         "canopy holds it for you, never for another resume: send it to a worker (`canopy send review:ID N`), or "
         "dismiss it if the worker was right (`canopy dismiss review:ID N --reason R`)"

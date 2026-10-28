@@ -17,7 +17,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import (
     agent_models,
@@ -57,21 +57,21 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17).
-KEY_RE = conversation.KEY_RE
+KEY_RE: Final = conversation.KEY_RE
 #: The branch is `<branch_prefix><KEY>-<slug>`; the slug is the overseer's short name for the work. At most 40
 #: characters: lowercase words joined by single hyphens.
-SLUG_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
+SLUG_RE: Final = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
 #: A stacked run's base is another ticket's branch, `<branch_prefix><KEY>-<slug>`: what follows the prefix is one plain
 #: ref component, so it reaches git's argv as safely as a key.
-BASE_TAIL_RE = re.compile(r"(?=.{1,200}\Z)[A-Za-z0-9][A-Za-z0-9_-]*")
-DEFAULT_SLUG = "work"
-JOINT_PR_NOTE = "one per repository, listed under Repositories"
+BASE_TAIL_RE: Final = re.compile(r"(?=.{1,200}\Z)[A-Za-z0-9][A-Za-z0-9_-]*")
+DEFAULT_SLUG: Final = "work"
+JOINT_PR_NOTE: Final = "one per repository, listed under Repositories"
 #: A prompt carries at most this much of `MAP.md`.
-MAX_MAP = 20_000
-RUNS_DIR = "runs"
+MAX_MAP: Final = 20_000
+RUNS_DIR: Final = "runs"
 #: Each cursor a dispatch moves, and `--review-run`, by the reason a `resume` must name for it (DESIGN §8): what the
 #: dispatch handles is a reason it runs. A reason needs no cursor; `conflict`, `no_pr`, and `retarget` have none.
-REASON_CURSORS: Mapping[str, ResumeReason] = {
+REASON_CURSORS: Final[Mapping[str, ResumeReason]] = {
     "ci": ResumeReason.CI,
     "review": ResumeReason.REVIEW,
     "review_run": ResumeReason.REVIEW,
@@ -79,9 +79,9 @@ REASON_CURSORS: Mapping[str, ResumeReason] = {
     "message": ResumeReason.REPLY,
 }
 #: What names a recorded run among the runs `_guard` counts as running, beside a dry run's tickets (DESIGN §40).
-RECORDED_PREFIX = "recorded:"
+RECORDED_PREFIX: Final = "recorded:"
 #: The attention item a dispatch refused for a retired `fix-ci` prompt override records (DESIGN §8, §14).
-FIX_CI_OVERRIDE = "fix_ci_override"
+FIX_CI_OVERRIDE: Final = "fix_ci_override"
 
 
 class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)

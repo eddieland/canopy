@@ -1,6 +1,7 @@
 """Building a case's commits in the source clone: a replay on its history, an undone fix with none, and overlays."""
 
 from pathlib import Path
+from typing import Final
 
 import pytest
 from canopy_review_bench import bench, commits
@@ -9,7 +10,7 @@ from canopy_review_bench.bench import BenchError, Case, Side, Spot
 from tests.canopy_review_bench.helpers import Source, source_repo
 from tests.conftest import git
 
-TITLE = "Wait between attempts, a little"
+TITLE: Final = "Wait between attempts, a little"
 
 
 def replay(source: Source, **keys: object) -> Case:

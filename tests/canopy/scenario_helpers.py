@@ -142,7 +142,7 @@ from contextlib import AbstractContextManager, ExitStack, contextmanager, redire
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, Unpack, assert_never
+from typing import Any, Final, Literal, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
@@ -194,16 +194,16 @@ type Worker = AbstractContextManager[None]
 type ConfigFile = Literal["user", "workspace", "private"]
 
 #: A feedback plan's text, as `feedback_planned`'s planner writes it.
-FEEDBACK_TEXT = "# Feedback plan: PROJ-1\n\n## Items\n\n### Item 501: change\n\nRename it.\n"
+FEEDBACK_TEXT: Final = "# Feedback plan: PROJ-1\n\n## Items\n\n### Item 501: change\n\nRename it.\n"
 #: alice's comment, which `with_a_pr` trusts her for, and bob's, on a thread of its own, both on DRAFTS_PR's head.
-ALICES_COMMENT = comment(501)
-BOBS_COMMENT = comment(502, "PRRT_2", author="bob", body="Drop this argument.")
+ALICES_COMMENT: Final = comment(501)
+BOBS_COMMENT: Final = comment(502, "PRRT_2", author="bob", body="Drop this argument.")
 #: DRAFTS_PR's head in `github_shows`, and the check that is red there.
-FEEDBACK_HEAD = "abc1234"
-FEEDBACK_RED = {"name": "build", "status": "completed", "conclusion": "failure"}
+FEEDBACK_HEAD: Final = "abc1234"
+FEEDBACK_RED: Final = {"name": "build", "status": "completed", "conclusion": "failure"}
 #: `feedback_planned`'s planner's result: a change for alice's comment, a decline for bob's, and an id it was never
 #: given.
-FEEDBACK_PLANNED = {
+FEEDBACK_PLANNED: Final = {
     "status": "done",
     "summary": "planned the round",
     "items": [
@@ -213,30 +213,30 @@ FEEDBACK_PLANNED = {
     ],
 }
 #: PROJ-9's PR in `with_a_blocker`, the blocker DRAFTS_PR is stacked on in `github_stacked`, and its branch.
-BLOCKER_PR = "https://github.com/acme/api/pull/6"
-BLOCKER_BRANCH = "agent/PROJ-9-base"
+BLOCKER_PR: Final = "https://github.com/acme/api/pull/6"
+BLOCKER_BRANCH: Final = "agent/PROJ-9-base"
 
 #: How many lines of what a command printed to stdout its step in the story keeps; what it printed to stderr, where a
 #: refusal says why, the story keeps whole.
-TOLD_LINES = 2
+TOLD_LINES: Final = 2
 
 #: How long a held worker, or a test waiting on one, waits before it gives up.
-HOLD_TIMEOUT = 60
+HOLD_TIMEOUT: Final = 60
 #: How long a test waits on a chore run to end.
-CHORE_SECONDS = 30
+CHORE_SECONDS: Final = 30
 
 #: The overseer's commands that start a review run: a review, and a revision of a review's draft (DESIGN §34).
-REVIEW_COMMANDS = (["canopy", "review", "run"], ["canopy", "review", "revise"])
+REVIEW_COMMANDS: Final = (["canopy", "review", "run"], ["canopy", "review", "revise"])
 
 #: The roles a held run's agent may play, each scripted by its own `FAKE_<ROLE>_*` variables: a worker, a private
 #: ticket's, a planner, and a reviewer. The overseer is never held.
-HELD_ROLES = ("WORKER", "WORKER_PRIVATE", "PLANNER", "REVIEWER")
+HELD_ROLES: Final = ("WORKER", "WORKER_PRIVATE", "PLANNER", "REVIEWER")
 
 #: The command a held agent runs first, with the gates' directory: it says it is at work, in `<run id>.working`, its run
 #: id as CANOPY_RUN_ID names it (`7`, or `review-7` for a review), then waits for `<run id>.open` before it goes on to
 #: what its script says. It gives up after HOLD_TIMEOUT, failing, so an agent no test lets go of does not outlast its
 #: test by much. An agent with no run id is not one a test holds, and goes on at once.
-GATE = f"""
+GATE: Final = f"""
 import os, pathlib, sys, time
 run = os.environ.get("CANOPY_RUN_ID")
 if not run:

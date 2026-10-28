@@ -27,7 +27,7 @@ import json
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import astuple, dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import db, drafts, observe, records, sql
 from canopy.core.vocab import (
@@ -51,17 +51,17 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 #: The file in a feedback planner's desk that holds its PRs' items, as the `vcs` source observed them: data to it.
-ITEMS = ".canopy-feedback.json"
+ITEMS: Final = ".canopy-feedback.json"
 #: The file in a feedback planner's desk that says what changed since the plan it replaces: data to it.
-CHANGES = ".canopy-feedback-changes.json"
+CHANGES: Final = ".canopy-feedback-changes.json"
 #: The most changes a refusal names one by one.
-MAX_SAID = 10
+MAX_SAID: Final = 10
 
 #: An item or a reply by its PR, its kind, and its id: the one the `vcs` source observed, or the one canopy gave it.
 type Key = tuple[str, PlanItem, int]
 #: How many bits of a SHA-256 a failed check's, a conflict's, or a merged blocker's id takes: few enough to stay an
 #: exact number in JSON and JavaScript, and enough that two of a PR's never share one.
-_ID_BITS = 48
+_ID_BITS: Final = 48
 
 
 class Changed(StrEnum):

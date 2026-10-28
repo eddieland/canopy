@@ -30,7 +30,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, get_args
+from typing import TYPE_CHECKING, Annotated, Final, Literal, get_args
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -59,17 +59,17 @@ from canopy.runtime.implementation import Version
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
 
-WORKSPACE_FILE_NAME = "canopy-workspace.toml"
+WORKSPACE_FILE_NAME: Final = "canopy-workspace.toml"
 # A workspace's state is always here, under its root: each workspace has its own journal and locks (DESIGN §18).
-WORKSPACE_STATE_DIR = ".canopy"
+WORKSPACE_STATE_DIR: Final = ".canopy"
 # The private file's name, in the state directory, and the user file's, in the user config directory.
-CONFIG_FILE_NAME = "config.toml"
+CONFIG_FILE_NAME: Final = "config.toml"
 # Tables of the workspace file that are its map, not config. `canopy.core.workspace` reads them.
-WORKSPACE_MAP_TABLES = ("workspace", "repos")
+WORKSPACE_MAP_TABLES: Final = ("workspace", "repos")
 # M55: triage before a plan waived too few plans to pay for itself, so trivial work is planned (DESIGN §25).
-_PLANNED = "delete it; every ticket policy.plan plans is planned, and canopy plan KEY --skip waives one"
+_PLANNED: Final = "delete it; every ticket policy.plan plans is planned, and canopy plan KEY --skip waives one"
 # Keys earlier canopy read, and what to do with one left in a file. Each is an error that says so, not "unknown key".
-REMOVED_KEYS = {
+REMOVED_KEYS: Final = {
     "paths.state_dir": f"delete it; state is always in the workspace's {WORKSPACE_STATE_DIR}/ (D016)",
     "trust.pr_label": "delete it; workers no longer label their PRs, which the branch prefix already marks",
     # M56: a `resume` fixes CI, so one limit counts it, and the cooldown holds a `resume` for CI alone (DESIGN §8).
@@ -85,25 +85,25 @@ REMOVED_KEYS = {
     "runtime.plan_triage_temperature": _PLANNED,
     "runtime.plan_triage_timeout_minutes": _PLANNED,
 }
-PROMPT = "{prompt}"
+PROMPT: Final = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
-DEFINITIONS_DIR = "{definitions_dir}"
+DEFINITIONS_DIR: Final = "{definitions_dir}"
 # Replaced with the run's session title: a worker's `<KEY> <kind>: <ticket title>`, `tick <id>`, `chore:<name>`, or
 # `review <PR URL>` (DESIGN §13). Optional in every template.
-TITLE = "{title}"
-_PLACEHOLDER_RE = re.compile(r"\{prompt\}|\{definitions_dir\}|\{title\}")
+TITLE: Final = "{title}"
+_PLACEHOLDER_RE: Final = re.compile(r"\{prompt\}|\{definitions_dir\}|\{title\}")
 #: The sandbox wrapper canopy installs beside itself (DESIGN §24), by the name its command is installed as.
-SANDBOX_WRAPPER = "canopy-sandbox"
+SANDBOX_WRAPPER: Final = "canopy-sandbox"
 # A repository name is a directory name, a treehouse leaf, and a `--repo` argument (DESIGN §18).
-REPO_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
+REPO_NAME_RE: Final = re.compile(r"[a-z][a-z0-9-]*")
 # A chore's name appears in file paths and on the command line (DESIGN §19).
-CHORE_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
-MIN_CHORE_EVERY_MINUTES = 15
+CHORE_NAME_RE: Final = re.compile(r"[a-z][a-z0-9-]*")
+MIN_CHORE_EVERY_MINUTES: Final = 15
 #: A persona's name, and its file's, `<name>.md` (DESIGN §31): lowercase words joined by single hyphens, at most 40
 #: characters, so it is a plain file name and reaches the journal and the command line as it is.
-PERSONA_NAME_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
+PERSONA_NAME_RE: Final = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
 #: The persona every agent writes in unless the operator chooses another: canopy's own voice, which it ships.
-DEFAULT_PERSONA = "canopy"
+DEFAULT_PERSONA: Final = "canopy"
 
 
 class ConfigError(Exception):
@@ -134,9 +134,9 @@ def _non_blank(value: str) -> str:
 
 #: The temperature that sets none, leaving the model's own: some models, such as OpenAI's reasoning ones, refuse a
 #: request that sets one. No provider takes a negative temperature, so it cannot mean one.
-NO_TEMPERATURE = -1
+NO_TEMPERATURE: Final = -1
 #: The highest temperature a provider takes; OpenAI's range ends there, Anthropic's at 1.
-MAX_TEMPERATURE = 2
+MAX_TEMPERATURE: Final = 2
 
 
 def _temperature(value: float) -> float:
@@ -147,7 +147,7 @@ def _temperature(value: float) -> float:
 
 # One or more plain ref components, each followed by "/". Branch names reach git's argv, so none may start with "-" or
 # hold anything git treats specially ("..", "@{", a leading "."). The workspace file can set this key (TRUST_MODEL T7).
-BRANCH_PREFIX_RE = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_-]*/)+")
+BRANCH_PREFIX_RE: Final = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_-]*/)+")
 
 
 def _branch_prefix(value: str) -> str:
@@ -156,7 +156,7 @@ def _branch_prefix(value: str) -> str:
     return value
 
 
-MAX_COMMENT_MARK = 80
+MAX_COMMENT_MARK: Final = 80
 
 
 def _comment_mark(value: str) -> str:
@@ -179,13 +179,13 @@ def _comment_mark(value: str) -> str:
     return value
 
 
-MAX_TRAILER_NAME = 80
-MAX_TRAILER_EMAIL = 254
+MAX_TRAILER_NAME: Final = 80
+MAX_TRAILER_EMAIL: Final = 254
 # The `Co-authored-by` trailer canopy's git hooks add to a worker's commits (TRUST_MODEL T5).
-DEFAULT_TRAILER_NAME = "canopy worker"
-DEFAULT_TRAILER_EMAIL = "noreply@canopy.invalid"
+DEFAULT_TRAILER_NAME: Final = "canopy worker"
+DEFAULT_TRAILER_EMAIL: Final = "noreply@canopy.invalid"
 # An address git and VCS hosts read as one: no whitespace, angle brackets, or backtick, and one "@" inside it.
-TRAILER_EMAIL_RE = re.compile(r"[^\s<>@`]+@[^\s<>@`]+")
+TRAILER_EMAIL_RE: Final = re.compile(r"[^\s<>@`]+@[^\s<>@`]+")
 
 
 def _trailer_name(value: str) -> str:
@@ -214,11 +214,11 @@ def _trailer_email(value: str) -> str:
     return value
 
 
-MAX_COMMIT_PREFIX = 60
+MAX_COMMIT_PREFIX: Final = 60
 #: The placeholder `trust.commit_prefix` names the run's ticket key with.
-KEY_PLACEHOLDER = "{key}"
+KEY_PLACEHOLDER: Final = "{key}"
 #: How git's `--autosquash` finds the commit a fixup is for: by its subject, which a prefix must leave as it is.
-AUTOSQUASH = ("fixup!", "squash!", "amend!")
+AUTOSQUASH: Final = ("fixup!", "squash!", "amend!")
 
 
 def _commit_prefix(value: str) -> str:
@@ -234,10 +234,10 @@ def _commit_prefix(value: str) -> str:
     return value
 
 
-MAX_REVIEWER = 100
+MAX_REVIEWER: Final = 100
 # The `trust.trusted_reviewers` entry for canopy's own reviewer (DESIGN §21). A login cannot hold a colon, so no account
 # can be read as it; canopy's reviewer posts as the operator, so the operator's login cannot stand for it.
-CANOPY_REVIEWER = "canopy:review"
+CANOPY_REVIEWER: Final = "canopy:review"
 
 
 def _reviewer(value: str) -> str:
@@ -399,16 +399,16 @@ def _distinct_personas(value: tuple[str, ...]) -> tuple[str, ...]:
 
 #: The highest the `policy.max_attachment*` keys go, whatever a file says: attachments are copied into every run of
 #: their subject, and the web UI uploads one in a single request, which its server bounds (DESIGN §22).
-ATTACHMENTS_CEILING = 20
-ATTACHMENT_KIB_CEILING = 1024
-ATTACHMENTS_TOTAL_KIB_CEILING = 4096
+ATTACHMENTS_CEILING: Final = 20
+ATTACHMENT_KIB_CEILING: Final = 1024
+ATTACHMENTS_TOTAL_KIB_CEILING: Final = 4096
 
 # bool is an int subclass; Strict* types reject `max_workers = true` and quoted numbers.
 NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
 Minutes = Annotated[StrictInt, Field(ge=1)]
 #: The longest `review.settle_minutes`: a week (DESIGN §21).
-MAX_SETTLE_MINUTES = 7 * 24 * 60
+MAX_SETTLE_MINUTES: Final = 7 * 24 * 60
 #: An agent's sampling temperature, or `NO_TEMPERATURE`. TOML has no null, so a sentinel says "set none".
 Temperature = Annotated[StrictFloat, AfterValidator(_temperature)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
@@ -449,8 +449,8 @@ def _server_name(value: str) -> str:
 
 ToolPart = Annotated[str, AfterValidator(_tool_part)]
 
-TICKET_KEY = "{key}"
-MAX_LINK_URL = 500
+TICKET_KEY: Final = "{key}"
+MAX_LINK_URL: Final = 500
 
 
 def link_template(placeholder: str) -> AfterValidator:
@@ -486,7 +486,7 @@ def link_template(placeholder: str) -> AfterValidator:
 # `?tools=all`, and runs the rest through `execute*` tools that read or write by argument; those are denied.
 # The create tools are the ones a private worker files follow-ups with. GitHub's `issue_write` also edits and closes
 # issues, which has no narrower tool to name; the prompt keeps it to creating (TRUST_MODEL T6).
-DEFAULT_TRACKER_TOOLS: dict[str, McpTools] = {
+DEFAULT_TRACKER_TOOLS: Final[dict[str, McpTools]] = {
     "jira": McpTools(
         "atlassian",
         (
@@ -774,7 +774,7 @@ def _plain_version(value: object) -> object:
 
 
 #: Each agent's command template, by its key, and the agent the key's default runs.
-_AGENT_CMDS = {
+_AGENT_CMDS: Final = {
     "overseer_cmd": agents.OVERSEER,
     "worker_cmd": agents.WORKER,
     "private_worker_cmd": agents.PRIVATE_WORKER,
@@ -878,12 +878,12 @@ class Runtime(Section):
 
 
 #: An eval case's name, which names its files and `canopy review eval --case`.
-EVAL_CASE_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+EVAL_CASE_RE: Final = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
 #: A line a bug case's operator confirmed the bug on: `path:line`, or `path:first-last` for a range of lines.
-EVAL_LINE_RE = re.compile(r"(?P<path>[^\s:][^:]*):(?P<first>[1-9][0-9]{0,6})(?:-(?P<last>[1-9][0-9]{0,6}))?")
+EVAL_LINE_RE: Final = re.compile(r"(?P<path>[^\s:][^:]*):(?P<first>[1-9][0-9]{0,6})(?:-(?P<last>[1-9][0-9]{0,6}))?")
 #: A full commit, as git names one: sha-1 or sha-256.
-COMMIT_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
-_MAX_EVAL_URL = 300
+COMMIT_RE: Final = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+_MAX_EVAL_URL: Final = 300
 
 
 def _eval_case_name(value: str) -> str:
@@ -1035,8 +1035,8 @@ class Loop(Section):
 
 
 #: The most budget alerts, and the highest percentage one may name: ten times the budget.
-MAX_ALERTS = 10
-MAX_ALERT_PERCENT = 1000
+MAX_ALERTS: Final = 10
+MAX_ALERT_PERCENT: Final = 1000
 
 
 def _distinct_alerts(value: tuple[int, ...]) -> tuple[int, ...]:
@@ -1064,10 +1064,10 @@ class Spend(Section):
 
 
 # Host names that mean loopback. The web UI's Host and Origin checks accept these and the bind address (DESIGN §22).
-LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1"})
+LOOPBACK_NAMES: Final = frozenset({"localhost", "127.0.0.1", "::1"})
 # A path prefix the web UI is served under through a proxy: `/canopy`, `/a/b`. Restricted to characters that need no
 # escaping in a URL or an HTML attribute, since the server writes it into index.html's <base href>.
-_BASE_PATH_RE = re.compile(r"(/[A-Za-z0-9._~-]+)*")
+_BASE_PATH_RE: Final = re.compile(r"(/[A-Za-z0-9._~-]+)*")
 
 
 def listen_address(value: str) -> str:
@@ -1110,10 +1110,10 @@ def check_base_path(value: str) -> str:
 
 
 #: The longest `serve.url`: the links built on it must fit in a notification.
-MAX_UI_URL = 200
+MAX_UI_URL: Final = 200
 # A URL's own characters, so a link built on it needs no escaping in a notification's markup: no space, `|`, `<`, `>`,
 # quote, or backslash. The Slack sink checks each link against the same class (`_PAGE` in `canopy_notify_slack`).
-_UI_URL_RE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
+_UI_URL_RE: Final = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
 
 
 def _ui_url(value: str) -> str:
@@ -1211,15 +1211,15 @@ class Personas(Section):
 
 
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
-SINK_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
-MAX_SINKS = 5
+SINK_NAME_RE: Final = re.compile(r"[a-z][a-z0-9-]*")
+MAX_SINKS: Final = 5
 # The event groups a sink may take. `attention` is the attention list's diff; the others are point events.
 EventGroup = Literal["attention", "loop", "runs", "chores", "reviews", "tasks", "replies"]
 # The sink `notify.cmd` stands for.
-DEFAULT_SINK = "default"
-MIN_DIGEST_MINUTES = 60
+DEFAULT_SINK: Final = "default"
+MIN_DIGEST_MINUTES: Final = 60
 # A sink batching for longer than a day would hold everything but what needs the operator now.
-MAX_BATCH_MINUTES = 1440
+MAX_BATCH_MINUTES: Final = 1440
 
 
 def _sink_name(value: str) -> str:
@@ -1294,16 +1294,16 @@ class Notify(Section):
 
 
 # A source's name is a table name, as a sink's is (ROADMAP M36).
-SOURCE_NAME_RE = SINK_NAME_RE
+SOURCE_NAME_RE: Final = SINK_NAME_RE
 # The commands a `vcs` source runs when none is configured: canopy's own GitHub programs (DESIGN §29).
-GITHUB_READER = "canopy-connect-github"
-GITHUB_POSTER = "canopy-post-github"
+GITHUB_READER: Final = "canopy-connect-github"
+GITHUB_POSTER: Final = "canopy-post-github"
 # The name canopy's own `vcs` source goes by when none is configured, in `connector_runs` and `canopy status`.
-DEFAULT_SOURCE = "github"
+DEFAULT_SOURCE: Final = "github"
 #: The order a tick runs the sources in, by kind: the `vcs` run is also the reconcile read of the drafts (DESIGN §29).
-_SOURCE_ORDER = ("tracker", "vcs", "artifacts", "slack")
+_SOURCE_ORDER: Final = ("tracker", "vcs", "artifacts", "slack")
 #: A person's Slack user id, as a `slack` source's `operators` names one: `U...`, or `W...` on an Enterprise Grid.
-SLACK_USER_RE = re.compile(r"[UW][A-Z0-9]{2,30}")
+SLACK_USER_RE: Final = re.compile(r"[UW][A-Z0-9]{2,30}")
 
 
 def _slack_user(value: str) -> str:
@@ -1424,7 +1424,7 @@ class Connect(Section):
 
 #: The tools of an artifact store an agent that publishes may call, by the names the store's contract gives them
 #: (DESIGN §38, `packages/canopy-artifacts`): all but `comment_feed`, which is for the source that reads comments back.
-ARTIFACT_TOOLS = (
+ARTIFACT_TOOLS: Final = (
     "artifact_publish",
     "artifact_read",
     "artifact_list",
@@ -1434,9 +1434,9 @@ ARTIFACT_TOOLS = (
     "thread_resolve",
 )
 #: The agents `artifacts.publish_roles` may name, by the name it keys them by, as `runtime.allow_bash` keys them.
-PUBLISH_ROLES: Mapping[str, str] = {"worker": agents.WORKER}
+PUBLISH_ROLES: Final[Mapping[str, str]] = {"worker": agents.WORKER}
 #: The agents that never publish, by that name, and why (DESIGN §38).
-REFUSED_PUBLISH_ROLES: Mapping[str, str] = {
+REFUSED_PUBLISH_ROLES: Final[Mapping[str, str]] = {
     "worker-private": "a private ticket's worker never publishes, so nothing of a private ticket reaches a store",
     "planner": "the planner writes one file, its plan, and nothing else",
 }
@@ -1482,10 +1482,10 @@ class Artifacts(Section):
         return agents.Publishing(self.mcp_server, ARTIFACT_TOOLS, agent_names)
 
 
-CHORE_DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")  # by `datetime.weekday()`
+CHORE_DAYS: Final = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")  # by `datetime.weekday()`
 ChoreDay = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-_HOURS_RE = re.compile(r"([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-4]):([0-5]\d)")
-_DAY_MINUTES = 24 * 60
+_HOURS_RE: Final = re.compile(r"([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-4]):([0-5]\d)")
+_DAY_MINUTES: Final = 24 * 60
 
 
 def chore_hours(value: str) -> tuple[int, int]:
@@ -1627,7 +1627,7 @@ class Config(Section):
         return self.capacity.max_reviews > 0 and (self.review.agent_prs or bool(self.review.query.strip()))
 
 
-SECTIONS: dict[str, type[Section]] = {
+SECTIONS: Final[dict[str, type[Section]]] = {
     "tracker": Tracker,
     "policy": Policy,
     "trust": Trust,
@@ -1666,13 +1666,13 @@ def _spec(name: str, field: FieldInfo) -> KeySpec:
     return KeySpec(name, scopes[0], tightens[0] if tightens else None, field)
 
 
-SPECS: dict[str, KeySpec] = {
+SPECS: Final[dict[str, KeySpec]] = {
     f"{section}.{key}": _spec(f"{section}.{key}", field)
     for section, model in SECTIONS.items()
     for key, field in model.model_fields.items()
 }
 # Sections whose tables are named by the operator, such as `[chores.build-health]`: one key each, the whole section.
-TABLE_SECTIONS = ("chores",)
+TABLE_SECTIONS: Final = ("chores",)
 SPECS.update({name: _spec(name, Config.model_fields[name]) for name in TABLE_SECTIONS})
 
 

@@ -32,7 +32,7 @@ import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
@@ -51,17 +51,21 @@ if TYPE_CHECKING:
 
 #: The overseer's server, as its inline config names it, and as the server names itself: the runtime puts it before each
 #: tool's name, `canopy_dispatch`, and no workspace config may name a server so (DESIGN §13).
-SERVER = "canopy"
+SERVER: Final = "canopy"
 #: How the runtime starts the server for the overseer, and how a tick checks it starts (DESIGN §6): this interpreter's
 #: canopy. `-P` keeps the working directory, the workspace root, off the import path, so no file a workspace holds can
 #: stand in for canopy's own modules (TRUST_MODEL T7).
-COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp")
+COMMAND: Final = (sys.executable, "-P", "-m", "canopy", "_mcp")
 #: The protocol versions the server speaks, newest first: a client that asks for one of them is answered in it, and
 #: any other in the newest.
-PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
+PROTOCOL_VERSIONS: Final = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 #: JSON-RPC's error codes for a line that is not JSON, a message that is not a request, a method the server does not
 #: have, parameters it cannot take, and a failure of its own.
-PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INVALID_PARAMS, INTERNAL_ERROR = -32700, -32600, -32601, -32602, -32603
+PARSE_ERROR: Final = -32700
+INVALID_REQUEST: Final = -32600
+METHOD_NOT_FOUND: Final = -32601
+INVALID_PARAMS: Final = -32602
+INTERNAL_ERROR: Final = -32603
 
 #: How a call opens the workspace: a context whose journal closes when the block ends.
 type Opener = Callable[[], AbstractContextManager[Context]]
@@ -129,7 +133,7 @@ def tool[R: BaseModel, O: tools.Result](
     return Tool(name, description, request, call, result)
 
 
-TOOLS = (
+TOOLS: Final = (
     tool(
         "dispatch",
         "Record a worker for a ticket, if its guards allow one now; it starts once your run ends, if they still do. A "
@@ -237,7 +241,7 @@ def _chore_history(arguments: Mapping[str, object], opened: Opener) -> str:
 
 
 #: A chore's one tool, which the runtime names `canopy_chore_history` (its server is `history.SERVER`).
-CHORE_TOOLS = (
+CHORE_TOOLS: Final = (
     Tool(
         history.TOOL,
         "List this chore's earlier runs, newest first, with what each reported; with run, one run's findings in full; "
@@ -249,7 +253,7 @@ CHORE_TOOLS = (
 
 
 #: Why a report is refused outside a chore's run, the one run the harness gives the reports' server today.
-_CHORES_ALONE = "canopy's reports are served to a chore's run alone, and this is none"
+_CHORES_ALONE: Final = "canopy's reports are served to a chore's run alone, and this is none"
 
 
 def _report[R: BaseModel](name: str, description: str, request: type[R], do: Callable[[Context, R], str]) -> Tool:
@@ -279,7 +283,7 @@ def _report[R: BaseModel](name: str, description: str, request: type[R], do: Cal
 
 #: canopy's read-only reports (`core.reports`), which the runtime names `canopy_reports_health` and so on. An agent
 #: given the server allows those it reads by name; `canopy-chore` reads none.
-REPORT_TOOLS = (
+REPORT_TOOLS: Final = (
     _report(
         reports.HEALTH,
         "How canopy's ticks and runs of the last days ended, as JSON: each kind of run by status and cost "
@@ -687,7 +691,7 @@ def _call(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str,
     return _said(said) if isinstance(said, str) else _said(said.text, structured=said.result)
 
 
-_METHODS: Mapping[str, Callable[[Mapping[str, object], Opener, Mode], dict[str, object]]] = {
+_METHODS: Final[Mapping[str, Callable[[Mapping[str, object], Opener, Mode], dict[str, object]]]] = {
     "initialize": _initialize,
     "ping": _ping,
     "tools/list": _list,
@@ -730,11 +734,11 @@ def _chore_refusal(opener: Opener) -> str | None:
 
 
 #: The overseer's verbs, served inside a running tick and never inside a run.
-OVERSEER = Mode(TOOLS, _overseer_refusal)
+OVERSEER: Final = Mode(TOOLS, _overseer_refusal)
 #: A chore's history, served inside that chore's run alone.
-CHORE = Mode(CHORE_TOOLS, _chore_refusal)
+CHORE: Final = Mode(CHORE_TOOLS, _chore_refusal)
 #: canopy's read-only reports, served inside a chore's run alone, the one run the harness gives their server today.
-REPORTS = Mode(REPORT_TOOLS, _chore_refusal)
+REPORTS: Final = Mode(REPORT_TOOLS, _chore_refusal)
 
 
 def _inside_run() -> str:

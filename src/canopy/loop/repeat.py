@@ -52,7 +52,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from rich.live import Live
 from rich.spinner import Spinner
@@ -88,13 +88,13 @@ if TYPE_CHECKING:
     from canopy.loop.tick import Woken, WokenBy
     from canopy.serve.backend import Backend
 
-LOCK_FILE_NAME = "loop.lock"
+LOCK_FILE_NAME: Final = "loop.lock"
 # How often the wait wakes to redraw the countdown and to notice a stop or an operator message.
-_WAIT_STEP_SECONDS = 0.5
+_WAIT_STEP_SECONDS: Final = 0.5
 # A second stop signal this soon after the first is the same Ctrl-C, not a second one. `uv run` forwards the
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
-SAME_SIGNAL_SECONDS = 1.0
+SAME_SIGNAL_SECONDS: Final = 1.0
 
 
 @dataclass

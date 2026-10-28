@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -23,11 +23,13 @@ if TYPE_CHECKING:
     from tests.conftest import Journals
 
 #: A tracker source, played by the fake connector as `jira`.
-SOURCES = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}}}
+SOURCES: Final = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}}}
 #: The same source, its comments by `acc-1` on a private ticket the operator's own.
-OPERATOR_SOURCES = {"sources": {"jira": {**SOURCES["sources"]["jira"], "operators": ["acc-1"]}}}
+OPERATOR_SOURCES: Final = {"sources": {"jira": {**SOURCES["sources"]["jira"], "operators": ["acc-1"]}}}
 #: The migration that recorded the comments observed before it.
-VERSION = next(m.version for m in db.discover(resources.migrations_dir()) if m.name == "comments_in_conversations")
+VERSION: Final = next(
+    m.version for m in db.discover(resources.migrations_dir()) if m.name == "comments_in_conversations"
+)
 
 
 def comment(

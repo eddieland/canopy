@@ -14,7 +14,7 @@ task, or its stop, clears them here too.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, sql, task_tickets, tasks
 from canopy.core.items import Item
@@ -26,17 +26,17 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: Where a ticket key would be, an item about a task names it so, as `loop.attention.TASK_PREFIX` does.
-TASK_PREFIX = "task:"
+TASK_PREFIX: Final = "task:"
 #: The task whose run is running, in mobile's second slot.
-RUNNING_TASK = 6
+RUNNING_TASK: Final = 6
 #: The lease the running task's run holds, which the mock's pool shows on its slot.
-RUNNING_LEASE = "lease-4"
+RUNNING_LEASE: Final = "lease-4"
 #: The draft PR task 1's run opened.
-PR_97 = "https://github.com/acme/web/pull/97"
+PR_97: Final = "https://github.com/acme/web/pull/97"
 #: How a run the operator stopped with `canopy stop task:N --now` ends, as `runs.task_run.STOP_NOTE` says it.
-STOP_NOTE = "the operator stopped the task with `canopy stop --now`"
+STOP_NOTE: Final = "the operator stopped the task with `canopy stop --now`"
 
-_LONG_TEXT = """\
+_LONG_TEXT: Final = """\
 The checkout page's bundle grew past 900 kB after the last two releases, and the first paint on a mid-range phone is
 now over three seconds. Find out what grew and cut it back.
 
@@ -49,7 +49,7 @@ Keep the public behavior the same: no visual change, no change to the order of t
 change, and file a ticket in ABC for anything you find that is too big for this one, so it does not get lost. Do not
 touch the analytics snippet: marketing owns it and will notice."""
 
-_REPORT = """# Checkout bundle
+_REPORT: Final = """# Checkout bundle
 
 The checkout bundle is 612 kB, down from 934 kB; first paint on the throttled profile is 1.9 s, down from 3.2 s.
 
@@ -69,7 +69,7 @@ The checkout bundle is 612 kB, down from 934 kB; first paint on the throttled pr
 The CSS is still one file for the whole app. Splitting it per route is a bigger change than this task.
 """
 
-_TASKS = (
+_TASKS: Final = (
     # id, text, repo, project, channel, submitted, stopped
     (1, _LONG_TEXT, "web", "ABC", "web", -420, None),
     (2, "Bump the iOS deployment target to 16.", "mobile", None, "cli", -300, None),
@@ -100,7 +100,7 @@ _TASKS = (
 type _Run = tuple[int, int, str, int, int, int | None, RunStatus, dict[str, object] | None, str | None, float]
 
 # The ticket task 5's run reported, which its task, naming no project, cannot record.
-_UNRECORDED = task_tickets.check(["OPS-7"], project=None, limit=3)
+_UNRECORDED: Final = task_tickets.check(["OPS-7"], project=None, limit=3)
 
 
 def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], slot: Callable[[str, int], str]) -> None:

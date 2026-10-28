@@ -30,11 +30,12 @@ import re
 import shutil
 import stat
 from pathlib import Path
+from typing import Final
 
 from canopy.infra import procs
 
 # Flags before the subcommand: these override any repository, global, or system config.
-SAFE_FLAGS = (
+SAFE_FLAGS: Final = (
     "-c",
     "core.hooksPath=/dev/null",
     "-c",
@@ -48,17 +49,17 @@ SAFE_FLAGS = (
 # `gc.auto` for `gc --auto`, which older git runs instead. Run in the background on a pool's shared git directory, it
 # packs refs and prunes while other slots' runs use them; on CI it pruned a worktree `git worktree add` had not yet
 # locked. Maintenance an operator runs on purpose is unaffected.
-AUTO_MAINTENANCE_OFF = (("maintenance.auto", "false"), ("gc.auto", "0"))
-_MAINTENANCE_FLAGS = tuple(arg for key, value in AUTO_MAINTENANCE_OFF for arg in ("-c", f"{key}={value}"))
+AUTO_MAINTENANCE_OFF: Final = (("maintenance.auto", "false"), ("gc.auto", "0"))
+_MAINTENANCE_FLAGS: Final = tuple(arg for key, value in AUTO_MAINTENANCE_OFF for arg in ("-c", f"{key}={value}"))
 # Never let git wait for credentials on a terminal nobody is watching.
-ENV = {"GIT_TERMINAL_PROMPT": "0"}
-LINK = ".git"
-COMMONDIR = "commondir"
+ENV: Final = {"GIT_TERMINAL_PROMPT": "0"}
+LINK: Final = ".git"
+COMMONDIR: Final = "commondir"
 # What `git worktree add` writes in `commondir`: the common directory is the one that holds `worktrees/<slot>/`.
-COMMONDIR_CONTENT = b"../..\n"
-_LINK_PREFIX = b"gitdir:"
-_LS_FILES_TIMEOUT_SECONDS = 30
-_CONFIG_TIMEOUT_SECONDS = 30
+COMMONDIR_CONTENT: Final = b"../..\n"
+_LINK_PREFIX: Final = b"gitdir:"
+_LS_FILES_TIMEOUT_SECONDS: Final = 30
+_CONFIG_TIMEOUT_SECONDS: Final = 30
 
 
 def argv(*args: str) -> list[str]:

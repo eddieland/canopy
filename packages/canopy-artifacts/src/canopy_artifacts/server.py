@@ -15,7 +15,7 @@ import json
 import sys
 import traceback
 from collections.abc import Callable, Iterable, Mapping
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
@@ -24,12 +24,16 @@ from canopy_artifacts.tools import TOOLS, Tool
 
 #: The protocol versions the server speaks, newest first: a client that asks for one of them is answered in it, and
 #: any other in the newest.
-PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
+PROTOCOL_VERSIONS: Final = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 #: The server's name, as `initialize` gives it.
-NAME = "canopy-artifacts"
+NAME: Final = "canopy-artifacts"
 #: JSON-RPC's error codes for a line that is not JSON, a message that is not a request, a method the server does not
 #: have, parameters it cannot take, and a failure of its own.
-PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INVALID_PARAMS, INTERNAL_ERROR = -32700, -32600, -32601, -32602, -32603
+PARSE_ERROR: Final = -32700
+INVALID_REQUEST: Final = -32600
+METHOD_NOT_FOUND: Final = -32601
+INVALID_PARAMS: Final = -32602
+INTERNAL_ERROR: Final = -32603
 
 #: A JSON-RPC response, or None for a notification, which is never answered.
 type Response = dict[str, object] | None
@@ -194,7 +198,7 @@ def _call(params: Mapping[str, object], store: Store) -> dict[str, object]:
         return _refused(Code.INVALID, "a number is past the most the store holds")
 
 
-_METHODS: Mapping[str, Callable[[Mapping[str, object], Store], dict[str, object]]] = {
+_METHODS: Final[Mapping[str, Callable[[Mapping[str, object], Store], dict[str, object]]]] = {
     "initialize": _initialize,
     "ping": _ping,
     "tools/list": _list,

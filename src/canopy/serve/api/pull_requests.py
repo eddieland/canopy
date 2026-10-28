@@ -6,7 +6,7 @@ slashes in it, so it is a query parameter, never a path.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -24,11 +24,11 @@ from canopy.serve.schema.review import (
     ReviewRequestStopped,
 )
 
-TAG = "pull requests"
+TAG: Final = "pull requests"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 # The kind a PR's grant is of, as `canopy grant URL review` names it.
-_REVIEW = "review"
+_REVIEW: Final = "review"
 
 PrUrl = Annotated[
     str,
@@ -40,7 +40,7 @@ PrUrl = Annotated[
 ]
 
 # The 422 a route answers for a URL that is not a plain https:// URL of at most 300 characters.
-_BAD_URL = {422: {"model": ErrorResponse, "description": "Not a plain https:// URL of at most 300 characters."}}
+_BAD_URL: Final = {422: {"model": ErrorResponse, "description": "Not a plain https:// URL of at most 300 characters."}}
 
 
 @router.get("/pull-requests", operation_id="listPullRequests", summary="List the PRs")

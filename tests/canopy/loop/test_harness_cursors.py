@@ -10,7 +10,7 @@ run moving nothing.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: A body that carries the workers' marks, `trust.comment_prefix` by default (D069).
-MARKED = "CANOPY: Renamed it, as asked."
+MARKED: Final = "CANOPY: Renamed it, as asked."
 
 
 @pytest.fixture
@@ -248,7 +248,7 @@ def test_a_dry_run_moves_no_cursor(scenario: Scenario, github_state: Path) -> No
 
 #: A worker's reply on a review thread, as GitHub holds it: a review comment with the workers' marks, wrapped in an
 #: empty review of its own.
-WORKED = [
+WORKED: Final = [
     {"item": "review", "id": 101, "author": "me", "state": "commented", "time": "2026-10-18T10:00:00Z", "body": ""},
     {
         "item": "comment",

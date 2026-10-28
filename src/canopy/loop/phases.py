@@ -20,7 +20,7 @@ from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from canopy.core import (
     artifact_authority,
@@ -60,15 +60,15 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-_DISPATCH = "dispatch:"
-_ATTENTION = attention.ACTION_PREFIX
-_RESUME = f"{_DISPATCH}resume"
-_FEEDBACK_PLAN = f"{_DISPATCH}feedback-plan"
-_ATTEMPT_LIMIT = f"{_ATTENTION}attempt_limit"
-_NEEDS_AUTHOR = f"{_ATTENTION}needs_author"
+_DISPATCH: Final = "dispatch:"
+_ATTENTION: Final = attention.ACTION_PREFIX
+_RESUME: Final = f"{_DISPATCH}resume"
+_FEEDBACK_PLAN: Final = f"{_DISPATCH}feedback-plan"
+_ATTEMPT_LIMIT: Final = f"{_ATTENTION}attempt_limit"
+_NEEDS_AUTHOR: Final = f"{_ATTENTION}needs_author"
 #: What the overseer may decide for a subject at each phase: §7's next action, and the attention items it records for
 #: it. A dispatch at its attempt limit is an attention item instead (§8); a resume may wait on a feedback plan (§32).
-ALLOWS: Mapping[Phase, AbstractSet[str]] = {
+ALLOWS: Final[Mapping[Phase, AbstractSet[str]]] = {
     Phase.READY: frozenset({f"{_DISPATCH}implement", f"{_DISPATCH}plan", _ATTEMPT_LIMIT}),
     Phase.PLAN_PROPOSED: frozenset({f"{_ATTENTION}plan_review", f"{_DISPATCH}plan", _ATTEMPT_LIMIT}),
     Phase.BLOCKED: frozenset({f"{_DISPATCH}implement", "wait", _ATTEMPT_LIMIT}),
@@ -90,16 +90,16 @@ ALLOWS: Mapping[Phase, AbstractSet[str]] = {
 }
 #: The phase a decision moves its ticket to within the tick that made it: a worker it dispatched is running, so the
 #: overseer sets `running` at once, though the derivation, made before it decided, held the row that dispatched it.
-MOVES_TO: Mapping[str, Phase] = {
+MOVES_TO: Final[Mapping[str, Phase]] = {
     f"{_DISPATCH}implement": Phase.RUNNING,
     f"{_DISPATCH}plan": Phase.RUNNING,
     _RESUME: Phase.RUNNING,
     _FEEDBACK_PLAN: Phase.RUNNING,
 }
 #: What the overseer may decide for a ticket the tracker says is closed: mark it done (DESIGN §7).
-CLOSED_ALLOWS: AbstractSet[str] = frozenset({"done"})
+CLOSED_ALLOWS: Final[AbstractSet[str]] = frozenset({"done"})
 #: What it may decide for an open ticket no row holds for, such as one without a queue label.
-NONE_ALLOWS: AbstractSet[str] = frozenset({"skip", "wait"})
+NONE_ALLOWS: Final[AbstractSet[str]] = frozenset({"skip", "wait"})
 #: An observed label: its `name`, and `added_at`, None where the tracker does not say.
 type Label = dict[str, str | None]
 #: How a ticket compares with the overseer in one tick.

@@ -9,7 +9,7 @@ operator asked for that tick. Workers already dispatched are not touched.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, sql
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     import sqlite3
 
 # The channel of a pause or resume from the loop's own terminal, beside `cli` and `web` (DESIGN §22).
-LOOP = "loop"
+LOOP: Final = "loop"
 
 
 @dataclass(frozen=True)

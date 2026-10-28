@@ -7,7 +7,7 @@ the run before its worker starts. `paths.worktree_include` reaches every `treeho
 import json
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import override
+from typing import Final, override
 
 import pytest
 
@@ -26,7 +26,7 @@ from tests.conftest import CanopyEnv, GitPool, git, user_toml
 
 # What a setup sees: the run's branch, its repository, its run, and the latest commit checked out, the branch's. It
 # leaves a file the worker then looks for, so the setup ran before the worker.
-SETUP = (
+SETUP: Final = (
     'sh -c \'echo "setup on $CANOPY_BRANCH in $CANOPY_REPO, run $CANOPY_RUN_ID: $(git log -1 --format=%s)"; '
     "touch .setup-done'"
 )

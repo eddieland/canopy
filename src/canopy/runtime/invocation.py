@@ -9,7 +9,7 @@ canopy's agents, as a chore with a model of its own is run (DESIGN §13).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.runtime.implementation import one, pick, two
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 _shared = one.invocation
 
 #: The runtime, as messages to the operator name it.
-NAME = _shared.NAME
+NAME: Final = _shared.NAME
 
 
 def default_template(agent: str, *, version: Version, definitions_dir: str, title: str) -> str:

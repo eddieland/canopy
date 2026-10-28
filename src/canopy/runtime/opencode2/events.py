@@ -31,7 +31,7 @@ from __future__ import annotations
 import contextlib
 import json
 from collections.abc import Mapping
-from typing import Annotated, Literal, cast
+from typing import Annotated, Final, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
 
@@ -40,13 +40,13 @@ from canopy.runtime.opencode2.definitions import MAX_SKILL_NAME, SKILL_NAME_RE
 from canopy.runtime.report import MAX_COST_USD, SKILL_PREFIX, AgentOutput, Call, Count, ToolUse, Usage
 
 #: The event that starts a model call, the one that ends it, and the one that ends a tool call.
-STEP_START = "step_start"
-STEP_FINISH = "step_finish"
-TOOL_USE = "tool_use"
+STEP_START: Final = "step_start"
+STEP_FINISH: Final = "step_finish"
+TOOL_USE: Final = "tool_use"
 #: The event that says the session failed.
-ERROR = "error"
+ERROR: Final = "error"
 #: OpenCode's tool that loads a skill.
-SKILL_TOOL = "skill"
+SKILL_TOOL: Final = "skill"
 
 
 class _Text(BaseModel):

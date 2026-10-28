@@ -22,7 +22,7 @@ import re
 import sqlite3
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
 from canopy.core import (
     chore_runs,
@@ -50,63 +50,63 @@ if TYPE_CHECKING:
 
 # A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
 # other kind of reference can be read as one.
-KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
-MAX_KEY = 100
+KEY_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+MAX_KEY: Final = 100
 # Set for the agents of canopy's own runs, as CANOPY_TICK_ID is for the overseer: the operator's commands refuse in
 # either, so an agent that follows injected text naively cannot reply or start a ticket as the operator (TRUST_MODEL
 # T1).
-TICK_ID_ENV = "CANOPY_TICK_ID"
-RUN_ID_ENV = "CANOPY_RUN_ID"
-MAX_OPERATOR = 4000
-MAX_PR_URL = 300
+TICK_ID_ENV: Final = "CANOPY_TICK_ID"
+RUN_ID_ENV: Final = "CANOPY_RUN_ID"
+MAX_OPERATOR: Final = 4000
+MAX_PR_URL: Final = 300
 # The channel of a start record the loop wrote: with `tracker.private` set, a labeled ticket's first dispatch starts
 # it privately, as if the operator had (DESIGN §22).
-LABEL = "label"
+LABEL: Final = "label"
 # A submission id a channel's form draws when it is rendered (DESIGN §22).
-SUBMISSION_RE = re.compile(r"[A-Za-z0-9_-]{8,64}")
+SUBMISSION_RE: Final = re.compile(r"[A-Za-z0-9_-]{8,64}")
 #: Where the recorded submission of an operator message that answers no question starts: one an operator verb writes
 #: as its instruction, such as a feedback plan's approval (DESIGN §32), never a reply. No reply's submission, a
 #: channel's id behind its channel's name or a body's hash, can start so.
-INSTRUCTION = "instruction/"
+INSTRUCTION: Final = "instruction/"
 #: A tracker comment's body is cut to this where a source records it, and marked truncated (DESIGN §22, §35).
-MAX_COMMENT = 2000
+MAX_COMMENT: Final = 2000
 #: The channel of a comment on an artifact a source observed (DESIGN §38), apart from a tracker comment's `tracker`.
-ARTIFACTS = "artifacts"
+ARTIFACTS: Final = "artifacts"
 #: The channel of a tracker comment a source observed, the operator's own on a private ticket included (§22, §35).
-TRACKER = "tracker"
+TRACKER: Final = "tracker"
 #: The decision each `mirror` recorded, before M37 retired the overseer's mirror of tracker comments: a copy of one,
 #: which decided nothing. Older ticks hold them.
-MIRROR_ACTION = "mirror"
+MIRROR_ACTION: Final = "mirror"
 # A tracker's comment id, as a cursor id is: plain and short. An author is the tracker's account id: printable, no
 # whitespace.
-COMMENT_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
-MAX_AUTHOR = 200
-MAX_TIME = 64
+COMMENT_ID_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
+MAX_AUTHOR: Final = 200
+MAX_TIME: Final = 64
 # How much of a ticket's conversation a private worker's prompt carries: its latest messages, oldest first.
-PROMPT_MESSAGES = 20
-PROMPT_CHARS = 30_000
+PROMPT_MESSAGES: Final = 20
+PROMPT_CHARS: Final = 30_000
 # How many of a ticket's latest runs a public worker's prompt reports (`prompt_previous_runs`).
-PREVIOUS_RUNS = 3
+PREVIOUS_RUNS: Final = 3
 # How many of the operator's notes to a chore its prompt carries: the latest, oldest first (DESIGN §19).
-CHORE_NOTES = 10
+CHORE_NOTES: Final = 10
 #: Who wrote a tick's note on a ticket: canopy, from what the tick recorded (`loop/acknowledge.py`).
-CANOPY = "canopy"
+CANOPY: Final = "canopy"
 #: What a tick's note is: canopy's word on the operator's messages, never an instruction or a report of work.
-NOTE = "note"
+NOTE: Final = "note"
 
-TICKET = db.SUBJECT_TICKET
-PR = "pr"
-CHORE = "chore"
-RUN = "run"
-REVIEW = "review"
+TICKET: Final = db.SUBJECT_TICKET
+PR: Final = "pr"
+CHORE: Final = "chore"
+RUN: Final = "run"
+REVIEW: Final = "review"
 # What a review's dismissal may give as its reason, as a refusal names them.
-_REASONS = ", ".join(f"`{r}`" for r in DismissalReason)
+_REASONS: Final = ", ".join(f"`{r}`" for r in DismissalReason)
 #: A one-off task the operator submitted (DESIGN §36), `task:N`.
-TASK = "task"
+TASK: Final = "task"
 # The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review`, `stop`, and
 # `persona` (a review request and its persona, `core/review_requests.py`), and `show`; working one is PR-scoped work
 # (ROADMAP M14).
-VERBS: Mapping[str, tuple[str, ...]] = {
+VERBS: Final[Mapping[str, tuple[str, ...]]] = {
     TICKET: (
         "start",
         "stop",
@@ -132,11 +132,11 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     TASK: ("stop", "reply", "show", "attach", "detach"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
-_PR_WORK = (
+_PR_WORK: Final = (
     "{ref} is a PR; canopy only reviews PRs it does not own, and works them once PR-scoped work exists (ROADMAP M14)"
 )
-_PR_SHORT_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
-PR_URL_RE = re.compile(r"https://[^\s/]+/[^\s/]+/[^\s/]+/pull/[1-9][0-9]{0,9}/?")
+_PR_SHORT_RE: Final = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
+PR_URL_RE: Final = re.compile(r"https://[^\s/]+/[^\s/]+/[^\s/]+/pull/[1-9][0-9]{0,9}/?")
 
 
 class Refused(Exception):  # noqa: N818  (an outcome the operator is told about, not an error)

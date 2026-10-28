@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import ModelsRead
@@ -29,16 +29,16 @@ if TYPE_CHECKING:
 #: A table of agent runs, each with a session: a tick's overseer, a worker or plan run, a chore run, a review run, a
 #: task's run.
 type RunTable = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
-_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs")
+_TABLES: Final[tuple[RunTable, ...]] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs")
 #: No reply's model, for a read that found none, or that did not find the session.
-_NO_REPLIES: Mapping[str, str] = MappingProxyType({})
+_NO_REPLIES: Final[Mapping[str, str]] = MappingProxyType({})
 #: How long a failed read waits before it is tried again, and how many reads a run gets in all.
-RETRY_AFTER = timedelta(days=1)
-MAX_ATTEMPTS = 3
+RETRY_AFTER: Final = timedelta(days=1)
+MAX_ATTEMPTS: Final = 3
 
 
 #: The tables of a ticket's runs whose cost is its own: its worker and plan runs, and the review runs naming it.
-_TICKET_TABLES: tuple[Literal["runs", "review_runs"], ...] = ("runs", "review_runs")
+_TICKET_TABLES: Final[tuple[Literal["runs", "review_runs"], ...]] = ("runs", "review_runs")
 
 
 @dataclass(frozen=True)

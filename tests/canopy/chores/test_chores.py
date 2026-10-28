@@ -8,7 +8,7 @@ import sqlite3
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Final, TextIO
 from unittest import mock
 
 import pytest
@@ -53,15 +53,15 @@ from tests.canopy.helpers import (
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv
 
-FINDING = {
+FINDING: Final = {
     "id": "flaky/checkout/test_retry",
     "title": "test_retry fails one run in five",
     "detail": "Seen on builds 81, 84, and 90.",
     "link": "https://ci.example.test/job/checkout/90",
 }
-OK = {"status": "ok", "summary": "one flaky test", "findings": [FINDING]}
+OK: Final = {"status": "ok", "summary": "one flaky test", "findings": [FINDING]}
 # A time the journal records, as `db.now` writes it.
-TIMES = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z")
+TIMES: Final = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z")
 
 
 @pytest.fixture
@@ -1101,7 +1101,7 @@ def test_the_default_chore_cmd_asks_for_events(canopy_env: CanopyEnv) -> None:
     assert "--format json" in load(canopy_env.root, canopy_env.user_file).runtime.chore_cmd
 
 
-GONE: dict[str, object] = {"status": "ok", "summary": "all green", "findings": []}
+GONE: Final[dict[str, object]] = {"status": "ok", "summary": "all green", "findings": []}
 
 
 def test_a_chore_reads_its_earlier_runs_through_its_tool_from_a_cwd_outside_the_workspace(

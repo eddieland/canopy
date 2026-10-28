@@ -14,6 +14,7 @@ comments.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Final
 
 
 class RunStatus(StrEnum):
@@ -149,7 +150,7 @@ class Phase(StrEnum):
 
 # The phases about a PR, `pushed_no_pr` to `merged` in the phase table, are a unit's (DESIGN §7, §18); the others are
 # the ticket's own.
-UNIT_PHASES = frozenset(
+UNIT_PHASES: Final = frozenset(
     {
         Phase.PUSHED_NO_PR,
         Phase.CONFLICTED,

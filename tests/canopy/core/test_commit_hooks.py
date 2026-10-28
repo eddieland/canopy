@@ -5,6 +5,7 @@ unless there is nothing to add; the prefix names the run's ticket, and a task, w
 """
 
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -14,7 +15,7 @@ from canopy.core.config import ConfigError, load
 from canopy.infra import procs
 from tests.conftest import CanopyEnv
 
-TRAILER = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
+TRAILER: Final = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
 
 
 def test_canopys_entry_comes_after_the_operators_own() -> None:

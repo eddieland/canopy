@@ -18,26 +18,27 @@ import secrets
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Final
 
 from fastapi import HTTPException, Request
 
 from canopy.serve.guard import allowed_origin
 
-COOKIE_PREFIX = "canopy_session_"
-TOKEN_HEADER = "x-canopy-token"  # noqa: S105  (a header name, not a credential)
-SESSION_SECONDS = 30 * 24 * 3600
+COOKIE_PREFIX: Final = "canopy_session_"
+TOKEN_HEADER: Final = "x-canopy-token"  # noqa: S105  (a header name, not a credential)
+SESSION_SECONDS: Final = 30 * 24 * 3600
 # A wrong secret is answered after this long. It slows one client guessing in turn, not many guessing at once, so what
 # stops guessing is a secret no one can predict: `canopy secret` writes 32 random bytes. `secret.read` refuses fewer
 # than 32 characters, but cannot tell a predictable one, so a secret the operator writes by hand must be random too.
-FAILED_SIGN_IN_SECONDS = 1.0
+FAILED_SIGN_IN_SECONDS: Final = 1.0
 # What `GET /api/session` gives a page when nobody signs in (mock data only).
-OPEN_TOKEN = "open"  # noqa: S105  (not a credential: the open server checks none)
-_VERSION = "v1"
+OPEN_TOKEN: Final = "open"  # noqa: S105  (not a credential: the open server checks none)
+_VERSION: Final = "v1"
 #: The methods that read; any other is a write, which needs the session's token (`Sessions.require`).
-READ_METHODS = frozenset({"GET", "HEAD"})
+READ_METHODS: Final = frozenset({"GET", "HEAD"})
 #: Where a write the server lets through leaves, in the request's state, the session it was let through as, and a
 #: sign-in the session it issued: None on an open server, which signs nobody in. audit.py records what it finds there.
-AUTHORIZED = "canopy_authorized"
+AUTHORIZED: Final = "canopy_authorized"
 
 
 @dataclass(frozen=True)

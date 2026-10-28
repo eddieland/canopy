@@ -1,9 +1,11 @@
 """The state block's `reviews` cut to the PRs the overseer may act on (DESIGN §21, #1528)."""
 
+from typing import Final
+
 from canopy.reviews import view
 from canopy.reviews.view import RequestedPR, ReviewedPR, ReviewsSection
 
-API = "https://github.com/acme/api/pull"
+API: Final = "https://github.com/acme/api/pull"
 
 
 def reviewed(number: int, ticket: str | None) -> ReviewedPR:
@@ -50,7 +52,7 @@ def section(*prs: ReviewedPR) -> ReviewsSection:
 
 # A listed ticket's PR; a done ticket's; a unit's PR reviewed with no ticket; a coworker's PR the query found; and one
 # it no longer finds.
-REVIEWED = section(
+REVIEWED: Final = section(
     reviewed(1, "PROJ-1"),
     reviewed(2, "PROJ-2"),
     reviewed(3, None),

@@ -1,11 +1,12 @@
 """A running agent's output read a line at a time: what each line changes of what its row records (DESIGN §8)."""
 
 import json
+from typing import Final
 
 from canopy.runtime.implementation import Version
 from canopy.runtime.watch import Change, Watch
 
-TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
+TOKENS: Final = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
 
 
 def event(kind: str, part: object, session: object = "ses_abc123") -> str:

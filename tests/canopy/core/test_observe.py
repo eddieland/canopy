@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from unittest import mock
 
 from canopy.core import observe, records, sql
@@ -16,11 +16,11 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-PR = "https://github.com/acme/api/pull/7"
-VCS = Source(kind="vcs", cmd="connector github")
-ASKED = observe.Request(prs=[PR], repositories=[observe.Repository("repo")], branch_prefix="agent/")
+PR: Final = "https://github.com/acme/api/pull/7"
+VCS: Final = Source(kind="vcs", cmd="connector github")
+ASKED: Final = observe.Request(prs=[PR], repositories=[observe.Repository("repo")], branch_prefix="agent/")
 #: Every observed review item.
-REVIEWS = "SELECT * FROM observed_reviews"
+REVIEWS: Final = "SELECT * FROM observed_reviews"
 
 
 def prints(state: Path, *lines: dict[str, Any] | str, **more: object) -> None:

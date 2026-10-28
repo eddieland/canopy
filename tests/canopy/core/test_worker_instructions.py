@@ -6,6 +6,7 @@ them.
 
 import sqlite3
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -14,8 +15,8 @@ from canopy.core.config import load
 from tests.canopy.helpers import IMPLEMENT, PROMPT_VALUES, dispatch_in_tick
 from tests.conftest import CanopyEnv, GitPool, user_toml
 
-FIXUP = "Commit a change that corrects an earlier commit on the branch with `git commit --fixup=<sha>`."
-SECTION = "## Standing instructions from the operator\n\n"
+FIXUP: Final = "Commit a change that corrects an earlier commit on the branch with `git commit --fixup=<sha>`."
+SECTION: Final = "## Standing instructions from the operator\n\n"
 
 
 def instruct(canopy_env: CanopyEnv, text: str | bytes) -> Path:

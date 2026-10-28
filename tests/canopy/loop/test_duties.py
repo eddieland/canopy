@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 
@@ -15,9 +15,9 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises, 
 from tests.conftest import CanopyEnv, GitPool
 
 #: A `tracker` source the fake connector plays, so the query is read by a source (DESIGN §30).
-TRACKER = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}}}
+TRACKER: Final = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}}}
 #: How a tick that owed the query and did not record it ends.
-UNQUERIED = "overseer left duties undone: the tracker query was due and no `canopy queried` recorded it"
+UNQUERIED: Final = "overseer left duties undone: the tracker query was due and no `canopy queried` recorded it"
 
 
 @pytest.fixture

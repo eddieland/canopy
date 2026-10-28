@@ -3,6 +3,7 @@
 import sqlite3
 from collections.abc import Iterable
 from importlib.metadata import version
+from typing import Final
 
 import pytest
 
@@ -16,7 +17,7 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool
 
 #: A review cursor as canopy keeps one: the newest handled item's journal number (DESIGN §35).
-REVIEWED = "review=4127"
+REVIEWED: Final = "review=4127"
 
 
 @pytest.mark.parametrize(

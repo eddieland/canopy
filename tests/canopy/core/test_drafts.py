@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -18,14 +18,14 @@ if TYPE_CHECKING:
 
     from tests.canopy.scenario_helpers import Ran, Scenario
 
-PR = DRAFTS_PR
-ISSUE = "https://github.com/acme/api/issues/1"
-REPLY = "Renamed it.\n\n```python\nretries = 3\n```"
-THREAD = {"on": "thread", "pr": PR, "comment": 501, "did": "changed", "text": REPLY}
+PR: Final = DRAFTS_PR
+ISSUE: Final = "https://github.com/acme/api/issues/1"
+REPLY: Final = "Renamed it.\n\n```python\nretries = 3\n```"
+THREAD: Final = {"on": "thread", "pr": PR, "comment": 501, "did": "changed", "text": REPLY}
 #: KEY's run on its `work` branch, as each drafting run here is.
-WORK = dispatches(slug="work")
+WORK: Final = dispatches(slug="work")
 #: Workers post their own replies, as before drafts (DESIGN §29); APPROVE has them draft replies for the operator.
-POST = {"review_replies": "post"}
+POST: Final = {"review_replies": "post"}
 
 
 @pytest.fixture(autouse=True)

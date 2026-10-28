@@ -6,12 +6,13 @@ A terminal can hang up only on the process it controls, so each case runs in a c
 import signal
 import sys
 import textwrap
+from typing import Final
 
 from canopy.infra import procs
 
 # The child takes a pseudo-terminal as its controlling terminal, then hangs it up by closing the end a terminal emulator
 # would hold. SIGHUP is ignored so the child lives to print what it saw.
-_HANG_UP = """
+_HANG_UP: Final = """
 import fcntl, os, pty, signal, termios
 from canopy.infra import hangup
 signal.signal(signal.SIGHUP, signal.SIG_IGN)
@@ -25,7 +26,7 @@ with hangup.watch() as hung_up:
 """
 
 # SIGHUP in the loop, with the terminal said to have hung up or not.
-_LOOP = """
+_LOOP: Final = """
 import os, signal
 from canopy.loop import repeat, reread
 if IGNORED:

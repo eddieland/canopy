@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import gc_passes
 from canopy.runtime import entries, transcript
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from canopy.runtime.implementation import Version
 
 #: No reply's model: a run one model served, or one whose replies canopy has not read.
-_NO_MODELS: Mapping[str, str] = MappingProxyType({})
+_NO_MODELS: Final[Mapping[str, str]] = MappingProxyType({})
 
 
 def session_transcript(

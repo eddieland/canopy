@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 from canopy.core import db, runtime_sessions, sql
@@ -16,10 +16,10 @@ if TYPE_CHECKING:
     import sqlite3
 
 #: 2026-10-24T12:00:00Z, in milliseconds since the epoch.
-NOON_MS = 1_792_843_200_000
-DAY = ("2026-10-24T00:00:00.000Z", "2026-10-25T00:00:00.000Z")
+NOON_MS: Final = 1_792_843_200_000
+DAY: Final = ("2026-10-24T00:00:00.000Z", "2026-10-25T00:00:00.000Z")
 #: The workspace's state directory, where its chores run by default.
-STATE_DIR = Path("/work/.canopy")
+STATE_DIR: Final = Path("/work/.canopy")
 
 
 def session(

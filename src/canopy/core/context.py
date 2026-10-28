@@ -6,7 +6,7 @@ import dataclasses
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import chore_view, config, db, pools, treehouse, workspace
 from canopy.core.pool import CanopyPool
@@ -15,7 +15,7 @@ from canopy.core.workspace import REPOS_DIR
 from canopy.infra import lock, logs, procs, resources
 
 # Held by every command that may start a detached run, so two cannot both pass a capacity check (DESIGN §8, §19).
-DISPATCH_LOCK = "dispatch.lock"
+DISPATCH_LOCK: Final = "dispatch.lock"
 
 if TYPE_CHECKING:
     from canopy.core.config import Config

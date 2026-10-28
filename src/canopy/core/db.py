@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, LiteralString, assert_never
+from typing import TYPE_CHECKING, Final, Literal, LiteralString, assert_never
 
 from canopy.core import item_numbers, records, sql
 from canopy.core.vocab import (
@@ -35,25 +35,25 @@ from canopy.runtime.report import ToolUse, Usage
 if TYPE_CHECKING:
     from canopy.core.vocab import AnyRunStatus, RunStatus
 
-DB_FILE_NAME = "canopy.db"
+DB_FILE_NAME: Final = "canopy.db"
 # How long a connection waits for another to release the write lock before its write fails as `database is locked`.
-BUSY_SECONDS = 10.0
-_MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
+BUSY_SECONDS: Final = 10.0
+_MIGRATION_RE: Final = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 # The rationale the overseer gives a `done` decision for a ticket the tracker reports closed (DESIGN §7).
-CLOSED_RATIONALE = "closed"
+CLOSED_RATIONALE: Final = "closed"
 # The version of canopy this process runs, recorded on each tick it starts (DESIGN §6). Read once, at import: an upgrade
 # while `canopy loop` runs replaces the installed package's metadata, not the code this process loaded, so a read per
 # tick would name the new release on ticks the old code ran.
-CANOPY_VERSION = version("canopy")
+CANOPY_VERSION: Final = version("canopy")
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
 # review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a ticket's,
 # over journal message ids (DESIGN §22); the rest are journal numbers (§35), but for the comment cursor of a ticket no
 # tracker source observes, which has none to name: it is the tracker's comment id, in `UNTRACKED_COMMENT`.
-TICKET_CURSORS: Mapping[str, LiteralString] = {"comment": "comment_cursor", "message": "last_message_id"}
-UNIT_CURSORS: Mapping[str, LiteralString] = {"review": "review_cursor", "ci": "ci_cursor"}
-CURSOR_COLUMNS: Mapping[str, LiteralString] = {**TICKET_CURSORS, **UNIT_CURSORS}
-UNTRACKED_COMMENT: LiteralString = "last_comment_id"
+TICKET_CURSORS: Final[Mapping[str, LiteralString]] = {"comment": "comment_cursor", "message": "last_message_id"}
+UNIT_CURSORS: Final[Mapping[str, LiteralString]] = {"review": "review_cursor", "ci": "ci_cursor"}
+CURSOR_COLUMNS: Final[Mapping[str, LiteralString]] = {**TICKET_CURSORS, **UNIT_CURSORS}
+UNTRACKED_COMMENT: Final[LiteralString] = "last_comment_id"
 #: The columns of a ticket whose change is activity, as `change_ticket` sets them. A column name in SQL comes from
 #: here, never from input.
 type TicketChange = Literal["phase", "title", "done", "plan_setting"]
@@ -63,23 +63,23 @@ type TicketChange = Literal["phase", "title", "done", "plan_setting"]
 type RunTable = Literal["runs", "chore_runs", "review_runs", "task_runs"]
 # The rows whose agent's progress `set_progress` records as it prints; a worker run's is `set_run_progress`.
 type ProgressTable = Literal["ticks", "chore_runs", "task_runs", "review_runs"]
-RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs", "task_runs")
+RUN_TABLES: Final[tuple[RunTable, ...]] = ("runs", "chore_runs", "review_runs", "task_runs")
 # What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
 # process group the run's own process starts, which outlives that process if it dies.
-RUN_NOUNS: Mapping[RunTable, str] = {
+RUN_NOUNS: Final[Mapping[RunTable, str]] = {
     "runs": "run",
     "chore_runs": "chore run",
     "review_runs": "review run",
     "task_runs": "task run",
 }
-AGENT_PID: Mapping[RunTable, LiteralString] = {
+AGENT_PID: Final[Mapping[RunTable, LiteralString]] = {
     "runs": "worker_pid",
     "chore_runs": "agent_pid",
     "review_runs": "agent_pid",
     "task_runs": "agent_pid",
 }
 #: The run tables whose runs each hold a slot, and so count toward `capacity.max_workers` (DESIGN §6, §21, §36).
-SLOT_TABLES: tuple[RunTable, ...] = ("runs", "review_runs", "task_runs")
+SLOT_TABLES: Final[tuple[RunTable, ...]] = ("runs", "review_runs", "task_runs")
 
 
 class MigrationError(Exception):
@@ -678,7 +678,7 @@ def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
 # A run with its ticket's title as `ticket_title`, a `resume`'s reasons as `reasons`, comma-separated (read them with
 # `reasons_in`), and whether the operator stopped its ticket as `ticket_stopped`, for display (DESIGN §8, §13, §22).
 # Every query a page or `canopy status` shows runs from starts here.
-_RUNS = (
+_RUNS: Final = (
     sql.select(
         "r.*, t.title AS ticket_title, "
         "(SELECT group_concat(w.reason, ',') FROM run_reasons w WHERE w.run_id = r.id) AS reasons, "
@@ -689,7 +689,7 @@ _RUNS = (
     .left_join("tickets t ON t.key = r.ticket_key")
 )
 # What a run table's rows are read as: a run with its ticket's title, for display, and any other run as it is.
-_RUN_SELECT: Mapping[RunTable, sql.Select] = {
+_RUN_SELECT: Final[Mapping[RunTable, sql.Select]] = {
     "runs": _RUNS,
     "chore_runs": sql.select("r.*").from_("chore_runs r"),
     "review_runs": sql.select("r.*").from_("review_runs r"),
@@ -1040,7 +1040,7 @@ def run_tools(conn: sqlite3.Connection, table: RunTable | Literal["ticks"], run_
 
 
 #: The assignments of a row's cost and token columns, a `?` for each of what `_spent` returns, in its order.
-_SPENT: LiteralString = (
+_SPENT: Final[LiteralString] = (
     "cost_usd = ?, tokens_input = ?, tokens_output = ?, tokens_reasoning = ?, tokens_cache_read = ?, "
     "tokens_cache_write = ?, tokens_peak_context = ?, tokens_first_call = ?, tokens_first_cache_write = ?, "
     "tokens_first_cache_read = ?"
@@ -1392,7 +1392,7 @@ def decision_count(conn: sqlite3.Connection, tick_id: int) -> int:
 # Conversations (DESIGN §22)
 
 # The kind of subject a ticket is. Messages and start records are keyed by subject, so a new kind adds no table (D075).
-SUBJECT_TICKET = "ticket"
+SUBJECT_TICKET: Final = "ticket"
 
 
 def insert_message(
@@ -1642,7 +1642,7 @@ def _weighed_tickets(conn: sqlite3.Connection, keys: str, limit: int) -> list[sq
 # running ones between them give each run's time as `recent_tickets` takes it. Messages and start records may name a
 # ticket the journal has no row for, which the join leaves out, so one never takes a real ticket's place; CROSS JOIN
 # keeps SQLite reading the start records in order from their index, rather than sorting every one.
-_TICKET_ACTIVITY = (
+_TICKET_ACTIVITY: Final = (
     sql.select("key, changed_at").from_("tickets").order_by("changed_at DESC"),
     sql.select("m.subject_id, m.at")
     .from_("messages m")

@@ -24,7 +24,7 @@ import sqlite3
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import LiteralString, Protocol, runtime_checkable
+from typing import Final, LiteralString, Protocol, runtime_checkable
 
 #: A value sqlite3 binds to a `?`. A `StrEnum` member is a `str`, and a `bool` an `int`.
 type Value = str | int | float | bytes | None
@@ -37,7 +37,7 @@ class PerRow(Enum):
 
 
 #: A value bound from each row a statement is run for, by `execute_many`, in the order the `ROW`s appear.
-ROW = PerRow.ROW
+ROW: Final = PerRow.ROW
 #: What a fragment binds to its `?`s: a value, or a `ROW` that `execute_many` fills.
 type Bound = Value | PerRow
 
@@ -659,8 +659,8 @@ class Delete:
 
 
 # A slot, or a quoted string or identifier, whose `?`s and `{}`s are not slots.
-_TOKEN = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|\?|\{\}")
-_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_TOKEN: Final = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|\?|\{\}")
+_IDENTIFIER: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 def _filled(params: Sequence[Bound], row: Sequence[Value], wanted: int) -> list[Value]:

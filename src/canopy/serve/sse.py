@@ -11,7 +11,7 @@ failure in a stream logs as it did and carries none of this noise.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import anyio
 from starlette.datastructures import Headers
@@ -19,7 +19,7 @@ from starlette.datastructures import Headers
 if TYPE_CHECKING:
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-_EVENT_STREAM = "text/event-stream"
+_EVENT_STREAM: Final = "text/event-stream"
 
 
 class QuietLeaving:

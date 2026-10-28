@@ -8,7 +8,7 @@ command refuses inside one of canopy's own ticks or runs, where an agent would r
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import config, sandboxing
 from canopy.core.vocab import RunKind
@@ -21,14 +21,14 @@ if TYPE_CHECKING:
     from canopy.core.settings import Layer
 
 #: What stands for the prompt in a rendered command: canopy writes a new one for each run.
-PROMPT = "<prompt>"
+PROMPT: Final = "<prompt>"
 #: The ticket an example title names.
-EXAMPLE_KEY = "PROJ-1"
+EXAMPLE_KEY: Final = "PROJ-1"
 #: The PR an example reviewer's title names.
-EXAMPLE_PR = "https://github.com/owner/repo/pull/1"
+EXAMPLE_PR: Final = "https://github.com/owner/repo/pull/1"
 
 #: The wrapper's role for each command a run in a sandboxed repository starts in it (DESIGN §24).
-_SANDBOX_ROLES: dict[str, sandboxing.Role] = {
+_SANDBOX_ROLES: Final[dict[str, sandboxing.Role]] = {
     "worker": "worker",
     "private worker": "worker",
     "planner": "worker",

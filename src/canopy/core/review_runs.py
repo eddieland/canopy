@@ -6,7 +6,7 @@ A review run's lifecycle, from its claim to its close, is the one every run tabl
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import DismissalReason, HoldKind, ReviewRunStatus
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 #: A PR's reviews: its review runs but the revisions of their drafts (DESIGN §34), which review nothing, report no
 #: verdict, and count toward their draft's limit rather than the PR's.
-_REVIEWS = sql.select("*").from_("review_runs").where("revises IS NULL")
+_REVIEWS: Final = sql.select("*").from_("review_runs").where("revises IS NULL")
 
 
 def insert_review_run(

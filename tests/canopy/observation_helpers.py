@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 from canopy.core import artifact_feed, conversation, db, item_numbers, records, sql
@@ -24,17 +24,17 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: The time the observation tests are read at; an observation at `FRESH` is fresh, one at `OLD` stale.
-NOW = datetime(2026, 10, 20, 12, tzinfo=UTC)
+NOW: Final = datetime(2026, 10, 20, 12, tzinfo=UTC)
 #: When canopy first held the tests' tickets: before any was observed.
-FIRST_SEEN = "2026-10-20T09:00:00.000Z"
-FRESH = "2026-10-20T11:59:00.000Z"
-OLD = "2026-10-20T10:00:00.000Z"
-PR = "https://github.com/acme/repo/pull/7"
-HEAD = "abc1234"
+FIRST_SEEN: Final = "2026-10-20T09:00:00.000Z"
+FRESH: Final = "2026-10-20T11:59:00.000Z"
+OLD: Final = "2026-10-20T10:00:00.000Z"
+PR: Final = "https://github.com/acme/repo/pull/7"
+HEAD: Final = "abc1234"
 #: A tracker source, so tickets are observed.
-TRACKER = {"connect": {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira"}}}}
+TRACKER: Final = {"connect": {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira"}}}}
 #: Who the tests trust: `acc-1` replies, `octocat` reviews.
-TRUST = {"trust": {"authorized_repliers": ["acc-1"], "trusted_reviewers": ["Octocat"]}}
+TRUST: Final = {"trust": {"authorized_repliers": ["acc-1"], "trusted_reviewers": ["Octocat"]}}
 
 
 @contextmanager
@@ -217,7 +217,7 @@ def review(
 
 
 #: Who comments on an artifact in the helpers' changes: a person the store signed in.
-ANA = {"id": "u_ana", "display_name": "Ana", "kind": "person"}
+ANA: Final = {"id": "u_ana", "display_name": "Ana", "kind": "person"}
 
 
 def artifact_comment(

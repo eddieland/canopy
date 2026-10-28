@@ -4,6 +4,7 @@ import io
 import stat
 import sys
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -14,8 +15,8 @@ from tests.canopy.helpers import present
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
-DOC = "# Importer\n\nShard the queue by tenant.\n"
-TASK = Ref(conversation.TASK, "1")
+DOC: Final = "# Importer\n\nShard the queue by tenant.\n"
+TASK: Final = Ref(conversation.TASK, "1")
 
 
 @pytest.fixture

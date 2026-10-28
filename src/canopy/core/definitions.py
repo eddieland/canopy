@@ -26,7 +26,7 @@ import stat
 import tempfile
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import agent_models, bash_allows, commit_hooks, prompts, replies
 from canopy.core.config import NO_TEMPERATURE
@@ -46,10 +46,10 @@ if TYPE_CHECKING:
 # Kept importable from here: the features catch `DefinitionsError` as the snapshot's.
 __all__ = ["RUNTIME_DIR", "DefinitionsError", "digest", "ensure", "prune", "rules", "sources"]
 
-RUNTIME_DIR = "runtime"
-_TMP_PREFIX = ".tmp-"
+RUNTIME_DIR: Final = "runtime"
+_TMP_PREFIX: Final = ".tmp-"
 # A temporary directory this old belongs to a process that died mid-copy; a copy takes well under a second.
-_STALE_TMP_SECONDS = 3600
+_STALE_TMP_SECONDS: Final = 3600
 
 
 def sources(config: Config | None = None, models: Mapping[str, Model] | None = None) -> dict[str, bytes]:

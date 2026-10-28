@@ -10,7 +10,7 @@ import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict
+from typing import Final, TypedDict
 from unittest import mock
 
 import canopy_sandbox
@@ -22,7 +22,7 @@ from canopy.setup import sandbox
 from tests.conftest import CanopyEnv, executable
 
 # Records its arguments and working directory, prints $FAKE_STDOUT_<NAME>, then exits with $FAKE_EXIT_<NAME>, or 0.
-STUB = """\
+STUB: Final = """\
 #!{python}
 import json, os, sys
 from pathlib import Path
@@ -34,7 +34,7 @@ sys.stderr.write(os.environ.get("FAKE_STDERR", ""))
 sys.exit(int(os.environ.get("FAKE_EXIT_" + name.upper(), "0")))
 """
 # `npm ci`: replaces node_modules, as npm does, with an srt from the lockfile that answers its version to --version.
-NPM = STUB.replace(
+NPM: Final = STUB.replace(
     "sys.stderr.write",
     """if sys.argv[1:2] == ["ci"] and os.environ.get("FAKE_EXIT_NPM", "0") == "0":
     import shutil
@@ -47,7 +47,7 @@ NPM = STUB.replace(
     srt.chmod(0o755)
 sys.stderr.write""",
 )
-LINUX_COMMANDS = ("bwrap", "socat", "rg", "npm", "canopy-sandbox")
+LINUX_COMMANDS: Final = ("bwrap", "socat", "rg", "npm", "canopy-sandbox")
 
 
 class Call(TypedDict):

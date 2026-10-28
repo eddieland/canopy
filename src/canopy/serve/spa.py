@@ -14,7 +14,7 @@ import base64
 import hashlib
 import re
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
@@ -22,15 +22,15 @@ if TYPE_CHECKING:
     from starlette.requests import Request
 
 # Vite puts content-hashed files here; a name changes whenever its content does, so they can be cached forever.
-_ASSETS = "assets"
-_IMMUTABLE = "public, max-age=31536000, immutable"
+_ASSETS: Final = "assets"
+_IMMUTABLE: Final = "public, max-age=31536000, immutable"
 # index.html names the current assets, so the browser must revalidate it on every load or an upgrade shows a stale UI.
-_NO_CACHE = "no-cache"
+_NO_CACHE: Final = "no-cache"
 # The name of the meta tag in index.html that holds its build's id (SinglePageApp.build); the UI reads it there.
-BUILD_META = "canopy-build"
-_INLINE_SCRIPT = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.DOTALL)
+BUILD_META: Final = "canopy-build"
+_INLINE_SCRIPT: Final = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.DOTALL)
 
-_NOT_BUILT = """<!doctype html>
+_NOT_BUILT: Final = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>canopy</title></head>
 <body><p>canopy's web UI is not built into this installation. Build it with <code>make ui-build</code>, or
 reinstall canopy with Node 22.12+ and npm on PATH.</p></body></html>

@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum
-from typing import TYPE_CHECKING, TypedDict, assert_never
+from typing import TYPE_CHECKING, Final, TypedDict, assert_never
 
 from canopy.chores import start as chore_start
 from canopy.core import chore_view, conversation, db, feedback_plans, records, sql
@@ -58,7 +58,7 @@ class Rank(IntEnum):
 
 
 #: The rank of each row of §7 that dispatches.
-PHASE_RANKS: Mapping[Phase, Rank] = {
+PHASE_RANKS: Final[Mapping[Phase, Rank]] = {
     Phase.HUMAN_REPLIED: Rank.HUMAN,
     Phase.CHANGES_REQUESTED: Rank.HUMAN,
     Phase.REVIEW_FINDINGS: Rank.HUMAN,
@@ -70,7 +70,7 @@ PHASE_RANKS: Mapping[Phase, Rank] = {
     Phase.READY: Rank.READY,
 }
 #: The rank of the row each reason of a `resume` answers. `retarget` follows a blocker that merged: work in flight.
-REASON_RANKS: Mapping[ResumeReason, Rank] = {
+REASON_RANKS: Final[Mapping[ResumeReason, Rank]] = {
     ResumeReason.REPLY: Rank.HUMAN,
     ResumeReason.REVIEW: Rank.HUMAN,
     ResumeReason.CONFLICT: Rank.REPAIR,
@@ -79,7 +79,7 @@ REASON_RANKS: Mapping[ResumeReason, Rank] = {
     ResumeReason.NO_PR: Rank.NO_PR,
 }
 #: What a `dispatch:chore` the harness makes says of why it runs.
-CHORE_WHY = "due, with no `when`"
+CHORE_WHY: Final = "due, with no `when`"
 
 
 @dataclass(frozen=True)
@@ -94,7 +94,7 @@ class Row:
 
 #: The rows the harness dispatches for, none yet: each rests on what a connector observed (a PR's mergeability, its
 #: checks, a branch with no PR), so each waits on its measurement.
-ROWS: Mapping[Phase, Row] = {}
+ROWS: Final[Mapping[Phase, Row]] = {}
 
 
 @dataclass(frozen=True)

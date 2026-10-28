@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from canopy.core import conversation, db, observe, records, slack_replies, sql
 from canopy.core.config import Notify, Sink, Source
@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-NAME = "slack"
-OPERATOR = "U0OPERATOR"
-SOURCE = Source(kind="slack", cmd=f"connector {NAME}", operators=(OPERATOR,))
+NAME: Final = "slack"
+OPERATOR: Final = "U0OPERATOR"
+SOURCE: Final = Source(kind="slack", cmd=f"connector {NAME}", operators=(OPERATOR,))
 
 
 def says(ts: str, body: str, *, user: str = OPERATOR, ticket: str = KEY) -> dict[str, object]:

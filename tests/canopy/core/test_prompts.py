@@ -1,4 +1,5 @@
 import re
+from typing import Final
 
 import pytest
 from syrupy.assertion import SnapshotAssertion
@@ -10,11 +11,11 @@ from tests.canopy.helpers import PROMPT_VALUES, with_rebase
 from tests.conftest import CanopyEnv
 
 # A row of the overseer prompt's phase table: `| `phase` | evidence | action |`.
-_PHASE_ROW = re.compile(r"^\| `([a-z_]+)` \|", re.MULTILINE)
+_PHASE_ROW: Final = re.compile(r"^\| `([a-z_]+)` \|", re.MULTILINE)
 
-UNIT_KINDS = sorted(k for k in prompts.WORKER if k != "plan")
+UNIT_KINDS: Final = sorted(k for k in prompts.WORKER if k != "plan")
 #: What a plan's prompt needs beside the worker's values (DESIGN §25).
-PLAN_VALUES = {
+PLAN_VALUES: Final = {
     **PROMPT_VALUES,
     "AUTHORIZATION": "check",
     "PLAN_FILE": ".canopy-plan.md",
@@ -22,7 +23,7 @@ PLAN_VALUES = {
     "MAX_PLAN_CHARS": "100,000",
 }
 # The kinds whose prompt checks the queue label through `{{LABELS}}`: a plan's carries its check in `{{AUTHORIZATION}}`.
-LABELED_KINDS = sorted(k for k in prompts.WORKER if k != "plan")
+LABELED_KINDS: Final = sorted(k for k in prompts.WORKER if k != "plan")
 
 
 @pytest.mark.parametrize("kind", UNIT_KINDS)
@@ -104,7 +105,7 @@ def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:
 
 
 #: An override with two sections that may not apply, one ending a line another placeholder goes on with.
-SECTIONS = """Work {{KEY}} with {{LABELS}}.
+SECTIONS: Final = """Work {{KEY}} with {{LABELS}}.
 
 {{#CONTEXT}}
 
@@ -603,7 +604,7 @@ def test_a_resume_names_each_of_its_reasons_in_the_vocabularys_order() -> None:
 
 
 #: The levels at which a planner is told how to say its plan needs no review (DESIGN §25).
-APPROVING = [level for level in PlannerApproval if level is not PlannerApproval.OFF]
+APPROVING: Final = [level for level in PlannerApproval if level is not PlannerApproval.OFF]
 
 
 def test_a_planner_hears_nothing_of_review_while_the_key_is_off() -> None:

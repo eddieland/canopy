@@ -4,6 +4,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -12,10 +13,10 @@ from canopy.runtime.report import SessionPage, SessionSpend
 from tests.canopy.helpers import in_zone
 from tests.conftest import Journals
 
-NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
+NOW: Final = datetime(2026, 10, 8, 12, tzinfo=UTC)
 #: A workspace state directory none of these journals' sessions ran in.
-STATE_DIR = Path("/work/.canopy")
-PR = "https://github.com/acme/api/pull/7"
+STATE_DIR: Final = Path("/work/.canopy")
+PR: Final = "https://github.com/acme/api/pull/7"
 
 
 def at(month: int, day: int, hour: int = 12) -> str:

@@ -10,7 +10,7 @@ run's prompt could be served.
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 import click
 
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: What each line of a memory's text is printed after, under the line that names it.
-_INDENT = "      "
+_INDENT: Final = "      "
 
 
 @click.group("memory", cls=Group)

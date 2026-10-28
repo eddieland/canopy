@@ -6,6 +6,7 @@ import re
 import sqlite3
 import time
 from pathlib import Path
+from typing import Final
 
 import pytest
 from syrupy.assertion import SnapshotAssertion
@@ -35,8 +36,10 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool
 
-PLAN = dispatches(kind=RunKind.PLAN)
-TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button to `ui/form.tsx`, red.\n\n## Tests\n\nA test of the colour.\n"
+PLAN: Final = dispatches(kind=RunKind.PLAN)
+TEXT: Final = (
+    "# Plan for PROJ-1\n\n## repo\n\nAdd the button to `ui/form.tsx`, red.\n\n## Tests\n\nA test of the colour.\n"
+)
 
 
 def test_a_plan_is_written_to_its_file_and_recorded_proposed(
@@ -313,7 +316,7 @@ def test_a_plans_effort_is_recorded_as_its_planner_judged_and_one_it_misspells_d
 
 
 #: A planner's result saying its plan needs no review, with its reason (DESIGN §25).
-NO_REVIEW = {
+NO_REVIEW: Final = {
     "status": "done",
     "summary": "planned it",
     "review": "not_needed",

@@ -8,6 +8,7 @@ import time
 from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -23,8 +24,8 @@ from canopy.runtime.implementation import Version
 from canopy.runtime.opencode import definitions as opencode_definitions
 from tests.conftest import CanopyEnv
 
-PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
-SKILL_MARKER = "    # canopy: skill rule\n"
+PROMPT_MARKER: Final = "<!-- canopy: overseer prompt -->\n"
+SKILL_MARKER: Final = "    # canopy: skill rule\n"
 
 
 def test_the_snapshot_holds_the_bundled_agents_skills_and_plugins(tmp_path: Path) -> None:
@@ -216,7 +217,7 @@ def test_workers_may_push_as_their_prompts_say_and_never_force(agent: str) -> No
         assert not _allowed(rules, refused), refused
 
 
-LEASED_PUSH = "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x"
+LEASED_PUSH: Final = "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x"
 
 
 @pytest.mark.parametrize("agent", ["canopy-worker", agents.PRIVATE_WORKER])
@@ -246,7 +247,7 @@ def test_with_rebase_workers_may_push_with_a_lease_and_no_other_force(canopy_env
 
 
 # Each agent whose temperature is rendered from config, with its key in `[runtime]`.
-TEMPERATURES = [
+TEMPERATURES: Final = [
     ("canopy-reviewer", "review_temperature"),
     ("canopy-overseer", "overseer_temperature"),
 ]
@@ -477,7 +478,7 @@ def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
 
 #: The agents example chores come with, copies of `canopy-chore` that `canopy chore install` puts in the workspace: the
 #: commands their prompts run, and canopy's reports they read through tools (DESIGN §27).
-CHORE_AGENTS: Mapping[str, tuple[Sequence[str], Sequence[str]]] = {
+CHORE_AGENTS: Final[Mapping[str, tuple[Sequence[str], Sequence[str]]]] = {
     "canopy-introspect": (
         (),
         (
@@ -572,11 +573,11 @@ def test_the_planner_reads_the_ticket_and_writes_nothing(canopy_env: CanopyEnv, 
 
 
 #: A chore's one tool of canopy's, its own history (DESIGN §19), as the runtime names it.
-CHORE_HISTORY = history.tool_name()
+CHORE_HISTORY: Final = history.tool_name()
 
 
 #: canopy's read-only reports, whose server a chore's run is also given (DESIGN §27), as the runtime names them.
-REPORTS = reports.tool_names()
+REPORTS: Final = reports.tool_names()
 
 
 @pytest.mark.parametrize("provider", ["github", "jira"])
@@ -606,9 +607,9 @@ def test_no_other_agent_may_call_a_chores_history_tool_or_canopys_reports(
 
 
 #: canopy's read-only git tools, the reviewer's and the planner's (DESIGN §27), as the runtime names them.
-GIT_TOOLS = git_tools.tool_names()
+GIT_TOOLS: Final = git_tools.tool_names()
 #: The agents that read git through them, having no shell.
-GIT_READERS = {agents.REVIEWER, agents.PLANNER}
+GIT_READERS: Final = {agents.REVIEWER, agents.PLANNER}
 
 
 @pytest.mark.parametrize("provider", ["github", "jira"])
@@ -636,9 +637,9 @@ def test_no_other_agent_may_call_canopys_git_tools(canopy_env: CanopyEnv, agent:
 
 
 #: The artifact store's tools as the runtime names them on a server called `louvre` (DESIGN §38), the feed among them.
-STORE_TOOLS = tuple(f"louvre_{tool}" for tool in (*config.ARTIFACT_TOOLS, "comment_feed"))
+STORE_TOOLS: Final = tuple(f"louvre_{tool}" for tool in (*config.ARTIFACT_TOOLS, "comment_feed"))
 #: The store's skill, which every definition denies but a publishing worker's.
-STORE_SKILL = "canopy-artifacts"
+STORE_SKILL: Final = "canopy-artifacts"
 
 
 def _publish(canopy_env: CanopyEnv, roles: str = '["worker"]') -> None:
@@ -824,7 +825,7 @@ def test_an_overseer_override_canopy_cannot_read_refuses_the_snapshot(canopy_env
         definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
 
 
-JIRA_CLI_READS = ("jira issue list *", "jira issue view *")
+JIRA_CLI_READS: Final = ("jira issue list *", "jira issue view *")
 
 
 def test_the_overseer_may_run_the_commands_config_allows_it_and_its_snapshot_says_so(canopy_env: CanopyEnv) -> None:
@@ -910,7 +911,7 @@ def test_each_worker_definition_as_rendered_with_a_store_the_worker_publishes_to
 
 
 #: GitHub's MCP tools, as its server v2.0.2 lists them on its default toolsets, in OpenCode's `<server>_<tool>` form.
-GITHUB_TOOLS = tuple(
+GITHUB_TOOLS: Final = tuple(
     f"github_{tool}"
     for tool in (
         "get_me",
@@ -963,7 +964,7 @@ GITHUB_TOOLS = tuple(
 )
 #: The ones no canopy prompt asks for: teams, users, UI data, releases, tags, repository search and creation, forks,
 #: collaborators, and Copilot.
-UNASKED_GITHUB_TOOLS = (
+UNASKED_GITHUB_TOOLS: Final = (
     "github_get_teams",
     "github_get_team_members",
     "github_search_users",
@@ -981,7 +982,7 @@ UNASKED_GITHUB_TOOLS = (
     "github_request_copilot_review",
 )
 #: The overseer's reads of GitHub: PRs, with their checks, reviews, and merge state; branches; and the signed-in user.
-OVERSEER_GITHUB_READS = {
+OVERSEER_GITHUB_READS: Final = {
     "github_pull_request_read",
     "github_list_pull_requests",
     "github_search_pull_requests",
@@ -989,7 +990,7 @@ OVERSEER_GITHUB_READS = {
     "github_get_me",
 }
 #: Its reads of GitHub's issues, which are the tickets only when the tracker is GitHub.
-GITHUB_ISSUE_READS = {"github_issue_read", "github_list_issues", "github_search_issues"}
+GITHUB_ISSUE_READS: Final = {"github_issue_read", "github_list_issues", "github_search_issues"}
 
 
 def _ruleset(canopy_env: CanopyEnv, agent: str) -> list[tuple[str, str, str]]:
@@ -998,7 +999,7 @@ def _ruleset(canopy_env: CanopyEnv, agent: str) -> list[tuple[str, str, str]]:
 
 
 #: The overseer's tools, as the runtime names them to it: `canopy_dispatch`, ... (DESIGN §27).
-CANOPY_TOOLS = [servers.tool_name(mcp.SERVER, tool.name) for tool in mcp.TOOLS]
+CANOPY_TOOLS: Final = [servers.tool_name(mcp.SERVER, tool.name) for tool in mcp.TOOLS]
 
 
 @pytest.mark.parametrize("provider", ["jira", "github"])
@@ -1060,7 +1061,7 @@ def _set_provider(canopy_env: CanopyEnv, provider: str) -> None:
 
 
 #: Tools of Atlassian's server that write to Jira, and the `execute` ones that run another by name, read or write.
-JIRA_WRITES = (
+JIRA_WRITES: Final = (
     "addCommentToJiraIssue",
     "addWorklogToJiraIssue",
     "createIssueLink",
@@ -1253,13 +1254,13 @@ def test_the_chore_is_sent_githubs_reads_whatever_the_tracker(canopy_env: Canopy
 
 #: GitHub's issue tools, which only the `tracker-github` skill names: its issue reads, and what filing or labelling an
 #: issue takes.
-GITHUB_ISSUE_TOOLS = GITHUB_ISSUE_READS | {
+GITHUB_ISSUE_TOOLS: Final = GITHUB_ISSUE_READS | {
     "github_issue_write",
     "github_list_issue_types",
     "github_list_issue_fields",
     "github_get_label",
 }
-ISSUES_MARKER = "  # canopy: github issue tools\n"
+ISSUES_MARKER: Final = "  # canopy: github issue tools\n"
 
 
 @pytest.mark.parametrize("provider", ["jira", "github"])
@@ -1291,9 +1292,9 @@ def test_workers_and_the_planner_lose_githubs_issue_tools_off_a_github_tracker_a
 
 
 #: The tracker's tools each agent's prompt names, by provider: a run must be sent each.
-JIRA = config.DEFAULT_TRACKER_TOOLS["jira"]
-JIRA_READS = frozenset(f"{JIRA.server}_{read}" for read in JIRA.allowed)
-PROMPT_TRACKER_TOOLS: dict[tuple[str, str], AbstractSet[str]] = {
+JIRA: Final = config.DEFAULT_TRACKER_TOOLS["jira"]
+JIRA_READS: Final = frozenset(f"{JIRA.server}_{read}" for read in JIRA.allowed)
+PROMPT_TRACKER_TOOLS: Final[dict[tuple[str, str], AbstractSet[str]]] = {
     (agents.OVERSEER, "jira"): JIRA_READS,
     (agents.WORKER, "jira"): JIRA_READS
     | {
@@ -1311,7 +1312,7 @@ PROMPT_TRACKER_TOOLS: dict[tuple[str, str], AbstractSet[str]] = {
     (agents.CHORE, "github"): GITHUB_ISSUE_READS,
 }
 #: GitHub's tools each agent's prompt names for its PRs, whatever the tracker.
-PROMPT_GITHUB_TOOLS: dict[str, AbstractSet[str]] = {
+PROMPT_GITHUB_TOOLS: Final[dict[str, AbstractSet[str]]] = {
     agents.OVERSEER: OVERSEER_GITHUB_READS,
     agents.WORKER: {"github_pull_request_read", "github_create_pull_request", "github_update_pull_request"},
     agents.PRIVATE_WORKER: {"github_pull_request_read", "github_create_pull_request", "github_update_pull_request"},
@@ -1333,7 +1334,7 @@ def test_each_agent_is_sent_each_tool_its_prompt_names(canopy_env: CanopyEnv, ag
 
 #: GitHub's tools the planner may call when the tracker is GitHub: its reads of issues and PRs,
 #: and the signed-in user. The code they read in their desks.
-PLANNER_GITHUB_READS = {
+PLANNER_GITHUB_READS: Final = {
     "github_get_me",
     "github_issue_read",
     "github_list_issues",
@@ -1345,7 +1346,7 @@ PLANNER_GITHUB_READS = {
     "github_search_pull_requests",
 }
 #: The tools the private worker opens, updates, and replies on its PRs with, through GitHub's server.
-GITHUB_PR_WRITES = ("create_pull_request", "update_pull_request", "add_reply_to_pull_request_comment")
+GITHUB_PR_WRITES: Final = ("create_pull_request", "update_pull_request", "add_reply_to_pull_request_comment")
 
 
 def test_with_a_github_tracker_the_planner_reads_and_writes_nothing(canopy_env: CanopyEnv) -> None:
@@ -1440,7 +1441,7 @@ def test_under_approve_workers_lose_the_tools_that_comment(
 
 
 #: Each key of `runtime.models`, and the agents it chooses for.
-MODEL_ROLES = [
+MODEL_ROLES: Final = [
     ("worker", (agents.WORKER, agents.PRIVATE_WORKER)),
     ("planner", (agents.PLANNER,)),
     ("reviewer", (agents.REVIEWER,)),

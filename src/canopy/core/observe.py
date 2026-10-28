@@ -25,7 +25,7 @@ from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Literal, assert_never, cast
+from typing import TYPE_CHECKING, Annotated, Final, Literal, assert_never, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -52,23 +52,23 @@ if TYPE_CHECKING:
     from canopy.core.config import Config, Source
 
 #: How much of a connector's stderr a run keeps.
-MAX_STDERR = 300
+MAX_STDERR: Final = 300
 #: A connector's stdout past this is cut off: the run fails and records nothing.
-MAX_OUTPUT = 16 * 1024 * 1024
+MAX_OUTPUT: Final = 16 * 1024 * 1024
 #: A line longer than this is refused unread.
-MAX_LINE = 1024 * 1024
+MAX_LINE: Final = 1024 * 1024
 #: A title is cut to this, on one line; a body, as a comment's is, to `conversation.MAX_COMMENT`.
-MAX_TITLE = 200
+MAX_TITLE: Final = 200
 #: More labels or blockers than this refuse the line: a list cut short would read as one removed.
-MAX_LIST = 100
+MAX_LIST: Final = 100
 #: The longest name, path, or URL a line may carry; a longer one refuses the line, since a cut would change it.
-MAX_NAME = 200
-MAX_PATH = 1000
-MAX_URL = 2000
+MAX_NAME: Final = 200
+MAX_PATH: Final = 1000
+MAX_URL: Final = 2000
 #: The kinds each kind of source owns: a line of another kind is skipped, so one source never writes another's facts.
 #: An `artifacts` source owns none of these: its feed is read past a cursor, in `artifact_feed`, never whole. Nor
 #: does a `slack` source: what it reads is the operator's messages, recorded in `slack_replies`.
-OWNS: Mapping[SourceKind, frozenset[str]] = {
+OWNS: Final[Mapping[SourceKind, frozenset[str]]] = {
     SourceKind.TRACKER: frozenset({"ticket", "comment"}),
     SourceKind.VCS: frozenset({"pr", "review", "check", "branch"}),
     SourceKind.ARTIFACTS: frozenset(),
@@ -76,7 +76,7 @@ OWNS: Mapping[SourceKind, frozenset[str]] = {
 }
 #: How a completed CI context ends red: what holds a unit at `ci_red`, and what makes a failed check a feedback plan's
 #: item (DESIGN §32).
-FAILED: AbstractSet[CheckConclusion] = frozenset(
+FAILED: Final[AbstractSet[CheckConclusion]] = frozenset(
     {
         CheckConclusion.FAILURE,
         CheckConclusion.ERROR,
@@ -87,7 +87,7 @@ FAILED: AbstractSet[CheckConclusion] = frozenset(
     },
 )
 #: How a completed CI context passes. One `stale` neither passes nor fails: GitHub left it for a newer run.
-PASSED: AbstractSet[CheckConclusion] = frozenset(
+PASSED: Final[AbstractSet[CheckConclusion]] = frozenset(
     {CheckConclusion.SUCCESS, CheckConclusion.NEUTRAL, CheckConclusion.SKIPPED},
 )
 
@@ -416,13 +416,13 @@ def _pr_url(value: str) -> str:
     return value
 
 
-_LOGIN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\[\]-]*")
-_SHA_RE = re.compile(r"[0-9a-f]{7,64}")
-_HOST_REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
-_REF_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*")
-_NODE_RE = re.compile(r"[A-Za-z0-9_=-]+")
+_LOGIN_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\[\]-]*")
+_SHA_RE: Final = re.compile(r"[0-9a-f]{7,64}")
+_HOST_REPO_RE: Final = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+_REF_RE: Final = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*")
+_NODE_RE: Final = re.compile(r"[A-Za-z0-9_=-]+")
 # Plain ref components, as the branch prefix is: nothing git reads specially.
-_BRANCH_RE = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_.-]*/)*[A-Za-z0-9][A-Za-z0-9_.-]*")
+_BRANCH_RE: Final = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_.-]*/)*[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 _Key = Annotated[str, text_of(conversation.MAX_KEY, conversation.KEY_RE)]
 #: An ISO 8601 time, as the journal writes one; a time with no offset is the source's UTC.
@@ -564,7 +564,7 @@ class _End(_Line):
 
 
 type _Observation = _Ticket | _Comment | _Pr | _Review | _Check | _Branch
-_KINDS: Mapping[str, type[_Observation]] = {
+_KINDS: Final[Mapping[str, type[_Observation]]] = {
     "ticket": _Ticket,
     "comment": _Comment,
     "pr": _Pr,
@@ -573,7 +573,7 @@ _KINDS: Mapping[str, type[_Observation]] = {
     "branch": _Branch,
 }
 # What each kind is about, and the field that names it: a refused line's subject is not whole this run.
-_SUBJECTS: Mapping[str, tuple[Literal["tickets", "prs", "repositories"], str]] = {
+_SUBJECTS: Final[Mapping[str, tuple[Literal["tickets", "prs", "repositories"], str]]] = {
     "ticket": ("tickets", "key"),
     "comment": ("tickets", "ticket"),
     "pr": ("prs", "url"),
@@ -899,7 +899,7 @@ def _keep_check_run(conn: sqlite3.Connection, line: _Check, now: str) -> int | N
 
 
 # How many subjects a run's `missed` names before it counts the rest.
-_NAMED = 5
+_NAMED: Final = 5
 
 
 def _missed(request: Request, whole: Whole, *, query_read: bool, review_read: bool) -> str | None:

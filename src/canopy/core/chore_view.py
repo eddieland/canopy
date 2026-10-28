@@ -12,7 +12,7 @@ import threading
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
 from canopy.core import chore_result as result
 from canopy.core import chore_runs, contract, db, records
@@ -24,10 +24,12 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 # Chore run statuses that raise `chore_failed`: the chore could not check, or left no usable result.
-FAILED = frozenset({ChoreRunStatus.FAILED, ChoreRunStatus.UNKNOWN, ChoreRunStatus.TIMEOUT, ChoreRunStatus.CRASHED})
-FAILED_REASON = "chore_failed"
+FAILED: Final = frozenset(
+    {ChoreRunStatus.FAILED, ChoreRunStatus.UNKNOWN, ChoreRunStatus.TIMEOUT, ChoreRunStatus.CRASHED},
+)
+FAILED_REASON: Final = "chore_failed"
 # How many of a chore's runs to read back at a time. A finding open longer than that reads further back.
-_HISTORY_RUNS = 200
+_HISTORY_RUNS: Final = 200
 
 
 def configured(config: Config, workspace: Workspace) -> dict[str, Chore]:

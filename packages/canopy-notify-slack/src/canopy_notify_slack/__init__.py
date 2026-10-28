@@ -45,25 +45,25 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Protocol
+from typing import Final, Protocol
 
 import click
 
-SLACK_PREFIX = "https://hooks.slack.com/"
-SLACK_API_URL = "https://slack.com/api/chat.postMessage"
+SLACK_PREFIX: Final = "https://hooks.slack.com/"
+SLACK_API_URL: Final = "https://slack.com/api/chat.postMessage"
 # A bot token: a user token (`xoxp-`) acts as the operator, with every scope they granted it.
-TOKEN_PREFIX = "xoxb-"  # noqa: S105
-TIMEOUT_SECONDS = 30
+TOKEN_PREFIX: Final = "xoxb-"  # noqa: S105
+TIMEOUT_SECONDS: Final = 30
 # How much of Slack's reply a failure prints.
-_MAX_REPLY = 500
-_MAX_LINES = 45
+_MAX_REPLY: Final = 500
+_MAX_LINES: Final = 45
 # A channel id (`C0123ABCD`) or a name (`#canopy`, `canopy`).
-_CHANNEL = re.compile(r"#?[A-Za-z0-9._-]{1,80}")
+_CHANNEL: Final = re.compile(r"#?[A-Za-z0-9._-]{1,80}")
 # An emoji code (`:robot_face:`), with an optional skin tone (`:wave::skin-tone-3:`).
-_EMOJI = re.compile(r"(?::[a-z0-9_+'-]{1,100}:){1,2}")
-_MAX_USERNAME = 80
+_EMOJI: Final = re.compile(r"(?::[a-z0-9_+'-]{1,100}:){1,2}")
+_MAX_USERNAME: Final = 80
 # A name canopy gives a reason, such as `needs_reviewer`; a chore's finding names its own, which stays as written.
-_SNAKE = re.compile(r"[a-z]+(?:_[a-z]+)+")
+_SNAKE: Final = re.compile(r"[a-z]+(?:_[a-z]+)+")
 
 
 class SinkError(Exception):
@@ -315,14 +315,14 @@ def render(message: Mapping[str, object]) -> str:
 
 
 # Block Kit's limits: blocks in a message, characters in a section's text and in a header, elements in a context.
-_MAX_BLOCKS = 50
-_MAX_SECTION = 3000
-_MAX_HEADER = 150
-_MAX_CONTEXT = 10
+_MAX_BLOCKS: Final = 50
+_MAX_SECTION: Final = 3000
+_MAX_HEADER: Final = 150
+_MAX_CONTEXT: Final = 10
 # Digest runs listed by name, as the text format lists them.
-_DIGEST_LISTED = 10
+_DIGEST_LISTED: Final = 10
 #: Each kind of run a digest's `spend` names, as its field shows it.
-_SPENT = (
+_SPENT: Final = (
     ("overseer", "overseer"),
     ("workers", "workers"),
     ("plans", "plans"),
@@ -332,16 +332,16 @@ _SPENT = (
     ("dry_run", "dry runs"),
 )
 # A URL in journal text: it runs to a space or an angle bracket, and starts a word or follows punctuation.
-_URL = re.compile(r"(?<![\w/])https?://[^\s<>]+")
+_URL: Final = re.compile(r"(?<![\w/])https?://[^\s<>]+")
 # What ends a sentence or wraps a URL, never the URL's own last character.
-_TRAILING = ".,:;!?'\"`*_~"
-_CLOSING = {")": "(", "]": "["}
+_TRAILING: Final = ".,:;!?'\"`*_~"
+_CLOSING: Final = {")": "(", "]": "["}
 # A link canopy sends to a page of its web UI: a URL's own characters only, so it needs no escaping but `&`, and no `|`
 # can put a label of its own in it. The same class as `serve.url`'s check in canopy's config (`_UI_URL_RE`).
-_PAGE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
-_MAX_PAGE = 2000
+_PAGE: Final = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
+_MAX_PAGE: Final = 2000
 #: Each status a run, a chore's run, or a review's run ends with, as the emoji that leads its line.
-_STATUS_EMOJI = {
+_STATUS_EMOJI: Final = {
     "done": ":white_check_mark:",
     "ok": ":white_check_mark:",
     "blocked": ":raising_hand:",
@@ -356,16 +356,16 @@ _STATUS_EMOJI = {
 
 # A pull request on GitHub, which its link shows by the name its own URL spells, `acme/api#7`: an owner, a repository,
 # and a number, in characters that need no escaping, so the label cannot say anything the URL does not.
-_GITHUB_PR = re.compile(r"https://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/pull/([0-9]{1,10})/?")
+_GITHUB_PR: Final = re.compile(r"https://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/pull/([0-9]{1,10})/?")
 
 #: The events that need the operator, shown before the rest: the loop or a sink failing, and a plan waiting on them.
 #: The same as canopy sends a batching sink at once (DESIGN §20), with a new attention item and a blocked run.
-_NEEDS_YOU = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed"})
+_NEEDS_YOU: Final = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed"})
 #: The events whose `blocked` run asked the operator a question: a ticket's run's, and a task's.
-_ASKING = frozenset({"run.ended", "task.ended"})
+_ASKING: Final = frozenset({"run.ended", "task.ended"})
 
 type Block = dict[str, object]
-_DIVIDER: Block = {"type": "divider"}
+_DIVIDER: Final[Block] = {"type": "divider"}
 
 
 @dataclass(frozen=True)
@@ -701,7 +701,7 @@ def _reply_refused(e: Mapping[str, object]) -> _Shown:
 
 
 # Each event kind as shown, its first line naming what happened: the event's page in the web UI is linked after it.
-_EVENTS: dict[str, Callable[[Mapping[str, object]], _Shown]] = {
+_EVENTS: Final[dict[str, Callable[[Mapping[str, object]], _Shown]]] = {
     "run.started": _run_started,
     "run.ended": _run_ended,
     "plan.proposed": _plan_proposed,
@@ -981,22 +981,22 @@ def _post(url: str, payload: dict[str, object], headers: dict[str, str]) -> tupl
 # Threads, with `--threads`
 
 #: What `--broadcast` can show in the channel from a thread's reply, and what each is.
-BROADCASTS: Mapping[str, str] = {
+BROADCASTS: Final[Mapping[str, str]] = {
     "attention": "a new attention item",
     "plan": "a plan to approve",
     "blocked": "a run that ended blocked, waiting on an answer",
 }
 
 #: What a chore's findings' attention items name as their ticket, before the chore's name.
-_CHORE = "chore:"
+_CHORE: Final = "chore:"
 #: What `_thread` names a part answering the operator's own message by, before its `ts`: never a ticket's key.
-_ANSWER = "answer:"
+_ANSWER: Final = "answer:"
 #: How many days, today's among them, the threads file keeps a thread: as far back as `canopy-connect-slack` reads.
-KEEP_DAYS = 7
+KEEP_DAYS: Final = 7
 #: The threads file's format: 2 added each subject's earlier threads, which a sink that writes 1 drops.
-_VERSION = 2
+_VERSION: Final = 2
 # A message's `ts`, which names it to reply in its thread.
-_TS = re.compile(r"\d{1,20}\.\d{1,20}")
+_TS: Final = re.compile(r"\d{1,20}\.\d{1,20}")
 
 
 def default_threads_file() -> Path:

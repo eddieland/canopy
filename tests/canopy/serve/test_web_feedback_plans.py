@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from unittest import mock
 
 import pytest
@@ -34,8 +34,8 @@ if TYPE_CHECKING:
 
     from tests.canopy.scenario_helpers import Scenario
 
-PR = DRAFTS_PR
-APPROVE = f"/api/tickets/{KEY}/feedback-plan"
+PR: Final = DRAFTS_PR
+APPROVE: Final = f"/api/tickets/{KEY}/feedback-plan"
 
 
 def planned_client(scenario: Scenario, github_state: Path) -> tuple[TestClient, dict[str, str], int]:

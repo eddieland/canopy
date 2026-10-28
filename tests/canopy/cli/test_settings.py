@@ -4,6 +4,7 @@ import json
 import os
 import shlex
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -12,7 +13,7 @@ from canopy.cli.main import main
 from canopy.core import agent_commands, config, conversation, definitions, sandboxing
 from tests.conftest import CanopyEnv
 
-PLAN_CMD = (
+PLAN_CMD: Final = (
     "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --log-level 'some level' "
     "--title={title} {prompt}"
 )

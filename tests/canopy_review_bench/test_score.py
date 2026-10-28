@@ -1,12 +1,14 @@
 """Scoring a run: what finds a bug, what counts as a false alarm, and the summary's numbers."""
 
+from typing import Final
+
 import pytest
 from canopy_review_bench.bench import Side
 from canopy_review_bench.github import Comment
 from canopy_review_bench.score import Rate, Review, SpotRecord, summary
 
-SETTINGS: dict[str, object] = {"label": "bot 2.3", "repo": "acme/api-bench", "reviewers": ["review-bot[bot]"]}
-BUG = SpotRecord(path="src/retry.py", first=5, last=6, side=Side.BASE)
+SETTINGS: Final[dict[str, object]] = {"label": "bot 2.3", "repo": "acme/api-bench", "reviewers": ["review-bot[bot]"]}
+BUG: Final = SpotRecord(path="src/retry.py", first=5, last=6, side=Side.BASE)
 
 
 def comment(path: str = "src/retry.py", line: int = 5, side: Side = Side.BASE) -> Comment:

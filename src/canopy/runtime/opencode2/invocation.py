@@ -17,25 +17,25 @@ from __future__ import annotations
 
 import re
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 #: The runtime, as messages to the operator name it.
-NAME = "OpenCode"
+NAME: Final = "OpenCode"
 #: The variable OpenCode reads its config directory from.
-CONFIG_DIR_ENV = "OPENCODE_CONFIG_DIR"
+CONFIG_DIR_ENV: Final = "OPENCODE_CONFIG_DIR"
 #: The flag that gives a command a private server of its own rather than the shared background service.
-STANDALONE = "--standalone"
+STANDALONE: Final = "--standalone"
 #: The options of `opencode run` that choose a model, its short form, and the model's variant, taken to be 1's: a
 #: template refused for one 2 does not take loses nothing, while one it does take would beat the model in the agent's
 #: definition (DESIGN §13).
-MODEL_OPTION = "--model"
-SHORT_MODEL_OPTION = "-m"
-VARIANT_OPTION = "--variant"
+MODEL_OPTION: Final = "--model"
+SHORT_MODEL_OPTION: Final = "-m"
+VARIANT_OPTION: Final = "--variant"
 # The agent a command runs, as `opencode run` takes it, by a name that is safe as one path component.
-_AGENT_RE = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
+_AGENT_RE: Final = re.compile(r"(--agent[ =])([a-z][a-z0-9-]*)(?=\s|$)")
 
 
 def default_template(agent: str, *, definitions_dir: str, title: str) -> str:

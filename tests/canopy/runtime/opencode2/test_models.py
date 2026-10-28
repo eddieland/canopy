@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 
 #: What OpenCode 2.1.4 listed in a workspace whose config adds a provider, `stub`, cut to three of its models: one of
 #: its own with no variants, one whose `id` is not its `modelID`, and the config's, its key in its `settings`.
-RECORDED = Path(__file__).parent / "recorded" / "model-list.json"
+RECORDED: Final = Path(__file__).parent / "recorded" / "model-list.json"
 #: The command canopy asks the list with.
-ARGV = ("opencode", "api", "--standalone", "model.list")
+ARGV: Final = ("opencode", "api", "--standalone", "model.list")
 
 
 def runner(stdout: str = "", *, code: int = 0, timed_out: bool = False) -> mock.NonCallableMagicMock:

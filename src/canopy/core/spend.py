@@ -23,7 +23,7 @@ import statistics
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import TYPE_CHECKING, Literal, LiteralString
+from typing import TYPE_CHECKING, Final, Literal, LiteralString
 
 from canopy.core import contract, db, records, runtime_sessions, sql
 from canopy.core.vocab import RunKind, SessionsRead
@@ -47,25 +47,25 @@ type _Table = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
 # Every tick that ended is in exactly one group, in this order: a dry run first, whatever the loop said of it, then a
 # live tick that did not close `ok`, then the loop's word on an `ok` one, idle or not, and last a tick no loop ran. A
 # tick from before migration 0013 has no word from the loop either, so it reads as hand-run: nothing can tell.
-GROUPS: tuple[Group, ...] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
-KINDS: tuple[Kind, ...] = ("overseer", "workers", "plans", "chores", "reviews", "tasks")
+GROUPS: Final[tuple[Group, ...]] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
+KINDS: Final[tuple[Kind, ...]] = ("overseer", "workers", "plans", "chores", "reviews", "tasks")
 #: Each kind's weekly series of first calls, in the order `Breakdown.first_call_weeks` lists them.
-BY: tuple[By, ...] = ("kind", "chore", "model")
+BY: Final[tuple[By, ...]] = ("kind", "chore", "model")
 # The longest window `canopy spend` and the web UI read, in days; a year keeps the per-day lines bounded.
-MAX_DAYS = 366
-DEFAULT_DAYS = 7
+MAX_DAYS: Final = 366
+DEFAULT_DAYS: Final = 7
 # The longest window in hours the web UI reads: a week, by the hour.
-MAX_HOURS = 7 * 24
+MAX_HOURS: Final = 7 * 24
 # The idle ticks the web UI links to: the newest in the window.
-IDLE_TICKS = 20
+IDLE_TICKS: Final = 20
 
 # Each kind of agent run but the overseer's, by its table and which of the table's rows it counts: a plan run (§25), an
 # old triage before a plan among them (M55), is a row of `runs`, a kind of its own, and every other row there a
 # worker's, an old split's among them. Then every kind, the overseer's ticks included. The tables and conditions are
 # fixed, never input (D125).
-_PLANS = (RunKind.PLAN, RunKind.NEEDS_PLAN)
-_EVERY = sql.frag("1")
-_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
+_PLANS: Final = (RunKind.PLAN, RunKind.NEEDS_PLAN)
+_EVERY: Final = sql.frag("1")
+_TABLES: Final[Mapping[Kind, tuple[_Table, sql.Fragment]]] = {
     "workers": ("runs", sql.not_in("kind", _PLANS)),
     "plans": ("runs", sql.in_("kind", _PLANS)),
     "chores": ("chore_runs", _EVERY),
@@ -73,30 +73,30 @@ _TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
     "tasks": ("task_runs", _EVERY),
 }
 #: Every kind of agent run by its table and the condition on the table's rows, the overseer's ticks included.
-KIND_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
+KIND_TABLES: Final[Mapping[Kind, tuple[_Table, sql.Fragment]]] = {"overseer": ("ticks", _EVERY), **_TABLES}
 #: The budget whole, as a percentage of it: the alert always sent.
-FULL = 100
+FULL: Final = 100
 # About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
-CHARS_PER_TOKEN = 4
+CHARS_PER_TOKEN: Final = 4
 # The overseer's series, each from the ticks.
-_SERIES = ("overseer", "idle", "dry_run")
+_SERIES: Final = ("overseer", "idle", "dry_run")
 # What a run's row, `r`, says of its first model call, and when it started; then, from the read of its session
 # (`canopy.core.run_models`), the runtime's version its record named and the one model it named, None for none or more
 # than one, each for a `?` the run's table fills; and the chore it ran, for the `{}`.
-_FIRST_CALL: LiteralString = (
+_FIRST_CALL: Final[LiteralString] = (
     "r.definitions_digest, r.tokens_first_call, r.tokens_first_cache_write, r.tokens_first_cache_read, r.started_at, "
     "(SELECT m.runtime_version FROM run_model_reads m WHERE m.run_table = ? AND m.run_id = r.id), "
     "(SELECT CASE WHEN count(*) = 1 THEN max(m.model) END FROM run_models m "
     "WHERE m.run_table = ? AND m.run_id = r.id), {}"
 )
 # The chore a run ran: only a chore's run names one. Fixed, never input (D125).
-_CHORE = sql.frag("r.chore")
-_NO_CHORE = sql.frag("NULL")
+_CHORE: Final = sql.frag("r.chore")
+_NO_CHORE: Final = sql.frag("NULL")
 # The local day a row started on, as `YYYY-MM-DD`: SQLite reads the journal's UTC time in the local time Python does.
-_DAY = sql.frag("date(started_at, 'localtime')")
+_DAY: Final = sql.frag("date(started_at, 'localtime')")
 # The local hour a row started on, as `YYYY-MM-DDTHH`, read the same way.
-_HOUR_FORMAT = "%Y-%m-%dT%H"
-_HOUR = sql.frag("strftime(?, started_at, 'localtime')", _HOUR_FORMAT)
+_HOUR_FORMAT: Final = "%Y-%m-%dT%H"
+_HOUR: Final = sql.frag("strftime(?, started_at, 'localtime')", _HOUR_FORMAT)
 
 
 @dataclass(frozen=True)
