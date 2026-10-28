@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from canopy.core import db, monthly, runtime_sessions, spend
+from canopy.core import db, runtime_sessions, spend
 from canopy.runtime.report import SessionPage, SessionSpend
+from canopy.serve import monthly
 from tests.canopy.helpers import in_zone
 from tests.conftest import Journals
 

@@ -9,10 +9,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import contract, conversation, db, feedback_plans, item_numbers, plans, pools, tasks
+from canopy.core import contract, conversation, db, item_numbers, plans, pools
 from canopy.core.vocab import ResumeReason
 from canopy.reviews import view as review_view
-from canopy.runs import policy
+from canopy.runs import feedback_plans, policy, tasks
 
 if TYPE_CHECKING:
     from canopy.core import records

@@ -15,9 +15,10 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, cast
 
-from canopy.core import contract, conversation, db, outbox, plans, pools, records, sql, task_tickets
+from canopy.core import contract, conversation, db, outbox, plans, pools, records, sql
 from canopy.core.conversation import Refused
 from canopy.core.vocab import RunStatus
+from canopy.runs import task_tickets
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping

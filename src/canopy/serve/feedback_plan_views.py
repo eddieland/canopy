@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, assert_never
 
-from canopy.core import db, feedback_items, feedback_plans, plans, records, sql
+from canopy.core import db, plans, records, sql
 from canopy.core.vocab import PlanItem, PlanStatus
+from canopy.runs import feedback_items, feedback_plans
 from canopy.serve.schema import FeedbackPlanWritten, WaitingFeedbackPlan
 from canopy.serve.schema.feedback_plan import FeedbackPlan, FeedbackPlanApproved, FeedbackPlanItem, ItemName
 

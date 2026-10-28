@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import ConfigDict, Field, StrictInt, WithJsonSchema
 
-from canopy.core import conversation, db, recorded_runs, review_requests, review_revisions, review_runs
+from canopy.core import conversation, db, recorded_runs, review_revisions, review_runs
 from canopy.core.vocab import RecordedStatus
 from canopy.infra import logs
 from canopy.loop import attention
@@ -32,7 +32,7 @@ from canopy.loop.tools import (
     running_tick,
     truncate,
 )
-from canopy.reviews import grants, revise
+from canopy.reviews import grants, review_requests, revise
 from canopy.reviews import start as review_start
 
 if TYPE_CHECKING:

@@ -21,14 +21,8 @@ from typing import TYPE_CHECKING
 
 from canopy.core import (
     agent_models,
-    artifact_authority,
-    attachments,
     conversation,
     db,
-    drafts,
-    feedback_items,
-    feedback_plans,
-    follow_ups,
     memory,
     notice,
     outbox,
@@ -48,7 +42,16 @@ from canopy.core.vocab import PoolKind, RecordedKind, ResumeReason, RunKind, Run
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.infra.text import quoted
-from canopy.runs import plan_guards, policy
+from canopy.runs import (
+    artifact_authority,
+    attachments,
+    drafts,
+    feedback_items,
+    feedback_plans,
+    follow_ups,
+    plan_guards,
+    policy,
+)
 
 if TYPE_CHECKING:
     import sqlite3

@@ -22,18 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import (
-    artifact_authority,
-    conversation,
-    db,
-    item_numbers,
-    observe,
-    personas,
-    plans,
-    records,
-    review_runs,
-    sql,
-)
+from canopy.core import conversation, db, item_numbers, observe, personas, plans, records, review_runs, sql
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
@@ -53,6 +42,7 @@ from canopy.core.workspace import CheckRole
 from canopy.loop import attention, harness
 from canopy.reviews import start as review_start
 from canopy.reviews.start import DISPATCH_ACTION as REVIEW_ACTION
+from canopy.runs import artifact_authority
 
 if TYPE_CHECKING:
     import sqlite3

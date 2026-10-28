@@ -12,10 +12,11 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import chore_runs, db, pr_list, records, review_runs, sql
+from canopy.core import chore_runs, db, records, review_runs, sql
 from canopy.core.vocab import Phase, SeenKind, TickStatus
 from canopy.infra import resources
 from canopy.runtime.report import ToolUse, Usage
+from canopy.serve import pr_list
 from tests.canopy.helpers import DEAD_PID, journal_at, old_ticket, present, shipped_through, versions_after
 from tests.conftest import Journals
 

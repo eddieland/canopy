@@ -16,19 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import (
-    contract,
-    conversation,
-    db,
-    review_answers,
-    review_diff,
-    review_drafts,
-    review_requests,
-    review_runs,
-    run_models,
-)
+from canopy.core import contract, conversation, db, review_answers, review_diff, review_drafts, review_runs, run_models
 from canopy.core import review_result as result
 from canopy.core.vocab import DismissalReason, ReviewRunStatus, SeenKind
+from canopy.reviews import review_requests
 from canopy.serve import review_draft_views
 from canopy.serve.schema.review import (
     DiffFile,

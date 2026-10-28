@@ -19,9 +19,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import agent_models, attachments, conversation, db, notice, pools, prompts, tasks
+from canopy.core import agent_models, conversation, db, notice, pools, prompts
 from canopy.core.vocab import Decider, RunStatus
 from canopy.infra import lock, logs, procs
+from canopy.runs import attachments, tasks
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

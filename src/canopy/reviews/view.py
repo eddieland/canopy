@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import db, personas, review_requests, review_revisions, review_runs
+from canopy.core import db, personas, review_revisions, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
-from canopy.reviews import grants, settle
+from canopy.reviews import grants, review_requests, settle
 from canopy.reviews import start as review_start
 
 if TYPE_CHECKING:

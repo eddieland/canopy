@@ -11,8 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import drafts, drafts_manage, observe, review_drafts_manage, sql
+from canopy.core import observe, review_drafts_manage, sql
 from canopy.core.vocab import DraftStatus, PrState
+from canopy.runs import drafts, drafts_manage
 
 if TYPE_CHECKING:
     import sqlite3

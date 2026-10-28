@@ -1,6 +1,6 @@
 """`canopy task`: the operator's one-off tasks (DESIGN §36), and how `show`, `reply`, and `stop` treat `task:N`.
 
-A submission writes through `canopy.core.tasks`, and a reply through `canopy.core.conversation`, each refusing inside
+A submission writes through `canopy.runs.tasks`, and a reply through `canopy.core.conversation`, each refusing inside
 canopy's own ticks and runs (`inside_run`): only the operator hands canopy a task, or its next word. The next tick
 starts a run, before the overseer, which never sees it; `canopy _task` (`cli/runs.py`) is its run.
 """
@@ -15,13 +15,13 @@ import click
 from canopy.cli import attachments as attachments_cli
 from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.params import REPO
-from canopy.core import conversation, plans, task_tickets, tasks
+from canopy.core import conversation, plans
 from canopy.core.items import age
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
 from canopy.infra.text import one_line, printable
 from canopy.loop.render import result_of, spent
-from canopy.runs import task_run
+from canopy.runs import task_run, task_tickets, tasks
 
 if TYPE_CHECKING:
     from canopy.core import records

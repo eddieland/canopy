@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import conversation, personas, review_requests
+from canopy.core import conversation, personas
 from canopy.infra import logs
+from canopy.reviews import review_requests
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

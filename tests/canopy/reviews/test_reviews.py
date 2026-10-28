@@ -17,7 +17,6 @@ from canopy.core import (
     db,
     definitions,
     personas,
-    pr_list,
     records,
     review_answers,
     review_diff,
@@ -32,6 +31,7 @@ from canopy.core.vocab import DismissalReason, FindingAnswer, ResumeReason, RunK
 from canopy.infra import procs
 from canopy.loop import attention
 from canopy.reviews import grants, waiting
+from canopy.serve import pr_list
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,

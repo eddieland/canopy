@@ -8,10 +8,11 @@ import httpx2
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, personas, review_requests
+from canopy.core import conversation, db, personas
 from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.infra import resources
+from canopy.reviews import review_requests
 from tests.canopy.helpers import context, operator, personas_dir
 from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review_decisions, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, reviews

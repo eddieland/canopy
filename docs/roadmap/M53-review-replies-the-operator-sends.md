@@ -130,7 +130,7 @@ refused alone, a PR's waiting `unchecked`. Threads read in code: `core/observe.p
 records each PR it read whole into `observed_prs` and `observed_reviews`; `_run` reads its PRs once the run is closed
 and each tick's reconcile reads every PR a draft waits on, checking each draft (`unknown_thread`, one a thread a run)
 and superseding the unsent drafts of earlier runs; `drafts_waiting` for the operator alone; and fakes of both GitHub
-programs in `tests/fakes/github`. Sending from the CLI: `core/drafts_manage.py` and `canopy draft list`, `show`,
+programs in `tests/fakes/github`. Sending from the CLI: `runs/drafts_manage.py` and `canopy draft list`, `show`,
 `edit`, `drop`, `send`, and `settle`, each refusing `inside_run`; a send checks every draft and reads each PR again
 whole before anything posts, refusing `stale` and `thread_changed`, claims its drafts, posts one PR's as one review,
 and records each comment's id; a post that ends unsure is `unconfirmed` until a read settles it by its pending

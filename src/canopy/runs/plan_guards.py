@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import db, feedback_plans, plans, prompts, sql
+from canopy.core import db, plans, prompts, sql
 from canopy.core.vocab import PlanStatus, ReplyMode, RunKind
-from canopy.runs import policy
+from canopy.runs import feedback_plans, policy
 
 if TYPE_CHECKING:
     from pathlib import Path

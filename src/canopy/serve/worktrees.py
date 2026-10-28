@@ -17,8 +17,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, records, tasks
+from canopy.core import conversation, db, records
 from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, QUARANTINED, SYNC_HOLDER, PoolError, Slot
+from canopy.runs import tasks
 from canopy.serve import views
 from canopy.serve.schema.worktree import Pool, Process, ReviewHold, TaskHold, Worktree, WorktreeState
 

@@ -10,8 +10,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
-from canopy.core import contract, conversation, review_requests
+from canopy.core import contract, conversation
 from canopy.infra import logs
+from canopy.reviews import review_requests
 from canopy.serve import pull_requests
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, not_found

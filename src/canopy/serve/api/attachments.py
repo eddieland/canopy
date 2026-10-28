@@ -1,7 +1,7 @@
 """Files the operator attaches to a ticket or a task (DESIGN §22): what `canopy attach` and `canopy detach` do.
 
 An upload is the file's bytes as the request's body, one file a request, which the guard bounds (guard.py) above the
-largest attachment `policy` allows. Each write goes through `canopy.core.attachments`, with channel `web`, so its
+largest attachment `policy` allows. Each write goes through `canopy.runs.attachments`, with channel `web`, so its
 guards are the CLI's: only UTF-8 text, within the limits, on a ticket canopy knows or a task not stopped (TRUST_MODEL
 T1, T8). What a ticket's or a task's page shows of them comes with the page's own read.
 """
@@ -13,8 +13,9 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import APIRouter, Path, Request
 from starlette.concurrency import run_in_threadpool
 
-from canopy.core import attachments, conversation, plans
+from canopy.core import conversation, plans
 from canopy.infra import logs
+from canopy.runs import attachments
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TaskId, TicketKey

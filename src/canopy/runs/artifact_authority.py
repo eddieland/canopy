@@ -24,9 +24,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import artifact_feed, conversation, db, records, sql
+from canopy.core import conversation, db, records, sql
 from canopy.core.vocab import AuthorKind, StartStatus
 from canopy.infra.text import printable
+from canopy.runs import artifact_feed
 
 if TYPE_CHECKING:
     import sqlite3

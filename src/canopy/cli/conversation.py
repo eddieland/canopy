@@ -4,7 +4,7 @@
 take a reference whose shape names its kind: a ticket key, `REPO#N` or a PR's URL, `chore:NAME`, `run:ID`,
 `review:ID`, or `task:N`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, `forget`, `dismiss`, and
 `send` write through `canopy.core.conversation`, which every channel shares, or for a PR's review request (`start URL
---review`, `stop URL`) through `canopy.core.review_requests`, for a task (`stop task:N`) through `canopy.core.tasks`
+--review`, `stop URL`) through `canopy.reviews.review_requests`, for a task (`stop task:N`) through `canopy.runs.tasks`
 (`cli/tasks.py`), `grant` through `canopy.runs.policy`, or `canopy.reviews.grants`
 for a PR's reviews, `pause` and `resume` through `canopy.core.pause`, and `notice` through `canopy.core.notice`; all
 ten refuse inside canopy's own ticks and runs, `notice` only when it sets or clears one. On `review:ID`, `reply` notes
@@ -29,8 +29,6 @@ from canopy.core import (
     chore_view,
     conversation,
     db,
-    feedback_items,
-    feedback_plans,
     notice,
     pause,
     personas,
@@ -39,7 +37,6 @@ from canopy.core import (
     prompts,
     reports,
     review_drafts_manage,
-    review_requests,
     review_revisions,
     review_runs,
 )
@@ -48,8 +45,8 @@ from canopy.infra import logs
 from canopy.infra.text import one_line
 from canopy.loop import attention, readback
 from canopy.loop.render import phase_of
-from canopy.reviews import grants
-from canopy.runs import halt, policy
+from canopy.reviews import grants, review_requests
+from canopy.runs import feedback_items, feedback_plans, halt, policy
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

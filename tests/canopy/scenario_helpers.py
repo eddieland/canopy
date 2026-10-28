@@ -146,11 +146,12 @@ from typing import Any, Literal, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
-from canopy.core import db, feedback_items, records, review_runs
+from canopy.core import db, records, review_runs
 from canopy.core.context import Context
 from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TickStatus
 from canopy.infra import logs, procs
 from canopy.loop import attention, poll, repeat, tick
+from canopy.runs import feedback_items
 from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,
