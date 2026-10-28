@@ -17,7 +17,7 @@ export const REASON_MEANINGS: Readonly<Record<string, string>> = {
     review_unsettled: 'A review you staged waits for you to submit or delete it on GitHub, or its publish is unknown.',
     review_rebuttal: 'A review rebutted a worker’s decline of its finding: send the finding on, or dismiss it.',
     review_late: 'A review found something in code unchanged since the PR’s first review: send it on, or dismiss it.',
-    attempt_limit: 'The ticket used up its attempts of one kind: take it over, or grant it more.',
+    attempt_limit: 'The ticket, one of its PRs, or its plan used up its runs of one kind: take it over, or grant more.',
     crashed: 'The ticket’s latest run crashed: read its log. A reply or a message tries again.',
     unpushed: 'The ticket’s latest run ended with work it did not push: read its log.',
     unknown_result: 'The ticket’s latest run ended without a result canopy could read, or timed out: read its log.',
@@ -54,7 +54,7 @@ export const PHASE_MEANINGS: Readonly<Record<string, string>> = {
     ready: 'Labeled for canopy, with no run, no branch, and no open blocker: the next to start.',
     plan_proposed: 'Its newest plan waits on you to approve it or reply.',
     blocked: 'Ready, but a ticket it depends on is still open.',
-    running: 'A worker is on it now.',
+    running: 'A run is on it now: a worker’s, or a planner’s.',
     pushed_no_pr: 'Its branch is pushed, with no PR yet.',
     conflicted: 'Its PR conflicts with its base branch.',
     ci_running: 'Its PR’s checks are still running.',
@@ -73,10 +73,10 @@ export const PHASE_MEANINGS: Readonly<Record<string, string>> = {
 
 /** What an attention reason means, or null for one canopy does not know, such as one the overseer made up. */
 export function reasonMeaning(reason: string): string | null {
-    return REASON_MEANINGS[reason] ?? null
+    return Object.hasOwn(REASON_MEANINGS, reason) ? (REASON_MEANINGS[reason] ?? null) : null
 }
 
 /** What a ticket's or a PR's phase means, or null for none. */
 export function phaseMeaning(phase: string | null): string | null {
-    return phase === null ? null : (PHASE_MEANINGS[phase] ?? null)
+    return phase !== null && Object.hasOwn(PHASE_MEANINGS, phase) ? (PHASE_MEANINGS[phase] ?? null) : null
 }
