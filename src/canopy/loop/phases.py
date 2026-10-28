@@ -49,6 +49,7 @@ from canopy.core.vocab import (
     SourceKind,
     TicketState,
 )
+from canopy.core.workspace import CheckRole
 from canopy.loop import attention, harness
 from canopy.reviews import start as review_start
 from canopy.reviews.start import DISPATCH_ACTION as REVIEW_ACTION
@@ -681,7 +682,7 @@ class _World:
         return Derived(key, repo, _in_order(phases))
 
     def _ci(self, repo: str, pr: records.ObservedPr, unit: records.TicketUnit) -> tuple[list[Phase], bool]:
-        """Derive the CI rows from the PR's checks at its head, less those the repository names `human_checks` (§30).
+        """Derive the CI rows from the PR's checks at its head, those its repository gives no other role (§30).
 
         A failure is new when its check run was first observed after the unit's `ci` cursor, a journal number (§35); a
         commit status, which has no run, only while the cursor is empty.
@@ -689,9 +690,12 @@ class _World:
         Returns:
             The rows that hold of `ci_running` and `ci_red`, and whether every check passed, as none at all do.
         """
-        found = self.ctx.workspace.repo(repo)
-        human = found.human_checks if found is not None else frozenset[str]()
-        ci = [c for c in self.checks.get(pr.url, []) if c.head_sha == pr.head_sha and c.name not in human]
+        roles = self.ctx.workspace.check_roles(repo)
+        ci = [
+            c
+            for c in self.checks.get(pr.url, [])
+            if c.head_sha == pr.head_sha and roles.get(c.name, CheckRole.CI) is CheckRole.CI
+        ]
         pending = any(c.status is not CheckStatus.COMPLETED for c in ci)
         failed = [c for c in ci if c.status is CheckStatus.COMPLETED and c.conclusion in observe.FAILED]
         phases = [Phase.CI_RUNNING] if pending else []

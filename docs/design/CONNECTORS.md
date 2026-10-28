@@ -98,15 +98,19 @@ applied by hand, §7's table disagreed with the overseer on `ci_red` (MEASUREMEN
 
 ### Checks that are not CI
 
-Some contexts stay pending until a person acts, a deploy approval or a sign-off, and counting one as CI holds a green PR
-at `ci_running` for as long. Each repository names them in the map (§18) as `human_checks`. A listed context is not
-CI: it does not hold a unit at `ci_running`, make it `ci_red`, or have to pass.
+Some contexts are not CI: a deploy approval or an ownership sign-off stays pending until a person acts, and a merge
+queue's status is never green on an open PR. Counting one as CI holds a green PR at `ci_running` for as long, and
+never raises `needs_reviewer`. Each repository gives such a check a role in the map (§18), by its exact name: `human`,
+`merge`, or `ignore`; every other check is `ci`. A check of those three is not CI: it does not hold a unit at
+`ci_running`, make it `ci_red`, have to pass, or become a feedback plan's item. The overseer is shown a `human` one
+beside the checks, as waiting on a person, and neither of the others.
 
-- The list names the exceptions, not the CI: a job left off a list of CI would hide a red build, while a check left
+- The map names the exceptions, not the CI: a job left off a list of CI would hide a red build, while a check left
   off this one holds a PR where the operator sees it waiting.
 - Shared: it is a fact about the repository, and runs, spends, and authorizes nothing (TRUST_MODEL T7).
 - Rejected: branch protection's required checks (reading them needs admin, and one can be the human check); a time past
-  which a pending check counts as human (a slow build crosses any threshold).
+  which a pending check counts as human (a slow build crosses any threshold); patterns of names (one can catch a CI job
+  and hide it red).
 
 ### canopy's connectors
 

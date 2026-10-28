@@ -340,6 +340,25 @@ def test_a_resume_for_ci_alone_needs_a_failure_no_worker_had(
         assert found[1].startswith(f"every failed check at the head of {PR} (build) failed at that head at or behind")
 
 
+@pytest.mark.parametrize("role", ["human", "merge", "ignore"])
+def test_a_check_its_repository_says_is_not_ci_starts_no_resume_for_ci(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    role: str,
+) -> None:
+    # The build failed at run 11, which a worker had; `owners` failed since, at run 12, and is not CI.
+    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": {"owners": role}}}})
+    check(observed, "build", "completed", "failure", run_id=11)
+    check(observed, "owners", "completed", "failure", run_id=12)
+    had = str(number_of(observed, NumberedItem.CHECK_RUN, 11))
+    # Its failure moves no default ci cursor past the build's.
+    assert moved(dispatched(observed, kind="resume", label=LABEL, reasons=["ci"])[1]) == {"ci": had}
+    observed.execute("UPDATE ticket_units SET ci_cursor = ?", (had,))
+    action, reason = dispatched(observed, kind="resume", label=LABEL, reasons=["ci"], cursors={"ci": had})
+    assert action == "refused:handled"
+    assert reason.startswith(f"every failed check at the head of {PR} (build) failed at that head")
+
+
 @pytest.mark.parametrize(
     ("reasons", "cursor"),
     [
