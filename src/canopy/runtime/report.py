@@ -40,6 +40,8 @@ SKILL_PREFIX = "skill:"
 #: `MAX_MODELS` count under `OTHER_MODELS`, which no runtime names a model.
 MAX_MODELS = 20
 MAX_MODEL_NAME = 200
+#: How long a runtime's version, as a session's record names it, may be: `1.19.3` and its like are far shorter.
+MAX_RUNTIME_VERSION = 40
 OTHER_MODELS = "(other models)"
 #: A message the runtime names in a session's record and on each event of a model call: the reply the call wrote, the
 #: key that joins a call in the run's log to the model the record names for it. As a session id is shaped.
@@ -172,6 +174,20 @@ class SessionModels:
     #: The model that wrote each reply, as `models` names it, by the reply's message (`MESSAGE_ID_RE`), in order, at
     #: most `MAX_REPLIES`; empty unless more than one model wrote the session's replies, since one names them all.
     replies: Mapping[str, str] = field(default_factory=dict)
+    #: The runtime's version the session's record names, as `runtime_version` keeps it; None where it names none.
+    runtime_version: str | None = None
+
+
+def runtime_version(named: str | None) -> str | None:
+    """The runtime's version a session's record names, as canopy keeps it: printable, with no space, and short.
+
+    Returns:
+        It, or None for none, or one with nothing canopy keeps.
+    """
+    if named is None:
+        return None
+    kept = "".join(c for c in named if c.isprintable() and not c.isspace())[:MAX_RUNTIME_VERSION]
+    return kept or None
 
 
 #: Where a read of the runtime's sessions stopped, to start the next after: the last session's update, in
