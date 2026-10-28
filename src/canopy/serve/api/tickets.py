@@ -189,8 +189,9 @@ def model(key: TicketKey, body: ModelRequest, backend: BackendDep) -> AgentModel
                 ref.id,
                 body.agent,
                 body.model,
-                # The backend's list carries the variants whether or not the model names one.
-                listing=lambda _variants: backend.models(ctx),
+                # The backend's list carries the variants whether or not the model names one. It may be minutes old: a
+                # run checks its model against a list read as it starts.
+                listing=lambda _variants: backend.model_list(ctx),
                 channel=WEB,
             )
         except conversation.Refused as r:

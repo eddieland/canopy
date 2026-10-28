@@ -474,11 +474,24 @@ export const personasQuery = queryOptions({
 
 /**
  * The models the runtime lists, as `canopy models` prints them: what a ticket's agent's model may be chosen from. Not
- * on the stream, since each read starts the runtime: read when a Model menu opens, and again when one opens later.
+ * on the stream, since a read can start the runtime: read when a Model menu opens, and again when one opens later,
+ * which the server answers from the list it read in the last few minutes, or until the loop reads its config again.
  */
 export const modelsQuery = queryOptions({
     queryKey: keys.models,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/models', { signal })),
+    staleTime: 0,
+})
+
+/**
+ * The models the runtime lists, read from it now rather than the list the server kept, which may still name a model
+ * a run has just found gone. Under the same key as `modelsQuery`, so the menus find it; the server keeps it in place
+ * of the old one, so their own reads agree with it.
+ */
+export const freshModelsQuery = queryOptions({
+    queryKey: keys.models,
+    queryFn: async ({ signal }) =>
+        unwrap(await api.GET('/api/models', { params: { query: { refresh: true } }, signal })),
     staleTime: 0,
 })
 
