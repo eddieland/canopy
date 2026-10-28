@@ -95,7 +95,7 @@ def test_a_unit_shows_the_checks_at_its_head_and_new_review_items_by_who_wrote_t
     tracked: sqlite3.Connection,
     snapshot: SnapshotAssertion,
 ) -> None:
-    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"human_checks": ["deploy/approval"]}}})
+    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": {"deploy/approval": "human"}}}})
     observe_ticket(tracked)
     db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
     observe_pr(tracked)

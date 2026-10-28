@@ -387,7 +387,7 @@ def test_a_unit_whose_pr_is_stale_is_stale(canopy_env: CanopyEnv, observed: sqli
 
 
 def test_a_check_the_repository_names_human_is_not_ci(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
-    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"human_checks": ["deploy/approval"]}}})
+    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": {"deploy/approval": "human"}}}})
     green(canopy_env, observed)
     check(observed, "deploy/approval", "pending", None)
     observed.commit()

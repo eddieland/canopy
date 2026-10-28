@@ -453,10 +453,9 @@ def test_a_merge_queues_check_holds_no_pr_from_its_reviewer(scenario: Scenario, 
 
 
 def test_an_ownership_check_that_waits_on_a_person_is_never_ci_red(scenario: Scenario, github_state: Path) -> None:
-    # The map lists it in `human_checks`, as before the roles: it keeps working with no change to the map.
     scenario.operator("start", KEY)
     db.set_unit(scenario.conn, KEY, str(scenario.env.root), "repo", pr_url=PR)
-    scenario.configures("workspace", repos={"repo": {"human_checks": ["owners"]}})
+    scenario.configures("workspace", repos={"repo": {"checks": {"owners": "human"}}})
     scenario.conn.commit()
     github_checks(github_state, {"name": "owners", "status": "in_progress", "run_id": 12})
     scenario.tick(*waits(KEY))
@@ -468,10 +467,6 @@ def test_an_ownership_check_that_waits_on_a_person_is_never_ci_red(scenario: Sce
     assert ticked.runs == []
     [unit] = [d for d in phases.recorded(scenario.conn, ticked.tick.id) if d.repo == "repo"]
     assert unit.phases == (phases.Phase.GREEN_UNREVIEWED,)
-    # Named in `checks` as well, it is refused, rather than given two roles.
-    scenario.configures("workspace", repos={"repo": {"checks": {"owners": "human"}}})
-    refused = scenario.operator("status", code=2)
-    assert "'owners' named in both `checks` and `human_checks`" in refused.err
 
 
 @pytest.mark.parametrize("reason", sorted(attention.FROM_CAUSES))

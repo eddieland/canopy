@@ -18,7 +18,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Self
+from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
 
@@ -41,7 +41,7 @@ REPOS_DIR = "repos"
 POOLS_DIR = ".treehouse"
 DESKS_DIR = "desks"
 MAX_SUMMARY = 200
-#: The longest name of a check a repository's `checks` or `human_checks` names: a connector's longest (DESIGN §30).
+#: The longest name of a check a repository's `checks` names: a connector's longest (DESIGN §30).
 MAX_CHECK_NAME = 200
 # Where a repository's `branch_url` puts a branch's name.
 BRANCH_NAME = "{branch}"
@@ -124,28 +124,19 @@ class _RepoTable(_Table):
     branch_url: Annotated[StrictStr, link_template(BRANCH_NAME)] | None = None
     # The role of each check named, by its exact name; every other check is CI (DESIGN §30).
     checks: dict[Annotated[StrictStr, AfterValidator(_check_name)], CheckRole] = {}
-    # The checks whose role is `human`, as a list: the key `checks` came after, kept so a map that has it still loads.
-    human_checks: tuple[Annotated[StrictStr, AfterValidator(_check_name)], ...] = ()
     # Paths whose change makes a review high impact, beside CI's workflows, which no entry removes (DESIGN §21).
     high_impact_paths: tuple[Annotated[StrictStr, AfterValidator(_impact_path)], ...] = ()
 
-    @model_validator(mode="after")
-    def _named_once(self) -> Self:
-        both = sorted(set(self.checks) & set(self.human_checks))
-        if both:
-            names = ", ".join(repr(n) for n in both)
+    @model_validator(mode="before")
+    @classmethod
+    def _no_human_checks(cls, data: object) -> object:
+        # The list `checks` replaced: an error that says what to write, not "extra inputs are not permitted".
+        if isinstance(data, Mapping) and "human_checks" in data:
             raise ValueError(
-                f"{names} named in both `checks` and `human_checks`: give each check one role, in `checks`",
+                'human_checks was removed: name each of its checks in `checks` instead, as "NAME" = "human" under '
+                "[repos.<name>.checks]",
             )
-        return self
-
-    def roles(self) -> dict[str, CheckRole]:
-        """Fold `human_checks` into `checks`.
-
-        Returns:
-            Each check named, by name, with its role.
-        """
-        return {**dict.fromkeys(self.human_checks, CheckRole.HUMAN), **self.checks}
+        return data
 
 
 class _Map(_Table):
@@ -319,7 +310,7 @@ def load(root: Path) -> Workspace:
             url=table.url,
             summary=table.summary,
             branch_url=github_branch_url(table.url) if table.branch_url is None else table.branch_url,
-            checks=table.roles(),
+            checks=table.checks,
             high_impact_paths=table.high_impact_paths,
         )
         for name, table in sorted(parsed.repos.items())
