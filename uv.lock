@@ -7,6 +7,7 @@ members = [
     "canopy",
     "canopy-artifacts",
     "canopy-github",
+    "canopy-http",
     "canopy-jira",
     "canopy-notify-slack",
     "canopy-review-bench",
@@ -155,11 +156,25 @@ requires-dist = [
 name = "canopy-github"
 source = { editable = "packages/canopy-github" }
 dependencies = [
+    { name = "canopy-http" },
     { name = "click" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "click", specifier = ">=8.5.0" }]
+requires-dist = [
+    { name = "canopy-http", editable = "packages/canopy-http" },
+    { name = "click", specifier = ">=8.5.0" },
+]
+
+[[package]]
+name = "canopy-http"
+source = { editable = "packages/canopy-http" }
+dependencies = [
+    { name = "httpx2" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "httpx2", specifier = ">=2.13.1" }]
 
 [[package]]
 name = "canopy-jira"
