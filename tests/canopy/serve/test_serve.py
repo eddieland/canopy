@@ -33,7 +33,7 @@ from canopy.infra import logs
 from canopy.serve import live, secret, server, views
 from canopy.serve import mock as serve_mock
 from canopy.serve import options as serve_options
-from canopy.serve.__main__ import main
+from canopy.serve.__main__ import KEEP_ALIVE_SECONDS, main
 from canopy.serve.api import session
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
@@ -1057,6 +1057,15 @@ def test_the_development_server_serves_mock_data_only() -> None:
     public = invoke(main, ["serve", "--mock", "--host", "10.0.0.5"])
     assert public.exit_code == 2
     assert "loopback" in public.stderr
+
+
+def test_the_development_server_keeps_an_idle_connection_past_any_test(ui: Path) -> None:
+    """The e2e tests' request contexts reuse a connection idle for 5 s, uvicorn's default, and read ECONNRESET."""
+    with mock.patch.object(uvicorn, "run", autospec=True) as run:
+        assert invoke(main, ["serve", "--mock", "--ui-dir", str(ui)]).exit_code == 0
+    assert run.call_args.kwargs["timeout_keep_alive"] == KEEP_ALIVE_SECONDS
+    # Past Playwright's 30 s test timeout, so no connection a test opens idles out while the test runs.
+    assert KEEP_ALIVE_SECONDS > 30
 
 
 def test_openapi_names_the_stream_event_and_every_route() -> None:
