@@ -17,9 +17,11 @@ stopped at lunch is a timestamp, not a verdict.
 The loop rebuilds the list at the end of every tick, so an item leaves when its cause is gone: the question answered,
 the PR merged, the failed ticket granted another run and dispatched. An item about a PR waiting on its reviewer or a
 plan waiting on you leaves only when a fresh read shows it so: a GitHub outage keeps it on the list rather than
-announcing it resolved, then raising it again an hour later. You can't clear an item by hand, only its cause,
-and chore findings are the one exception. When an item leaves while you're looking, it folds shut and a leaf drifts
-off.
+announcing it resolved, then raising it again an hour later. A judgment call the loop made stays until what it's
+about is settled: a comment that `needs author` until it's handled or you reply on the ticket, a ticket split across
+repositories (`multi repo`) until you reply, a check a notice held (`notice rerun`) until it runs again. You can't clear
+an item by hand, only its cause, and chore findings are the one exception. When an item leaves while you're looking, it
+folds shut and a leaf drifts off.
 
 The items come in four groups, in this order, and within a group the one open longest comes first:
 

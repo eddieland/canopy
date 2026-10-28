@@ -253,9 +253,9 @@ RECORDS = [
     pytest.param(
         Verb(
             "attention",
-            {"reason": "needs_author", "detail": "asks about intent", "pr": PR},
-            ["attention", "needs_author", "--detail", "asks about intent", "--pr", PR],
-            result={"reason": "needs_author", "key": None, "repo": None, "pr": PR},
+            {"reason": "flaky_rerun", "detail": "build failed again on rerun", "pr": PR},
+            ["attention", "flaky_rerun", "--detail", "build failed again on rerun", "--pr", PR],
+            result={"reason": "flaky_rerun", "key": None, "repo": None, "pr": PR},
         ),
         id="attention-pr",
     ),

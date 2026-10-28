@@ -444,14 +444,16 @@ stopped, or seen closed or unlabeled: a tick that could not read a cause drops n
 overseer a dispatch or a review past its limit records `attempt_limit` or `review_limit` too.
 
 **Recorded by the overseer.** The overseer records the items that are judgment with its `attention` tool (§27), with a
-reason and a detail, every tick its cause holds; the tool refuses it a reason the harness raises. Items are stored as
-decisions, not a table of their own (D020). The current list is the attention decisions of the latest `ok` tick, so an
-item disappears the first tick that does not record it, and a failed or `skipped` tick leaves the previous list
-standing; a halted tick's item (§6 step 5) is added to it while it is the latest tick's. The harness holds the
-overseer's item, and a guard's, through a tick that did not give the overseer its subject, such as a ticket the harness
-decided (§37), since the overseer cannot record again what it was not shown; the item goes the first tick that gives
-the overseer its subject and leaves it out, or once its ticket is done or stopped. The state block lists the
-overseer's open items on what it is given (§6 step 4), so it records each again until it sees the cause gone. An
+reason and a detail; the tool refuses it a reason the harness raises. Items are stored as decisions, not a table of
+their own (D020). `needs_author`, `multi_repo`, and `notice_rerun` it records once, naming what each is about, and the
+harness holds each until what it names ends it (§37). Any other it records every tick its cause holds: the current list
+is the attention decisions of the latest `ok` tick, so such an item disappears the first tick that does not record it,
+and a failed or `skipped` tick leaves the previous list standing; a halted tick's item (§6 step 5) is added to it while
+it is the latest tick's. The harness holds such an item of the overseer's, and a guard's, through a tick that did not
+give the overseer its subject, such as a ticket the harness decided (§37), since the overseer cannot record again what
+it was not shown; the item goes the first tick that gives the overseer its subject and leaves it out, or once its
+ticket is done or stopped. The state block lists the overseer's open items on what it is given (§6 step 4), each it
+keeps with what it names, so it records none of those twice and each other again until it sees the cause gone. An
 item's age runs from the first tick of its unbroken run.
 
 **Notification.** An item is identified by its ticket, reason, and repository; rewording its detail does not make it

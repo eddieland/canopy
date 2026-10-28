@@ -1243,12 +1243,16 @@ def record_decision(
     chore: str | None = None,
     pr: str | None = None,
     decider: Decider = Decider.OVERSEER,
+    kept: bool = False,
+    item: int | None = None,
 ) -> int:
     """Insert a decision for `tick_id` and return its id.
 
     `repo` is set for an item about a repository, `chore` for a decision about a chore, which has no ticket key, and
     `pr` for a decision about a PR the loop reviews, which has a ticket key only for one of the loop's own PRs.
-    `decider` says who made it: the overseer, through one of its verbs, or the harness on its own (DESIGN §37).
+    `decider` says who made it: the overseer, through one of its verbs, or the harness on its own (DESIGN §37). `kept`
+    marks an attention item the overseer keeps, held until what it names ends it, and `item` is the journal number of
+    what it names, if it names one (`core.kept_items`).
 
     Returns:
         The new decision's id.
@@ -1263,6 +1267,8 @@ def record_decision(
         chore=chore,
         pr=pr,
         decider=decider,
+        kept=kept,
+        item=item,
     )
     return rowid(sql.execute(conn, decision))
 
