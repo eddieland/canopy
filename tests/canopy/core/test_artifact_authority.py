@@ -78,7 +78,7 @@ def test_a_listed_authors_comment_is_authority_an_unlisted_ones_waits_and_an_age
     scenario.tick(*waits(KEY))
     # The overseer is shown the listed author's alone, as an instruction beside the operator's messages.
     operator = scenario.ticket_state()["operator"]
-    assert operator["new_operator_messages"] == []
+    assert "new_operator_messages" not in operator  # none, so the block leaves the list out
     assert [(c["id"], c["author"], c["comment"], c["body"]) for c in operator["artifact_comments"]] == [
         (listed, "u_ana", "artifact:c1", "Shard by tenant, not by day."),
     ]
