@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.core import conversation, db, drafts, feedback_items, feedback_plans, plans
+from canopy.core import conversation, db, drafts, feedback_items, feedback_plans, plans, workspace
 from canopy.core.config import load
 from canopy.core.vocab import (
     DraftStatus,
@@ -510,7 +510,8 @@ def stale_for(scenario: Scenario) -> list[str]:
     """What changed on the current feedback plan's PRs since it was written, in the harness's words."""
     plan = present(feedback_plans.current(scenario.conn, KEY))
     trust = load(scenario.env.root, scenario.env.user_file).trust
-    return [c.said() for c in feedback_items.changes(scenario.conn, trust, plan)]
+    ws = workspace.load(scenario.env.root)
+    return [c.said() for c in feedback_items.changes(scenario.conn, trust, plan, ws)]
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -1126,6 +1127,48 @@ def test_a_failed_check_its_repository_says_is_not_ci_is_no_item(scenario: Scena
     # Only the build is CI: the others wait on a person, gate the merge, or are ignored, so the planner is given none.
     [*_, [_, cat]] = commands_run(scenario.agent_log)
     assert [(i["id"], i["item"]) for i in json.loads(cat["stdout"])] == [(501, "comment"), (build, "check")]
+
+
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize("roles_since", [False, True], ids=["roles-when-planned", "roles-set-since"])
+def test_a_check_that_is_not_ci_moving_leaves_a_waiting_plan_as_it_is(
+    scenario: Scenario,
+    github_state: Path,
+    *,
+    roles_since: bool,
+) -> None:
+    roles = {"owners": "human", "lint-legacy": "ignore"}
+    if not roles_since:
+        scenario.configures("workspace", repos={"repo": {"checks": roles}})
+    with_a_pr(scenario)
+    waiting = [{"name": n, "status": "in_progress", "conclusion": None} for n in roles]
+    github_shows(github_state, ALICE, BOB, checks=[RED, *waiting])
+    assert scenario.run(FEEDBACK_PLAN, worker=planner_does(plan=TEXT, result=PLANNED)).status == RunStatus.DONE
+    recorded = [str(r[0]) for r in scenario.conn.execute("SELECT name FROM feedback_plan_checks ORDER BY name")]
+    # A plan written before the map gave them roles saw them; one written after saw only the build.
+    assert recorded == (["build", "lint-legacy", "owners"] if roles_since else ["build"])
+    if roles_since:
+        scenario.configures("workspace", repos={"repo": {"checks": roles}})
+
+    # The owners approve and the advisory job fails, at the same head: neither is CI, so nothing changed for the plan,
+    # on either side of what it saw, and no quiet period starts.
+    done = [
+        {"name": "owners", "status": "completed", "conclusion": "success"},
+        {"name": "lint-legacy", "status": "completed", "conclusion": "failure"},
+    ]
+    github_shows(github_state, ALICE, BOB, checks=[RED, *done])
+    newest = read_again(scenario)
+    assert (newest["stale"], newest["quiet_passed"]) == (False, True)
+    assert stale_for(scenario) == []
+    moves = scenario.conn.execute("SELECT DISTINCT name FROM feedback_plan_moves WHERE kind = 'check'")
+    assert [str(r[0]) for r in moves] == ["build"]
+    assert scenario.refuses(FEEDBACK_PLAN)[0][0] == "refused:bad_plan"
+
+    # The build is CI: its move makes the plan stale, and starts the quiet period.
+    github_shows(github_state, ALICE, BOB, checks=[{**RED, "conclusion": "success"}, *done])
+    newest = read_again(scenario)
+    assert (newest["stale"], newest["quiet_passed"]) == (True, False)
+    assert stale_for(scenario) == [f"check build on {PR} went from failure to success"]
 
 
 #: `build`, a check that waits on a person here, so the items `raised` returns are the blocker's alone.

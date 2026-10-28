@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Config, Policy, Trust
     from canopy.core.feedback_items import Item
+    from canopy.core.workspace import Workspace
 
 #: The most items one plan's result line names; past it, the rest are refused, each with a harness note.
 MAX_ITEMS = 100
@@ -438,7 +439,14 @@ def spend(conn: sqlite3.Connection, plan_id: int, run_id: int) -> bool:
     return row is not None
 
 
-def dispatch_refusal(conn: sqlite3.Connection, config: Config, key: str, *, now: datetime) -> tuple[str, str] | None:
+def dispatch_refusal(
+    conn: sqlite3.Connection,
+    config: Config,
+    ws: Workspace,
+    key: str,
+    *,
+    now: datetime,
+) -> tuple[str, str] | None:
     """Return the guard and reason that refuse a feedback plan run for `key` now, or None (DESIGN §32).
 
     Only with feedback plans on; and not while one approved waits for its `resume`, nor while the ticket's current
@@ -456,12 +464,13 @@ def dispatch_refusal(conn: sqlite3.Connection, config: Config, key: str, *, now:
         return None
     if plan.status is PlanStatus.APPROVED:
         return "bad_plan", f"feedback plan {plan.id} of {key} is approved: dispatch the resume that follows it"
-    return _waiting_refusal(conn, config, plan, now)
+    return _waiting_refusal(conn, config, ws, plan, now)
 
 
 def _waiting_refusal(
     conn: sqlite3.Connection,
     config: Config,
+    ws: Workspace,
     plan: records.FeedbackPlan,
     now: datetime,
 ) -> tuple[str, str] | None:
@@ -475,7 +484,7 @@ def _waiting_refusal(
     ticket = db.get_ticket(conn, key)
     if ticket is not None and changes_asked(conn, ticket) is not None:
         return None
-    found = stale(conn, config, plan, now)
+    found = stale(conn, config, ws, plan, now)
     if not found.changes:
         why = "who has asked for no change, and nothing changed on its PRs since it was written"
         return "bad_plan", f"feedback plan {plan.id} of {key} waits on the operator, {why}"
@@ -505,17 +514,23 @@ class Stale:
         return self.quiet_until is None or now >= self.quiet_until
 
 
-def stale(conn: sqlite3.Connection, config: Config, plan: records.FeedbackPlan, now: datetime) -> Stale:
+def stale(
+    conn: sqlite3.Connection,
+    config: Config,
+    ws: Workspace,
+    plan: records.FeedbackPlan,
+    now: datetime,
+) -> Stale:
     """Compare `plan` with what the connectors observe of its PRs now, in code (DESIGN §32, Planning again).
 
     The quiet period runs from the newest item or reply on its PRs, or from when the harness first saw the head or
     check conclusion they moved to, the newer: a stream of pushes or a flapping check holds a re-plan as a stream of
-    comments does (TRUST_MODEL T3).
+    comments does (TRUST_MODEL T3). A check `ws` gives a role other than CI neither makes it stale nor holds it.
 
     Returns:
         What changed, and when the quiet period on its PRs ends.
     """
-    changes = feedback_items.changes(conn, config.trust, plan)
+    changes = feedback_items.changes(conn, config.trust, plan, ws)
     made = feedback_items.newest(conn, config.trust, feedback_items.prs_of(conn, plan.id))
     moved = feedback_items.moved_at(conn, plan.id, changes, now)
     latest = max((t for t in (made, moved) if t is not None), default=None)
@@ -523,8 +538,8 @@ def stale(conn: sqlite3.Connection, config: Config, plan: records.FeedbackPlan, 
     return Stale(changes=changes, quiet_until=quiet)
 
 
-def note_moves(conn: sqlite3.Connection, config: Config) -> None:
-    """Record each waiting feedback plan's PR's head and checks, each value timed from when it was first seen.
+def note_moves(conn: sqlite3.Connection, config: Config, ws: Workspace) -> None:
+    """Record each waiting feedback plan's PR's head and CI checks, each value timed from when it was first seen.
 
     Call each tick after the connectors read, so the quiet period runs from the newest move (`stale`). Nothing is
     recorded with feedback plans off.
@@ -539,7 +554,7 @@ def note_moves(conn: sqlite3.Connection, config: Config) -> None:
     now = db.now()
     with db.transaction(conn):
         for plan in waiting:
-            feedback_items.record_values(conn, plan.id, feedback_items.prs_of(conn, plan.id), now)
+            feedback_items.record_values(conn, ws, plan.id, feedback_items.prs_of(conn, plan.id), now)
 
 
 def approve(
@@ -548,6 +563,7 @@ def approve(
     key: str,
     *,
     trust: Trust,
+    ws: Workspace,
     channel: str,
     dispatch_lock: Path,
     chosen: Collection[int] = (),
@@ -566,7 +582,8 @@ def approve(
 
     A waiting plan that is stale is refused once for what changed on its PRs since it was written, which the refusal
     names and records; approving it again, with nothing more changed, approves it, and what changed waits for the next
-    plan (DESIGN §32, Planning again). `trust` tells a worker's comments and the operator's sent replies from feedback.
+    plan (DESIGN §32, Planning again). `trust` tells a worker's comments and the operator's sent replies from feedback,
+    and `ws` the checks that are not CI from those that are.
 
     Returns:
         The approved plan's row.
@@ -595,7 +612,7 @@ def approve(
                 "bad_plan",
                 f"feedback plan {plan.id} of {key} is approved, and its file has not changed since",
             )
-        changed = feedback_items.changes(conn, trust, plan) if plan.status is PlanStatus.PROPOSED else []
+        changed = feedback_items.changes(conn, trust, plan, ws) if plan.status is PlanStatus.PROPOSED else []
         shown = feedback_items.digest(changed)
         if changed and plan.stale_shown != shown:
             # Recorded, and committed with the transaction before the refusal, so approving again approves it.
@@ -851,6 +868,7 @@ class FeedbackPlanState(TypedDict):
 def state_section(
     conn: sqlite3.Connection,
     config: Config,
+    ws: Workspace,
     ticket: records.Ticket,
     *,
     attempts: Mapping[str, int],
@@ -892,15 +910,21 @@ def state_section(
         "needed": on,
         "attempts": dict(attempts),
         "limits": dict(limits),
-        "newest": None if newest is None else _newest(conn, config, newest, now),
+        "newest": None if newest is None else _newest(conn, config, ws, newest, now),
         "changes_asked": changes_asked(conn, ticket) is not None,
         "blocked": blocked,
     }
 
 
-def _newest(conn: sqlite3.Connection, config: Config, plan: records.FeedbackPlan, now: datetime) -> NewestFeedbackPlan:
+def _newest(
+    conn: sqlite3.Connection,
+    config: Config,
+    ws: Workspace,
+    plan: records.FeedbackPlan,
+    now: datetime,
+) -> NewestFeedbackPlan:
     waits = plan.status is PlanStatus.PROPOSED
-    found = stale(conn, config, plan, now) if waits else Stale(changes=(), quiet_until=None)
+    found = stale(conn, config, ws, plan, now) if waits else Stale(changes=(), quiet_until=None)
     return {
         "id": plan.id,
         "status": plan.status,

@@ -204,6 +204,7 @@ def _approve_feedback(
         ctx.state_dir,
         key,
         trust=ctx.config.trust,
+        ws=ctx.workspace,
         channel=CLI,
         dispatch_lock=ctx.dispatch_lock_path,
         chosen=chosen,

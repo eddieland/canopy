@@ -77,7 +77,7 @@ weighs, and a `leave` drafts nothing the operator would see after.
 
 ### Planning again
 
-A feedback plan records what it was written against: the PR's head, each check's conclusion at that head, and each
+A feedback plan records what it was written against: the PR's head, each CI check's conclusion at that head, and each
 item and reply it was given, by id with a hash of its body, never its text. While it waits, the harness marks it stale,
 in code, with a reason for each change, when what the connectors observe (§30) shows the head moved, a check's
 conclusion changed, an item or a reply arrived, or an item it covers was edited or its thread resolved. A stale plan is

@@ -55,7 +55,7 @@ def feedback_plan_refusal(ctx: Context, key: str, *, base: str | None) -> tuple[
             "bad_base",
             "a feedback plan reads the PR's head and starts from no other branch; leave out base (--base)",
         )
-    return feedback_plans.dispatch_refusal(ctx.conn, ctx.config, key, now=datetime.now(UTC))
+    return feedback_plans.dispatch_refusal(ctx.conn, ctx.config, ctx.workspace, key, now=datetime.now(UTC))
 
 
 def feedback_prs_refusal(
