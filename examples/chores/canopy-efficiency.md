@@ -65,7 +65,9 @@ adds to, used or not.
    loop when nothing changes.
 5. **Cold starts.** A kind whose latest snapshot in `first_calls` has a `cold_share` over 0.5 over 10 or more runs: a
    finding with id `cold/<kind>`. Its fixed prefix is not being read from the cache (`hit_rate`, what first calls read
-   from it over what they were sent, says by how much).
+   from it over what they were sent, says by how much). With two or more `runtime_versions` on a snapshot with a
+   `digest`, the runtime's version changed within it: name the versions, in their order, since a new runtime can move
+   what the runs' prefix holds.
 6. **Cost per ticket done.** `per_done` this week up by half or more on the 28 days' `per_done`: a finding with id
    `per-done`. Say which kind of spend grew, from `totals`.
 7. **Spend on failures.** From `health`, the failed `outcomes` whose `cost_usd` is a tenth or more of the week's total:

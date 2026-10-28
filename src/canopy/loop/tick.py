@@ -613,14 +613,18 @@ def _query(ctx: Context, tick_id: int, now: datetime, log: logs.TickAdapter) -> 
 
     The harness records a query the state block shows `fresh` at `now`, before the overseer runs, as `canopy queried`
     would, so what it records is what the overseer reads and the overseer owes no `canopy queried` (DESIGN §6 step 5).
-    One no source read, or read too long ago, stays the overseer's to run.
+    With no `tracker` source, one read too long ago stays the overseer's to run. With one, the overseer reads no
+    tracker (§39): a query it did not read fresh does not run this tick, and a ticket it would find waits for the read
+    that finds it, the next tick's query due again.
 
     Returns:
-        Whether the query is due this tick.
+        Whether the query runs this tick.
     """
     due = _query_due(ctx, now)
-    db.set_tick_query(ctx.conn, tick_id, due=due)
     found = observations.fresh_query(ctx, now) if due else None
+    if found is None and ctx.config.connect.observes_tickets():
+        due = False
+    db.set_tick_query(ctx.conn, tick_id, due=due)
     if found is not None:
         named = duties.record_queried(ctx.conn, tick_id, ctx.repo, found)
         log.info("recorded the query a source read", extra={"tickets": named})
