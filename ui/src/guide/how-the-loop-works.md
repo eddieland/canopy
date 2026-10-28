@@ -71,7 +71,7 @@ Every ticket has a phase, and so does each of its PRs: where it stands, as the o
 is `ready`, `running`, `needs human`, `human replied`, `blocked` (on another ticket), or `plan proposed`. A PR
 goes through phases such as `ci running`, `ci red`, `review pending`, `review findings`, `changes requested`,
 `green unreviewed`, `approved`, and `merged`. The UI writes them with spaces; hover over one, or Tab to it, for the
-CLI's spelling.
+CLI's spelling and what the phase means.
 
 The overseer derives a phase from live state every tick and never takes the journal's word for it. If a PR merged at
 lunch, the next tick knows, whatever canopy last wrote down.

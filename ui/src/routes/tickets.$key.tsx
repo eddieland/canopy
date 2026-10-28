@@ -33,6 +33,7 @@ import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { ticketDescription } from '@/lib/descriptions'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { phaseMeaning } from '@/lib/meanings'
 import { useViewedTicket } from '@/lib/recent-tickets'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
@@ -155,7 +156,11 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     {/* place, so its total stays in reach. */}
                     <Fields className="pb-0">
                         <Field label="phase" mono>
-                            <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} />
+                            <Word
+                                word={phaseWord(ticket)}
+                                text={phaseLabel(ticket)}
+                                meaning={phaseMeaning(ticket.phase)}
+                            />
                             {ticket.done ? ', done' : ''}
                         </Field>
                         <Field label="branch" mono>
@@ -323,7 +328,7 @@ function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; pha
     return (
         <Field label={repo ? `PR in ${repo}` : 'PR'} mono className="flex items-baseline gap-3">
             {pr ? <PullRequestLink url={pr} className="text-sm" /> : <None />}
-            {phase && <Word word={phase} className="text-muted-foreground" />}
+            {phase && <Word word={phase} meaning={phaseMeaning(phase)} className="text-muted-foreground" />}
         </Field>
     )
 }
