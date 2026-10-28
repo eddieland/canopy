@@ -6,9 +6,10 @@ its own (`decisions.decider`), and the phase that row names, and the state block
 ticket. One row it does not decide, anywhere on the ticket, leaves the ticket whole to the overseer, which reads the
 derivation's rows beside the observations. So does a ticket that is not a fresh, open candidate, but for one whose
 observation the `tracker` source left stale: the overseer reads no tracker where a source does (§39), so the harness
-records its `wait`, naming what is old. So does one with a `merged` row while a `multi_repo` item is open on it: a
-repository's part may remain. An item the overseer holds open on a ticket the harness takes stands while the overseer
-is not given the ticket (`attention.current`).
+records its `wait`, naming what is old. Where the `vcs` source runs beside it, the overseer reads no GitHub either, so a
+candidate with a PR, branches, or an open blocker's PR that source left stale is the harness's `wait` too. So does one
+with a `merged` row while a `multi_repo` item is open on it: a repository's part may remain. An item the overseer holds
+open on a ticket the harness takes stands while the overseer is not given the ticket (`attention.current`).
 
 The rows it decides are `ROWS`: only those it reads from its own journal alone, which need no measurement (§37, The
 evidence gate). A row that rests on what a connector observed joins them only by a PR citing the measurement that shows
@@ -161,14 +162,15 @@ def _decided(conn: sqlite3.Connection, key: str, subjects: Sequence[Derived]) ->
         The decision, or None when the ticket is left to the overseer.
     """
     own = subjects[0]
-    if own.repo is None and own.stale is not None and own.stale_tracker:
-        # The overseer reads no tracker where a source does (§39): the ticket waits for a read that is whole, and the
-        # source that left it stale has raised `connector_failed` (§30). One marked done, which the query still finds,
-        # is owed nothing (§7).
+    stale = _stale(subjects)
+    if stale is not None:
+        # The ticket waits for a read that is whole, and the source that left it stale has raised `connector_failed`
+        # (§30). One marked done, which the query still finds, is owed nothing (§7).
         ticket = db.get_ticket(conn, key)
         if ticket is not None and ticket.done:
             return None
-        return Decision(key, None, "wait", f"stale: {own.stale}; it waits for the tracker source to read it again")
+        what, source = stale
+        return Decision(key, None, "wait", f"stale: {what}; it waits for the {source} source to read it again")
     if own.repo is not None or own.stale is not None or own.closed or not own.candidate or not own.phases:
         return None
     private = conversation.is_started(conversation.start_of(conn, key))
@@ -177,6 +179,24 @@ def _decided(conn: sqlite3.Connection, key: str, subjects: Sequence[Derived]) ->
     phase = own.phases[0]
     row = ROWS[phase]
     return Decision(key, phase, row.action, f"{phase}: {row.why}")
+
+
+def _stale(subjects: Sequence[Derived]) -> tuple[str, str] | None:
+    """What a ticket's decision rests on that a source left stale, where the overseer reads it no longer (§39).
+
+    The overseer reads no tracker where a `tracker` source does, nor GitHub where the `vcs` source runs beside it. The
+    ticket's own observation is the `tracker` source's; on a candidate fresh, or stale only by what the `vcs` source
+    reads, the first subject that source left stale is its. A closed or unlabeled ticket is decided without its PRs.
+
+    Returns:
+        What is stale, and the kind of source that left it so; None when nothing is.
+    """
+    own = subjects[0]
+    if own.repo is None and own.stale is not None and own.stale_tracker:
+        return own.stale, "tracker"
+    if not (own.stale_vcs or (own.stale is None and own.candidate is True and not own.closed)):
+        return None
+    return next(((s.stale, "vcs") for s in subjects if s.stale is not None and s.stale_vcs), None)
 
 
 def _takes(subject: Derived, *, private: bool) -> bool:

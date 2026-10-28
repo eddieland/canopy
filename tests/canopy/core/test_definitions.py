@@ -990,6 +990,13 @@ OVERSEER_GITHUB_READS = {
 }
 #: Its reads of GitHub's issues, which are the tickets only when the tracker is GitHub.
 GITHUB_ISSUE_READS = {"github_issue_read", "github_list_issues", "github_search_issues"}
+#: GitHub's reads of PRs and branches, which the overseer keeps but where a `tracker` source runs (DESIGN §39).
+GITHUB_PR_READS = {
+    "github_pull_request_read",
+    "github_list_pull_requests",
+    "github_search_pull_requests",
+    "github_list_branches",
+}
 
 
 def _ruleset(canopy_env: CanopyEnv, agent: str) -> list[tuple[str, str, str]]:
@@ -1101,18 +1108,18 @@ def test_the_overseer_keeps_a_trackers_read_that_a_github_pattern_matches(tool: 
     assert _opencode_disabled(_opencode_ruleset(rendered), tool) is not allowed
 
 
-def test_where_a_tracker_source_reads_the_overseer_may_call_no_tracker_tool_and_has_no_skill(
+def test_where_a_tracker_source_reads_the_overseer_may_call_no_tracker_or_github_tool_and_has_no_skill(
     canopy_env: CanopyEnv,
 ) -> None:
-    """It reads the journal for the tracker (DESIGN §39): no tool of the tracker's, no skill in its body or to load."""
+    """It reads the journal for both worlds (DESIGN §39): no tool of the tracker's or GitHub's, no skill to load."""
     canopy_env.write_private('[connect.sources.jira]\nkind = "tracker"\ncmd = "connector jira"\n')
     ruleset = _ruleset(canopy_env, agents.OVERSEER)
     jira = config.DEFAULT_TRACKER_TOOLS["jira"]
     tools = (*jira.allowed, *jira.create, *jira.pr_writes, "someToolNoPatternNames")
-    for tool in (*(f"{jira.server}_{tool}" for tool in tools), *GITHUB_ISSUE_READS):
+    for tool in (*(f"{jira.server}_{tool}" for tool in tools), *GITHUB_ISSUE_READS, *GITHUB_PR_READS):
         assert _opencode_disabled(ruleset, tool), tool
-    # GitHub's PRs are still read live, until the `vcs` source's observations are all it reads.
-    assert not _opencode_disabled(ruleset, "github_pull_request_read")
+    # canopy's own tools are its to call still.
+    assert not _opencode_disabled(ruleset, "canopy_decide")
     snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     text = (snapshot / "agents" / "canopy-overseer.md").read_text()
     assert "The skill `tracker-jira` follows" not in text
@@ -1120,28 +1127,25 @@ def test_where_a_tracker_source_reads_the_overseer_may_call_no_tracker_tool_and_
 
 
 @pytest.mark.parametrize("observed", [False, True])
-def test_on_a_github_tracker_a_tracker_source_leaves_the_overseer_its_reads_of_prs_alone(*, observed: bool) -> None:
+def test_on_a_github_tracker_where_a_tracker_source_reads_the_overseer_reads_no_github(*, observed: bool) -> None:
     bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
     tools = agents.McpTools("github", ("issue_read", "list_issues", "pull_request_read", "create_pull_request"))
     ruleset = _opencode_ruleset(opencode_definitions.render_overseer_reads(bundled, tools, "github", observed=observed))
-    assert not _opencode_disabled(ruleset, "github_pull_request_read")
-    assert not _opencode_disabled(ruleset, "github_list_branches")
-    for tool in ("github_issue_read", "github_list_issues", "github_search_issues"):
+    for tool in (*GITHUB_ISSUE_READS, *GITHUB_PR_READS, "github_get_me"):
         assert _opencode_disabled(ruleset, tool) is observed, tool
     assert _opencode_disabled(ruleset, "github_create_pull_request")
 
 
-def test_where_a_tracker_source_reads_and_no_tracker_tools_are_known_githubs_issue_reads_are_denied() -> None:
+def test_where_a_tracker_source_reads_and_no_tracker_tools_are_known_githubs_reads_are_denied() -> None:
     bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
     ruleset = _opencode_ruleset(opencode_definitions.render_overseer_reads(bundled, None, "linear", observed=True))
-    for tool in GITHUB_ISSUE_READS:
+    for tool in (*GITHUB_ISSUE_READS, *GITHUB_PR_READS):
         assert _opencode_disabled(ruleset, tool), tool
     # With the server named, by config or a provider's defaults, it is denied whole, though no read tool is known.
     named = opencode_definitions.render_overseer_reads(bundled, None, "linear", observed=True, server="linear")
     ruleset = _opencode_ruleset(named)
-    for tool in ("linear_list_issues", "linear_create_issue", *GITHUB_ISSUE_READS):
+    for tool in ("linear_list_issues", "linear_create_issue", *GITHUB_ISSUE_READS, *GITHUB_PR_READS):
         assert _opencode_disabled(ruleset, tool), tool
-    assert not _opencode_disabled(ruleset, "github_pull_request_read")
 
 
 def test_a_tracker_source_denies_the_overseer_a_configured_server_with_no_read_tools(canopy_env: CanopyEnv) -> None:

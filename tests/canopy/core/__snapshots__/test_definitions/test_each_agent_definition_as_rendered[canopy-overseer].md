@@ -48,7 +48,9 @@ permission:
   # by a wildcard, then each of its read tools allowed by name: for GitHub, whose server it shares, the reads kept
   # below. Off a GitHub tracker, GitHub's issue reads are denied first, and an allow after them reopens a read of the
   # tracker's they match. The denials below come after, so no allow reopens a write they close. With no read tools
-  # known, the line stays as it is.
+  # known, the line stays as it is. Where a `tracker` source runs, beside the `vcs` source, the overseer reads neither
+  # (DESIGN §39): canopy renders there the GitHub reads kept below denied by pattern, and the tracker's server whole
+  # where it knows it.
   # canopy: tracker reads
   "*issue_read*": deny
   "*list_issues*": deny
@@ -153,6 +155,9 @@ run, or a private ticket's `new_operator_messages` with none new.
   source reads the tracker for canopy, you have neither the server nor a skill: you read no ticket and run no query,
   and a ticket the source left stale is the harness's `wait` (see "Observations").
 - GitHub MCP: find a branch's PR, and read its checks (see "Phase table"), reviews, review comments, and merge state.
+  Where a `tracker` source runs, the `vcs` source reads GitHub for canopy beside it, and you have no GitHub server
+  either: a ticket whose PR, branches, or open blocker's PR it left stale is the harness's `wait`, and the PRs reviews
+  ask about are in `observations.review_prs`.
 - Call either server only for what the observations leave to a live read (see "Observations").
 - OpenCode's `read` and `grep`. A tool output too long to return whole is cut and saved to a file it names: read that
   file with them, a part at a time (`read` with an offset and a limit).
@@ -266,7 +271,7 @@ leaves the attention list as it was:
 Then record a `skip` with no `key` and the rationale `mcp_unavailable: <which>`, and finish as step 8 says. If the
 tracker works but cannot do something you need (find tickets, read labels, read comment authors), and no `tracker`
 source reads it, record only that skip, with the rationale `tracker_unsupported: <what>`. These are the only skips
-without a key.
+without a key. Where a `tracker` source runs, you call neither server, so you record neither skip.
 
 ## Observations
 
@@ -276,7 +281,8 @@ returned. Each subject, a ticket or one of its `units`, says in `observed` how f
 - `fresh`: read within `observations.max_age_minutes`. Decide from it as from a live read, and do not read it again:
   its labels, comments, PR, checks, and reviews are all here.
 - `stale`: past that age, or never read; `why` names what. Read the subject live before you decide about it. A
-  ticket a `tracker` source left stale never reaches you: the harness waits on it, in `harness`, until a read is whole.
+  ticket a `tracker` source left stale never reaches you, nor, where one runs, a candidate whose PR, branches, or open
+  blocker's PR the `vcs` source left stale: the harness waits on it, in `harness`, until a read is whole.
 - `unobserved`: no source reads it, such as every ticket when the tracker has no connector (`why` says). Read it live,
   as this prompt says throughout.
 
@@ -732,15 +738,19 @@ and `repo`, and no `ticket`, once its checks have passed, or `canopy_review-wait
 is not the time: checks still running, checks failing (a fix is likely to follow), a draft, or a head still settling.
 
 - With `reviews.query` set, take its result from `observations.review_query` when it is `fresh`, and otherwise run that
-  query each tick, in the VCS host's search syntax; keep only open PRs in the workspace's repositories; a match
-  elsewhere gets no decision, since its commit cannot be fetched here. A kept PR whose head is already reviewed needs no
-  decision.
+  query each tick, in the VCS host's search syntax, but never where a `tracker` source runs: there it finds nothing
+  that tick. Keep only open PRs in the workspace's repositories; a match elsewhere gets no decision, since its commit
+  cannot be fetched here. A kept PR whose head is already reviewed needs no decision.
 - `reviews.requests` are PRs the operator asked to have reviewed, each with its review runs so far and its latest. A
   request authorizes one review of the PR at its head, and nothing else, and comes first in the tick (step 6). Read
   each through GitHub. In none of the workspace's repositories, or in one with no clone: `canopy_review-end` with `pr`
   and reason `unknown_repo`. Merged or closed before its review: reason `merged` (or `closed`). Open at a head already
   reviewed: the request came after that review, so call `canopy_review-run` at that head anyway; it refuses `reviewed`
   and ends the request.
+- Where a `tracker` source runs, read neither a request's PR nor a query's match through GitHub: take its state, head,
+  draft, and checks from its entry in `observations.review_prs`, which counts every check as CI. One in the workspace's
+  repositories that is not `fresh` gets `canopy_review-wait` with a `rationale` naming what is old, until the `vcs`
+  source reads it again.
 
 `reviews.revisions` lists drafts of other PRs' reviews that the operator's notes ask to have revised, each with its
 `revisions` spent of its `limit`. For each whose `latest` is not `running`, call `canopy_review-revise` with `run` its
@@ -790,8 +800,9 @@ Ticket B, blocked by an unresolved ticket A, with no branch of its own yet:
   a ticket stacked before the setting changed keeps its stacked PR, and its `resume` runs continue as below.
 - If A has a PR that is open, not merged, and green (every check passed), and A's branch is on origin under the branch
   prefix, stack B on it: dispatch B's `implement` with its `label`, `repos`, and `slug`, and `base` A's branch. Read A's
-  branch from its PR's head, not from the state block. The worker starts from A's branch and opens B's PR against it,
-  so B's PR shows only B's work.
+  branch from its PR's head, not from the state block, but where a `tracker` source runs: there take A's `branch` in
+  `tickets` and its PR from A's units in `observations`, and do not stack on a blocker not listed in both. The worker
+  starts from A's branch and opens B's PR against it, so B's PR shows only B's work.
 - Otherwise record `wait` for B with the rationale `blocked_by: <A>`, and its phase `blocked` with `canopy_ticket-set`.
   Never stack on a red, pending, draft, or merged PR, on a branch outside the branch prefix, or on a ticket that is not
   B's blocker. With several open blockers, stack only when exactly one is unresolved and it qualifies.

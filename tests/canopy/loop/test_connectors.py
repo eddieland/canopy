@@ -199,6 +199,24 @@ def test_a_pr_with_an_open_review_request_is_read_so_its_review_knows_its_base(
     assert asked(watched)[-1]["request"]["prs"] == [PR]
 
 
+@pytest.mark.parametrize("tracker", [True, False])
+def test_where_a_tracker_source_runs_each_pr_the_review_query_found_is_read(
+    scenario: Scenario,
+    watched: Path,
+    *,
+    tracker: bool,
+) -> None:
+    """The overseer reads no GitHub there (DESIGN §39), so it reviews a match from the read; elsewhere it reads one."""
+    if not tracker:
+        scenario.configures("private", connect={"sources": {"jira": None}})
+    found = "https://github.com/acme/api/pull/9"
+    plays(watched, github={"end": {"prs": [PR], "repositories": ["repo"], "review_query": [found]}})
+    scenario.tick(*waits(*KEYS))
+    plays(watched)
+    scenario.tick(*waits(*KEYS))
+    assert asked(watched)[-1]["request"]["prs"] == ([PR, found] if tracker else [PR])
+
+
 def test_a_line_out_of_bounds_is_refused_its_subject_kept_and_the_rest_recorded(
     scenario: Scenario,
     watched: Path,

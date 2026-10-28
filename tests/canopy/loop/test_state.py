@@ -14,13 +14,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
 
+import pytest
+
 from canopy.core import config, conversation, db, item_numbers, pools, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import NumberedItem, Phase, ResumeReason, RunStatus, StartStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import duties, harness, harness_dispatches, phases, tick
 from canopy.runs import policy, reconcile
-from tests.canopy.helpers import chore_toml
+from tests.canopy.helpers import chore_toml, in_tick
 
 if TYPE_CHECKING:
     import sqlite3
@@ -28,6 +30,7 @@ if TYPE_CHECKING:
 
     from syrupy.assertion import SnapshotAssertion
 
+    from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import CanopyEnv
 
 DAY = "2026-10-16"
@@ -235,6 +238,31 @@ def prompts(env: CanopyEnv, *names: str) -> None:
         prompt = env.home / "chores" / f"{name}.md"
         prompt.parent.mkdir(exist_ok=True)
         prompt.write_text(f"# {name}\n")
+
+
+@pytest.mark.parametrize("tracker", [True, False])
+def test_a_review_query_not_read_fresh_keeps_no_pr_of_no_ticket_where_the_overseer_reads_no_github(
+    scenario: Scenario,
+    connector_state: Path,
+    *,
+    tracker: bool,
+) -> None:
+    """Where a `tracker` source runs, the overseer runs no query itself (DESIGN §39): nothing it might find is kept."""
+    vcs = {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1}
+    jira = {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}
+    scenario.configures("private", connect={"sources": {"github": vcs, **({"jira": jira} if tracker else {})}})
+    scenario.configures("private", review={"query": "is:pr review-requested:@me"})
+    with in_tick(scenario.conn, ends_ok=True) as tick_id:
+        scenario.conn.execute(
+            "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, ended_at, status, log_path) "
+            "VALUES (?, ?, 'abc1234', ?, ?, 'done', 'x')",
+            (tick_id, PR, db.now(), db.now()),
+        )
+    # The `vcs` source does not read the review query to its end.
+    connector_state.write_text(json.dumps({"github": {"end": {"repositories": ["repo"]}}}))
+    scenario.tick(queried=None if tracker else [])
+    assert scenario.state()["observations"]["review_query"]["observed"] == "stale"
+    assert [pr["url"] for pr in scenario.state()["reviews"]["prs"]] == ([] if tracker else [PR])
 
 
 def derive_conflicted(conn: sqlite3.Connection, tick_id: int, key: str) -> None:
