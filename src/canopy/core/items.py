@@ -12,6 +12,9 @@ from datetime import UTC, datetime
 
 from canopy.core import db
 
+#: An attention item is a decision whose action is this prefix and its reason (D020).
+ACTION_PREFIX = "attention:"
+
 
 @dataclass(frozen=True)
 class Item:

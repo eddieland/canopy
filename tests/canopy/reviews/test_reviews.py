@@ -618,17 +618,17 @@ def test_the_state_block_shows_reviewed_prs(reviewing: CanopyEnv, scenario: Scen
 
 def test_attention_about_a_pr_without_a_ticket(reviewing: CanopyEnv, scenario: Scenario) -> None:
     scenario.tick(
-        canopy("attention", "--pr", PR, "needs_author", "--detail", "review run 3 asks about intent"),
+        canopy("attention", "--pr", PR, "flaky_rerun", "--detail", "build failed again on rerun"),
         *waits("PROJ-1"),
     )
     conn = scenario.conn
     assert [(i.subject, i.reason, i.detail) for i in attention.current(conn)] == [
-        (f"pr:{PR}", "needs_author", "review run 3 asks about intent"),
+        (f"pr:{PR}", "flaky_rerun", "build failed again on rerun"),
     ]
-    assert f"pr:{PR}  attention:needs_author" in scenario.operator("decisions").out
+    assert f"pr:{PR}  attention:flaky_rerun" in scenario.operator("decisions").out
     with scenario.ticking() as tick_id:
-        scenario.overseer("attention", "needs_author", "--detail", "x", code=2)
-        scenario.overseer("attention", "--pr", "http://plain", "needs_author", "--detail", "x", code=2)
+        scenario.overseer("attention", "flaky_rerun", "--detail", "x", code=2)
+        scenario.overseer("attention", "--pr", "http://plain", "flaky_rerun", "--detail", "x", code=2)
     assert review_decisions(conn, tick_id) == []
 
 

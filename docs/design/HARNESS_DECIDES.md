@@ -12,11 +12,11 @@ the tickets left (§6); the state block's `harness`, naming each ticket taken; a
 in §7. The rows enabled are those read from the journal alone: `wait` for `running`, and for a private ticket's
 `needs_human`; and `chore run` for a due chore with no `when` (§19). No ticket's dispatch is enabled: each rests on an
 observation. Of the attention list held in code, built: the items the harness raises from their causes, in §14, which
-the overseer is refused (`raised`); and the overseer's items held through a tick that does not give the overseer their
-subject, until one that does leaves them out or the ticket is done or stopped (§14), so a ticket with one is the
-harness's for a `wait`, though not for a run. Of the cursors, built: the harness's moves past what needs no handling,
-and a dispatch's default cursors, for a `resume` of a public ticket, read from fresh observations (What the overseer is
-left). The rest, from the overseer's three items on, is designed, not built. Until it is, §8, §21, and TRUST_MODEL
+the overseer is refused (`raised`); the three the overseer keeps, below; and its other items held through a tick that
+does not give the overseer their subject, until one that does leaves them out or the ticket is done or stopped (§14),
+so a ticket with one is the harness's for a `wait`, though not for a run. Of the cursors, built: the harness's moves
+past what needs no handling, and a dispatch's default cursors, for a `resume` of a public ticket, read from fresh
+observations (What the overseer is left). The rest is designed, not built. Until it is, §8, §21, and TRUST_MODEL
 describe canopy as it is; this section says what changes, and the PR that finishes it changes those sections and cuts
 this one to what is left.
 
@@ -84,9 +84,11 @@ rests on is stale (§14). No item hangs on the overseer recording it again: none
 go because a tick could not read its cause, and nothing needs to tell a partial tick from a whole one.
 
 The overseer keeps the three that are judgment: `needs_author`, `multi_repo`, and `notice_rerun` (§8). It records each
-once, naming what it is about, and the harness holds it until that is handled (the cursor passes the item it names, a
-newer run of the held check is observed, or a human answers after it), or the ticket is done or stopped. The block
-lists them with what each names, so none is recorded twice.
+once, about a ticket, naming what it is about, and the harness holds it whatever later ticks record, until the cursor
+passes the item a `needs_author` names, a newer run of the check a `notice_rerun` names is observed, the operator
+answers on the ticket after a `needs_author` or `multi_repo` (a tracker reply is not theirs), or the ticket is done or
+stopped. One naming nothing that could end it is refused (`unnamed`). The block lists them with what each names, so
+none is recorded twice; the overseer drops one only by moving a cursor past what it names.
 
 ### What the overseer is left
 

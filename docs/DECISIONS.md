@@ -152,7 +152,8 @@ such as a shipped migration, may still cite one, and git history has its text.
   operator names in `runtime.allow_bash`, never canopy's own. They, and the commands that share their functions until
   those go, refuse without a running tick, so the journal holds only what the loop did.
 - Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's, with the
-  overseer's items held through a tick that did not give it their subject (DESIGN §14). No own table.
+  overseer's items held through a tick that did not give it their subject, and the three it keeps held from the one
+  that recorded them until what they name ends them (`decisions.kept`, DESIGN §14, §37). No own table.
 - The harness raises the items that need no judgment from their causes, keeping one while an observation it rests on
   is stale, and the overseer's tools refuse it those reasons (`raised`, DESIGN §37).
 

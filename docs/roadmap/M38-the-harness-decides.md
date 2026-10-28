@@ -100,56 +100,72 @@ units holds rows, every one enabled, and its own row none, and not when a feedba
 current; a `feedback-plan` ranks with a human waiting and a `retarget` with a repair, so neither is held behind a
 conflict; `reserved` holds `canopy dispatch` only, not a review the overseer starts, until a review row is the
 harness's; and the harness moves no cursor, so a row enabled later brings its cursors with it. Built (2026-10-23): the
-fifth bullet's hold, which a tick without the overseer (M39) needs. An item the overseer recorded stands through every
-`ok` tick that did not give the overseer its subject, a ticket it recorded no decision about there, such as one the
-harness decided, and goes the first tick that gives it the subject and leaves it out, or once its ticket is done or
-stopped (`attention.current`); the harness's own items still stand only while the latest `ok` tick records them. So a
-ticket with an item the overseer holds is the harness's for a `wait`, the item standing, and the block lists the item
-only once the overseer is given the ticket again; D020 is edited in place. Chosen conservatively, for the operator to
-change: the harness's run is still held off a ticket with an item the overseer holds, since what the item says may be
-why not to run; an item about a PR or the workspace stands only through a tick that ran no overseer; and done and
-stopped are the only ends decided in code. Built (2026-10-24): the fifth bullet's first half. None of the eight was
-raised by code before; guards recorded `attempt_limit` and `review_limit` on refusing the overseer, and still do. Each
-tick, after the derivation and before the overseer, the harness raises the eight from their causes, marked as its own
-(`loop/harness_items.py`): `needs_reviewer` and `ready_to_merge` for a unit whose first row is `green_unreviewed` or
-`approved` (`review_limit` with it at its review limit), `untrusted_review` while that row holds, `attempt_limit` for
-the run a ticket's rows want past its limit, `review_failed` while a PR's latest review run in the state block's window
-failed, and `plan_review` and `plan_changed` from the plans' rows and files. One resting on an observation is recorded
-again, as the latest `ok` tick listed it, while that observation is stale or the derivation raised, and goes once a
-fresh read shows its cause gone or the journal shows a limit lifted; a ticket seen closed or unlabeled, done, or
-stopped holds none. So an outage tick that closes `ok` resolves nothing (#219). The overseer's attention tool and its
-command refuse the eight (`raised`); the prompt records `wait` where a row names one, and its re-recording rule covers
-only its own items; the comparison takes a `wait` beside the harness's item as agreeing; and garbage collection keeps
-the overseer's older rows of the eight as corpus. The derivation now reads untrusted `canopy:review` findings as
-`untrusted_review`, as the prompt's table does. D020 and TRUST_MODEL T1 are edited. Chosen conservatively, for the
-operator to change: a public ticket whose own row is stale, such as every one where no `tracker` source runs, still
-gets its units' items from their fresh PRs, and keeps its plan's and a branchless unit's `attempt_limit`; an
-`attempt_limit` is raised for each unit the rows want resumed, every unit of a `ready` ticket (or the workspace's one
-repository), and every unit on `human_replied`, never for `blocked` or a running ticket; a PR the review query found
-gets its `review_limit` only from the guard, since no source reads its head; a guard's item is held as the overseer's
-is. Built (2026-10-25): the sixth bullet's cursors past what needs no handling. Each live tick, after the connectors
-and before the derivation, the harness moves a ticket's `comment` cursor and each unit's `review` cursor across the
-items directly after it that carry the workers' marks or that the operator sent through canopy (and an empty review
-holding only such comments, as GitHub wraps a reply), stopping at the first item that is anything else, never moving
-back; each move is its decision `cursor`, marked as its own, which decides nothing about the ticket
-(`loop/harness_cursors.py`); a dry run moves none. Chosen conservatively, for the operator to change: only a subject
-the block shows fresh moves, a fresh candidate's comments and a fresh PR's reviews, not a stale or unobserved one's;
-a ticket's draft the operator sent is a tracker comment in their name, left to the overseer; and a canopy review run,
-with findings or none, stops the `review` cursor. Built (2026-10-25): the sixth bullet's default cursors. A `resume`
-moves each cursor of its reasons it leaves out, once its worker starts, to the newest item of that kind the state
-block showed (the newest comment shown, operator message the tick had read, failed check at the head, review item
+fifth bullet's hold, which a tick without the overseer (M39) needs, narrowed on 2026-10-24 to the overseer's items it
+does not keep (below) and a guard's. An item the overseer recorded stands through every `ok` tick that did not give the
+overseer its subject, a ticket it recorded no decision about there, such as one the harness decided, and goes the first
+tick that gives it the subject and leaves it out, or once its ticket is done or stopped (`attention.current`); the
+harness's own items still stand only while the latest `ok` tick records them. So a ticket with an item the overseer
+holds is the harness's for a `wait`, the item standing, and the block lists the item only once the overseer is given the
+ticket again; D020 is edited in place. Chosen conservatively, for the operator to change: the harness's run is still
+held off a ticket with an item the overseer holds, since what the item says may be why not to run; an item about a PR or
+the workspace stands only through a tick that ran no overseer; and done and stopped are the only ends decided in code.
+Built (2026-10-24): the fifth bullet's first half. None of the eight was raised by code before; guards recorded
+`attempt_limit` and `review_limit` on refusing the overseer, and still do. Each tick, after the derivation and before
+the overseer, the harness raises the eight from their causes, marked as its own (`loop/harness_items.py`):
+`needs_reviewer` and `ready_to_merge` for a unit whose first row is `green_unreviewed` or `approved` (`review_limit`
+with it at its review limit), `untrusted_review` while that row holds, `attempt_limit` for the run a ticket's rows want
+past its limit, `review_failed` while a PR's latest review run in the state block's window failed, and `plan_review` and
+`plan_changed` from the plans' rows and files. One resting on an observation is recorded again, as the latest `ok` tick
+listed it, while that observation is stale or the derivation raised, and goes once a fresh read shows its cause gone or
+the journal shows a limit lifted; a ticket seen closed or unlabeled, done, or stopped holds none. So an outage tick that
+closes `ok` resolves nothing (#219). The overseer's attention tool and its command refuse the eight (`raised`); the
+prompt records `wait` where a row names one, and its re-recording rule covers only its own items; the comparison takes a
+`wait` beside the harness's item as agreeing; and garbage collection keeps the overseer's older rows of the eight as
+corpus. The derivation now reads untrusted `canopy:review` findings as `untrusted_review`, as the prompt's table does.
+D020 and TRUST_MODEL T1 are edited. Chosen conservatively, for the operator to change: a public ticket whose own row is
+stale, such as every one where no `tracker` source runs, still gets its units' items from their fresh PRs, and keeps its
+plan's and a branchless unit's `attempt_limit`; an `attempt_limit` is raised for each unit the rows want resumed, every
+unit of a `ready` ticket (or the workspace's one repository), and every unit on `human_replied`, never for `blocked` or
+a running ticket; a PR the review query found gets its `review_limit` only from the guard, since no source reads its
+head; a guard's item is held as the overseer's is. Built (2026-10-24): the fifth bullet's second half. The overseer
+records `needs_author`, `multi_repo`, and `notice_rerun` once, marked `kept` and naming in `item` the journal number of
+what it is about (`decisions.kept` and `item`, migration 0104), and the harness holds each from the `ok` tick that
+recorded it, whatever later ticks record, until what it names ends it (`core/kept_items.py`): the ticket's comment
+cursor, or the review cursor of the unit whose PR it is on, passes the item a `needs_author` names; the operator answers
+on the ticket after a `needs_author` or a `multi_repo`; a newer run of the check a `notice_rerun` names is observed; or
+the ticket is done or stopped. The tool and its command refuse one that names nothing that could end it (`unnamed`): one
+about no ticket, a `notice_rerun` with no check run, an item not of its ticket or of one of its units' PRs, and `item`
+on any other reason. The block lists each held record `kept` with its `item`, the prompt records each once and `wait`
+beside it, and a ticket with a `merged` row and a `multi_repo` open is left to the overseer. D020, §14, §37, and
+TRUST_MODEL T1 are edited. Chosen conservatively, for the operator to change: the overseer ends none but by moving a
+cursor past what a `needs_author` names; only the operator's message, through any channel, is a human's answer, not a
+reply on the tracker or a comment on an artifact, since the list is read without the config that says who may reply; a
+`notice_rerun` ends only on a newer run, not on an answer, and stays too once the journal no longer holds its check run;
+a dry run's record counts only while its tick is the latest `ok` one (D036); an item the overseer recorded every tick
+before is not listed to it, so it records one once if its cause still holds, and no sink hears it ended, though its age
+starts again; `flaky_rerun` stays recorded every tick (§23, Open); and the derivation comparison does not yet take a
+`wait` beside a held item as agreeing. Built (2026-10-25): the sixth bullet's cursors past what needs no handling. Each
+live tick, after the connectors and before the derivation, the harness moves a ticket's `comment` cursor and each unit's
+`review` cursor across the items directly after it that carry the workers' marks or that the operator sent through
+canopy (and an empty review holding only such comments, as GitHub wraps a reply), stopping at the first item that is
+anything else, never moving back; each move is its decision `cursor`, marked as its own, which decides nothing about the
+ticket (`loop/harness_cursors.py`); a dry run moves none. Chosen conservatively, for the operator to change: only a
+subject the block shows fresh moves, a fresh candidate's comments and a fresh PR's reviews, not a stale or unobserved
+one's; a ticket's draft the operator sent is a tracker comment in their name, left to the overseer; and a canopy review
+run, with findings or none, stops the `review` cursor. Built (2026-10-25): the sixth bullet's default cursors. A
+`resume` moves each cursor of its reasons it leaves out, once its worker starts, to the newest item of that kind the
+state block showed (the newest comment shown, operator message the tick had read, failed check at the head, review item
 shown, or the end of the review run it names), short of the first it may not cover: one past the block's bound, or an
-untrusted reviewer's feedback with no go-ahead it carries (`claims.default_cursors`). A cursor passed is kept, and
-M37's checks bound it as before. A `resume` for `reply` is now checked to cover an authorized reply, as one for
-`review` is, rather than to name it, so a default at a newer comment by someone else still passes; TRUST_MODEL T1 is
-edited. The prompt names a `resume`'s cursors only to stop shorter. Chosen conservatively, for the operator to change:
-no default on a private ticket, for a joint `resume`, or for another kind (an `implement` carrying a message still
-names its cursor); no `comment` or `message` default unless the ticket is observed a fresh candidate, and no `ci` or
-`review` default unless its PR is observed fresh; a message sent after the tick read the journal is not passed; no
-`ci` default while a notice is in force or lately ended, since whether it holds a check is judgment; and a `review`
-cursor stops short of untrusted feedback with feedback plans on too. Left: every other row, each on its measurement;
-the overseer's three items recorded once and ended by what they name; cursors moved past what the harness's own
-decisions handle; the prompt cut to the judgment; and the design folded into the sections it names. Open for the
-operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each disagreement
-the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR (recommended:
-yes).
+untrusted reviewer's feedback with no go-ahead it carries (`claims.default_cursors`). A cursor passed is kept, and M37's
+checks bound it as before. A `resume` for `reply` is now checked to cover an authorized reply, as one for `review` is,
+rather than to name it, so a default at a newer comment by someone else still passes; TRUST_MODEL T1 is edited. The
+prompt names a `resume`'s cursors only to stop shorter. Chosen conservatively, for the operator to change: no default on
+a private ticket, for a joint `resume`, or for another kind (an `implement` carrying a message still names its cursor);
+no `comment` or `message` default unless the ticket is observed a fresh candidate, and no `ci` or `review` default
+unless its PR is observed fresh; a message sent after the tick read the journal is not passed; no `ci` default while a
+notice is in force or lately ended, since whether it holds a check is judgment; and a `review` cursor stops short of
+untrusted feedback with feedback plans on too. Left: every other row, each on its measurement; cursors moved past what
+the harness's own decisions handle; the prompt cut to the judgment; and the design folded into the sections it names.
+Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each
+disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR
+(recommended: yes).

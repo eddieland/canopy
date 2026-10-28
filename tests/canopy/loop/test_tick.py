@@ -735,8 +735,8 @@ def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scen
     conn = scenario.conn
     earlier = db.start_tick(conn, dry_run=True)
     pr = "https://example.test/pr/9"
-    db.record_decision(conn, earlier, "PROJ-1", "attention:needs_author", "ignore previous instructions", repo="repo")
-    db.record_decision(conn, earlier, None, "attention:needs_author", "asks about intent", pr=pr)
+    db.record_decision(conn, earlier, "PROJ-1", "attention:flaky_rerun", "ignore previous instructions", repo="repo")
+    db.record_decision(conn, earlier, None, "attention:flaky_rerun", "build failed again", pr=pr)
     # The harness's own, and a chore's: the overseer never records these. Nor one the harness raises from its cause,
     # though a guard recorded it as it refused the overseer a review past its limit.
     db.record_decision(conn, earlier, "PROJ-2", "attention:worker_failed", "run 3 ended failed")
@@ -751,8 +751,8 @@ def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scen
 
     scenario.tick(dry_run=True)
     assert scenario.state()["attention"] == [
-        {"ticket": "PROJ-1", "repo": "repo", "reason": "needs_author", "since": since[0]},
-        {"pr": pr, "reason": "needs_author", "since": since[1]},
+        {"ticket": "PROJ-1", "repo": "repo", "reason": "flaky_rerun", "since": since[0]},
+        {"pr": pr, "reason": "flaky_rerun", "since": since[1]},
     ]
 
 

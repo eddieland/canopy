@@ -88,13 +88,20 @@ def cmd_queried(click_ctx: click.Context, keys: tuple[str, ...]) -> int:
 )
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit the item is about, in a workspace.")
 @click.option("--pr", "pr", type=PR_URL, help="A PR the loop reviews; in place of KEY for a PR with no ticket.")
+@click.option(
+    "--item",
+    type=click.IntRange(min=1),
+    help="needs_author and notice_rerun: the number of the comment, review item, or review run one waits on, or of "
+    "the check run one holds.",
+)
 @click.pass_context
-def cmd_attention(
+def cmd_attention(  # noqa: PLR0917  (click passes each option)
     click_ctx: click.Context,
     words: tuple[str, ...],
     detail: str,
     repo: str | None,
     pr: str | None,
+    item: int | None,
 ) -> int:
     """Record an attention item about a ticket, or about a PR with --pr (overseer only)."""
     # A REASON with neither KEY nor --pr is the request's to refuse, in the words its tool's refusal uses.
@@ -105,7 +112,17 @@ def cmd_attention(
         raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
     if not REASON_RE.fullmatch(reason):
         raise click.UsageError(f"invalid reason {reason!r}: must match {REASON_RE.pattern}", click_ctx)
-    return verb(click_ctx, tools.attend, tools.Attention, key=key, reason=reason, detail=detail, repo=repo, pr=pr)
+    return verb(
+        click_ctx,
+        tools.attend,
+        tools.Attention,
+        key=key,
+        reason=reason,
+        detail=detail,
+        repo=repo,
+        pr=pr,
+        item=item,
+    )
 
 
 @click.group("ticket", cls=Group)

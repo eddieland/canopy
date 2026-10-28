@@ -124,6 +124,8 @@ def decision(action: str, rationale: str) -> records.Decision:
         chore=None,
         pr=None,
         decider=Decider.OVERSEER,
+        kept=False,
+        item=None,
     )
 
 

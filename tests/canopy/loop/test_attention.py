@@ -70,24 +70,25 @@ def test_every_tick_rewrites_attention_md(scenario: Scenario, canopy_env: Canopy
 
 def test_notify_gets_new_and_resolved_items_once(scenario: Scenario, canopy_env: CanopyEnv, notified: Path) -> None:
     listing = f"Full list: {canopy_env.state_dir / 'attention.md'}\n"
-    both = recorded(("PROJ-3", "needs_author"), ("PROJ-4", "multi_repo"))
+    # PROJ-3's is an item the overseer records every tick its cause holds; PROJ-4's one it keeps (DESIGN §37).
+    both = recorded(("PROJ-3", "flaky_rerun"), ("PROJ-4", "multi_repo"))
     scenario.tick(*both)
     assert messages(notified) == [
         "canopy attention: 2 new, 0 resolved\n"
-        "+ PROJ-3 needs_author: PROJ-3 detail\n"
+        "+ PROJ-3 flaky_rerun: PROJ-3 detail\n"
         "+ PROJ-4 multi_repo: PROJ-4 detail\n" + listing,
     ]
 
     # Still open, even with a reworded detail: nothing new to say.
-    scenario.tick(raises("PROJ-3", "needs_author", "reworded"), raises("PROJ-4", "multi_repo"))
+    scenario.tick(raises("PROJ-3", "flaky_rerun", "reworded"), *waits("PROJ-4"))
     assert len(messages(notified)) == 1
 
-    scenario.tick(*recorded(("PROJ-4", "multi_repo")), *waits("PROJ-3"))
-    assert messages(notified)[1] == "canopy attention: 0 new, 1 resolved\n- PROJ-3 needs_author\n" + listing
+    scenario.tick(*waits("PROJ-3", "PROJ-4"))
+    assert messages(notified)[1] == "canopy attention: 0 new, 1 resolved\n- PROJ-3 flaky_rerun\n" + listing
 
     # An item that comes back after going away is new again.
-    scenario.tick(*both)
-    assert messages(notified)[2].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-3 needs_author")
+    scenario.tick(*recorded(("PROJ-3", "flaky_rerun")), *waits("PROJ-4"))
+    assert messages(notified)[2].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-3 flaky_rerun")
     rows = scenario.conn.execute("SELECT ticket_key FROM notifications")
     assert sorted(str(r[0]) for r in rows) == ["PROJ-3", "PROJ-4"]
 

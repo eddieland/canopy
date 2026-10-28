@@ -6,8 +6,9 @@ its own (`decisions.decider`), and the phase that row names, and the state block
 ticket. One row it does not decide, anywhere on the ticket, leaves the ticket whole to the overseer, which reads the
 derivation's rows beside the observations. So does a ticket that is not a fresh, open candidate, but for one whose
 observation the `tracker` source left stale: the overseer reads no tracker where a source does (§39), so the harness
-records its `wait`, naming what is old. An item the overseer
-holds open on a ticket the harness takes stands while the overseer is not given the ticket (`attention.current`).
+records its `wait`, naming what is old. So does one with a `merged` row while a `multi_repo` item is open on it: a
+repository's part may remain. An item the overseer holds open on a ticket the harness takes stands while the overseer
+is not given the ticket (`attention.current`).
 
 The rows it decides are `ROWS`: only those it reads from its own journal alone, which need no measurement (§37, The
 evidence gate). A row that rests on what a connector observed joins them only by a PR citing the measurement that shows
@@ -24,7 +25,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import conversation, db, records, sql
+from canopy.core import conversation, db, kept_items, records, sql
 from canopy.core.vocab import Decider, Phase
 from canopy.loop import attention
 
@@ -89,9 +90,16 @@ def decide(ctx: Context, derived: Iterable[Derived]) -> list[Decision]:
     by_ticket: dict[str, list[Derived]] = {}
     for d in derived:
         by_ticket.setdefault(d.ticket_key, []).append(d)
+    merged = any(Phase.MERGED in d.phases for subjects in by_ticket.values() for d in subjects)
+    apart = (
+        {i.ticket_key for i in attention.current(ctx.conn) if i.reason == kept_items.MULTI_REPO} if merged else set()
+    )
     found: list[Decision] = []
     for key in sorted(by_ticket):
-        decision = _decided(ctx.conn, key, by_ticket[key])
+        subjects = by_ticket[key]
+        if key in apart and any(Phase.MERGED in s.phases for s in subjects):
+            continue
+        decision = _decided(ctx.conn, key, subjects)
         if decision is not None:
             found.append(decision)
     return found
