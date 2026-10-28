@@ -267,9 +267,6 @@ banned-from = ["unittest.mock"]
 # The GitHub programs are separate programs whose job is the token and the calls the harness never holds or makes
 # (DESIGN §29): they run gh for its token and talk to GitHub's API.
 "packages/canopy-github/**" = ["TID251"]
-# The Jira connector is a separate program whose job is the credentials and the calls the harness never holds or makes
-# (DESIGN §30).
-"packages/canopy-jira/**" = ["TID251"]
 # The wheel's build hook runs npm (D079); it is part of packaging, not of canopy.
 "hatch_build.py" = ["S603", "TID251"]
 # The Slack sink is a separate program whose job is the network call the harness never makes (DESIGN §20).

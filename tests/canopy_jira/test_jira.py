@@ -83,6 +83,8 @@ class Jira:
     #: Whether a fetch's changelog says how many entries the whole one has.
     totals: bool = True
     fail: dict[str, int] = field(default_factory=dict[str, int])
+    #: How many requests next, to any path, are answered in full but have their replies cut off halfway.
+    cuts: int = 0
     #: Each request: its method, path, query, Authorization header, and body.
     seen: list[tuple[str, str, dict[str, str], str | None, Any]] = field(
         default_factory=list[tuple[str, str, dict[str, str], str | None, Any]],
@@ -181,10 +183,16 @@ class _Api(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"errorMessages": ["no"]}')
             return
-        reply = _Api.jira.handle(self.command, url.path, params, body)
+        reply = json.dumps(_Api.jira.handle(self.command, url.path, params, body)).encode()
         self.send_response(200)
+        self.send_header("Content-Length", str(len(reply)))
         self.end_headers()
-        self.wfile.write(json.dumps(reply).encode())
+        if _Api.jira.cuts:
+            _Api.jira.cuts -= 1
+            self.wfile.write(reply[: len(reply) // 2])
+            self.close_connection = True
+            return
+        self.wfile.write(reply)
 
     @override
     def log_message(self, format: str, *args: Any) -> None:
@@ -236,7 +244,7 @@ def jira() -> Generator[tuple[Jira, str]]:
     """A stand-in for Jira Cloud's REST API, holding no tickets. Yields it and its URL."""
     fake = Jira()
     _Api.jira = fake
-    with serving(_Api) as url:
+    with mock.patch.object(canopy_jira, "RETRY_PAUSES", (0.0, 0.0)), serving(_Api) as url:
         yield fake, url
 
 
@@ -458,6 +466,19 @@ def test_a_ticket_jira_does_not_return_is_left_off_the_end_even_when_the_query_r
     assert found.end() == {"kind": "end", "tickets": ["PROJ-1"], "query": ["PROJ-2"]}
     assert "cannot read GONE-1: Jira did not return it" in found.err
     assert "cannot read PROJ-2: HTTP 500" in found.err
+    assert fake.paths().count("GET /rest/api/3/issue/PROJ-2/comment") == 3, "a read Jira failed is sent again, twice"
+
+
+def test_a_read_whose_reply_is_cut_off_is_sent_again(jira: tuple[Jira, str], credentials: Path) -> None:
+    fake, url = jira
+    fake.add(Issue("PROJ-1"))
+    fake.cuts = 2
+
+    found = read(url, {"tickets": [{"key": "PROJ-1"}]}, credentials)
+
+    assert found.code == 0
+    assert found.end() == {"kind": "end", "tickets": ["PROJ-1"]}
+    assert fake.paths().count("POST /rest/api/3/issue/bulkfetch") == 3
 
 
 def test_a_blocker_jira_does_not_return_is_named_and_its_ticket_still_read(
