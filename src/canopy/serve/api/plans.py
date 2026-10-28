@@ -121,6 +121,7 @@ def approve_feedback(key: TicketKey, body: FeedbackPlanApproval, backend: Backen
                 ctx.state_dir,
                 ref.id,
                 trust=ctx.config.trust,
+                ws=ctx.workspace,
                 channel=WEB,
                 dispatch_lock=ctx.dispatch_lock_path,
                 chosen=body.items,

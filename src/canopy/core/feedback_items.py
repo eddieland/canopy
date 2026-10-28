@@ -10,9 +10,10 @@ ticket's PR that the PR is stacked on and that merged (DESIGN §10), are items t
 (`check_id`, `conflict_id`, `blocker_id`), since the source observes none.
 
 When a feedback plan is recorded, what its run's read saw is recorded with it (`take`, `record`): each PR's head, each
-check's conclusion at that head, and each item and reply the planner was given, by id with a SHA-256 of its body, never
-its text. An item a `resume` went ahead on stays handled while its body and its thread's replies are as that plan saw
-them; once either changed, it is offered again. So the next round is what is new since the last plan, with the items a
+CI check's conclusion at that head, and each item and reply the planner was given, by id with a SHA-256 of its body,
+never its text: a check its repository gives another role (`not_ci`) is neither recorded nor compared. An item a
+`resume` went ahead on stays handled while its body and its thread's replies are as that plan saw them; once either
+changed, it is offered again. So the next round is what is new since the last plan, with the items a
 failed `resume` handed back, those an approval left out, and those no plan covered. A plan is stale when what the
 connectors observe now differs from what it saw (`changes`), each difference with its reason, computed here in code;
 the quiet period before a stale plan is planned again runs from the newest item or reply on its PRs, or from when the
@@ -39,6 +40,7 @@ from canopy.core.vocab import (
     ReviewState,
     RunStatus,
 )
+from canopy.core.workspace import CheckRole
 
 if TYPE_CHECKING:
     import sqlite3
@@ -46,6 +48,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from canopy.core.config import Trust
+    from canopy.core.workspace import Workspace
 
 #: The file in a feedback planner's desk that holds its PRs' items, as the `vcs` source observed them: data to it.
 ITEMS = ".canopy-feedback.json"
@@ -142,7 +145,8 @@ class Snapshot:
 
     #: Each PR's head, by URL; None where the reader did not say.
     heads: Mapping[str, str | None]
-    #: Each check's conclusion at its PR's head, by PR and check name.
+    #: Each CI check's conclusion at its PR's head, by PR and check name: one its repository gives another role is
+    #: left out, so none of its moves makes the plan stale (DESIGN §30).
     checks: Mapping[tuple[str, str], CheckConclusion | None]
     #: The review items the planner was given, each with its replies.
     given: Sequence[Offered]
@@ -305,6 +309,24 @@ def raised(
     return [r for r in found if not handled.has((r.pr_url, r.item, r.id))]
 
 
+def not_ci(conn: sqlite3.Connection, ws: Workspace, prs: Iterable[str]) -> dict[str, frozenset[str]]:
+    """Return the checks each of `prs`'s repository gives a role other than CI, by PR (DESIGN §30).
+
+    None of them is a feedback plan's item (`raised`) or part of what a plan saw (`take`, `changes`): a check that
+    waits on a person, gates the merge, or is ignored makes no plan stale when it moves. A PR's repository is that of
+    the ticket's unit whose PR it is.
+
+    Returns:
+        Their names, by PR URL; none for a PR no unit has, or whose repository the map does not have.
+    """
+    rows = sql.execute(conn, sql.select("pr_url, repo").from_("ticket_units").where_in("pr_url", tuple(prs)))
+    found: dict[str, frozenset[str]] = {}
+    for row in rows:
+        roles = ws.check_roles(str(row[1]))
+        found[str(row[0])] = frozenset(name for name, role in roles.items() if role is not CheckRole.CI)
+    return found
+
+
 def check_id(pr: str, head: str, name: str) -> int:
     """Return the id canopy gives the check named `name` at `pr`'s `head`, as a feedback plan's item.
 
@@ -375,12 +397,17 @@ def items_file(items: Iterable[Item]) -> str:
     return json.dumps([_item_json(o) if isinstance(o, Offered) else _raised_json(o) for o in items], indent=1)
 
 
-def take(conn: sqlite3.Connection, prs: Iterable[str], given: Sequence[Offered]) -> Snapshot:
+def take(
+    conn: sqlite3.Connection,
+    prs: Iterable[str],
+    given: Sequence[Offered],
+    not_ci: Mapping[str, AbstractSet[str]],
+) -> Snapshot:
     """Return what the journal's latest reads hold of `prs`, with the review items `given` to a planner: its snapshot.
 
     Returns:
-        Each PR's head, the conclusion of each check at it, whether it conflicted, the merged PR it was stacked on,
-        and the items given.
+        Each PR's head, the conclusion of each check at it but those `not_ci` names for that PR, whether it
+        conflicted, the merged PR it was stacked on, and the items given.
     """
     heads: dict[str, str | None] = {}
     checks: dict[tuple[str, str], CheckConclusion | None] = {}
@@ -396,8 +423,10 @@ def take(conn: sqlite3.Connection, prs: Iterable[str], given: Sequence[Offered])
         heads[pr] = head
         conflicts[pr] = None if observed is None else observe.conflicts(observed)
         stacked[pr] = None if observed is None else _merged_blocker_pr(conn, observed)
+        skip = not_ci.get(pr, frozenset[str]())
         for check in _checks_at(conn, pr, head):
-            checks[pr, check.name] = check.conclusion
+            if check.name not in skip:
+                checks[pr, check.name] = check.conclusion
     return Snapshot(heads=heads, checks=checks, given=given, conflicts=conflicts, blockers=stacked)
 
 
@@ -431,13 +460,14 @@ def record(conn: sqlite3.Connection, plan_id: int, snapshot: Snapshot) -> None:
     )
 
 
-def changes(conn: sqlite3.Connection, trust: Trust, plan: records.FeedbackPlan) -> list[Change]:
+def changes(conn: sqlite3.Connection, trust: Trust, plan: records.FeedbackPlan, ws: Workspace) -> list[Change]:
     """Return what changed on `plan`'s PRs since it saw them, as the journal's latest reads hold them (DESIGN §32).
 
     A head that moved; a check whose conclusion at an unmoved head changed, or a conflict with its base or a merged
     blocker that came or went there; a review or thread the plan was not given; a reply on a thread it was given, named
     as answering that thread's item; an item it covers edited or its thread resolved; and an item a `resume` went
-    ahead on, edited since. A plan recorded before snapshots were has none.
+    ahead on, edited since. A plan recorded before snapshots were has none. A check `ws` gives a role other than CI is
+    compared on neither side (`not_ci`), so a snapshot that still holds one is not stale for it.
 
     Returns:
         The changes, heads and checks first, then by PR and item, oldest first; empty when the plan is not stale.
@@ -449,7 +479,8 @@ def changes(conn: sqlite3.Connection, trust: Trust, plan: records.FeedbackPlan) 
     )
     if not heads:
         return []
-    found = [c for h in heads for c in _moved(conn, plan.id, h)]
+    skip = not_ci(conn, ws, (h.pr_url for h in heads))
+    found = [c for h in heads for c in _moved(conn, plan.id, h, skip.get(h.pr_url, frozenset[str]()))]
     seen = _seen(conn, plan.id)
     sent = drafts.sent_by_pr(conn)
     handled = _Handled(conn, plan.ticket_key)
@@ -520,13 +551,15 @@ def newest(conn: sqlite3.Connection, trust: Trust, prs: Collection[str]) -> date
     return found
 
 
-def record_values(conn: sqlite3.Connection, plan_id: int, prs: Iterable[str], now: str) -> None:
-    """Record each head and check conclusion of a waiting plan's `prs` as the reads hold them, first seen `now`.
+def record_values(conn: sqlite3.Connection, ws: Workspace, plan_id: int, prs: Collection[str], now: str) -> None:
+    """Record each head and CI check conclusion of a waiting plan's `prs` as the reads hold them, first seen `now`.
 
     A head or check that keeps its value keeps its time; one that takes another value, or takes back one it held
     before, is timed `now`, so each new push or flap of a check starts the quiet period again (DESIGN §32, Planning
-    again). Call after every read that may move them, each tick.
+    again). A check `ws` gives another role is not recorded: it makes no plan stale, so it holds no quiet period. Call
+    after every read that may move them, each tick.
     """
+    skip = not_ci(conn, ws, prs)
     rows: list[tuple[int, str, MoveKind, str, str, str]] = []
     for pr in prs:
         found = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", pr))
@@ -536,6 +569,7 @@ def record_values(conn: sqlite3.Connection, plan_id: int, prs: Iterable[str], no
         rows.extend(
             (plan_id, pr, MoveKind.CHECK, c.name, _str(c.conclusion) or "", now)
             for c in _checks_at(conn, pr, found.head_sha)
+            if c.name not in skip.get(pr, frozenset[str]())
         )
     sql.execute_many(
         conn,
@@ -888,12 +922,17 @@ def _checks_at(conn: sqlite3.Connection, pr: str, head: str | None) -> list[reco
     )
 
 
-def _moved(conn: sqlite3.Connection, plan_id: int, then: records.FeedbackPlanPr) -> list[Change]:
+def _moved(
+    conn: sqlite3.Connection,
+    plan_id: int,
+    then: records.FeedbackPlanPr,
+    not_ci: AbstractSet[str],
+) -> list[Change]:
     """What changed at a plan's PR's head: the head itself, or the checks, conflict, and blocker while it did not move.
 
     Returns:
-        The head's move, or each check whose conclusion changed, a conflict that came or went, and a merged blocker
-        that came or went; empty while the reads hold nothing of the PR.
+        The head's move, or each check but those `not_ci` names whose conclusion changed, a conflict that came or
+        went, and a merged blocker that came or went; empty while the reads hold nothing of the PR.
     """
     pr = then.pr_url
     observed = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", pr))
@@ -912,7 +951,7 @@ def _moved(conn: sqlite3.Connection, plan_id: int, then: records.FeedbackPlanPr)
     found = [
         Change(Changed.CHECK, pr, name=c.name, was=_str(was.get(c.name)), now=_str(c.conclusion))
         for c in _checks_at(conn, pr, observed.head_sha)
-        if c.conclusion != was.get(c.name)
+        if c.name not in not_ci and c.conclusion != was.get(c.name)
     ]
     # Only once the host has said now: a PR whose mergeability it is still working out has not moved. One it had not
     # settled when the plan read it was offered no conflict, so a conflict it settles since is new to the plan, and no
