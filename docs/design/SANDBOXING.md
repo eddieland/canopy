@@ -24,9 +24,10 @@ The prefix runs `canopy-sandbox`, a program canopy installs beside itself, not h
 that picks the operator's policy template. The prefix is private config (§12, T7), so no repository can remove it, and
 the sandbox denies writes to canopy's config, so no worker can; nothing canopy runs writes it. The wrapper strips the
 environment that would point git elsewhere or run a startup file; refuses a run outside the place its role starts in,
-and a template with no read denials or no network allowlist; and gives each run a policy, a private temp directory,
-the role's cache, and, for a worker or setup, its own `git`. The prompt passes through `srt`'s quoted shell string byte
-for byte (D023's revisit clause). Timeouts end everything; on macOS a process that calls `setsid` escapes.
+and a template with no read denials, no network allowlist, or an allowance over what it denies every run; and gives
+each run a policy, a private temp directory, the role's cache, and, for a worker or setup, its own `git`. The prompt
+passes through `srt`'s quoted shell string byte for byte (D023's revisit clause). Timeouts end everything; on macOS
+a process that calls `setsid` escapes.
 
 ### What is wrapped
 
