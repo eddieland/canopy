@@ -187,8 +187,9 @@ Judge whether canopy's PR reviews are worth what they cost.
 
 Run `canopy review show`, `canopy review noise --days 30 --json`, and `canopy config show` (for
 `runtime.models.reviewer` and the review settings). From the noise counts, take the findings by severity, persona, and
-model, and the ones I dismissed by reason: `wrong` is the reviewer's noise, `intentional` and `not_worth_it` held. Count
-the ones I sent to a worker (`canopy send`, a reply in the ticket's conversation), and the cost of reviews by model.
+model, and the ones I dismissed by reason: `wrong` is the reviewer's noise, `intentional`, `not_worth_it`, and
+`out_of_scope` held. Count the ones I sent to a worker (`canopy send`, a reply in the ticket's conversation), and the
+cost of reviews by model.
 Read a sample of `wrong` ones and say why each was wrong: a misreading, a style point, or a matter of taste. Read a
 sample of sent ones and say whether a later push fixed them. Recommend whether to keep, change, or drop the reviewer's model or
 variant, and draft any lines for `paths.reviewer_instructions` that would cut the findings I keep dismissing.

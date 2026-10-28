@@ -572,7 +572,8 @@ def cmd_dismiss(
     A review's finding stays in `canopy review show ID`, marked with its reason, and is left out of what a resume hands
     a worker and of what the overseer reads. It is one run's finding: a new commit's review starts fresh. Say why with
     --reason: `wrong`, it does not hold; `intentional`, it holds but the change means it; `not_worth_it`, it holds and
-    is not worth the fix. `canopy review noise` counts them.
+    is not worth the fix; `out_of_scope`, it holds and is worth fixing, but in another PR. `canopy review noise` counts
+    them.
 
     The findings are dismissed together or not at all: one refused leaves every other as it was.
     """

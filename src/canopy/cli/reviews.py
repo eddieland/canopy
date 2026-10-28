@@ -152,10 +152,10 @@ def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
 def cmd_review_noise(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     """Count the last days' review findings by severity, persona, and model, and what became of each.
 
-    A finding dismissed `wrong` is the reviewer's noise; `intentional` and `not_worth_it` held and were left. One not
-    dismissed counts by a worker's latest answer to it, `fixed` or `declined`; your dismissal wins over an answer. A
-    rebuttal is a finding held as one of a worker's decline. The `wrong` rate is the share of a group's findings
-    dismissed so.
+    A finding dismissed `wrong` is the reviewer's noise; `intentional`, `not_worth_it`, and `out_of_scope` held and were
+    left, the last for another PR. One not dismissed counts by a worker's latest answer to it, `fixed` or `declined`;
+    your dismissal wins over an answer. A rebuttal is a finding held as one of a worker's decline. The `wrong` rate is
+    the share of a group's findings dismissed so.
     """
     ctx = open_context(click_ctx)
     found = noise.tally(ctx.conn, db.format_time(datetime.now(UTC) - timedelta(days=days)))

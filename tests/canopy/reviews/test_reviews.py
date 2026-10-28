@@ -1029,6 +1029,13 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     assert "is no longer dismissed: a resume hands it to the worker again." in undone.out
     # Dismissing one again records the reason anew.
     assert review_runs.review_dismissals(conn, review_id) == {2: DismissalReason.INTENTIONAL}
+    # One that holds and is worth fixing, but in another PR.
+    later = scenario.operator("dismiss", ref, "1", "--reason", "out_of_scope")
+    assert f"{ref} finding 1 is dismissed as out_of_scope: no worker or tick acts on it." in later.out
+    assert review_runs.review_dismissals(conn, review_id) == {
+        1: DismissalReason.OUT_OF_SCOPE,
+        2: DismissalReason.INTENTIONAL,
+    }
 
 
 def test_review_noise_counts_findings_by_severity_persona_and_model_and_why_each_was_dismissed(
@@ -1037,18 +1044,26 @@ def test_review_noise_counts_findings_by_severity_persona_and_model_and_why_each
     git_pool: GitPool,
     opencode_state: Path,
 ) -> None:
-    """`canopy review noise` reads the reviewer's noise from the operator's dismissals: `wrong` ones (DESIGN §21)."""
+    """`canopy review noise` reads the reviewer's noise from the operator's dismissals: `wrong` ones (DESIGN §21).
+
+    An `out_of_scope` one held, so it counts in its own column and not in the `wrong` rate.
+    """
     nothing = scenario.operator("review", "noise").out
     assert nothing.startswith("0 done reviews since ")
     assert nothing.endswith(": no findings.\n")
     opencode_state.write_text(json.dumps({"sessions": {"ses_review": [["anthropic", "claude-x", 0.25]]}}))
     with_events(reviewing, "canopy-reviewer")
-    three = {**TWO_FINDINGS, "findings": [*TWO_FINDINGS["findings"], {**FINDINGS["findings"][0], "title": "again"}]}
-    reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(three, session="ses_review"))
+    elsewhere = {**TWO_FINDINGS["findings"][1], "title": "rename the module"}
+    four = {
+        **TWO_FINDINGS,
+        "findings": [*TWO_FINDINGS["findings"], {**FINDINGS["findings"][0], "title": "again"}, elsewhere],
+    }
+    reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(four, session="ses_review"))
     ref = f"review:{reviewed.id}"
     scenario.operator("dismiss", ref, "1", "--reason", "wrong")
     scenario.operator("dismiss", ref, "2", "--reason", "not_worth_it")
     scenario.operator("dismiss", ref, "3", "--reason", "intentional")
+    scenario.operator("dismiss", ref, "4", "--reason", "out_of_scope")
     # As a dismissal from before canopy asked why.
     sql.execute(scenario.conn, sql.update("review_dismissals").set(reason=None).where("finding = ?", 3))
 
@@ -1061,26 +1076,49 @@ def test_review_noise_counts_findings_by_severity_persona_and_model_and_why_each
             "dismissed": {"wrong": 1, "unrecorded": 1},
             "answered": {},
             "rebuttals": 0,
-            "rates": {"wrong": 0.5, "intentional": 0.0, "not_worth_it": 0.0, "fixed": 0.0, "declined": 0.0},
+            "rates": {
+                "wrong": 0.5,
+                "intentional": 0.0,
+                "not_worth_it": 0.0,
+                "out_of_scope": 0.0,
+                "fixed": 0.0,
+                "declined": 0.0,
+            },
         },
         {
             "key": "minor",
-            "findings": 1,
-            "dismissed": {"not_worth_it": 1},
+            "findings": 2,
+            "dismissed": {"not_worth_it": 1, "out_of_scope": 1},
             "answered": {},
             "rebuttals": 0,
-            "rates": {"wrong": 0.0, "intentional": 0.0, "not_worth_it": 1.0, "fixed": 0.0, "declined": 0.0},
+            "rates": {
+                "wrong": 0.0,
+                "intentional": 0.0,
+                "not_worth_it": 0.5,
+                "out_of_scope": 0.5,
+                "fixed": 0.0,
+                "declined": 0.0,
+            },
         },
     ]
     assert [(g["key"], g["findings"], g["dismissed"]) for g in found["persona"]] == [
-        (reviewed.row.persona, 3, {"wrong": 1, "not_worth_it": 1, "unrecorded": 1}),
+        (reviewed.row.persona, 4, {"wrong": 1, "not_worth_it": 1, "out_of_scope": 1, "unrecorded": 1}),
     ]
     assert [g["key"] for g in found["model"]] == ["anthropic/claude-x"]
     text = scenario.operator("review", "noise").out.splitlines()
     assert text[2:5] == [
-        "severity  findings  wrong  intentional  not_worth_it  unrecorded  fixed  declined  rebuttals  wrong rate",
-        "blocking         2      1            0             0           1      0         0          0         50%",
-        "minor            1      0            0             1           0      0         0          0          0%",
+        (
+            "severity  findings  wrong  intentional  not_worth_it  out_of_scope  unrecorded  fixed  declined  rebuttals"
+            "  wrong rate"
+        ),
+        (
+            "blocking         2      1            0             0             0           1      0         0          0"
+            "         50%"
+        ),
+        (
+            "minor            2      0            0             1             1           0      0         0          0"
+            "          0%"
+        ),
     ]
 
 
@@ -1358,8 +1396,14 @@ def test_review_noise_counts_what_workers_answered_of_the_findings_not_dismissed
     assert found["severity"][0]["rates"]["fixed"] == 0.5
     text = scenario.operator("review", "noise").out.splitlines()
     assert text[3:5] == [
-        "blocking         2      1            0             0           0      1         0          0         50%",
-        "minor            2      0            0             0           0      0         1          1          0%",
+        (
+            "blocking         2      1            0             0             0           0      1         0          0"
+            "         50%"
+        ),
+        (
+            "minor            2      0            0             0             0           0      0         1          1"
+            "          0%"
+        ),
     ]
 
 

@@ -104,7 +104,7 @@ A finding nobody answers is noise that trains you to skip findings. So answer ea
 
 - **send to a worker**, for the ones worth fixing: your go-ahead for a `resume` to fix those and leave the rest.
 - **dismiss**, for the rest, with why: **wrong**, it doesn't hold; **intentional**, it holds and the change means it;
-  **not worth it**, it holds and isn't worth the fix.
+  **not worth it**, it holds and isn't worth the fix; **out of scope**, it holds and is worth fixing, in another PR.
 
 A review whose findings are all dismissed moves on as a clean one. On a coworker's PR there's no worker to send to, so
 leaving a finding out of your draft dismisses it ([Publishing your review](pull-requests#publishing-your-review)).
@@ -120,6 +120,8 @@ counts as wrong.
 - A high `wrong` rate is a reviewer worth retuning: another model, another persona, or a sharper `REVIEW.md`.
 - A high `not worth it` rate is a reviewer that's right about things you've chosen to live with. Ask for fewer minor
   findings, in a persona or your docs.
+- `out of scope` isn't noise at all: the reviewer was right, just early. Those findings are work you owe another PR, so
+  write them down somewhere canopy isn't the only one remembering.
 - Few dismissals at all, on a reviewer you don't trust yet, is the evidence for trusting it.
 - A pile of rebuttals is an author and a reviewer that disagree on purpose. Read a few: one of them is usually right.
 

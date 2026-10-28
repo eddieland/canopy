@@ -347,8 +347,9 @@ is tell canopy which findings matter.
 
 - **dismiss**, on a finding's card, as `canopy dismiss review:ID N --reason REASON`: no worker or tick acts on it. It
   asks why first: **wrong**, it doesn't hold; **intentional**, it holds and the change means it; **not worth it**, it
-  holds and isn't worth the fix. The card then says `dismissed: wrong`, say. It stays listed, and **undo** brings it
-  back. If you dismiss every finding, the PR moves on as if the review were clean.
+  holds and isn't worth the fix; **out of scope**, it holds and is worth fixing, but in another PR. The card then says
+  `dismissed: wrong`, say. It stays listed, and **undo** brings it back. If you dismiss every finding, the PR moves on
+  as if the review were clean.
 
   The reason is how canopy tells a noisy reviewer from one that's right about things you chose to live with.
   `canopy review noise` counts them by severity, persona, and model: a high `wrong` rate is a reviewer worth retuning,

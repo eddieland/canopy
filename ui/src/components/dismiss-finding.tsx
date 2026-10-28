@@ -11,12 +11,14 @@ import { dismissedText, reviewDismissedText } from '@/lib/outcomes'
 
 /**
  * Why a review's finding may be dismissed, in the order its menu lists them (DESIGN §21): each reason, its words, and
- * what it means. A `wrong` dismissal is the reviewer's noise; the other two are findings that held.
+ * what it means. A `wrong` dismissal is the reviewer's noise; the others are findings that held, an `out of scope`
+ * one left for another PR.
  */
 export const DISMISSAL_REASONS: readonly { reason: DismissalReason; label: string; hint: string }[] = [
     { reason: 'wrong', label: 'wrong', hint: 'It does not hold: the reviewer misread the code' },
     { reason: 'intentional', label: 'intentional', hint: 'It holds, and the change means it to' },
     { reason: 'not_worth_it', label: 'not worth it', hint: 'It holds, and is not worth the fix' },
+    { reason: 'out_of_scope', label: 'out of scope', hint: 'It holds, and belongs in another PR' },
 ]
 
 /** A dismissed finding's chip: `dismissed`, then why, when the operator said (`dismissed: not worth it`). */

@@ -399,6 +399,8 @@ class DismissalReason(StrEnum):
     INTENTIONAL = "intentional"
     #: It holds, and fixing it is not worth the change it takes.
     NOT_WORTH_IT = "not_worth_it"
+    #: It holds, and is worth fixing, but not in this PR: it belongs in another.
+    OUT_OF_SCOPE = "out_of_scope"
 
 
 class FindingAnswer(StrEnum):
