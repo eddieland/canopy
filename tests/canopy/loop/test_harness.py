@@ -231,7 +231,7 @@ VERBS = {
         ["attention", KEY, "needs_author", "--detail", "d"],
         {"key": KEY, "reason": "needs_author", "detail": "d"},
     ),
-    "ticket-set": (["ticket", "set", KEY, "--phase", "ready"], {"key": KEY, "phase": "ready"}),
+    "ticket-set": (["ticket", "set", KEY, "--phase", "ready"], {"tickets": [{"key": KEY, "phase": "ready"}]}),
 }
 
 
@@ -294,6 +294,30 @@ def test_decisions_in_one_call_are_refused_together_when_the_harness_decided_one
             assert action == "refused:decided"
             assert reason.startswith(f"the harness decided {KEY} this tick")
     assert conn.execute("SELECT count(*) FROM tickets WHERE key = 'PROJ-2'").fetchone()[0] == 0
+
+
+def test_a_ticket_set_of_several_is_refused_whole_when_the_harness_decided_one(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    batch = ["ticket", "set", "PROJ-2", KEY, "--phase", "ready"]
+    arguments = [{"key": "PROJ-2", "phase": "ready"}, {"key": KEY, "phase": "ready"}]
+    for through in ("command", "tool"):
+        with in_tick(conn) as tick_id:
+            harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
+            if through == "command":
+                assert main(batch) == 1
+            else:
+                said = mcp_session(tool_call("ticket-set", tickets=arguments)).said()
+                assert said.error
+                assert said.text.startswith(f"{KEY}: ticket set refused (decided)")
+                assert said.text.endswith("nothing else in the call was recorded: set the rest again")
+            # Only the refusal is recorded: PROJ-2's phase is not, and is the overseer's to set again.
+            [_, (action, reason)] = decisions(conn, tick_id)
+            assert action == "refused:decided"
+            assert reason.startswith(f"the harness decided {KEY} this tick")
+    assert conn.execute("SELECT count(*) FROM tickets WHERE key = 'PROJ-2'").fetchone()[0] == 0
+    assert conn.execute("SELECT phase FROM tickets WHERE key = ?", (KEY,)).fetchone()[0] == Phase.RUNNING
 
 
 def test_a_tick_leaves_a_running_ticket_to_the_harness_and_the_overseer_only_the_rest(

@@ -164,10 +164,10 @@ TOOLS = (
     ),
     tool(
         "ticket-set",
-        "Record a ticket's phase, cursors, done flag, or title, or with repo a unit's phase and cursors. A dry run "
-        "advances no cursor and marks nothing done.",
-        tools.TicketSet,
-        tools.TicketUpdated,
+        "Record tickets' phases, cursors, done flags, or titles, or with repo a unit's phase and cursors, one item "
+        "per ticket or unit, all or none. A dry run advances no cursor and marks nothing done.",
+        tools.TicketSets,
+        tools.TicketsUpdated,
         tools.ticket_set,
     ),
     tool(

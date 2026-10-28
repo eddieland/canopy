@@ -114,7 +114,7 @@ def ticket_group() -> None:
 
 
 @ticket_group.command("set", cls=OverseerCommand)
-@click.argument("key", type=TICKET_KEY)
+@click.argument("keys", nargs=-1, required=True, type=TICKET_KEY, metavar="KEY...")
 @click.option(
     "--repo",
     type=REPO,
@@ -143,26 +143,23 @@ def ticket_group() -> None:
 def cmd_ticket_set(
     click_ctx: click.Context,
     *,
-    key: str,
+    keys: tuple[str, ...],
     repo: str | None,
     phase: str | None,
     cursor_pairs: tuple[tuple[str, str], ...],
     done: bool,
     title: str | None,
 ) -> int:
-    """Record a ticket's phase, cursors, done flag, or title, or a unit's phase and cursors.
+    """Record tickets' phase, cursors, done flag, or title, or a unit's phase and cursors, all or none.
 
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
-    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in.
+    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in. Name several
+    KEYs to set each the same; a cursor and a title are one ticket's, so they take one KEY.
     """
-    return verb(
-        click_ctx,
-        tools.ticket_set,
-        tools.TicketSet,
-        key=key,
-        repo=repo,
-        phase=phase,
-        cursors=dict(cursor_pairs),
-        done=done,
-        title=title,
-    )
+    if len(keys) > 1 and (cursor_pairs or title is not None):
+        raise click.UsageError("--cursor and --title are one ticket's: name one KEY with them", click_ctx)
+    settings = [
+        {"key": key, "repo": repo, "phase": phase, "cursors": dict(cursor_pairs), "done": done, "title": title}
+        for key in keys
+    ]
+    return verb(click_ctx, tools.ticket_set, tools.TicketSets, tickets=settings)
