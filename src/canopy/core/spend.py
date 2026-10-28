@@ -7,12 +7,13 @@ apart from the live ones', and idle ticks' (§6, Idle pacing) are a series of th
 Beside what the window
 cost, what it got done: the tickets marked done in it, and what each ticket and PR's own runs cost.
 And what each kind of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and
-how often it started cold. And what each kind's tool calls put into its context, by tool: the reads that each later
-model call reads again. And what each kind spent on each model, as the runs' own sessions say (§13). And the local
-calendar month so far against the operator's monthly budget, which nothing enforces. And what every session the runtime
-keeps cost, canopy's apart from the rest, as the runtime's record says (`runtime_sessions`). A figure of all spend, the
-month's against its budget and `spent_since`'s, is canopy's runs and the sessions outside canopy together: canopy's own
-sessions are its runs, so they are counted once.
+how often it started cold; and by week, each chore's and each model's apart, with how much of it was read from the cache
+and where the runtime's version or the snapshot changed. And what each kind's tool calls put into its context, by tool:
+the reads that each later model call reads again. And what each kind spent on each model, as the runs' own sessions
+say (§13). And the local calendar month so far against the operator's monthly budget, which nothing enforces. And what
+every session the runtime keeps cost, canopy's apart from the rest, as the runtime's record says (`runtime_sessions`). A
+figure of all spend, the month's against its budget and `spent_since`'s, is canopy's runs and the sessions outside
+canopy together: canopy's own sessions are its runs, so they are counted once.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from canopy.core.vocab import RunKind, SessionsRead
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+    from collections.abc import Set as AbstractSet
     from pathlib import Path
 
     from canopy.core import config
@@ -37,6 +39,8 @@ if TYPE_CHECKING:
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
 type Kind = Literal["overseer", "workers", "plans", "chores", "reviews", "tasks"]
 type Done = Literal["merged", "closed"]
+#: What a weekly series of first calls follows within a kind: every run of it, those of one chore, or one model's.
+type By = Literal["kind", "chore", "model"]
 #: A table of agent runs, each with a `started_at` and a `cost_usd`: the overseer's ticks, and the others'.
 type _Table = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
 
@@ -45,6 +49,8 @@ type _Table = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
 # tick from before migration 0013 has no word from the loop either, so it reads as hand-run: nothing can tell.
 GROUPS: tuple[Group, ...] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
 KINDS: tuple[Kind, ...] = ("overseer", "workers", "plans", "chores", "reviews", "tasks")
+#: Each kind's weekly series of first calls, in the order `Breakdown.first_call_weeks` lists them.
+BY: tuple[By, ...] = ("kind", "chore", "model")
 # The longest window `canopy spend` and the web UI read, in days; a year keeps the per-day lines bounded.
 MAX_DAYS = 366
 DEFAULT_DAYS = 7
@@ -74,12 +80,18 @@ FULL = 100
 CHARS_PER_TOKEN = 4
 # The overseer's series, each from the ticks.
 _SERIES = ("overseer", "idle", "dry_run")
-# What a run's row, `r`, says of its first model call, and when it started; then the runtime's version its session's
-# record named, from the read of it (`canopy.core.run_models`), for the `?` the run's table fills.
+# What a run's row, `r`, says of its first model call, and when it started; then, from the read of its session
+# (`canopy.core.run_models`), the runtime's version its record named and the one model it named, None for none or more
+# than one, each for a `?` the run's table fills; and the chore it ran, for the `{}`.
 _FIRST_CALL: LiteralString = (
     "r.definitions_digest, r.tokens_first_call, r.tokens_first_cache_write, r.tokens_first_cache_read, r.started_at, "
-    "(SELECT m.runtime_version FROM run_model_reads m WHERE m.run_table = ? AND m.run_id = r.id)"
+    "(SELECT m.runtime_version FROM run_model_reads m WHERE m.run_table = ? AND m.run_id = r.id), "
+    "(SELECT CASE WHEN count(*) = 1 THEN max(m.model) END FROM run_models m "
+    "WHERE m.run_table = ? AND m.run_id = r.id), {}"
 )
+# The chore a run ran: only a chore's run names one. Fixed, never input (D125).
+_CHORE = sql.frag("r.chore")
+_NO_CHORE = sql.frag("NULL")
 # The local day a row started on, as `YYYY-MM-DD`: SQLite reads the journal's UTC time in the local time Python does.
 _DAY = sql.frag("date(started_at, 'localtime')")
 # The local hour a row started on, as `YYYY-MM-DDTHH`, read the same way.
@@ -227,6 +239,37 @@ class FirstCalls:
 
 
 @dataclass(frozen=True)
+class FirstCallWeek:
+    """The first model calls of one kind's runs that started in one local ISO week of the window (§13).
+
+    One week of a series: with `by` `kind`, every run of the kind; `chore`, those of the chore `name`; `model`, those
+    the model `name` alone served, `name` None for the runs no session was read for or more than one model served. A
+    fall in `hit_rate` from one week to the next is a prefix the runs share that their first calls no longer read from
+    the cache, as a change of the runtime or of canopy's definitions can make, which the week's `new_runtime_versions`
+    and `new_digests` name.
+    """
+
+    kind: Kind
+    by: By
+    name: str | None
+    #: The ISO week, `2026-W41`, of this machine's local time: Monday to Sunday.
+    week: str
+    #: How many of the runs reported a first call.
+    runs: int
+    #: The median of what their first calls were sent, the lower middle one of an even count.
+    first_call: int
+    #: What their first calls read from the cache over what they were sent, summed over the runs that recorded both;
+    #: None when none did.
+    hit_rate: float | None
+    #: The runtime's versions their sessions' records named that the runs of the series' week before did not, in the
+    #: order the runs first ran on each; the week before is the latest earlier one in the window with runs, and the
+    #: series' first week names none, having none before it.
+    new_runtime_versions: Sequence[str] = ()
+    #: The definitions snapshots their runs loaded that those of the series' week before did not, the same way.
+    new_digests: Sequence[str] = ()
+
+
+@dataclass(frozen=True)
 class ToolSpend:
     """What one tool's calls in one kind's runs that started in the window put into their context (§13).
 
@@ -296,6 +339,10 @@ class Breakdown:
     hours: int | None = None
     models: Sequence[ModelSpend] = ()
     sessions: runtime_sessions.SessionsSpend | None = None
+    #: Each kind's first model calls by local ISO week: the kinds in `KINDS` order, each kind's series in `BY` order,
+    #: its chores' and models' by name, the runs no single model served last, and each series' weeks oldest first. The
+    #: overseer's include dry runs, as its `first_calls` do.
+    first_call_weeks: Sequence[FirstCallWeek] = ()
 
 
 @dataclass(frozen=True)
@@ -578,7 +625,7 @@ def _breakdown(
         done = done_in(conn, since, until)
         tickets = _tickets(conn, since, until, done)
         pull_requests = _pull_requests(conn, since, until)
-        first_calls = _first_calls(conn, since, until)
+        calls = _first_call_rows(conn, since, until)
         tools = _tools(conn, since, until)
         models = _models(conn, since, until)
         sessions = runtime_sessions.spend(conn, since, until, state_dir=state_dir)
@@ -608,11 +655,12 @@ def _breakdown(
         per_done=runs / len(done) if done and runs is not None else None,
         tickets=tickets,
         pull_requests=pull_requests,
-        first_calls=first_calls,
+        first_calls=_first_calls(calls),
         tools=tools,
         hours=hours,
         models=models,
         sessions=sessions,
+        first_call_weeks=_first_call_weeks(calls),
     )
 
 
@@ -885,43 +933,134 @@ def _first_key(named: Iterable[tuple[str | None, float | None]]) -> str | None:
     return next((key for key, _ in named if key is not None), None)
 
 
-# Each kind's first model calls in the window, grouped by the snapshot their runs loaded. A run recorded before canopy
-# kept the first call, or that made none, is in no group.
-def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[FirstCalls]:
-    found: list[FirstCalls] = []
+@dataclass(frozen=True)
+class _FirstCall:
+    """One run's first model call, as its row and the read of its session recorded it."""
+
+    kind: Kind
+    #: The definitions snapshot the run loaded; None for a run that reported none.
+    digest: str | None
+    #: What the call was sent, from the cache or not.
+    sent: int
+    #: Whether it started cold (`_cold`).
+    cold: bool
+    started: str
+    #: What it read from the cache; None for a run recorded before canopy kept it.
+    read: int | None
+    #: The runtime's version its session's record named; None where no read found one.
+    runtime_version: str | None
+    #: The chore it ran; None for a run of any other kind.
+    chore: str | None
+    #: The one model its session named; None when no read found it, or more than one model served it.
+    model: str | None
+
+
+# Each kind's first model calls in the window, the kinds in `KINDS` order and each kind's by when its run started. A run
+# recorded before canopy kept the first call, or that made none, has none.
+def _first_call_rows(conn: sqlite3.Connection, since: str, until: str) -> list[_FirstCall]:
+    found: list[_FirstCall] = []
     for kind in KINDS:
         table, which = KIND_TABLES[kind]
-        by_digest: dict[str | None, list[tuple[int, bool, str, int | None]]] = {}
-        versions: dict[str | None, dict[str, None]] = {}
         first = (
-            sql.select(_FIRST_CALL, table)
+            sql.select(_FIRST_CALL, table, table, _CHORE if kind == "chores" else _NO_CHORE)
             .from_("{} r", sql.name(table))
             .where("{}", which)
             .where("r.started_at >= ? AND r.started_at < ? AND r.tokens_first_call IS NOT NULL", since, until)
             .order_by("r.started_at, r.id")
         )
-        for digest, sent, written, was_read, started, version in sql.execute(conn, first):
+        for digest, sent, written, was_read, started, version, model, chore in sql.execute(conn, first):
             read = None if was_read is None else int(was_read)
-            call = (int(sent), _cold(int(sent), int(written or 0), read), str(started), read)
-            key = None if digest is None else str(digest)
-            by_digest.setdefault(key, []).append(call)
-            if version is not None:
-                versions.setdefault(key, {})[str(version)] = None
-        found.extend(
-            FirstCalls(
-                kind=kind,
-                digest=digest,
-                runs=len(calls),
-                first_call=statistics.median_low(sent for sent, _, _, _ in calls),
-                cold_share=sum(cold for _, cold, _, _ in calls) / len(calls),
-                first_started=calls[0][2],
-                last_started=calls[-1][2],
-                hit_rate=_hit_rate([(sent, read) for sent, _, _, read in calls if read is not None]),
-                runtime_versions=tuple(versions.get(digest, {})),
+            found.append(
+                _FirstCall(
+                    kind=kind,
+                    digest=None if digest is None else str(digest),
+                    sent=int(sent),
+                    cold=_cold(int(sent), int(written or 0), read),
+                    started=str(started),
+                    read=read,
+                    runtime_version=None if version is None else str(version),
+                    chore=None if chore is None else str(chore),
+                    model=None if model is None else str(model),
+                ),
             )
-            for digest, calls in by_digest.items()
-        )
     return found
+
+
+# Each kind's first calls grouped by the snapshot their runs loaded, in the order the calls come.
+def _first_calls(calls: Iterable[_FirstCall]) -> list[FirstCalls]:
+    by_snapshot: dict[tuple[Kind, str | None], list[_FirstCall]] = {}
+    for call in calls:
+        by_snapshot.setdefault((call.kind, call.digest), []).append(call)
+    return [
+        FirstCalls(
+            kind=kind,
+            digest=digest,
+            runs=len(group),
+            first_call=statistics.median_low(c.sent for c in group),
+            cold_share=sum(c.cold for c in group) / len(group),
+            first_started=group[0].started,
+            last_started=group[-1].started,
+            hit_rate=_hit_rate([(c.sent, c.read) for c in group if c.read is not None]),
+            runtime_versions=tuple(dict.fromkeys(c.runtime_version for c in group if c.runtime_version is not None)),
+        )
+        for (kind, digest), group in by_snapshot.items()
+    ]
+
+
+# Each kind's first calls by local ISO week, in each of its series: the kind's, each chore's, and each model's.
+def _first_call_weeks(calls: Iterable[_FirstCall]) -> list[FirstCallWeek]:
+    series: dict[tuple[Kind, By, str | None], dict[str, list[_FirstCall]]] = {}
+    for call in calls:
+        week = _iso_week(call.started)
+        for by, name in _series_of(call):
+            series.setdefault((call.kind, by, name), {}).setdefault(week, []).append(call)
+    found: list[FirstCallWeek] = []
+    for (kind, by, name), weeks in sorted(series.items(), key=lambda s: _series_order(*s[0])):
+        before: list[_FirstCall] | None = None
+        for week, group in sorted(weeks.items()):
+            found.append(
+                FirstCallWeek(
+                    kind=kind,
+                    by=by,
+                    name=name,
+                    week=week,
+                    runs=len(group),
+                    first_call=statistics.median_low(c.sent for c in group),
+                    hit_rate=_hit_rate([(c.sent, c.read) for c in group if c.read is not None]),
+                    new_runtime_versions=_new(
+                        [c.runtime_version for c in group],
+                        None if before is None else {c.runtime_version for c in before},
+                    ),
+                    new_digests=_new([c.digest for c in group], None if before is None else {c.digest for c in before}),
+                ),
+            )
+            before = group
+    return found
+
+
+# The local ISO week a journal time is in, as `2026-W41`.
+def _iso_week(stamp: str) -> str:
+    year, week, _ = db.parse_time(stamp).astimezone().isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+# The series a first call is in beside its kind's: its chore's, for a chore's run, and its model's.
+def _series_of(call: _FirstCall) -> list[tuple[By, str | None]]:
+    return [("kind", None), *([("chore", call.chore)] if call.chore is not None else []), ("model", call.model)]
+
+
+# Where a series goes among the others: by its kind, then by whether it is the kind's, a chore's, or a model's, then
+# by name.
+def _series_order(kind: Kind, by: By, name: str | None) -> tuple[int, int, bool, str]:
+    return KINDS.index(kind), BY.index(by), name is None, name or ""
+
+
+# The values runs used, in the order they first used them, that `before` does not hold; none with `before` None, for a
+# series' first week, which has no week before it to differ from.
+def _new(used: Iterable[str | None], before: AbstractSet[str | None] | None) -> tuple[str, ...]:
+    if before is None:
+        return ()
+    return tuple(v for v in dict.fromkeys(used) if v is not None and v not in before)
 
 
 # What first calls read from the cache over what they were sent, each `(sent, read)`; None for none, or none sent.

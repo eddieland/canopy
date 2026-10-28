@@ -45,7 +45,9 @@ Skills: the tracker skill canopy ships for your tracker, and any of your own Ope
 In `spend`, `tools` lists, per kind, each tool its runs called, with calls, errors, and the characters returned
 (`result_chars`, about four to a token), which every later model call of the run reads again. `first_calls` gives each
 kind's median first model call (`first_call`, in tokens): its fixed overhead, which every tool and skill offered to it
-adds to, used or not.
+adds to, used or not. `first_call_weeks` gives each kind's first calls by local ISO week, its runs whole (`by`
+`kind`), by chore, and by model: what each week's first calls read from the cache over what they were sent
+(`hit_rate`), and the runtime's versions and definitions snapshots its runs used that the week before's did not.
 
 1. **Unused MCP servers.** A server whose `reach` is not `none` for a kind's agents, none of whose tools the kind
    called in 28 days, over 10 or more runs of that kind: a finding with id `unused/<kind>/<server>`. If no kind called
@@ -68,9 +70,14 @@ adds to, used or not.
    from it over what they were sent, says by how much). With two or more `runtime_versions` on a snapshot with a
    `digest`, the runtime's version changed within it: name the versions, in their order, since a new runtime can move
    what the runs' prefix holds.
-6. **Cost per ticket done.** `per_done` this week up by half or more on the 28 days' `per_done`: a finding with id
+6. **First-call drops.** In the 28 days' `first_call_weeks`, a kind's series with `by` `kind` whose latest two weeks
+   with runs are consecutive ISO weeks, each with 10 or more runs, and the latest's `hit_rate` more than 0.15 below the
+   other's: a finding with id `first-call/<kind>`, naming both weeks. Name the latest week's `new_runtime_versions` and
+   `new_digests`, what changed as it fell, or say that neither changed. The kind's `chore` and `model` series for the
+   same two weeks say whether one chore or one model fell alone: name it.
+7. **Cost per ticket done.** `per_done` this week up by half or more on the 28 days' `per_done`: a finding with id
    `per-done`. Say which kind of spend grew, from `totals`.
-7. **Spend on failures.** From `health`, the failed `outcomes` whose `cost_usd` is a tenth or more of the week's total:
+8. **Spend on failures.** From `health`, the failed `outcomes` whose `cost_usd` is a tenth or more of the week's total:
    a finding with id `failing/<kind>`. `canopy-health` reports their causes; say only what they cost.
 
 Report each problem once, under the first of these that fits it. With little data, under 20 ticks or 10 runs of a
