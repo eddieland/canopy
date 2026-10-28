@@ -366,7 +366,15 @@ def _feedback_plans(
         repos = [str(u.repo) for u in units.get(t.key, [])]
         attempts = {r: done.get(policy.unit(t.key, r), 0) for r in repos}
         limits = {r: policy.feedback_plan_limit(ctx.config, granted.get(policy.unit(t.key, r), {})) for r in repos}
-        section = feedback_plans.state_section(ctx.conn, ctx.config, t, attempts=attempts, limits=limits, now=now)
+        section = feedback_plans.state_section(
+            ctx.conn,
+            ctx.config,
+            ctx.workspace,
+            t,
+            attempts=attempts,
+            limits=limits,
+            now=now,
+        )
         if section is not None:
             found[t.key] = section
     return found
@@ -446,7 +454,7 @@ def _steps(
     # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
     drafted.reconcile(ctx, connectors.run(ctx, tick_id, log, dry_run=dry_run).read, log)
     # What moved on a waiting feedback plan's PRs, first seen now: its quiet period runs from the newest (§32).
-    feedback_plans.note_moves(ctx.conn, ctx.config)
+    feedback_plans.note_moves(ctx.conn, ctx.config, ctx.workspace)
     # Before the derivation and the block, so both read each cursor past what needs no handling (DESIGN §37).
     _harness_cursors(ctx, tick_id, log, dry_run=dry_run)
     derived = _derive(ctx, tick_id, log)

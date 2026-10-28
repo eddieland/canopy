@@ -769,7 +769,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], tr
         [(plan_id, n, PR_88, *item) for n, item in enumerate(_ITEMS, start=1)],
     )
     given = feedback_items.offered(conn, trust, _KEY, [PR_88])
-    feedback_items.record(conn, plan_id, feedback_items.take(conn, [PR_88], given))
+    feedback_items.record(conn, plan_id, feedback_items.take(conn, [PR_88], given, {}))
     _review(conn, at)
 
 
@@ -958,7 +958,7 @@ def _plan(
         ],
     )
     given = feedback_items.offered(conn, trust, state.key, [state.url])
-    feedback_items.record(conn, plan_id, feedback_items.take(conn, [state.url], given))
+    feedback_items.record(conn, plan_id, feedback_items.take(conn, [state.url], given, {}))
     if state.approval is not None:
         _approve(conn, state, plan_id, written.sha256, at(state.approved))
     if state.spent is not None:
