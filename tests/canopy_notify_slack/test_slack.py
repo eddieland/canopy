@@ -504,8 +504,8 @@ class _Api(BaseHTTPRequestHandler):
     reply: ClassVar[dict[str, Any]] = {"ok": True}
     # The posts, counted from 1, refused as `not_in_channel`.
     refuse: ClassVar[set[int]] = set()
-    # What the next posts get instead of an answer, in turn: `cut`, made but its reply cut off; `limit`, a 429 that
-    # names no wait; or `redirect`, a 302 to a port nothing listens on.
+    #: What the next posts get instead of an answer, in turn: `cut`, made but its reply cut off; `limit`, a 429 that
+    #: names no wait; or `redirect`, a 302 to a port nothing listens on.
     hiccups: ClassVar[list[str]] = []
 
     def do_POST(self) -> None:
