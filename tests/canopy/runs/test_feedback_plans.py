@@ -1107,9 +1107,25 @@ def test_a_failed_check_and_a_conflict_are_items_planned_approved_and_left_by_nu
         feedback_items.check_id(PR, "def5678", "build"),
         feedback_items.conflict_id(PR, "def5678", "main"),
     ]
-    # A check the repository's `human_checks` names waits on a person: no item.
+    # A check the repository names `human` waits on a person: no item.
     human = {PR: frozenset({"build"})}
     assert [r.item for r in feedback_items.raised(conn, KEY, [PR], human)] == [PlanItem.CONFLICT]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_failed_check_its_repository_says_is_not_ci_is_no_item(scenario: Scenario, github_state: Path) -> None:
+    with_a_pr(scenario)
+    roles = {"owners": "human", "merge-queue": "merge", "lint-legacy": "ignore"}
+    scenario.configures("workspace", repos={"repo": {"checks": roles}})
+    failed = [{"name": n, "status": "completed", "conclusion": "failure"} for n in ("build", *roles)]
+    github_shows(github_state, ALICE, checks=failed)
+    build = feedback_items.check_id(PR, HEAD, "build")
+    items = [{"id": 501, "proposal": "change", "reply": "Renamed."}, {"id": build, "proposal": "change"}]
+    planner = planner_does(["cat", feedback_items.ITEMS], plan=TEXT, result={**PLANNED, "items": items})
+    assert scenario.run(FEEDBACK_PLAN, worker=planner).status == RunStatus.DONE
+    # Only the build is CI: the others wait on a person, gate the merge, or are ignored, so the planner is given none.
+    [*_, [_, cat]] = commands_run(scenario.agent_log)
+    assert [(i["id"], i["item"]) for i in json.loads(cat["stdout"])] == [(501, "comment"), (build, "check")]
 
 
 #: `build`, a check that waits on a person here, so the items `raised` returns are the blocker's alone.

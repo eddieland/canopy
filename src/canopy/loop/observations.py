@@ -22,10 +22,11 @@ import json
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict, assert_never
 
 from canopy.core import conversation, db, item_numbers, observe, records, sql
 from canopy.core.vocab import CheckStatus, ReviewItem, ReviewState, SourceKind, TicketState
+from canopy.core.workspace import CheckRole
 from canopy.loop import phases
 
 if TYPE_CHECKING:
@@ -162,9 +163,9 @@ class PrObservation(TypedDict):
 class ChecksState(TypedDict):
     """The named checks at a PR's head, summarized: CI that passed is only counted, so a busy repository's stay short.
 
-    `stale` only when a check ended neither passing nor failing, and `human` only when the repository's
-    `human_checks` names a check at the head: those wait on a person, are not CI, and count in none of the others
-    (DESIGN §30).
+    `stale` only when a check ended neither passing nor failing, and `human` only when a check at the head is one its
+    repository says waits on a person: those are not CI, and count in none of the others. A check its repository says
+    gates the merge, or ignores, is in none of them (DESIGN §30).
     """
 
     passed: int
@@ -185,7 +186,7 @@ class FailedCheck(TypedDict):
 
 
 class HumanCheck(TypedDict):
-    """A check the repository's `human_checks` names, at a PR's head, as it stands."""
+    """A check its repository says waits on a person, at a PR's head, as it stands."""
 
     name: str
     status: str
@@ -537,8 +538,7 @@ class Reader:
         why = self._age(url, pr)
         if why is not None or pr is None:
             return {"repo": repo, "observed": "stale", "why": why or f"{url} never observed"}
-        found = self.ctx.workspace.repo(repo)
-        human = found.human_checks if found is not None else frozenset[str]()
+        roles = self.ctx.workspace.check_roles(repo)
         trusted = {t.lower() for t in self.ctx.config.trust.trusted_reviewers}
         new = new_reviews(self.reviews.get(url, []), unit.review_cursor)
         observed: UnitObservation = {
@@ -555,7 +555,7 @@ class Reader:
                 "mergeable_state": pr.mergeable_state,
                 "author": pr.author,
             },
-            "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], human),
+            "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], roles),
             "verdicts": _verdicts(self.reviews.get(url, []), trusted),
             "reviews": [self._review(r, trusted) for r in new[:MAX_NEW_ITEMS]],
         }
@@ -646,8 +646,12 @@ def _result(stored: str | None) -> list[str]:
     return [str(x) for x in json.loads(stored)] if stored is not None else []
 
 
-def _checks(checks: Iterable[records.ObservedCheck], human: AbstractSet[str]) -> ChecksState:
+def _checks(checks: Iterable[records.ObservedCheck], roles: Mapping[str, CheckRole]) -> ChecksState:
     """Summarize the checks at a PR's head as the phase table reads them (DESIGN §7): passed, pending, or failed.
+
+    Args:
+        checks: The checks at the head.
+        roles: The role its repository gives each check it names; every other one is CI (DESIGN §30).
 
     Returns:
         How many passed, the names of those pending, each failure whole, and the stale and human checks when any.
@@ -656,9 +660,18 @@ def _checks(checks: Iterable[records.ObservedCheck], human: AbstractSet[str]) ->
     stale: list[str] = []
     people: list[HumanCheck] = []
     for c in checks:
-        if c.name in human:
-            people.append({"name": c.name, "status": c.status, "conclusion": c.conclusion})
-        elif c.status is not CheckStatus.COMPLETED:
+        role = roles.get(c.name, CheckRole.CI)
+        match role:
+            case CheckRole.CI:
+                pass
+            case CheckRole.HUMAN:
+                people.append({"name": c.name, "status": c.status, "conclusion": c.conclusion})
+                continue
+            case CheckRole.MERGE | CheckRole.IGNORE:
+                continue
+            case _:
+                assert_never(role)
+        if c.status is not CheckStatus.COMPLETED:
             found["pending"].append(c.name)
         elif c.conclusion in observe.PASSED:
             found["passed"] += 1

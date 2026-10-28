@@ -387,10 +387,28 @@ def test_a_unit_whose_pr_is_stale_is_stale(canopy_env: CanopyEnv, observed: sqli
 
 
 def test_a_check_the_repository_names_human_is_not_ci(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
-    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"human_checks": ["deploy/approval"]}}})
+    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": {"deploy/approval": "human"}}}})
     green(canopy_env, observed)
     check(observed, "deploy/approval", "pending", None)
     observed.commit()
+    assert derived(canopy_env)[1].phases == (phases.Phase.GREEN_UNREVIEWED,)
+
+
+@pytest.mark.parametrize("role", ["human", "merge", "ignore"])
+@pytest.mark.parametrize(("status", "conclusion"), [("queued", None), ("completed", "failure")])
+def test_a_check_the_repository_gives_a_role_but_ci_is_not_ci(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    role: str,
+    status: str,
+    conclusion: str | None,
+) -> None:
+    # A merge queue's status is never green on an open PR: the PR passes its checks while it waits or fails.
+    green(canopy_env, observed)
+    check(observed, "merge-queue", status, conclusion)
+    observed.commit()
+    assert phases.Phase.GREEN_UNREVIEWED not in derived(canopy_env)[1].phases
+    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": {"merge-queue": role}}}})
     assert derived(canopy_env)[1].phases == (phases.Phase.GREEN_UNREVIEWED,)
 
 

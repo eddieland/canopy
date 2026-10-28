@@ -424,6 +424,51 @@ def test_a_tick_keeps_its_item_through_a_skipped_tick_a_failed_one_and_an_outage
     assert messages(notified)[-1].startswith("canopy attention: 0 new, 2 resolved")
 
 
+#: A build that passed, at the PR's head.
+PASSING = {"name": "build", "status": "completed", "conclusion": "success", "run_id": 11}
+
+
+def github_checks(state: Path, *checks: dict[str, object]) -> None:
+    """Make the fake GitHub hold PR open with `checks` at its head."""
+    state.write_text(json.dumps({"prs": {PR: {"checks": [PASSING, *checks]}}}))
+
+
+def test_a_merge_queues_check_holds_no_pr_from_its_reviewer(scenario: Scenario, github_state: Path) -> None:
+    # A private ticket's PR passes its build, and its merge queue's status waits: it is never green on an open PR.
+    scenario.operator("start", KEY)
+    db.set_unit(scenario.conn, KEY, str(scenario.env.root), "repo", pr_url=PR)
+    scenario.conn.commit()
+    github_checks(github_state, {"name": "merge-queue", "status": "queued", "run_id": 12})
+    scenario.tick(*waits(KEY))
+    # As CI, it holds the PR at `ci_running` for good, and no one is asked to review it.
+    assert scenario.attention() == []
+    scenario.configures("workspace", repos={"repo": {"checks": {"merge-queue": "merge"}}})
+    scenario.tick(*waits(KEY))
+    assert scenario.attention() == [(KEY, "needs_reviewer")]
+    # Failing, as a queue's status does on a PR not yet in it, it is no more CI: the PR still passes its checks.
+    github_checks(github_state, {"name": "merge-queue", "status": "completed", "conclusion": "failure", "run_id": 12})
+    ticked = scenario.tick(*waits(KEY))
+    assert [d.action for d in ticked.decisions if d.decider is Decider.HARNESS] == ["attention:needs_reviewer"]
+    assert scenario.attention() == [(KEY, "needs_reviewer")]
+
+
+def test_an_ownership_check_that_waits_on_a_person_is_never_ci_red(scenario: Scenario, github_state: Path) -> None:
+    scenario.operator("start", KEY)
+    db.set_unit(scenario.conn, KEY, str(scenario.env.root), "repo", pr_url=PR)
+    scenario.configures("workspace", repos={"repo": {"checks": {"owners": "human"}}})
+    scenario.conn.commit()
+    github_checks(github_state, {"name": "owners", "status": "in_progress", "run_id": 12})
+    scenario.tick(*waits(KEY))
+    assert scenario.attention() == [(KEY, "needs_reviewer")]
+    # It fails until the right people approve: not `ci_red`, so nothing resumes a worker for ci.
+    github_checks(github_state, {"name": "owners", "status": "completed", "conclusion": "failure", "run_id": 12})
+    ticked = scenario.tick(*waits(KEY))
+    assert [d.action for d in ticked.decisions if d.decider is Decider.HARNESS] == ["attention:needs_reviewer"]
+    assert ticked.runs == []
+    [unit] = [d for d in phases.recorded(scenario.conn, ticked.tick.id) if d.repo == "repo"]
+    assert unit.phases == (phases.Phase.GREEN_UNREVIEWED,)
+
+
 @pytest.mark.parametrize("reason", sorted(attention.FROM_CAUSES))
 def test_the_overseer_is_refused_an_item_the_harness_raises(
     canopy_env: CanopyEnv,

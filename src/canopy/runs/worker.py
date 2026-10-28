@@ -59,7 +59,7 @@ from canopy.core import (
 )
 from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
-from canopy.core.workspace import DESKS_DIR
+from canopy.core.workspace import DESKS_DIR, CheckRole
 from canopy.infra import logs, procs, stopping
 from canopy.runs import checkpoint, desks, dispatch, drafted, plan_guards, policy, tidy
 from canopy.runs.checkpoint import SetupError
@@ -677,8 +677,8 @@ def _feedback_plan(
         raise SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
     reviews = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
     snapshot = feedback_items.take(ctx.conn, prs, reviews)
-    human = {units[s.repo]: _human_checks(ctx, s.repo) for s in slots if s.repo in units}
-    offered = [*reviews, *feedback_items.raised(ctx.conn, key, prs, human)]
+    not_ci = {units[s.repo]: _not_ci(ctx, s.repo) for s in slots if s.repo in units}
+    offered = [*reviews, *feedback_items.raised(ctx.conn, key, prs, not_ci)]
     desk_files = _feedback_desk(ctx, key, offered) | _place_attachments(run, slots, _attachment_copies(ctx, run))
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.plan_cmd, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
@@ -697,14 +697,13 @@ def _feedback_plan(
     return _record_feedback_plan(ctx, run, parsed, written.text, matched=matched, snapshot=snapshot, log=log)
 
 
-def _human_checks(ctx: Context, repo: str) -> AbstractSet[str]:
-    """The checks repository `repo` names `human_checks`: they wait on a person, so no feedback plan's items.
+def _not_ci(ctx: Context, repo: str) -> AbstractSet[str]:
+    """The checks repository `repo` gives a role other than CI (DESIGN §30): none is a feedback plan's item.
 
     Returns:
         Their names; none for a repository the map does not have.
     """
-    found = ctx.workspace.repo(repo)
-    return found.human_checks if found is not None else frozenset[str]()
+    return frozenset(name for name, role in ctx.workspace.check_roles(repo).items() if role is not CheckRole.CI)
 
 
 def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Item]) -> dict[str, str]:

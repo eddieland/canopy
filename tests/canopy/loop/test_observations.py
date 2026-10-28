@@ -95,7 +95,7 @@ def test_a_unit_shows_the_checks_at_its_head_and_new_review_items_by_who_wrote_t
     tracked: sqlite3.Connection,
     snapshot: SnapshotAssertion,
 ) -> None:
-    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"human_checks": ["deploy/approval"]}}})
+    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": {"deploy/approval": "human"}}}})
     observe_ticket(tracked)
     db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
     observe_pr(tracked)
@@ -132,6 +132,28 @@ def test_a_unit_shows_the_checks_at_its_head_and_new_review_items_by_who_wrote_t
         ],
         "stale": ["legacy"],
         "human": [{"name": "deploy/approval", "status": "pending", "conclusion": None}],
+    }
+
+
+def test_a_check_that_gates_the_merge_or_is_ignored_is_in_none_of_a_units_checks(
+    canopy_env: CanopyEnv,
+    tracked: sqlite3.Connection,
+) -> None:
+    roles = {"merge-queue": "merge", "lint-legacy": "ignore", "owners": "human"}
+    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": roles}}})
+    observe_ticket(tracked)
+    db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
+    observe_pr(tracked)
+    check(tracked, "build", "completed", "success")
+    check(tracked, "merge-queue", "pending", None)
+    check(tracked, "lint-legacy", "completed", "failure", run_id=13)
+    check(tracked, "owners", "completed", "failure", run_id=14)
+    [unit] = observed(canopy_env, tracked)["tickets"][0].get("units", [])
+    assert unit.get("checks") == {
+        "passed": 1,
+        "pending": [],
+        "failed": [],
+        "human": [{"name": "owners", "status": "completed", "conclusion": "failure"}],
     }
 
 

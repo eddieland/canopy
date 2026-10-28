@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING
 from canopy.core import artifact_authority, conversation, db, item_numbers, notice, observe, records, review_runs, sql
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
+from canopy.core.workspace import CheckRole
 from canopy.loop import observations, phases
 from canopy.runs.dispatch import Refusal
 
@@ -417,8 +418,8 @@ def _check_handled(
     same context at the same head is, as `observed_check_runs` keeps them: a re-run that went red again. Every failure
     is new while the cursor is empty, as the derivation reads them. One with no run, a commit status, is new here too,
     though the derivation shows it only while the cursor is empty: with no run to compare, the guard lets it through
-    rather than refuse what it cannot tell had. A check the repository's `human_checks` names is not CI, and a head with
-    no failure is not refused here.
+    rather than refuse what it cannot tell had. A check its repository gives a role other than CI is not CI, and a
+    head with no failure is not refused here.
 
     Raises:
         Refusal: `handled`.
@@ -450,20 +451,19 @@ def _failed_at_head(
     pr: observations.PrObservation,
     repo: str | None,
 ) -> list[records.ObservedCheck]:
-    """The CI checks that failed at a PR's head, less those the repository's `human_checks` names.
+    """The CI checks that failed at a PR's head: those its repository gives no other role (DESIGN §30).
 
-    A check `human_checks` names waits on a person, so it is not CI.
+    A check that waits on a person, gates the merge, or is ignored is not CI.
 
     Returns:
         The checks, in the order the block reads them.
     """
-    found = ctx.workspace.repo(repo) if repo is not None else None
-    human = found.human_checks if found is not None else frozenset[str]()
+    roles = ctx.workspace.check_roles(repo)
     return [
         c
         for c in reader.checks.get(pr["url"], [])
         if c.head_sha == pr["head"]
-        and c.name not in human
+        and roles.get(c.name, CheckRole.CI) is CheckRole.CI
         and c.status is CheckStatus.COMPLETED
         and c.conclusion in observe.FAILED
     ]

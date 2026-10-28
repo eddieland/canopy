@@ -5,9 +5,9 @@ whole (DESIGN §29, §30). A thread is one item: the comment a feedback plan of 
 comment, with each other comment on it a reply given beside it, so a reviewer's "never mind" or the PR author's "won't
 do" reaches the planner as an answer to the item, never as work of its own. The operator's replies sent through canopy,
 a worker's comments (D069), pending reviews, resolved threads, and reviews that say nothing are neither. A failed check
-at a PR's head, but one its repository's `human_checks` names, the PR's conflict with its base, and a merged blocker,
-another ticket's PR that the PR is stacked on and that merged (DESIGN §10), are items too (`raised`), by ids canopy
-gives them (`check_id`, `conflict_id`, `blocker_id`), since the source observes none.
+at a PR's head, but one its repository says is not CI, the PR's conflict with its base, and a merged blocker, another
+ticket's PR that the PR is stacked on and that merged (DESIGN §10), are items too (`raised`), by ids canopy gives them
+(`check_id`, `conflict_id`, `blocker_id`), since the source observes none.
 
 When a feedback plan is recorded, what its run's read saw is recorded with it (`take`, `record`): each PR's head, each
 check's conclusion at that head, and each item and reply the planner was given, by id with a SHA-256 of its body, never
@@ -256,14 +256,14 @@ def raised(
     conn: sqlite3.Connection,
     key: str,
     prs: Sequence[str],
-    human: Mapping[str, AbstractSet[str]],
+    not_ci: Mapping[str, AbstractSet[str]],
 ) -> list[Raised]:
     """Return each failed check, conflict, and merged blocker on `prs` a feedback plan of `key` may cover, as read.
 
-    A failed check is one completed red at its PR's head, but one `human` names for that PR: those wait on a person and
-    are not CI (DESIGN §30). A conflict is the PR's with its base, while its host says so. A merged blocker is another
-    ticket's PR, merged, whose branch the open PR still targets (DESIGN §10). A `resume` that went ahead on one handled
-    it while the PR's head is where it was, since its id names that head.
+    A failed check is one completed red at its PR's head, but one `not_ci` names for that PR: those wait on a person,
+    gate the merge, or are ignored, and are not CI (DESIGN §30). A conflict is the PR's with its base, while its host
+    says so. A merged blocker is another ticket's PR, merged, whose branch the open PR still targets (DESIGN §10). A
+    `resume` that went ahead on one handled it while the PR's head is where it was, since its id names that head.
 
     Returns:
         The items, by PR in the order given, each PR's checks by name, then its conflict, then its merged blocker.
@@ -279,7 +279,7 @@ def raised(
         if observed is None or observed.head_sha is None:
             continue
         head = observed.head_sha
-        skip = human.get(pr, frozenset[str]())
+        skip = not_ci.get(pr, frozenset[str]())
         found.extend(
             Raised(pr, PlanItem.CHECK, check_id(pr, head, c.name), head, c.name, c.conclusion, c.url)
             for c in _checks_at(conn, pr, head)
