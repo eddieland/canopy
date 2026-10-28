@@ -102,8 +102,8 @@ Some contexts are not CI: a deploy approval or an ownership sign-off stays pendi
 queue's status is never green on an open PR. Counting one as CI holds a green PR at `ci_running` for as long, and
 never raises `needs_reviewer`. Each repository gives such a check a role in the map (§18), by its exact name: `human`,
 `merge`, or `ignore`; every other check is `ci`. A check of those three is not CI: it does not hold a unit at
-`ci_running`, make it `ci_red`, have to pass, or become a feedback plan's item. The overseer is shown a `human` one
-beside the checks, as waiting on a person, and neither of the others.
+`ci_running`, make it `ci_red`, have to pass, become a feedback plan's item, or make a waiting one stale. The overseer
+is shown a `human` one beside the checks, as waiting on a person, and neither of the others.
 
 An operator finds such a check unnamed when a PR stalls, so the harness says where: a unit held at `ci_running` by one
 check alone, still pending an hour after every other check at its head finished and none failed, raises `check_stuck`

@@ -44,7 +44,9 @@ def for_pr(ctx: Context, url: str, thread_of: Mapping[int, str]) -> FeedbackPlan
         return None
     # Feedback after an approval waits for the next plan, so only a waiting plan is stale (DESIGN §32).
     changes: list[feedback_items.Change] = (
-        feedback_items.changes(conn, ctx.config.trust, plan) if plan.status is PlanStatus.PROPOSED else []
+        feedback_items.changes(conn, ctx.config.trust, plan, ctx.workspace)
+        if plan.status is PlanStatus.PROPOSED
+        else []
     )
     path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
     reading = plans.read(path)
@@ -133,7 +135,7 @@ def waiting(ctx: Context, key: str) -> WaitingFeedbackPlan | None:
         id=plan.id,
         pr_urls=[str(u.pr_url) for u in units if u.pr_url and u.repo in covered],
         items=len(feedback_plans.items(conn, plan.id)),
-        stale=bool(feedback_items.changes(conn, ctx.config.trust, plan)),
+        stale=bool(feedback_items.changes(conn, ctx.config.trust, plan, ctx.workspace)),
     )
 
 

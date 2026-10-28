@@ -59,7 +59,7 @@ from canopy.core import (
 )
 from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
-from canopy.core.workspace import DESKS_DIR, CheckRole
+from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import checkpoint, desks, dispatch, drafted, plan_guards, policy, tidy
 from canopy.runs.checkpoint import SetupError
@@ -67,8 +67,6 @@ from canopy.runtime import agents, project_config, stdout
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
-    from collections.abc import Set as AbstractSet
-
     from canopy.core import records
     from canopy.core.context import Context
 
@@ -676,8 +674,8 @@ def _feedback_plan(
     if not prs or read.failure is not None:
         raise SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
     reviews = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
-    snapshot = feedback_items.take(ctx.conn, prs, reviews)
-    not_ci = {units[s.repo]: _not_ci(ctx, s.repo) for s in slots if s.repo in units}
+    not_ci = feedback_items.not_ci(ctx.conn, ctx.workspace, prs)
+    snapshot = feedback_items.take(ctx.conn, prs, reviews, not_ci)
     offered = [*reviews, *feedback_items.raised(ctx.conn, key, prs, not_ci)]
     desk_files = _feedback_desk(ctx, key, offered) | _place_attachments(run, slots, _attachment_copies(ctx, run))
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.plan_cmd, desk_files=desk_files)
@@ -697,15 +695,6 @@ def _feedback_plan(
     return _record_feedback_plan(ctx, run, parsed, written.text, matched=matched, snapshot=snapshot, log=log)
 
 
-def _not_ci(ctx: Context, repo: str) -> AbstractSet[str]:
-    """The checks repository `repo` gives a role other than CI (DESIGN §30): none is a feedback plan's item.
-
-    Returns:
-        Their names; none for a repository the map does not have.
-    """
-    return frozenset(name for name, role in ctx.workspace.check_roles(repo).items() if role is not CheckRole.CI)
-
-
 def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Item]) -> dict[str, str]:
     """Return the files a feedback planner's desk holds, each data to it (DESIGN §32).
 
@@ -720,7 +709,7 @@ def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Item
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text
     if copy is not None:
         desk_files[plans.REPLACED] = copy
-    changed = feedback_items.changes(ctx.conn, ctx.config.trust, replaced)
+    changed = feedback_items.changes(ctx.conn, ctx.config.trust, replaced, ctx.workspace)
     if changed:
         desk_files[feedback_items.CHANGES] = feedback_items.changes_file(changed)
     return desk_files
