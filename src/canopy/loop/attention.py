@@ -108,6 +108,9 @@ MODEL_HALTS: frozenset[str] = frozenset({TickStatus.MODEL_MISSING, TickStatus.MO
 MAINTENANCE_ON = "auto_maintenance_on"
 #: A git on `PATH` too old to put canopy's marks on a worker's commits (TRUST_MODEL T5).
 GIT_TOO_OLD = "git_too_old"
+#: A check still pending at a PR's head long after its other checks there finished, which may not be CI: the harness
+#: raises it from its cause beside `FROM_CAUSES` (`loop.harness_items`, DESIGN §30).
+CHECK_STUCK = "check_stuck"
 #: What the harness raises from its causes in the journal (`loop.harness_items`, DESIGN §14, §37), which the overseer
 #: recorded until the harness held them: its attention tool refuses each.
 FROM_CAUSES: frozenset[str] = frozenset(
@@ -133,6 +136,7 @@ ALWAYS_HARNESS: frozenset[str] = frozenset(
         "repo_missing",
         MAINTENANCE_ON,
         GIT_TOO_OLD,
+        CHECK_STUCK,
         *HALTS,
         connector_runs.FAILED_REASON,
         archive.REASON,
