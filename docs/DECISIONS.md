@@ -276,6 +276,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - Agents check author and label (D003). Never forced, unless the operator sets `trust.rebase` (private): then a
   rebased branch is pushed with `--force-with-lease`, the only force a worker's definition allows.
+- The harness's one force of its own: with `trust.max_flaky_kicks` (private), a lease of the rebased branch to rerun
+  checks a worker judged flaky, a limited number of times per pushed head (DESIGN §23).
 - Rejected: any labeled PR (a label would put commits on a coworker's branch); rebasing by default (merging needs no
   force, and most repositories accept merge commits).
 

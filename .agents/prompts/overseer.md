@@ -290,11 +290,12 @@ item the harness raises, as `wait (needs_reviewer)` does, record `wait`.
 - Dispatch a `resume` only for a phase whose action is one (`changes_requested` and `review_findings` once classified
   for a worker), its `context` naming what that phase found: a `ci_running` unit has nothing new to address.
 - A `ci_red` failure not newer than the `ci` cursor was already handed to a worker. If that run ended `done` with
-  `flaky` true and the same check run still fails, the worker judged it a failure a rerun would pass and changed nothing
-  for it, so no newer run will come: record attention `flaky_rerun` with `repo` the unit and a detail naming the check,
-  its run link, and the run's id, and dispatch no `resume` for it. Otherwise, if it ended `done` and the same check run
-  still fails, its fix has not reached CI or did not help: `wait` until a newer check run exists. If it ended
-  `blocked`, the ticket is `needs_human`.
+  `flaky` true and `kicked` naming the unit's repository, canopy pushed its branch again to rerun its checks: `wait` for
+  the new head's. With `flaky` true, the unit not in `kicked`, and the same check run still failing, the worker judged
+  it a failure a rerun would pass and changed nothing for it, so no newer run will come: record attention `flaky_rerun`
+  with `repo` the unit and a detail naming the check, its run link, and the run's id, and dispatch no `resume` for it.
+  Otherwise, if it ended `done` and the same check run still fails, its fix has not reached CI or did not help: `wait`
+  until a newer check run exists. If it ended `blocked`, the ticket is `needs_human`.
 - A `resume` for `ci` alone refused `handled` had no failure a worker had not: each failed at that head at or behind
   the `ci` cursor, so a rerun went red again and another worker would see what the last one saw. Record `canopy
   attention <KEY> flaky_rerun --repo <the unit> --detail '<the check, its run link, and that its rerun failed again>'`,

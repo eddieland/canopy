@@ -75,6 +75,8 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
             f"? {f.get('ticket')} run {f.get('run')} filed follow-ups {', '.join(named) or '-'}: "
             "label or `canopy start` each one you want worked",
         )
+    if kind == "ci.flaky":
+        return _flaky_line(f)
     if kind == "task.ended":
         text = f"< task:{f.get('task')} run {f.get('run')} ended {f.get('status')}"
         extras = [str(x) for x in (f.get("pr"), f.get("summary")) if x]
@@ -118,6 +120,25 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
     return _line(f"{kind} {json.dumps(f)}")
 
 
+def _flaky_line(f: Mapping[str, object]) -> str:
+    """The line of a `ci.flaky` event.
+
+    Returns:
+        The line, led by `+` when canopy kicked the check, or `?` when it waits on the operator's rerun.
+    """
+    given = f.get("kicked")
+    kicked = [str(r) for r in cast("list[object]", given)] if isinstance(given, list) else []
+    given = f.get("prs")
+    prs = [str(u) for u in cast("list[object]", given)] if isinstance(given, list) else []
+    head = f"{f.get('ticket')} run {f.get('run')} left a failed check as flaky"
+    if kicked:
+        text = f"+ {head}; canopy pushed {', '.join(kicked)} again to rerun it"
+    else:
+        text = f"? {head}; rerun it, or `canopy reply` that it is real"
+    extras = [*prs, f"why: {f.get('estimate')}" if f.get("estimate") else "", str(f.get("note") or "")]
+    return _line(f"{text}: {' '.join(x for x in extras if x)}")
+
+
 def item_page(ui: str | None, ticket_key: str | None) -> str | None:
     """The web UI's page for an attention item's subject: its ticket's, chore's, or PR's, else the attention list.
 
@@ -141,7 +162,7 @@ def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str |
     """
     f = fields
     match kind:
-        case "run.started" | "run.ended" | "follow_ups.filed" if f.get("run"):
+        case "run.started" | "run.ended" | "follow_ups.filed" | "ci.flaky" if f.get("run"):
             return page(ui, "runs", f["run"])
         case "plan.proposed" | "plan.approved" if f.get("ticket"):
             # A feedback plan has no page of its own yet: its ticket's page is where its PRs are.
