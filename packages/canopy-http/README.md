@@ -1,8 +1,9 @@
 # canopy-http
 
-The HTTP client the programs canopy ships use for every request they make (D130): today the GitHub programs
-(`canopy-github`) and the Jira connector (`canopy-jira`). It is a library, with no command of its own, and imports
-nothing from canopy. The harness never uses it: it opens no connection and holds no token (TRUST_MODEL T2).
+The HTTP client the programs canopy ships use for every request they make (D130): the GitHub programs
+(`canopy-github`), the Jira connector (`canopy-jira`), and the Slack sink and its reader (`canopy-notify-slack`). It
+is a library, with no command of its own, and imports nothing from canopy. The harness never uses it: it opens no
+connection and holds no token (TRUST_MODEL T2).
 
 ```python
 import canopy_http
