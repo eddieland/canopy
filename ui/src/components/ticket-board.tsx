@@ -7,6 +7,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketState } from '@/components/ticket-state'
 import { TicketTitle } from '@/components/ticket-title'
 import { Tip } from '@/components/tip'
+import { phaseMeaning } from '@/lib/meanings'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 import {
     BOARD_COLUMN_HELP,
@@ -99,7 +100,7 @@ function Card({ ticket }: { ticket: TicketSummary }) {
             <TicketTitle title={ticket.title} />
             <span className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-1">
                 <TicketState ticket={ticket} />
-                <Tip fact={phaseWord(ticket)} mono>
+                <Tip fact={phaseWord(ticket)} mono detail={phaseMeaning(ticket.phase)}>
                     <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
                         {phaseLabel(ticket)}
                     </span>

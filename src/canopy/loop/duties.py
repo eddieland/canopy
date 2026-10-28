@@ -32,7 +32,10 @@ _QUERIED_SOME = "the query returned these open tickets: "
 # How many omitted tickets the failure names before it counts the rest.
 _NAMED = 10
 # The reasons a skip with no key gives, its rationale's first word: the overseer could not see the world this tick.
-TICK_WIDE_SKIPS = ("mcp_unavailable", "tracker_unsupported")
+# Where a `tracker` source reads the tracker, the overseer reads none, so it has no `tracker_unsupported` to give
+# (DESIGN §39, `canopy.loop.tools`).
+TRACKER_UNSUPPORTED = "tracker_unsupported"
+TICK_WIDE_SKIPS = ("mcp_unavailable", TRACKER_UNSUPPORTED)
 
 
 @dataclass(frozen=True)

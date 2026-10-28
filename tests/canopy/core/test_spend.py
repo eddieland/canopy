@@ -11,7 +11,9 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, runtime_sessions, spend, sql
+from canopy.core import db, run_models, runtime_sessions, spend, sql
+from canopy.core.run_models import Due
+from canopy.core.vocab import ModelsRead
 from canopy.runtime.report import SessionPage, SessionSpend, ToolUse, Usage
 from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
@@ -653,6 +655,17 @@ def test_first_calls_are_by_kind_and_snapshot_with_their_median_and_cold_share(
     assert [f.hit_rate for f in found.first_calls] == [pytest.approx(old), pytest.approx(1 - 67_000 / 183_000), 29 / 30]
 
 
+def test_first_calls_name_the_runtime_versions_their_runs_ran_on_in_order(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    for hours, version in ((4, "1.19.3"), (3, None), (2, "1.20.0"), (1, "1.19.3")):
+        t = tick(conn, earlier(NOW, 0, hours), 0.1)
+        db.set_tick_report(conn, t, "s", first_call(50_000, 1_000), digest="d")
+        if version is not None:
+            run_models.record(conn, Due("ticks", t, "s", 0), ModelsRead.FOUND, runtime_version=version)
+    [overseer] = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR).first_calls
+    assert (overseer.runs, overseer.runtime_versions) == (4, ("1.19.3", "1.20.0"))
+
+
 def test_a_first_call_that_read_little_from_the_cache_is_cold_though_it_wrote_nothing(
     tmp_path: Path,
     journals: Journals,
@@ -692,6 +705,7 @@ def test_canopy_spend_json_has_the_first_calls(canopy_env: CanopyEnv, capsys: py
             "first_started": earlier(now, 0),
             "last_started": earlier(now, 0),
             "hit_rate": 1_000 / 50_000,
+            "runtime_versions": [],
         },
     ]
 

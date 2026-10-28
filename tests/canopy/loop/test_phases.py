@@ -371,7 +371,9 @@ def test_a_ticket_that_depends_on_a_stale_or_missing_observation_is_stale(
     if statement:
         observed.execute(statement)
     observed.commit()
-    assert derived(canopy_env) == [phases.Derived(KEY, None, stale=stale)]
+    # Stale by the `tracker` source's reads, but for the branches, which the `vcs` source's read.
+    tracker = not stale.startswith("branches")
+    assert derived(canopy_env) == [phases.Derived(KEY, None, stale=stale, stale_tracker=tracker)]
 
 
 def test_without_a_tracker_source_a_public_ticket_is_stale(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:

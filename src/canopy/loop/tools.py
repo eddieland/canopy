@@ -751,10 +751,16 @@ def decide(ctx: Context, request: Decisions) -> Outcome[Decided]:
         What the command prints, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick, or about a ticket the harness decided this tick, whose refusal is recorded and
-            leaves every decision of the call unrecorded.
+        Refused: Outside a running tick; about a ticket the harness decided this tick, whose refusal is recorded and
+            leaves every decision of the call unrecorded; or a tick-wide skip for a tracker a `tracker` source reads.
     """
     current = running_tick(ctx)
+    tick_wide = [d.rationale.split(":", 1)[0].strip() for d in request.decisions if d.key is None]
+    if duties.TRACKER_UNSUPPORTED in tick_wide and ctx.config.connect.observes_tickets():
+        raise Refused(
+            f"decide refused: a `tracker` source reads the tracker, and you read none, so no tick is skipped "
+            f"'{duties.TRACKER_UNSUPPORTED}' (DESIGN §39); decide each ticket under its own key",
+        )
     keys = [d.key for d in request.decisions if d.key is not None]
     if refused := [r for key in keys if (r := _decided_by_harness(ctx, current.id, key, "decide")) is not None]:
         recorded = "the refusal was recorded" if len(refused) == 1 else "the refusals were recorded"
@@ -802,9 +808,14 @@ def queried(ctx: Context, request: Queried) -> Outcome[QueryRecorded]:
         What the command prints, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick.
+        Refused: Outside a running tick, or where a `tracker` source reads the query, whose read canopy records.
     """
     current = running_tick(ctx)
+    if ctx.config.connect.observes_tickets():
+        raise Refused(
+            "queried refused: a `tracker` source reads the query, and canopy records its result itself (DESIGN §39); "
+            "run no query, and record none",
+        )
     found = duties.record_queried(ctx.conn, current.id, ctx.repo, request.keys)
     return Outcome(
         f"recorded the query: {found} open ticket(s)",

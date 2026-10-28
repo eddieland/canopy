@@ -149,6 +149,20 @@ def test_each_variant_of_a_model_is_counted_on_its_own() -> None:
     )
 
 
+def test_the_version_of_opencode_that_made_the_session_is_read_with_its_models() -> None:
+    session = {"id": "ses_1", "version": "1.19.3"}
+    export = printing(json.dumps({"info": session, "messages": [assistant("a", "x", 0.5, message="msg_2")]}))
+    assert read(export) == SessionModels("found", (ModelUse("a/x", 1, 0.5),), runtime_version="1.19.3")
+    # Kept short and printable, and none where the record names none.
+    export = printing(json.dumps({"info": {**session, "version": "1.2 \x1b" + "9" * 99}, "messages": []}))
+    assert read(export).runtime_version == "1.2" + "9" * 37
+    assert read(printing(exported(USER))).runtime_version is None
+    # A version that is no string is none, and the models are read as ever.
+    messages = [assistant("a", "x", 0.5, message="msg_2")]
+    export = printing(json.dumps({"info": {**session, "version": 119}, "messages": messages}))
+    assert read(export) == SessionModels("found", (ModelUse("a/x", 1, 0.5),))
+
+
 def test_a_session_one_model_served_keeps_no_reply_s_model() -> None:
     export = printing(
         exported(

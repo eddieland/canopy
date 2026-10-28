@@ -4,7 +4,9 @@ Each tick, after the derivation (§30), the harness takes a ticket whole when ev
 each of its units is one it decides, and none rests on a stale observation. It records the ticket's decision, marked as
 its own (`decisions.decider`), and the phase that row names, and the state block names it instead of listing the
 ticket. One row it does not decide, anywhere on the ticket, leaves the ticket whole to the overseer, which reads the
-derivation's rows beside the observations. So does a ticket that is not a fresh, open candidate. An item the overseer
+derivation's rows beside the observations. So does a ticket that is not a fresh, open candidate, but for one whose
+observation the `tracker` source left stale: the overseer reads no tracker where a source does (§39), so the harness
+records its `wait`, naming what is old. An item the overseer
 holds open on a ticket the harness takes stands while the overseer is not given the ticket (`attention.current`).
 
 The rows it decides are `ROWS`: only those it reads from its own journal alone, which need no measurement (§37, The
@@ -64,7 +66,8 @@ class Decision:
     """A ticket the harness decides this tick: what it records, and the phase it sets."""
 
     key: str
-    phase: Phase
+    #: None for a ticket whose observation is stale: no row was derived, so its phase stays as it was.
+    phase: Phase | None
     action: str
     rationale: str
 
@@ -103,7 +106,8 @@ def record(conn: sqlite3.Connection, tick_id: int, repo: str, decisions: Iterabl
     with db.transaction(conn):
         for d in decisions:
             db.touch_ticket(conn, d.key, repo)
-            db.change_ticket(conn, d.key, "phase", d.phase)
+            if d.phase is not None:
+                db.change_ticket(conn, d.key, "phase", d.phase)
             db.record_decision(conn, tick_id, d.key, d.action, d.rationale, decider=Decider.HARNESS)
 
 
@@ -149,6 +153,14 @@ def _decided(conn: sqlite3.Connection, key: str, subjects: Sequence[Derived]) ->
         The decision, or None when the ticket is left to the overseer.
     """
     own = subjects[0]
+    if own.repo is None and own.stale is not None and own.stale_tracker:
+        # The overseer reads no tracker where a source does (§39): the ticket waits for a read that is whole, and the
+        # source that left it stale has raised `connector_failed` (§30). One marked done, which the query still finds,
+        # is owed nothing (§7).
+        ticket = db.get_ticket(conn, key)
+        if ticket is not None and ticket.done:
+            return None
+        return Decision(key, None, "wait", f"stale: {own.stale}; it waits for the tracker source to read it again")
     if own.repo is not None or own.stale is not None or own.closed or not own.candidate or not own.phases:
         return None
     private = conversation.is_started(conversation.start_of(conn, key))
