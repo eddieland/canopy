@@ -9,7 +9,7 @@ the form of the entry, are the implementation's.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.runtime.implementation import one, pick, two
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 #: The variables that give a run a server, removed from every run canopy starts before it sets its own: each version's,
 #: so a run started under one never passes on what the other would read.
-VARIABLES = one.servers.VARIABLES | two.servers.VARIABLES
+VARIABLES: Final = one.servers.VARIABLES | two.servers.VARIABLES
 
 
 def env(

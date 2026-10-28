@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import artifact_feed, conversation, db, records, sql
 from canopy.core.vocab import AuthorKind, StartStatus
@@ -34,9 +34,9 @@ if TYPE_CHECKING:
     from collections.abc import Set as AbstractSet
 
 #: The attention item an untrusted comment raises, about its ticket (DESIGN §14, §38).
-REASON = "untrusted_artifact_comment"
+REASON: Final = "untrusted_artifact_comment"
 #: How many authors an item's detail names; the rest are counted.
-MAX_NAMED = 5
+MAX_NAMED: Final = 5
 
 
 class Standing(StrEnum):

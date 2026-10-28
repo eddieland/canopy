@@ -25,6 +25,7 @@ import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import canopy_sandbox
@@ -44,40 +45,41 @@ pytestmark = pytest.mark.skipif(
     reason="the sandbox canary runs with CANOPY_SANDBOX_CANARY=1",
 )
 
-WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
-ROLES = ("worker", "setup", "chore", "review")
+WRAPPER: Final = Path(sys.executable).parent / "canopy-sandbox"
+ROLES: Final = ("worker", "setup", "chore", "review")
 # The overseer reads its workspace's state, so it is checked apart from the roles above.
-OVERSEER = "overseer"
+OVERSEER: Final = "overseer"
 # Where `canopy sandbox setup` put srt for the operator running the tests, found before a fixture moves HOME.
-PINNED_SRT = canopy_sandbox.runtime_dir() / "node_modules" / ".bin" / "srt"
+PINNED_SRT: Final = canopy_sandbox.runtime_dir() / "node_modules" / ".bin" / "srt"
 # Found before a fixture puts tests/fakes, and its fake srt, first on PATH.
-SRT = str(PINNED_SRT) if PINNED_SRT.is_file() else shutil.which("srt")
+SRT: Final = str(PINNED_SRT) if PINNED_SRT.is_file() else shutil.which("srt")
 # A parent short enough on Linux and macOS alike for the sockets srt makes under the wrapper's run directory; on macOS
 # /tmp is a link to /private/tmp. And the temp directory the operator's own canopy runs with, found before a fixture
 # moves TMPDIR, which on macOS is a deep one per user.
-SHORT_TMP = os.path.realpath("/tmp")  # noqa: S108  (the run directories under it are private to the user)
-SYSTEM_TMP = tempfile.gettempdir()
-PLANTED = "canary-planted-7f3a"
+SHORT_TMP: Final = os.path.realpath("/tmp")  # noqa: S108  (the run directories under it are private to the user)
+SYSTEM_TMP: Final = tempfile.gettempdir()
+PLANTED: Final = "canary-planted-7f3a"
 # On the shipped template's allowlist, and not; and the cloud metadata address, which no policy should reach.
-ALLOWED_URL = "https://github.com"
+ALLOWED_URL: Final = "https://github.com"
 # On the overseer's allowlist, which leaves github.com off.
-GITHUB_API_URL = "https://api.github.com"
-DENIED_URL = "https://example.com"
-METADATA_URL = "http://169.254.169.254/latest/meta-data/"
+GITHUB_API_URL: Final = "https://api.github.com"
+DENIED_URL: Final = "https://example.com"
+METADATA_URL: Final = "http://169.254.169.254/latest/meta-data/"
 # The two ways out: through srt's proxy, even for the addresses srt's NO_PROXY names (loopback, link-local), and around
 # it. srt's proxy refuses with a header no other proxy sends, which curl prints with the response's; around it, the
 # sandbox has no route, so the name does not resolve or the connection fails. Anything else, a certificate error or
 # another proxy's 403 say, is not the policy refusing and fails the test.
-VIA_PROXY = "--noproxy '' -D -"
-DIRECT = "--noproxy '*'"
-ROUTES = [pytest.param(VIA_PROXY, id="through-the-proxy"), pytest.param(DIRECT, id="direct")]
-SRT_REFUSAL = "X-Proxy-Error: blocked-by-allowlist"
-CURL_NO_HOST, CURL_NO_CONNECTION = 6, 7
+VIA_PROXY: Final = "--noproxy '' -D -"
+DIRECT: Final = "--noproxy '*'"
+ROUTES: Final = [pytest.param(VIA_PROXY, id="through-the-proxy"), pytest.param(DIRECT, id="direct")]
+SRT_REFUSAL: Final = "X-Proxy-Error: blocked-by-allowlist"
+CURL_NO_HOST: Final = 6
+CURL_NO_CONNECTION: Final = 7
 # What a sleeping process left behind by a timed-out run would show in its command line.
-LINGERER = "987.654321"
-TIMEOUT = 3.0
+LINGERER: Final = "987.654321"
+TIMEOUT: Final = 3.0
 # What every sandboxed command prints first, so an attempt that fails because nothing ran fails the test instead.
-RAN = "canary-ran"
+RAN: Final = "canary-ran"
 
 
 @dataclass(frozen=True)

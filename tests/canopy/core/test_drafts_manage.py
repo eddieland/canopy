@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from unittest import mock
 
 import pytest
@@ -37,11 +37,11 @@ if TYPE_CHECKING:
     from canopy.infra import logs, procs
     from tests.canopy.scenario_helpers import Scenario
 
-PR = DRAFTS_PR
-OLD = "2020-01-01T00:00:00Z"
-ISSUE = "https://github.com/acme/api/issues/1"
+PR: Final = DRAFTS_PR
+OLD: Final = "2020-01-01T00:00:00Z"
+ISSUE: Final = "https://github.com/acme/api/issues/1"
 #: A resume of KEY for a conflict on its PR: a reason no observation has to authorize, which the drafts do not need.
-RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
+RESUME: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
 
 
 def drafted_run(scenario: Scenario, state: Path, entries: object, connect: Mapping[str, object] | None = None) -> int:

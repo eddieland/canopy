@@ -7,7 +7,7 @@ Each writes through `canopy.core.plans`, which every channel shares, and refuses
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-CLI = "cli"
+CLI: Final = "cli"
 
 
 @click.command("plan")

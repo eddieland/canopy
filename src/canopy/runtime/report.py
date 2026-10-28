@@ -13,41 +13,41 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import Field, StrictInt
 
 #: Far above anything one model call reports, and low enough that no run's sums overflow a float or SQLite's integers.
-MAX_TOKENS = 10**12
-MAX_COST_USD = 10**6
+MAX_TOKENS: Final = 10**12
+MAX_COST_USD: Final = 10**6
 
 #: A count of tokens a runtime reported, within `MAX_TOKENS`.
 Count = Annotated[StrictInt, Field(ge=0, le=MAX_TOKENS)]
 
 #: Printed by `canopy status` and pasted into a shell, so nothing a terminal or a shell would read as anything else.
-SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,100}")
+SESSION_ID_RE: Final = re.compile(r"[A-Za-z0-9_-]{1,100}")
 
 #: How many distinct tools one run's rollup keeps, and how long a tool's name may be: far more than a runtime offers,
 #: and few enough that output no runtime printed cannot fill the journal. The calls of any tool past the first
 #: `MAX_TOOLS` count under `OTHER_TOOLS`, which no runtime names a tool.
-MAX_TOOLS = 200
-MAX_TOOL_NAME = 200
-OTHER_TOOLS = "(other tools)"
+MAX_TOOLS: Final = 200
+MAX_TOOL_NAME: Final = 200
+OTHER_TOOLS: Final = "(other tools)"
 #: What a call that loaded a skill is counted under, before the skill's name: `skill:tracker-jira`.
-SKILL_PREFIX = "skill:"
+SKILL_PREFIX: Final = "skill:"
 #: How many models one session's record keeps, and how long a model's name may be: far more than a run uses, and few
 #: enough that a record no runtime wrote cannot fill the journal. The replies of any model past the first
 #: `MAX_MODELS` count under `OTHER_MODELS`, which no runtime names a model.
-MAX_MODELS = 20
-MAX_MODEL_NAME = 200
+MAX_MODELS: Final = 20
+MAX_MODEL_NAME: Final = 200
 #: How long a runtime's version, as a session's record names it, may be: `1.19.3` and its like are far shorter.
-MAX_RUNTIME_VERSION = 40
-OTHER_MODELS = "(other models)"
+MAX_RUNTIME_VERSION: Final = 40
+OTHER_MODELS: Final = "(other models)"
 #: A message the runtime names in a session's record and on each event of a model call: the reply the call wrote, the
 #: key that joins a call in the run's log to the model the record names for it. As a session id is shaped.
-MESSAGE_ID_RE = SESSION_ID_RE
+MESSAGE_ID_RE: Final = SESSION_ID_RE
 #: How many replies' models one session's record keeps, each by its message: far more calls than a transcript shows.
-MAX_REPLIES = 10_000
+MAX_REPLIES: Final = 10_000
 
 #: How reading a session's models ended: they were read; the runtime keeps no session of that id, which reading again
 #: would not change; or the runtime could not be asked, or said what canopy cannot read.
@@ -197,9 +197,9 @@ type SessionCursor = tuple[int, str]
 #: its record could not be read.
 type SessionsRead = Literal["found", "missing", "failed"]
 #: How many sessions one read returns at most: a page, so a long history is read a page at a time.
-MAX_SESSIONS = 500
+MAX_SESSIONS: Final = 500
 #: How long a session's directory may be, as the record keeps it; a longer one is cut.
-MAX_DIRECTORY = 4096
+MAX_DIRECTORY: Final = 4096
 
 
 @dataclass(frozen=True)

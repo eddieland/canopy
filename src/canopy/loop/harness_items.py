@@ -33,7 +33,7 @@ import json
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, feedback_plans, observe, plans, records, review_runs, sql
 from canopy.core.vocab import CheckStatus, Phase, PlanStatus, PrState, ResumeReason, ReviewRunStatus, RunKind
@@ -52,28 +52,28 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.loop.phases import Derived
 
-NEEDS_REVIEWER = "needs_reviewer"
-READY_TO_MERGE = "ready_to_merge"
-UNTRUSTED_REVIEW = "untrusted_review"
-ATTEMPT_LIMIT = "attempt_limit"
-REVIEW_FAILED = "review_failed"
-REVIEW_LIMIT = "review_limit"
-PLAN_REVIEW = "plan_review"
-PLAN_CHANGED = "plan_changed"
-CHECK_STUCK = attention.CHECK_STUCK
+NEEDS_REVIEWER: Final = "needs_reviewer"
+READY_TO_MERGE: Final = "ready_to_merge"
+UNTRUSTED_REVIEW: Final = "untrusted_review"
+ATTEMPT_LIMIT: Final = "attempt_limit"
+REVIEW_FAILED: Final = "review_failed"
+REVIEW_LIMIT: Final = "review_limit"
+PLAN_REVIEW: Final = "plan_review"
+PLAN_CHANGED: Final = "plan_changed"
+CHECK_STUCK: Final = attention.CHECK_STUCK
 #: Every reason this module raises: those of `attention.FROM_CAUSES`, and one only the harness has ever recorded.
-REASONS: frozenset[str] = attention.FROM_CAUSES | {CHECK_STUCK}
+REASONS: Final[frozenset[str]] = attention.FROM_CAUSES | {CHECK_STUCK}
 #: The reasons whose cause rests on what a connector observed, so a stale observation keeps their item.
-OBSERVED: frozenset[str] = frozenset(
+OBSERVED: Final[frozenset[str]] = frozenset(
     {NEEDS_REVIEWER, READY_TO_MERGE, UNTRUSTED_REVIEW, ATTEMPT_LIMIT, REVIEW_LIMIT, CHECK_STUCK},
 )
 #: How long a unit's one pending CI check stays so after the last of its other checks at the head finished before it
 #: raises `check_stuck`. A merge queue's status never completes on an open PR, nor a sign-off until a person acts, so
 #: any time names them; an hour names them within a working session, while CI that runs an hour past every other job
 #: is rare. A constant, not a key: the item only asks, and a check the operator leaves as CI holds the PR as before.
-STUCK_AFTER = timedelta(hours=1)
+STUCK_AFTER: Final = timedelta(hours=1)
 #: The rows of §7 whose next run is a `resume` of their unit, each with the reason it would carry.
-RESUME_ROWS: Mapping[Phase, ResumeReason] = {
+RESUME_ROWS: Final[Mapping[Phase, ResumeReason]] = {
     Phase.PUSHED_NO_PR: ResumeReason.NO_PR,
     Phase.CONFLICTED: ResumeReason.CONFLICT,
     Phase.CI_RED: ResumeReason.CI,
@@ -81,7 +81,7 @@ RESUME_ROWS: Mapping[Phase, ResumeReason] = {
     Phase.CHANGES_REQUESTED: ResumeReason.REVIEW,
 }
 #: How a review run ended that raises `review_failed` (DESIGN §21).
-FAILED_REVIEWS: frozenset[ReviewRunStatus] = frozenset(
+FAILED_REVIEWS: Final[frozenset[ReviewRunStatus]] = frozenset(
     {ReviewRunStatus.FAILED, ReviewRunStatus.UNKNOWN, ReviewRunStatus.TIMEOUT, ReviewRunStatus.CRASHED},
 )
 

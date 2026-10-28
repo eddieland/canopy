@@ -46,7 +46,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
 from pathlib import Path
-from typing import TextIO
+from typing import Final, TextIO
 
 import click
 
@@ -62,25 +62,25 @@ from canopy_notify_slack import (
 )
 
 #: The Web API, its methods named after it.
-SLACK_API = "https://slack.com/api/"
+SLACK_API: Final = "https://slack.com/api/"
 #: How many of a thread's messages a page asks for: the most Slack recommends.
-PAGE = 200
+PAGE: Final = 200
 #: How many pages one thread may take before it counts as not read: a thread canopy started is not this long.
-MAX_PAGES = 50
+MAX_PAGES: Final = 50
 #: A ticket's key, as canopy reads one (DESIGN §17). A review's thread, `review:URL`, is not one.
-_KEY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+_KEY: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
 #: A person's Slack user id: `U...`, or `W...` on an Enterprise Grid.
-_USER = re.compile(r"[UW][A-Z0-9]{2,30}")
+_USER: Final = re.compile(r"[UW][A-Z0-9]{2,30}")
 #: A message's `ts`.
-_TS = re.compile(r"\d{1,20}\.\d{1,20}")
+_TS: Final = re.compile(r"\d{1,20}\.\d{1,20}")
 #: Slack's error for a thread it no longer has.
-_GONE = "thread_not_found"
+_GONE: Final = "thread_not_found"
 #: A link or a mention in a message's text, as Slack writes it: `<https://x|label>`, `<@U123>`, `<#C123|name>`.
-_ANGLED = re.compile(r"<([^<>|]*)(?:\|([^<>]*))?>")
+_ANGLED: Final = re.compile(r"<([^<>|]*)(?:\|([^<>]*))?>")
 #: A message that starts by mentioning a user, as Slack writes the mention, and what follows it.
-_LEADING_MENTION = re.compile(r"\s*<@([UW][A-Z0-9]{2,30})(?:\|[^<>]*)?>[\s:,]*(.*)", re.DOTALL)
+_LEADING_MENTION: Final = re.compile(r"\s*<@([UW][A-Z0-9]{2,30})(?:\|[^<>]*)?>[\s:,]*(.*)", re.DOTALL)
 #: What follows a mention of the bot: a ticket's key, set off by a space or a `:` or `,`, then the reply.
-_ADDRESSED = re.compile(r"([A-Za-z0-9][A-Za-z0-9_-]{0,99})(?:[:,]\s*|\s+|$)(.*)", re.DOTALL)
+_ADDRESSED: Final = re.compile(r"([A-Za-z0-9][A-Za-z0-9_-]{0,99})(?:[:,]\s*|\s+|$)(.*)", re.DOTALL)
 
 
 @dataclass(frozen=True)

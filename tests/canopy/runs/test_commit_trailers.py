@@ -6,13 +6,14 @@ the run's harness note, never rewritten.
 
 import json
 from pathlib import Path
+from typing import Final
 
 from tests.canopy.helpers import commit_and_push, trailers_on, worker_does
 from tests.canopy.scenario_helpers import Scenario, pushes
 from tests.conftest import GitPool, executable, git
 
-TRAILER = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
-BRANCH = "agent/PROJ-1-work"
+TRAILER: Final = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
+BRANCH: Final = "agent/PROJ-1-work"
 
 
 def test_git_adds_canopys_trailer_to_each_commit_a_worker_makes(scenario: Scenario, git_pool: GitPool) -> None:

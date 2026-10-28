@@ -14,7 +14,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Final, override
 
 import uvicorn
 
@@ -24,16 +24,16 @@ if TYPE_CHECKING:
     from canopy.infra import logs
     from canopy.serve.options import ServeOptions
 
-FIRST_RETRY_SECONDS = 1.0
-MAX_RETRY_SECONDS = 60.0
+FIRST_RETRY_SECONDS: Final = 1.0
+MAX_RETRY_SECONDS: Final = 60.0
 # A server that ran this long before it failed starts its backoff over.
-HEALTHY_SECONDS = 60.0
-GRACEFUL_SECONDS = 2
-_UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
+HEALTHY_SECONDS: Final = 60.0
+GRACEFUL_SECONDS: Final = 2
+_UVICORN_LOGGERS: Final = ("uvicorn", "uvicorn.error", "uvicorn.access")
 #: What uvicorn cancels a request still open with, once `GRACEFUL_SECONDS` pass. A `CancelledError` without it, in
 #: itself or in the cancels it was raised while handling, such as one the app raises itself, is logged as uvicorn logs
 #: it; so is this one, if uvicorn ever words it otherwise.
-_SHUTDOWN_CANCEL = "Task cancelled, timeout graceful shutdown exceeded"
+_SHUTDOWN_CANCEL: Final = "Task cancelled, timeout graceful shutdown exceeded"
 
 
 class _ToCanopyLog(logging.Handler):

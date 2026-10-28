@@ -27,7 +27,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Final, TypedDict
 
 from canopy.core import conversation, db, feedback_items, plans, prompts, records, replies, sql
 from canopy.core.conversation import Refused
@@ -45,21 +45,21 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 #: The most items one plan's result line names; past it, the rest are refused, each with a harness note.
-MAX_ITEMS = 100
+MAX_ITEMS: Final = 100
 #: A drafted reply's bound, in characters, as a draft's (DESIGN §29).
-MAX_REPLY = replies.MAX_DRAFT_CHARS
+MAX_REPLY: Final = replies.MAX_DRAFT_CHARS
 #: The most characters of the operator's own words an approval's message carries, after the sentence naming the
 #: plan's items, within an operator message's bound.
-MAX_WORDS = conversation.MAX_OPERATOR - 1000
+MAX_WORDS: Final = conversation.MAX_OPERATOR - 1000
 #: The most refused ids a run's harness note names one by one.
-_MAX_NAMED = 10
+_MAX_NAMED: Final = 10
 #: The most characters of an item's excerpt or of a plan's line on it, as the PR's page shows them.
-MAX_LINE = 200
+MAX_LINE: Final = 200
 # An item's heading in a plan's file, at any level, and any heading, which ends the item before it; a fenced code
 # block holds no item's first line.
-_ITEM_HEADING_RE = re.compile(r"#{1,6}[ \t]+Item[ \t]+(\d{1,20})(?![\d])")
-_ANY_HEADING_RE = re.compile(r"#{1,6}(?:[ \t]|$)")
-_FENCE_RE = re.compile(r"(?:`{3,}|~{3,})")
+_ITEM_HEADING_RE: Final = re.compile(r"#{1,6}[ \t]+Item[ \t]+(\d{1,20})(?![\d])")
+_ANY_HEADING_RE: Final = re.compile(r"#{1,6}(?:[ \t]|$)")
+_FENCE_RE: Final = re.compile(r"(?:`{3,}|~{3,})")
 
 
 @dataclass(frozen=True)

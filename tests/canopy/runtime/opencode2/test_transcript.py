@@ -2,12 +2,13 @@
 
 import json
 from pathlib import Path
+from typing import Final
 
 from canopy.runtime.entries import Error, Step, Text, ToolCall
 from canopy.runtime.opencode2 import events, transcript
 
-RECORDED = Path(__file__).parent / "recorded"
-SESSION = "ses_e9efac2adffehb60wAIBaOM6if"
+RECORDED: Final = Path(__file__).parent / "recorded"
+SESSION: Final = "ses_e9efac2adffehb60wAIBaOM6if"
 
 
 def event(kind: str, part: object) -> str:

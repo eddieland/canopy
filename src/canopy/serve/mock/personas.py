@@ -7,7 +7,7 @@ ABC-105's newest plan run read canopy's text as it ships; the rest, made-up dige
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, personas, sql
 from canopy.core.vocab import OverrideKind, RunKind
@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     from canopy.core import config
 
 #: The made-up digests of the personas runs and reviews wrote in.
-_CANOPY_DIGEST = "c4a0f1e2d3b4a5968778695a4b3c2d1e0f1a2b3c4d5e6f708192a3b4c5d6e7f8"
-_SKEPTIC_DIGEST = "5e7a1c2b3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"
+_CANOPY_DIGEST: Final = "c4a0f1e2d3b4a5968778695a4b3c2d1e0f1a2b3c4d5e6f708192a3b4c5d6e7f8"
+_SKEPTIC_DIGEST: Final = "5e7a1c2b3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"
 
 
 def seed(conn: sqlite3.Connection, cfg: config.Config, at: Callable[[int], str]) -> None:

@@ -6,7 +6,7 @@ import os
 import threading
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 import pytest
@@ -19,7 +19,7 @@ from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools
 from tests.canopy.helpers import LABEL, InlineRunner, decisions, in_tick, tick_starts
 from tests.conftest import CanopyEnv, git, user_toml
 
-GIT_AUTHORS = ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL")
+GIT_AUTHORS: Final = ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL")
 
 
 def declare(canopy_env: CanopyEnv, capacity: str) -> None:

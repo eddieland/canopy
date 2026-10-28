@@ -8,7 +8,7 @@ from collections.abc import Generator, Mapping, Sequence
 from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, ClassVar, override
+from typing import Any, ClassVar, Final, override
 from unittest import mock
 
 import pytest
@@ -18,13 +18,13 @@ from click.testing import Result
 from tests.canopy_notify_slack.helpers import token_file
 from tests.conftest import invoke
 
-CHANNEL = "C0123ABCD"
-REPO = "/r/api"
-OPERATOR = "U0OPERATOR"
+CHANNEL: Final = "C0123ABCD"
+REPO: Final = "/r/api"
+OPERATOR: Final = "U0OPERATOR"
 #: The app's own bot user, as `auth.test` names it.
-BOT = "U0CANOPYBOT"
+BOT: Final = "U0CANOPYBOT"
 #: What a thread's first post, the sink's own, looks like when it is read back.
-STARTER: dict[str, Any] = {"type": "message", "subtype": "bot_message", "bot_id": "B1", "text": "PROJ-1"}
+STARTER: Final[dict[str, Any]] = {"type": "message", "subtype": "bot_message", "bot_id": "B1", "text": "PROJ-1"}
 
 
 class _Replies(BaseHTTPRequestHandler):

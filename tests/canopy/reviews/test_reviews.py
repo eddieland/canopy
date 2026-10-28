@@ -6,6 +6,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -958,7 +959,7 @@ def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
     assert "Your git tools, `canopy_git_merge-base`" in reviewed.prompt
 
 
-TWO_FINDINGS = {
+TWO_FINDINGS: Final = {
     **FINDINGS,
     "findings": [
         *FINDINGS["findings"],
@@ -1245,7 +1246,7 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
 
 
 #: What a resumed worker answers of TWO_FINDINGS, with entries `_run` refuses after the two it keeps.
-DECLINED = "It logs once per attempt, which the runbook asks for."
+DECLINED: Final = "It logs once per attempt, which the runbook asks for."
 
 
 def answers_to(review_id: int) -> list[dict[str, object]]:

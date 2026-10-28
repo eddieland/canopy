@@ -5,7 +5,7 @@ Reads only.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Query
 
@@ -14,7 +14,7 @@ from canopy.serve import report_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.reports import MonthlyReport
 
-TAG = "reports"
+TAG: Final = "reports"
 router = APIRouter(tags=[TAG])
 
 

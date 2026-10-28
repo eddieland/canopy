@@ -10,7 +10,7 @@ from __future__ import annotations
 import itertools
 import json
 from datetime import timedelta
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Final, NamedTuple
 
 from canopy.infra import logs
 from canopy.serve.mock import reviews
@@ -22,9 +22,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The running runs, whose logs hold their workers' stdout so far.
-RUNNING_LOGS = ("41", "43")
+RUNNING_LOGS: Final = ("41", "43")
 
-_SEARCH_BOX = """\
+_SEARCH_BOX: Final = """\
 1\timport { useState } from 'react'
 2\t
 3\texport function SearchBox({ onSearch }: { onSearch: (q: string) => void }) {
@@ -34,7 +34,7 @@ _SEARCH_BOX = """\
 """
 
 # Shortened from what canopy renders, keeping its shape.
-_PROMPT_39 = """\
+_PROMPT_39: Final = """\
 # canopy worker: implement
 
 You are working ticket ABC-099 in slot 3. Each repository listed below is checked out with a detached HEAD, at
@@ -61,7 +61,7 @@ None.
 
 End with one line of JSON: {"status": "done" | "failed" | "blocked", "summary": "...", "prs": {"<repo>": "<url>"}}
 """
-_PROMPT_TICK_2 = """\
+_PROMPT_TICK_2: Final = """\
 ## State
 
 {
@@ -75,7 +75,7 @@ _PROMPT_TICK_2 = """\
   "attention": []
 }
 """
-_PROMPT_CHORE_2 = """\
+_PROMPT_CHORE_2: Final = """\
 # canopy chore: deps
 
 Audit each repository's dependencies against the published advisories. Report each advisory that touches a lockfile
@@ -90,7 +90,7 @@ as a finding.
 
 None.
 """
-_PROMPT_REVIEW_4 = """\
+_PROMPT_REVIEW_4: Final = """\
 # canopy reviewer
 
 You are reviewing one pull request at one commit. You did not write it and you have no transcript of whoever did.
@@ -106,7 +106,7 @@ This is review 2 of at most 2 of this PR.
 The first review found a stale response could replace a newer one; check the abort.
 """
 # Run 40's setup command, as `_run` writes it before the worker starts (DESIGN §8), and its runtime's stderr.
-_SETUP_40 = """\
+_SETUP_40: Final = """\
 --- setup web stdout ---
 Lockfile is up to date, resolution step is skipped
 Packages: +412
@@ -114,10 +114,10 @@ Done in 6.2s
 --- setup web stderr ---
  WARN  deprecated inflight@1.0.6
 """
-_RUN_STDERR_40 = """\
+_RUN_STDERR_40: Final = """\
 ERROR 2026-10-08T09:41:12 +3m12s service=session error=rate limited: retry after 30s
 """
-_TICK_STDERR = """\
+_TICK_STDERR: Final = """\
 INFO  2026-10-08T11:00:00 +210ms service=default version=1.19.0 args=["run","--format","json"] opencode
 WARN  2026-10-08T11:00:01 +1043ms service=mcp key=jira error=timed out after 1000ms listing prompts
 """

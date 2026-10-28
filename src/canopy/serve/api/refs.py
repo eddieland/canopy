@@ -6,7 +6,7 @@ a 409, anything else that is not a validation error an `ErrorResponse`.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Final
 
 from fastapi import HTTPException, Path, Request
 from fastapi.responses import JSONResponse
@@ -21,10 +21,10 @@ if TYPE_CHECKING:
 
 type Responses = dict[int | str, dict[str, Any]]
 
-WEB = "web"
+WEB: Final = "web"
 _log = logs.for_tick(None)
 # The largest id SQLite stores; a larger one in a path is a 422, not an overflow.
-_MAX_ID = 2**63 - 1
+_MAX_ID: Final = 2**63 - 1
 
 TicketKey = Annotated[str, Path(description="The ticket's key, as the tracker names it: `PROJ-1`.")]
 ChoreName = Annotated[str, Path(description="The chore's name, as `chore:NAME` names it.")]
@@ -40,7 +40,7 @@ MemoryId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The memory's id, a
 
 # Every API route's: the guard answers 403, 411, or 413 before any route does (guard.py), and a session's check on a
 # write answers 403.
-GUARDED: Responses = {
+GUARDED: Final[Responses] = {
     403: {
         "model": ErrorResponse,
         "description": "Refused before the route ran: a Host or Origin header naming another host, or a write "
@@ -56,12 +56,12 @@ GUARDED: Responses = {
     },
 }
 # Every route's but the session's own (deps.signed_in).
-SIGNED_IN: Responses = {
+SIGNED_IN: Final[Responses] = {
     401: {"model": ErrorResponse, "description": "No valid session: sign in with the listener secret."},
 }
 # Every route's but the stream's that reads or writes the journal: another connection held its write lock past
 # db.BUSY_SECONDS.
-BUSY: Responses = {
+BUSY: Final[Responses] = {
     503: {
         "model": ErrorResponse,
         "description": "The journal is busy: another writer, such as the loop, held it past the busy timeout. Try "
@@ -69,7 +69,7 @@ BUSY: Responses = {
     },
 }
 # A route's whose guards can refuse: a write, or a path naming a ticket or a chore by a reference that is not one.
-REFUSED: Responses = {
+REFUSED: Final[Responses] = {
     409: {"model": RefusalResponse, "description": "A guard refused it: `detail` names the guard and its reason."},
 }
 

@@ -21,6 +21,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Final
 
 import canopy_sandbox
 
@@ -28,44 +29,44 @@ from canopy.core import config
 from canopy.infra import procs
 
 # What Linux needs beside srt, each as a command that answers when it is installed, and the package that has it.
-LINUX_TOOLS = (
+LINUX_TOOLS: Final = (
     (("bwrap", "--version"), "bubblewrap"),
     (("socat", "-V"), "socat"),
     (("rg", "--version"), "ripgrep"),
 )
 # The oldest bubblewrap srt fully supports (its OLDEST_FULLY_SUPPORTED_BWRAP_VERSION). An older one still sandboxes.
-OLDEST_BWRAP = (0, 5, 0)
-OLD_BWRAP = """\
+OLDEST_BWRAP: Final = (0, 5, 0)
+OLD_BWRAP: Final = """\
 bubblewrap {version} is older than 0.5.0, the oldest srt fully supports. On it, srt cannot hide a socket, fifo, or
 device that a template denies reading, and leaves on the host the mount points of a sandbox that was killed. Install
 bubblewrap 0.5.0 or later, from your distribution's backports or a newer release of it."""
 # The machines srt ships its seccomp helper for, by the name uname gives them. Without the helper, srt runs with no
 # filter, and logs that only with --debug: nothing stops a sandboxed command making a Unix socket.
-SECCOMP_MACHINES = ("x86_64", "aarch64")
-NO_SECCOMP = """\
+SECCOMP_MACHINES: Final = ("x86_64", "aarch64")
+NO_SECCOMP: Final = """\
 srt has no seccomp filter for {machine}, only for {machines}. Without it, a sandboxed command can connect to any
 Unix socket it can see, such as your SSH agent's or Docker's. Do not rely on the sandbox on this machine."""
 # Ubuntu 24.04 and later set this to 1, which leaves bubblewrap's user namespace without the capabilities it needs.
-APPARMOR_USERNS = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+APPARMOR_USERNS: Final = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
 # srt's bridge listens on IPv6 unless told otherwise. canopy-sandbox tells it, so a kernel without IPv6 is no To do.
-NO_IPV6 = """\
+NO_IPV6: Final = """\
 this kernel has no IPv6, so canopy-sandbox has srt's network bridge inside the sandbox listen on IPv4
 (SOCAT_DEFAULT_LISTEN_IP=4), unless you set that variable yourself."""
-USERNS_FIX = """\
+USERNS_FIX: Final = """\
 bubblewrap cannot make a user namespace: AppArmor restricts unprivileged ones. Lift the restriction, now and at boot:
     sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
     echo 'kernel.apparmor_restrict_unprivileged_userns = 0' | sudo tee /etc/sysctl.d/60-canopy-sandbox.conf"""
-WRAPPER_MISSING = """\
+WRAPPER_MISSING: Final = """\
 canopy-sandbox is not on PATH. It installs with canopy: run the install again, with --reinstall, and put uv's tool
 directory on PATH (`uv tool update-shell`)."""
 # npm ci installs exactly the lockfile, and checks each package's integrity hash. srt has no install scripts, and none
 # of its dependencies may run one. A Node older than a package's `engines` fails the install instead of only warning.
-NPM_CI = ("npm", "ci", "--ignore-scripts", "--engine-strict", "--no-audit", "--no-fund")
+NPM_CI: Final = ("npm", "ci", "--ignore-scripts", "--engine-strict", "--no-audit", "--no-fund")
 # The lockfile of the last install that finished and answered the pinned version, written only then: npm ci needs the
 # lockfile itself in place before it runs, so that copy says nothing about whether the install behind it succeeded.
-INSTALLED_LOCK = "canopy-installed.lock"
-NPM_TIMEOUT = 600
-SHARED_CACHE = """\
+INSTALLED_LOCK: Final = "canopy-installed.lock"
+NPM_TIMEOUT: Final = 600
+SHARED_CACHE: Final = """\
 {template} lets a sandboxed run write {paths}: your own caches, whose packages and programs your tools run outside
 the sandbox, the agent runtime's for the overseer included. Remove them from its allowWrite and allowRead, and
 add @CACHE@ to both, as the shipped template does (docs/SANDBOX.md)."""

@@ -20,17 +20,18 @@ import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 import click
 
 from canopy.infra import procs
 
-TITLE = "canopy"
-MAX_LINES = 12
-MAX_BODY = 1000
-_TIMEOUT_SECONDS = 20
+TITLE: Final = "canopy"
+MAX_LINES: Final = 12
+MAX_BODY: Final = 1000
+_TIMEOUT_SECONDS: Final = 20
 # AppleScript reads the title and body from its arguments, so neither is ever parsed as script.
-_OSASCRIPT = [
+_OSASCRIPT: Final = [
     "osascript",
     "-e",
     "on run argv",

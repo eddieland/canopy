@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -24,11 +24,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The file a run's reviews are appended to, one JSON object a line.
-REVIEWS_FILE = "reviews.jsonl"
+REVIEWS_FILE: Final = "reviews.jsonl"
 #: The file a run's settings are written to.
-RUN_FILE = "run.json"
+RUN_FILE: Final = "run.json"
 #: The z of a 95% interval.
-_Z = 1.96
+_Z: Final = 1.96
 
 
 class SpotRecord(BaseModel):

@@ -23,7 +23,7 @@ import sqlite3
 import stat
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, plans, records, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
@@ -38,19 +38,19 @@ if TYPE_CHECKING:
 
 #: An attachment's name, as runs see it: a plain file name of letters, digits, `.`, `_`, and `-`, at most 100
 #: characters, starting with a letter or digit, so it is never hidden, `..`, or a path.
-NAME_RE = re.compile(r"(?=[A-Za-z0-9._-]{1,100}\Z)[A-Za-z0-9][A-Za-z0-9._-]*")
+NAME_RE: Final = re.compile(r"(?=[A-Za-z0-9._-]{1,100}\Z)[A-Za-z0-9][A-Za-z0-9._-]*")
 #: Where attachments are kept, under the state directory, each subject's in a directory of its own.
-DIR_NAME = "attachments"
+DIR_NAME: Final = "attachments"
 #: The subjects that take attachments: a ticket, by its key, and a task, by its id.
-KINDS = (conversation.TICKET, conversation.TASK)
+KINDS: Final = (conversation.TICKET, conversation.TASK)
 #: Where a run's copies of its subject's attachments go, at the root of its worktree, which git there ignores, or in its
 #: desk: written for that run alone, and removed before its slot is returned (DESIGN §22).
-RUN_DIR = ".canopy-attachments"
-KIB = 1024
+RUN_DIR: Final = ".canopy-attachments"
+KIB: Final = 1024
 # What runs of any other character become in a name made from a file's, and the `-` such a run leaves before a `.` or at
 # the end, which is dropped.
-_UNNAMED_RE = re.compile(r"[^A-Za-z0-9._-]+")
-_LEFT_OVER_RE = re.compile(r"-+(?=\.)|-+\Z")
+_UNNAMED_RE: Final = re.compile(r"[^A-Za-z0-9._-]+")
+_LEFT_OVER_RE: Final = re.compile(r"-+(?=\.)|-+\Z")
 
 
 class AttachmentFileError(Exception):

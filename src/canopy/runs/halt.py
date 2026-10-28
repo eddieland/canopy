@@ -9,7 +9,7 @@ attempt limits like any ended run.
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db
 from canopy.core.vocab import RunStatus
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.infra import logs
 
-NOTE = "the operator stopped the ticket with `canopy stop --now`"
+NOTE: Final = "the operator stopped the ticket with `canopy stop --now`"
 
 
 def end(ctx: Context, run: records.Run, log: logs.TickAdapter) -> bool:

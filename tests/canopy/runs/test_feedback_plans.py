@@ -6,7 +6,7 @@ import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 from syrupy.assertion import SnapshotAssertion
@@ -64,11 +64,11 @@ from tests.canopy.scenario_helpers import FEEDBACK_TEXT as TEXT
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv
 
-PR = DRAFTS_PR
-FEEDBACK_PLAN = dispatches(kind=RunKind.FEEDBACK_PLAN)
-RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
+PR: Final = DRAFTS_PR
+FEEDBACK_PLAN: Final = dispatches(kind=RunKind.FEEDBACK_PLAN)
+RESUME: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
 #: The reply the planner proposes for bob's comment, as FEEDBACK_PLANNED has it.
-PLANNED_REPLY = "Kept, since the API needs it."
+PLANNED_REPLY: Final = "Kept, since the API needs it."
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -845,7 +845,7 @@ def test_a_check_that_flaps_back_starts_the_quiet_period_again(scenario: Scenari
 
 
 #: What the operator adds to their approval of alice's item alone: words of their own for its resume.
-WORDS = "Keep the old name as an alias for a release."
+WORDS: Final = "Keep the old name as an alias for a release."
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -1172,7 +1172,7 @@ def test_a_check_that_is_not_ci_moving_leaves_a_waiting_plan_as_it_is(
 
 
 #: `build`, a check that waits on a person here, so the items `raised` returns are the blocker's alone.
-NO_BUILD = {PR: frozenset({"build"})}
+NO_BUILD: Final = {PR: frozenset({"build"})}
 
 
 @pytest.mark.usefixtures("git_pool")

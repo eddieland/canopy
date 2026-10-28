@@ -30,7 +30,7 @@ import sqlite3
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import conversation, db, records, review_drafts, review_revisions, review_runs, sql
 from canopy.core.config import notify_words
@@ -43,13 +43,13 @@ if TYPE_CHECKING:
     from canopy.core.config import Config, Source
 
 #: How much of the poster's stderr a failure says: which comment GitHub refused, say.
-_MAX_STDERR = 300
+_MAX_STDERR: Final = 300
 #: What the operator does with a review they staged, which a refusal for it says.
-_FINISH = "submit or delete it on GitHub, and the next read of the PR settles it"
+_FINISH: Final = "submit or delete it on GitHub, and the next read of the PR settles it"
 
 #: How long past its post command's timeout a publish may hold its draft before canopy takes the post as one that
 #: ended without saying, as when the process posting it was killed.
-CLAIM_MARGIN_MINUTES = 5
+CLAIM_MARGIN_MINUTES: Final = 5
 
 #: What an edit makes of the draft's newest version: its body and its comments.
 type _Making = Callable[[Version], tuple[str, Sequence[Comment]]]

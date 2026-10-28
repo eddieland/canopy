@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, memory, records, sql
 from canopy.core.vocab import MemoryMode, MemoryScope, MemoryStatus, RunStatus
@@ -20,11 +20,11 @@ if TYPE_CHECKING:
     import sqlite3
 
 # A query's words past these are not searched for.
-MAX_WORDS = 8
-DEFAULT_LIMIT = 10
-MAX_LIMIT = 50
+MAX_WORDS: Final = 8
+DEFAULT_LIMIT: Final = 10
+MAX_LIMIT: Final = 50
 # bm25()'s weight for a word in a memory's key, against 1 for one in its text: a key names what the memory is about.
-_KEY_WEIGHT = 2.0
+_KEY_WEIGHT: Final = 2.0
 
 
 class Unsearchable(Exception):  # noqa: N818  (a refusal, as `conversation.Refused` is)

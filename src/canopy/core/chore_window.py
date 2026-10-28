@@ -7,7 +7,7 @@ to its end or its timeout. Times are wall-clock times in the chore's `timezone`,
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, time, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from zoneinfo import ZoneInfo
 
 from canopy.core.config import CHORE_DAYS, chore_hours
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Chore
 
-_DAY = 24 * 60
+_DAY: Final = 24 * 60
 
 
 def limited(chore: Chore) -> bool:

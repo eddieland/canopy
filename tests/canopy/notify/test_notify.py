@@ -8,7 +8,7 @@ import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 import pytest
@@ -35,7 +35,7 @@ from tests.canopy.scenario_helpers import Scenario, asks, dispatches, raises
 from tests.conftest import CanopyEnv, GitPool
 
 #: The line an overseer that gave up ends on, in place of the one that ends a tick.
-GAVE_UP = "gave up"
+GAVE_UP: Final = "gave up"
 
 
 def add_sink(scenario: Scenario, script: Path, name: str, out: Path, **settings: object) -> None:
@@ -705,7 +705,7 @@ def test_a_finding_the_operator_dismissed_is_marked_so_in_both_formats() -> None
     assert resolved["dismissed"] is True
 
 
-UI = "http://localhost:9000/canopy/"
+UI: Final = "http://localhost:9000/canopy/"
 
 
 def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:

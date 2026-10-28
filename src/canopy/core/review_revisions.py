@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, review_diff, review_drafts, review_runs, sql
 from canopy.core.memory_text import TextRefused
@@ -32,9 +32,9 @@ if TYPE_CHECKING:
     from canopy.core.review_result import RevisionResult
 
 #: The KIND `canopy grant review:ID` takes: more revisions of the review's draft.
-KIND = "revision"
+KIND: Final = "revision"
 #: A waiting draft with a note no version has answered: one whose note was written at its newest version.
-_WANTED = (
+_WANTED: Final = (
     sql.select("d.*")
     .from_("review_drafts d")
     .where("d.status = ?", ReviewDraftStatus.WAITING)

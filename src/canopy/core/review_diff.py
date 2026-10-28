@@ -15,22 +15,22 @@ import re
 import stat
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, NamedTuple
+from typing import Final, Literal, NamedTuple
 
 from canopy.infra import logs
 
 # How much of a diff is written and read: a large PR's, and little enough to read on each request.
-MAX_BYTES = 4 * 1024 * 1024
+MAX_BYTES: Final = 4 * 1024 * 1024
 # How many files and lines a diff holds, and how many characters a line keeps.
-MAX_FILES = 500
-MAX_LINES = 30_000
-MAX_LINE_CHARS = 1000
+MAX_FILES: Final = 500
+MAX_LINES: Final = 30_000
+MAX_LINE_CHARS: Final = 1000
 
-_SHA_RE = re.compile(r"[0-9a-f]{7,64}")
-_MAX_HEAD = 80
-_HUNK_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$")
+_SHA_RE: Final = re.compile(r"[0-9a-f]{7,64}")
+_MAX_HEAD: Final = 80
+_HUNK_RE: Final = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$")
 # `path`, `path:12`, `path:L12`, `path:12:4` (a column), or `path:12-20` (a range of lines).
-_LOCATION_RE = re.compile(r"^(?P<path>.+?)(?::L?(?P<line>\d+)(?:-L?(?P<last>\d+)|:\d+)?)?$")
+_LOCATION_RE: Final = re.compile(r"^(?P<path>.+?)(?::L?(?P<line>\d+)(?:-L?(?P<last>\d+)|:\d+)?)?$")
 
 type LineKind = Literal["add", "del", "ctx"]
 

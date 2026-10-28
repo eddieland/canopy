@@ -6,14 +6,14 @@ page; this reads the list from the runtime and changes nothing.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Query
 
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.model import ModelList
 
-TAG = "models"
+TAG: Final = "models"
 router = APIRouter(tags=[TAG])
 
 

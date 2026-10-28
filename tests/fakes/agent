@@ -59,17 +59,17 @@ import subprocess  # noqa: TID251  (stands in for an agent runtime, so a fake ov
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
-DEFAULT_RESULT = {
+DEFAULT_RESULT: Final = {
     "status": "done",
     "branch": None,
     "pr": None,
     "summary": "fake agent: nothing to do",
 }
-STEP_TOKENS = {"input": 1000, "output": 200, "reasoning": 30, "cache": {"read": 4000, "write": 500}}
+STEP_TOKENS: Final = {"input": 1000, "output": 200, "reasoning": 30, "cache": {"read": 4000, "write": 500}}
 # How long the agent waits for a local MCP server to answer.
-SERVER_TIMEOUT = 60
+SERVER_TIMEOUT: Final = 60
 
 
 def role(argv: list[str]) -> str:

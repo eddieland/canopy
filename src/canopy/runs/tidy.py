@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import attachments, hostgit, plans
 from canopy.infra import procs
@@ -23,11 +23,11 @@ if TYPE_CHECKING:
 
     from canopy.infra import logs
 
-OBJECTS_ENV = "CANOPY_GIT_OBJECTS"
-_GIT_TIMEOUT_SECONDS = 300
+OBJECTS_ENV: Final = "CANOPY_GIT_OBJECTS"
+_GIT_TIMEOUT_SECONDS: Final = 300
 # A worktree's own refs, kept in its own directory beside HEAD. Every other ref is shared, which a sandbox denies.
-_OWN_REFS = ("refs/worktree", "refs/bisect", "refs/rewritten")
-_PSEUDO_REFS = ("ORIG_HEAD", "FETCH_HEAD")
+_OWN_REFS: Final = ("refs/worktree", "refs/bisect", "refs/rewritten")
+_PSEUDO_REFS: Final = ("ORIG_HEAD", "FETCH_HEAD")
 
 
 class GitError(Exception):

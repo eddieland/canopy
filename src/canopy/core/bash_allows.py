@@ -11,7 +11,7 @@ writes through git or a forge, or is one of the loop's own tools.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.runtime import agents
 from canopy.runtime.definitions import BASH_ALLOW_RE, RUNTIME_COMMANDS
@@ -23,25 +23,25 @@ if TYPE_CHECKING:
 #: deny every command but those they name, such as a tracker CLI's reads while its MCP server is down, and the workers,
 #: whose rules deny only what they name, so an allow undoes one of those denies that no check below refuses, such as
 #: the private worker's of a tracker's CLI (TRUST_MODEL T6).
-ROLES: Mapping[str, str] = {
+ROLES: Final[Mapping[str, str]] = {
     "overseer": agents.OVERSEER,
     "worker": agents.WORKER,
     "worker-private": agents.PRIVATE_WORKER,
     "planner": agents.PLANNER,
 }
 #: canopy's other agents, by the name the key would give them, and why none of them takes an allow.
-REFUSED_ROLES: Mapping[str, str] = {
+REFUSED_ROLES: Final[Mapping[str, str]] = {
     "reviewer": "the reviewer has no shell: it reads code the loop did not write (TRUST_MODEL T4)",
     "chore": "canopy-chore has no shell; a chore that runs commands names an agent of yours in its cmd (DESIGN §19)",
 }
 #: The most patterns one agent takes, and the longest pattern.
-MAX_PATTERNS = 20
-MAX_PATTERN = 200
+MAX_PATTERNS: Final = 20
+MAX_PATTERN: Final = 200
 
 #: Commands that run a command, script, or expression they are given, so allowing one, whatever its arguments, would
 #: allow any: shells and the builtins that run text, wrappers, interpreters, the runners of a language's packages and
 #: builds, editors, remote and container shells, and commands with an option that runs a program.
-RUNS_COMMANDS = frozenset(
+RUNS_COMMANDS: Final = frozenset(
     {
         # Shells, and the builtins that run text or a file.
         *("sh", "bash", "rbash", "zsh", "fish", "dash", "ksh", "mksh", "csh", "tcsh", "ash", "yash", "busybox"),
@@ -74,7 +74,7 @@ RUNS_COMMANDS = frozenset(
     },
 )
 #: Commands that fetch a page, which anyone can shape: no agent has web tools (D077).
-WEB_COMMANDS = frozenset(
+WEB_COMMANDS: Final = frozenset(
     {
         *("curl", "wget", "http", "https", "xh", "aria2c", "lynx", "w3m", "links", "nc", "ncat", "netcat", "socat"),
         *("telnet", "ftp"),
@@ -82,13 +82,13 @@ WEB_COMMANDS = frozenset(
 )
 #: git and the forges' CLIs: they push, merge, and close, which canopy keeps from every agent but its workers, and git
 #: runs hooks and configured commands.
-VCS_COMMANDS = frozenset({"gh", "glab", "hub"})
+VCS_COMMANDS: Final = frozenset({"gh", "glab", "hub"})
 
 # The families of interpreters, refused with any version (`python3`, `python3.12`, `pip3`), and of canopy's own
 # programs, git's, and treehouse's, refused with any suffix (`canopy-post-github`, `git-receive-pack`).
-_INTERPRETERS_RE = re.compile(r"(?:python|pypy|pip|perl|ruby|php|lua|node|nodejs|tclsh|wish)[0-9.]*")
-_LOOP_RE = re.compile(r"(?:canopy|treehouse)(?:-.*)?")
-_GIT_RE = re.compile(r"git(?:-.*)?")
+_INTERPRETERS_RE: Final = re.compile(r"(?:python|pypy|pip|perl|ruby|php|lua|node|nodejs|tclsh|wish)[0-9.]*")
+_LOOP_RE: Final = re.compile(r"(?:canopy|treehouse)(?:-.*)?")
+_GIT_RE: Final = re.compile(r"git(?:-.*)?")
 
 
 def by_agent(allow_bash: Mapping[str, Sequence[str]]) -> dict[str, tuple[str, ...]]:

@@ -24,7 +24,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import chore_view, config, db, pools, tasks
 from canopy.core.context import Context, db_path
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
 #: Seconds the server serves a model list the runtime gave before it asks the runtime again: long enough that opening
 #: the ticket page's menus one after another starts it once, short enough to see a provider set up meanwhile.
-MODEL_LIST_SECONDS = 300.0
+MODEL_LIST_SECONDS: Final = 300.0
 
 
 def _status(ctx: Context, repo: str) -> Sequence[pools.Slot]:

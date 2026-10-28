@@ -5,6 +5,7 @@ It combines its packs, losing no commit a slot holds, and skips a repository whi
 
 import json
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -14,7 +15,7 @@ from canopy.loop import git_gc
 from tests.canopy.conftest import Ws
 from tests.conftest import git
 
-LEASE = {"lease_id": "id-1", "lease_holder": "canopy:PROJ-9", "leased_at": "2026-10-22T00:00:00Z"}
+LEASE: Final = {"lease_id": "id-1", "lease_holder": "canopy:PROJ-9", "leased_at": "2026-10-22T00:00:00Z"}
 
 
 def loose_objects(clone: Path) -> int:

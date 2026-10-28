@@ -14,7 +14,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, memory, records, sql
 from canopy.core.memory_text import TextRefused, check_text
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 #: The statement that sets `secure_delete` back to each value `PRAGMA secure_delete` reads, which a PRAGMA cannot bind.
-_SECURE_DELETE: Mapping[int, sql.Fragment] = {
+_SECURE_DELETE: Final[Mapping[int, sql.Fragment]] = {
     0: sql.frag("PRAGMA secure_delete = OFF"),
     1: sql.frag("PRAGMA secure_delete = ON"),
     2: sql.frag("PRAGMA secure_delete = FAST"),

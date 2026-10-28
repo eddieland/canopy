@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Final, Literal, cast
 
 from canopy.core import contract, conversation, db, outbox, plans, pools, records, sql, task_tickets
 from canopy.core.conversation import Refused
@@ -28,20 +28,20 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 #: The most a task's text holds, as an operator message does.
-MAX_TEXT = conversation.MAX_OPERATOR
+MAX_TEXT: Final = conversation.MAX_OPERATOR
 #: A tracker project's key, as a ticket key's part before its last `-` spells it (DESIGN §18).
-PROJECT_RE = conversation.KEY_RE
-MAX_PROJECT = 100
+PROJECT_RE: Final = conversation.KEY_RE
+MAX_PROJECT: Final = 100
 #: What a task's slot is leased as, after `canopy:` (DESIGN §18): `canopy:task:<id>`, which no ticket key can be.
-HOLDER_KEY = "task:"
+HOLDER_KEY: Final = "task:"
 #: The branch of task N is `<branch_prefix>task/N`: a ticket key has no `/`, so no ticket's branch takes this shape.
-BRANCH_PART = "task/"
+BRANCH_PART: Final = "task/"
 #: A task's report: a markdown file its worker writes at the slot's root, which git there ignores (DESIGN §36).
-REPORT = ".canopy-task-report.md"
+REPORT: Final = ".canopy-task-report.md"
 #: Where reports are kept, `<state_dir>/tasks/<id>/<run>.md`, readable only by the operator, as plans are (§25).
-REPORTS_DIR = "tasks"
+REPORTS_DIR: Final = "tasks"
 #: The longest PR URL a task's result may name and have shown.
-MAX_PR_URL = 500
+MAX_PR_URL: Final = 500
 
 #: Where a task stands: stopped, queued for a run a tick will start, waiting on the operator's reply to its latest
 #: run's question, or its latest run's status.

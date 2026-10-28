@@ -3,6 +3,7 @@
 import json
 import operator
 from pathlib import Path
+from typing import Final
 
 import canopy_review_bench
 from canopy_review_bench import bench, commits, score
@@ -22,8 +23,8 @@ from tests.canopy_review_bench.helpers import (
 )
 from tests.conftest import git, invoke
 
-BUG_TITLE = "Simplify fetch"
-CLEAN_TITLE = "Wait between attempts"
+BUG_TITLE: Final = "Simplify fetch"
+CLEAN_TITLE: Final = "Wait between attempts"
 
 
 def remote(tmp_path: Path) -> Path:

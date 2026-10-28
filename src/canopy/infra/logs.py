@@ -15,13 +15,13 @@ import stat
 from collections.abc import Mapping, MutableMapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TextIO, override
+from typing import Any, Final, TextIO, override
 
-LOG_FILE_NAME = "canopy.log"
+LOG_FILE_NAME: Final = "canopy.log"
 #: A rotated log's name, `canopy.log.1` the newest, and its number.
-ROTATED_RE = re.compile(rf"{re.escape(LOG_FILE_NAME)}\.(\d+)")
-_LOGGER = "canopy"
-_STANDARD_ATTRS = frozenset(vars(logging.makeLogRecord({})))
+ROTATED_RE: Final = re.compile(rf"{re.escape(LOG_FILE_NAME)}\.(\d+)")
+_LOGGER: Final = "canopy"
+_STANDARD_ATTRS: Final = frozenset(vars(logging.makeLogRecord({})))
 
 
 class JsonFormatter(logging.Formatter):

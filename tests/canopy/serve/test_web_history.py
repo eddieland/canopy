@@ -11,6 +11,7 @@ import sqlite3
 from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -25,19 +26,19 @@ from canopy.serve.mock import history as serve_history
 from tests.conftest import Journals
 
 # The mock's own PR, which the old history leaves alone.
-PR = "https://github.com/acme/web/pull/88"
+PR: Final = "https://github.com/acme/web/pull/88"
 # How old the oldest of the mock's own rows is, in minutes, its months before T0 among them (mock/history.py); the
 # history this adds is older than that.
-HISTORY_STARTS = 200 * 24 * 60
+HISTORY_STARTS: Final = 200 * 24 * 60
 # SQLite calls the progress handler once per this many virtual machine instructions: a step.
-STEP = 10
+STEP: Final = 10
 # How much more work a read may do over five times the history: a deeper index, never another pass over it.
-GROWTH = 1.1
-SLACK = 5
+GROWTH: Final = 1.1
+SLACK: Final = 5
 
 # Each read a page or the event stream makes, but the all-time spend: that one sums every cost ever recorded, from an
 # index alone (migration 0022), and grows with the journal by design.
-READS: dict[str, Callable[[Backend, Context], object]] = {
+READS: Final[dict[str, Callable[[Backend, Context], object]]] = {
     "attention": views.attention,
     "runs": lambda _b, ctx: views.runs(ctx),
     "tickets": lambda _b, ctx: views.tickets(ctx),
@@ -208,9 +209,9 @@ def test_a_findings_start_is_read_back_once(backend: Backend) -> None:
     assert advisory_since(dataclasses.replace(backend)) == advisory_since(backend)
 
 
-ADVISORY = {"id": "lodash-advisory", "title": "lodash 4.17.20 has a prototype pollution advisory"}
+ADVISORY: Final = {"id": "lodash-advisory", "title": "lodash 4.17.20 has a prototype pollution advisory"}
 # The results a chore's page reads with nothing to walk: its latest `ok` run's, its summary's, and each run it lists.
-PAGE = 2 + chore_views.CHORE_RUNS
+PAGE: Final = 2 + chore_views.CHORE_RUNS
 
 
 def advisory_since(backend: Backend) -> str:
@@ -318,7 +319,7 @@ def add_history(conn: sqlite3.Connection, first: int, count: int) -> None:
         )
 
 
-CLEAR = json.dumps({"status": "ok", "summary": "nothing found", "findings": []})
+CLEAR: Final = json.dumps({"status": "ok", "summary": "nothing found", "findings": []})
 
 
 def old(item: int, minutes: int = 0) -> str:

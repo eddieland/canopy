@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Final, TypedDict
 
 from canopy.core import conversation, db, records, sql
 from canopy.core.vocab import Decider, Phase
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 #: The decision a cursor the harness moved past what needs no handling is recorded as (`loop.harness_cursors`): its
 #: own, about the ticket, yet no decision of the ticket's, which stays the overseer's.
-CURSOR_ACTION = "cursor"
+CURSOR_ACTION: Final = "cursor"
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,7 @@ class Row:
 #: The rows the harness decides, each read from its own journal alone. `running`: a worker of the ticket is running,
 #: in `runs`. `needs_human` on a private ticket: its latest run ended `blocked` and no operator message came after,
 #: both in the journal; a public ticket's rests on the tracker's label, which a connector observes.
-ROWS: Mapping[Phase, Row] = {
+ROWS: Final[Mapping[Phase, Row]] = {
     Phase.RUNNING: Row("wait", "a worker of it is running"),
     Phase.NEEDS_HUMAN: Row("wait", "its latest run asked the operator, who has not answered", private_only=True),
 }

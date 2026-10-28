@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import (
     agent_models,
@@ -75,30 +75,30 @@ if TYPE_CHECKING:
     from canopy.serve.schema.transcript import RawOutput, Transcript
 
 # How many runs that ended the runs list carries, after the running ones.
-RECENT_RUNS = 50
+RECENT_RUNS: Final = 50
 # How many tickets the tickets list carries, by most recent activity.
-TICKETS = 200
+TICKETS: Final = 200
 # A ticket's page: its latest runs, messages, and decisions.
-TICKET_RUNS = 10
-TICKET_MESSAGES = 100
-TICKET_DECISIONS = 20
-SUMMARY_LENGTH = 300
+TICKET_RUNS: Final = 10
+TICKET_MESSAGES: Final = 100
+TICKET_DECISIONS: Final = 20
+SUMMARY_LENGTH: Final = 300
 # The windows the spend figures and a chore's spend cover: the last day and the last 30.
-SPEND_DAY_HOURS = 24
-SPEND_MONTH_HOURS = 30 * 24
-_CHORE = "chore:"
-_PR = "pr:"
+SPEND_DAY_HOURS: Final = 24
+SPEND_MONTH_HOURS: Final = 30 * 24
+_CHORE: Final = "chore:"
+_PR: Final = "pr:"
 # A one-off task's item (DESIGN §36): no ticket, chore, or PR, but the task's own page.
-_TASK = "task:"
-_SOURCES: dict[str, MessageSource] = {
+_TASK: Final = "task:"
+_SOURCES: Final[dict[str, MessageSource]] = {
     "worker": "worker",
     "operator": "operator",
     "tracker": "tracker",
     "canopy": "canopy",
 }
-_PAUSE_CHANNELS: dict[str, PauseChannel] = {"loop": "loop", "cli": "cli", "web": "web"}
-_NOTICE_CHANNELS: dict[str, NoticeChannel] = {"cli": "cli", "web": "web"}
-_KINDS: dict[str, MessageKind] = {
+_PAUSE_CHANNELS: Final[dict[str, PauseChannel]] = {"loop": "loop", "cli": "cli", "web": "web"}
+_NOTICE_CHANNELS: Final[dict[str, NoticeChannel]] = {"cli": "cli", "web": "web"}
+_KINDS: Final[dict[str, MessageKind]] = {
     "report": "report",
     "question": "question",
     "reply": "reply",

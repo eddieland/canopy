@@ -8,7 +8,7 @@ T1, T8). What a ticket's or a task's page shows of them comes with the page's ow
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Final
 
 from fastapi import APIRouter, Path, Request
 from starlette.concurrency import run_in_threadpool
@@ -23,7 +23,7 @@ from canopy.serve.schema import Attached, Detached
 if TYPE_CHECKING:
     from canopy.serve.backend import Backend
 
-TAG = "attachments"
+TAG: Final = "attachments"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 
@@ -32,7 +32,7 @@ AttachmentName = Annotated[
     Path(max_length=100, description="What its runs see it as: a plain file name, such as `design.md`."),
 ]
 # The body is the file's bytes, not JSON: a text file escaped as a JSON string could outgrow the guard's bound.
-_BODY: dict[str, Any] = {
+_BODY: Final[dict[str, Any]] = {
     "requestBody": {
         "required": True,
         "description": "The file's text, UTF-8, as its bytes.",

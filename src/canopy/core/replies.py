@@ -15,7 +15,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import records, sql
 from canopy.core.prompts import mark_comments
@@ -25,15 +25,15 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 # The kinds whose workers comment, and so whose prompts say how (DESIGN §29).
-COMMENTING_KINDS = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
+COMMENTING_KINDS: Final = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
 # The result's field and the placeholder that asks for it, which every prompt that drafts must carry under `approve`:
 # an override written before drafts existed would have its worker post in the operator's name.
-DRAFTS = "DRAFTS"
-REQUIRED_APPROVE = (DRAFTS,)
-MAX_DRAFTS = 30
-MAX_DRAFT_CHARS = 4000
+DRAFTS: Final = "DRAFTS"
+REQUIRED_APPROVE: Final = (DRAFTS,)
+MAX_DRAFTS: Final = 30
+MAX_DRAFT_CHARS: Final = 4000
 # Where a mark goes once a worker posts only on the ticket.
-_ON_TICKET = "on the ticket"
+_ON_TICKET: Final = "on the ticket"
 
 
 @dataclass(frozen=True)

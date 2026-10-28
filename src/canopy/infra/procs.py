@@ -20,14 +20,14 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import IO, Protocol, cast
+from typing import IO, Final, Protocol, cast
 
 from canopy.infra import lock
 
 #: The variable a child started with a timeout finds its deadline in, as Unix seconds: the moment `run` kills it, taken
 #: when its clock starts, so the two agree (DESIGN §33). A child started without a timeout gets none, not even one its
 #: parent had: a deadline is for the process it was set for alone.
-DEADLINE_ENV = "CANOPY_DEADLINE"
+DEADLINE_ENV: Final = "CANOPY_DEADLINE"
 
 
 class ProcError(Exception):

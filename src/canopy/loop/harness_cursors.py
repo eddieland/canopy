@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
 from canopy.core import conversation, db, drafts, item_numbers, records, sql
 from canopy.core.vocab import Decider, ReviewItem, ReviewState
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: How many items a move's rationale names before it counts the rest.
-NAMED = 5
+NAMED: Final = 5
 #: A cursor the harness moves: the ticket's `comment` cursor, or a unit's `review` cursor.
 type Cursor = Literal["comment", "review"]
 

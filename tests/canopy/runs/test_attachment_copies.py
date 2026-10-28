@@ -6,6 +6,7 @@ worker starts.
 """
 
 from pathlib import Path
+from typing import Final
 
 from canopy.cli.main import main
 from canopy.core import attachments, contract, conversation, tasks
@@ -30,8 +31,8 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool
 
-DOC = "# Importer\n\nShard the queue by tenant.\n"
-COPY = f"{attachments.RUN_DIR}/design.md"
+DOC: Final = "# Importer\n\nShard the queue by tenant.\n"
+COPY: Final = f"{attachments.RUN_DIR}/design.md"
 
 
 def attached(scenario: Scenario, ref: str = KEY, text: str = DOC) -> Path:

@@ -8,7 +8,7 @@ through a link, as `canopy show task:N` reads it.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import contract, conversation, db, plans, run_models, sql, task_tickets, tasks
 from canopy.core.vocab import RunStatus
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from canopy.serve.schema.transcript import Transcript
 
 #: A task's latest run's status as where the task stands, every status the same word.
-RUN_STANDINGS: Mapping[RunStatus, TaskStanding] = {
+RUN_STANDINGS: Final[Mapping[RunStatus, TaskStanding]] = {
     RunStatus.RUNNING: "running",
     RunStatus.DONE: "done",
     RunStatus.BLOCKED: "blocked",

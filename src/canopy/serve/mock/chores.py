@@ -7,7 +7,7 @@ running.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import sql, workspace
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: The advisory `deps`'s chore run 2 found, which the attention list shows.
-LODASH = {
+LODASH: Final = {
     "id": "lodash-advisory",
     "title": "lodash 4.17.20 has a prototype pollution advisory",
     "detail": "web's lockfile pins lodash 4.17.20 through an old date picker; 4.17.21 fixes it.",

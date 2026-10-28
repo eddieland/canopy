@@ -1,10 +1,11 @@
 """A session's transcript read from OpenCode's JSON events: what a running run's row says a tool call did."""
 
 import json
+from typing import Final
 
 from canopy.runtime.opencode import events, transcript
 
-BASH: dict[str, object] = {
+BASH: Final[dict[str, object]] = {
     "status": "completed",
     "input": {"command": "uv run pytest -q", "description": "Run the tests"},
     "output": "3 passed\n",

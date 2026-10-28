@@ -6,7 +6,7 @@ attachments to `policy`'s limits; `canopy show` lists a subject's attachments wi
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.core.conversation import Ref
 
-CLI = "cli"
+CLI: Final = "cli"
 
 
 @click.command("attach")

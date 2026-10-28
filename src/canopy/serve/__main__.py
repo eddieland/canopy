@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import tempfile
 from pathlib import Path
+from typing import Final
 
 import click
 import uvicorn
@@ -24,7 +25,7 @@ from canopy.serve.options import ServeOptions
 #: Seconds an idle connection stays open, past any one test's length. A client that keeps connections alive, as the UI's
 #: end-to-end tests do (`route.fetch`, `page.request`), may reuse one just as uvicorn's default of 5 closes it, and read
 #: ECONNRESET; a test's connections close with it, so none outlives this.
-KEEP_ALIVE_SECONDS = 300
+KEEP_ALIVE_SECONDS: Final = 300
 
 
 @click.command("python -m canopy.serve", context_settings={"help_option_names": ["-h", "--help"]})

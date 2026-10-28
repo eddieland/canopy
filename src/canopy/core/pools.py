@@ -10,21 +10,21 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Protocol
+from typing import TYPE_CHECKING, Annotated, Final, Protocol
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StrictBool, StrictInt, StrictStr
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-HOLDER_PREFIX = "canopy:"
+HOLDER_PREFIX: Final = "canopy:"
 # Held only while `canopy workspace sync` makes a pool's slots, which it then returns. Not a `canopy:` holder, so no
 # ticket key can name it and reconcile leaves it to the next sync.
-SYNC_HOLDER = "canopy-sync"
+SYNC_HOLDER: Final = "canopy-sync"
 # The holder of a reused slot whose seeding failed, in both pools: no ticket can name it and no lease's return clears
 # it, so the slot is not reused until the operator releases it (DESIGN §18).
-QUARANTINED = "quarantined: worktree seeding failed"
-AVAILABLE = "available"
+QUARANTINED: Final = "quarantined: worktree seeding failed"
+AVAILABLE: Final = "available"
 
 
 class PoolError(Exception):

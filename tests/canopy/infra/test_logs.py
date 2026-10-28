@@ -3,12 +3,13 @@
 import json
 import logging
 from pathlib import Path
+from typing import Final
 
 import pytest
 
 from canopy.infra import logs
 
-NAME = logs.LOG_FILE_NAME
+NAME: Final = logs.LOG_FILE_NAME
 
 
 def write(state: Path, suffix: str, text: str) -> None:

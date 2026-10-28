@@ -8,7 +8,7 @@ has ended (`spawn_review`, `spawn_revision`, DESIGN §40).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Final
 
 from pydantic import ConfigDict, Field, StrictInt, WithJsonSchema
 
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: The decision `review end` records: the overseer ended a review request no review of could answer.
-END_ACTION = "review:end"
+END_ACTION: Final = "review:end"
 
 
 class ReviewRun(Request):

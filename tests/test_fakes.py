@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -103,8 +104,8 @@ def test_agent_reads_the_settings_of_the_ticket_its_title_names_first(agent_log:
             assert (other.returncode, other.stdout.splitlines()[-1]) == (0, "for the role")
 
 
-PR = "https://github.com/acme/api/pull/7"
-COMMENT = {
+PR: Final = "https://github.com/acme/api/pull/7"
+COMMENT: Final = {
     "item": "comment",
     "id": 501,
     "author": "alice",

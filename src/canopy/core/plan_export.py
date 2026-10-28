@@ -69,7 +69,7 @@ import time
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Final, Literal, Self
 from urllib.parse import quote
 
 from canopy.core import contract, db, plan_threads, plans, records, run_models, sql
@@ -86,11 +86,11 @@ if TYPE_CHECKING:
 type Kind = Literal["plan", "feedback plan"]
 
 #: A ticket's conversation's name in an export, beside its plans.
-CONVERSATION_NAME = "CONVERSATION.md"
+CONVERSATION_NAME: Final = "CONVERSATION.md"
 #: The name of the operator's comments on a ticket's plans in an export, beside its plans.
-COMMENTS_NAME = "COMMENTS.md"
+COMMENTS_NAME: Final = "COMMENTS.md"
 #: Each sort of file an export writes, as `counted` counts them, in its order: the noun, then its plural.
-SORTS: Sequence[tuple[str, str]] = (
+SORTS: Final[Sequence[tuple[str, str]]] = (
     ("plan", "plans"),
     ("original", "originals"),
     ("prompt", "prompts"),
@@ -99,47 +99,47 @@ SORTS: Sequence[tuple[str, str]] = (
     ("README", "READMEs"),
 )
 #: An index's name in an export: one in each ticket's directory, and one in `dest` for every ticket.
-INDEX_NAME = "README.md"
+INDEX_NAME: Final = "README.md"
 #: The line that opens every index canopy writes, so an export rewrites only its own.
-INDEX_MARK = "<!-- Written by canopy: each export rewrites this file while this line opens it. -->\n"
+INDEX_MARK: Final = "<!-- Written by canopy: each export rewrites this file while this line opens it. -->\n"
 #: Where, under the state directory, each destination's fingerprints are kept (`_Seen`), one file for each.
-SEEN_DIR = "plan-exports"
-_DIR_MODE = 0o700
-_FILE_MODE = 0o600
-_FRONT_MATTER = "---\n"
+SEEN_DIR: Final = "plan-exports"
+_DIR_MODE: Final = 0o700
+_FILE_MODE: Final = 0o600
+_FRONT_MATTER: Final = "---\n"
 # Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
 # and compared again.
-_FORMAT = 9
+_FORMAT: Final = 9
 # The decimal places of a cost in a front matter: a millionth of a dollar, below what any run's cost is reported to.
-_COST_DIGITS = 6
+_COST_DIGITS: Final = 6
 # The most characters of a title a file's name carries.
-_MAX_SLUG = 60
+_MAX_SLUG: Final = 60
 # The most characters of a title an index shows.
-_MAX_INDEX_TITLE = 100
+_MAX_INDEX_TITLE: Final = 100
 # What a line of Markdown text reads as markup: a link or an image, a tag, an entity, emphasis, code, math, a table's
 # cell, and the escape itself. A backslash before each makes it literal.
-_MARKUP_RE = re.compile(r"([\\`*_~\[\]()<>|&$])")
+_MARKUP_RE: Final = re.compile(r"([\\`*_~\[\]()<>|&$])")
 # A prompt's name in an export, `<run>-PROMPT.md`, or `<run>-prompt.md` as earlier exports wrote it: never a plan's,
 # which always has a status after its run.
-_PROMPT_NAME_RE = re.compile(r"\d+-(?:PROMPT|prompt)\.md")
+_PROMPT_NAME_RE: Final = re.compile(r"\d+-(?:PROMPT|prompt)\.md")
 # An original's name in an export, `<run>-ORIGINAL.md`: never a plan's either.
-_ORIGINAL_NAME_RE = re.compile(r"\d+-ORIGINAL\.md")
+_ORIGINAL_NAME_RE: Final = re.compile(r"\d+-ORIGINAL\.md")
 # What a PR's URL holds to be a link in an index: nothing that could end the link or start markup of its own.
-_LINKABLE_URL_RE = re.compile(r"https://[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+")
+_LINKABLE_URL_RE: Final = re.compile(r"https://[A-Za-z0-9._~:/?#@!$&'*+,;=%-]+")
 # The runs an index lists as the work that followed a ticket's plans: every kind that works on its branch.
-_WORK_KINDS = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
+_WORK_KINDS: Final = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
 # What a planner's heading opens with before the ticket's title (the plan prompts' outline): `Plan: KEY`.
-_HEADING_PREFIX = re.compile(r"(?:feedback\s+)?plan(?:\s*:|\s*$)\s*", re.IGNORECASE)
+_HEADING_PREFIX: Final = re.compile(r"(?:feedback\s+)?plan(?:\s*:|\s*$)\s*", re.IGNORECASE)
 # What a planner puts between a heading's key and its title, as `PROJ-1 — Title`, or leaves at its end, as `Title -`:
 # a character class's members. Each is the planner's only where a space sets it apart, so `--dry-run` keeps its own.
-_SEPARATORS = r"\-\u2010-\u2015:,;|/·•"
+_SEPARATORS: Final = r"\-\u2010-\u2015:,;|/·•"
 # A separator a space sets apart at a title's end.
-_TRAILING_SEPARATOR = re.compile(rf"(?:\s+[{_SEPARATORS}]+)+$")
+_TRAILING_SEPARATOR: Final = re.compile(rf"(?:\s+[{_SEPARATORS}]+)+$")
 # A heading's closing sequence: `#`s a space sets apart at its end, or the whole of it, so `C#` keeps its own.
-_CLOSING_HASHES = re.compile(r"(?:^|\s+)#+$")
+_CLOSING_HASHES: Final = re.compile(r"(?:^|\s+)#+$")
 # How long before an export a file must have last changed for its stat to stand for its bytes. A file changed in the
 # same tick of the filesystem's clock as it was read can change again with the same stat, git's "racily clean" case.
-_SETTLED_NS = 2_000_000_000
+_SETTLED_NS: Final = 2_000_000_000
 
 
 @dataclass(frozen=True)

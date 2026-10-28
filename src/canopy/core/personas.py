@@ -17,7 +17,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from typing import TYPE_CHECKING, Final, Literal, NamedTuple
 
 from canopy.core import conversation, db, memory_text, records, sql
 from canopy.core.config import DEFAULT_PERSONA, PERSONA_NAME_RE
@@ -31,39 +31,39 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 #: The persona every agent writes in unless the operator chooses another: canopy's own voice.
-DEFAULT = DEFAULT_PERSONA
+DEFAULT: Final = DEFAULT_PERSONA
 #: A persona's file is its name with this suffix.
-SUFFIX = ".md"
+SUFFIX: Final = ".md"
 #: The most bytes a persona's file may hold: it is in every prompt it reaches, as the standing instructions are.
-MAX_BYTES = 4096
+MAX_BYTES: Final = 4096
 #: An agent a persona reaches, each a key of `[personas]`. The overseer and chores have none.
 Agent = Literal["worker", "planner", "reviewer"]
 #: Every agent a persona reaches, in the order `[personas]` lists them.
-AGENTS: tuple[Agent, ...] = ("worker", "planner", "reviewer")
+AGENTS: Final[tuple[Agent, ...]] = ("worker", "planner", "reviewer")
 #: An agent whose next run alone may take a persona of its own: the runs `canopy start` and `canopy plan` ask for.
 NextAgent = Literal["worker", "planner"]
 #: Every agent whose next run alone may take a persona of its own.
-NEXT_AGENTS: tuple[NextAgent, ...] = ("worker", "planner")
+NEXT_AGENTS: Final[tuple[NextAgent, ...]] = ("worker", "planner")
 #: The guard and attention reason of a run whose persona has no file.
-MISSING = "persona_missing"
+MISSING: Final = "persona_missing"
 #: The guard and attention reason of a run whose persona's file canopy would not put in a prompt.
-BAD = "bad_persona"
+BAD: Final = "bad_persona"
 #: The guard of an override naming a persona with no file: it is refused when set, not when a run starts.
-UNKNOWN = "unknown_persona"
+UNKNOWN: Final = "unknown_persona"
 #: Where an agent's next persona comes from: the ticket's override, `[personas]`, or canopy's own default.
 Source = Literal["ticket", "config", "default"]
 #: The most characters of a persona's description a menu shows beside its name; a longer one is cut at a word.
-DESCRIPTION_CHARS = 160
+DESCRIPTION_CHARS: Final = 160
 #: The one key a persona's front matter may hold.
-DESCRIPTION_KEY = "description"
+DESCRIPTION_KEY: Final = "description"
 #: A persona's front matter: a `---` line, its fields, and a `---` line, at the very start of its file, as a skill's.
-_FRONT_MATTER = re.compile(r"---[ \t]*\n(.*?)^---[ \t]*$\n?", re.DOTALL | re.MULTILINE)
+_FRONT_MATTER: Final = re.compile(r"---[ \t]*\n(.*?)^---[ \t]*$\n?", re.DOTALL | re.MULTILINE)
 #: The line a front matter opens with; a file that opens with it and never closes it is refused.
-_OPENS = re.compile(r"---[ \t]*(?:\n|$)")
+_OPENS: Final = re.compile(r"---[ \t]*(?:\n|$)")
 #: One field of a front matter: its key, a colon, and its value on the same line.
-_FIELD = re.compile(r"([A-Za-z_][\w-]*):[ \t]*(.*)")
+_FIELD: Final = re.compile(r"([A-Za-z_][\w-]*):[ \t]*(.*)")
 #: A value in quotes, single or double, which a front matter's value may be written in, as YAML's.
-_QUOTED = re.compile(r"(['\"])(.*)\1")
+_QUOTED: Final = re.compile(r"(['\"])(.*)\1")
 
 
 class PersonaError(Exception):

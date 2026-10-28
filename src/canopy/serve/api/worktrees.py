@@ -5,13 +5,15 @@ Not on the event stream: each read runs the pool's `status` once per pool.
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter
 
 from canopy.serve import worktrees
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.worktree import Pool
 
-TAG = "worktrees"
+TAG: Final = "worktrees"
 router = APIRouter(tags=[TAG])
 
 

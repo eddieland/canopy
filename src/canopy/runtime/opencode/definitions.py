@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import fnmatch
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.infra import resources
 from canopy.runtime.agents import CHORE, OVERSEER, PLANNER, PRIVATE_WORKER, REVIEWER, WORKER, DefinitionsError
@@ -49,51 +49,51 @@ if TYPE_CHECKING:
     from canopy.runtime.agents import McpTools, Model, Publishing, Rules
 
 #: The directories of a config directory OpenCode reads agents, skills, and plugins from.
-AGENTS_SUBDIR = "agents"
-SKILLS_SUBDIR = "skills"
-PLUGINS_SUBDIR = "plugins"
+AGENTS_SUBDIR: Final = "agents"
+SKILLS_SUBDIR: Final = "skills"
+PLUGINS_SUBDIR: Final = "plugins"
 
 #: A part of an OpenCode tool name: an MCP server's name or one of its tools', as OpenCode sanitizes them. They are
 #: rendered into definitions, so nothing else may reach them.
-TOOL_PART_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+TOOL_PART_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
 #: OpenCode's rule for a skill's name: lowercase letters and digits in words joined by single hyphens, at most 64.
-SKILL_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
-MAX_SKILL_NAME = 64
+SKILL_NAME_RE: Final = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+MAX_SKILL_NAME: Final = 64
 #: A bash rule canopy renders from config: a command's name, a literal word, then words of plain characters and
 #: OpenCode's wildcards, `*` for any run of characters and `?` for one, each after a single space. No character of it
 #: ends a shell's word or command, or a YAML string in double quotes, and with no wildcard in its first word it matches
 #: one command.
-BASH_ALLOW_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*(?: [A-Za-z0-9._,:=@%+/*?-]+)*")
+BASH_ALLOW_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*(?: [A-Za-z0-9._,:=@%+/*?-]+)*")
 #: The commands of OpenCode itself, which run an agent with rules of its own.
-RUNTIME_COMMANDS = ("opencode",)
+RUNTIME_COMMANDS: Final = ("opencode",)
 #: A model as OpenCode names it, `provider/model`, as `opencode models` lists it one a line: a provider's id, then the
 #: model's, which may hold a `/` of its own (`openrouter/vendor/model`). At most 200 characters, none of which ends a
 #: YAML string in double quotes, so it is rendered into a definition as it is.
-MODEL_RE = re.compile(r"(?=.{3,200}\Z)[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._:@/+-]*")
+MODEL_RE: Final = re.compile(r"(?=.{3,200}\Z)[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._:@/+-]*")
 #: A variant of a model canopy renders, as OpenCode names one, such as a reasoning effort (`high`, `max`): a letter,
 #: then at most 63 letters, digits, `_`, and `-`, none of which ends a YAML string in double quotes. OpenCode's own are
 #: lowercase words; a provider's config may name more.
-VARIANT_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}")
+VARIANT_RE: Final = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}")
 
 
 def _file(agent: str) -> str:
     return f"{AGENTS_SUBDIR}/{agent}.md"
 
 
-_PRIVATE_FILE = _file(PRIVATE_WORKER)
-_OVERSEER_FILE = _file(OVERSEER)
-_REVIEWER_FILE = _file(REVIEWER)
-_CHORE_FILE = _file(CHORE)
+_PRIVATE_FILE: Final = _file(PRIVATE_WORKER)
+_OVERSEER_FILE: Final = _file(OVERSEER)
+_REVIEWER_FILE: Final = _file(REVIEWER)
+_CHORE_FILE: Final = _file(CHORE)
 # The definitions that may call only the tracker's read tools, rendered at their marked line.
-_READ_ONLY_TRACKER_FILES = (_PRIVATE_FILE, _file(PLANNER))
-_WORKER_FILES = (_file(WORKER), _PRIVATE_FILE)
+_READ_ONLY_TRACKER_FILES: Final = (_PRIVATE_FILE, _file(PLANNER))
+_WORKER_FILES: Final = (_file(WORKER), _PRIVATE_FILE)
 # The definitions that deny GitHub's issue tools off a GitHub tracker, at their marked line.
-_GITHUB_ISSUE_FILES = (*_WORKER_FILES, _file(PLANNER))
+_GITHUB_ISSUE_FILES: Final = (*_WORKER_FILES, _file(PLANNER))
 # The line of the shipped worker definitions the rules for a rebased branch's push are rendered at.
-_REBASE_MARKER = "    # canopy: rebase rules\n"
+_REBASE_MARKER: Final = "    # canopy: rebase rules\n"
 # The one forced push `trust.rebase` allows, after the deny of every other: the prompts' own command, a lease on the
 # branch's remote-tracking ref. A `--force` added to it is denied again; the rules after the marker still deny the rest.
-_REBASE_RULES = (
+_REBASE_RULES: Final = (
     '    "git push --force-with-lease origin HEAD:refs/heads/*": allow\n',
     '    "git push *--force": deny\n',
     '    "git push *--force *": deny\n',
@@ -101,23 +101,23 @@ _REBASE_RULES = (
 # The lines of the shipped worker definitions the denial of commenting is rendered at, when workers draft their
 # replies (DESIGN §29): in bash, `gh`'s commands that comment; among the MCP rules, the GitHub server's comment tools.
 # A worker that still posts its ticket comments itself, for want of a tracker source that posts, keeps the issue ones.
-_REPLY_BASH_MARKER = "    # canopy: reply rules\n"
-_REPLY_TOOLS_MARKER = "  # canopy: reply tools\n"
-_REPLY_BASH = ('    "gh pr comment*": deny\n',)
-_REPLY_BASH_ISSUES = ('    "gh issue comment*": deny\n',)
-_REPLY_TOOLS = ('  "*reply_to_pull_request_comment*": deny\n', '  "*add_comment_to_pending_review*": deny\n')
-_REPLY_TOOLS_ISSUES = ('  "*add_issue_comment*": deny\n',)
+_REPLY_BASH_MARKER: Final = "    # canopy: reply rules\n"
+_REPLY_TOOLS_MARKER: Final = "  # canopy: reply tools\n"
+_REPLY_BASH: Final = ('    "gh pr comment*": deny\n',)
+_REPLY_BASH_ISSUES: Final = ('    "gh issue comment*": deny\n',)
+_REPLY_TOOLS: Final = ('  "*reply_to_pull_request_comment*": deny\n', '  "*add_comment_to_pending_review*": deny\n')
+_REPLY_TOOLS_ISSUES: Final = ('  "*add_issue_comment*": deny\n',)
 # The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
-_TOOLS_MARKER = "  # canopy: tracker tools\n"
+_TOOLS_MARKER: Final = "  # canopy: tracker tools\n"
 # The line of the shipped overseer's, reviewer's, and chore's definitions the tracker's rules are rendered at, above
 # their denials of GitHub's tools by name and patterns, so that no allow rendered there reopens a write they close
 # (D021).
-_READS_MARKER = "  # canopy: tracker reads\n"
+_READS_MARKER: Final = "  # canopy: tracker reads\n"
 # The tracker provider whose tickets are GitHub's issues, on the same server as the PRs (the skill `tracker-github`).
-_GITHUB = "github"
+_GITHUB: Final = "github"
 # The overseer's reads of GitHub, as its definition keeps them, allowed by name when the tracker is GitHub and so the
 # server is the tracker's: the tracker's read tools there include the PR writes a private worker needs.
-_OVERSEER_GITHUB_READS = (
+_OVERSEER_GITHUB_READS: Final = (
     "get_me",
     "issue_read",
     "list_issues",
@@ -128,15 +128,15 @@ _OVERSEER_GITHUB_READS = (
     "list_branches",
 )
 # The overseer's reads of GitHub's issues, which it has no use for where a `tracker` source reads them (DESIGN §39).
-_OVERSEER_ISSUE_READS = ("issue_read", "list_issues", "search_issues")
+_OVERSEER_ISSUE_READS: Final = ("issue_read", "list_issues", "search_issues")
 # GitHub's issue reads, which the overseer and the reviewer have no use for off a GitHub tracker. Rendered before the
 # tracker's rules: a read of the tracker's that one matches, such as a `list_issues` of its own, is allowed again after
 # it.
-_GITHUB_ISSUE_READS = ("*issue_read*", "*list_issues*", "*search_issues*")
+_GITHUB_ISSUE_READS: Final = ("*issue_read*", "*list_issues*", "*search_issues*")
 # GitHub's issue tools, which only the `tracker-github` skill names, so that the workers and the planner have no use
 # for them off a GitHub tracker: the reads, and what filing or labelling an issue takes. Not its issue comment tools,
 # which comment on a PR's conversation too.
-_GITHUB_ISSUE_TOOLS = (
+_GITHUB_ISSUE_TOOLS: Final = (
     *_GITHUB_ISSUE_READS,
     "*issue_write*",
     "*list_issue_types*",
@@ -144,30 +144,30 @@ _GITHUB_ISSUE_TOOLS = (
     "*get_label*",
 )
 # The line of the shipped workers' and planner's definitions the denial of GitHub's issue tools is rendered at.
-_ISSUES_MARKER = "  # canopy: github issue tools\n"
+_ISSUES_MARKER: Final = "  # canopy: github issue tools\n"
 # The line of every shipped definition the artifact store's server is rendered at (DESIGN §38): after the patterns
 # that deny tools by their names, so that a tool allowed by name there is allowed, and before the rules for canopy's own
 # servers, whose names no store's may share.
-_ARTIFACT_TOOLS_MARKER = "  # canopy: artifact tools\n"
+_ARTIFACT_TOOLS_MARKER: Final = "  # canopy: artifact tools\n"
 # The line of the shipped worker definition the allow of the store's skill is rendered at, after its deny.
-_ARTIFACT_SKILL_MARKER = "    # canopy: artifact skill\n"
-_ARTIFACT_SKILL = "canopy-artifacts"
+_ARTIFACT_SKILL_MARKER: Final = "    # canopy: artifact skill\n"
+_ARTIFACT_SKILL: Final = "canopy-artifacts"
 # The agents canopy ships, each of which is rendered with the store's server.
-_AGENTS = (WORKER, PRIVATE_WORKER, PLANNER, REVIEWER, OVERSEER, CHORE)
+_AGENTS: Final = (WORKER, PRIVATE_WORKER, PLANNER, REVIEWER, OVERSEER, CHORE)
 # The line of the shipped reviewer's and overseer's definitions their temperature is rendered at.
-_TEMPERATURE_MARKER = "# canopy: temperature\n"
+_TEMPERATURE_MARKER: Final = "# canopy: temperature\n"
 # The line of every shipped definition its model is rendered at.
-_MODEL_MARKER = "# canopy: model\n"
+_MODEL_MARKER: Final = "# canopy: model\n"
 # The line of the shipped overseer definition its prompt replaces, with everything after it.
-_PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
+_PROMPT_MARKER: Final = "<!-- canopy: overseer prompt -->\n"
 # The line of the shipped overseer definition the denial of its skill tool is rendered at, when its body holds the
 # tracker's skill: nothing is left for it to load, and a tool whose last rule denies `*` is not sent. The line ends its
 # `skill` rules, after the denial of the operator's skill.
-_SKILL_MARKER = "    # canopy: skill rule\n"
-_SKILL_RULE = '    "*": deny\n'
+_SKILL_MARKER: Final = "    # canopy: skill rule\n"
+_SKILL_RULE: Final = '    "*": deny\n'
 # The line of a shipped definition the commands config allows it are rendered at: the last of its bash rules, so each
 # allow wins (D021). Only a definition whose bash rules deny every command but those they name has it.
-_BASH_ALLOWS_MARKER = "    # canopy: bash allows\n"
+_BASH_ALLOWS_MARKER: Final = "    # canopy: bash allows\n"
 
 
 def agent_names() -> list[str]:

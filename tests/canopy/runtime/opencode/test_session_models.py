@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -44,7 +44,7 @@ def assistant(
 
 
 #: The user's message, which names the model it asked for rather than one that served.
-USER: dict[str, object] = {
+USER: Final[dict[str, object]] = {
     "info": {"id": "msg_1", "role": "user", "model": {"providerID": "anthropic", "modelID": "asked"}},
     "parts": [],
 }
@@ -220,7 +220,7 @@ def test_a_read_that_cannot_be_trusted_fails_in_canopy_s_words(export: Export, e
 
 
 #: The export as OpenCode prints it, indented, of a session one model served.
-PRETTY = json.dumps(json.loads(exported(assistant("anthropic", "claude-haiku", 0.5))), indent=2)
+PRETTY: Final = json.dumps(json.loads(exported(assistant("anthropic", "claude-haiku", 0.5))), indent=2)
 
 
 @pytest.mark.parametrize(

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, ConfigDict
 
@@ -24,13 +24,13 @@ if TYPE_CHECKING:
     import sqlite3
 
 #: The placeholder of the result field's contract, which a resume handed review findings carries.
-REVIEW_ANSWERS = "REVIEW_ANSWERS"
+REVIEW_ANSWERS: Final = "REVIEW_ANSWERS"
 #: How many answers a run's result may carry: every finding of a review in each of a few personas.
-MAX_ANSWERS = 4 * result.MAX_FINDINGS
+MAX_ANSWERS: Final = 4 * result.MAX_FINDINGS
 #: How long a reason may be.
-MAX_REASON = 1000
+MAX_REASON: Final = 1000
 #: How many refused entries a note names; the rest are counted.
-MAX_NAMED = 10
+MAX_NAMED: Final = 10
 
 
 class _Reported(BaseModel):

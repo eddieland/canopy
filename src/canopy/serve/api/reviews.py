@@ -10,7 +10,7 @@ operator's own comment review, pending for them to submit unless they ask canopy
 from __future__ import annotations
 
 import gzip
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Final
 
 from fastapi import APIRouter, HTTPException, Path, Request, Response
 
@@ -44,11 +44,11 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-TAG = "reviews"
+TAG: Final = "reviews"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 # A body this long or longer goes gzipped to a browser that takes it; a shorter one saves too little to be worth it.
-_GZIP_FROM = 1024
+_GZIP_FROM: Final = 1024
 
 CommentNumber = Annotated[
     int,

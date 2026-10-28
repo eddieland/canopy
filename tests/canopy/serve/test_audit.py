@@ -1,6 +1,7 @@
 """The web UI's audit of write requests: what it records of a signed-in session's writes, and what it never keeps."""
 
 import sqlite3
+from typing import Final
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -12,7 +13,7 @@ from canopy.serve.api import session
 from canopy.serve.backend import Backend
 from tests.canopy.web_helpers import ORIGIN, SECRET, client, signed_in, signed_in_client
 
-KEY = "PROJ-1"
+KEY: Final = "PROJ-1"
 
 
 def writes(conn: sqlite3.Connection) -> list[records.WebWrite]:

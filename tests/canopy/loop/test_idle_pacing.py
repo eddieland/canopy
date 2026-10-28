@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -38,14 +39,14 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
-PR = "https://example.test/pr/1"
+PR: Final = "https://example.test/pr/1"
 #: What the overseer passes to dispatch KEY: a dry run records it without starting a run.
-DISPATCH = ("--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement")
+DISPATCH: Final = ("--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement")
 # The journal's clock and the test's: a tick's `read_at` is put this far back, so what the test records after it is
 # after it, whatever the millisecond.
-BACK = timedelta(seconds=1)
+BACK: Final = timedelta(seconds=1)
 # Where hand-made runs say they log; nothing is written there.
-LOGS = Path("logs")
+LOGS: Final = Path("logs")
 
 type Step = Callable[[sqlite3.Connection, int], object]
 
@@ -293,7 +294,7 @@ def both(*steps: Step) -> Step:
     return run
 
 
-RELABELLED = both(seen_ticket, sets_ticket(phase=Phase.CI_RED))
+RELABELLED: Final = both(seen_ticket, sets_ticket(phase=Phase.CI_RED))
 
 
 @pytest.mark.parametrize(

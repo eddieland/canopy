@@ -6,15 +6,16 @@ What the `vcs` source reads beside the PRs it is named (DESIGN §30).
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Final
 
 from canopy_github import Client, GitHubError, InputError, Repository, obj, pages, parse_pr, text
 
 #: The most branches under the prefix a repository may have before it counts as not read: narrow the prefix.
-MAX_BRANCHES = 1000
+MAX_BRANCHES: Final = 1000
 #: The most results GitHub's search returns of one query; a query that matches more cannot be read to its end.
-MAX_SEARCH = 1000
+MAX_SEARCH: Final = 1000
 
-_BRANCHES = """
+_BRANCHES: Final = """
 query Branches($owner: String!, $name: String!, $prefix: String!, $after: String) {
   repository(owner: $owner, name: $name) {
     refs(refPrefix: "refs/heads/", query: $prefix, first: 100, after: $after) {
@@ -25,7 +26,7 @@ query Branches($owner: String!, $name: String!, $prefix: String!, $after: String
 }
 """
 
-_SEARCH = """
+_SEARCH: Final = """
 query Search($query: String!, $after: String) {
   search(query: $query, type: ISSUE, first: 100, after: $after) {
     issueCount

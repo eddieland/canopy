@@ -8,7 +8,7 @@ import os
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
 from unittest import mock
 
 import pytest
@@ -24,12 +24,12 @@ from tests.canopy.helpers import KEY, context, earlier, ended_tick, run_with_fil
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
-MIB = 1024 * 1024
+MIB: Final = 1024 * 1024
 # The kinds of file a pass removes, as the dry run names them.
-FILE_KINDS = ("run files", "tick files", "chore run files", "review files", "unrecorded files")
+FILE_KINDS: Final = ("run files", "tick files", "chore run files", "review files", "unrecorded files")
 # The tables whose rows a test counts before and after a pass.
 type Table = Literal["decisions", "connector_runs", "derivations", "ticks"]
-TABLES: tuple[Table, ...] = ("decisions", "connector_runs", "derivations", "ticks")
+TABLES: Final[tuple[Table, ...]] = ("decisions", "connector_runs", "derivations", "ticks")
 
 
 def passes(conn: sqlite3.Connection) -> list[records.GcPass]:

@@ -42,7 +42,7 @@ import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TextIO
+from typing import Final, TextIO
 
 import click
 
@@ -65,9 +65,9 @@ from canopy_github import (
 from canopy_github.read import threads
 
 # GitHub's own limit on a comment's body.
-MAX_TEXT = 65536
+MAX_TEXT: Final = 65536
 # Each reaction a reply may add, by the name canopy and GitHub's REST API give it, to the name GraphQL takes.
-REACTIONS = {
+REACTIONS: Final = {
     "+1": "THUMBS_UP",
     "-1": "THUMBS_DOWN",
     "laugh": "LAUGH",
@@ -77,45 +77,45 @@ REACTIONS = {
     "rocket": "ROCKET",
     "eyes": "EYES",
 }
-MAX_REPLIES = 100
+MAX_REPLIES: Final = 100
 # As many comments as replies: canopy sends at most 30 (DESIGN §34).
-MAX_COMMENTS = 100
+MAX_COMMENTS: Final = 100
 # A commit's full object id, SHA-1 or SHA-256, as GitHub's `GitObjectID` takes it.
-_COMMIT = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+_COMMIT: Final = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 # A key a GitHub Issues tracker gives a ticket: letters, a hyphen, the issue's number (DESIGN §17).
-_KEY = re.compile(r"[A-Za-z][A-Za-z0-9_]*-([1-9][0-9]{0,9})")
+_KEY: Final = re.compile(r"[A-Za-z][A-Za-z0-9_]*-([1-9][0-9]{0,9})")
 
-_VIEWER = "query Viewer { viewer { login } }"
-_PR_ID = """
+_VIEWER: Final = "query Viewer { viewer { login } }"
+_PR_ID: Final = """
 query PullRequestId($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } }
 }
 """
-_ISSUE_ID = """
+_ISSUE_ID: Final = """
 query IssueId($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { issue(number: $number) { id } }
 }
 """
-_PENDING = """
+_PENDING: Final = """
 query PendingReviews($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) { reviews(states: [PENDING], first: 10) { nodes { id author { login } } } }
   }
 }
 """
-_REVIEW = """
+_REVIEW: Final = """
 query Review($id: ID!) {
   node(id: $id) { ... on PullRequestReview { state author { login } pullRequest { id } } }
 }
 """
-_ADD_REVIEW = """
+_ADD_REVIEW: Final = """
 mutation AddReview($pr: ID!, $body: String, $commit: GitObjectID) {
   addPullRequestReview(input: {pullRequestId: $pr, body: $body, commitOID: $commit}) {
     pullRequestReview { id fullDatabaseId }
   }
 }
 """
-_REPLY = """
+_REPLY: Final = """
 mutation Reply($review: ID!, $thread: ID!, $body: String!) {
   addPullRequestReviewThreadReply(
     input: {pullRequestReviewId: $review, pullRequestReviewThreadId: $thread, body: $body}
@@ -124,7 +124,7 @@ mutation Reply($review: ID!, $thread: ID!, $body: String!) {
   }
 }
 """
-_THREAD = """
+_THREAD: Final = """
 mutation Thread($review: ID!, $path: String!, $line: Int!, $body: String!) {
   addPullRequestReviewThread(
     input: {pullRequestReviewId: $review, path: $path, line: $line, side: RIGHT, body: $body}
@@ -133,22 +133,22 @@ mutation Thread($review: ID!, $path: String!, $line: Int!, $body: String!) {
   }
 }
 """
-_SUBMIT = """
+_SUBMIT: Final = """
 mutation Submit($review: ID!, $body: String) {
   submitPullRequestReview(input: {pullRequestReviewId: $review, event: COMMENT, body: $body}) {
     pullRequestReview { fullDatabaseId url state }
   }
 }
 """
-_DELETE = """
+_DELETE: Final = """
 mutation Delete($review: ID!) { deletePullRequestReview(input: {pullRequestReviewId: $review}) { clientMutationId } }
 """
-_REACT = """
+_REACT: Final = """
 mutation React($subject: ID!, $content: ReactionContent!) {
   addReaction(input: {subjectId: $subject, content: $content}) { reaction { content } }
 }
 """
-_COMMENT = """
+_COMMENT: Final = """
 mutation Comment($subject: ID!, $body: String!) {
   addComment(input: {subjectId: $subject, body: $body}) { commentEdge { node { fullDatabaseId url } } }
 }

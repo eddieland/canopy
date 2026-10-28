@@ -7,7 +7,7 @@ import threading
 from collections.abc import Generator, Iterable, Mapping, Sequence
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, ClassVar, Protocol, override
+from typing import Any, ClassVar, Final, Protocol, override
 from unittest import mock
 
 import canopy_notify_slack as slack
@@ -17,7 +17,7 @@ from click.testing import Result
 from tests.canopy_notify_slack.helpers import token_file
 from tests.conftest import invoke
 
-MESSAGE: dict[str, Any] = {
+MESSAGE: Final[dict[str, Any]] = {
     "version": 1,
     "sink": "slack",
     "repo": "/home/me/src/api",

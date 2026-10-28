@@ -2,6 +2,7 @@
 
 import socket  # noqa: TID251  (a test asks the OS for a free port; canopy itself opens no socket)
 from pathlib import Path
+from typing import Final
 
 import httpx2
 from fastapi.testclient import TestClient
@@ -15,10 +16,10 @@ from canopy.serve.backend import Backend
 from canopy.serve.options import ServeOptions
 from canopy.serve.schema import Capacity
 
-SECRET = "s3cret-" + "x" * 40
-ORIGIN = "http://127.0.0.1:8765"
+SECRET: Final = "s3cret-" + "x" * 40
+ORIGIN: Final = "http://127.0.0.1:8765"
 #: What may run at once under the config a test starts with, which sets no `[capacity]` key.
-DEFAULT_CAPACITY = Capacity(workers=2, reviews=1, chores=1)
+DEFAULT_CAPACITY: Final = Capacity(workers=2, reviews=1, chores=1)
 
 
 def at(minutes: int) -> str:

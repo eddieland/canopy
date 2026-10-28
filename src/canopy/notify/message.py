@@ -13,7 +13,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict, cast
+from typing import TYPE_CHECKING, Final, TypedDict, cast
 from urllib.parse import quote
 
 from canopy.core import contract, db, records, spend, sql
@@ -23,17 +23,17 @@ from canopy.core.vocab import RunStatus, SessionsRead
 if TYPE_CHECKING:
     from canopy.notify.journal import Diff
 
-VERSION = 1
+VERSION: Final = 1
 # At most this many attention lines and this many events in one message; the rest are counted, and count as delivered.
-MAX_LINES = 20
+MAX_LINES: Final = 20
 # Events older than this when a sink next succeeds are counted, not listed.
-STALE_EVENTS = timedelta(hours=24)
-_DONE_LISTED = 10
+STALE_EVENTS: Final = timedelta(hours=24)
+_DONE_LISTED: Final = 10
 # The attention list's subjects that are not tickets: a chore, by `chore:<name>`, a PR, by `pr:<url>`, and a one-off
 # task, by `task:<id>`, which has no page of its own yet (DESIGN §36).
-_CHORE = "chore:"
-_PR = "pr:"
-_TASK = "task:"
+_CHORE: Final = "chore:"
+_PR: Final = "pr:"
+_TASK: Final = "task:"
 
 
 def _line(text: object) -> str:
@@ -237,7 +237,7 @@ class Event:
         return {"id": self.id, "kind": self.kind, "at": self.at, **self.fields, **named, **own}
 
 
-_OWN = ("id", "kind", "at", "line", "ui")
+_OWN: Final = ("id", "kind", "at", "line", "ui")
 
 
 class DoneRun(TypedDict):

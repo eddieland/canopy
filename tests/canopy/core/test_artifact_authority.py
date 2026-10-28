@@ -6,7 +6,7 @@ marked as an agent's, or with every one of the workers' marks, as neither.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Scenario
 
 #: The one author the operator lists.
-LISTED = frozenset({"u_ana"})
+LISTED: Final = frozenset({"u_ana"})
 
 
 def said(author: str, kind: AuthorKind = AuthorKind.PERSON, *, marked: bool = False) -> records.ObservedArtifactComment:

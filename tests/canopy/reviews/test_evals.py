@@ -10,7 +10,7 @@ import os
 import stat
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 import pytest
@@ -23,7 +23,7 @@ from tests.canopy.review_helpers import CLEAN, PR, REPORT, THEIRS, feature_commi
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv, GitPool
 
-MODEL = "acme/fake-model-1"
+MODEL: Final = "acme/fake-model-1"
 
 
 def case(name: str, sha: str, base: str, *lines: str, pr: str = PR, repo: str = "repo") -> dict[str, object]:

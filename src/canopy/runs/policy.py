@@ -25,7 +25,7 @@ from collections.abc import Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import conversation, db, sql
 from canopy.core.vocab import ResumeReason, RunKind
@@ -40,21 +40,21 @@ Unit = tuple[str, str | None]
 # `runs.kind` as read; a `click.Choice` takes them as `str(kind)`, since click matches an enum by its name. `fix-ci` is
 # none of them: its old runs and grants count as `resume`'s (`counted_as`). Nor are `split` and `needs-plan`, retired
 # too: their old runs count per ticket, and nothing dispatches them.
-KINDS: tuple[str, ...] = (RunKind.IMPLEMENT, RunKind.RESUME)
-RETIRED = RunKind.FIX_CI
-SPLIT = RunKind.SPLIT
-PLAN = RunKind.PLAN
-NEEDS_PLAN = RunKind.NEEDS_PLAN
-FEEDBACK_PLAN = RunKind.FEEDBACK_PLAN
+KINDS: Final[tuple[str, ...]] = (RunKind.IMPLEMENT, RunKind.RESUME)
+RETIRED: Final = RunKind.FIX_CI
+SPLIT: Final = RunKind.SPLIT
+PLAN: Final = RunKind.PLAN
+NEEDS_PLAN: Final = RunKind.NEEDS_PLAN
+FEEDBACK_PLAN: Final = RunKind.FEEDBACK_PLAN
 # The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
-TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN, NEEDS_PLAN)
+TICKET_KINDS: Final[tuple[str, ...]] = (SPLIT, PLAN, NEEDS_PLAN)
 # The kinds counted per ticket that `canopy grant` takes.
-TICKET_GRANT_KINDS: tuple[str, ...] = (PLAN,)
+TICKET_GRANT_KINDS: Final[tuple[str, ...]] = (PLAN,)
 #: The kinds counted per unit that `canopy grant` takes: `KINDS`, and feedback plans, counted apart from them.
-UNIT_GRANT_KINDS: tuple[str, ...] = (*KINDS, FEEDBACK_PLAN)
+UNIT_GRANT_KINDS: Final[tuple[str, ...]] = (*KINDS, FEEDBACK_PLAN)
 # The kinds `attempts` leaves out: the ticket's, and feedback plans, which `feedback_plan_attempts` counts.
-_APART: tuple[str, ...] = (*TICKET_KINDS, FEEDBACK_PLAN)
-DISPATCH_KINDS: tuple[str, ...] = tuple(k for k in RunKind if k not in (RETIRED, SPLIT, NEEDS_PLAN))
+_APART: Final[tuple[str, ...]] = (*TICKET_KINDS, FEEDBACK_PLAN)
+DISPATCH_KINDS: Final[tuple[str, ...]] = tuple(k for k in RunKind if k not in (RETIRED, SPLIT, NEEDS_PLAN))
 
 
 def limits(config: Config) -> dict[str, int]:

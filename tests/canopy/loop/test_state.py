@@ -11,7 +11,7 @@ import json
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 from canopy.core import config, conversation, db, item_numbers, pools, workspace
@@ -30,13 +30,13 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv
 
-DAY = "2026-10-16"
-NOW = datetime(2026, 10, 16, 10, 0, tzinfo=UTC)
+DAY: Final = "2026-10-16"
+NOW: Final = datetime(2026, 10, 16, 10, 0, tzinfo=UTC)
 # What a snapshot shows in place of the workspace root, which is in a temporary directory.
-WORKSPACE = "/workspace"
-PR = "https://example.test/acme/repo/pull/7"
+WORKSPACE: Final = "/workspace"
+PR: Final = "https://example.test/acme/repo/pull/7"
 #: A row the harness dispatches for, enabled here as a measurement would enable it (DESIGN §37).
-CONFLICTED = harness_dispatches.Row(ResumeReason.CONFLICT, "The PR conflicts with its base: bring it in.")
+CONFLICTED: Final = harness_dispatches.Row(ResumeReason.CONFLICT, "The PR conflicts with its base: bring it in.")
 
 
 def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:

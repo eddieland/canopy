@@ -5,7 +5,7 @@ Choosing is of the persona or the model one of the ticket's agents runs in or on
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from fastapi import APIRouter, HTTPException
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from canopy.runtime.report import ModelList
     from canopy.serve.backend import Backend
 
-TAG = "tickets"
+TAG: Final = "tickets"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

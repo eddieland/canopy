@@ -27,7 +27,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import agent_models, config, definitions, hostgit, personas, pools, prompts
 from canopy.core import review_result as result
@@ -47,20 +47,20 @@ if TYPE_CHECKING:
 
 #: How many lines from a confirmed line a finding's location may be and still find the bug: a reviewer often names the
 #: line a defect starts on, or the call that reaches it, a line or two from the one the fix changed.
-TOLERANCE = 3
+TOLERANCE: Final = 3
 #: The lease holder of an eval's slot: not a `canopy:` holder, so a tick's reconcile does not return it as a dead run's.
-HOLDER = "canopy-eval"
+HOLDER: Final = "canopy-eval"
 #: The remote-tracking branch an eval's checkout names the case's base by, which `{{BASE}}` names to the reviewer.
-BASE_BRANCH = "canopy-eval-base"
+BASE_BRANCH: Final = "canopy-eval-base"
 #: Where evals keep their results, and each one's prompts and logs, in the state directory.
-EVALS_DIR = "review-evals"
+EVALS_DIR: Final = "review-evals"
 #: Held while an eval runs, so two never take each other's slots for left behind.
-LOCK_FILE = "review-eval.lock"
+LOCK_FILE: Final = "review-eval.lock"
 #: A finding's severities, the most serious first.
-SEVERITIES = ("blocking", "major", "minor")
+SEVERITIES: Final = ("blocking", "major", "minor")
 #: The status of a case no review started for: a guard refused it, or its slot could not be leased.
-REFUSED = "refused"
-_GIT_TIMEOUT_SECONDS = 300
+REFUSED: Final = "refused"
+_GIT_TIMEOUT_SECONDS: Final = 300
 
 
 class EvalError(Exception):

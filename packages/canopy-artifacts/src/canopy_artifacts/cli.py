@@ -22,7 +22,7 @@ import re
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import cast
+from typing import Final, cast
 
 import click
 
@@ -30,17 +30,17 @@ from canopy_artifacts import server
 from canopy_artifacts.store import MAX_FEED, Scope, Store, StoreError, agent, open_store
 
 #: A namespace, such as `canopy/operator`, of at most 128 characters.
-_NAMESPACE = re.compile(r"(?=.{1,128}\Z)[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
+_NAMESPACE: Final = re.compile(r"(?=.{1,128}\Z)[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*")
 #: An agent's name, such as `implement` or `run-42`.
-_AGENT = re.compile(r"[A-Za-z0-9._-]{1,64}")
+_AGENT: Final = re.compile(r"[A-Za-z0-9._-]{1,64}")
 #: The most changes one run of `feed` prints: a run past them ends its `end` line at the last, and the next run reads
 #: on from there, so a store with a long backlog is read in steps that each fit what canopy reads of a source.
-MOST = 1000
+MOST: Final = 1000
 #: Who a reader is, in its scope: it writes nothing, so no comment is signed with it.
-_READER = "feed"
+_READER: Final = "feed"
 #: The variable canopy gives a run's agent its origin pairs in, a JSON object of strings, which `serve` inherits and
 #: sets on every artifact made, under `--origin`'s.
-ORIGIN_ENV = "CANOPY_ARTIFACT_ORIGIN"
+ORIGIN_ENV: Final = "CANOPY_ARTIFACT_ORIGIN"
 
 
 @click.group("canopy-artifacts", context_settings={"help_option_names": ["-h", "--help"]})

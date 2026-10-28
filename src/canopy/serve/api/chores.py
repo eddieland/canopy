@@ -7,6 +7,8 @@ when one runs on its own.
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter, HTTPException
 
 from canopy.core import chore_view, conversation
@@ -18,7 +20,7 @@ from canopy.serve.schema import Replied, ReplyRequest
 from canopy.serve.schema.chore import ChoreDetail, ChoreRunDetail, ChoreSummary, ChoreTried, Dismissed, DismissRequest
 from canopy.serve.schema.transcript import Transcript
 
-TAG = "chores"
+TAG: Final = "chores"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

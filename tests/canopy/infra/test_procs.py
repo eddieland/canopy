@@ -8,6 +8,7 @@ import time
 import warnings
 from collections.abc import Callable
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -229,7 +230,7 @@ def test_an_on_line_that_raises_kills_the_child_and_closes_its_pipes() -> None:
 
 
 #: A child that writes as a runtime built on Bun does: one write that does not wait for a full pipe to drain, then exit.
-WRITES_ONCE = """
+WRITES_ONCE: Final = """
 import contextlib, os, sys
 os.set_blocking(1, False)
 with contextlib.suppress(BlockingIOError):

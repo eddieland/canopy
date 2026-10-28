@@ -6,7 +6,7 @@ recorded before it, hold. The prompts under `approve` are held here.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -20,8 +20,8 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv
 
-TRACKER_POSTS = '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n'
-DRAFTING = [
+TRACKER_POSTS: Final = '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n'
+DRAFTING: Final = [
     (RunKind.IMPLEMENT, False, False),
     (RunKind.IMPLEMENT, False, True),
     (RunKind.IMPLEMENT, True, False),

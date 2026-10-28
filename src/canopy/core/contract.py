@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from typing import cast
+from typing import Final, cast
 
 from pydantic import AfterValidator, BaseModel, ValidationError
 
 # A PR's title, as a worker or a reviewer reports it: GitHub's own limit.
-MAX_PR_TITLE = 256
+MAX_PR_TITLE: Final = 256
 
 
 def bounded(limit: int) -> AfterValidator:

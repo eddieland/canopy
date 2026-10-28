@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -13,7 +13,7 @@ from canopy.serve.api.refs import RunId, not_found
 from canopy.serve.schema import Run, RunsSince
 from canopy.serve.schema.transcript import RawOutput, Transcript
 
-TAG = "runs"
+TAG: Final = "runs"
 router = APIRouter(tags=[TAG])
 
 

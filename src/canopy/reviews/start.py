@@ -18,7 +18,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import (
     agent_models,
@@ -48,19 +48,19 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
     from canopy.core.context import Context
 
-REVIEWS_DIR = "reviews"
-CHECKOUT_LINK = "checkout"
-DISPATCH_ACTION = "dispatch:review"
-HOLDER_KEY = "review:"
+REVIEWS_DIR: Final = "reviews"
+CHECKOUT_LINK: Final = "checkout"
+DISPATCH_ACTION: Final = "dispatch:review"
+HOLDER_KEY: Final = "review:"
 # Why a review runs (DESIGN §21): one of the loop's own PRs, named by its ticket, a PR with the operator's open review
 # request, or a `review.query` match.
-OWN = "own"
-REQUEST = review_requests.PURPOSE
-QUERY = "query"
-SHA_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
-MAX_PR_URL = 300
-KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
-_DAY = timedelta(hours=24)
+OWN: Final = "own"
+REQUEST: Final = review_requests.PURPOSE
+QUERY: Final = "query"
+SHA_RE: Final = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+MAX_PR_URL: Final = 300
+KEY_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+_DAY: Final = timedelta(hours=24)
 
 
 class Refusal(Exception):  # noqa: N818  (an outcome the overseer is told about, not an error)

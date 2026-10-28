@@ -26,7 +26,7 @@ import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Final, Literal, get_args
 
 import tomlkit
 import tomlkit.exceptions
@@ -44,13 +44,13 @@ type Value = int | bool | str | tuple[str, ...] | tuple[int, ...] | dict[str, in
 type Source = Literal["private", "user", "workspace", "default"]
 
 # Read by name from the request, so each guard's words are the operator's to act on.
-NOT_EDITABLE = "not_editable"
-PAST_BOUND = "past_bound"
-NOT_STRICTER = "not_stricter"
-STALE = "stale"
-UNSAFE_FILE = "unsafe_file"
-NOT_ROUNDTRIP = "not_roundtrip"
-CONFIG_INVALID = "config_invalid"
+NOT_EDITABLE: Final = "not_editable"
+PAST_BOUND: Final = "past_bound"
+NOT_STRICTER: Final = "not_stricter"
+STALE: Final = "stale"
+UNSAFE_FILE: Final = "unsafe_file"
+NOT_ROUNDTRIP: Final = "not_roundtrip"
+CONFIG_INVALID: Final = "config_invalid"
 
 
 @dataclass(frozen=True)
@@ -78,7 +78,7 @@ def _pace(name: str, floor: int) -> Editable:
 # In the order the page shows them. The bounds stop a stolen session from turning one operator's spend up without limit:
 # a raise within them outlives a new secret, a residual the page and the log show (TRUST_MODEL T8). They are set well
 # above what one machine runs today, so the page is for the operator's real changes and the file for the rest.
-EDITABLE: tuple[Editable, ...] = (
+EDITABLE: Final[tuple[Editable, ...]] = (
     _count("capacity.max_workers", 32),
     _count("capacity.max_chores", 16),
     _count("capacity.max_reviews", 16),
@@ -106,14 +106,14 @@ EDITABLE: tuple[Editable, ...] = (
     Editable("trust.rebase", "stricter"),
     Editable("trust.commit_trailer", "stricter"),
 )
-BY_NAME = {e.name: e for e in EDITABLE}
+BY_NAME: Final = {e.name: e for e in EDITABLE}
 # The file as it was before the latest save, beside it: `config.toml.bak`. None when the save made the file.
-BACKUP_SUFFIX = ".bak"
-REPO_SLOTS = "capacity.repo_slots"
+BACKUP_SUFFIX: Final = ".bak"
+REPO_SLOTS: Final = "capacity.repo_slots"
 # A private file the save makes: the operator's alone, as `config.load` requires of it.
-NEW_FILE_MODE = 0o600
+NEW_FILE_MODE: Final = 0o600
 # The trust switches, and the value each may move to from the page: the stricter one.
-_STRICTER_BOOL = {"trust.rebase": False, "trust.commit_trailer": True}
+_STRICTER_BOOL: Final = {"trust.rebase": False, "trust.commit_trailer": True}
 
 
 @dataclass(frozen=True)

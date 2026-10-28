@@ -15,33 +15,33 @@ import re
 import subprocess
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TextIO
+from typing import Final, TextIO
 
 import canopy_http
 
 #: How long `gh` may take to name the hosts it is logged in to, or a token.
-TIMEOUT_SECONDS = 30
+TIMEOUT_SECONDS: Final = 30
 #: The media type that names the preview a PR's `mergeStateStatus` was introduced under.
-MERGE_INFO_PREVIEW = "application/vnd.github.merge-info-preview+json"
+MERGE_INFO_PREVIEW: Final = "application/vnd.github.merge-info-preview+json"
 # How much of a comment's or review's body is printed. canopy bounds what it records again.
-MAX_BODY = 8000
+MAX_BODY: Final = 8000
 #: How long a query GitHub answered with a server error, such as its unicorn page, or whose reply was cut off, waits
 #: before each new try: one try, then one more for each pause. A mutation is sent again only when it never left or
 #: GitHub refused it for its rate limit, as one GitHub failed to answer may have been carried out (canopy-http).
-RETRY_PAUSES: Sequence[float] = (1.0, 3.0)
+RETRY_PAUSES: Final[Sequence[float]] = (1.0, 3.0)
 # How much of GitHub's reply an error quotes.
-_MAX_REPLY = 500
+_MAX_REPLY: Final = 500
 # A query, which reads and so may be sent again, as a mutation may not: the operation each document names first.
-_QUERY = re.compile(r"\s*query\b")
-_HOST = r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?"
-_NAME = r"[A-Za-z0-9_.-]{1,100}"
-_NUMBER = r"[1-9][0-9]{0,9}"
-_PR = re.compile(rf"https://({_HOST})/({_NAME})/({_NAME})/pull/({_NUMBER})")
-_ISSUE = re.compile(rf"https://({_HOST})/({_NAME})/({_NAME})/issues/({_NUMBER})")
+_QUERY: Final = re.compile(r"\s*query\b")
+_HOST: Final = r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?"
+_NAME: Final = r"[A-Za-z0-9_.-]{1,100}"
+_NUMBER: Final = r"[1-9][0-9]{0,9}"
+_PR: Final = re.compile(rf"https://({_HOST})/({_NAME})/({_NAME})/pull/({_NUMBER})")
+_ISSUE: Final = re.compile(rf"https://({_HOST})/({_NAME})/({_NAME})/issues/({_NUMBER})")
 # A clone URL as `git clone` takes it: https, scp-style SSH, or ssh://, with an optional `.git` and trailing slash. An
 # SSH URL's port is the SSH server's, not the API's, so it is not part of the host.
-_HOST_NAME = r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?"
-_CLONE = re.compile(
+_HOST_NAME: Final = r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?"
+_CLONE: Final = re.compile(
     rf"(?:https://({_HOST})/|ssh://git@({_HOST_NAME})(?::[0-9]{{1,5}})?/|git@({_HOST_NAME}):)"
     rf"({_NAME})/({_NAME}?)(?:\.git)?/?",
 )

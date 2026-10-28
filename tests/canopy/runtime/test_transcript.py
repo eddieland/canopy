@@ -4,15 +4,16 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 from canopy.runtime import entries, transcript
 from canopy.runtime.entries import Error, Step, Text, Tokens, ToolCall
 from canopy.runtime.implementation import Version
 
-SESSION = "ses_abc123"
-T = 1_791_460_800_000  # 2026-10-08 12:00 UTC, in milliseconds
-AT = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+SESSION: Final = "ses_abc123"
+T: Final = 1_791_460_800_000  # 2026-10-08 12:00 UTC, in milliseconds
+AT: Final = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
 
 
 def event(kind: str, part: object, session: str = SESSION, ms: int = T, **extra: object) -> str:
@@ -23,7 +24,7 @@ def tool(name: str, state: dict[str, object], session: str = SESSION) -> str:
     return event("tool_use", {"type": "tool", "callID": "call_1", "tool": name, "state": state}, session)
 
 
-BASH: dict[str, object] = {
+BASH: Final[dict[str, object]] = {
     "status": "completed",
     "input": {"command": "uv run pytest -q", "description": "Run the tests"},
     "output": "3 passed\n",

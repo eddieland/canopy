@@ -13,7 +13,7 @@ import shutil
 from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Literal, Protocol, assert_never
+from typing import TYPE_CHECKING, Final, Literal, Protocol, assert_never
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
@@ -76,22 +76,22 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.runtime.report import Usage
 
-TICK_ID_ENV = conversation.TICK_ID_ENV
+TICK_ID_ENV: Final = conversation.TICK_ID_ENV
 # A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
-DONE_LINE = "CANOPY_TICK_DONE"
+DONE_LINE: Final = "CANOPY_TICK_DONE"
 # The overseer acts only through canopy's tools, so a tick starts their server as the runtime would, and asks it to
 # `initialize`, before paying for the overseer (DESIGN §6, §27). When it fails, the tick closes `canopy_unavailable`
 # and raises an item of the same name.
-SERVER_CHECK_TIMEOUT_SECONDS = 60
-MIB = 1024 * 1024
+SERVER_CHECK_TIMEOUT_SECONDS: Final = 60
+MIB: Final = 1024 * 1024
 # How long a ticket marked done stays in the state block's `recently_done` while the query still finds it, so the
 # overseer leaves it out while a human has yet to close it in the tracker (DESIGN §7). One still open after that is read
 # again and marked done again, which lists it for as long once more.
-RECENTLY_DONE_DAYS = 30
+RECENTLY_DONE_DAYS: Final = 30
 #: What the summary of a tick that ran no overseer starts with, after a dry run's prefix (DESIGN §39).
-NO_OVERSEER = "no overseer, nothing left to judge"
+NO_OVERSEER: Final = "no overseer, nothing left to judge"
 #: How many of the runtime's errors a failed overseer's summary names; past it, the first and last, the rest counted.
-MAX_ERRORS_NAMED = 3
+MAX_ERRORS_NAMED: Final = 3
 # How a tick ended: the status it closed its row with, or, with no row, `lock_busy` when another tick held the lock and
 # `error` when `canopy loop` caught the tick raising before it had one or after it closed it.
 type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]

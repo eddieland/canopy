@@ -6,7 +6,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -36,12 +36,12 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
 #: The overseer dispatches KEY's implement on its `work` branch.
-WORK = dispatches(slug="work")
+WORK: Final = dispatches(slug="work")
 #: The overseer dispatches a resume of KEY to fix CI.
-FIX_CI = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
-LESSON = "Run the API's tests with `make test-api`; plain `pytest` misses its fixtures."
-HEADING = "## Lessons from the operator"
-VALUES = {
+FIX_CI: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
+LESSON: Final = "Run the API's tests with `make test-api`; plain `pytest` misses its fixtures."
+HEADING: Final = "## Lessons from the operator"
+VALUES: Final = {
     **PROMPT_VALUES,
     "AUTHORIZATION": prompts.plan_authorization(KEY, ["agent-ready-alice"], private=False),
     "PLAN_FILE": ".canopy-plan.md",
@@ -49,7 +49,7 @@ VALUES = {
     "MAX_PLAN_CHARS": "100,000",
     "CONVERSATION": "No messages yet.",
 }
-PROMPTS = [(str(k), False) for k in prompts.WORKER] + [(str(k), True) for k in prompts.WORKER_PRIVATE]
+PROMPTS: Final = [(str(k), False) for k in prompts.WORKER] + [(str(k), True) for k in prompts.WORKER_PRIVATE]
 
 
 def memory_modes(ticket_notes: str = "off", proposals: str = "off") -> dict[str, str]:

@@ -1,14 +1,15 @@
 """Reading an agent's stdout: plain text, or OpenCode's JSON events (DESIGN §13)."""
 
 import json
+from typing import Final
 
 import pytest
 
 from canopy.runtime.opencode import events
 from canopy.runtime.report import AgentOutput, ToolUse, Usage
 
-RESULT = '{"status":"done","summary":"did it"}'
-TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
+RESULT: Final = '{"status":"done","summary":"did it"}'
+TOKENS: Final = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
 
 
 def event(kind: str, part: object, session: object = "ses_abc123") -> str:

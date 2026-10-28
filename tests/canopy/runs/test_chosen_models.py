@@ -10,6 +10,7 @@ operator has not named the trailer themselves.
 
 import json
 from pathlib import Path
+from typing import Final
 
 from canopy.core import definitions
 from canopy.core.config import load
@@ -19,11 +20,11 @@ from tests.canopy.review_helpers import CLEAN, feature_commit, head, reviewer_re
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool
 
-MODEL = "acme/fake-model-1"
-OTHER = "acme/fake-model-2"
-PLAN = dispatches(kind=RunKind.PLAN)
+MODEL: Final = "acme/fake-model-1"
+OTHER: Final = "acme/fake-model-2"
+PLAN: Final = dispatches(kind=RunKind.PLAN)
 #: A resume that needs no cursor and no review: its PR conflicts with its base.
-RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
+RESUME: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
 
 
 def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(

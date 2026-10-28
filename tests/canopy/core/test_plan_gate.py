@@ -7,6 +7,7 @@ needs one (`unplanned`), and neither an `implement` nor a `resume` follows a pla
 
 import sqlite3
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -27,16 +28,16 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool
 
-TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
+TEXT: Final = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
 # `canopy plan KEY`, asking for a plan, and its two flags.
-VERBS: tuple[tuple[str, ...], ...] = ((), ("--skip",), ("--approve",))
-UNPLANNED = "PROJ-1 needs a plan before its implement, and {}; dispatch `plan` or wait for it"
+VERBS: Final[tuple[tuple[str, ...], ...]] = ((), ("--skip",), ("--approve",))
+UNPLANNED: Final = "PROJ-1 needs a plan before its implement, and {}; dispatch `plan` or wait for it"
 #: The workspace's policy, asking for a plan the operator approves before any `implement` (DESIGN §25).
-APPROVE = {"plan": "approve"}
+APPROVE: Final = {"plan": "approve"}
 #: The overseer dispatches KEY's implement on its `work` branch.
-IMPLEMENT = dispatches(slug="work")
+IMPLEMENT: Final = dispatches(slug="work")
 #: The overseer dispatches a resume of KEY for review.
-RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
+RESUME: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
 
 
 def planned(scenario: Scenario) -> int:

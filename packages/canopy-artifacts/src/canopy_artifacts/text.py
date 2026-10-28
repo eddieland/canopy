@@ -16,17 +16,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from typing import Literal, override
+from typing import Final, Literal, override
 
 #: The most of the text either side of a passage an anchor keeps.
-CONTEXT = 32
+CONTEXT: Final = 32
 #: The content types a version may have.
 type ContentType = Literal["text/html", "text/markdown"]
 #: Elements whose contents a page does not show.
-_HIDDEN = frozenset({"script", "style", "template", "title"})
+_HIDDEN: Final = frozenset({"script", "style", "template", "title"})
 #: Elements that sit inside a line of text, so their tags part no words. Any other tag starts or ends a block, or is
 #: an element such as `br` or `img` that stands between words, so it parts the words either side.
-_INLINE = frozenset(
+_INLINE: Final = frozenset(
     {
         "a",
         "abbr",

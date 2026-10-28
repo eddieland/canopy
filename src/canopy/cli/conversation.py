@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import sys
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 import click
 
@@ -58,12 +58,12 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.core.conversation import Ref
 
-CLI = "cli"
+CLI: Final = "cli"
 # `canopy show` lists this many of a ticket's runs and messages.
-SHOW_RUNS = 5
-SHOW_MESSAGES = 100
+SHOW_RUNS: Final = 5
+SHOW_MESSAGES: Final = 100
 # How much of a commented passage `canopy show --plans` quotes, as a change request does (DESIGN §25).
-SHOW_QUOTE = 160
+SHOW_QUOTE: Final = 160
 
 
 def _ref(text: str, verb: str) -> Ref:

@@ -10,7 +10,7 @@ import os
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, override
+from typing import Any, Final, override
 from unittest import mock
 
 import pytest
@@ -464,7 +464,7 @@ def test_a_publish_whose_process_died_is_settled_by_a_read_once_its_claim_outliv
 
 #: The reviser's report on `REPORT`'s draft, as the operator's note asks: one comment on a line of the diff, and one off
 #: it, which goes in the body under its location.
-REVISED = {
+REVISED: Final = {
     "status": "done",
     "body": "One defect, gently put.",
     "comments": [
@@ -472,7 +472,7 @@ REVISED = {
         {"location": "tests/test_retry.py:3", "text": "A test would catch it."},
     ],
 }
-NOTE = "Say it more gently, and fold the test finding into the body."
+NOTE: Final = "Say it more gently, and fold the test finding into the body."
 
 
 def wanted(scenario: Scenario) -> list[dict[str, Any]]:

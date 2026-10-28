@@ -7,7 +7,7 @@ recorded again while memory is off.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -22,11 +22,11 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 # Every prompt a worker run can be rendered from: each kind's public prompt, and the private variants.
-PROMPTS = [
+PROMPTS: Final = [
     *((str(kind), False) for kind in prompts.WORKER),
     *((str(kind), True) for kind in prompts.WORKER_PRIVATE),
 ]
-VALUES = {
+VALUES: Final = {
     **PROMPT_VALUES,
     "AUTHORIZATION": prompts.plan_authorization("PROJ-1", ["agent-ready-alice"], private=False),
     "PLAN_FILE": ".canopy-plan.md",

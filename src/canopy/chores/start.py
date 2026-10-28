@@ -13,7 +13,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.chores import history
 from canopy.core import agent_models, chore_runs, conversation, db, notice, outbox, prompts, recorded_runs
@@ -27,9 +27,9 @@ if TYPE_CHECKING:
     from canopy.core.config import Chore, Config
     from canopy.core.context import Context
 
-CHORES_DIR = "chores"
-RUNS_DIR = "chore-runs"
-DISPATCH_ACTION = "dispatch:chore"
+CHORES_DIR: Final = "chores"
+RUNS_DIR: Final = "chore-runs"
+DISPATCH_ACTION: Final = "dispatch:chore"
 
 
 class Refusal(Exception):  # noqa: N818  (an outcome the overseer is told about, not an error)

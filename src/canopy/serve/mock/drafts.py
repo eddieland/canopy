@@ -15,7 +15,7 @@ import zlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Final, override
 
 from canopy.core import db, review_diff, sql
 from canopy.infra import procs
@@ -24,10 +24,10 @@ from canopy.serve.mock.reviews import PR_88
 if TYPE_CHECKING:
     import sqlite3
 
-RUN = 45
+RUN: Final = 45
 # The head run 45 pushed, and its diff from the base branch: the spinner clears in a `finally` now.
-SHA = "e3a7d915" + "9" * 32
-DIFF = """\
+SHA: Final = "e3a7d915" + "9" * 32
+DIFF: Final = """\
 diff --git a/src/search/SearchBox.tsx b/src/search/SearchBox.tsx
 index 4a1f2b3..7c9d0e1 100644
 --- a/src/search/SearchBox.tsx
@@ -72,9 +72,10 @@ index 0000000..d41c9a7
 +    return { results, loading }
 +}
 """
-_STARTED, _ENDED = -40, -22
-_REVIEW = 4_102_337_001
-_THREADS = (
+_STARTED: Final = -40
+_ENDED: Final = -22
+_REVIEW: Final = 4_102_337_001
+_THREADS: Final = (
     # thread, comment, author, path, line (None: outdated), resolved, minutes, body
     (
         "PRRT_kwDOA1",
@@ -101,7 +102,7 @@ _THREADS = (
     ),
     ("PRRT_kwDOA3", 2_468_013_644, "alice", "src/search/useSearch.ts", None, True, -46, "nit: `Result` is type-only."),
 )
-_DRAFTS = (
+_DRAFTS: Final = (
     # number, kind, comment, stance, the run's text, the operator's edit, the run's reaction
     (
         1,

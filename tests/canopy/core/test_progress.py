@@ -4,6 +4,7 @@ import io
 import json
 import sqlite3
 from pathlib import Path
+from typing import Final
 
 from canopy.core import chore_runs, db, progress
 from canopy.core.vocab import TickStatus
@@ -11,14 +12,14 @@ from canopy.infra import logs
 from canopy.runtime.implementation import Version
 from tests.canopy.helpers import in_tick, present
 
-TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
+TOKENS: Final = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
 
 
 def event(kind: str, part: object) -> str:
     return json.dumps({"type": kind, "timestamp": 1, "sessionID": "ses_live", "part": part}) + "\n"
 
 
-STEP = event("step_finish", {"type": "step-finish", "reason": "tool-calls", "cost": 0.25, "tokens": TOKENS})
+STEP: Final = event("step_finish", {"type": "step-finish", "reason": "tool-calls", "cost": 0.25, "tokens": TOKENS})
 
 
 def test_each_line_reaches_the_log_and_a_ticks_session_and_spend_so_far_reach_the_tick(

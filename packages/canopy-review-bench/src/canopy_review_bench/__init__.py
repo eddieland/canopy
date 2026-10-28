@@ -8,6 +8,7 @@ package says how to choose cases and stage a bench.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Final
 
 import click
 
@@ -15,8 +16,8 @@ from canopy_review_bench import bench, commits, score
 from canopy_review_bench import run as run_module
 from canopy_review_bench.github import GitHub
 
-_BENCH = click.Path(exists=True, dir_okay=False, path_type=Path)
-_OVERLAY = click.Path(exists=True, file_okay=False, path_type=Path)
+_BENCH: Final = click.Path(exists=True, dir_okay=False, path_type=Path)
+_OVERLAY: Final = click.Path(exists=True, file_okay=False, path_type=Path)
 
 
 @click.group()

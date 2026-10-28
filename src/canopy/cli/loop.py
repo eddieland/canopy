@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 from rich.console import Console
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 # `canopy status` lists this many runs that ended.
-RECENT_RUNS = 10
+RECENT_RUNS: Final = 10
 
 
 @click.command("loop")

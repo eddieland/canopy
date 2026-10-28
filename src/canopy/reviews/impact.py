@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import records, sql
 from canopy.core import review_result as result
@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 
 #: The paths whose change makes a review of every repository `high`: CI's workflows. A repository's entry in the map
 #: adds to them and cannot remove them, so a commit to the shared workspace file cannot take CI off (TRUST_MODEL T7).
-ALWAYS = (".github/workflows/",)
+ALWAYS: Final = (".github/workflows/",)
 #: How much of a matched path a note shows: its name is the PR author's text.
-MAX_SHOWN_PATH = 200
+MAX_SHOWN_PATH: Final = 200
 
 
 @dataclass(frozen=True)

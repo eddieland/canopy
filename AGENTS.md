@@ -97,8 +97,9 @@ If code and the design disagree, the design doc wins until a decision entry says
     replace the step above. A Claude Code cloud session installs them when it starts (`.claude/settings.json`).
   - Tests: `uv run pytest -q <test modules>` for the package you changed, which sits parallel to it under `tests/`
     (add `-n auto` for a directory). Add the whole-canopy tests your change can trip: `tests/canopy/test_layers.py`
-    for a new import, module, or test helper, `test_frozen.py` for a dataclass, `test_prompt_sizes.py` for a prompt,
-    `core/test_db.py` and `core/test_records.py` for a migration or row type. A change to a shared fixture or helper
+    for a new import, module, or test helper, `test_frozen.py` for a dataclass, `test_final.py` for a module-level
+    constant, `test_prompt_sizes.py` for a prompt, `core/test_db.py` and `core/test_records.py` for a migration or row
+    type. A change to a shared fixture or helper
     in `tests/` runs the modules that use it. Under `ui/`, the unit tests and specs `ui/AGENTS.md` names.
   - Bringing the base branch in, by a merge or a rebase: the tests of the files whose conflicts you resolved by hand,
     and `core/test_db.py` and `core/test_records.py` for a migration you renumbered. A merge git made alone runs no
@@ -157,6 +158,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   `Set` (as `AbstractSet` where imported so) by what its readers need, as a parameter is, so the type checker refuses
   a change through it. A class that keeps state it changes is not frozen. `tests/canopy/test_frozen.py` fails on a
   `list`, `dict`, or `set` field.
+- A module-level constant, a name in capitals such as `MAX_TEXT` or `_PATTERN`, is annotated `Final`: `X: Final = 1`,
+  or `X: Final[Mapping[str, int]] = {...}` where it needs a declared type, one name to a line, so the type checker
+  refuses a rebinding of it. `tests/canopy/test_final.py` fails on one that is not.
 - Deterministic core. The Python code never calls an LLM. It runs agent processes and reads their output.
 - Everything canopy knows of the agent runtime, OpenCode, lives in its implementations, `src/canopy/runtime/opencode/`
   (OpenCode 1, the default) and `src/canopy/runtime/opencode2/` (OpenCode 2, when `runtime.version` is 2) (D009): its

@@ -27,35 +27,35 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
 
 from canopy_artifacts.text import CONTEXT, Anchor, ContentType, locate, visible_text
 
 #: The database's file, in the store's directory.
-DATABASE = "artifacts.db"
+DATABASE: Final = "artifacts.db"
 #: The id of the one person the local store knows, on whose behalf its agents write.
-OPERATOR = "operator"
+OPERATOR: Final = "operator"
 #: How every comment and change written here arrived. The web UI's will be `web`.
-VIA = "mcp"
+VIA: Final = "mcp"
 #: The most characters of an artifact's title, a version's content, and a comment's body.
-MAX_TITLE = 200
-MAX_CONTENT = 2_000_000
-MAX_BODY = 4000
+MAX_TITLE: Final = 200
+MAX_CONTENT: Final = 2_000_000
+MAX_BODY: Final = 4000
 #: The most characters of an anchor's passage: a whole section of a page, as a plan's may be.
-MAX_EXACT = 4000
+MAX_EXACT: Final = 4000
 #: The most origin pairs an artifact carries, and the most characters of a pair's key and value.
-MAX_ORIGIN = 16
-MAX_ORIGIN_KEY = 64
-MAX_ORIGIN_VALUE = 256
+MAX_ORIGIN: Final = 16
+MAX_ORIGIN_KEY: Final = 64
+MAX_ORIGIN_VALUE: Final = 256
 #: How many artifacts a page of `artifacts` holds, and the most changes one of the feed's may.
-LIST_PAGE = 50
-MAX_FEED = 200
+LIST_PAGE: Final = 50
+MAX_FEED: Final = 200
 #: The most digits of a cursor `artifacts` gives: a row's number, which SQLite holds in 64 bits.
-_CURSOR_DIGITS = 18
+_CURSOR_DIGITS: Final = 18
 #: How long a write waits for another process's to commit before it fails.
-_BUSY_SECONDS = 30
+_BUSY_SECONDS: Final = 30
 #: The schema, in steps: step N takes a database at `user_version` N to N + 1. Never edit a step; add one.
-_SCHEMA: Sequence[Sequence[str]] = (
+_SCHEMA: Final[Sequence[Sequence[str]]] = (
     (
         """CREATE TABLE artifacts (
             n INTEGER PRIMARY KEY,

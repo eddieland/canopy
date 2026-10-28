@@ -10,7 +10,7 @@ refuses inside canopy's own runs, as every operator verb does.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, records, sql
 from canopy.core.conversation import Refused
@@ -20,10 +20,10 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 # A comment or a reply has a reply's bound (DESIGN §22), as the UI's `MAX_COMMENT` does.
-MAX_BODY = conversation.MAX_OPERATOR
+MAX_BODY: Final = conversation.MAX_OPERATOR
 # A passage may be a whole section of a plan; the text either side is the UI's `CONTEXT`.
-MAX_QUOTE = 4000
-MAX_CONTEXT = 32
+MAX_QUOTE: Final = 4000
+MAX_CONTEXT: Final = 32
 
 
 @dataclass(frozen=True)

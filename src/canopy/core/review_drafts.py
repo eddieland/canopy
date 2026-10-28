@@ -23,7 +23,7 @@ import hashlib
 import json
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, review_diff, review_result, review_runs, sql
 from canopy.core.memory_text import TextRefused, check_text
@@ -36,12 +36,12 @@ if TYPE_CHECKING:
 #: How many comments one version may carry: as many as one run's drafts, which one review canopy posts on a PR already
 #: holds (DESIGN §29), and more than a review reports findings, so the reviewer's first version always fits. A comment
 #: past it is refused, never cut.
-MAX_COMMENTS = MAX_DRAFTS
+MAX_COMMENTS: Final = MAX_DRAFTS
 #: How many hex characters of a version's SHA-256 name it, as a draft's text is named (`drafts_manage.HASH_CHARS`).
-HASH_CHARS = 12
+HASH_CHARS: Final = 12
 #: The purpose of a review of one of the loop's own PRs (DESIGN §21), which has no draft.
-OWN = "own"
-_DRAFTS = sql.select("*").from_("review_drafts")
+OWN: Final = "own"
+_DRAFTS: Final = sql.select("*").from_("review_drafts")
 
 
 @dataclass(frozen=True)

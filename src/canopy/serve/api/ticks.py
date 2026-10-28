@@ -5,6 +5,8 @@ Reads only; a rationale, a transcript, and an output are untrusted text.
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter, HTTPException
 
 from canopy.serve import tick_views
@@ -13,7 +15,7 @@ from canopy.serve.api.refs import TickId, not_found
 from canopy.serve.schema import LastTick, Tick, TickDetail
 from canopy.serve.schema.transcript import RawOutput, Transcript
 
-TAG = "ticks"
+TAG: Final = "ticks"
 router = APIRouter(tags=[TAG])
 
 

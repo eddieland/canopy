@@ -6,6 +6,7 @@ The pool here is what treehouse makes: slots that are worktrees of one primary c
 import ast
 import json
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -15,12 +16,12 @@ from tests.canopy.helpers import pool, present, slot_of, worker_does
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import GitPool, executable, git
 
-PACKAGE = Path(__file__).resolve().parents[3] / "src" / "canopy"
+PACKAGE: Final = Path(__file__).resolve().parents[3] / "src" / "canopy"
 # The worker's own git is not under test: it runs with the flags too, so only host-side git could fire a hook.
-WORKER_COMMIT = hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work")
+WORKER_COMMIT: Final = hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work")
 #: The overseer dispatches PROJ-1's implement on its `work` branch.
-WORK = dispatches(slug="work")
-HOOKS = ("post-checkout", "reference-transaction", "pre-push", "post-index-change")
+WORK: Final = dispatches(slug="work")
+HOOKS: Final = ("post-checkout", "reference-transaction", "pre-push", "post-index-change")
 
 
 def plant(primary: Path, fired: Path) -> None:

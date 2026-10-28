@@ -7,7 +7,7 @@ import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 from unittest import mock
 
 import pytest
@@ -43,10 +43,11 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
 #: A chore with no `when`, which the harness runs (DESIGN §37), and one with a `when`, which the overseer decides.
-MINE, THEIRS = "deps", "build-health"
+MINE: Final = "deps"
+THEIRS: Final = "build-health"
 #: What the fake overseer runs after its asks: how many runs of each kind the journal holds then, and how many are
 #: recorded and not yet started.
-COUNTS = (
+COUNTS: Final = (
     "import sqlite3, sys; c = sqlite3.connect(sys.argv[1]); "
     "print(*(c.execute(f'SELECT count(*) FROM {t}').fetchone()[0] for t in ('runs', 'review_runs', 'chore_runs')), "
     "c.execute(\"SELECT count(*) FROM recorded_runs WHERE status = 'recorded'\").fetchone()[0])"

@@ -10,12 +10,13 @@ import sqlite3
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Final
 
 from canopy.core import db, records, sql
 from canopy.core.items import Item, fingerprint, subject
 
 # Events every sink has passed are deleted once they are this old.
-KEEP_EVENTS = timedelta(days=7)
+KEEP_EVENTS: Final = timedelta(days=7)
 
 
 def newest_event_id(conn: sqlite3.Connection) -> int:

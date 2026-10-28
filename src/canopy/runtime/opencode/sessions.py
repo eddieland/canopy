@@ -21,7 +21,7 @@ import json
 import os
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
 
@@ -42,11 +42,11 @@ if TYPE_CHECKING:
     from canopy.runtime.report import SessionCursor
 
 #: How long a read waits for OpenCode to let go of the database, in seconds.
-TIMEOUT_SECONDS = 5.0
+TIMEOUT_SECONDS: Final = 5.0
 #: A page of sessions updated after a cursor, the least recently updated first: the cursor's update, twice, its id, and
 #: the page's size. The columns are `_Session`'s, in its order. A row whose update or id is not of its column's type is
 #: never read, since the cursor could not pass it: SQLite stores any type in any column, and a run can write the file.
-SESSIONS_SQL = """
+SESSIONS_SQL: Final = """
 SELECT id, parent_id, directory, time_created, time_updated,
        cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write
 FROM session
@@ -57,7 +57,7 @@ LIMIT ?
 """
 #: Each model's replies in the sessions a JSON array of ids names, and their cost: each assistant message whose JSON
 #: names a provider and a model, by its session, provider, model, and variant.
-MODELS_SQL = """
+MODELS_SQL: Final = """
 SELECT session_id, json_extract(data, '$.providerID'), json_extract(data, '$.modelID'),
        json_extract(data, '$.variant'), count(*), total(json_extract(data, '$.cost'))
 FROM message
@@ -70,9 +70,9 @@ WHERE session_id IN (SELECT value FROM json_each(?))
 GROUP BY 1, 2, 3, 4
 """
 #: Between a model and its variant, as `canopy.runtime.opencode.session_models` names a model run at one.
-VARIANT_MARK = "@"
+VARIANT_MARK: Final = "@"
 #: Where the read starts when no cursor is given: before every session.
-_FIRST: SessionCursor = (-1, "")
+_FIRST: Final[SessionCursor] = (-1, "")
 
 # Milliseconds since the epoch, as OpenCode stamps a session: up to the year 9999.
 _Millis = Annotated[StrictInt, Field(ge=0, le=253_402_300_799_999)]

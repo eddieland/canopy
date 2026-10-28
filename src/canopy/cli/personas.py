@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -16,9 +16,9 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
     from canopy.core.context import Context
 
-CLI = "cli"
+CLI: Final = "cli"
 #: How `canopy persona KEY` names where each agent's persona comes from.
-SOURCES: dict[personas.Source, str] = {
+SOURCES: Final[dict[personas.Source, str]] = {
     "ticket": "this ticket's override",
     "config": "[personas]",
     "default": "canopy's default",

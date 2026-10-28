@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -59,7 +59,7 @@ def test_each_model_listed_is_read_and_any_other_line_passed_over() -> None:
 
 
 #: What `opencode models --verbose` prints: each model's line, then its JSON over several lines, indented by two.
-VERBOSE = """[corp-plugin] loaded
+VERBOSE: Final = """[corp-plugin] loaded
 anthropic/claude-x
 {
   "id": "claude-x",

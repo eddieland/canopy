@@ -6,14 +6,15 @@ left to vouch for SQL built some other way.
 
 import ast
 from pathlib import Path
+from typing import Final
 
-PACKAGE = Path(__file__).resolve().parents[2] / "src" / "canopy"
+PACKAGE: Final = Path(__file__).resolve().parents[2] / "src" / "canopy"
 # The builder itself, which alone runs SQL on a connection and makes fragments.
-BUILDER = "core/sql.py"
+BUILDER: Final = "core/sql.py"
 # What runs SQL on a sqlite3 connection or cursor.
-RUNS_SQL = frozenset({"execute", "executemany", "executescript"})
+RUNS_SQL: Final = frozenset({"execute", "executemany", "executescript"})
 # Calls that run SQL the builder does not make, with why: each is the only one of its kind.
-EXEMPT = {
+EXEMPT: Final = {
     # The migrations are files of SQL, run whole as they shipped.
     ("core/db.py", "migrate", "executescript"),
     # The runtime's own database, not the journal, which the runtime's layer, below `core`, reads with its literal

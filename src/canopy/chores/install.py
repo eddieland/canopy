@@ -27,7 +27,7 @@ import shlex
 import shutil
 import tomllib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import config
 from canopy.infra import logs, resources
@@ -40,13 +40,13 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 #: The directory of the state directory installed prompts are copied into.
-PROMPTS_DIR = "chore-prompts"
+PROMPTS_DIR: Final = "chore-prompts"
 #: The directory of the state directory each installed chore's runtime config directory is in, by the chore's name.
-AGENTS_DIR = "chore-agents"
+AGENTS_DIR: Final = "chore-agents"
 #: The comment above an installed table, which says who owns it.
-MARKER = "# Written by `canopy chore install {name}`, which replaces this table whole when run again."
+MARKER: Final = "# Written by `canopy chore install {name}`, which replaces this table whole when run again."
 # A line that starts a table or an array of tables, and so ends the one before it.
-_HEADER_RE = re.compile(r"[ \t]*\[")
+_HEADER_RE: Final = re.compile(r"[ \t]*\[")
 
 
 class InstallError(Exception):

@@ -20,7 +20,7 @@ import json
 import sqlite3
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import assert_never
+from typing import Final, assert_never
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
@@ -40,11 +40,11 @@ from canopy.core.vocab import (
 from canopy.infra import logs
 
 # The longest ticket URL a draft may name; the post command checks the rest.
-MAX_URL = 2048
+MAX_URL: Final = 2048
 # Every draft's whole row, for each reader to finish.
-_DRAFTS = sql.select("*").from_("drafts")
+_DRAFTS: Final = sql.select("*").from_("drafts")
 #: The stance a thread's draft takes when it does what its plan item proposed, for the proposals that draft a reply.
-_PROPOSED_STANCE: Mapping[Proposal, DraftStance] = {
+_PROPOSED_STANCE: Final[Mapping[Proposal, DraftStance]] = {
     Proposal.CHANGE: DraftStance.CHANGED,
     Proposal.DECLINE: DraftStance.DECLINED,
 }

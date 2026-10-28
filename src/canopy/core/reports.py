@@ -18,7 +18,7 @@ import dataclasses
 import json
 import sys
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Final
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 
@@ -47,22 +47,22 @@ if TYPE_CHECKING:
 
 #: The MCP server of these reports, as a run's inline config names it. The runtime joins it to each tool's name,
 #: `canopy_reports_health`; no tool's own name holds an underscore, as none of canopy's tools do (DESIGN §27).
-SERVER = "canopy_reports"
+SERVER: Final = "canopy_reports"
 #: How the runtime starts that server: this interpreter's canopy, which `-P` keeps off the working directory's modules
 #: (TRUST_MODEL T7).
-SERVER_COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp", "--reports")
+SERVER_COMMAND: Final = (sys.executable, "-P", "-m", "canopy", "_mcp", "--reports")
 #: The tools it serves, by their own names: each command's, with hyphens for spaces.
-HEALTH = "health"
-SPEND = "spend"
-MEMORY_LESSONS = "memory-lessons"
-MEMORY_PROPOSALS = "memory-proposals"
-MEMORY_LIST = "memory-list"
-DECISIONS = "decisions"
-SHOW_RUN = "show-run"
-SHOW_CHORE = "show-chore"
-CONFIG_SHOW = "config-show"
-AGENTS = "agents"
-TOOLS = (
+HEALTH: Final = "health"
+SPEND: Final = "spend"
+MEMORY_LESSONS: Final = "memory-lessons"
+MEMORY_PROPOSALS: Final = "memory-proposals"
+MEMORY_LIST: Final = "memory-list"
+DECISIONS: Final = "decisions"
+SHOW_RUN: Final = "show-run"
+SHOW_CHORE: Final = "show-chore"
+CONFIG_SHOW: Final = "config-show"
+AGENTS: Final = "agents"
+TOOLS: Final = (
     HEALTH,
     SPEND,
     MEMORY_LESSONS,

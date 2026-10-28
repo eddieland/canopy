@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import chore_result, chore_runs, chore_view, contract, conversation, db, run_models
 from canopy.core.vocab import ChoreRunStatus
@@ -48,9 +48,9 @@ if TYPE_CHECKING:
     from canopy.serve.schema.transcript import Transcript
 
 #: A chore's page: its latest runs.
-CHORE_RUNS = 10
+CHORE_RUNS: Final = 10
 #: The most of a chore's prompt read for its title: its first line, cut here.
-_CHORE_TITLE_READ = 500
+_CHORE_TITLE_READ: Final = 500
 
 
 def chores(backend: Backend, ctx: Context) -> list[ChoreSummary]:

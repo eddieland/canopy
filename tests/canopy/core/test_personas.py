@@ -7,7 +7,7 @@ in a prompt is refused; and a prompt override without `{{PERSONA}}` serves a run
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -25,18 +25,18 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 #: Each prompt a persona reaches, by the id its snapshot is recorded under.
-AGENTS = ["plan", "reviewer", "implement", "implement-private", "resume", "resume-private"]
+AGENTS: Final = ["plan", "reviewer", "implement", "implement-private", "resume", "resume-private"]
 #: The heading the persona's section opens with in every one of them.
-PERSONA = "## Persona\n\n"
+PERSONA: Final = "## Persona\n\n"
 #: The values a plan's prompt needs beyond a worker's.
-PLAN_VALUES = {
+PLAN_VALUES: Final = {
     "AUTHORIZATION": prompts.plan_authorization("PROJ-1", ["agent-ready-alice"], private=False),
     "PLAN_FILE": ".canopy-plan.md",
     "PLAN_OUT": ".canopy-new-plan.md",
     "MAX_PLAN_CHARS": "100,000",
 }
 #: The values the reviewer's prompt needs.
-REVIEWER_VALUES = {
+REVIEWER_VALUES: Final = {
     "PR_URL": "https://example.test/pr/1",
     "SHA": "b" * 40,
     "CHECKOUT": "/state/reviews/1/checkout",
@@ -53,7 +53,7 @@ REVIEWER_VALUES = {
     "CONTRACT": "<the result contract>",
 }
 #: An operator's own `canopy`, which takes the place of the one canopy ships.
-SHADOW = "When you write anything, write it as a field note: what you saw, then what you did.\n"
+SHADOW: Final = "When you write anything, write it as a field note: what you saw, then what you did.\n"
 
 
 @pytest.mark.parametrize("source", ["shipped", "shadowed"])

@@ -9,7 +9,7 @@ alone, so the cases here write the derivation's observations fresh at `NOW` and 
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
 #: What the harness records for a ticket a worker of which is running.
-RUNNING = harness.Decision(KEY, Phase.RUNNING, "wait", "running: a worker of it is running")
+RUNNING: Final = harness.Decision(KEY, Phase.RUNNING, "wait", "running: a worker of it is running")
 
 
 @pytest.fixture
@@ -218,7 +218,7 @@ def test_its_attention_items_are_marked_its_own_and_are_not_its_decisions(scenar
 
 
 #: What the overseer records about a ticket, through each verb's command and its tool.
-VERBS = {
+VERBS: Final = {
     "decide": (
         ["decide", KEY, "wait", "--rationale", "r"],
         {"decisions": [{"key": KEY, "action": "wait", "rationale": "r"}]},

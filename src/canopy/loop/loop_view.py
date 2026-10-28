@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from rich.table import Table
 from rich.text import Text
@@ -27,12 +27,12 @@ if TYPE_CHECKING:
     from canopy.loop.tick import Woken
 
 #: Pressed during the wait, this key runs the next tick now, as `canopy tick` by hand would.
-TICK_NOW_KEY = "t"
+TICK_NOW_KEY: Final = "t"
 #: Pressed during a tick or the wait, this key pauses the loop, or resumes it when paused.
-PAUSE_KEY = "p"
+PAUSE_KEY: Final = "p"
 
 #: What the countdown says ended the wait early, before the time left.
-_WOKEN_NOTES: dict[Woken | None, str] = {
+_WOKEN_NOTES: Final[dict[Woken | None, str]] = {
     "message": "operator message; next tick in ",
     "starts": "a ticket started or stopped; next tick in ",
     "task": "a task submitted, replied to, or stopped; next tick in ",

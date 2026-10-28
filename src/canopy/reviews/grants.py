@@ -8,7 +8,7 @@ beside its `review_runs`. Only the operator grants (TRUST_MODEL T3).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import conversation, db, review_runs, sql
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 # The KIND `canopy grant` takes for a PR.
-KIND = "review"
+KIND: Final = "review"
 
 
 def limit(conn: sqlite3.Connection, config: Config, pr_url: str) -> int:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import commit_hooks, hostgit
 from canopy.core.config import AUTOSQUASH
@@ -19,9 +19,9 @@ if TYPE_CHECKING:
 
     from canopy.infra import logs
 
-_GIT_TIMEOUT_SECONDS = 300
+_GIT_TIMEOUT_SECONDS: Final = 300
 # The most commits a note names that lack one of canopy's marks; it counts the rest.
-_MAX_NAMED = 5
+_MAX_NAMED: Final = 5
 
 
 class SetupError(Exception):

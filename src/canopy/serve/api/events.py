@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import closing
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends
 from fastapi.sse import EventSourceResponse
@@ -13,7 +13,7 @@ from canopy.serve import live
 from canopy.serve.api.deps import BackendDep, OptionsDep
 from canopy.serve.schema.event import StreamEvent
 
-TAG = "events"
+TAG: Final = "events"
 router = APIRouter(tags=[TAG])
 
 

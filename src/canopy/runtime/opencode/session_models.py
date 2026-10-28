@@ -20,7 +20,7 @@ as the start of one JSON value, and the first that holds an export is the export
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
 
@@ -42,13 +42,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: How long one export may take: it starts OpenCode, which reads its config and plugins, then the session.
-TIMEOUT_SECONDS = 60
+TIMEOUT_SECONDS: Final = 60
 #: The command, as canopy's words for a failure name it.
-COMMAND = "opencode export --sanitize"
+COMMAND: Final = "opencode export --sanitize"
 #: What OpenCode prints on stderr for a session it does not have.
-NOT_FOUND = "Session not found"
+NOT_FOUND: Final = "Session not found"
 # Where a JSON object starts a line.
-_OBJECT_RE = re.compile(r"^\{", re.MULTILINE)
+_OBJECT_RE: Final = re.compile(r"^\{", re.MULTILINE)
 
 
 class _Info(BaseModel):

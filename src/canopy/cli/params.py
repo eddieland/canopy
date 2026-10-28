@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Final, override
 
 import click
 from click.shell_completion import CompletionItem
@@ -215,13 +215,13 @@ def chore_names() -> list[str]:
         return []
 
 
-TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")
-REASON = PatternType("REASON", REASON_RE, "reason")
-SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
-REPO = PatternType("NAME", config.REPO_NAME_RE, "repository name", repo_names)
-CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", chore_names)
+TICKET_KEY: Final = PatternType("KEY", KEY_RE, "ticket key")
+REASON: Final = PatternType("REASON", REASON_RE, "reason")
+SLUG: Final = PatternType("SLUG", dispatch.SLUG_RE, "slug")
+REPO: Final = PatternType("NAME", config.REPO_NAME_RE, "repository name", repo_names)
+CHORE: Final = PatternType("NAME", config.CHORE_NAME_RE, "chore name", chore_names)
 # One of the example chores canopy ships, which `canopy chore install` sets up.
-EXAMPLE_CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", install.available)
-PR_URL = PrUrlType()
-PERSONA = PatternType("NAME", config.PERSONA_NAME_RE, "persona name")
-EVAL_CASE = PatternType("NAME", config.EVAL_CASE_RE, "eval case name")
+EXAMPLE_CHORE: Final = PatternType("NAME", config.CHORE_NAME_RE, "chore name", install.available)
+PR_URL: Final = PrUrlType()
+PERSONA: Final = PatternType("NAME", config.PERSONA_NAME_RE, "persona name")
+EVAL_CASE: Final = PatternType("NAME", config.EVAL_CASE_RE, "eval case name")

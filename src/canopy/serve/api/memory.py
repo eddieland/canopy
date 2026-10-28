@@ -6,7 +6,7 @@ The verbs, promote, reject, renew, pin, unpin, edit, and forget, are `canopy mem
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -33,7 +33,7 @@ from canopy.serve.schema.memory import (
     TicketMemory,
 )
 
-TAG = "memory"
+TAG: Final = "memory"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

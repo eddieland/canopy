@@ -5,6 +5,7 @@ refuse them as they refuse the CLI's.
 """
 
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -17,9 +18,9 @@ from tests.canopy.helpers import in_run, in_tick, inline_context, pool_statuses,
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
-TEXT = "Find out why the build is slow, and push a fix if one is small."
+TEXT: Final = "Find out why the build is slow, and push a fix if one is small."
 #: A reply's form, with the submission id it drew.
-REPLY = {"body": "Look at the cache step first.", "submission": "form-0001"}
+REPLY: Final = {"body": "Look at the cache step first.", "submission": "form-0001"}
 
 
 def test_a_task_submitted_from_the_web_is_queued_as_the_operators_on_channel_web(ctx: Context) -> None:

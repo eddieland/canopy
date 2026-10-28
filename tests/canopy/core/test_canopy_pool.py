@@ -14,6 +14,7 @@ import threading
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -24,7 +25,7 @@ from canopy.runs import reconcile
 from tests.canopy.helpers import present
 from tests.conftest import HERMETIC_GIT, CanopyEnv, Journals, git
 
-REPO = "repo"
+REPO: Final = "repo"
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,7 @@ def ws(tmp_path: Path, journals: Journals) -> Iterator[Ws]:
 
 # Run in a process of its own: lease a slot of the pool at argv[1] (root) for argv[3], recording it in the journal at
 # argv[2], and print the lease.
-LEASE_SCRIPT = """
+LEASE_SCRIPT: Final = """
 import sys
 from pathlib import Path
 from canopy.core import db, pool

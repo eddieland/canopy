@@ -7,7 +7,7 @@ prompt carries as `canopy reply chore:NAME`'s does.
 import dataclasses
 import json
 from collections.abc import Collection
-from typing import Any
+from typing import Any, Final
 
 import pytest
 
@@ -18,7 +18,7 @@ from canopy.serve.backend import Backend
 from tests.canopy.helpers import json_block
 from tests.canopy.web_helpers import SECRET, at, client, signed_in
 
-NOTE = "Leave out lodash-advisory until 2026-10-15: the date picker's upgrade is merging."
+NOTE: Final = "Leave out lodash-advisory until 2026-10-15: the date picker's upgrade is merging."
 
 
 def test_the_chores_list_is_each_configured_chore_as_canopy_status_lists_it(backend: Backend) -> None:

@@ -22,7 +22,7 @@ import re
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Final, Literal, Self
 
 from pydantic import (
     AfterValidator,
@@ -54,33 +54,33 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: A ticket key; keys reach branch names, lease holders, paths, and argv (DESIGN §17).
-KEY_RE = dispatch.KEY_RE
+KEY_RE: Final = dispatch.KEY_RE
 #: An attention item's reason, the `attention:<reason>` action it is recorded as.
-REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
+REASON_RE: Final = re.compile(r"[a-z][a-z0-9_]*")
 #: A cursor's id: it is rendered into prompts, so it is kept short and plain.
-CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
+CURSOR_VALUE_RE: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
 #: The most free text the overseer writes to the journal in one field.
-MAX_TEXT = 2000
+MAX_TEXT: Final = 2000
 #: A ticket's title is a name, shown beside its key and in its runs' session titles (DESIGN §13).
-MAX_TITLE = 80
+MAX_TITLE: Final = 80
 #: The longest PR URL the overseer may name.
-MAX_PR_URL = 300
+MAX_PR_URL: Final = 300
 #: What `decide` records.
-DECIDE_ACTIONS = ("wait", "skip", "done")
+DECIDE_ACTIONS: Final = ("wait", "skip", "done")
 #: The guard that refuses what the overseer records about a ticket the harness decided (DESIGN §37).
-DECIDED = "decided"
+DECIDED: Final = "decided"
 #: The guard that refuses an attention item of a reason the harness raises from its causes (DESIGN §37).
-RAISED = "raised"
+RAISED: Final = "raised"
 #: The phases the overseer sets. `split` is retired (M46): old tickets may still hold it, and nothing sets it.
-SETTABLE_PHASES = tuple(p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT)
+SETTABLE_PHASES: Final = tuple(p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT)
 
 
 #: What a verb's result says of the recorded run it returns (DESIGN §40).
-RECORDED_DESCRIPTION = (
+RECORDED_DESCRIPTION: Final = (
     "The recorded run, which the tick starts once your run ends, under its guards again; none in a dry run."
 )
 #: What a verb's text says of a run it recorded.
-STARTS_AFTER = "it starts once your run ends, if its guards still allow it"
+STARTS_AFTER: Final = "it starts once your run ends, if its guards still allow it"
 
 
 class Refused(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import contract, db, records
 from canopy.infra.text import one_line
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from canopy.core import chore_view
 
 #: How much of a persona's digest a line shows: enough to tell two versions of it apart.
-DIGEST_WIDTH = 12
+DIGEST_WIDTH: Final = 12
 
 
 def run_kind(row: sqlite3.Row) -> str:

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -227,7 +227,7 @@ def queue_given_a_role(env: CanopyEnv, conn: sqlite3.Connection) -> None:
 
 
 #: Each reason: what raises it, the item, and what shows its cause gone.
-CAUSES: dict[str, tuple[Callable[[CanopyEnv, sqlite3.Connection], None], Found, Callable[..., None]]] = {
+CAUSES: Final[dict[str, tuple[Callable[[CanopyEnv, sqlite3.Connection], None], Found, Callable[..., None]]]] = {
     "needs_reviewer": (green, (KEY, "needs_reviewer", "repo"), pending),
     "ready_to_merge": (approved, (KEY, "ready_to_merge", "repo"), merged),
     "untrusted_review": (untrusted, (KEY, "untrusted_review", "repo"), answered),
@@ -323,7 +323,7 @@ def test_a_ticket_seen_closed_or_unlabeled_holds_no_item(canopy_env: CanopyEnv, 
 
 
 #: The reasons whose cause rests on an observation, and what raises each.
-OBSERVED = sorted(harness_items.OBSERVED)
+OBSERVED: Final = sorted(harness_items.OBSERVED)
 
 
 def raise_in_an_ok_tick(env: CanopyEnv, conn: sqlite3.Connection) -> list[Found]:
@@ -442,7 +442,7 @@ def test_a_tick_keeps_its_item_through_a_skipped_tick_a_failed_one_and_an_outage
 
 
 #: A build that passed, at the PR's head.
-PASSING = {"name": "build", "status": "completed", "conclusion": "success", "run_id": 11}
+PASSING: Final = {"name": "build", "status": "completed", "conclusion": "success", "run_id": 11}
 
 
 def github_checks(state: Path, *checks: dict[str, object]) -> None:
@@ -487,7 +487,7 @@ def test_an_ownership_check_that_waits_on_a_person_is_never_ci_red(scenario: Sce
 
 
 #: A merge queue's status, waiting as it does on every open PR.
-QUEUED: dict[str, object] = {"name": "merge-queue", "status": "queued", "run_id": 12}
+QUEUED: Final[dict[str, object]] = {"name": "merge-queue", "status": "queued", "run_id": 12}
 
 
 def queued_on_a_pr(scenario: Scenario, github_state: Path, *checks: dict[str, object]) -> None:

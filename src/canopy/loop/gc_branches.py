@@ -14,7 +14,7 @@ a branch already deleted on the remote. Nothing here fetches, and nothing is del
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import hostgit, sql, tasks
 from canopy.core.vocab import RunStatus
@@ -28,8 +28,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: The remote every primary clone pushes to and fetches from.
-REMOTE = "origin"
-_FOR_EACH_REF_TIMEOUT_SECONDS = 60
+REMOTE: Final = "origin"
+_FOR_EACH_REF_TIMEOUT_SECONDS: Final = 60
 
 
 @dataclass(frozen=True)

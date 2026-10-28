@@ -5,7 +5,7 @@ carried in the state block and every public worker's prompt (D093).
 """
 
 import json
-from typing import cast
+from typing import Final, cast
 
 import pytest
 
@@ -16,7 +16,7 @@ from tests.canopy.helpers import KEY, present, waits, worker_does
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import GitPool
 
-GO_AHEAD = "Use your best judgement on codebot's review: take the null check, skip the renames."
+GO_AHEAD: Final = "Use your best judgement on codebot's review: take the null check, skip the renames."
 
 
 def trust(scenario: Scenario, *reviewers: str) -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy_review_bench.bench import BenchError
 
@@ -13,9 +13,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 #: How long a command may run by default.
-TIMEOUT_SECONDS = 120
+TIMEOUT_SECONDS: Final = 120
 #: How much of a failed command's output its error quotes.
-_QUOTED = 600
+_QUOTED: Final = 600
 
 
 def run(

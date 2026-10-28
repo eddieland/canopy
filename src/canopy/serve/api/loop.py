@@ -6,6 +6,8 @@ and the notice at every step of its wait.
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter
 
 from canopy.core import config, conversation, notice, pause
@@ -15,7 +17,7 @@ from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError
 from canopy.serve.schema import ConfigReload, LoopState, NoticeChanged, NoticeRequest, PauseChanged, TickAsked
 
-TAG = "loop"
+TAG: Final = "loop"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

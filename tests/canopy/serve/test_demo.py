@@ -1,6 +1,7 @@
 """The public demo of the web UI over mock data (canopy.serve.demo, D122): its host names, and mock data only."""
 
 from pathlib import Path
+from typing import Final
 from unittest import mock
 
 import pytest
@@ -10,8 +11,8 @@ from pydantic import ValidationError
 from canopy.serve import demo
 from canopy.serve.options import ServeOptions
 
-DEMO = "canopy-git-main-acme.vercel.app"
-VERCEL = {
+DEMO: Final = "canopy-git-main-acme.vercel.app"
+VERCEL: Final = {
     "VERCEL_URL": "canopy-a1b2c3-acme.vercel.app",
     "VERCEL_BRANCH_URL": DEMO,
     "VERCEL_PROJECT_PRODUCTION_URL": "canopy.example.com",

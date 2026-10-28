@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from canopy.core import (
     contract,
@@ -55,9 +55,9 @@ if TYPE_CHECKING:
     from canopy.serve.schema.transcript import RawOutput, Transcript
 
 # How many review runs the reviews list carries, newest first.
-RECENT_REVIEWS = 100
+RECENT_REVIEWS: Final = 100
 # Most severe first: a review's worst finding is the first of these it reported.
-_SEVERITIES: tuple[FindingSeverity, ...] = ("blocking", "major", "minor")
+_SEVERITIES: Final[tuple[FindingSeverity, ...]] = ("blocking", "major", "minor")
 
 
 def reviews(ctx: Context) -> list[ReviewSummary]:

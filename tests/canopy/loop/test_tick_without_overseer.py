@@ -9,7 +9,7 @@ one duty no ticket is needed for.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -28,7 +28,8 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv, GitPool
 
 #: A chore with no `when`, which the harness runs (DESIGN §37), and one with a `when`, which the overseer decides.
-MINE, THEIRS = "deps", "build-health"
+MINE: Final = "deps"
+THEIRS: Final = "build-health"
 
 
 @pytest.fixture

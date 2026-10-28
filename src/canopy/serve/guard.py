@@ -14,7 +14,7 @@ header bounds what the app can read; a chunked body has none, and is refused, as
 from __future__ import annotations
 
 from collections.abc import Set as AbstractSet
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from urllib.parse import urlsplit
 
 from starlette.datastructures import Headers
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # Sent on every response. No framing (clickjacking), no MIME sniffing, no Referer to anywhere.
-SECURITY_HEADERS: tuple[tuple[bytes, bytes], ...] = (
+SECURITY_HEADERS: Final[tuple[tuple[bytes, bytes], ...]] = (
     (b"x-content-type-options", b"nosniff"),
     (b"x-frame-options", b"DENY"),
     (b"referrer-policy", b"no-referrer"),
@@ -32,7 +32,7 @@ SECURITY_HEADERS: tuple[tuple[bytes, bytes], ...] = (
 # The largest body a request may carry. The largest the API takes is an edited plan's 100,000 characters (DESIGN §25):
 # at most 1,200,000 bytes of JSON when every one is outside the BMP and escaped as a surrogate pair, `\ud83d\ude00`, 12
 # bytes each.
-MAX_BODY_BYTES = 1280 * 1024
+MAX_BODY_BYTES: Final = 1280 * 1024
 
 
 def host_name(host: str) -> str:

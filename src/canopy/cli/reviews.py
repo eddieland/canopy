@@ -15,7 +15,7 @@ import json
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 import click
 
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from canopy.core.config import EvalCase
 
 #: The channel `show` marks a review seen through, and a draft's edit or publish is recorded with (DESIGN §22).
-CLI = "cli"
+CLI: Final = "cli"
 
 
 @click.group("review", cls=Group)

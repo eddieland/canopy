@@ -14,7 +14,7 @@ from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import contract, db, outbox, spend, sql
 from canopy.core.config import Sink, notify_words
@@ -27,16 +27,16 @@ if TYPE_CHECKING:
     from canopy.core.items import Item
     from canopy.infra import logs
 
-TIMEOUT_SECONDS = 60
+TIMEOUT_SECONDS: Final = 60
 # A sink that fails this many deliveries in a row raises `loop.sink_failing` once; so many failed ticks raise
 # `loop.failing` once.
-FAILING_AFTER = 3
-_POINT_GROUPS = (outbox.LOOP, outbox.RUNS, outbox.CHORES, outbox.REVIEWS, outbox.TASKS)
+FAILING_AFTER: Final = 3
+_POINT_GROUPS: Final = (outbox.LOOP, outbox.RUNS, outbox.CHORES, outbox.REVIEWS, outbox.TASKS)
 # Events a batching sink sends at once, with whatever it held: the loop or a sink failing, or a plan waiting on the
 # operator, which holds its ticket until they answer (DESIGN §25).
-_URGENT_KINDS = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed"})
+_URGENT_KINDS: Final = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed"})
 # The events whose `blocked` run asked the operator a question: a ticket's run's, and a one-off task's (DESIGN §36).
-_ASKING_KINDS = frozenset({"run.ended", "task.ended"})
+_ASKING_KINDS: Final = frozenset({"run.ended", "task.ended"})
 
 
 @dataclass(frozen=True)

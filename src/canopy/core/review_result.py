@@ -6,21 +6,21 @@ bounded. A result that does not validate is `unknown`.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictStr, model_validator
 
 from canopy.core import contract
 from canopy.core.contract import bounded, one_line
 
-MAX_SUMMARY = 2000
-MAX_TITLE = 200
-MAX_LOCATION = 300
-MAX_DETAIL = 1000
-MAX_FINDINGS = 20
+MAX_SUMMARY: Final = 2000
+MAX_TITLE: Final = 200
+MAX_LOCATION: Final = 300
+MAX_DETAIL: Final = 1000
+MAX_FINDINGS: Final = 20
 #: A revised version's bounds: a draft's text and comments, as `replies` bounds them (it imports too much for here).
-MAX_REVISED_TEXT = 4000
-MAX_REVISED_COMMENTS = 30
+MAX_REVISED_TEXT: Final = 4000
+MAX_REVISED_COMMENTS: Final = 30
 
 
 def _finding_number(value: object) -> object:
@@ -123,7 +123,7 @@ def parse_revision(stdout: str) -> RevisionResult | None:
     return contract.last_line(RevisionResult, stdout)
 
 
-CONTRACT = (
+CONTRACT: Final = (
     '{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high",'
     '"summary":"a paragraph, line breaks sparingly",'
     '"body":"what you would tell the PR\'s author beyond the findings, or nothing",'
@@ -131,7 +131,7 @@ CONTRACT = (
     '"findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line",'
     '"detail":"what is wrong and why","rebuts":null}]}'
 )
-REVISION_CONTRACT = (
+REVISION_CONTRACT: Final = (
     '{"status":"done|failed","body":"the review\'s body, or why you could not revise",'
     '"comments":[{"location":"path:line","text":"the comment"}]}'
 )

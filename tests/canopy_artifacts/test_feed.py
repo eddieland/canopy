@@ -6,7 +6,7 @@ import json
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from unittest import mock
 
 import pytest
@@ -20,9 +20,9 @@ from canopy.core.vocab import AnchorStatus, AuthorKind, ConnectorRunStatus, Thre
 from canopy.infra import logs, procs
 from tests.conftest import CanopyEnv, invoke
 
-NAMESPACE = "canopy/operator"
-PAGE = """<html><body><p>The cache is slow under load.</p><p>We should shard it.</p></body></html>"""
-REWORDED = """<html><body><p>The cache is slow under load.</p><p>Sharding it is the plan.</p></body></html>"""
+NAMESPACE: Final = "canopy/operator"
+PAGE: Final = """<html><body><p>The cache is slow under load.</p><p>We should shard it.</p></body></html>"""
+REWORDED: Final = """<html><body><p>The cache is slow under load.</p><p>Sharding it is the plan.</p></body></html>"""
 
 
 @pytest.fixture

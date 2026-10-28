@@ -18,7 +18,7 @@ import json
 import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, TextIO
+from typing import TYPE_CHECKING, Annotated, Final, Literal, TextIO
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
@@ -53,13 +53,13 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 #: The most a task's summary or question holds, as a worker's does.
-MAX_TEXT = 2000
+MAX_TEXT: Final = 2000
 #: The most PRs a task's result may name: its prompt asks for one at most.
-MAX_PRS = 10
+MAX_PRS: Final = 10
 #: The run's id as its agent's environment names it, so the operator's commands refuse inside it (DESIGN §22).
-RUN_ID_PREFIX = "task-"
+RUN_ID_PREFIX: Final = "task-"
 #: How a run the operator stopped with `canopy stop task:N --now` ends.
-STOP_NOTE = "the operator stopped the task with `canopy stop --now`"
+STOP_NOTE: Final = "the operator stopped the task with `canopy stop --now`"
 
 Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
 

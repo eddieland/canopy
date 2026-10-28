@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -19,8 +20,8 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes, sets_phase
 from tests.conftest import GitPool, git
 
-FIRST = "agent/PROJ-1-first"
-SECOND = "agent/PROJ-2-second"
+FIRST: Final = "agent/PROJ-1-first"
+SECOND: Final = "agent/PROJ-2-second"
 
 
 def blocker(scenario: Scenario) -> Ran:
@@ -145,7 +146,7 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
-BAD_BASE = "base (--base) must be another ticket's branch, agent/<KEY>-<slug>"
+BAD_BASE: Final = "base (--base) must be another ticket's branch, agent/<KEY>-<slug>"
 
 
 @pytest.mark.parametrize(

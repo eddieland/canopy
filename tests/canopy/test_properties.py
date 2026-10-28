@@ -4,6 +4,7 @@ import re
 import string
 from collections.abc import Callable
 from pathlib import Path
+from typing import Final
 
 import click
 import pytest
@@ -30,7 +31,7 @@ from canopy.runtime.definitions import BASH_ALLOW_RE
 from canopy.setup import init
 
 # Characters that mean something to a shell, a path, a glob, or a git ref.
-UNSAFE = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")
+UNSAFE: Final = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")
 fixtures = [HealthCheck.function_scoped_fixture]
 
 
@@ -95,7 +96,7 @@ def accepts_branch_prefix(value: str) -> bool:
 
 
 # Each validator the CLI and init actually call, with the pattern it is meant to enforce on the whole string.
-VALIDATORS = [
+VALIDATORS: Final = [
     pytest.param(KEY_RE, accepts_ticket_key, id="ticket-key-type"),
     pytest.param(KEY_RE, valid_key, id="decide-key"),
     pytest.param(REASON_RE, accepts_reason, id="reason-type"),
@@ -144,7 +145,7 @@ def test_text_is_stripped_non_empty_and_bounded(value: str) -> None:
     assert 0 < len(text) <= MAX_TEXT
 
 
-WORDS = st.text(alphabet=string.ascii_letters + string.digits + "-_", min_size=1, max_size=12)
+WORDS: Final = st.text(alphabet=string.ascii_letters + string.digits + "-_", min_size=1, max_size=12)
 
 
 @given(st.lists(WORDS, min_size=1, max_size=4), st.text())
@@ -260,7 +261,7 @@ def test_accepted_slugs_are_short_and_plain(value: str) -> None:
 
 
 #: Characters that mean something to a shell or to YAML: none may reach a rendered bash rule.
-SHELL_SIGNIFICANT = set("\"'`$;&|<>\\(){}[]#~!^\n\r\t")
+SHELL_SIGNIFICANT: Final = set("\"'`$;&|<>\\(){}[]#~!^\n\r\t")
 
 
 @given(st.text() | near(BASH_ALLOW_RE))
@@ -285,7 +286,7 @@ def test_an_accepted_bash_allow_is_one_plain_command_line_of_a_command_that_runs
         assert not command.startswith(f"{own}-")
 
 
-REFUSED_COMMANDS = sorted(
+REFUSED_COMMANDS: Final = sorted(
     {*bash_allows.RUNS_COMMANDS, *bash_allows.WEB_COMMANDS, *bash_allows.VCS_COMMANDS}
     | {
         "canopy",

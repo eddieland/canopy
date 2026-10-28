@@ -10,6 +10,8 @@ T1).
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter, HTTPException
 
 from canopy.core import conversation
@@ -33,7 +35,7 @@ from canopy.serve.schema.task import (
 from canopy.serve.schema.ticket import StopRequest
 from canopy.serve.schema.transcript import Transcript
 
-TAG = "tasks"
+TAG: Final = "tasks"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

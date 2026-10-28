@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, Final, Literal, assert_never
 
 from canopy.core import review_answers, review_runs, run_models
 from canopy.core import review_result as result
@@ -28,15 +28,15 @@ if TYPE_CHECKING:
 type Dimension = Literal["severity", "persona", "model"]
 
 #: Each dimension, in the order the tables print.
-DIMENSIONS: tuple[Dimension, ...] = ("severity", "persona", "model")
+DIMENSIONS: Final[tuple[Dimension, ...]] = ("severity", "persona", "model")
 #: The group of a review run in no persona: the default reviewer, or a review from before canopy recorded one.
-NO_PERSONA = "(no persona)"
+NO_PERSONA: Final = "(no persona)"
 #: The group of a review run whose session named no model, or has not been read yet.
-NO_MODEL = "(no model read)"
+NO_MODEL: Final = "(no model read)"
 #: What a dismissal from before canopy asked why is counted as.
-UNRECORDED = "unrecorded"
+UNRECORDED: Final = "unrecorded"
 #: What the text's columns mean, after its first line's count of reviews.
-LEGEND = (
+LEGEND: Final = (
     "A `wrong` dismissal is the reviewer's noise; `fixed` and `declined` are workers' answers to the findings not "
     "dismissed, and a rebuttal answers a decline."
 )

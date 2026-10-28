@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter
 
 from canopy.core import conversation
@@ -10,7 +12,7 @@ from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError
 from canopy.serve.schema.review import SeenMarked, SeenRequest
 
-TAG = "seen"
+TAG: Final = "seen"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 

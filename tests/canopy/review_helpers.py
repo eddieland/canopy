@@ -4,7 +4,7 @@ import sqlite3
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Unpack
+from typing import Final, Unpack
 
 from canopy.cli.main import main
 from canopy.core import db
@@ -13,8 +13,8 @@ from tests.canopy.helpers import Behavior, Called, InlineRunner, in_tick, presen
 from tests.conftest import GitPool, git
 
 # A PR the loop opened.
-PR = "https://github.com/acme/api/pull/7"
-FINDINGS = {
+PR: Final = "https://github.com/acme/api/pull/7"
+FINDINGS: Final = {
     "status": "done",
     "verdict": "findings",
     "impact": "normal",
@@ -28,12 +28,12 @@ FINDINGS = {
         },
     ],
 }
-CLEAN = {"status": "done", "verdict": "clean", "impact": "low", "summary": "Nothing found."}
+CLEAN: Final = {"status": "done", "verdict": "clean", "impact": "low", "summary": "Nothing found."}
 #: A coworker's PR, which the loop did not open: a `review.query` match, whose review has a draft (DESIGN §34).
-THEIRS = "https://github.com/acme/api/pull/8"
+THEIRS: Final = "https://github.com/acme/api/pull/8"
 #: The reviewer's report on the commit `feature_commit` pushes, which adds `retry.py`'s two lines: one finding on a line
 #: of the diff, one on a file the diff does not touch.
-REPORT = {
+REPORT: Final = {
     "status": "done",
     "verdict": "findings",
     "impact": "normal",
@@ -44,9 +44,9 @@ REPORT = {
     ],
 }
 #: What `REPORT`'s draft makes of its finding on a line of the diff: a comment on it.
-ON_LINE = Comment("retry.py", 1, "loops forever\n\nNothing ends it.", finding=1)
+ON_LINE: Final = Comment("retry.py", 1, "loops forever\n\nNothing ends it.", finding=1)
 #: What it makes of its finding off the diff: a part of the body.
-OFF_DIFF = "`tests/test_retry.py:3`\n\nno tests\n\nAdd one."
+OFF_DIFF: Final = "`tests/test_retry.py:3`\n\nno tests\n\nAdd one."
 
 
 def run_inline(

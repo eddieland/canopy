@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from contextlib import closing, contextmanager, suppress
 from importlib.metadata import version
 from pathlib import Path
-from typing import override
+from typing import Final, override
 from unittest import mock
 
 import anyio
@@ -64,7 +64,7 @@ from tests.canopy.helpers import granted_meanwhile, present
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, SECRET, client, free_port, signed_in
 from tests.conftest import Journals, invoke
 
-INDEX = """<!doctype html>
+INDEX: Final = """<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -845,7 +845,7 @@ def test_the_loop_stopping_its_server_with_a_stream_open_logs_the_cancel_as_info
     assert cancelled.levelno == logging.INFO
 
 
-_SHUTDOWN_CANCEL = "Task cancelled, timeout graceful shutdown exceeded"
+_SHUTDOWN_CANCEL: Final = "Task cancelled, timeout graceful shutdown exceeded"
 
 
 def _while_handling(error: BaseException, handled: BaseException) -> BaseException:
@@ -897,7 +897,7 @@ def test_only_uvicorns_cancel_at_shutdown_reaches_canopy_log_at_info(error: Base
     assert (handed.exc_info is None) == (level == logging.INFO)
 
 
-_READ = live._Reader.read  # noqa: SLF001  (the stream's reads, on its own thread)
+_READ: Final = live._Reader.read  # noqa: SLF001  (the stream's reads, on its own thread)
 
 
 def a_long_burst(reader: live._Reader) -> list[StreamEvent]:

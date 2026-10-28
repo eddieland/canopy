@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, web_writes
 from canopy.infra import logs
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from canopy.serve.backend import Backend
 
 #: The longest path kept; a longer one is cut to this many characters.
-MAX_PATH = 512
+MAX_PATH: Final = 512
 
 _log = logs.for_tick(None)
 

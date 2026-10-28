@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -26,10 +26,10 @@ from tests.canopy.helpers import (
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
-FIX_CI = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci")
-NOTE = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
-HEADING = "## Notes from earlier runs\n\n"
-OTHER = "PROJ-2"
+FIX_CI: Final = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci")
+NOTE: Final = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
+HEADING: Final = "## Notes from earlier runs\n\n"
+OTHER: Final = "PROJ-2"
 
 pytestmark = pytest.mark.usefixtures("git_pool")
 

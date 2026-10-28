@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import click
 
@@ -18,9 +18,9 @@ if TYPE_CHECKING:
     from canopy.runtime.agents import Model
     from canopy.runtime.report import ModelList
 
-CLI = "cli"
+CLI: Final = "cli"
 #: How `canopy model KEY` names where each agent's model comes from.
-SOURCES: dict[ticket_models.Source, str] = {
+SOURCES: Final[dict[ticket_models.Source, str]] = {
     "ticket": "this ticket's override",
     "config": "[runtime.models]",
     "default": "nothing sets one",

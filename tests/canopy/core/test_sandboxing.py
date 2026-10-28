@@ -1,11 +1,12 @@
 """Which runs canopy starts in the sandbox wrapper itself: those in `runtime.sandbox_repos` (DESIGN §24)."""
 
 from pathlib import Path
+from typing import Final
 
 from canopy.core import config, sandboxing
 
-RUNTIME = config.Runtime(sandbox_repos=("api", "docs"))
-DEFINITIONS = Path("/state/definitions")
+RUNTIME: Final = config.Runtime(sandbox_repos=("api", "docs"))
+DEFINITIONS: Final = Path("/state/definitions")
 
 
 def test_a_run_in_a_sandboxed_repository_starts_in_the_wrapper_with_its_role() -> None:

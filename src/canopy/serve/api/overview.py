@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from importlib.metadata import version
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -13,7 +13,7 @@ from canopy.serve.api.deps import BackendDep, SpaDep
 from canopy.serve.schema import AttentionItem, Meta
 from canopy.serve.schema.spend import Spend, SpendBreakdown
 
-TAG = "overview"
+TAG: Final = "overview"
 router = APIRouter(tags=[TAG])
 
 

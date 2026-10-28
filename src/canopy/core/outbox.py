@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Final, TypedDict
 
 from canopy.core import contract, review_result
 from canopy.core.db import Event
@@ -19,20 +19,20 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
     from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus
 
-RUNS = "runs"
-LOOP = "loop"
-CHORES = "chores"
-REVIEWS = "reviews"
+RUNS: Final = "runs"
+LOOP: Final = "loop"
+CHORES: Final = "chores"
+REVIEWS: Final = "reviews"
 #: A one-off task's runs (DESIGN §36): a group of its own, which no sink takes unless the operator lists it.
-TASKS = "tasks"
+TASKS: Final = "tasks"
 #: What canopy did with a reply it read from Slack (DESIGN §20): a mention it recorded, and any reply it refused.
-REPLIES = "replies"
+REPLIES: Final = "replies"
 #: The kind of the event that says the month's spend reached one of its budget's alerts.
-BUDGET_REACHED = "loop.budget_reached"
-SUMMARY_LIMIT = 300
-DETAIL_LIMIT = 500
+BUDGET_REACHED: Final = "loop.budget_reached"
+SUMMARY_LIMIT: Final = 300
+DETAIL_LIMIT: Final = 500
 #: How many follow-ups a `follow_ups.filed` event names; the rest are counted.
-MAX_FOLLOW_UPS = 20
+MAX_FOLLOW_UPS: Final = 20
 
 
 class RunStarted(TypedDict):

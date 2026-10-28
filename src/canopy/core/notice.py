@@ -16,7 +16,7 @@ import math
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, records, sql
 from canopy.core.conversation import Refused
@@ -26,18 +26,18 @@ if TYPE_CHECKING:
 
 # A notice's own bound, apart from the standing instructions' (`prompts.MAX_STANDING_BYTES`): a sentence or two about
 # an outage, in every prompt while it lasts.
-MAX_BYTES = 1024
+MAX_BYTES: Final = 1024
 # How long a notice lasts without `--for`, and the longest it may: an outage is hours, and one that outlasts a week
 # belongs in the standing instructions.
-DEFAULT_MINUTES = 4 * 60
-MAX_MINUTES = 7 * 24 * 60
+DEFAULT_MINUTES: Final = 4 * 60
+MAX_MINUTES: Final = 7 * 24 * 60
 # The overseer reads the notices in force or ended within this long, at most `RECENT_LIMIT` of them, newest first: a
 # failed check from an outage stays held after the notice ends until a newer run of it exists (§7).
-RECENT_DAYS = 7
-RECENT_LIMIT = 5
+RECENT_DAYS: Final = 7
+RECENT_LIMIT: Final = 5
 # `--for`'s form: a whole number of minutes, hours, or days.
-_DURATION_RE = re.compile(r"([1-9][0-9]{0,5})([mhd])")
-_UNIT_MINUTES = {"m": 1, "h": 60, "d": 24 * 60}
+_DURATION_RE: Final = re.compile(r"([1-9][0-9]{0,5})([mhd])")
+_UNIT_MINUTES: Final = {"m": 1, "h": 60, "d": 24 * 60}
 
 
 @dataclass(frozen=True)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 from unittest import mock
 
 from canopy.core import artifact_feed, conversation, db, observe, records, sql
@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-NAME = "artifacts"
-SOURCE = Source(kind="artifacts", cmd=f"connector {NAME}")
+NAME: Final = "artifacts"
+SOURCE: Final = Source(kind="artifacts", cmd=f"connector {NAME}")
 
 
 def feeds(state: Path, *lines: dict[str, object] | str, **more: object) -> None:

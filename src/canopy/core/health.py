@@ -9,7 +9,7 @@ spend`, to say which failures recur and what they cost.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import contract, db, spend, sql
 from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunKind, RunStatus, TickStatus
@@ -22,19 +22,19 @@ if TYPE_CHECKING:
     from canopy.core.spend import Kind
 
 # The newest failures a report lists, across every kind.
-FAILURES = 20
+FAILURES: Final = 20
 # What a failure's note is cut to: enough to tell one cause from another, which `canopy show` and the web UI give whole.
-NOTE_LIMIT = 300
-REFUSED = "refused:"
+NOTE_LIMIT: Final = 300
+REFUSED: Final = "refused:"
 
 
 # The statuses each kind of run ends in when it did not do what it was started for. A worker that asked a question
 # (`blocked`) or that the operator stopped did, as did a tick that closed `ok`. A plan run (§25), an old triage before
 # a plan among them, is a run of the `runs` table, and fails as a worker does.
-_WORKER_FAILED = frozenset(
+_WORKER_FAILED: Final = frozenset(
     {RunStatus.FAILED, RunStatus.UNKNOWN, RunStatus.UNPUSHED, RunStatus.CRASHED, RunStatus.TIMEOUT},
 )
-_FAILED: dict[Kind, frozenset[str]] = {
+_FAILED: Final[dict[Kind, frozenset[str]]] = {
     "overseer": frozenset(TickStatus) - {TickStatus.RUNNING, TickStatus.OK},
     "workers": _WORKER_FAILED,
     "plans": _WORKER_FAILED,
@@ -47,11 +47,11 @@ _FAILED: dict[Kind, frozenset[str]] = {
 # `review`), its status, when it started, what it was about, its note, and its cost. A plan run is a row of `runs`, a
 # kind of its own, an old triage among them, as `canopy spend` counts them. The tables are fixed, never input, and
 # each is built from literal SQL (D125).
-_RUN_ROWS = sql.select(
+_RUN_ROWS: Final = sql.select(
     "id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd",
 ).from_("runs")
-_PLAN_KINDS = (RunKind.PLAN, RunKind.NEEDS_PLAN)
-_ROWS: Mapping[Kind, sql.Select] = {
+_PLAN_KINDS: Final = (RunKind.PLAN, RunKind.NEEDS_PLAN)
+_ROWS: Final[Mapping[Kind, sql.Select]] = {
     "overseer": sql.select(
         "id, CASE WHEN dry_run THEN 'dry run' WHEN overseer_ran = 0 THEN 'no overseer' ELSE 'live' END AS what, "
         "status, started_at, "

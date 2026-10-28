@@ -5,7 +5,7 @@ import typing
 from dataclasses import dataclass, fields
 from enum import StrEnum
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Final
 
 import pytest
 
@@ -24,14 +24,14 @@ from tests.canopy.helpers import in_tick, present
 from tests.conftest import Journals
 
 # The field types a column of each declared type may be read as.
-AFFINITY: dict[str, frozenset[object]] = {
+AFFINITY: Final[dict[str, frozenset[object]]] = {
     "INTEGER": frozenset({int, bool}),
     "TEXT": frozenset({str}),
     "REAL": frozenset({float}),
     "BLOB": frozenset({bytes}),
 }
-PR = "https://github.com/acme/api/pull/7"
-DECISION_COLUMNS = "id, tick_id, ticket_key, action, rationale, created_at, repo, chore, pr, decider"
+PR: Final = "https://github.com/acme/api/pull/7"
+DECISION_COLUMNS: Final = "id, tick_id, ticket_key, action, rationale, created_at, repo, chore, pr, decider"
 
 
 def row_types() -> list[type[records.Row]]:

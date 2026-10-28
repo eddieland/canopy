@@ -3,6 +3,7 @@
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -13,7 +14,7 @@ from canopy.infra import resources
 from canopy.runtime.report import ModelUse
 from tests.conftest import Journals
 
-NOW = datetime(2026, 10, 20, 12, tzinfo=UTC)
+NOW: Final = datetime(2026, 10, 20, 12, tzinfo=UTC)
 
 
 @pytest.fixture

@@ -8,19 +8,19 @@ breaks the line, whoever wrote it.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 #: Characters that make a printable value need quotes.
-_QUOTED = frozenset(' ="\\')
+_QUOTED: Final = frozenset(' ="\\')
 #: How a character is written inside quotes, for those `str.isprintable` passes that still need an escape.
-_ESCAPES = {'"': '\\"', "\\": "\\\\"}
+_ESCAPES: Final = {'"': '\\"', "\\": "\\\\"}
 #: How the characters that do not print and are common enough to read are written; the rest are `\uXXXX`.
-_NAMED = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+_NAMED: Final = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
 #: The last code point a `\uXXXX` escape holds; those after it are written `\UXXXXXXXX`.
-_BMP_MAX = 0xFFFF
+_BMP_MAX: Final = 0xFFFF
 
 
 def line(fields: Mapping[str, object]) -> str:

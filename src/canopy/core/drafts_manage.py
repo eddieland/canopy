@@ -23,7 +23,7 @@ import json
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 
 from canopy.core import conversation, db, drafts, observe, records, sql
 from canopy.core.config import notify_words
@@ -43,10 +43,10 @@ if TYPE_CHECKING:
     from canopy.core.config import Config, Source
 
 # How many hex characters of a text's SHA-256 name it, in the CLI and the web UI alike.
-HASH_CHARS = 12
+HASH_CHARS: Final = 12
 # How much of a comment a `thread_changed` refusal quotes, and of the poster's stderr a failure says.
-_MAX_QUOTED = 100
-_MAX_STDERR = 300
+_MAX_QUOTED: Final = 100
+_MAX_STDERR: Final = 300
 
 
 def hash_of(text: str, reaction: Reaction | None) -> str:
@@ -345,7 +345,7 @@ def _check_sendable(conn: sqlite3.Connection, draft: records.Draft, seen: str) -
 
 
 # What the operator does with a review they staged, which a refusal for it says.
-_FINISH = "submit or delete it on GitHub, and the next read of the PR settles it"
+_FINISH: Final = "submit or delete it on GitHub, and the next read of the PR settles it"
 
 
 def _check_none_staged(conn: sqlite3.Connection, prs: Iterable[str]) -> None:

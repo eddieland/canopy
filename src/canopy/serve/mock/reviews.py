@@ -16,7 +16,7 @@ The operator has seen every review but the clean one, review 2, which is new to 
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from canopy.core import db, review_diff, review_drafts, sql
 from canopy.core.review_result import Finding, ReviewResult
@@ -28,23 +28,23 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-PR_88 = "https://github.com/acme/web/pull/88"
-PR_91 = "https://github.com/acme/web/pull/91"
-PR_12 = "https://github.com/acme/api/pull/12"
-PR_95 = "https://github.com/acme/web/pull/95"
-PR_14 = "https://github.com/acme/api/pull/14"
-SHA_88_FIRST = "5e1c0d2a" + "7" * 32
-SHA_88 = "9b2f4c61" + "3" * 32
-SHA_91 = "c47a91e0" + "5" * 32
-SHA_12 = "0d8e3b57" + "1" * 32
-SHA_14 = "a61f7c08" + "4" * 32
+PR_88: Final = "https://github.com/acme/web/pull/88"
+PR_91: Final = "https://github.com/acme/web/pull/91"
+PR_12: Final = "https://github.com/acme/api/pull/12"
+PR_95: Final = "https://github.com/acme/web/pull/95"
+PR_14: Final = "https://github.com/acme/api/pull/14"
+SHA_88_FIRST: Final = "5e1c0d2a" + "7" * 32
+SHA_88: Final = "9b2f4c61" + "3" * 32
+SHA_91: Final = "c47a91e0" + "5" * 32
+SHA_12: Final = "0d8e3b57" + "1" * 32
+SHA_14: Final = "a61f7c08" + "4" * 32
 #: The reviews that have a draft: those of PRs the loop does not own that ended `done`.
-DRAFTED = (2, 5, 6)
+DRAFTED: Final = (2, 5, 6)
 #: The personas the operator asked Carol's PR to be reviewed in, one review each.
-PERSONAS_14 = ("canopy", "skeptic")
-_UNKNOWN = "the reviewer's last line was not a valid result"
+PERSONAS_14: Final = ("canopy", "skeptic")
+_UNKNOWN: Final = "the reviewer's last line was not a valid result"
 
-_STALE = ReviewResult(
+_STALE: Final = ReviewResult(
     status="done",
     verdict="findings",
     impact="normal",
@@ -60,7 +60,7 @@ _STALE = ReviewResult(
     ],
 )
 # What review 4 reported, its reviewer's last line in its transcript too.
-LATEST = ReviewResult(
+LATEST: Final = ReviewResult(
     status="done",
     verdict="findings",
     impact="normal",
@@ -89,7 +89,7 @@ LATEST = ReviewResult(
     ],
 )
 # What review 5 reported on Carol's PR: two findings on lines of its diff, and one about a file it does not touch.
-_CAROL = ReviewResult(
+_CAROL: Final = ReviewResult(
     status="done",
     verdict="findings",
     impact="normal",
@@ -118,7 +118,7 @@ _CAROL = ReviewResult(
     ],
 )
 # What review 6, the skeptic's, reported on Carol's PR, at the same commit as review 5.
-_CAROL_SKEPTIC = ReviewResult(
+_CAROL_SKEPTIC: Final = ReviewResult(
     status="done",
     verdict="findings",
     impact="normal",
@@ -133,7 +133,7 @@ _CAROL_SKEPTIC = ReviewResult(
         ),
     ],
 )
-_CLEAN = ReviewResult(
+_CLEAN: Final = ReviewResult(
     status="done",
     verdict="clean",
     impact="low",
@@ -141,7 +141,7 @@ _CLEAN = ReviewResult(
     findings=[],
 )
 
-DIFF_88 = """\
+DIFF_88: Final = """\
 diff --git a/src/search/SearchBox.tsx b/src/search/SearchBox.tsx
 index 4a1f2b3..7c9d0e1 100644
 --- a/src/search/SearchBox.tsx
@@ -185,7 +185,7 @@ index 0000000..b3e8f42
 +}
 """
 # Blank context lines are written empty, as some tools save them; the reader takes them as context.
-DIFF_12 = """\
+DIFF_12: Final = """\
 diff --git a/README.md b/README.md
 index 1d2e3f4..5a6b7c8 100644
 --- a/README.md
@@ -196,7 +196,7 @@ index 1d2e3f4..5a6b7c8 100644
 +Run `make serve` and open http://localhost:8080.
 
 """
-DIFF_14 = """\
+DIFF_14: Final = """\
 diff --git a/api/upstream.py b/api/upstream.py
 index 3c4d5e6..8f9a0b1 100644
 --- a/api/upstream.py

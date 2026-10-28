@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from canopy.core import contract, conversation, db, follow_ups, records, sql
 from canopy.core.follow_ups import Refusal
@@ -24,11 +24,11 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
 #: Where a task run's stored result keeps the entries `_task` refused: the valid keys, and how many others there were.
-STORED = "tickets_unrecorded"
+STORED: Final = "tickets_unrecorded"
 #: The attention item a refused entry raises, about the task (DESIGN §14, §36).
-REASON = "task_ticket_unrecorded"
+REASON: Final = "task_ticket_unrecorded"
 #: How many refused keys a note or a stored result names; the rest are counted.
-MAX_NAMED = follow_ups.MAX_NAMED
+MAX_NAMED: Final = follow_ups.MAX_NAMED
 
 
 @dataclass(frozen=True)

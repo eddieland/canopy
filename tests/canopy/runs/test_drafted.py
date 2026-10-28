@@ -9,7 +9,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from unittest import mock
 
 import pytest
@@ -41,11 +41,11 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import CanopyEnv
 
-PR = DRAFTS_PR
+PR: Final = DRAFTS_PR
 #: KEY's run on its `work` branch, as each drafting run here is.
-WORK = dispatches(slug="work")
+WORK: Final = dispatches(slug="work")
 #: A resume of KEY for a conflict on its PR: a reason no observation has to authorize, which the drafts do not need.
-RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
+RESUME: Final = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
 
 
 @pytest.mark.usefixtures("git_pool")
