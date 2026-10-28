@@ -691,7 +691,7 @@ def test_a_review_run_records_what_it_cost(
     assert row.session_id == "ses_review"
     usage = present(db.usage_of(row))
     assert usage.cost_usd == 0.25  # two model calls at 0.125
-    assert (usage.first_call, usage.first_cache_write) == (5500, 500)
+    assert (usage.first_call, usage.first_cache_write, usage.first_cache_read) == (5500, 500, 4000)
     assert (reviewing.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
     assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
     assert tools_of(conn, "review_runs", run_id) == [("bash", 1, 0, len("read it\n"))]

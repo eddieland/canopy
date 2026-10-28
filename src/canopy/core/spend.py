@@ -75,7 +75,9 @@ CHARS_PER_TOKEN = 4
 # The overseer's series, each from the ticks.
 _SERIES = ("overseer", "idle", "dry_run")
 # What a run's row says of its first model call, and when it started.
-_FIRST_CALL: LiteralString = "definitions_digest, tokens_first_call, tokens_first_cache_write, started_at"
+_FIRST_CALL: LiteralString = (
+    "definitions_digest, tokens_first_call, tokens_first_cache_write, tokens_first_cache_read, started_at"
+)
 # The local day a row started on, as `YYYY-MM-DD`: SQLite reads the journal's UTC time in the local time Python does.
 _DAY = sql.frag("date(started_at, 'localtime')")
 # The local hour a row started on, as `YYYY-MM-DDTHH`, read the same way.
@@ -202,8 +204,9 @@ class FirstCalls:
 
     `runs` counts those that reported a first call; `first_call` is the median of what it was sent, from the cache or
     not, the lower middle one of an even count; `cold_share` the share of them that started cold, their first call
-    writing more than half of what it was sent to the cache. `first_started` and `last_started` are when the first and
-    the last of them started. `digest` is None for runs that reported a first call and no snapshot.
+    reading less than half of what it was sent from the cache, or, for a run recorded before canopy kept what it read,
+    writing more than half of it. `first_started` and `last_started` are when the first and the last of them started.
+    `digest` is None for runs that reported a first call and no snapshot.
     """
 
     kind: Kind
@@ -213,6 +216,9 @@ class FirstCalls:
     cold_share: float
     first_started: str
     last_started: str
+    #: What their first calls read from the cache over what they were sent, summed over the runs that recorded both;
+    #: None when none did.
+    hit_rate: float | None = None
 
 
 @dataclass(frozen=True)
@@ -877,7 +883,7 @@ def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[First
     found: list[FirstCalls] = []
     for kind in KINDS:
         table, which = KIND_TABLES[kind]
-        by_digest: dict[str | None, list[tuple[int, bool, str]]] = {}
+        by_digest: dict[str | None, list[tuple[int, bool, str, int | None]]] = {}
         first = (
             sql.select(_FIRST_CALL)
             .from_(table)
@@ -885,22 +891,30 @@ def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[First
             .where("started_at >= ? AND started_at < ? AND tokens_first_call IS NOT NULL", since, until)
             .order_by("started_at, id")
         )
-        for digest, sent, written, started in sql.execute(conn, first):
-            call = (int(sent), _cold(int(sent), int(written or 0)), str(started))
+        for digest, sent, written, was_read, started in sql.execute(conn, first):
+            read = None if was_read is None else int(was_read)
+            call = (int(sent), _cold(int(sent), int(written or 0), read), str(started), read)
             by_digest.setdefault(None if digest is None else str(digest), []).append(call)
         found.extend(
             FirstCalls(
                 kind=kind,
                 digest=digest,
                 runs=len(calls),
-                first_call=statistics.median_low(sent for sent, _, _ in calls),
-                cold_share=sum(cold for _, cold, _ in calls) / len(calls),
+                first_call=statistics.median_low(sent for sent, _, _, _ in calls),
+                cold_share=sum(cold for _, cold, _, _ in calls) / len(calls),
                 first_started=calls[0][2],
                 last_started=calls[-1][2],
+                hit_rate=_hit_rate([(sent, read) for sent, _, _, read in calls if read is not None]),
             )
             for digest, calls in by_digest.items()
         )
     return found
+
+
+# What first calls read from the cache over what they were sent, each `(sent, read)`; None for none, or none sent.
+def _hit_rate(calls: Sequence[tuple[int, int]]) -> float | None:
+    sent = sum(s for s, _ in calls)
+    return sum(r for _, r in calls) / sent if sent else None
 
 
 # Each kind's tool calls in the window, by tool, the most characters first. A run whose template printed no events, or
@@ -979,10 +993,12 @@ def _unnamed_models(kind: Kind, since: str, until: str) -> sql.Select:
     )
 
 
-# Whether a first call started cold: it wrote most of what it was sent to the cache, where a warm one reads the fixed
-# prefix (the system prompt, the agent's body, the tools) from it and writes only what is new.
-def _cold(sent: int, written: int) -> bool:
-    return 2 * written > sent
+# Whether a first call started cold: it read less than half of what it was sent from the cache, where a warm one reads
+# the fixed prefix (the system prompt, the agent's body, the tools) from it. A provider that reports no cache writes,
+# as OpenAI's, still reports reads. A run recorded before canopy kept the read (`read` None) is cold when it wrote most
+# of what it was sent to the cache instead.
+def _cold(sent: int, written: int, read: int | None) -> bool:
+    return 2 * read < sent if read is not None else 2 * written > sent
 
 
 def _costs(found: Mapping[str, float | None]) -> Costs:

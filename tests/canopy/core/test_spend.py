@@ -1,5 +1,6 @@
 """What agent runs cost, by what they bought (DESIGN §11, ROADMAP M33): `canopy spend` over a journal by hand."""
 
+import dataclasses
 import json
 import re
 import sqlite3
@@ -597,9 +598,29 @@ def test_plan_runs_are_a_kind_of_their_own_with_old_triages_among_them(
     assert out[-1] == "No cost reported: 1 of 4 plan runs."
 
 
-def first_call(sent: int, written: int) -> Usage:
-    """What a run reported whose first model call was sent `sent` tokens and wrote `written` of them to the cache."""
-    return Usage(0.1, 0, 0, 0, sent - written, written, peak_context=sent, first_call=sent, first_cache_write=written)
+def first_call(sent: int, written: int, read: int | None = None) -> Usage:
+    """What a run reported whose first model call was sent `sent` tokens and wrote `written` of them to the cache.
+
+    It read the rest from the cache, or `read` when given; it read nothing canopy kept with `read` 0 and a write.
+    """
+    read = sent - written if read is None else read
+    return Usage(
+        0.1,
+        sent - written - read,
+        0,
+        0,
+        read,
+        written,
+        peak_context=sent,
+        first_call=sent,
+        first_cache_write=written,
+        first_cache_read=read,
+    )
+
+
+def unread_first_call(sent: int, written: int) -> Usage:
+    """A first call recorded before canopy kept what it read from the cache."""
+    return dataclasses.replace(first_call(sent, written), first_cache_read=None)
 
 
 def test_first_calls_are_by_kind_and_snapshot_with_their_median_and_cold_share(
@@ -622,11 +643,36 @@ def test_first_calls_are_by_kind_and_snapshot_with_their_median_and_cold_share(
     db.set_run_report(conn, "runs", run_id, "s", first_call(30_000, 1_000), digest="new")
 
     found = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR)
-    assert found.first_calls == [
+    assert [dataclasses.replace(f, hit_rate=None) for f in found.first_calls] == [
         spend.FirstCalls("overseer", "old", 3, 51_000, 1 / 3, earlier(NOW, 0, 5), earlier(NOW, 0, 3)),
         spend.FirstCalls("overseer", "new", 3, 61_000, 1 / 3, earlier(NOW, 0, 2), earlier(NOW, 0, 0.5)),
         spend.FirstCalls("workers", "new", 1, 30_000, 0.0, earlier(NOW, 0, 1), earlier(NOW, 0, 1)),
     ]
+    # What each read from the cache over what each was sent, summed: the rest of what each did not write.
+    old = (1_000 + 49_000 + 49_000) / (50_000 + 52_000 + 51_000)
+    assert [f.hit_rate for f in found.first_calls] == [pytest.approx(old), pytest.approx(1 - 67_000 / 183_000), 29 / 30]
+
+
+def test_a_first_call_that_read_little_from_the_cache_is_cold_though_it_wrote_nothing(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """A provider that reports no cache writes, as OpenAI's, says a call was cold only by what it read (#1526)."""
+    conn = journals.open(tmp_path / "canopy.db")
+    ticket(conn, "PROJ-1")
+    t = tick(conn, earlier(NOW, 0, 3), 0.1)
+    for hours, read in ((3, 0), (2, 20_000), (1, 30_000)):
+        review(conn, t, "https://e.test/pr/1", None, earlier(NOW, 0, hours), 0.1)
+        review_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
+        db.set_run_report(conn, "review_runs", review_id, "s", first_call(50_000, 0, read), digest="d")
+    # One recorded before canopy kept the read is judged by its write, as before.
+    review(conn, t, "https://e.test/pr/1", None, earlier(NOW, 0, 0.5), 0.1)
+    review_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
+    db.set_run_report(conn, "review_runs", review_id, "s", unread_first_call(50_000, 0), digest="d")
+
+    [reviews] = [f for f in spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR).first_calls if f.kind == "reviews"]
+    assert (reviews.runs, reviews.cold_share) == (4, 2 / 4)  # the one that read nothing, and the one under half
+    assert reviews.hit_rate == pytest.approx(50_000 / 150_000)  # the three that recorded a read
 
 
 def test_canopy_spend_json_has_the_first_calls(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
@@ -643,6 +689,7 @@ def test_canopy_spend_json_has_the_first_calls(canopy_env: CanopyEnv, capsys: py
             "cold_share": 1.0,
             "first_started": earlier(now, 0),
             "last_started": earlier(now, 0),
+            "hit_rate": 1_000 / 50_000,
         },
     ]
 

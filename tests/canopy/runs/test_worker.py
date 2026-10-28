@@ -562,7 +562,8 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
     assert tuple(row[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
     assert row["tokens_peak_context"] == 1000 + 4000 + 500  # one call's input, cache read, and cache write
-    assert (row["tokens_first_call"], row["tokens_first_cache_write"]) == (5500, 500)
+    first = ("tokens_first_call", "tokens_first_cache_write", "tokens_first_cache_read")
+    assert tuple(row[c] for c in first) == (5500, 500, 4000)
     assert (scenario.env.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()  # the one it loaded
     # Each command the fake ran is a `bash` call that returned its stdout.
     assert tools_of(scenario.conn, "runs", run.id) == tools_printed(scenario.agent_log, "canopy-worker") != []
