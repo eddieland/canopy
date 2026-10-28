@@ -246,13 +246,11 @@ def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
     ws_scenario.tick(*waits("PROJ-1"), dry_run=True)
 
     [ticket] = ws_scenario.state()["tickets"]
-    assert (ticket["phase"], ticket["branch"], ticket["cursors"]) == (
-        "running",
-        BRANCH,
-        {"comment": "c-1"},
-    )
+    assert (ticket["phase"], ticket["cursors"]) == ("running", {"comment": "c-1"})
     no_limit = {"implement": 1, "resume": 0}
-    # What is null or empty, such as api's phase and cursors and either's cooldown, is left out.
+    # What is null or empty, such as api's phase and cursors and either's cooldown, is left out, and the branch is
+    # said once, on the units.
+    assert "branch" not in ticket
     assert ticket["units"] == [
         {"repo": "api", "branch": BRANCH, "pr_url": PRS["api"], "attempts": no_limit},
         {
@@ -264,7 +262,8 @@ def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
             "attempts": no_limit,
         },
     ]
-    assert ticket["last_run"]["repos"] == [{"repo": "api", "base": "main"}, {"repo": "web", "base": "main"}]
+    # Unstacked, the run shows no base, and its branch is the units'.
+    assert sorted(ticket["last_run"]) == ["ended_at", "kind", "run_id", "status"]
 
 
 def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:

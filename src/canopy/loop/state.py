@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
 
 from canopy.core import contract, conversation, db, feedback_plans, item_numbers, plans, pools, tasks
 from canopy.core.vocab import ResumeReason
+from canopy.loop.observations import rendered as rendered_observations
 from canopy.reviews import view as review_view
 from canopy.runs import policy
 
@@ -71,6 +72,7 @@ class TicketState(TypedDict):
     key: str
     title: str | None
     phase: str | None
+    #: The ticket's branch only when none of its units carries it: a unit's `branch` says it once.
     branch: str | None
     cursors: dict[str, str | int | None]
     cursor_items: NotRequired[dict[str, str]]
@@ -110,7 +112,10 @@ class SentState(TypedDict):
 
 
 class RunState(TypedDict):
-    """A ticket's latest run. `reasons` only for a `resume` that named them (DESIGN §8)."""
+    """A ticket's latest run. `reasons` only for a `resume` that named them (DESIGN §8).
+
+    Its branch is the ticket's, on its units, and when it started is not read: neither is repeated here.
+    """
 
     run_id: int
     kind: str
@@ -122,9 +127,9 @@ class RunState(TypedDict):
     #: Present only when the harness pushed the branch again to rerun the checks the worker left as flaky (DESIGN §23):
     #: the repositories it pushed, whose checks run again on the new head. A unit not named was not kicked.
     kicked: NotRequired[list[str]]
-    branch: str | None
-    repos: list[RunRepo]
-    started_at: str
+    #: Present only when the run was stacked, some repository's base another ticket's branch (DESIGN §10): the base
+    #: each repository started from. An unstacked run's base is its repository's own, which no decision reads.
+    repos: NotRequired[list[RunRepo]]
     ended_at: str | None
 
 
@@ -316,16 +321,17 @@ def state_block(
 
     def ticket_summary(t: records.Ticket) -> TicketState:
         key = t.key
+        its_units = units.get(key, [])
         summary: TicketState = {
             "key": key,
             "title": t.title,
             "phase": t.phase,
-            "branch": t.branch,
+            "branch": None if any(u.branch == t.branch for u in its_units) else t.branch,
             "cursors": {name: getattr(t, db.ticket_cursor(name, tracked=tracked)) for name in db.TICKET_CURSORS},
-            "units": [unit_summary(key, u) for u in units.get(key, [])],
+            "units": [unit_summary(key, u) for u in its_units],
             "needs_human_since": t.needs_human_since,
             "last_seen_at": t.last_seen_at,
-            "last_run": _run_summary(last_runs.get(key), run_slots, run_reasons),
+            "last_run": _run_summary(last_runs.get(key), run_slots, run_reasons, config.trust.branch_prefix),
         }
         # A private ticket's conversation state, or a public one's new operator messages, each only when it has one.
         if key in private:
@@ -435,7 +441,14 @@ def state_block(
             "",
             "```json",
             # Compact: every step of the tick re-reads the block, and it is about 29% fewer tokens than indented.
-            json.dumps({**state, "tickets": _compact(state["tickets"])}, separators=(",", ":")),
+            json.dumps(
+                {
+                    **state,
+                    "tickets": _compact(state["tickets"]),
+                    "observations": rendered_observations(state["observations"]),
+                },
+                separators=(",", ":"),
+            ),
             "```",
             "",
         ],
@@ -475,18 +488,15 @@ def _run_summary(
     run: records.Run | None,
     run_slots: Mapping[int, Sequence[records.RunSlot]],
     run_reasons: Mapping[int, Sequence[str]],
+    branch_prefix: str,
 ) -> RunState | None:
     if run is None:
         return None
-    summary: RunState = {
-        "run_id": run.id,
-        "kind": run.kind,
-        "status": run.status,
-        "branch": run.branch,
-        "repos": [{"repo": s.repo, "base": s.base_branch} for s in run_slots.get(run.id, [])],
-        "started_at": run.started_at,
-        "ended_at": run.ended_at,
-    }
+    summary: RunState = {"run_id": run.id, "kind": run.kind, "status": run.status, "ended_at": run.ended_at}
+    slots = run_slots.get(run.id, [])
+    # A stacked base is always under the prefix, as the dispatch guard checks (DESIGN §10); a repository's own is not.
+    if any(_under(branch_prefix, s.base_branch) for s in slots):
+        summary["repos"] = [{"repo": s.repo, "base": s.base_branch} for s in slots]
     if run.id in run_reasons:
         summary["reasons"] = list(run_reasons[run.id])
     # Only a `resume` for `ci` is asked whether a failure was the change's: from any other run the bit means nothing.
@@ -498,6 +508,10 @@ def _run_summary(
         if isinstance(kicked, list) and kicked:
             summary["kicked"] = [str(repo) for repo in kicked]
     return summary
+
+
+def _under(prefix: str, branch: str | None) -> bool:
+    return branch is not None and branch.removeprefix(prefix) != branch
 
 
 def _running_summary(
