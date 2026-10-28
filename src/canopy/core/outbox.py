@@ -200,10 +200,14 @@ class BudgetReached(TypedDict):
     projected: float | None
     #: Canopy's runs' part of `spent`, in US dollars, rounded to the cent.
     runs: float
-    #: The sessions outside canopy's part of `spent`, in US dollars, rounded to the cent: 0 before any read.
+    #: The sessions outside canopy's part of `spent`, in US dollars: `spent` less `runs`, so the parts add up to it; 0
+    #: before any read.
     outside: float
     #: When `canopy loop` last read the runtime's sessions, a journal time; None when it never has.
     sessions_read_at: str | None
+    #: How that read ended, a `SessionsRead`: after `failed`, `outside` is what an earlier read found; None when none
+    #: ran.
+    sessions_read: str | None
 
 
 def cut(text: object, limit: int) -> str:
@@ -492,14 +496,17 @@ def budget_reached(month: spend.Month, percent: int) -> Event:
         The `loop.budget_reached` event, naming the month, the budget, the alert, what it spent, canopy's part and the
         part outside canopy, when the runtime's sessions were last read, and where it is headed.
     """
+    # The parts are taken from the rounded whole, so a sink never shows them a cent apart from it.
+    spent, runs = round(month.spent_usd or 0.0, 2), round(month.runs_usd or 0.0, 2)
     fields: BudgetReached = {
         "month": month.month,
         "budget": month.budget_usd,
         "percent": percent,
-        "spent": round(month.spent_usd or 0.0, 2),
+        "spent": spent,
         "projected": round(month.projected_usd, 2) if month.projected_usd is not None else None,
-        "runs": round(month.runs_usd or 0.0, 2),
-        "outside": round(month.outside_usd, 2),
+        "runs": runs,
+        "outside": round(spent - runs, 2),
         "sessions_read_at": month.sessions_read_at,
+        "sessions_read": month.sessions_read.value if month.sessions_read is not None else None,
     }
     return Event(LOOP, BUDGET_REACHED, fields)

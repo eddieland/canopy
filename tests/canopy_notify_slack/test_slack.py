@@ -335,6 +335,17 @@ def test_slack_blocks_for_each_event_kind() -> None:
             "outside": 100.0,
             "sessions_read_at": "2026-10-28T13:05:00.000Z",
         },
+        {
+            "kind": "loop.budget_reached",
+            "month": "2026-11",
+            "budget": 300,
+            "percent": 80,
+            "spent": 240.0,
+            "runs": 200.0,
+            "outside": 40.0,
+            "sessions_read_at": "2026-10-28T13:05:00.000Z",
+            "sessions_read": "failed",
+        },
         {"kind": "test", "text": "canopy test message"},
         {"kind": "kind.from.a.newer.canopy", "line": "x <y>"},
     ]
@@ -355,6 +366,11 @@ def test_slack_blocks_for_each_event_kind() -> None:
         ":moneybag: *Spend for 2026-10 reached its budget:* $301.50 of $300; on pace for $410.25",
         (
             "canopy's runs $201.50 · outside canopy $100.00 · sessions read"
+            " <!date^1793192700^{date_short_pretty} {time}|2026-10-28T13:05:00.000Z>"
+        ),
+        ":moneybag: *Spend for 2026-11 reached 80% of its budget:* $240.00 of $300",
+        (
+            "canopy's runs $200.00 · outside canopy $40.00 · the last read of sessions failed"
             " <!date^1793192700^{date_short_pretty} {time}|2026-10-28T13:05:00.000Z>"
         ),
         ":test_tube: canopy test message",

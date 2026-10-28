@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 from canopy.core import contract, db, records, spend, sql
 from canopy.core.items import Item, age
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, SessionsRead
 
 if TYPE_CHECKING:
     from canopy.notify.journal import Diff
@@ -363,8 +363,8 @@ class Digest:
 
 
 # A `loop.budget_reached` event's line: the month's spend against its budget, then canopy's runs' part and the part
-# outside canopy, as of when `canopy loop` last read the runtime's sessions. An event recorded before it carried the
-# parts names none.
+# outside canopy, as of when `canopy loop` last read the runtime's sessions, or last tried to, when that read failed.
+# An event recorded before it carried the parts names none.
 def _budget_line(f: Mapping[str, object]) -> str:
     spent, projected, percent = f.get("spent"), f.get("projected"), f.get("percent")
     so_far = _usd(spent) if isinstance(spent, int | float) else "-"
@@ -377,7 +377,8 @@ def _budget_line(f: Mapping[str, object]) -> str:
     if not isinstance(read, str) or not isinstance(outside, int | float):
         return f"{text}; canopy's runs {_usd(runs)}, outside canopy not read yet"
     at = db.parse_time(read).astimezone().strftime("%Y-%m-%d %H:%M")
-    return f"{text}; canopy's runs {_usd(runs)}, outside canopy {_usd(outside)} (sessions read {at})"
+    how = "the last read of sessions failed" if f.get("sessions_read") == SessionsRead.FAILED else "sessions read"
+    return f"{text}; canopy's runs {_usd(runs)}, outside canopy {_usd(outside)} ({how} {at})"
 
 
 # The digest's line for what its span cost: the total, then each kind that reported a cost, the idle ticks' part of

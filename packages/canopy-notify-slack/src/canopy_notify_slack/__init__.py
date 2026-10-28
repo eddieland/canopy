@@ -652,15 +652,16 @@ def _budget_parts(e: Mapping[str, object]) -> list[str]:
     """What a `loop.budget_reached` event's spend is made of: canopy's runs, and the sessions outside canopy.
 
     Returns:
-        Canopy's runs' part, then the part outside canopy with when canopy last read the runtime's sessions, or that it
-        has not; none for an event from a canopy that did not send the parts.
+        Canopy's runs' part, then the part outside canopy with when canopy last read the runtime's sessions, or last
+        tried to when that read failed, or that it has not; none for an event from a canopy that did not send the parts.
     """
     runs, outside, read = e.get("runs"), e.get("outside"), e.get("sessions_read_at")
     if not isinstance(runs, int | float):
         return []
     if read is None or not isinstance(outside, int | float):
         return [f"canopy's runs {_usd(runs)}", "outside canopy not read yet"]
-    return [f"canopy's runs {_usd(runs)}", f"outside canopy {_usd(outside)}", f"sessions read {_when(read)}"]
+    how = "the last read of sessions failed" if e.get("sessions_read") == "failed" else "sessions read"
+    return [f"canopy's runs {_usd(runs)}", f"outside canopy {_usd(outside)}", f"{how} {_when(read)}"]
 
 
 def _test(e: Mapping[str, object]) -> _Shown:

@@ -25,7 +25,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Literal, LiteralString
 
 from canopy.core import contract, db, records, runtime_sessions, sql
-from canopy.core.vocab import RunKind
+from canopy.core.vocab import RunKind, SessionsRead
 
 if TYPE_CHECKING:
     import sqlite3
@@ -320,6 +320,8 @@ class Month:
     outside_usd: float = 0.0
     #: When the runtime's sessions were last read, a journal time; None when they never were, and `outside_usd` is 0.
     sessions_read_at: str | None = None
+    #: How that read ended: after a `failed` one, `outside_usd` is what an earlier read found; None when none ran.
+    sessions_read: SessionsRead | None = None
 
     @property
     def share(self) -> float:
@@ -408,6 +410,7 @@ def month(
         runs_usd=found.runs,
         outside_usd=found.outside or 0.0,
         sessions_read_at=read.read_at if read is not None else None,
+        sessions_read=read.status if read is not None else None,
     )
 
 
