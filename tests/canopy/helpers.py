@@ -21,7 +21,7 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, plans, prompts, recorded_runs, records, replies, sql, workspace
+from canopy.core import config, db, git_tools, plans, prompts, recorded_runs, records, replies, sql, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
@@ -907,6 +907,11 @@ MCP_OPENING: tuple[Mapping[str, object], ...] = (
 )
 #: A `tools/list` request, for `mcp_session`.
 LIST_TOOLS: Mapping[str, object] = {"method": "tools/list"}
+
+
+def logged(text: str) -> git_tools.Commits:
+    """The commits the text of a call to the git tool `log` holds: its JSON, after the note before it."""
+    return git_tools.Commits.model_validate_json(text.removeprefix(f"{git_tools.DATA_NOTE}\n\n"))
 
 
 def tool_call(name: str, /, **arguments: object) -> dict[str, object]:

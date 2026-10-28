@@ -46,7 +46,10 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
     before = time.time()
     ticked = scenario.tick(
         calls("canopy_decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "checks pending"}]),
-        calls("canopy_ticket-set", key="PROJ-1", repo="repo", phase="ci_running", cursors={"ci": "1"}),
+        calls(
+            "canopy_ticket-set",
+            tickets=[{"key": "PROJ-1", "repo": "repo", "phase": "ci_running", "cursors": {"ci": "1"}}],
+        ),
         calls("canopy_dispatch", key="PROJ-2", kind="implement", label=LABEL, repos=["repo"]),
         calls("canopy_attention", key="PROJ-3", reason="needs_author", detail="https://example.test/pr/3"),
         calls("canopy_decide", decisions=[{"key": "PROJ-4;rm", "action": "wait", "rationale": "bad key"}]),

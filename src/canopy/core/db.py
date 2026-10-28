@@ -191,7 +191,14 @@ def discover(migrations_dir: Path) -> list[Migration]:
 
 @contextmanager
 def transaction(conn: sqlite3.Connection) -> Generator[None]:
-    """Run the block in a `BEGIN IMMEDIATE` transaction; roll back if it raises."""
+    """Run the block in a `BEGIN IMMEDIATE` transaction; roll back if it raises.
+
+    Inside a transaction already, the block runs in that one, which commits or rolls back with it: so a call that
+    writes several records together, as a `ticket set` of several tickets does, can wrap writes that open their own.
+    """
+    if conn.in_transaction:
+        yield
+        return
     sql.execute(conn, sql.frag("BEGIN IMMEDIATE"))
     try:
         yield

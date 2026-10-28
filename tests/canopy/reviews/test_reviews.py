@@ -43,6 +43,7 @@ from tests.canopy.helpers import (
     in_run,
     in_tick,
     lifelock_left,
+    logged,
     messages,
     personas_dir,
     pool_statuses,
@@ -948,8 +949,8 @@ def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
     assert [call["error"] for call in (fork, diff, log, root)] == [False] * 4, [fork, diff, log, root]
     assert fork["text"] == head(git_pool)
     assert "+while True:\n+    call()" in diff["text"]
-    assert f"commit {sha}\n" in log["text"]
-    assert "A\tretry.py" in log["text"]
+    [commit] = logged(log["text"]).commits
+    assert (commit.commit, [(f.status, f.path) for f in commit.files]) == (sha, [("A", "retry.py")])
     assert root["text"] == "Nothing at . in origin/main."
     assert (escape["error"], option["error"]) == (True, True)
     assert "no `..`" in escape["text"]
