@@ -432,9 +432,10 @@ Controls:
   client is bound to one origin; canopy never reads it.
   `canopy-connect-jira` (DESIGN §30) reads an email and API token from an operator-only file of its own, held to the
   Slack sink's checks, never from canopy's config, argv, journal, or logs, and sends them only to the Jira site the
-  operator names, over https, following no redirect. Lint bans network modules in the harness (`urllib.request`,
-  `http.client`, `socket`), and `test_layers.py` bans `canopy-http`, httpx2, and any import of these programs, so the
-  process that holds the journal and enforces the guards never opens a connection or reads a token or a sink's secret.
+  operator names, over https, following no redirect, through `canopy-http` (D130). Lint bans network modules in the
+  harness (`urllib.request`, `http.client`, `socket`), and `test_layers.py` bans `canopy-http`, httpx2, and any import
+  of these programs, so the process that holds the journal and enforces the guards never opens a connection or reads a
+  token or a sink's secret.
 
 ### T3. Runaway agents (cost, capacity, infinite loops)
 
