@@ -547,7 +547,8 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     git_pool: GitPool,
     opencode_state: Path,
 ) -> None:
-    opencode_state.write_text(json.dumps({"sessions": {"ses_w1": [["anthropic", "claude-x", 0.25]]}}))
+    sessions = {"ses_w1": [["anthropic", "claude-x", 0.25]]}
+    opencode_state.write_text(json.dumps({"sessions": sessions, "version": "1.19.3"}))
     with report_events(scenario.env):
         run = scenario.run(worker=pushes())
 
@@ -571,6 +572,8 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     assert [(m.model, m.replies) for m in run_models.of_run(scenario.conn, "runs", run.id)] == [
         ("anthropic/claude-x", 1),
     ]
+    # And the OpenCode that ran it.
+    assert run_models.reads_of(scenario.conn, "runs", [run.id])[run.id].runtime_version == "1.19.3"
 
     out = scenario.operator("status").out
     assert re.search(r"\nRecent runs \(1\):\n  PROJ-1  implement  done  \d+s ago  https://example.test/pr/1\n", out)

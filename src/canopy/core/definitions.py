@@ -105,6 +105,8 @@ def rules(config: Config, models: Mapping[str, Model] | None = None) -> agents.R
         artifacts=config.artifacts.publishing(),
         models=agent_models.by_agent(runtime.models, chore_models) if models is None else models,
         chore_agents=[agents.chore_agent(name) for name in sorted(chore_models)],
+        tracker_observed=config.connect.observes_tickets(),
+        tracker_server=config.tracker.server(),
     )
 
 

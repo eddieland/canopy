@@ -24,6 +24,7 @@ import { TicketField } from '@/components/ticket-field'
 import { PullRequestLinksOut } from '@/components/ticket-links'
 import { pullRequestDescription } from '@/lib/descriptions'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { phaseMeaning } from '@/lib/meanings'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 
 interface PullRequestSearch {
@@ -100,7 +101,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                 // Its own title, as its worker reported it, else its ticket's: the ticket's still shows below.
                 subject={pr.title ?? pr.ticket_title}
                 help={HELP}
-                chips={pr.phase ? <Chip word={pr.phase} /> : undefined}
+                chips={pr.phase ? <Chip word={pr.phase} meaning={phaseMeaning(pr.phase)} /> : undefined}
                 // The PR on its host, as a ticket's page shows its links out.
                 links={<PullRequestLinksOut url={pr.url} />}
             >

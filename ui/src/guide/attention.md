@@ -42,6 +42,9 @@ The items come in four groups, in this order, and within a group the one open lo
    [How the loop works](how-the-loop-works#public-and-private-tickets) says why.
 4. **Findings**: what your chores found.
 
+Forgot what `review late` is? Hover over a reason, or Tab to it, and its tip says what it means under the CLI's
+spelling. Nobody memorizes forty reasons, and nobody should have to.
+
 The counters above the list say how many runs are going, a task's among them, how many tickets and tasks wait on you
 (on your reply, or on your approval of a feedback plan) and how long the oldest question has waited, and how many items
 the list holds. How those items break down is the

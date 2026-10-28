@@ -33,6 +33,17 @@ describe('Chip', () => {
         expect(tipOf(screen.getByText('dry run'))).toBeNull()
     })
 
+    it('says under its word what the word means, whenever it is given a meaning', () => {
+        render(
+            <>
+                <Chip word="review_late" meaning="A late finding." />
+                <Chip word="approved" meaning="Approved, not merged." />
+            </>,
+        )
+        expect(tipOf(screen.getByText('review late'))).toBe('review_late\nA late finding.')
+        expect(tipOf(screen.getByText('approved'))).toBe('approved\nApproved, not merged.')
+    })
+
     it('holds its word whole in its tip when the word is cut to fit', () => {
         vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(120)
         vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(40)
@@ -56,5 +67,10 @@ describe('Word', () => {
     it('shows the readable text it is given in place of the word, keeping the word in its tip', () => {
         render(<Word word="needs_human" text="needs human (plan)" />)
         expect(tipOf(screen.getByText('needs human (plan)'))).toBe('needs_human')
+    })
+
+    it('says what the word means in its tip, under the word', () => {
+        render(<Word word="merged" meaning="Its PR is merged." />)
+        expect(tipOf(screen.getByText('merged'))).toBe('merged\nIts PR is merged.')
     })
 })
