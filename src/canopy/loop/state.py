@@ -7,7 +7,7 @@ import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, NotRequired, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
 
 from canopy.core import contract, conversation, db, feedback_plans, item_numbers, plans, pools, tasks
 from canopy.core.vocab import ResumeReason
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from canopy.loop.attention import OpenItem
     from canopy.loop.harness import Decided
     from canopy.loop.harness_dispatches import ToCome
-    from canopy.loop.observations import ObservationsState
+    from canopy.loop.observations import ObservationsState, UnitObservation
     from canopy.reviews.view import ReviewsSection
     from canopy.runs.reconcile import Capacity
 
@@ -34,7 +34,8 @@ class OverseerState(TypedDict):
     It has `chores` only when chores are configured, `reviews` only when reviews are on, `notices` only when the
     operator set a notice lately, `harness` only when the harness decided a ticket this tick, and `dispatches_to_come`
     only when it dispatches after the overseer (DESIGN §37).
-    `observations` is the world as the connectors last read it (DESIGN §35).
+    `observations` is the world as the connectors last read it (DESIGN §35). As rendered, `tickets` leave out every
+    key, at any depth, whose value is null or an empty list or object, as the overseer's prompt says once.
     """
 
     repository: str
@@ -264,7 +265,8 @@ def state_block(
     in a unit's `resume` attempts, and its kind is in none; an old `split` run counts nowhere. `chores` are the
     configured chores with a `when` (DESIGN §19, §37); with none, the block has no `chores` key, exactly as before
     chores existed. `notices` are the operator's notices in force or ended lately (`notice.recent`), newest
-    first; with none, the block has no `notices` key. `private` holds each private ticket's conversation state, by
+    first; the block keeps an ended one only while a check it may hold could stand (`_notices`), and with none, has no
+    `notices` key. `private` holds each private ticket's conversation state, by
     key (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages
     newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `planned`
     holds a ticket's plan, by key: whether it needs one, its plan attempts and limit, and its newest plan's id,
@@ -334,6 +336,7 @@ def state_block(
         return summary
 
     listed = [ticket_summary(t) for t in tickets]
+    shown = _notices(notices, now, observations)
     state: OverseerState = {
         "repository": str(repo_root),
         "workspace": {
@@ -392,7 +395,7 @@ def state_block(
         **({"reviews": _scoped(reviews, listed, observations)} if reviews is not None else {}),
         # The operator's notices, in force or lately ended: a failed check that ran while one was in force, and that it
         # explains, is held, not fixed (DESIGN §7).
-        **({"notices": [_notice(n, now) for n in notices]} if notices else {}),
+        **({"notices": shown} if shown else {}),
         # What the overseer keeps on the attention list by recording it again: leaving one out resolves it (§14).
         "attention": attention or [],
         # What changes every tick comes last, after what changes rarely, for a runtime that caches part of a message
@@ -429,7 +432,7 @@ def state_block(
             "",
             "```json",
             # Compact: every step of the tick re-reads the block, and it is about 29% fewer tokens than indented.
-            json.dumps(state, separators=(",", ":")),
+            json.dumps({**state, "tickets": _compact(state["tickets"])}, separators=(",", ":")),
             "```",
             "",
         ],
@@ -524,8 +527,49 @@ def _scoped(reviews: ReviewsSection, listed: Sequence[TicketState], observations
     )
 
 
+def _notices(notices: Iterable[Notice], now: datetime, observations: ObservationsState) -> list[NoticeState]:
+    """The notices the overseer reads: each in force, and each ended while a check it may hold could stand.
+
+    A check a notice held stays held after the notice ends, until a newer run of it exists (DESIGN §8), so an ended
+    notice matters while some unit shows a failed check at its head, or is not observed fresh and so may have one.
+
+    Returns:
+        Those notices, newest first, as the state block carries them.
+    """
+    held = any(_may_hold(u) for t in observations["tickets"] for u in t.get("units", []))
+    return [_notice(n, now) for n in notices if held or n.in_force(now)]
+
+
+def _may_hold(unit: UnitObservation) -> bool:
+    checks = unit.get("checks")
+    return unit["observed"] != "fresh" or (checks is not None and bool(checks["failed"]))
+
+
 def _notice(held: Notice, now: datetime) -> NoticeState:
     return {"text": held.text, "set_at": held.set_at, "until": held.until, "in_force": held.in_force(now)}
+
+
+def _compact(value: object) -> object:
+    """`value` as the state block renders a ticket: every key, at any depth, left out whose value is empty.
+
+    Empty is null, or an empty list or object, so a cursor not yet set, a plan with no `newest`, and a private ticket's
+    `new_operator_messages` with none new are absent rather than spelled out. False and zero stay: a plan's and a
+    feedback plan's flags are read as false as often as true, and an attempt count is compared with its limit.
+
+    Returns:
+        A copy of `value` without those keys.
+    """
+    if isinstance(value, Mapping):
+        kept = {str(k): _compact(v) for k, v in cast("Mapping[object, object]", value).items()}
+        return {k: v for k, v in kept.items() if not _empty(v)}
+    if isinstance(value, list):
+        return [_compact(v) for v in cast("list[object]", value)]
+    return value
+
+
+def _empty(value: object) -> bool:
+    # Neither `False` nor `0` equals `[]` or `{}`, so both stay.
+    return value is None or value in ([], {})
 
 
 def _stamp(moment: datetime | None) -> str | None:

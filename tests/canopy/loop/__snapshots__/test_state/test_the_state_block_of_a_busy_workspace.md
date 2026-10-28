@@ -56,8 +56,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "phase": "ci_running",
       "branch": "agent/PROJ-1-retry",
       "cursors": {
-        "comment": "10001",
-        "message": null
+        "comment": "10001"
       },
       "units": [
         {
@@ -66,7 +65,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
           "pr_url": "https://example.test/acme/repo/pull/7",
           "phase": "ci_red",
           "cursors": {
-            "review": null,
             "ci": 1
           },
           "attempts": {
@@ -90,7 +88,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
           }
         }
       ],
-      "needs_human_since": null,
       "last_seen_at": "2026-10-16T09:40:00.000Z",
       "last_run": {
         "run_id": 4,
@@ -111,12 +108,10 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
         ]
       },
       "operator": {
-        "message_cursor": null,
         "new_operator_messages": [
           {
             "id": 2,
             "at": "2026-10-16T09:50:00.000Z",
-            "answers": null,
             "body": "Keep the retry count at three."
           }
         ]
@@ -125,30 +120,17 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
     {
       "key": "PROJ-4",
       "title": "Tidy the CLI help",
-      "phase": null,
       "branch": "agent/PROJ-4-help",
-      "cursors": {
-        "comment": null,
-        "message": null
-      },
       "units": [
         {
           "repo": "repo",
           "branch": "agent/PROJ-4-help",
-          "pr_url": null,
-          "phase": null,
-          "cursors": {
-            "review": null,
-            "ci": null
-          },
           "attempts": {
             "implement": 1,
             "resume": 0
-          },
-          "ci_cooldown_until": null
+          }
         }
       ],
-      "needs_human_since": null,
       "last_seen_at": "2026-10-16T09:00:00.000Z",
       "last_run": {
         "run_id": 3,
@@ -166,8 +148,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       },
       "private": {
         "started_at": "2026-10-16T09:00:00.000Z",
-        "message_cursor": null,
-        "new_operator_messages": [],
         "awaiting_reply": {
           "message_id": 1,
           "run_id": 3,
@@ -179,13 +159,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "key": "PROJ-6",
       "title": "Rework the importer",
       "phase": "split",
-      "branch": null,
-      "cursors": {
-        "comment": null,
-        "message": null
-      },
-      "units": [],
-      "needs_human_since": null,
       "last_seen_at": "2026-10-16T09:00:00.000Z",
       "last_run": {
         "run_id": 2,
@@ -266,6 +239,12 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "set_at": "2026-10-16T09:00:00.000Z",
       "until": "2026-10-16T12:00:00.000Z",
       "in_force": true
+    },
+    {
+      "text": "The registry is down.",
+      "set_at": "2026-10-16T08:00:00.000Z",
+      "until": "2026-10-16T08:30:00.000Z",
+      "in_force": false
     }
   ],
   "attention": [

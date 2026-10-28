@@ -153,7 +153,7 @@ def test_a_tick_asks_each_source_its_own_kind_and_records_what_it_read_whole(sce
     # what the connector read (DESIGN §35).
     assert scenario.conn.execute("SELECT count(*) FROM messages WHERE comment_id = '10001'").fetchone()[0] == 1
     assert scenario.state()["observations"]["query"]["result"] == ["PROJ-2", "PROJ-1"]
-    assert scenario.ticket_state("PROJ-1")["cursors"] == {"comment": None, "message": None}
+    assert "cursors" not in scenario.ticket_state("PROJ-1")  # neither is set, so the block leaves them out
     assert scenario.attention() == []
 
     # The next run asks only for comments newer than the newest the journal holds.
