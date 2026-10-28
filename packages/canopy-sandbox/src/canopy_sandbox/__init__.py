@@ -758,8 +758,15 @@ def check(policy: object, denied: Collection[Path], readable: Iterable[Path]) ->
 
 
 def _holds(entry: str, denied: Collection[Path]) -> Path | None:
-    """Return the directory of `denied` that `entry`, a path `srt` reads with `~` for HOME, is or holds, if any."""
-    place = Path(os.path.realpath(Path(entry).expanduser()))
+    """Return the directory of `denied` that `entry`, a path `srt` reads with `~` for HOME, is or holds, if any.
+
+    Raises:
+        SandboxError: `entry` is no path: it holds a NUL, or names the home of a user there is none of.
+    """
+    try:
+        place = Path(os.path.realpath(Path(entry).expanduser()))
+    except (RuntimeError, ValueError) as e:
+        raise SandboxError(f"the policy template names {entry!r}, which is not a path: {e}") from e
     for directory in denied:
         real = Path(os.path.realpath(directory))
         if place == real or place in real.parents:

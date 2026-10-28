@@ -35,8 +35,7 @@ The `worker` role wraps `worker_cmd`, `private_worker_cmd`, and `plan_cmd`; `set
 runs the branch's code just before the worker (§9); `chore` wraps `runtime.chore_cmd` and a chore's `cmd` (§19);
 `review` wraps `review_cmd`, which reads the most hostile text the loop meets (T1). `overseer` wraps `overseer_cmd` and
 the tools' server its runtime starts (§27); the runs it asks for start outside it, from the tick (§40), so none
-inherits its sandbox or ends with it. Unwrapped: the harness's own
-`notify.cmd`, `git`, and `treehouse`.
+inherits its sandbox or ends with it. Unwrapped: the harness's own `notify.cmd`, `git`, and `treehouse`.
 
 `runtime.sandbox_repos` sandboxes some repositories and not others: canopy starts a worker run, `setup_cmd`, and a
 review in one of them in the wrapper, with the role above, by its absolute path beside canopy's interpreter, so no

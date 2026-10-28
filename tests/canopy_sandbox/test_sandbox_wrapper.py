@@ -768,6 +768,14 @@ def test_a_worker_outside_a_linked_worktree_runs_nothing(sandbox: Sandbox, tmp_p
             {"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowWrite": ["~/.cache"]}},
             "names ~/",
         ),
+        (
+            {"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["a\u0000b"]}},
+            "not a path",
+        ),
+        (
+            {"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["~no-such-user-0/x"]}},
+            "not a path",
+        ),
     ],
 )
 def test_a_template_that_would_not_confine_the_command_runs_nothing(
