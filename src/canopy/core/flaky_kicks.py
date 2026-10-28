@@ -32,7 +32,7 @@ def spent(conn: sqlite3.Connection, repo: str, branch: str, head: str) -> int:
 
 
 def record(conn: sqlite3.Connection, run_id: int, *, repo: str, branch: str, from_head: str, to_head: str) -> None:
-    """Record that run `run_id` kicked `branch` in `repo` from `from_head` to `to_head`, as soon as origin has it."""
+    """Record that run `run_id` kicks `branch` in `repo` from `from_head` to `to_head`, before it pushes (`forget`)."""
     row = sql.insert(
         "flaky_kicks",
         run_id=run_id,
@@ -43,3 +43,8 @@ def record(conn: sqlite3.Connection, run_id: int, *, repo: str, branch: str, fro
         kicked_at=db.now(),
     )
     sql.execute(conn, row)
+
+
+def forget(conn: sqlite3.Connection, run_id: int, repo: str) -> None:
+    """Drop run `run_id`'s kick in `repo`, recorded before a push that then failed: the branch was not kicked."""
+    sql.execute(conn, sql.delete("flaky_kicks").where("run_id = ? AND repo = ?", run_id, repo))

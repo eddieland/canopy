@@ -2,10 +2,11 @@
 
 Such a worker changes nothing for the check and pushes nothing, so no new run of the PR's checks would come. Under
 `trust.max_flaky_kicks` the harness, never the worker, starts one: in each of the run's slots where origin still has the
-branch where the run found it, it rebases the branch onto its base and pushes it with a lease on that head
-(`checkpoint.kick`), the one forced push this allows (TRUST_MODEL T1), and records the kick. A head gets at most that
-many kicks; a push of work starts a head of its own. A slot that is not kicked, for the limit or a rebase that stops,
-is named in the run's note, and the overseer asks the operator to rerun its checks, as without kicks.
+branch where the run found it, it rebases the branch onto its base (`checkpoint.rebase_for_kick`), records the kick,
+and pushes it with a lease on that head, the one forced push this allows (TRUST_MODEL T1). A head gets at most that
+many kicks; a push of work starts a head of its own. A slot that is not kicked, for the limit, a rebase that stops or
+would drop a change, or a push that fails, is named in the run's note, and the overseer asks the operator to rerun its
+checks, as without kicks.
 """
 
 from __future__ import annotations
@@ -104,8 +105,15 @@ def _kick(
     spent = flaky_kicks.spent(ctx.conn, git.name, branch, head)
     if spent >= limit:
         return f"{git.where}not kicked: {branch} has had {spent} kick(s) since its work was pushed, {KEY}'s limit"
-    made = checkpoint.kick(git, branch, base, head)
+    made = checkpoint.rebase_for_kick(git, branch, base, head)
+    # Recorded before the push: a `_run` that dies between them counts a kick that may not have happened, never the
+    # other way, so a head never gets more than its kicks.
     flaky_kicks.record(ctx.conn, run_id, repo=git.name, branch=branch, from_head=head, to_head=made)
+    try:
+        checkpoint.push_kick(git, branch, head)
+    except checkpoint.SetupError:
+        flaky_kicks.forget(ctx.conn, run_id, git.name)
+        raise
     log.info(
         "flaky checks kicked",
         extra={"run_id": run_id, "repo": git.name, "branch": branch, "from": head, "to": made, "kick": spent + 1},

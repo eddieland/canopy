@@ -17,10 +17,12 @@ The worker's word reaches the overseer as one bit on the ticket's `last_run`, ne
 **Kicks.** With `trust.max_flaky_kicks` above 0 (private, off by default), `_run` reruns the checks itself: in each
 repository where origin still has the branch where the run found it, it rebases the branch onto its base, making each
 commit again, and pushes it with a lease on that head, the one forced push the key allows (TRUST_MODEL T1). The new
-head's checks run, and `last_run` says `kicked`, so the overseer waits for them. Each head a worker or a person pushed
-gets that many kicks, counted in code: the chain of kicks back from origin's head. A branch out of kicks, or one that
-does not rebase cleanly, is left as it was, named in the run's note, and handled as below. The harness kicks, never a
-worker: the worker's definition gains no force, and its judgment only starts a `resume` the attempt limit counts.
+head's checks run, and `last_run`'s `kicked` names the repository, so the overseer waits for them. Each head a worker
+or a person pushed gets that many kicks, counted in code: the chain of kicks back from origin's head, each recorded
+before its push. A rebase that would drop what the branch holds, such as a merge commit's own changes, is no kick. A
+branch out of kicks, or one that does not rebase cleanly, is left as it was, named in the run's note, and handled as
+below. The harness kicks, never a worker: the worker's definition gains no force, and its judgment only starts a
+`resume` the attempt limit counts.
 
 Kicked or not, the run's close tells the sinks (`ci.flaky`, §20): the PR, what was kicked or why not, and the worker's
 estimate of why the check is flaky, its summary cut to one line, as `run.ended` carries a summary.

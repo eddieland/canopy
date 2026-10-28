@@ -95,7 +95,7 @@ def test_a_flaky_check_is_kicked_onto_the_base_until_the_head_has_had_its_kicks(
         assert git("log", "-1", "--format=%s", BRANCH, cwd=git_pool.origin) == "PROJ-1: the change"
     # The overseer reads that the checks run again on a new head, and raises no rerun for the old one.
     scenario.tick(*waits(KEY, rationale="the kicked checks run"))
-    assert scenario.ticket_state()["last_run"]["kicked"] is True
+    assert scenario.ticket_state()["last_run"]["kicked"] == ["repo"]
 
     main_moves(git_pool, "m3")
     spent = leaves_flaky(scenario)
@@ -142,6 +142,40 @@ def test_a_branch_that_does_not_rebase_is_left_as_it_was(scenario: Scenario, git
     assert "\n" not in note
     assert git_pool.remote_head(BRANCH) == before
     assert "kicked" not in contract.stored_object(left.row["result_json"])
+
+
+def test_a_rebase_that_would_drop_a_merges_own_change_is_no_kick(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(trust={"max_flaky_kicks": 2})
+    scenario.run(worker=pushes())
+    main_moves(git_pool, "m")
+    # The branch merges main in, and the merge adds a file of its own, as a resolution would.
+    seed = git_pool.slots[1]
+    git("fetch", "--quiet", "origin", cwd=seed)
+    git("checkout", "--quiet", "--detach", f"origin/{BRANCH}", cwd=seed)
+    git("merge", "--quiet", "--no-ff", "--no-commit", "origin/main", cwd=seed)
+    (seed / "resolved.txt").write_text("the merge's own\n")
+    git("add", "resolved.txt", cwd=seed)
+    git("commit", "--quiet", "-m", "PROJ-1: merge main", cwd=seed)
+    git("push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}", cwd=seed)
+    before = git_pool.remote_head(BRANCH)
+
+    left = leaves_flaky(scenario)
+    assert left.status == "done"
+    assert harness_note(left) == (
+        f"repo: not kicked: rebasing {BRANCH} onto main would drop changes it holds, such as a merge's own"
+    )
+    assert git_pool.remote_head(BRANCH) == before
+
+
+def test_a_kick_whose_push_fails_is_not_counted(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(trust={"max_flaky_kicks": 1})
+    scenario.run(worker=pushes())
+    main_moves(git_pool, "m")
+    git_pool.reject_pushes()
+    refused = leaves_flaky(scenario)
+    assert harness_note(refused).startswith("repo: not kicked: the push failed: "), harness_note(refused)
+    assert scenario.conn.execute("SELECT count(*) FROM flaky_kicks").fetchone()[0] == 0
+    assert "kicked" not in contract.stored_object(refused.row["result_json"])
 
 
 def test_only_a_resume_for_ci_is_kicked(scenario: Scenario, git_pool: GitPool) -> None:
