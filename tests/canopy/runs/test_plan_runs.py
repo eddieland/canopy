@@ -26,6 +26,7 @@ from tests.canopy.helpers import (
     decisions,
     has_deadline,
     in_tick,
+    logged,
     plan_file,
     planner_does,
     pool,
@@ -109,7 +110,7 @@ def test_a_planner_reads_its_worktrees_history_through_canopys_git_tools(
     assert entry["command"][-1] in {f"repo={s}" for s in git_pool.slots}
     log, fork, other = planner["tools"]
     assert not log["error"], log["text"]
-    assert log["text"].endswith("\n\n    initial")
+    assert [c.message for c in logged(log["text"]).commits] == ["initial"]
     assert not fork["error"], fork["text"]
     assert fork["text"] == git_pool.remote_head("main")
     assert (other["error"], other["text"]) == (True, "no repository named 'web' here: this run reads repo")

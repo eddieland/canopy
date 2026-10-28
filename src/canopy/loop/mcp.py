@@ -17,9 +17,9 @@ planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in t
 run's own (`core.git_tools`); it opens no workspace, and serves nothing else.
 
 An overseer's tool lists its result's schema as its output schema, and answers with the text the command prints and
-the result as structured content. A refusal or an invalid argument is a tool error, `isError`, with the text the command
-prints and no structured content, and the server goes on. It writes nothing to stderr, which the runtime never reads,
-and logs no argument's text.
+the result as structured content; git's `log` does too, its text the result as JSON. A refusal or an invalid argument
+is a tool error, `isError`, with the text the command prints and no structured content, and the server goes on. It
+writes nothing to stderr, which the runtime never reads, and logs no argument's text.
 """
 
 from __future__ import annotations
@@ -82,9 +82,9 @@ class Tool:
     request: type[BaseModel]
     #: Validate its arguments, then do it in the context the opener opens: what the command prints, with its result
     #: when it has one.
-    call: Callable[[Mapping[str, object], Opener], str | tools.Outcome[tools.Result]]
+    call: Callable[[Mapping[str, object], Opener], str | tools.Outcome[BaseModel]]
     #: Its result, whose schema is the tool's output schema; None for a tool that answers with text alone.
-    result: type[tools.Result] | None = None
+    result: type[BaseModel] | None = None
 
     def listed(self) -> dict[str, object]:
         """Describe the tool as `tools/list` lists it.
@@ -434,11 +434,13 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         ),
         _git_tool(
             git_tools.LOG,
-            "List commits, newest first, with each one's message and the files it changed: one commit's history, or "
-            "BASE..HEAD for those on HEAD and not BASE. Narrow it to commits that change some paths, add or remove a "
-            "text (search), or say one in their message (message); follow one path across renames.",
+            "List commits as JSON, newest first, each with its id, parents, author, date, message, and the files it "
+            "changed: one commit's history, or BASE..HEAD for those on HEAD and not BASE. Narrow it to commits that "
+            "change some paths, add or remove a text (search), or say one in their message (message); follow one path "
+            "across renames. more says whether more match than it lists.",
             git_tools.Log,
             git_tools.log,
+            result=git_tools.Commits,
             runner=runner,
             checkouts=checkouts,
         ),
@@ -487,25 +489,32 @@ def _git_tool[R: git_tools.Request](
     name: str,
     description: str,
     request: type[R],
-    do: Callable[[procs.Runner, Mapping[str, Path], R], str],
+    do: Callable[[procs.Runner, Mapping[str, Path], R], str | git_tools.Result],
     *,
+    result: type[git_tools.Result] | None = None,
     runner: procs.Runner,
     checkouts: Mapping[str, Path],
 ) -> Tool:
     """Make git read `do` a tool over `checkouts`, taking `request` as its arguments.
 
+    A read that returns records, `result`, answers with them as structured content and as its text's JSON.
+
     Returns:
         The tool, which never opens the workspace.
     """
 
-    def call(arguments: Mapping[str, object], opened: Opener) -> str:  # noqa: ARG001  (git reads no journal)
+    def call(
+        arguments: Mapping[str, object],
+        opened: Opener,  # noqa: ARG001  (git reads no journal)
+    ) -> str | tools.Outcome[git_tools.Result]:
         asked = request.model_validate(arguments)
         try:
-            return do(runner, checkouts, asked)
+            found = do(runner, checkouts, asked)
         except git_tools.Refused as r:
             raise tools.Refused(str(r)) from None
+        return found if isinstance(found, str) else tools.Outcome(git_tools.text(found), found)
 
-    return Tool(name, description, request, call)
+    return Tool(name, description, request, call, result)
 
 
 def serve(lines: Iterable[bytes], write: Callable[[str], object], opener: Opener, mode: Mode | None = None) -> None:
