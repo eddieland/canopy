@@ -401,6 +401,26 @@ def test_slack_blocks_for_plans_follow_ups_and_tasks() -> None:
     ]
 
 
+def test_slack_blocks_for_a_flaky_check_kicked_or_left_to_the_operator() -> None:
+    pr = "https://github.com/acme/api/pull/7"
+    flaky: dict[str, Any] = {"kind": "ci.flaky", "ticket": "P-1", "title": "Fix the build", "run": 2, "prs": [pr]}
+    events: list[dict[str, Any]] = [
+        flaky | {"kicked": ["api"], "estimate": "The runner was lost <before> any test ran.", "note": None},
+        flaky | {"run": 3, "kicked": [], "estimate": "Same again.", "note": "api: not kicked: out of kicks"},
+    ]
+    assert _texts(slack.blocks({"repo": "/r/api", "events": events}))[1:] == [
+        (
+            ":repeat: *P-1* Fix the build · run 2 left a failed check as flaky; canopy pushed `api` again to rerun it\n"
+            f"<{pr}|acme/api#7>\n> *Why:* The runner was lost &lt;before&gt; any test ran."
+        ),
+        (
+            ":grey_question: *P-1* Fix the build · run 3 left a failed check as flaky\n"
+            f"<{pr}|acme/api#7>\n> *Why:* Same again."
+        ),
+        "rerun it, or `canopy reply` that it is real · api: not kicked: out of kicks",
+    ]
+
+
 def test_a_slack_digest_is_fields() -> None:
     digest: dict[str, Any] = {
         "since": "2026-09-24T15:00:00Z",

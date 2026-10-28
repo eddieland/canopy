@@ -34,6 +34,9 @@ class Kicks:
 
     kicked: Sequence[str] = ()
     notes: Sequence[str] = ()
+    #: Whether the run left a failed check as flaky, as a `resume` for `ci` that ended `done`: what the sinks hear of
+    #: (`ci.flaky`), kicked or not.
+    flaky: bool = False
 
 
 def after_run(
@@ -50,14 +53,17 @@ def after_run(
     That is a `resume` for `ci` that ended `done` with `flaky` true, under a `trust.max_flaky_kicks` above 0.
 
     Returns:
-        The repositories kicked, and a note for each slot not kicked, saying why; none for a run not to kick.
+        Whether the run left a check flaky, the repositories kicked, and a note for each slot not kicked, saying why;
+        nothing kicked and no notes without `trust.max_flaky_kicks`.
     """
-    limit = ctx.config.trust.max_flaky_kicks
     run_id = int(run["id"])
-    if not (limit and flaky and status is RunStatus.DONE and run["kind"] == RunKind.RESUME):
+    if not (flaky and status is RunStatus.DONE and run["kind"] == RunKind.RESUME):
         return Kicks()
     if ResumeReason.CI not in db.run_reasons(ctx.conn, [run_id]).get(run_id, ()):
         return Kicks()
+    limit = ctx.config.trust.max_flaky_kicks
+    if not limit:
+        return Kicks(flaky=True)
     branch = str(run["branch"])
     kicked: list[str] = []
     notes: list[str] = []
@@ -70,7 +76,7 @@ def after_run(
             kicked.append(git.name)
         elif note:
             notes.append(note)
-    return Kicks(kicked, notes)
+    return Kicks(kicked, notes, flaky=True)
 
 
 def _kick(

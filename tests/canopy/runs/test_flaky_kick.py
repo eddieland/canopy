@@ -8,6 +8,7 @@ from unittest import mock
 
 from canopy.core import contract
 from canopy.core.vocab import ResumeReason, RunKind
+from canopy.notify import message
 from tests.canopy.helpers import KEY, WORKER_DONE, waits, worker_does
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes
 from tests.conftest import GitPool, git
@@ -50,6 +51,17 @@ def main_moves(git_pool: GitPool, name: str) -> None:
 
 def harness_note(ran: Ran) -> str:
     return str(contract.stored_object(ran.row["result_json"]).get("harness", ""))
+
+
+def takes_runs(scenario: Scenario) -> None:
+    """Configure a sink that takes the `runs` events, so they are recorded."""
+    scenario.configures(notify={"sinks": {"slack": {"cmd": "true", "events": ["runs"]}}})
+
+
+def told(scenario: Scenario) -> list[dict[str, object]]:
+    """The fields of each `ci.flaky` event in the outbox, in order."""
+    rows = scenario.conn.execute("SELECT fields FROM notify_events WHERE kind = 'ci.flaky' ORDER BY id")
+    return [json.loads(str(r["fields"])) for r in rows]
 
 
 def test_without_kicks_a_flaky_check_is_left_to_the_operator(scenario: Scenario, git_pool: GitPool) -> None:
@@ -139,3 +151,43 @@ def test_only_a_resume_for_ci_is_kicked(scenario: Scenario, git_pool: GitPool) -
     main_moves(git_pool, "m")
     leaves_flaky(scenario, ResumeReason.REVIEW)
     assert git_pool.remote_head(BRANCH) == before
+
+
+def test_the_sinks_hear_the_workers_estimate_of_why_a_check_is_flaky(scenario: Scenario, git_pool: GitPool) -> None:
+    takes_runs(scenario)
+    scenario.run(worker=pushes())
+    left = leaves_flaky(scenario)
+    [fields] = told(scenario)
+    assert fields == {
+        "ticket": KEY,
+        "run": left.id,
+        "prs": ["https://example.test/pr/1"],
+        "kicked": [],
+        "estimate": "unit-tests lost its runner",
+        "note": None,
+    }
+    assert message.event_line("ci.flaky", fields) == (
+        f"? {KEY} run {left.id} left a failed check as flaky; rerun it, or `canopy reply` that it is real: "
+        "https://example.test/pr/1 why: unit-tests lost its runner"
+    )
+
+    scenario.configures(trust={"max_flaky_kicks": 1})
+    main_moves(git_pool, "m")
+    kicked = leaves_flaky(scenario)
+    assert told(scenario)[-1]["kicked"] == ["repo"]
+    assert message.event_line("ci.flaky", told(scenario)[-1]).startswith(
+        f"+ {KEY} run {kicked.id} left a failed check as flaky; canopy pushed repo again to rerun it: ",
+    )
+    # Out of kicks: the note says why, and the operator reruns it.
+    main_moves(git_pool, "m2")
+    leaves_flaky(scenario)
+    spent = told(scenario)[-1]
+    assert spent["kicked"] == []
+    assert "has had 1 kick(s) since its work was pushed" in str(spent["note"])
+
+
+def test_a_flaky_bit_from_a_run_not_sent_for_ci_tells_the_sinks_nothing(scenario: Scenario, git_pool: GitPool) -> None:
+    takes_runs(scenario)
+    scenario.run(worker=pushes())
+    leaves_flaky(scenario, ResumeReason.REVIEW)
+    assert told(scenario) == []

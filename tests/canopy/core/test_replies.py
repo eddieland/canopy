@@ -68,28 +68,6 @@ def test_under_post_nothing_is_required_and_drafts_render_empty(canopy_env: Cano
     assert rendered.values[replies.DRAFTS] == ""
 
 
-@pytest.mark.parametrize(
-    ("mode", "flaky_comment", "asked"),
-    [("approve", True, True), ("approve", False, False), ("post", True, False)],
-)
-def test_a_flaky_check_is_explained_in_a_draft_only_under_approve_when_asked(
-    canopy_env: CanopyEnv,
-    mode: str,
-    *,
-    flaky_comment: bool,
-    asked: bool,
-) -> None:
-    """A comment the worker posted itself would carry the marks, so the estimate is only ever a draft (DESIGN §23)."""
-    canopy_env.write_private(f'[trust]\nreview_replies = "{mode}"\nflaky_comment = {str(flaky_comment).lower()}\n')
-    cfg = load(canopy_env.root, canopy_env.user_file)
-    rendered = present(replies.render(cfg, RunKind.RESUME, private=False))
-    values = {**PROMPT_VALUES, "CONVERSATION": "No messages yet.", **rendered.values}
-    text = prompts.render_worker(cfg, RunKind.RESUME, values, private=False, required=rendered.required)
-    ci_note = rendered.values["CI_NOTE"]
-    assert (f"{ci_note}{replies.FLAKY_NOTE}\n" in text) is asked
-    assert f"{ci_note}\n" in text or asked
-
-
 def test_under_approve_a_prompt_must_carry_drafts_but_a_private_implements(canopy_env: CanopyEnv) -> None:
     approving(canopy_env)
     cfg = load(canopy_env.root, canopy_env.user_file)

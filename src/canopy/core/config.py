@@ -686,11 +686,6 @@ class Trust(Section):
     #: rebasing the branch onto its base and pushing it with a lease (DESIGN §23, TRUST_MODEL T1); 0 leaves every
     #: rerun to the operator. Private: a shared file must not let canopy replace a branch's history.
     max_flaky_kicks: Annotated[Count, Scope.PRIVATE] = 0
-    #: Whether a public ticket's `resume` that leaves a check flaky drafts a comment on its PR with its estimate of why,
-    #: for the operator to send unmarked, as their own (DESIGN §23, §29). Only under `review_replies = "approve"`: a
-    #: comment a worker posts itself carries the marks. Private: a shared file must not decide what is said in the
-    #: operator's name.
-    flaky_comment: Annotated[StrictBool, Scope.PRIVATE] = False
     # Whether workers draft the comments they would post, for the operator to send, or post them, marked (DESIGN
     # §29). Private: a shared file must not decide what is said in the operator's name.
     review_replies: Annotated[ReplyMode, Scope.PRIVATE] = ReplyMode.APPROVE

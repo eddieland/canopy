@@ -24,7 +24,7 @@ import json
 import os
 import sqlite3
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
 
@@ -195,8 +195,8 @@ class Outcome:
     follow_ups: follow_ups.Checked | None = None
     #: What a resume's worker answered of the review findings it was handed, checked (DESIGN §21).
     answers: review_answers.Checked | None = None
-    #: The repositories whose branch the harness kicked, to rerun checks the worker judged flaky (DESIGN §23).
-    kicked: Sequence[str] = ()
+    #: Whether the worker left a failed check flaky, and the branches the harness kicked to rerun it (DESIGN §23).
+    kicks: flaky_kick.Kicks = field(default_factory=flaky_kick.Kicks)
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11).
@@ -209,8 +209,8 @@ class Outcome:
             data["harness"] = self.note
         if self.follow_ups is not None:
             data |= self.follow_ups.stored()
-        if self.kicked:
-            data["kicked"] = list(self.kicked)
+        if self.kicks.kicked:
+            data["kicked"] = list(self.kicks.kicked)
         return json.dumps(data)
 
 
@@ -300,8 +300,9 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     """Write what the run reported beside its result, in the transaction that closes it.
 
     That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), with the event that tells the sinks of
-    them, so a run reconcile closed first writes none. So are its answers to review findings (§21), but only from a
-    run that ended `done` or `blocked`: one that did not finish its work cannot say what it fixed.
+    them, and the event that tells them it left a check flaky (§23), so a run reconcile closed first writes none. So
+    are its answers to review findings (§21), but only from a run that ended `done` or `blocked`: one that did not
+    finish its work cannot say what it fixed.
     """
     run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
@@ -317,6 +318,18 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
         event = outbox.follow_ups_filed(ctx.config, key=key, run_id=run_id, filed=filed)
         if event is not None:
             db.record_event(ctx.conn, event)
+    if outcome.kicks.flaky and isinstance(outcome.result, WorkerResult):
+        flaky = outbox.ci_flaky(
+            ctx.config,
+            key=str(run["ticket_key"]),
+            run_id=run_id,
+            prs=[pr for pr in (outcome.result.prs or {}).values() if pr],
+            kicked=outcome.kicks.kicked,
+            estimate=outcome.result.summary,
+            note="; ".join(outcome.kicks.notes),
+        )
+        if flaky is not None:
+            db.record_event(ctx.conn, flaky)
 
 
 type _Doer = Callable[[Context, sqlite3.Row, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]
@@ -853,7 +866,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         drafts=drafted,
         follow_ups=filed,
         answers=answered,
-        kicked=kicks.kicked,
+        kicks=kicks,
     )
 
 

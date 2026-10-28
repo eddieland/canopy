@@ -98,8 +98,8 @@ Whoever controls a shared workspace file (anyone who can push to the repository 
 choose prompts or models, spend money, authorize anyone, decide what is said in the operator's name, or loosen a
 guard; every key that does is private (TRUST_MODEL T7). Among them are every `runtime`, `notify`, `connect`,
 `chores`, `review`, `serve`, `memory`, `paths`, `capacity`, and `loop` key, the queue labels, the repliers and trusted
-reviewers, the comment marks and commit trailer, `trust.rebase`, `trust.max_flaky_kicks`, and `trust.flaky_comment`.
-Unknown keys are errors in every file, and a removed key is an error that says what to do instead.
+reviewers, the comment marks and commit trailer, `trust.rebase`, and `trust.max_flaky_kicks`. Unknown keys are errors
+in every file, and a removed key is an error that says what to do instead.
 
 **The private file's provenance.** The private file is under the workspace root, which may be a checkout of a shared
 repository, and its keys run commands. So whenever config is loaded, canopy refuses a state directory any of whose
@@ -187,7 +187,7 @@ Rules:
 - `trust.rebase` lets workers rebase and push with `--force-with-lease` instead of merging a base in, for hosts that
   refuse merge commits; `_run`'s own push leases the commit the run started from (§8, TRUST_MODEL T1).
   `trust.max_flaky_kicks` lets `_run` rebase and lease a branch to rerun checks a worker judged flaky, that many times
-  per pushed head (§23). `trust.flaky_comment` has that worker draft its estimate of why, for the operator to send.
+  per pushed head (§23).
 - `canopy init` sets up a workspace in the current directory or fills in the one it is inside (§18). Never in the home
   directory or one that already has a `.canopy/`, and in a git checkout only with `--workspace`: canopy writes nothing
   into a code repository. It writes the private file, readable only by the operator, and a workspace file where

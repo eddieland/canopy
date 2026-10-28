@@ -34,14 +34,6 @@ MAX_DRAFTS = 30
 MAX_DRAFT_CHARS = 4000
 # Where a mark goes once a worker posts only on the ticket.
 _ON_TICKET = "on the ticket"
-#: What `{{FLAKY_NOTE}}` asks of a `resume` under `approve` with `trust.flaky_comment` (DESIGN §23): the worker's
-#: estimate of why a check is flaky, in a draft the operator sends unmarked, as their own. Empty otherwise, so the
-#: prompt is the same bytes as before the setting existed.
-FLAKY_NOTE = (
-    "\nWhen you set `flaky`, put your estimate of why each such check is flaky in the `pr` draft for its PR (Result,\n"
-    "below), with anything else you would say there: the check, what failed and how, your evidence, and how likely a\n"
-    "rerun is to pass. Write it for the PR's reviewers: the operator reads it and sends it as their own."
-)
 
 
 @dataclass(frozen=True)
@@ -85,8 +77,6 @@ def render(
         return Rendered(mode=mode, ticket_drafts=False, values=posted_values(marks, label), required=())
     ticket_marks = mark_comments(trust.comment_prefix, trust.comment_suffix, where=_ON_TICKET)
     values = _drafted_values(ticket_marks, label, ticket=ticket)
-    if trust.flaky_comment:
-        values["FLAKY_NOTE"] = FLAKY_NOTE
     told = _sent_note(sent or {})
     for name in ("PR_REPLIES", "PRIVATE_PR_REPLIES"):
         values[name] += told
@@ -128,8 +118,6 @@ def posted_values(marks: str, label: str) -> dict[str, str]:
         "ASK_QUESTION": "Post your question as a ticket comment. One question, concrete, with the\n   options you see.",
         # worker-resume.md
         "CI_NOTE": "Comment on each PR whose checks you fixed, describing the fix.",
-        # A worker's own comment carries the marks: the estimate of a flaky check is asked for only as a draft.
-        "FLAKY_NOTE": "",
         "PR_REPLIES": (
             f"Reply on the PR to each comment you addressed. {marks} You post as the\noperator, so that is "
             "how canopy knows the comment is yours and never reads it back as review feedback or as a reply."
@@ -179,7 +167,6 @@ def _drafted_values(ticket_marks: str, label: str, *, ticket: bool) -> dict[str,
     values = {
         DRAFTS: _contract(ticket=ticket),
         "CI_NOTE": "Describe the fix in a `pr` draft for that PR (Result, below), not in a comment.",
-        "FLAKY_NOTE": "",
         "PR_REPLIES": replies if ticket else f"{replies} {on_ticket}",
         "DECLINE": decline.format(who="a human"),
         "PRIVATE_PR_REPLIES": f"{replies} Change nothing on a PR but the edit to its body below, when one is needed.",
