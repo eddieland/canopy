@@ -28,7 +28,7 @@ import stat
 import tomllib
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, get_args
 from urllib.parse import urlsplit
@@ -570,6 +570,31 @@ class Tracker(Section):
         return McpTools(server, tuple(allowed), default.create, default.pr_writes)
 
 
+class PlannerApproval(StrEnum):
+    """`policy.planner_may_approve`: how readily a planner may say its plan needs no review (DESIGN §25).
+
+    Each level but `off` renders its own bar in the planner's prompt; none relaxes the exclusions every level holds.
+    """
+
+    #: The planner is never asked: every plan waits on the operator.
+    OFF = "off"
+    #: Only a plan that leaves the operator nothing to judge.
+    STRICT = "strict"
+    #: A plan that follows the code's own patterns, within the scope the ticket settles.
+    NORMAL = "normal"
+    #: The planner's confident best reading, unless it leaves a real question open.
+    LENIENT = "lenient"
+
+
+def _approval_level(value: object) -> object:
+    # The key was a switch first: `true` keeps the bar it rendered then, and `false` keeps it off.
+    if value is True:
+        return PlannerApproval.STRICT
+    if value is False:
+        return PlannerApproval.OFF
+    return value
+
+
 class Policy(Section):
     """The `[policy]` table: attempt limits and cooldowns. A limit counts every run of that kind a ticket has had."""
 
@@ -597,10 +622,13 @@ class Policy(Section):
     #: guard in code. Private, unlike `plan`: it holds a trusted reviewer's feedback for the operator, and lets anyone
     #: else's start a plan run that reads only, so a shared file must choose neither (TRUST_MODEL T7).
     feedback_plan: Annotated[Literal["off", "approve"], Scope.PRIVATE] = "off"
-    #: Whether the harness approves a plan, or a feedback plan, whose planner says it needs no review, as the
-    #: planner's approval and not the operator's (DESIGN §25). Private: it loosens the operator's gate on plans, so only
-    #: the operator's own files turn it on (TRUST_MODEL T7).
-    planner_may_approve: Annotated[StrictBool, Scope.PRIVATE] = False
+    #: How readily the harness approves a plan, or a feedback plan, whose planner says it needs no review, as the
+    #: planner's approval and not the operator's (DESIGN §25): `off`, or the bar the planner's prompt sets, `strict`,
+    #: `normal`, or `lenient`. `true` reads as `strict` and `false` as `off`. Private: it loosens the operator's gate
+    #: on plans, so only the operator's own files turn it on (TRUST_MODEL T7).
+    planner_may_approve: Annotated[PlannerApproval, Scope.PRIVATE, BeforeValidator(_approval_level)] = (
+        PlannerApproval.OFF
+    )
     #: How long a stale feedback plan waits after the newest item or reply on its PRs before it is planned again
     #: (DESIGN §32): a burst of comments makes one plan, and a bot's stream of them a bounded number (TRUST_MODEL T3).
     feedback_quiet_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 10
@@ -617,6 +645,14 @@ class Policy(Section):
         Tighten.LOWER,
         Field(ge=1, le=ATTACHMENTS_TOTAL_KIB_CEILING),
     ] = 1024
+
+    def planner_approves(self) -> bool:
+        """Return whether a planner may say its plan needs no review, at any level (DESIGN §25).
+
+        Returns:
+            True unless `planner_may_approve` is `off`.
+        """
+        return self.planner_may_approve is not PlannerApproval.OFF
 
 
 class Trust(Section):

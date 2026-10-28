@@ -32,10 +32,13 @@ the old; an approval sent before that re-plan starts wins, as the operator's lat
 
 **The planner's word.** Under `policy.planner_may_approve`, private (T7) and off by default, a planner may say its plan
 needs no review, with a one-line reason; the harness then records the plan approved as written, the planner's approval
-and never the operator's, and the `implement` goes ahead with nothing waiting on them. It costs no run of its own, as a
-judge before the plan did (D126): the planner has read the ticket and the code. It fails closed: only a `done` result
-that says so with a reason counts, and a plan that replaces a current one, or a ticket whose own setting asks for a
-plan, waits on the operator, who has had a word on it. The sinks hear of it (§20); the plan and its reason stay to read.
+and never the operator's, and the `implement` goes ahead with nothing waiting on them. The key is a level, `strict`,
+`normal`, or `lenient`, and each sets its own bar in the planner's prompt; at every level a plan touching security,
+credentials, destructive data changes, or migrations needs review, and the ticket's text cannot argue it away. It
+costs no run of its own, as a judge before the plan did (D126): the planner has read the ticket and the code. It fails
+closed: only a `done` result that says so with a reason counts, and a plan that replaces a current one, or a ticket
+whose own setting asks for a plan, waits on the operator, who has had a word on it. The sinks hear of it (§20); the
+plan and its reason stay to read.
 
 ### The prompt
 
