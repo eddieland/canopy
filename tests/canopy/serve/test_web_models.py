@@ -39,8 +39,15 @@ def test_the_model_list_is_read_once_for_the_menus_and_a_choice_until_refreshed(
     # A refresh asks the runtime now, and what it lists is the list kept from then on.
     lists(opencode_state, "acme/fake-model-2")
     assert c.get("/api/models", params={"refresh": 1}).json()["models"] == ["acme/fake-model-2"]
-    assert refused(choose("acme/fake-model-1")).startswith("unknown_model: ")
     assert runtime_runs(opencode_state) == 2
+    # A model the kept list lacks is looked up again before it is refused, so one set up since is not.
+    assert refused(choose("acme/fake-model-1")).startswith("unknown_model: ")
+    assert runtime_runs(opencode_state) == 3
+    lists(opencode_state, "acme/fake-model-2", "acme/fake-model-3")
+    assert choose("acme/fake-model-3").json()["model"] == "acme/fake-model-3"
+    assert runtime_runs(opencode_state) == 4
+    assert choose("acme/fake-model-2").json()["model"] == "acme/fake-model-2"
+    assert runtime_runs(opencode_state) == 4
 
 
 def test_a_list_that_could_not_be_read_is_never_kept(ctx: Context, opencode_state: Path) -> None:
