@@ -221,8 +221,8 @@ own paths in the workspace file, as `high_impact_paths` in its `[repos.NAME]` ta
 `docs/TRUST_MODEL.md`. An entry covers the path it names and everything under it. It can also be a pattern: `*` and
 `?` match within one part of a path, and `**` any number of parts. Unlike a `.gitignore`, every entry starts at the
 repository's root, so a bare `OWNERS` or `*.yml` covers only the root's; `**/OWNERS` covers an `OWNERS` file in any
-directory, and `services/*/migrations/` each service's migrations, so a new project's files are covered without a new
-entry. A repository's list only adds, so nobody can take CI's workflows off it. `high` puts the PR's items first in
+directory, and `services/*/migrations/` covers each service's migrations, so a new project's files are covered without
+a new entry. A repository's list only adds, so nobody can take CI's workflows off it. `high` puts the PR's items first in
 `canopy status`, `attention.md`, and your notifications. It doesn't buy a longer review.
 
 Spend review where a missed bug is expensive. For a PR that worries you, ask for a review in two or three personas

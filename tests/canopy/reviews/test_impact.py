@@ -44,7 +44,8 @@ RAISED = (
         ),
         (("*.yml",), ["ci.yml", "a/ci.yml"], ("ci.yml", "*.yml")),
         (("*.yml",), ["a/ci.yml"], None),
-        (("v?/",), ["v10/a", "v1/a"], ("v1/a", "v?/")),
+        (("v?/",), ["v1/a"], ("v1/a", "v?/")),
+        (("v?/",), ["v10/a", "v/a"], None),
         # A pattern covers everything under what it matches, as a path does.
         (("**/migrations",), ["db/migrations/0001.sql"], ("db/migrations/0001.sql", "**/migrations")),
         (("skills/",), ["skills-old/x"], None),
