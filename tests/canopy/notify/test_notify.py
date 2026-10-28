@@ -265,6 +265,8 @@ def test_the_month_reaching_its_budget_is_sent_once_per_budget(
     month = f"{datetime.now().astimezone():%Y-%m}"
     [over] = messages(out)
     assert over.startswith(f"canopy: 1 event\n! spend for {month} reached its budget: $4.00 of $3")
+    # canopy loop never read the runtime's sessions, so the part outside canopy is not known.
+    assert "; canopy's runs $4.00, outside canopy not read yet\n" in over
     # Told once, even after pruning would have taken the event that says so.
     conn.execute("UPDATE notify_events SET at = ?", (db.format_time(datetime.now(UTC) - timedelta(days=8)),))
     scenario.tick()
@@ -337,11 +339,16 @@ def test_the_sessions_outside_canopy_count_toward_the_budget(
     # The operator's own session, outside canopy, as canopy loop reads it between ticks.
     ms = int(datetime.now(UTC).timestamp() * 1000)
     mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
-    runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
+    read = datetime(2026, 10, 28, 13, 5, tzinfo=UTC)
+    page = SessionPage("found", (mine,), cursor=(ms, "ses_mine"))
+    runtime_sessions.record(scenario.conn, page, now=db.format_time(read))
     scenario.tick()
     month = f"{datetime.now().astimezone():%Y-%m}"
     [over] = messages(out)
     assert over.startswith(f"canopy: 1 event\n! spend for {month} reached its budget: $3.50 of $3")
+    # The message names both parts, and when canopy loop last read the runtime's sessions, in local time.
+    at = f"{read.astimezone():%Y-%m-%d %H:%M}"
+    assert f"; canopy's runs $2.00, outside canopy $1.50 (sessions read {at})\n" in over
 
 
 def chore_cost(conn: sqlite3.Connection, usd: float) -> None:

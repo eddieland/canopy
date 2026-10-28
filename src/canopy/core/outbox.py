@@ -198,6 +198,12 @@ class BudgetReached(TypedDict):
     spent: float
     #: What the month will cost at this pace, in US dollars, rounded to the cent; None in its first day.
     projected: float | None
+    #: Canopy's runs' part of `spent`, in US dollars, rounded to the cent.
+    runs: float
+    #: The sessions outside canopy's part of `spent`, in US dollars, rounded to the cent: 0 before any read.
+    outside: float
+    #: When `canopy loop` last read the runtime's sessions, a journal time; None when it never has.
+    sessions_read_at: str | None
 
 
 def cut(text: object, limit: int) -> str:
@@ -483,8 +489,8 @@ def budget_reached(month: spend.Month, percent: int) -> Event:
     """The local month's spend reached `percent` of the operator's monthly budget.
 
     Returns:
-        The `loop.budget_reached` event, naming the month, the budget, the alert, what it spent, and where it is
-        headed.
+        The `loop.budget_reached` event, naming the month, the budget, the alert, what it spent, canopy's part and the
+        part outside canopy, when the runtime's sessions were last read, and where it is headed.
     """
     fields: BudgetReached = {
         "month": month.month,
@@ -492,5 +498,8 @@ def budget_reached(month: spend.Month, percent: int) -> Event:
         "percent": percent,
         "spent": round(month.spent_usd or 0.0, 2),
         "projected": round(month.projected_usd, 2) if month.projected_usd is not None else None,
+        "runs": round(month.runs_usd or 0.0, 2),
+        "outside": round(month.outside_usd, 2),
+        "sessions_read_at": month.sessions_read_at,
     }
     return Event(LOOP, BUDGET_REACHED, fields)
