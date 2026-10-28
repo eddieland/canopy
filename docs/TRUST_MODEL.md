@@ -99,8 +99,13 @@ Controls:
   observed and shown (`unobserved`). A `resume`'s cursors the overseer leaves out default in code to the newest items
   shown that these checks let it cover (DESIGN §37). A dispatch resting on a public ticket or a PR observed past that
   age is refused `stale`. A private ticket and a subject no source covers keep their claims, checked by the worker as
-  before. Residual: the guards trust what a connector printed, and a label removed since its read authorizes until the
-  worker's check.
+  before. Where a `tracker` source runs, beside the `vcs` source, which always does, the overseer reads neither world
+  live (DESIGN §39): a candidate whose ticket, PR, branches, or open blocker's PR a source left stale is the harness's
+  `wait`, the PRs its reviews ask about are shown as the `vcs` source read them, and its definition denies GitHub's
+  reads and, wherever config or the provider names it, the tracker's server, so it skips no tick over an outage.
+  Residual: the guards trust what a connector printed, and a label removed since its read authorizes until the
+  worker's check. Off a GitHub tracker, GitHub's server is denied by its tools' names, as its writes are, since its
+  name is the operator's: a tool no pattern names is still the overseer's.
 - An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own, cut
   as a tracker comment is, with the store's id for each author and whether the comment is an agent's or carries every
   comment mark. A comment on an artifact whose origin names a ticket the journal holds is also recorded once in that
