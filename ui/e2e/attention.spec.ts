@@ -136,6 +136,19 @@ test("a task's other item opens the task, by the link in its head too", async ({
     await expect(page).toHaveURL(/\/tasks\/5$/u)
 })
 
+test("a reason says what it means on hover, in the list's row and in the item's head", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const row = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'needs reviewer' })
+    // In the row, a link, the tip is the chip's own title, as a tip inside a control is.
+    await expect(row.getByTitle(/^needs_reviewer\nThe PR is green and unreviewed: review it\.$/u)).toBeVisible()
+    await row.click()
+    await page.getByTestId('attention-detail').getByText('needs reviewer', { exact: true }).hover()
+    await expect(page.getByRole('tooltip')).toHaveText(
+        /^needs_reviewer\s*The PR is green and unreviewed: review it\.$/u,
+    )
+})
+
 test("a PR waiting on a reviewer leads with its link out, the detail's one stop for the PR", async ({ page }) => {
     await page.goto('attention')
     await settled(page)
