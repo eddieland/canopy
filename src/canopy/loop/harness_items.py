@@ -29,6 +29,7 @@ one of these reasons itself (`loop.tools`).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
@@ -230,7 +231,7 @@ def _of_unit(
 
 
 def _stuck_check(ctx: Context, repo: str, url: str, head: str, now: datetime) -> str | None:
-    """Whether one CI check of the PR at `url` in `repo` is pending at `head` `STUCK_AFTER` past its others finishing.
+    """Name the one CI check of the PR at `url` in `repo` pending at `head` `STUCK_AFTER` past its others finishing.
 
     Every other CI check there has completed and none failed; the time runs from when a source first saw the last of
     their runs completed. A commit status has no run whose time the journal keeps, so it counts as finished but sets
@@ -252,10 +253,12 @@ def _stuck_check(ctx: Context, repo: str, url: str, head: str, now: datetime) ->
     if last is None or now - last < STUCK_AFTER:
         return None
     [name] = pending
+    # The name as a TOML key, quoted and escaped, so the line the item suggests is one the map accepts as written.
+    key = json.dumps(name)
     return (
         f"`{name}` is still pending on {url} at {head[:12]}, over {STUCK_AFTER // timedelta(minutes=1)} minutes after "
         f"its other checks finished, holding it at ci_running; if it is not CI, give it a role in "
-        f'`[repos.{repo}.checks]`: `"{name}" = "merge"` for a merge queue, `"human"` for a sign-off, or `"ignore"`'
+        f'`[repos.{repo}.checks]`: `{key} = "merge"` for a merge queue, `"human"` for a sign-off, or `"ignore"`'
     )
 
 

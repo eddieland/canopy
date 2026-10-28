@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, plans
+from canopy.core import db, plans, sql
 from canopy.core.vocab import Decider, RunStatus, TickStatus
 from canopy.loop import attention, harness_items, phases
 from tests.canopy.helpers import (
@@ -214,7 +214,10 @@ def plan_changed(env: CanopyEnv, conn: sqlite3.Connection) -> None:
 def queue_stuck(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     """The PR's build passed two hours ago, and its merge queue's status still waits, as CI."""
     green(env, conn)
-    conn.execute("UPDATE observed_check_runs SET observed_at = ?", (db.format_time(NOW - timedelta(hours=2)),))
+    sql.execute(
+        conn,
+        sql.update("observed_check_runs").set(observed_at=db.format_time(NOW - timedelta(hours=2))).everything(),
+    )
     check(conn, "merge-queue", "queued", None, run_id=12)
 
 
@@ -567,7 +570,7 @@ def test_a_slow_check_beside_one_pending_or_failed_raises_nothing(
     assert attention.CHECK_STUCK not in {reason for _, reason in scenario.attention()}
 
 
-@pytest.mark.parametrize("reason", sorted(attention.FROM_CAUSES))
+@pytest.mark.parametrize("reason", sorted(attention.FROM_CAUSES | {attention.CHECK_STUCK}))
 def test_the_overseer_is_refused_an_item_the_harness_raises(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
