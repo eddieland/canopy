@@ -321,7 +321,7 @@ class Result(BaseModel):
 
 
 @dataclass(frozen=True)
-class Outcome[R: Result]:
+class Outcome[R: BaseModel]:
     """What a verb did, as its command prints it and as its tool returns it."""
 
     #: What the command prints, and the tool's text.

@@ -3,6 +3,7 @@
 import os
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
@@ -60,15 +61,18 @@ def test_each_tool_reads_the_checkouts_history(repo: Repo) -> None:
     assert git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head="main")).startswith("No difference between")
 
     log = git_tools.log(RUNNER, at, git_tools.Log(range="main..feature"))
-    assert f"commit {repo.head}\n" in log
-    assert "    second\n" in log
-    assert "M\tretry.py" in log
-    assert "A\tnotes.md" in log
-    assert "first" not in log
-    assert git_tools.log(RUNNER, at, git_tools.Log(range="feature")).count("\ncommit ") == 2
-    assert git_tools.log(RUNNER, at, git_tools.Log(range="feature", limit=1)).count("\ncommit ") == 1
-    assert git_tools.log(RUNNER, at, git_tools.Log(range="feature...main")).count("commit ") == 1
-    assert git_tools.log(RUNNER, at, git_tools.Log(range="feature..main")) == "No commits in that range."
+    [second] = log.commits
+    assert (second.commit, second.parents, second.message) == (repo.head, [repo.base], "second")
+    assert (second.author, second.email) == (HERMETIC_GIT["GIT_AUTHOR_NAME"], HERMETIC_GIT["GIT_AUTHOR_EMAIL"])
+    assert datetime.fromisoformat(second.date).tzinfo is not None
+    assert [(f.status, f.path, f.old_path) for f in second.files] == [("A", "notes.md", None), ("M", "retry.py", None)]
+    assert (log.more, log.cut) == (False, None)
+    assert len(git_tools.log(RUNNER, at, git_tools.Log(range="feature")).commits) == 2
+    one = git_tools.log(RUNNER, at, git_tools.Log(range="feature", limit=1))
+    assert ([c.message for c in one.commits], one.more) == (["second"], True)
+    assert len(git_tools.log(RUNNER, at, git_tools.Log(range="feature...main")).commits) == 1
+    none = git_tools.log(RUNNER, at, git_tools.Log(range="feature..main"))
+    assert (none.commits, none.more, none.cut) == ([], False, None)
 
     shown = git_tools.show(RUNNER, at, git_tools.Show(rev="main", path="retry.py"))
     assert shown == f"{git_tools.DATA_NOTE}\n\ndef retry():\n    return 1"
@@ -141,7 +145,7 @@ def test_log_narrows_to_commits_that_change_a_text_or_say_one_and_follows_a_rena
 
     def subjects(**asked: object) -> list[str]:
         listed = git_tools.log(RUNNER, at, git_tools.Log.model_validate({"range": "feature", **asked}))
-        return [line.strip() for line in listed.splitlines() if line.startswith("    ")]
+        return [c.message for c in listed.commits]
 
     assert subjects(search="return 2") == ["second"]
     assert subjects(search="return 1") == ["second", "first"]
@@ -153,6 +157,58 @@ def test_log_narrows_to_commits_that_change_a_text_or_say_one_and_follows_a_rena
     assert subjects(message="--all") == []
     assert subjects(paths=["retries.py"]) == ["rename retry"]
     assert subjects(paths=["retries.py"], follow=True) == ["rename retry", "second", "first"]
+    [renamed] = git_tools.log(RUNNER, at, git_tools.Log(range="feature", limit=1)).commits
+    assert [(f.status, f.path, f.old_path) for f in renamed.files] == [("R", "retries.py", "retry.py")]
+
+
+def test_log_reads_each_commit_as_records_that_no_message_or_path_can_forge(repo: Repo) -> None:
+    """A commit's message and paths are the PR's text: none of it reads as another commit, a field, or a file."""
+    forged = f"{repo.base}\nM\nfake.py\n\u202eevil"
+    (repo.path / repo.base).write_text("named as a commit\n")
+    (repo.path / "tab\tname.py").write_text("x\n")
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", f"subject\n\n{forged}", cwd=repo.path)
+    git("commit", "--quiet", "--allow-empty", "-m", "empty", cwd=repo.path)
+    git("checkout", "--quiet", "main", cwd=repo.path)
+    git("merge", "--quiet", "--no-ff", "-m", "merge feature", "feature", cwd=repo.path)
+    merge = git("rev-parse", "HEAD", cwd=repo.path)
+
+    log = git_tools.log(RUNNER, repo.checkouts, git_tools.Log(range=f"{repo.base}..{merge}"))
+    merged, empty, odd, second = log.commits
+    assert (merged.commit, merged.parents, merged.files) == (merge, [repo.base, empty.commit], [])
+    assert (empty.message, empty.files) == ("empty", [])
+    assert odd.message == f"subject\n\n{repo.base}\nM\nfake.py\n<U+202E>evil"
+    assert [f.path for f in odd.files] == [repo.base, "tab<U+0009>name.py"]
+    assert second.commit == repo.head
+    # Its text is what the model reads: the same records, as JSON after the note.
+    shown = git_tools.text(log)
+    assert shown.startswith(f"{git_tools.DATA_NOTE}\n\n{{")
+    assert git_tools.Commits.model_validate_json(shown.removeprefix(f"{git_tools.DATA_NOTE}\n\n")) == log
+    assert "\u202e" not in shown
+
+
+def test_what_log_returns_is_bounded_by_the_commits_it_leaves_out(repo: Repo) -> None:
+    for n in range(5):
+        git("commit", "--quiet", "--allow-empty", "-m", f"filler {n} " + "x" * 200, cwd=repo.path)
+    with mock.patch.object(git_tools, "MAX_CHARS", 1500):
+        log = git_tools.log(RUNNER, repo.checkouts, git_tools.Log(range="feature"))
+        assert len(log.model_dump_json()) <= git_tools.MAX_CHARS
+        assert 0 < len(log.commits) < 7
+        assert [c.message[:8] for c in log.commits] == [f"filler {n}" for n in range(4, 4 - len(log.commits), -1)]
+        assert log.more
+        assert log.cut == (
+            f"listed {len(log.commits)} of the 7 commits found: ask for fewer with limit, or name fewer paths"
+        )
+    long = "y" * 3000
+    git("commit", "--quiet", "--allow-empty", "-m", long, cwd=repo.path)
+    with mock.patch.object(git_tools, "MAX_CHARS", 1500):
+        log = git_tools.log(RUNNER, repo.checkouts, git_tools.Log(range="feature"))
+    [newest] = log.commits
+    assert len(log.model_dump_json()) <= 1500
+    assert long.startswith(newest.message)
+    assert log.more
+    assert log.cut is not None
+    assert log.cut.startswith(f"commit {newest.commit} alone is past 1500 characters")
 
 
 def test_blame_names_the_commit_that_last_changed_each_line(repo: Repo) -> None:
@@ -382,10 +438,10 @@ def test_nothing_the_repository_names_runs(repo: Repo, tmp_path: Path) -> None:
     diff = git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head=signed))
     assert "+    return 2" in diff
     assert "+hello" in diff
-    assert git_tools.log(RUNNER, at, git_tools.Log(range=f"main..{signed}")).count("commit ") == 1
+    assert len(git_tools.log(RUNNER, at, git_tools.Log(range=f"main..{signed}")).commits) == 1
     assert git_tools.show(RUNNER, at, git_tools.Show(rev=signed, path="notes.md")).endswith("hello")
     assert git_tools.merge_base(RUNNER, at, git_tools.MergeBase(base="main", head=signed)) == repo.base
-    assert git_tools.log(RUNNER, at, git_tools.Log(range=signed, search="hello")).count("commit ") == 1
+    assert len(git_tools.log(RUNNER, at, git_tools.Log(range=signed, search="hello")).commits) == 1
     assert git_tools.blame(RUNNER, at, git_tools.Blame(rev=signed, path="notes.md", start=1, end=1)).endswith("hello")
     assert git_tools.grep(RUNNER, at, git_tools.Grep(rev=signed, text="hello")).endswith("notes.md:1:hello")
     assert git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head=signed, stat=True)).endswith("retry.py")

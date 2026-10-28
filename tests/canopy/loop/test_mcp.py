@@ -1042,16 +1042,25 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
         )
     # Its own tools, wherever it runs, a running tick included, and none of the overseer's.
     assert served.listed() == ["merge-base", "diff", "log", "show", "blame", "grep", "files"]
-    # Each answers with text alone.
-    assert not any("outputSchema" in t for t in served.responses[1]["result"]["tools"])
-    assert served.structured(2) is None
-    schema = served.responses[1]["result"]["tools"][2]["inputSchema"]
+    # log answers with records, as structured content and as its text's JSON; the rest with text alone.
+    listed = {t["name"]: t for t in served.responses[1]["result"]["tools"]}
+    assert [name for name, t in listed.items() if "outputSchema" in t] == ["log"]
+    output = listed["log"]["outputSchema"]
+    for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
+        validator.check_schema(output)
+    assert sorted(output["required"]) == ["commits", "cut", "more"]
+    assert "$ref" not in json.dumps(output)
+    schema = listed["log"]["inputSchema"]
     assert (schema["required"], schema["additionalProperties"]) == (["range"], False)
     assert schema["properties"]["limit"]["maximum"] == git_tools.MAX_LIMIT
     log, diff, show, base = (served.said(n) for n in (2, 3, 4, 5))
     assert [said.error for said in (log, diff, show, base)] == [False] * 4
-    assert log.text.startswith(git_tools.DATA_NOTE)
-    assert f"commit {sha}\n" in log.text
+    structured = served.structured(2)
+    assert structured is not None
+    jsonschema.validate(structured, output)
+    assert log.text == f"{git_tools.DATA_NOTE}\n\n{json.dumps(structured, separators=(',', ':'))}"
+    assert [c["commit"] for c in structured["commits"]] == [sha]
+    assert served.structured(3) is None
     assert "+while True:\n+    call()" in diff.text
     assert show.text.endswith("while True:\n    call()")
     assert base.text == git("rev-parse", "main", cwd=seed)
@@ -1065,8 +1074,9 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     assert (blame.error, searched.error) == (False, False)
     assert blame.text.endswith(" 2)     call()")
     assert blame.text.count(f"{sha} ") == 2
-    assert searched.text.count("\ncommit ") == 1
-    assert f"commit {sha}\n" in searched.text
+    found = served.structured(11)
+    assert found is not None
+    assert [c["commit"] for c in found["commits"]] == [sha]
     assert (served.stderr, served.returncode) == ("", 0)
 
 
