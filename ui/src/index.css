@@ -1030,6 +1030,68 @@
     }
 }
 
+/*
+ * A tile of 2048 (src/components/shell/game-2048.tsx), an Easter egg, by its number (`data-tile`): a tint of a flair
+ * color over the raised surface, a new hue every two numbers and deeper within each, in the foreground's text, which
+ * the tints stay light enough to read. The goal is the accent, in the accent's own text. A tile just made, added or
+ * merged, pops.
+ */
+@utility game-tile {
+    --tile-hue: var(--surface-raised);
+    --tile-mix: 0%;
+    background-color: color-mix(in oklch, var(--tile-hue) var(--tile-mix), var(--surface-raised));
+    color: var(--foreground);
+    &[data-tile='4'] {
+        --tile-hue: var(--flair-cyan);
+        --tile-mix: 18%;
+    }
+    &[data-tile='8'] {
+        --tile-hue: var(--flair-cyan);
+        --tile-mix: 34%;
+    }
+    &[data-tile='16'] {
+        --tile-hue: var(--flair-green);
+        --tile-mix: 24%;
+    }
+    &[data-tile='32'] {
+        --tile-hue: var(--flair-green);
+        --tile-mix: 40%;
+    }
+    &[data-tile='64'] {
+        --tile-hue: var(--flair-yellow);
+        --tile-mix: 30%;
+    }
+    &[data-tile='128'] {
+        --tile-hue: var(--flair-yellow);
+        --tile-mix: 46%;
+    }
+    &[data-tile='256'] {
+        --tile-hue: var(--flair-red);
+        --tile-mix: 24%;
+    }
+    &[data-tile='512'] {
+        --tile-hue: var(--flair-red);
+        --tile-mix: 38%;
+    }
+    &[data-tile='1024'] {
+        --tile-hue: var(--flair-purple);
+        --tile-mix: 30%;
+    }
+    &[data-tile='2048'] {
+        background-color: var(--accent);
+        color: var(--accent-foreground);
+    }
+    &[data-tile='big'] {
+        --tile-hue: var(--flair-purple);
+        --tile-mix: 48%;
+    }
+    &[data-fresh] {
+        @media (prefers-reduced-motion: no-preference) {
+            animation: pop 160ms cubic-bezier(0.2, 0, 0, 1) backwards;
+        }
+    }
+}
+
 /* A skeleton's light passing over it, left to right. */
 @utility animate-shimmer {
     background-size: 200% 100%;
