@@ -70,8 +70,9 @@ class _Message(BaseModel):
 class _Session(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
-    # The version of OpenCode that made the session, where the export names one.
-    version: StrictStr | None = None
+    # The version of OpenCode that made the session, where the export names one: anything but a string is no version
+    # canopy keeps, and fails no read of the models.
+    version: object = None
 
 
 class _Export(BaseModel):
@@ -97,7 +98,8 @@ def read(runner: procs.Runner, *, cwd: Path, session_id: str) -> SessionModels:
     exported = _parse(printed)
     if exported is None:
         return SessionModels("failed", error=f"`{COMMAND}` printed what canopy cannot read")
-    version = runtime_version(exported.info.version if exported.info is not None else None)
+    named = exported.info.version if exported.info is not None else None
+    version = runtime_version(named if isinstance(named, str) else None)
     return SessionModels("found", _models(exported.messages), runtime_version=version)
 
 

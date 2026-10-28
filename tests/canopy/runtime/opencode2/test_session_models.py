@@ -105,6 +105,8 @@ def test_the_version_of_opencode_that_made_the_session_is_read_where_the_export_
     export = runner(json.dumps({"info": session, "messages": [assistant("a", "x", 0.5)]}))
     assert read(export) == SessionModels("found", (ModelUse("a/x", 1, 0.5),), runtime_version="2.1.2")
     assert read(runner(exported(assistant("a", "x", 0.5)))).runtime_version is None
+    export = runner(json.dumps({"info": {**session, "version": {"major": 2}}, "messages": [assistant("a", "x", 0.5)]}))
+    assert read(export) == SessionModels("found", (ModelUse("a/x", 1, 0.5),))
 
 
 def test_a_session_opencode_does_not_have_is_missing() -> None:
