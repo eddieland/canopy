@@ -416,6 +416,19 @@ def test_a_candidate_whose_open_blockers_pr_is_stale_is_stale_by_the_vcs_source(
     assert derived(canopy_env)[0].phases == (phases.Phase.BLOCKED,)
 
 
+def test_a_candidate_with_a_pr_of_its_own_waits_on_no_blockers_pr(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """Only a ticket with no branch is stacked, so one with its own PR goes on whatever its blocker's PR was read."""
+    green(canopy_env, observed)
+    observed.execute("UPDATE observed_tickets SET blockers = '[\"PROJ-9\"]' WHERE key = ?", (KEY,))
+    observe_ticket(observed, "PROJ-9", labels={})
+    db.set_unit(observed, "PROJ-9", str(canopy_env.root), "repo", pr_url="https://github.com/acme/repo/pull/9")
+    observed.commit()
+    assert derived(canopy_env)[0].stale is None
+
+
 def test_a_check_the_repository_names_human_is_not_ci(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
     canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": {"deploy/approval": "human"}}}})
     green(canopy_env, observed)

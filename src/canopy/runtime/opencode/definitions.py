@@ -133,13 +133,13 @@ _OVERSEER_GITHUB_READS = (
 _GITHUB_ISSUE_READS = ("*issue_read*", "*list_issues*", "*search_issues*")
 # GitHub's reads of PRs and branches, and of the signed-in user, which the overseer keeps but where the sources read
 # both the tracker and GitHub for it (DESIGN §39). Denied by pattern, as its writes are: the server's name is the
-# operator's.
+# operator's. `get_me` is anchored at the name's end, so that another server's `get_message` or `get_member` stays.
 _GITHUB_PR_READS = (
     "*pull_request_read*",
     "*list_pull_requests*",
     "*search_pull_requests*",
     "*list_branches*",
-    "*get_me*",
+    "*_get_me",
 )
 # GitHub's issue tools, which only the `tracker-github` skill names, so that the workers and the planner have no use
 # for them off a GitHub tracker: the reads, and what filing or labelling an issue takes. Not its issue comment tools,

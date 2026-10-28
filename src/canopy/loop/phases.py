@@ -513,6 +513,7 @@ class _World:
         """
         journal = self.tickets.get(key)
         private = conversation.is_started(conversation.start_of(self.ctx.conn, key))
+        seen: records.ObservedTicket | None = None
         if private:
             candidate, closed, blockers_open = True, False, False
         else:
@@ -524,8 +525,6 @@ class _World:
             labels = {label["name"] for label in labels_of(seen)}
             candidate = not closed and bool(labels & set(self.ctx.config.tracker.labels))
             blockers_open = any(self.observed[b].state is TicketState.OPEN for b in blockers_of(seen))
-            if candidate and key not in self.running and (stale := self._blocker_prs_stale(seen)) is not None:
-                return Derived(key, None, stale=stale, stale_vcs=True)
         if closed:
             return Derived(key, None, candidate=False, closed=True)
         phases: list[Phase] = []
@@ -540,6 +539,9 @@ class _World:
             if branch is None:
                 return Derived(key, None, stale=self._branches_stale(), stale_vcs=self.observes_all)
             if not branch:
+                # Only a ticket with no branch of its own may be stacked, so only its row reads a blocker's PR.
+                if seen is not None and (stale := self._blocker_prs_stale(seen)) is not None:
+                    return Derived(key, None, stale=stale, stale_vcs=True)
                 phases.append(Phase.BLOCKED if blockers_open else Phase.READY)
         return Derived(key, None, _in_order(phases), candidate=candidate, closed=False)
 
