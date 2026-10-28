@@ -472,15 +472,16 @@ Rules:
 
 canopy should be a little fun to use (PRODUCT.md): the header's ticker, Sprig at the foot of the rail, the empty inbox
 and the leaf a cleared item drops (an approved plan drops one too, and so does a review draft once published, not
-staged), and the lightswitch rave. Fun is ancillary, so this design holds only the rules it all keeps; what each one
-does is written in its code. None of it is journal text.
+staged), the lightswitch rave, and 2048, typed anywhere but a text field. Fun is ancillary, so this design holds only
+the rules it all keeps; what each one does is written in its code. None of it is journal text.
 
 - **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
   something; its room stays, so nothing beside it moves. The fit is measured as the layout changes (`useFits` in
-  `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in. Two exceptions, both the
+  `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in. Three exceptions, all the
   operator's call: Sprig may stand over the foot of the rail's spend by 40px rather than step out, offering tips there
-  only when clicked; and the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed.
+  only when clicked; the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed; and
+  2048 opens over the page as a dialog, only when typed, and Escape puts it away.
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`, `rave-dark`) or the accent,
   never a status color, so nothing in it reads as a run's state.
 - **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and counters.
@@ -490,7 +491,8 @@ does is written in its code. None of it is journal text.
   second, well clear of the three that WCAG 2.3.1 counts as harmful.
 - **Settings has one Fun panel**, second to last, below the settings that change how canopy works and above Session:
   an on/off for each, as checkboxes, then each one's details. Everything in it is kept in this browser (Themes, below).
-  The rave is the one without a checkbox: its switch hides in the panel's header.
+  The rave is the one without a checkbox: its switch hides in the panel's header. 2048 is not in the panel at all:
+  nothing of it shows until it is typed.
 
 ## Motion
 

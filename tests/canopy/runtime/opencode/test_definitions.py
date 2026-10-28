@@ -59,7 +59,7 @@ PLAIN = agents.Rules(
     artifacts=None,
     models={},
     chore_agents=(),
-    tracker_observed=False,
+    observes_all=False,
     tracker_server=None,
 )
 
