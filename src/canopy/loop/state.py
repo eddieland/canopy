@@ -389,7 +389,7 @@ def state_block(
         **({"dispatches_to_come": dispatches_to_come} if dispatches_to_come is not None else {}),
         **({"chores": chores} if chores else {}),
         # With reviews off, nothing about them reaches the overseer (DESIGN §21).
-        **({"reviews": _scoped(reviews, listed, observations)} if reviews is not None else {}),
+        **({"reviews": _scoped(reviews, listed, observations, config)} if reviews is not None else {}),
         # The operator's notices, in force or lately ended: a failed check that ran while one was in force, and that it
         # explains, is held, not fixed (DESIGN §7).
         **({"notices": [_notice(n, now) for n in notices]} if notices else {}),
@@ -508,12 +508,19 @@ def _running_summary(
 
 
 # The reviews of the PRs the overseer may act on this tick: its listed tickets' and the review query's (DESIGN §21).
-def _scoped(reviews: ReviewsSection, listed: Sequence[TicketState], observations: ObservationsState) -> ReviewsSection:
+def _scoped(
+    reviews: ReviewsSection,
+    listed: Sequence[TicketState],
+    observations: ObservationsState,
+    config: Config,
+) -> ReviewsSection:
     query = observations.get("review_query")
     if query is None:
         found: frozenset[str] | None = frozenset()  # no review query: a PR of no ticket was an operator's request
     elif query["observed"] == "fresh":
         found = frozenset(query.get("result", []))
+    elif config.connect.observes_all():
+        found = frozenset()  # the overseer reads no GitHub (§39): the query waits for the `vcs` source's next read
     else:
         found = None  # the overseer runs the query itself, and may find any PR reviewed lately
     return review_view.scoped(

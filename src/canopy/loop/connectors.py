@@ -10,6 +10,7 @@ sink's thread is their message, as `canopy reply` records one (§22, `slack_repl
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 from urllib.parse import urlsplit, urlunsplit
@@ -31,6 +32,7 @@ from canopy.core.vocab import ConnectorRunStatus, PrState, SourceKind
 from canopy.reviews import waiting
 
 if TYPE_CHECKING:
+    import sqlite3
     from collections.abc import Mapping
 
     from canopy.core.context import Context
@@ -133,8 +135,9 @@ def vcs_request(ctx: Context) -> observe.Request:
     on a read of it (§29), a review's draft among them (§34), while a requested review's draft waits on the operator
     and no read has seen it merged or closed (§34), and while the reader last saw it open, so no PR's observation stays
     open unread once its ticket is done or forgotten. A PR with the operator's open review request is
-    watched too, so its review knows the branch it merges into (§21). A PR that is not a PR's URL cannot be read, so it
-    is not asked about.
+    watched too, so its review knows the branch it merges into (§21). Where a `tracker` source runs, so the overseer
+    reads no GitHub itself (§39), so is each PR the review query last found, which it reviews from the read. A PR that
+    is not a PR's URL cannot be read, so it is not asked about.
 
     Returns:
         The request.
@@ -159,6 +162,8 @@ def vcs_request(ctx: Context) -> observe.Request:
         (r.pr_url for r in review_requests.open_requests(ctx.conn) if observe.is_pr_url(r.pr_url)),
     )
     query = ctx.config.review.query.strip()
+    if query and ctx.config.connect.observes_all():
+        prs.update(pr for pr in _review_query_found(ctx.conn) if observe.is_pr_url(pr))
     return observe.Request(
         prs=sorted(prs),
         repositories=[
@@ -168,6 +173,23 @@ def vcs_request(ctx: Context) -> observe.Request:
         branch_prefix=ctx.config.trust.branch_prefix,
         review_query=query or None,
     )
+
+
+def _review_query_found(conn: sqlite3.Connection) -> list[str]:
+    """The PRs the review query found on the newest `vcs` run that read it to the end.
+
+    Returns:
+        Their URLs; none when no run has.
+    """
+    row = sql.execute(
+        conn,
+        sql.select("review_query_result")
+        .from_("connector_runs")
+        .where("kind = ? AND review_query_result IS NOT NULL", SourceKind.VCS)
+        .order_by("id DESC")
+        .limit(1),
+    ).fetchone()
+    return [str(url) for url in json.loads(str(row[0]))] if row is not None else []
 
 
 def without_credentials(url: str) -> str:

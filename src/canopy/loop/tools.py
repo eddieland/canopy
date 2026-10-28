@@ -752,7 +752,8 @@ def decide(ctx: Context, request: Decisions) -> Outcome[Decided]:
 
     Raises:
         Refused: Outside a running tick; about a ticket the harness decided this tick, whose refusal is recorded and
-            leaves every decision of the call unrecorded; or a tick-wide skip for a tracker a `tracker` source reads.
+            leaves every decision of the call unrecorded; or a tick-wide skip for a world a source reads: the
+            tracker's, where a `tracker` source runs, or any server's, where the `vcs` source runs beside it.
     """
     current = running_tick(ctx)
     tick_wide = [d.rationale.split(":", 1)[0].strip() for d in request.decisions if d.key is None]
@@ -760,6 +761,12 @@ def decide(ctx: Context, request: Decisions) -> Outcome[Decided]:
         raise Refused(
             f"decide refused: a `tracker` source reads the tracker, and you read none, so no tick is skipped "
             f"'{duties.TRACKER_UNSUPPORTED}' (DESIGN §39); decide each ticket under its own key",
+        )
+    if duties.MCP_UNAVAILABLE in tick_wide and ctx.config.connect.observes_all():
+        raise Refused(
+            f"decide refused: the sources read the tracker and GitHub, and you read neither, so no tick is skipped "
+            f"'{duties.MCP_UNAVAILABLE}' (DESIGN §39): a source down is `connector_failed`, and what it left stale "
+            "is the harness's wait; decide each ticket under its own key",
         )
     keys = [d.key for d in request.decisions if d.key is not None]
     if refused := [r for key in keys if (r := _decided_by_harness(ctx, current.id, key, "decide")) is not None]:

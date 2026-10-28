@@ -1406,6 +1406,18 @@ class Connect(Section):
         """
         return any(s.kind == "tracker" for s in self.named().values())
 
+    def observes_all(self) -> bool:
+        """Whether a `tracker` and a `vcs` source both read, so the overseer reads neither world itself (DESIGN §39).
+
+        A `vcs` source always reads, canopy's own when none is configured (`named`), so both do where a `tracker`
+        source does.
+
+        Returns:
+            True if both do.
+        """
+        kinds = {s.kind for s in self.named().values()}
+        return {"tracker", "vcs"} <= kinds
+
     def tracker(self) -> Source | None:
         """The `tracker` source, if the operator configured one; canopy configures none of its own.
 
