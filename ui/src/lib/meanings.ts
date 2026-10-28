@@ -66,7 +66,7 @@ export const PHASE_MEANINGS: Readonly<Record<string, string>> = {
     green_unreviewed: 'Its PR’s checks pass, with no approval yet: it needs a reviewer.',
     approved: 'Its PR is approved and not merged: it waits on a person to merge it.',
     merged: 'Its PR is merged.',
-    needs_human: 'A worker asked a question, and no authorized reply has come since.',
+    needs_human: 'A run, a worker’s or a planner’s, asked a question, and no authorized reply has come since.',
     human_replied: 'An authorized reply, or your message, came since its question: a worker resumes with it.',
     split: 'Split into follow-up tickets, which canopy no longer does.',
 }
