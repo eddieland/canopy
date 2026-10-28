@@ -197,7 +197,9 @@ a worker to "fix" code that is not broken, again and again.
 Shape (§23), reshaped by the operator 2026-10-22: the `resume` worker sent for the failure judges it, with evidence,
 and reports it `flaky` rather than changing anything; the overseer then asks the operator to rerun the check
 (`flaky_rerun`) instead of waiting for a newer run. No agent reruns CI. Rejected: a `triage-ci` run before each `resume`
-that reran what it judged flaky, the first design, deferred 2026-10-15.
+that reran what it judged flaky, the first design, deferred 2026-10-15. Extended by the operator 2026-10-28: with
+`trust.max_flaky_kicks`, the harness first reruns the checks itself by rebasing the branch and pushing it with a lease,
+that many times per pushed head, and asks the operator once those are spent.
 
 ### R15. Tell every run that builds or reads CI about a passing condition, for as long as it lasts
 

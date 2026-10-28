@@ -158,6 +158,9 @@ comment_suffix = ""
 # Set if your repositories refuse merge commits: workers then rebase onto a base branch instead of merging it in, and
 # push the result with --force-with-lease to their own branch, never any other force (TRUST_MODEL T1).
 # rebase = false
+# How many times canopy reruns a PR's checks a worker judged flaky, for each head pushed, by rebasing the branch onto
+# its base and pushing it with --force-with-lease (DESIGN §23, TRUST_MODEL T1). 0: you rerun them yourself.
+# max_flaky_kicks = 0
 # How replies to review comments, and every other comment a worker would post, reach GitHub (DESIGN §29): "post" has
 # workers post them, marked; "approve" has them draft each one for you to read, edit, and send as your own words.
 # review_replies = "post"

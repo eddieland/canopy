@@ -22,5 +22,8 @@ describe('meanings', () => {
         expect(phaseMeaning('ci_red')).toBe('Its PR’s checks failed.')
         expect(phaseMeaning('not_a_phase')).toBeNull()
         expect(phaseMeaning(null)).toBeNull()
+        // A word an object inherits a property by is no meaning of canopy's.
+        expect(reasonMeaning('constructor')).toBeNull()
+        expect(phaseMeaning('toString')).toBeNull()
     })
 })

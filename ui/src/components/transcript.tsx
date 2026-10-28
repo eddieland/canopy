@@ -39,6 +39,7 @@ import {
     byCall,
     callLine,
     contextShape,
+    decisionsOf,
     drawnRows,
     duration,
     elapsed,
@@ -55,11 +56,12 @@ import {
     summary,
     tally,
     THINKING_LINES,
+    THIS_TICK,
     tokenCount,
     TRANSCRIPT_BUDGET,
     wroteTokens,
 } from '@/lib/transcript'
-import type { ModelCall as Call } from '@/lib/transcript'
+import type { CallDecision, ModelCall as Call } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
 // What a row marks with no search: one stable value, as a default prop must be.
@@ -522,7 +524,8 @@ function When({ at, start }: { at: string | null; start: string | null }) {
 
 /**
  * A tool call: one line, its name, what it did, and how it ended (refused, or what it printed when that is short),
- * that opens to its input and its output or error.
+ * that opens to its input and its output or error. A `decide` call opens to its decisions first, each on a line of
+ * its own with its rationale, as several recorded together are hard to read apart in their input.
  */
 function Tool({
     entry,
@@ -540,6 +543,7 @@ function Tool({
     const { verdict, guard, line } = outcome(entry)
     const failed = verdict !== 'done'
     const did = summary(entry)
+    const decisions = decisionsOf(entry)
     return (
         <li data-testid="transcript-tool" className={cn(targeted && 'bg-accent/14')}>
             <details open={open} className="group">
@@ -586,6 +590,7 @@ function Tool({
                 </summary>
                 <RowGrid kind="transcript" className="pb-3">
                     <RowLine from="text" className="flex flex-col gap-2">
+                        {decisions !== null && <Decisions decisions={decisions} words={words} />}
                         <Block label="input" words={words}>
                             {entry.input}
                         </Block>
@@ -871,6 +876,31 @@ function Returned({ tool }: { tool: TranscriptTool }) {
                 </span>
             </span>
             <Pre failed={failed}>{shownOutput(tool)}</Pre>
+        </div>
+    )
+}
+
+/** A `decide` call's decisions, in the order given: each its ticket, its action, and why. */
+function Decisions({ decisions, words }: { decisions: readonly CallDecision[]; words: readonly string[] }) {
+    return (
+        <div className="flex flex-col gap-1">
+            <span className="panel-label">{decisions.length === 1 ? 'decision' : `${decisions.length} decisions`}</span>
+            <ol className="flex flex-col gap-1 rounded-sm border bg-background p-2 text-xs">
+                {/* A call's decisions never reorder, and its keys may repeat in one the harness refused. */}
+                {decisions.map((d, i) => (
+                    <li key={i} className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="shrink-0 font-mono">
+                            <MarkedText text={d.key ?? THIS_TICK} words={words} />
+                        </span>
+                        <span className="shrink-0 font-mono text-muted-foreground">
+                            <MarkedText text={d.action} words={words} />
+                        </span>
+                        <span className="min-w-0 flex-1 break-words">
+                            <MarkedText text={d.rationale} words={words} />
+                        </span>
+                    </li>
+                ))}
+            </ol>
         </div>
     )
 }

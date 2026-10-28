@@ -586,6 +586,21 @@ def _follow_ups_filed(e: Mapping[str, object]) -> _Shown:
     )
 
 
+def _ci_flaky(e: Mapping[str, object]) -> _Shown:
+    kicked = _lines(e.get("kicked"))
+    what = f"{_named(e.get('ticket'), e.get('title'))} · run {escape(e.get('run'))} left a failed check as flaky"
+    if kicked:
+        first = f":repeat: {what}; canopy pushed {', '.join(f'`{escape(r)}`' for r in kicked)} again to rerun it"
+        aside = [_linked(e.get("note")) if e.get("note") else ""]
+    else:
+        first = f":grey_question: {what}"
+        aside = ["rerun it, or `canopy reply` that it is real", _linked(e.get("note")) if e.get("note") else ""]
+    return _Shown(
+        [first, " · ".join(_pr(pr) for pr in _lines(e.get("prs"))), _quote("Why", e.get("estimate"))],
+        aside,
+    )
+
+
 def _task_ended(e: Mapping[str, object]) -> _Shown:
     head = str(e.get("head") or "")[:12]
     tickets = _lines(e.get("tickets"))
@@ -694,6 +709,7 @@ _EVENTS: dict[str, Callable[[Mapping[str, object]], _Shown]] = {
     "plan.proposed": _plan_proposed,
     "plan.approved": _plan_approved,
     "follow_ups.filed": _follow_ups_filed,
+    "ci.flaky": _ci_flaky,
     "task.ended": _task_ended,
     "chore.ended": _chore_ended,
     "review.ended": _review_ended,
