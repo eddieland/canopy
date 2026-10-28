@@ -1099,7 +1099,7 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     # A tool that reads records lists them as its output schema, every field in every result; the rest list none.
     listed = {t["name"]: t for t in served.responses[1]["result"]["tools"]}
     outputs = {name: t["outputSchema"] for name, t in listed.items() if "outputSchema" in t}
-    assert list(outputs) == ["log", "grep", "files"]
+    assert list(outputs) == ["log", "blame", "grep", "files"]
     for output in outputs.values():
         for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
             validator.check_schema(output)
@@ -1131,10 +1131,12 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     assert "rev: not a revision" in option.text
     assert other.text == "no repository named 'web' here: this run reads checkout"
     assert served.responses[9]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
-    blame, searched = served.said(10), served.said(11)
-    assert (blame.error, searched.error) == (False, False)
-    assert blame.text.endswith(" 2)     call()")
-    assert blame.text.count(f"{sha} ") == 2
+    blamed = records(10, "blame")
+    assert [(line["line"], line["commit"], line["text"]) for line in blamed["lines"]] == [
+        (1, sha, "while True:"),
+        (2, sha, "    call()"),
+    ]
+    assert list(blamed["commits"]) == [sha]
     assert [c["commit"] for c in records(11, "log")["commits"]] == [sha]
     assert records(12, "grep")["matches"] == [{"path": "retry.py", "line": 2, "text": "    call()"}]
     assert records(13, "files")["paths"] == ["retry.py"]
