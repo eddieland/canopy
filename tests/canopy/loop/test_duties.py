@@ -120,16 +120,22 @@ def test_a_query_read_longer_ago_than_its_age_is_not_run(scenario: Scenario, tra
     assert "queried" not in ticked.actions
 
 
-def test_the_overseer_may_record_no_query_and_skip_no_tick_tracker_unsupported_where_a_source_reads(
+def test_the_overseer_may_record_no_query_and_skip_no_tick_where_a_source_reads(
     scenario: Scenario,
     tracker: Path,
 ) -> None:
+    """It reads no tracker, nor GitHub, which the `vcs` source reads beside it (DESIGN §39): no outage is its own."""
     reads(tracker, query=[])
     refused = scenario.overseer("queried", "PROJ-1", code=1)
     assert "a `tracker` source reads the query" in refused.err
     refused = scenario.overseer("decide", "skip", "--rationale", "tracker_unsupported: no labels", code=1)
     assert "no tick is skipped 'tracker_unsupported'" in refused.err
-    # A GitHub outage is still one the overseer may skip a tick over.
+    refused = scenario.overseer("decide", "skip", "--rationale", "mcp_unavailable: github", code=1)
+    assert "no tick is skipped 'mcp_unavailable'" in refused.err
+    assert scenario.conn.execute("SELECT count(*) FROM decisions WHERE ticket_key IS NULL").fetchone()[0] == 0
+
+
+def test_without_a_tracker_source_the_overseer_may_skip_a_tick_mcp_unavailable(scenario: Scenario) -> None:
     scenario.overseer("decide", "skip", "--rationale", "mcp_unavailable: github")
 
 

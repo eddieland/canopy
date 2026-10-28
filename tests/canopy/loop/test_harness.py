@@ -33,6 +33,7 @@ from tests.canopy.helpers import (
 from tests.canopy.observation_helpers import (
     FRESH,
     NOW,
+    OLD,
     PR,
     TRACKER,
     branches_read,
@@ -183,6 +184,55 @@ def test_a_ticket_no_source_observes_is_left_to_the_overseer_to_read(
     """With no `tracker` source the overseer still reads the tracker itself, so the harness does not wait it."""
     held(canopy_env, conn, KEY)
     conn.commit()
+    assert decided(canopy_env) == []
+
+
+@pytest.mark.parametrize(
+    ("stale", "why"),
+    [
+        pytest.param("old", f"{PR} last observed {OLD}", id="pr-old"),
+        pytest.param("missing", f"{PR} never observed", id="pr-missing"),
+        pytest.param("branches", "branches of repo not observed since 2026-10-20T11:30:00.000Z", id="branches"),
+    ],
+)
+def test_a_candidate_the_vcs_source_left_stale_is_the_harnesss_wait_naming_what_is_old(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    stale: str,
+    why: str,
+) -> None:
+    """Where a `tracker` source runs, the overseer reads no GitHub either (DESIGN §39): it waits for a whole read."""
+    if stale != "branches":
+        db.set_unit(observed, KEY, str(canopy_env.root), "repo", pr_url=PR)
+    if stale == "old":
+        observe_pr(observed, at=OLD)
+    observed.commit()
+    expected = harness.Decision(KEY, None, "wait", f"stale: {why}; it waits for the vcs source to read it again")
+    assert decided(canopy_env) == [expected]
+
+
+def test_a_closed_ticket_whose_pr_is_stale_is_left_to_the_overseer_to_mark_done(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """Marking it done reads nothing of GitHub's, so nothing waits on the `vcs` source (DESIGN §7)."""
+    db.set_unit(observed, KEY, str(canopy_env.root), "repo", pr_url=PR)
+    observed.execute("UPDATE observed_tickets SET state = 'closed'")
+    observed.commit()
+    assert decided(canopy_env) == []
+
+
+def test_without_a_tracker_source_a_stale_pr_is_left_to_the_overseer_to_read(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    """The overseer still reads GitHub there, as it reads the tracker, so the harness does not wait it."""
+    assert operator("start", KEY) == 0
+    db.set_unit(conn, KEY, str(canopy_env.root), "repo", pr_url=PR)
+    observe_pr(conn, at=OLD)
+    conn.commit()
+    [own, unit] = phases.derive(context(canopy_env), NOW)
+    assert (own.stale, unit.stale, unit.stale_vcs) == (None, f"{PR} last observed {OLD}", False)
     assert decided(canopy_env) == []
 
 

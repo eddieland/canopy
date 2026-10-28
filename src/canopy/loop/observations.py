@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict, assert_never
 
-from canopy.core import conversation, db, item_numbers, observe, records, sql
+from canopy.core import conversation, db, item_numbers, observe, records, review_requests, sql
 from canopy.core.vocab import CheckStatus, ReviewItem, ReviewState, SourceKind, TicketState
 from canopy.core.workspace import CheckRole
 from canopy.loop import phases
@@ -49,13 +49,16 @@ type Freshness = Literal["fresh", "stale", "unobserved"]
 class ObservationsState(TypedDict):
     """The state block's `observations`: the world as the connectors last read it, each subject with its age.
 
-    `review_query` only when `review.query` is set.
+    `review_query` only when `review.query` is set, and `review_prs` only where the overseer reads no GitHub itself,
+    a `tracker` source running beside the `vcs` source, and reviews are on (DESIGN §39).
     """
 
     max_age_minutes: int
     max_new_items: int
     query: QueryState
     review_query: NotRequired[QueryState]
+    #: Each PR an open review request names, then each the review query found fresh, as the `vcs` source read it.
+    review_prs: NotRequired[list[ReviewPrObservation]]
     tickets: list[TicketObservation]
 
 
@@ -145,6 +148,21 @@ class UnitObservation(TypedDict):
     reviews: NotRequired[list[ReviewItemState]]
     more_reviews: NotRequired[int]
     derived: NotRequired[list[str]]
+
+
+class ReviewPrObservation(TypedDict):
+    """A PR a review asks about, as the `vcs` source last read it. Only `url`, `observed`, and `why` when not fresh.
+
+    Its `checks` are summed up as CI, every one: which of the workspace's repositories it is in is the overseer's to
+    match, so no repository's check roles are applied.
+    """
+
+    url: str
+    observed: Freshness
+    why: NotRequired[str]
+    observed_at: NotRequired[str]
+    pr: NotRequired[PrObservation]
+    checks: NotRequired[ChecksState]
 
 
 class PrObservation(TypedDict):
@@ -245,6 +263,12 @@ def section(
     }
     if ctx.config.review.query.strip():
         found["review_query"] = reader.query(SourceKind.VCS)
+    # The overseer reads no GitHub where both sources run (§39): the PRs it reviews are read here for it.
+    if ctx.config.connect.observes_all() and review_requests.reviews_on(ctx.conn, ctx.config):
+        query = found.get("review_query")
+        fresh = query.get("result", []) if query is not None and query["observed"] == "fresh" else []
+        urls = dict.fromkeys([*(r.pr_url for r in review_requests.open_requests(ctx.conn)), *fresh])
+        found["review_prs"] = [reader.review_pr(url) for url in urls]
     return found
 
 
@@ -388,6 +412,26 @@ class Reader:
             Its freshness, and the result when a run read it.
         """
         return _query_state(self.runs.get(kind), kind, tracked=self.tracked, cutoff=self.cutoff)
+
+    def review_pr(self, url: str) -> ReviewPrObservation:
+        """A PR a review asks about: its state, head, and checks at its head, as last read whole.
+
+        Returns:
+            The PR's entry.
+        """
+        if not observe.is_pr_url(url):
+            return {"url": url, "observed": "unobserved", "why": f"{url} is not a PR's URL, so it is not observed"}
+        pr = self.prs.get(url)
+        why = self._age(url, pr)
+        if why is not None or pr is None:
+            return {"url": url, "observed": "stale", "why": why or f"{url} never observed"}
+        return {
+            "url": url,
+            "observed": "fresh",
+            "observed_at": pr.observed_at,
+            "pr": _pr(url, pr),
+            "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], {}),
+        }
 
     # A ticket
 
@@ -545,16 +589,7 @@ class Reader:
             "repo": repo,
             "observed": "fresh",
             "observed_at": pr.observed_at,
-            "pr": {
-                "url": url,
-                "state": pr.state,
-                "head": pr.head_sha,
-                "base": pr.base_ref,
-                "draft": pr.draft,
-                "mergeable": pr.mergeable,
-                "mergeable_state": pr.mergeable_state,
-                "author": pr.author,
-            },
+            "pr": _pr(url, pr),
             "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], roles),
             "verdicts": _verdicts(self.reviews.get(url, []), trusted),
             "reviews": [self._review(r, trusted) for r in new[:MAX_NEW_ITEMS]],
@@ -579,6 +614,19 @@ class Reader:
         if r.item is ReviewItem.REVIEW:
             found["state"] = r.state
         return found
+
+
+def _pr(url: str, pr: records.ObservedPr) -> PrObservation:
+    return {
+        "url": url,
+        "state": pr.state,
+        "head": pr.head_sha,
+        "base": pr.base_ref,
+        "draft": pr.draft,
+        "mergeable": pr.mergeable,
+        "mergeable_state": pr.mergeable_state,
+        "author": pr.author,
+    }
 
 
 def _cutoff(ctx: Context, now: datetime) -> datetime:

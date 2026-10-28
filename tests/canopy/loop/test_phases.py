@@ -372,8 +372,8 @@ def test_a_ticket_that_depends_on_a_stale_or_missing_observation_is_stale(
         observed.execute(statement)
     observed.commit()
     # Stale by the `tracker` source's reads, but for the branches, which the `vcs` source's read.
-    tracker = not stale.startswith("branches")
-    assert derived(canopy_env) == [phases.Derived(KEY, None, stale=stale, stale_tracker=tracker)]
+    vcs = stale.startswith("branches")
+    assert derived(canopy_env) == [phases.Derived(KEY, None, stale=stale, stale_tracker=not vcs, stale_vcs=vcs)]
 
 
 def test_without_a_tracker_source_a_public_ticket_is_stale(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
@@ -385,7 +385,48 @@ def test_a_unit_whose_pr_is_stale_is_stale(canopy_env: CanopyEnv, observed: sqli
     unit(canopy_env, observed)
     observe_pr(observed, at=OLD)
     observed.commit()
-    assert derived(canopy_env)[1] == phases.Derived(KEY, "repo", stale=f"{PR} last observed {OLD}")
+    assert derived(canopy_env)[1] == phases.Derived(KEY, "repo", stale=f"{PR} last observed {OLD}", stale_vcs=True)
+
+
+@pytest.mark.parametrize("at", [None, OLD], ids=["missing", "old"])
+def test_a_candidate_whose_open_blockers_pr_is_stale_is_stale_by_the_vcs_source(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    at: str | None,
+) -> None:
+    """Stacking on it, or going on stacked, reads that PR, which the overseer reads no longer (DESIGN §39)."""
+    blocker = "https://github.com/acme/repo/pull/9"
+    branches_read(observed)
+    observed.execute("UPDATE observed_tickets SET blockers = '[\"PROJ-9\"]' WHERE key = ?", (KEY,))
+    observe_ticket(observed, "PROJ-9", labels={})
+    db.set_unit(observed, "PROJ-9", str(canopy_env.root), "repo", pr_url=blocker)
+    if at is not None:
+        observed.execute(
+            "INSERT INTO observed_prs (url, repository, number, head_sha, base_ref, state, draft, mergeable, author, "
+            "observed_at, labels, mergeable_state) VALUES (?, 'acme/repo', 9, ?, 'main', 'open', 0, 'mergeable', "
+            "'operator', ?, '[]', 'clean')",
+            (blocker, HEAD, at),
+        )
+    observed.commit()
+    why = f"blocker PROJ-9's PR {blocker} " + ("never observed" if at is None else f"last observed {at}")
+    assert derived(canopy_env)[0] == phases.Derived(KEY, None, stale=why, stale_vcs=True)
+    # One marked done is owed nothing, so its PR is not read for it.
+    db.set_ticket(observed, "PROJ-9", str(canopy_env.root), done=True)
+    observed.commit()
+    assert derived(canopy_env)[0].phases == (phases.Phase.BLOCKED,)
+
+
+def test_a_candidate_with_a_pr_of_its_own_waits_on_no_blockers_pr(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """Only a ticket with no branch is stacked, so one with its own PR goes on whatever its blocker's PR was read."""
+    green(canopy_env, observed)
+    observed.execute("UPDATE observed_tickets SET blockers = '[\"PROJ-9\"]' WHERE key = ?", (KEY,))
+    observe_ticket(observed, "PROJ-9", labels={})
+    db.set_unit(observed, "PROJ-9", str(canopy_env.root), "repo", pr_url="https://github.com/acme/repo/pull/9")
+    observed.commit()
+    assert derived(canopy_env)[0].stale is None
 
 
 def test_a_check_the_repository_names_human_is_not_ci(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:

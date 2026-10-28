@@ -11,10 +11,11 @@ Being built (ROADMAP M39). It waits on §37, and on the overnight run that tests
 §6, §11, and TRUST_MODEL T3: "When the tick runs no overseer", the query no source read and the reviews the overseer
 starts still left to it until they are the harness's; and the poll's comparison and a failed poll's wake, the latest
 tick read as it ended, so what it started wakes nothing. Built too, where a `tracker` source runs, in TRUST_MODEL T1:
-the tracker's half of "What the overseer reads", the harness's `wait` on a ticket the source left stale, no query
-owed, and no `tracker_unsupported` skip. The rest is designed, not built: until it is, §5, §6, §11, §13,
-§15, §30, §37, and TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that finishes it
-changes those sections and cuts this one to what is left.
+"What the overseer reads", but for an unobserved subject and every server but canopy's denied: the harness's `wait` on
+a ticket the `tracker` or `vcs` source left stale, no query owed, the reviews' PRs read for the overseer, and no
+tick-wide skip. The rest is designed, not built: until it is, §5, §6, §11, §13, §15, §30, §37, and TRUST_MODEL
+describe canopy as it is; this section says what changes, and the PR that finishes it changes those sections and cuts
+this one to what is left.
 
 Once the harness decides what needs no judgment (§37), most ticks leave the overseer nothing: overnight, while PRs wait
 on a human, after a run ends with nothing to classify. The connectors' polls (§6) already read the world every few

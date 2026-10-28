@@ -46,7 +46,9 @@ permission:
   # by a wildcard, then each of its read tools allowed by name: for GitHub, whose server it shares, the reads kept
   # below. Off a GitHub tracker, GitHub's issue reads are denied first, and an allow after them reopens a read of the
   # tracker's they match. The denials below come after, so no allow reopens a write they close. With no read tools
-  # known, the line stays as it is.
+  # known, the line stays as it is. Where a `tracker` source runs, beside the `vcs` source, the overseer reads neither
+  # (DESIGN §39): canopy renders there the GitHub reads kept below denied by pattern, and the tracker's server whole
+  # where it knows it.
   # canopy: tracker reads
   # GitHub's MCP tools are permissioned by name, `<server>_<tool>`, and the server's name is the operator's, so each
   # tool is denied by its own: OpenCode sends no tool a rule denies whole, which cuts each tick's request. Kept are the
