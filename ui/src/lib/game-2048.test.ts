@@ -172,6 +172,7 @@ describe('parseSaved', () => {
         expect(parseSaved(JSON.stringify({ ...EMPTY, board: [2, 4] }))).toBe(EMPTY)
         expect(parseSaved(JSON.stringify({ ...EMPTY, board: EMPTY.board.with(0, 3) }))).toBe(EMPTY)
         expect(parseSaved(JSON.stringify({ ...EMPTY, score: -1 }))).toBe(EMPTY)
+        expect(parseSaved(JSON.stringify({ ...EMPTY, board: EMPTY.board.with(0, 2 ** 32 + 2) }))).toBe(EMPTY)
     })
 
     it('drops a score that is not one', () => {

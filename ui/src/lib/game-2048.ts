@@ -262,7 +262,8 @@ function isCount(value: unknown): value is number {
 
 // An empty cell, or a power of two from 2 up.
 function isTile(value: unknown): value is number {
-    return isCount(value) && (value === 0 || (value >= 2 && (value & (value - 1)) === 0))
+    // Not by bits: they are 32, and a stored number may be larger.
+    return isCount(value) && (value === 0 || (value >= 2 && Number.isInteger(Math.log2(value))))
 }
 
 function isScore(value: unknown): value is Score {

@@ -155,6 +155,8 @@ function Game() {
                 aria-label="Board"
                 className="mt-4 grid touch-none grid-cols-4 gap-2 rounded-md bg-border p-2 select-none"
                 onPointerDown={(event) => {
+                    // Held, so a swipe that ends past the board's edge still ends here.
+                    event.currentTarget.setPointerCapture(event.pointerId)
                     swipe.current = { x: event.clientX, y: event.clientY }
                 }}
                 onPointerUp={onPointerUp}
