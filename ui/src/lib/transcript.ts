@@ -364,14 +364,22 @@ export function startOf(entries: TranscriptEntry[]): string | null {
 
 /**
  * What a tool call did, on one line: a shell call's command, since its title is only what the agent said it was
- * for; else the runtime's title; else its input's short values as `key=value`, as `{"repo": "web", "pullNumber": 88}`
- * reads `repo=web pullNumber=88`. Empty when the input has none, or was cut and no longer parses.
+ * for; else a `decide` call's decisions, each its ticket and action (`ABC-1 wait, ABC-2 done`); else the runtime's
+ * title; else its input's short values as `key=value`, as `{"repo": "web", "pullNumber": 88}` reads
+ * `repo=web pullNumber=88`. Empty when the input has none, or was cut and no longer parses.
  */
 export function summary(entry: TranscriptTool): string {
     const input = parsed(entry.input)
     const command = input?.['command']
     if (typeof command === 'string') {
         return oneLine(command)
+    }
+    const decisions = decisionsIn(input)
+    if (decisions !== null) {
+        return decisions
+            .map((d) => `${d.key ?? THIS_TICK} ${d.action}`)
+            .join(', ')
+            .slice(0, MAX_LINE)
     }
     if (entry.title !== null) {
         return entry.title
@@ -393,6 +401,52 @@ export function summary(entry: TranscriptTool): string {
         return [`${key}=${/\s/u.test(shown) ? JSON.stringify(shown) : shown}`]
     })
     return pairs.join(' ').slice(0, MAX_LINE)
+}
+
+/** One decision a call to canopy's `decide` tool records, as its input names it. */
+export interface CallDecision {
+    /** The ticket, or null for a skip of the whole tick. */
+    key: string | null
+    /** What was decided: `wait`, `skip`, or `done`, as the overseer wrote it. */
+    action: string
+    /** Why, in the overseer's words; empty when the input gave none. */
+    rationale: string
+}
+
+/** What a decision about no ticket is about, as `canopy decide` says it: `recorded skip for this tick`. */
+export const THIS_TICK = 'this tick'
+
+/**
+ * The decisions a call to canopy's `decide` tool records, read from its input, in the order given: one, or several
+ * recorded together. Null for any other call, or an input cut short that no longer parses. The CLI's `canopy decide`
+ * is a shell call, whose command says them.
+ */
+export function decisionsOf(entry: TranscriptTool): CallDecision[] | null {
+    return decisionsIn(parsed(entry.input))
+}
+
+// An input's `decisions`, when it is a list of objects each naming its action, as only `decide`'s is.
+function decisionsIn(input: Record<string, unknown> | null): CallDecision[] | null {
+    const items = input?.['decisions']
+    if (!Array.isArray(items) || items.length === 0) {
+        return null
+    }
+    const decisions: CallDecision[] = []
+    for (const item of items as unknown[]) {
+        if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+            return null
+        }
+        const { key, action, rationale } = item as Record<string, unknown>
+        if (typeof action !== 'string') {
+            return null
+        }
+        decisions.push({
+            key: typeof key === 'string' && key !== '' ? key : null,
+            action,
+            rationale: typeof rationale === 'string' ? rationale : '',
+        })
+    }
+    return decisions
 }
 
 /** How a tool call ended: `refused` and `failed` say why, from the harness's own words when it was a canopy command. */
