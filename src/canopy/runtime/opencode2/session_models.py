@@ -2,7 +2,8 @@
 
 `opencode session export ID --sanitize` prints the session and its messages as one JSON object, `{info, messages}`,
 their text, reasoning, tool output, title, and paths redacted. Each assistant message names the model that wrote it,
-`{providerID, id, variant}`, the variant only when not the model's default, and what it cost; only those are read. A
+`{providerID, id, variant}`, the variant only when not the model's default, and what it cost; only those are read, and
+the session's `version` where it names the OpenCode that made it. A
 model run at a variant is named as OpenCode 2 spells it, `anthropic/claude-opus#high`, so each variant counts on its
 own. OpenCode looks a session up by its id alone, in the one database that holds every project's sessions, so any
 directory finds it. One it does not have it names on stderr, `Session not found: ID`, and exits 1.
@@ -25,7 +26,15 @@ from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, Stric
 
 from canopy.infra import procs
 from canopy.runtime.opencode2.invocation import STANDALONE
-from canopy.runtime.report import MAX_COST_USD, MAX_MODEL_NAME, MAX_MODELS, OTHER_MODELS, ModelUse, SessionModels
+from canopy.runtime.report import (
+    MAX_COST_USD,
+    MAX_MODEL_NAME,
+    MAX_MODELS,
+    OTHER_MODELS,
+    ModelUse,
+    SessionModels,
+    runtime_version,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -58,9 +67,17 @@ class _Message(BaseModel):
     cost: Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)] = 0
 
 
+class _Session(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    # The version of OpenCode that made the session, where the export names one.
+    version: StrictStr | None = None
+
+
 class _Export(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
+    info: _Session | None = None
     messages: tuple[_Message, ...]
 
 
@@ -80,7 +97,8 @@ def read(runner: procs.Runner, *, cwd: Path, session_id: str) -> SessionModels:
     exported = _parse(printed)
     if exported is None:
         return SessionModels("failed", error=f"`{COMMAND}` printed what canopy cannot read")
-    return SessionModels("found", _models(exported.messages))
+    version = runtime_version(exported.info.version if exported.info is not None else None)
+    return SessionModels("found", _models(exported.messages), runtime_version=version)
 
 
 class _FailedError(Exception):

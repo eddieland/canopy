@@ -2,7 +2,8 @@
 
 `opencode export ID --sanitize` prints the session and its messages as one JSON object, their text, reasoning, tool
 output, and paths redacted. Each assistant message names the provider and model that wrote it, the variant it ran at
-when not the model's default, and what it cost; only those, and its id, are read. A model run at a variant is named
+when not the model's default, and what it cost; only those, its id, and the session's `version`, the OpenCode that made
+it, are read. A model run at a variant is named
 with it, `anthropic/claude-opus@high`, so each variant counts on its own. The id is the `messageID` each event of the
 model call that wrote the message carries (`canopy.runtime.opencode.transcript`), so a session more than one model
 served names the model of each call in its transcript. OpenCode looks a session up by its id alone, in the one
@@ -34,6 +35,7 @@ from canopy.runtime.report import (
     OTHER_MODELS,
     ModelUse,
     SessionModels,
+    runtime_version,
 )
 
 if TYPE_CHECKING:
@@ -68,9 +70,17 @@ class _Message(BaseModel):
     info: _Info
 
 
+class _Session(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    # The version of OpenCode that made the session.
+    version: StrictStr | None = None
+
+
 class _Export(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
+    info: _Session | None = None
     messages: tuple[_Message, ...]
 
 
@@ -91,7 +101,8 @@ def read(runner: procs.Runner, *, cwd: Path, session_id: str) -> SessionModels:
     if exported is None:
         return SessionModels("failed", error=f"`{COMMAND}` printed what canopy cannot read")
     models, replies = _models(exported.messages)
-    return SessionModels("found", models, replies=replies if len(models) > 1 else {})
+    version = runtime_version(exported.info.version if exported.info is not None else None)
+    return SessionModels("found", models, replies=replies if len(models) > 1 else {}, runtime_version=version)
 
 
 class _FailedError(Exception):
