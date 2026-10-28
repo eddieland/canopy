@@ -30,10 +30,11 @@ type FindingSeverity = Annotated[
     Field(description="How much a review finding matters (DESIGN §21)."),
 ]
 type DismissalReasonName = Annotated[
-    Literal["wrong", "intentional", "not_worth_it"],
+    Literal["wrong", "intentional", "not_worth_it", "out_of_scope"],
     Field(
         description="Why the operator dismissed a review's finding (DESIGN §21): `wrong`, it does not hold; "
-        "`intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix.",
+        "`intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix; "
+        "`out_of_scope`, it holds and is worth fixing, but in another PR.",
     ),
 ]
 type FindingAnswerName = Annotated[

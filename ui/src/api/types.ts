@@ -257,7 +257,10 @@ export type ReviewDraftPublished = Schemas['ReviewDraftPublished']
 export type ReviewDraftNoted = Schemas['ReviewDraftNoted']
 /** How much a finding holds the merge: `blocking`, `major`, or `minor`. */
 export type FindingSeverity = Schemas['FindingSeverity']
-/** Why the operator dismissed a review's finding: `wrong`, `intentional`, or `not_worth_it` (DESIGN §21). */
+/**
+ * Why the operator dismissed a review's finding (DESIGN §21): `wrong`, `intentional`, `not_worth_it`, or
+ * `out_of_scope`.
+ */
 export type DismissalReason = Schemas['DismissalReasonName']
 /** The reviewed commit's diff: the PR's own text, untrusted and bounded. */
 export type ReviewDiff = Schemas['ReviewDiff']
