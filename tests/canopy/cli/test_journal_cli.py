@@ -246,6 +246,18 @@ def test_ticket_set_outside_a_tick_advances_cursors(scenario: Scenario) -> None:
     assert (unit.repo, unit.review_cursor) == ("repo", 4127)
 
 
+def test_ticket_set_sets_several_tickets_alike_but_one_tickets_cursor_or_title(scenario: Scenario) -> None:
+    conn = scenario.conn
+    updated = scenario.operator("ticket", "set", "PROJ-1", "PROJ-2", "--phase", "ready", "--done")
+    assert updated.out == "updated PROJ-1\nupdated PROJ-2\n"
+    rows = conn.execute("SELECT key, phase, done FROM tickets ORDER BY key").fetchall()
+    assert [tuple(r) for r in rows] == [("PROJ-1", "ready", 1), ("PROJ-2", "ready", 1)]
+    for one_tickets in (("--cursor", "comment=10001"), ("--title", "Fix the login loop")):
+        refused = scenario.operator("ticket", "set", "PROJ-1", "PROJ-3", *one_tickets, code=2)
+        assert "--cursor and --title are one ticket's: name one KEY with them" in refused.err
+    assert db.get_ticket(conn, "PROJ-3") is None
+
+
 def test_a_ticket_is_named_on_one_line_and_renamed(scenario: Scenario, git_pool: GitPool) -> None:
     def title() -> object:
         return scenario.conn.execute("SELECT title FROM tickets WHERE key = 'PROJ-1'").fetchone()["title"]

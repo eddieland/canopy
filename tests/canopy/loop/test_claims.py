@@ -716,7 +716,8 @@ def ticket_set(conn: sqlite3.Connection, cursors: Mapping[str, str]) -> list[tup
         code = main(command)
         by_command = decisions(conn, tick_id)
     with in_tick(conn, dry_run=True) as tick_id:
-        said = mcp_session(tool_call("ticket-set", key=KEY, repo="repo", cursors=dict(cursors))).said()
+        setting = {"key": KEY, "repo": "repo", "cursors": dict(cursors)}
+        said = mcp_session(tool_call("ticket-set", tickets=[setting])).said()
         by_tool = decisions(conn, tick_id)
     assert by_command == by_tool
     assert (code != 0, said.error) == (bool(by_command), bool(by_command)), said.text

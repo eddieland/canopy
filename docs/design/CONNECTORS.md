@@ -99,11 +99,12 @@ applied by hand, §7's table disagreed with the overseer on `ci_red` (MEASUREMEN
 ### Checks that are not CI
 
 Some contexts are not CI: a deploy approval or an ownership sign-off stays pending until a person acts, and a merge
-queue's status is never green on an open PR. Counting one as CI holds a green PR at `ci_running` for as long, and
-never raises `needs_reviewer`. Each repository gives such a check a role in the map (§18), by its exact name: `human`,
-`merge`, or `ignore`; every other check is `ci`. A check of those three is not CI: it does not hold a unit at
-`ci_running`, make it `ci_red`, have to pass, become a feedback plan's item, or make a waiting one stale. The overseer
-is shown a `human` one beside the checks, as waiting on a person, and neither of the others.
+queue's status is never green on an open PR. Counted as CI, one holds a green PR at `ci_running` and never raises
+`needs_reviewer`. So each repository gives such a check, by exact name, a role in the map (§18): `human`, `merge`, or
+`ignore`; every other is `ci`. A non-CI check never holds a unit at `ci_running`, makes it `ci_red`, has to pass,
+becomes a feedback plan's item, or makes a waiting one stale; the overseer is shown a `human` one, as waiting on a
+person, and not the others. One left unnamed that stalls a PR long after its other checks finished raises
+`check_stuck` (§14), naming it and its key in the map: it only asks, and the role stays the operator's.
 
 - The map names the exceptions, not the CI: a job left off a list of CI would hide a red build, while a check left
   off this one holds a PR where the operator sees it waiting.

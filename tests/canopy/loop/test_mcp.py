@@ -265,24 +265,32 @@ RECORDS = [
             # A tracker's ids sent as numbers are taken as strings, and a null as the field left out. No ci cursor:
             # the PR is never observed, so one is refused (test_claims).
             {
-                "key": "PROJ-1",
-                "repo": "repo",
-                "phase": "ci_red",
-                "cursors": {"comment": 7},
-                "done": None,
-                "title": "Fix the\nlogin",
+                "tickets": [
+                    {
+                        "key": "PROJ-1",
+                        "repo": "repo",
+                        "phase": "ci_red",
+                        "cursors": {"comment": 7},
+                        "done": None,
+                        "title": "Fix the\nlogin",
+                    },
+                ],
             },
             [
                 *("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", "ci_red", "--cursor", "comment=7"),
                 *("--title", "Fix the\nlogin"),
             ],
             result={
-                "key": "PROJ-1",
-                "repo": "repo",
-                "phase": "ci_red",
-                "cursors": ["comment"],
-                "done": False,
-                "dry_run": False,
+                "tickets": [
+                    {
+                        "key": "PROJ-1",
+                        "repo": "repo",
+                        "phase": "ci_red",
+                        "cursors": ["comment"],
+                        "done": False,
+                        "dry_run": False,
+                    },
+                ],
             },
         ),
         id="ticket-set",
@@ -290,12 +298,30 @@ RECORDS = [
     pytest.param(
         Verb(
             "ticket-set",
-            {"key": "PROJ-1", "done": True},
+            {"tickets": [{"key": "PROJ-1", "done": True}]},
             ["ticket", "set", "PROJ-1", "--done"],
             dry_run=True,
-            result={"key": "PROJ-1", "repo": None, "phase": None, "cursors": [], "done": False, "dry_run": True},
+            result={
+                "tickets": [
+                    {"key": "PROJ-1", "repo": None, "phase": None, "cursors": [], "done": False, "dry_run": True},
+                ],
+            },
         ),
         id="ticket-set-dry",
+    ),
+    pytest.param(
+        Verb(
+            "ticket-set",
+            {"tickets": [{"key": "PROJ-1", "phase": "ready"}, {"key": "PROJ-2", "phase": "ready"}]},
+            ["ticket", "set", "PROJ-1", "PROJ-2", "--phase", "ready"],
+            result={
+                "tickets": [
+                    {"key": key, "repo": None, "phase": "ready", "cursors": [], "done": False, "dry_run": False}
+                    for key in ("PROJ-1", "PROJ-2")
+                ],
+            },
+        ),
+        id="ticket-set-several",
     ),
     pytest.param(
         Verb(
@@ -482,12 +508,33 @@ REFUSALS = [
     pytest.param(
         Verb(
             "ticket-set",
-            {"key": "PROJ-1", "repo": "repo", "cursors": {"review": "yesterday"}},
+            {"tickets": [{"key": "PROJ-1", "repo": "repo", "cursors": {"review": "yesterday"}}]},
             ["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", "review=yesterday"],
         ),
         "a review cursor is an item's journal number, as the state block shows; got 'yesterday'",
         2,
         id="ticket-set-a-bad-cursor",
+    ),
+    pytest.param(
+        Verb(
+            "ticket-set",
+            {"tickets": [{"key": "PROJ-1", "done": True}, {"key": "PROJ-1", "phase": "ready"}]},
+            ["ticket", "set", "PROJ-1", "PROJ-1", "--done"],
+        ),
+        "set each ticket, or unit, once in a call: PROJ-1 set twice",
+        2,
+        id="ticket-set-a-ticket-twice",
+    ),
+    pytest.param(
+        Verb(
+            "ticket-set",
+            {"tickets": [{"key": "PROJ-1", "phase": "ready"}, {"key": "PROJ-2", "repo": "nope", "phase": "ready"}]},
+            ["ticket", "set", "PROJ-1", "PROJ-2", "--repo", "nope", "--phase", "ready"],
+        ),
+        "PROJ-2 (nope): 'nope' is not a repository in this workspace (repo)\n"
+        "nothing else in the call was recorded: set the rest again",
+        1,
+        id="ticket-set-several-one-refused",
     ),
     pytest.param(
         Verb(
@@ -636,7 +683,7 @@ def test_a_batch_of_decisions_is_refused_whole_for_its_form(overseen: CanopyEnv)
 def test_the_server_lists_each_tool_only_inside_a_running_tick_and_never_inside_a_run(overseen: CanopyEnv) -> None:
     conn = overseen.journal()
     decide = tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r"}])
-    outside = mcp_session(LIST_TOOLS, decide, tool_call("ticket-set", key="PROJ-1", title="Login"))
+    outside = mcp_session(LIST_TOOLS, decide, tool_call("ticket-set", tickets=[{"key": "PROJ-1", "title": "Login"}]))
     assert outside.listed() == []
     assert outside.said(2) == (
         "no tick is running (CANOPY_TICK_ID is not set); the overseer's verbs run only inside one",
@@ -669,7 +716,11 @@ def test_each_tools_input_is_its_schema_and_takes_no_other_field(overseen: Canop
     with in_tick(conn):
         served = mcp_session(LIST_TOOLS)
     schemas = {t["name"]: t["inputSchema"] for t in served.responses[1]["result"]["tools"]}
-    schema = schemas["ticket-set"]
+    assert (schemas["ticket-set"]["required"], schemas["ticket-set"]["properties"]["tickets"]["minItems"]) == (
+        ["tickets"],
+        1,
+    )
+    schema = schemas["ticket-set"]["properties"]["tickets"]["items"]
     assert (schema["type"], schema["additionalProperties"], schema["required"]) == ("object", False, ["key"])
     # A field named `title` is a field, though a schema's titles are left out.
     assert "title" in schema["properties"]
@@ -705,7 +756,7 @@ def test_a_tool_takes_no_text_for_a_flag_or_a_number_and_names_only_the_kinds_it
     conn = overseen.journal()
     with in_tick(conn):
         served = mcp_session(
-            tool_call("ticket-set", key="PROJ-1", done="yes"),
+            tool_call("ticket-set", tickets=[{"key": "PROJ-1", "done": "yes"}]),
             tool_call(
                 "dispatch",
                 key="PROJ-1",
@@ -717,7 +768,7 @@ def test_a_tool_takes_no_text_for_a_flag_or_a_number_and_names_only_the_kinds_it
             ),
             tool_call("dispatch", key="PROJ-1", kind="bogus", label=LABEL, repos=["repo"]),
         )
-    assert served.said(1) == ("done: Input should be a valid boolean", True)
+    assert served.said(1) == ("tickets.0.done: Input should be a valid boolean", True)
     assert served.said(2) == ("review_run: Input should be a valid integer", True)
     assert served.said(3) == (f"kind: choose from {', '.join(policy.DISPATCH_KINDS)}", True)
     assert "fix-ci" not in served.said(3).text
@@ -1042,16 +1093,25 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
         )
     # Its own tools, wherever it runs, a running tick included, and none of the overseer's.
     assert served.listed() == ["merge-base", "diff", "log", "show", "blame", "grep", "files"]
-    # Each answers with text alone.
-    assert not any("outputSchema" in t for t in served.responses[1]["result"]["tools"])
-    assert served.structured(2) is None
-    schema = served.responses[1]["result"]["tools"][2]["inputSchema"]
+    # log answers with records, as structured content and as its text's JSON; the rest with text alone.
+    listed = {t["name"]: t for t in served.responses[1]["result"]["tools"]}
+    assert [name for name, t in listed.items() if "outputSchema" in t] == ["log"]
+    output = listed["log"]["outputSchema"]
+    for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
+        validator.check_schema(output)
+    assert sorted(output["required"]) == ["commits", "cut", "more"]
+    assert "$ref" not in json.dumps(output)
+    schema = listed["log"]["inputSchema"]
     assert (schema["required"], schema["additionalProperties"]) == (["range"], False)
     assert schema["properties"]["limit"]["maximum"] == git_tools.MAX_LIMIT
     log, diff, show, base = (served.said(n) for n in (2, 3, 4, 5))
     assert [said.error for said in (log, diff, show, base)] == [False] * 4
-    assert log.text.startswith(git_tools.DATA_NOTE)
-    assert f"commit {sha}\n" in log.text
+    structured = served.structured(2)
+    assert structured is not None
+    jsonschema.validate(structured, output)
+    assert log.text == f"{git_tools.DATA_NOTE}\n\n{json.dumps(structured, separators=(',', ':'))}"
+    assert [c["commit"] for c in structured["commits"]] == [sha]
+    assert served.structured(3) is None
     assert "+while True:\n+    call()" in diff.text
     assert show.text.endswith("while True:\n    call()")
     assert base.text == git("rev-parse", "main", cwd=seed)
@@ -1065,8 +1125,9 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     assert (blame.error, searched.error) == (False, False)
     assert blame.text.endswith(" 2)     call()")
     assert blame.text.count(f"{sha} ") == 2
-    assert searched.text.count("\ncommit ") == 1
-    assert f"commit {sha}\n" in searched.text
+    found = served.structured(11)
+    assert found is not None
+    assert [c["commit"] for c in found["commits"]] == [sha]
     assert (served.stderr, served.returncode) == ("", 0)
 
 
