@@ -156,6 +156,27 @@ def test_a_run_read_again_keeps_its_models_till_a_read_finds_its_session(conn: s
     assert due(conn) == []
 
 
+def test_a_read_keeps_the_runtime_s_version_till_one_finds_the_session_again(conn: sqlite3.Connection) -> None:
+    w = worker(conn, tick(conn, at(5), None), at(4), "ses_w")
+    run = Due("runs", w, "ses_w", 0)
+
+    def version() -> object:
+        return conn.execute("SELECT runtime_version FROM run_model_reads").fetchone()[0]
+
+    run_models.record(conn, run, ModelsRead.FOUND, [ModelUse("a/x", 1, 0.1)], runtime_version="1.19.3")
+    assert version() == "1.19.3"
+    # A read that failed, or found the session gone, keeps what one before found.
+    run_models.record(conn, run, ModelsRead.FAILED, error="exited 1")
+    assert version() == "1.19.3"
+    run_models.record(conn, run, ModelsRead.MISSING)
+    assert version() == "1.19.3"
+    # One that finds it again records what its record names now, none included.
+    run_models.record(conn, run, ModelsRead.FOUND, [ModelUse("a/x", 1, 0.1)], runtime_version="1.20.0")
+    assert version() == "1.20.0"
+    run_models.record(conn, run, ModelsRead.FOUND, [ModelUse("a/x", 1, 0.1)])
+    assert version() is None
+
+
 def test_a_tickets_cost_by_model_sums_its_runs_and_the_reviews_naming_it(conn: sqlite3.Connection) -> None:
     first = tick(conn, at(5), "ses_t")
     canary, switched = worker(conn, first, at(4), "ses_w1"), worker(conn, first, at(3), "ses_w2")

@@ -17,6 +17,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped } from '@/components/tip'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { phaseMeaning } from '@/lib/meanings'
 import { countText, filterWords, prQueryOf, pullRequestShown, reposOf } from '@/lib/pull-request-filter'
 import type { PullRequestFilter } from '@/lib/pull-request-filter'
 import { repoListOf } from '@/lib/repo-filter'
@@ -123,7 +124,9 @@ function Row({ pr }: { pr: PullRequest }) {
         <ListRow kind="pull-request" data-testid="pull-request">
             <State pr={pr} />
             <PullRequestLink url={pr.url} />
-            <span className="flex">{pr.phase && <Chip word={pr.phase} className="min-w-0 shrink" />}</span>
+            <span className="flex">
+                {pr.phase && <Chip word={pr.phase} meaning={phaseMeaning(pr.phase)} className="min-w-0 shrink" />}
+            </span>
             <span className="flex min-w-0 items-center gap-2">
                 {pr.ticket_key === null ? (
                     <None reason={NO_TICKET} brief className="shrink-0 font-mono text-xs" />
