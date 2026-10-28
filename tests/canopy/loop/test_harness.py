@@ -150,6 +150,7 @@ def test_a_ticket_the_tracker_source_left_stale_is_the_harnesss_wait_naming_what
     """The overseer reads no tracker where a source does (DESIGN §39): the ticket waits for a whole read."""
     if running:
         running_run(context(canopy_env), KEY, private=False)
+    db.change_ticket(observed, KEY, "phase", Phase.CI_RED)
     observed.execute("UPDATE observed_tickets SET observed_at = '2026-10-20T10:00:00.000Z'")
     observed.commit()
     [decision] = decided(canopy_env)
@@ -159,7 +160,7 @@ def test_a_ticket_the_tracker_source_left_stale_is_the_harnesss_wait_naming_what
     # No row was derived, so its phase stays as it was.
     with in_tick(observed, ends_ok=True) as tick_id:
         harness.record(observed, tick_id, str(canopy_env.root), [decision])
-    assert observed.execute("SELECT phase FROM tickets WHERE key = ?", (KEY,)).fetchone()[0] is None
+    assert observed.execute("SELECT phase FROM tickets WHERE key = ?", (KEY,)).fetchone()[0] == Phase.CI_RED
     assert [d.ticket_key for d in harness.recorded(observed, tick_id)] == [KEY]
 
 
