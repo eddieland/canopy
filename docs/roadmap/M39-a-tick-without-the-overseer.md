@@ -94,7 +94,18 @@ tick is read as it ended, not as its block was rendered, so what it started, suc
 wakes nothing; only what is added wakes, so a ticket marked done or a comment a cursor passed does not, nor an item past
 a subject's bound until the block shows it; and a workspace with no source wakes on no poll. A run ending is seen by the
 next whole poll, since the ticket the harness waited on is then listed, so with idle pacing off it now ends the wait
-within a poll too. Left: the third and fifth bullets, and the design folded into the sections it names. Still open for
-the operator: whether a `tracker` source is required (recommended: required), which the first bullet did not need
-settled, since a query no source read keeps the overseer running; and whether `runtime.allow_bash`'s overseer entry goes
-with its MCP servers (recommended: yes, and that entry with it), the fifth bullet's.
+within a poll too. Settled by the operator (2026-10-28): a `tracker` source is required. Built (2026-10-28): the fifth
+bullet's tracker half, where a `tracker` source runs, ahead of config requiring one. A public ticket whose own
+observation, or a blocker's, the source left stale or never made is the harness's `wait`, naming what is old, its phase
+left as it was, so it is never listed to the overseer (`loop/harness.py`); a query it did not read fresh does not run
+that tick and stays due, so no tick owes `canopy queried`, and `canopy queried` and a `tracker_unsupported` skip are
+refused; the overseer's definition denies the tracker's server whole, and GitHub's issue reads, and carries no
+tracker skill, its skill tool denied (`runtime/opencode/definitions.py`). A workspace with no `tracker` source keeps
+the overseer's live reads until config requires one. Chosen conservatively, for the operator to change: a ticket a
+query found but the source has not read yet waits a poll for that read; with the tracker's tools unknown
+(`tracker.read_tools` unset off a provider canopy knows), only GitHub's issue reads are denied. Left: config requiring
+a `tracker` source, with the tests' workspaces given the fake one; the GitHub half (the `vcs` source reading the
+review query's and requests' PRs into the block, a stale unit the harness's `wait`, the GitHub server denied, and
+`mcp_unavailable` gone); the third bullet; and the design folded into the sections it names.
+Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended:
+yes, and that entry with it), the fifth bullet's.

@@ -114,6 +114,8 @@ class Rules:
     models: Mapping[str, Model]
     #: The chores' own copies of `CHORE` by name (`chore_agent`), each rendered as `CHORE` is, then with its own model.
     chore_agents: Sequence[str]
+    #: Whether a `tracker` source reads tickets into the journal, so the overseer reads no tracker itself (DESIGN §39).
+    tracker_observed: bool
 
 
 #: How much of an MCP server's tools an agent is offered: every one, only some, or none.
