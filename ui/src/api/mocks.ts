@@ -8,6 +8,7 @@ import type {
     Draft,
     FeedbackPlan,
     FeedbackPlanItem,
+    HostResources,
     PullRequestThreads,
     ReviewDraft,
     ReviewSummary,
@@ -508,6 +509,43 @@ export function feedbackPlan(fields: Partial<FeedbackPlan> = {}): FeedbackPlan {
             }),
             feedbackPlanItem(),
         ],
+        ...fields,
+    }
+}
+
+const GIB = 1024 ** 3
+const MIB = 1024 ** 2
+
+/** The mock's machine (canopy/serve/mock/host.py), with any fields replaced: nothing on it under pressure. */
+export function mockHost(fields: Partial<HostResources> = {}): HostResources {
+    return {
+        hostname: 'build-box',
+        system: 'Linux 6.8.0',
+        machine: 'x86_64',
+        python: '3.13.1',
+        booted_at: '2026-09-29T08:30:00Z',
+        read_at: '2026-10-08T12:30:00Z',
+        cpu: { cores: 12, load: [2.41, 1.87, 1.52] },
+        memory: { total: 64 * GIB, available: 23 * GIB + 410 * MIB, swap_total: 8 * GIB, swap_free: 7 * GIB },
+        disks: [
+            {
+                holds: ['workspace', 'journal'],
+                path: '/home/operator/acme',
+                total: 931 * GIB,
+                free: 412 * GIB,
+                floor: 2 * GIB,
+            },
+            { holds: ['temp'], path: '/tmp', total: 32 * GIB, free: 27 * GIB + 300 * MIB, floor: null },
+        ],
+        process: {
+            pid: 48213,
+            started_at: '2026-10-08T09:18:00Z',
+            rss: 268 * MIB,
+            peak_rss: 412 * MIB,
+            threads: 19,
+            open_files: 61,
+            max_open_files: 65536,
+        },
         ...fields,
     }
 }

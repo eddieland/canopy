@@ -78,7 +78,7 @@ function renderReadouts(
     } = {},
 ) {
     // Nothing is fetched: each readout's data is what the test seeds, as the stream would send it.
-    for (const key of [keys.meta, keys.tick, keys.loop]) {
+    for (const key of [keys.meta, keys.tick, keys.loop, keys.host]) {
         client.setQueryDefaults(key, { enabled: false })
     }
     client.setQueryData(keys.meta, meta)
@@ -135,6 +135,7 @@ describe('LiveReadouts', () => {
         const client = new QueryClient()
         client.setQueryDefaults(keys.tick, { enabled: false })
         client.setQueryDefaults(keys.loop, { enabled: false })
+        client.setQueryDefaults(keys.host, { enabled: false })
         await renderRouted(<LiveReadouts />, { client })
         expect(screen.queryByTestId('last-tick')).toBeNull()
 
@@ -154,7 +155,7 @@ describe('LiveReadouts', () => {
 
     it('says the tick Tick now asked for is starting until its row lands, then shows it', async () => {
         const client = new QueryClient()
-        for (const key of [keys.meta, keys.tick, keys.loop]) {
+        for (const key of [keys.meta, keys.tick, keys.loop, keys.host]) {
             client.setQueryDefaults(key, { enabled: false })
         }
         client.setQueryData(keys.meta, META)
