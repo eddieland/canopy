@@ -103,10 +103,10 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   ([Replying and stopping](tasks#replying-and-stopping)). The other item, tickets its run reported that canopy
   couldn't record, opens the task too: a reply or a stop clears it.
 - **A model that's gone** (`model missing`, `model list failed`): the ticket's models, the same menus its page
-  shows ([Choosing a model](tickets#choosing-a-model)). The runtime's list is read as the item opens, so the agent whose
-  model dropped off it is already amber: pick one it lists, or clear the override. When the list itself can't be read,
-  the menu says why and offers **Read again**, and the fix is the runtime, not the ticket. Replying won't help either
-  way. Nothing runs on a model nobody chose in the meantime, which is the point.
+  shows ([Choosing a model](tickets#choosing-a-model)). The runtime's list is read afresh as the item opens, not the
+  one canopy kept, so the agent whose model dropped off it is already amber: pick one it lists, or clear the override.
+  When the list itself can't be read, the menu says why and offers **Read again**, and the fix is the runtime, not the
+  ticket. Replying won't help either way. Nothing runs on a model nobody chose in the meantime, which is the point.
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
   There's nothing to answer here; the item leaves once the command has fixed its cause. The overseer and chores take
   their models from your config alone, so when one of theirs is refused, the command is `canopy models`: it lists what

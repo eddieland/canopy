@@ -28,12 +28,13 @@ const MODELS: AgentModel[] = [
     { agent: 'reviewer', model: null, source: 'default', variant: null, dropped_variant: null, last_served: null },
 ]
 
-// The paths the block reads; the server stand-in answers each with the runtime's list.
+// The paths the block reads, with their queries; the server stand-in answers each with the runtime's list.
 let read: string[] = []
 
 const server: Middleware = {
     onRequest({ request }) {
-        read.push(new URL(request.url).pathname)
+        const url = new URL(request.url)
+        read.push(url.pathname + url.search)
         return Response.json({ models: ['acme/fast-1', 'acme/deep-2'], error: null })
     },
 }
@@ -65,6 +66,7 @@ describe('ModelAttention', () => {
         })
         expect(gone.title).toBe('no longer listed; its next run is refused')
         expect(screen.getByRole('button', { name: 'planner model: acme/fast-1' })).toBeTruthy()
-        expect(read).toEqual(['/api/models'])
+        // Fresh from the runtime, not the list the server kept, which may still name the model gone.
+        expect(read).toEqual(['/api/models?refresh=true'])
     })
 })
