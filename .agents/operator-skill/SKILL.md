@@ -183,6 +183,7 @@ The overseer may record other reasons; the detail says what it wants.
 | `notice_rerun` | A check failed during an outage your notice named, and the notice has ended: rerun the check. |
 | `flaky_rerun` | A worker judged a failed check flaky and changed nothing for it: rerun the check, or `canopy reply` that it is real. |
 | `repo_missing` | A repository in the workspace map has no clone: `canopy workspace sync`. |
+| `check_stuck` | One check has held a PR at `ci_running` an hour past every other: if it is not CI (a merge queue, a sign-off), give it a role under `[repos.REPO.checks]` in the workspace map, as the detail says. |
 | `memory_proposal` | A done ticket's runs proposed lessons: `canopy memory proposals`, then `promote` or `reject` each. |
 | `lesson_review` | Lessons are due for review: `canopy memory renew ID`, graduate one into AGENTS.md, or `forget` it. |
 | `lesson_wrong` | A run reported a lesson wrong: read it with `canopy memory lessons`, then `renew` or `forget` it. |

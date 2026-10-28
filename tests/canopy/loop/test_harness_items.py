@@ -1,6 +1,6 @@
 """The attention items the harness raises from their causes (DESIGN §14, §37, ROADMAP M38).
 
-Each of the eight reasons over a journal written by hand, its observations fresh at `NOW`: raised while its cause
+Each of the nine reasons over a journal written by hand, its observations fresh at `NOW`: raised while its cause
 holds, and gone once the journal or a fresh observation shows the cause gone. One that rests on an observation is kept
 while that observation is stale, or when the derivation could not run. Then through ticks: kept across a `skipped`
 tick, an `overseer_failed` one, and an outage, and gone once a read shows its cause gone; and the overseer refused one
@@ -10,12 +10,13 @@ through its tool and its command alike.
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, plans
+from canopy.core import db, plans, sql
 from canopy.core.vocab import Decider, RunStatus, TickStatus
 from canopy.loop import attention, harness_items, phases
 from tests.canopy.helpers import (
@@ -210,6 +211,21 @@ def plan_changed(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     plans.path_for(env.state_dir, KEY, plan.run_id).write_text(f"{PLAN}\nAnd a second thing.\n")
 
 
+def queue_stuck(env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    """The PR's build passed two hours ago, and its merge queue's status still waits, as CI."""
+    green(env, conn)
+    sql.execute(
+        conn,
+        sql.update("observed_check_runs").set(observed_at=db.format_time(NOW - timedelta(hours=2))).everything(),
+    )
+    check(conn, "merge-queue", "queued", None, run_id=12)
+
+
+def queue_given_a_role(env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    """The repository's map says the merge queue's status gates the merge."""
+    env.configure(env.shared_file, {"repos": {"repo": {"checks": {"merge-queue": "merge"}}}})
+
+
 #: Each reason: what raises it, the item, and what shows its cause gone.
 CAUSES: dict[str, tuple[Callable[[CanopyEnv, sqlite3.Connection], None], Found, Callable[..., None]]] = {
     "needs_reviewer": (green, (KEY, "needs_reviewer", "repo"), pending),
@@ -220,11 +236,12 @@ CAUSES: dict[str, tuple[Callable[[CanopyEnv, sqlite3.Connection], None], Found, 
     "review_failed": (review_failed, (KEY, "review_failed", "repo"), reviewed_again),
     "plan_review": (plan_waits, (KEY, "plan_review", None), plan_approved),
     "plan_changed": (plan_changed, (KEY, "plan_changed", None), plan_approved),
+    "check_stuck": (queue_stuck, (KEY, "check_stuck", "repo"), queue_given_a_role),
 }
 
 
 def test_the_causes_cover_every_reason_the_harness_raises() -> None:
-    assert set(CAUSES) == attention.FROM_CAUSES
+    assert set(CAUSES) == harness_items.REASONS
 
 
 @pytest.mark.parametrize("reason", sorted(CAUSES))
@@ -469,7 +486,91 @@ def test_an_ownership_check_that_waits_on_a_person_is_never_ci_red(scenario: Sce
     assert unit.phases == (phases.Phase.GREEN_UNREVIEWED,)
 
 
-@pytest.mark.parametrize("reason", sorted(attention.FROM_CAUSES))
+#: A merge queue's status, waiting as it does on every open PR.
+QUEUED: dict[str, object] = {"name": "merge-queue", "status": "queued", "run_id": 12}
+
+
+def queued_on_a_pr(scenario: Scenario, github_state: Path, *checks: dict[str, object]) -> None:
+    """Start KEY privately, its unit's PR passing its build with `checks` beside it, and tick once."""
+    scenario.operator("start", KEY)
+    db.set_unit(scenario.conn, KEY, str(scenario.env.root), "repo", pr_url=PR)
+    scenario.conn.commit()
+    github_checks(github_state, *checks)
+    scenario.tick(*waits(KEY))
+
+
+def stuck(scenario: Scenario) -> str:
+    """The detail of the one `check_stuck` item on the list."""
+    [detail] = [i.detail for i in attention.current(scenario.conn) if i.reason == attention.CHECK_STUCK]
+    return detail
+
+
+def test_a_check_pending_long_after_the_others_finished_names_the_key_to_set(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    queued_on_a_pr(scenario, github_state, QUEUED)
+    # Within the hour after the build passed, the queue's status may be a slow build: nothing is raised.
+    scenario.time_passes(minutes=59)
+    scenario.tick(*waits(KEY))
+    assert scenario.attention() == []
+    scenario.time_passes(minutes=2)
+    scenario.tick(*waits(KEY))
+    assert scenario.attention() == [(KEY, "check_stuck")]
+    detail = stuck(scenario)
+    assert detail.startswith(f"`merge-queue` is still pending on {PR} at abc1234, over 60 minutes after")
+    assert detail.endswith(
+        '`[repos.repo.checks]`: `"merge-queue" = "merge"` for a merge queue, `"human"` for a sign-off, or `"ignore"`',
+    )
+    # Given its role, it holds the PR no longer, and its reviewer is asked for instead.
+    scenario.configures("workspace", repos={"repo": {"checks": {"merge-queue": "merge"}}})
+    scenario.tick(*waits(KEY))
+    assert scenario.attention() == [(KEY, "needs_reviewer")]
+
+
+def test_a_stuck_check_that_completes_or_a_new_head_ends_its_item(scenario: Scenario, github_state: Path) -> None:
+    queued_on_a_pr(scenario, github_state, QUEUED)
+    scenario.time_passes(minutes=61)
+    scenario.tick(*waits(KEY))
+    assert scenario.attention() == [(KEY, "check_stuck")]
+    # A push moves the head: its build has not run long enough there to tell.
+    pushed = {"pr": {"head_sha": "def5678"}, "checks": [{**PASSING, "run_id": 21}, {**QUEUED, "run_id": 22}]}
+    github_state.write_text(json.dumps({"prs": {PR: pushed}}))
+    scenario.tick(*waits(KEY))
+    assert scenario.attention() == []
+    scenario.time_passes(minutes=61)
+    scenario.tick(*waits(KEY))
+    assert scenario.attention() == [(KEY, "check_stuck")]
+    assert "at def5678," in stuck(scenario)
+    # It was slow after all: done, the PR is green.
+    done = {**QUEUED, "run_id": 22, "status": "completed", "conclusion": "success"}
+    github_state.write_text(json.dumps({"prs": {PR: {**pushed, "checks": [{**PASSING, "run_id": 21}, done]}}}))
+    scenario.tick(*waits(KEY))
+    assert scenario.attention() == [(KEY, "needs_reviewer")]
+
+
+@pytest.mark.parametrize(
+    "beside",
+    [
+        # Another check still runs, so the slow one is not the last.
+        {"name": "e2e", "status": "in_progress", "run_id": 13},
+        # Another failed: the PR is red, and a worker's resume answers that.
+        {"name": "lint", "status": "completed", "conclusion": "failure", "run_id": 13},
+    ],
+    ids=["another-pending", "another-failed"],
+)
+def test_a_slow_check_beside_one_pending_or_failed_raises_nothing(
+    scenario: Scenario,
+    github_state: Path,
+    beside: dict[str, object],
+) -> None:
+    queued_on_a_pr(scenario, github_state, QUEUED, beside)
+    scenario.time_passes(minutes=61)
+    scenario.tick(*waits(KEY))
+    assert attention.CHECK_STUCK not in {reason for _, reason in scenario.attention()}
+
+
+@pytest.mark.parametrize("reason", sorted(attention.FROM_CAUSES | {attention.CHECK_STUCK}))
 def test_the_overseer_is_refused_an_item_the_harness_raises(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,

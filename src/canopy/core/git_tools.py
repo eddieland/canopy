@@ -13,6 +13,10 @@ transport, so not the lazy fetch a promisor remote in the repository's config co
 `GIT_*` variable it inherits, and system config is skipped. Every read is of commits, never the working tree, so no
 clean filter runs. What a call returns is cut at `MAX_CHARS`, every hidden character named, as the PR's own text is
 untrusted.
+
+`log` answers with records, `Commits`, which its tool lists as its output schema and returns as structured content and,
+since the runtime shows the model only a tool's text, as JSON in its text: no commit's message or path can pass for
+another commit, or for a field. The rest answer with git's text.
 """
 
 from __future__ import annotations
@@ -65,6 +69,16 @@ MAX_SEARCH_CHARS = 200
 MAX_BLAME_LINES = 400
 #: How long one git command may take.
 TIMEOUT_SECONDS = 60
+#: A commit's full id, as `log` reads one: SHA-1's or SHA-256's.
+COMMIT_ID_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+#: How `log` prints each commit: its id, parents, author's name and email, author date, and message, each ended by NUL,
+#: which git never prints from a commit's message or a name, and the files it changed after them, each field ended by
+#: NUL too (`-z`).
+LOG_FORMAT = "%H%x00%P%x00%an%x00%ae%x00%aI%x00%B"
+#: How many fields `LOG_FORMAT` prints of each commit.
+_LOG_FIELDS = 6
+#: A file's status as `--name-status` prints it: a letter, and for a rename or a copy how alike the two are.
+_STATUS_RE = re.compile(r"[A-Z][0-9]*")
 #: A revision as the tools take one: a commit id, a ref, `HEAD~2`, `main^2`, `@{u}`. Never an option (no leading `-`),
 #: a range (`..`), a blob (`rev:path`), or anything a shell or a pathspec would read.
 REVISION_RE = re.compile(r"(?!.*\.\.)[A-Za-z0-9@][A-Za-z0-9_./~^@{}+-]{0,199}")
@@ -373,6 +387,81 @@ class Files(Request):
     ] = ()
 
 
+class Result(BaseModel):
+    """What a git tool that reads records returns: its fields are the tool's structured content, and its text's JSON."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+
+class Changed(BaseModel):
+    """A file a commit changed, as `log` lists it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    #: How it changed, git's letter for it.
+    status: Annotated[
+        StrictStr,
+        Field(description="How it changed: A added, M modified, D deleted, R renamed, C copied, T type changed."),
+    ]
+    #: Its path after the commit.
+    path: Annotated[StrictStr, Field(description="Its path after the commit, relative to the repository's root.")]
+    #: Its path before, for a rename or a copy.
+    old_path: Annotated[
+        StrictStr | None,
+        Field(description="The path it was renamed or copied from; null for any other change."),
+    ]
+
+
+class Commit(BaseModel):
+    """One commit `log` lists."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    #: Its full id.
+    commit: Annotated[StrictStr, Field(description="The commit's full id.")]
+    #: Its parents' ids.
+    parents: Annotated[Sequence[StrictStr], Field(description="Its parents' ids: none for a root, two for a merge.")]
+    #: Its author's name.
+    author: Annotated[StrictStr, Field(description="Its author's name.")]
+    #: Its author's email.
+    email: Annotated[StrictStr, Field(description="Its author's email.")]
+    #: When it was written.
+    date: Annotated[StrictStr, Field(description="When its author wrote it, in ISO 8601.")]
+    #: Its message, whole.
+    message: Annotated[StrictStr, Field(description="Its message, whole: the subject, then any body.")]
+    #: The files it changed.
+    files: Annotated[
+        Sequence[Changed],
+        Field(description="The files it changed; none for a merge, whose changes its parents list."),
+    ]
+
+
+class Commits(Result):
+    """What `log` returns: the commits it found, newest first."""
+
+    #: The commits.
+    commits: Annotated[Sequence[Commit], Field(description="The commits, newest first; none when none match.")]
+    #: Whether more match than are listed.
+    more: Annotated[
+        StrictBool,
+        Field(description="Whether more commits match than are listed: past limit, or left out to fit."),
+    ]
+    #: What was left out to fit, if anything.
+    cut: Annotated[
+        StrictStr | None,
+        Field(description=f"What was left out to fit {MAX_CHARS} characters; null when nothing was."),
+    ]
+
+
+def text(result: Result) -> str:
+    """The text a git tool that reads records returns: `DATA_NOTE`, then `result` as JSON.
+
+    Returns:
+        The text.
+    """
+    return f"{DATA_NOTE}\n\n{result.model_dump_json()}"
+
+
 def merge_base(runner: procs.Runner, checkouts: Mapping[str, Path], request: MergeBase) -> str:
     """Find where `request`'s two commits' histories meet.
 
@@ -409,14 +498,14 @@ def diff(runner: procs.Runner, checkouts: Mapping[str, Path], request: Diff) -> 
     return _said(text) if text else f"No difference between {base} and {head} in what was asked."
 
 
-def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> str:
+def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> Commits:
     """List `request.range`'s commits, newest first, at most `request.limit`, each with the files it changed.
 
     Only those that change `request.paths`, add or remove `request.search`, or hold `request.message` in their
     message, when the request names any; `request.follow` follows its one path across renames.
 
     Returns:
-        The commits, cut at `MAX_CHARS`, or a line saying there are none.
+        The commits, every hidden character named, those that do not fit `MAX_CHARS` left out, and whether more match.
 
     Raises:
         Refused: The checkout or a revision is unknown, or git failed.
@@ -429,8 +518,8 @@ def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> st
         "--no-show-signature",
         "--no-ext-diff",
         "--no-textconv",
-        "--format=medium",
-        "--date=iso-strict",
+        f"--format={LOG_FORMAT}",
+        "-z",
     )
     # Each search's text joined to its option, so no text is read as one. `--fixed-strings` holds `--grep` to the text
     # as written; `-S` takes it so unless asked for a pattern.
@@ -446,14 +535,15 @@ def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> st
         *args,
         "--name-status",
         *searches,
-        f"--max-count={request.limit}",
+        # One past the limit, to tell whether more match.
+        f"--max-count={request.limit + 1}",
         "--end-of-options",
         dots.join(commits),
         "--",
         *_paths(request.paths),
     )
-    text = _out(done, "log")
-    return _said(text) if text else "No commits in that range."
+    found = _read_log(_out(done, "log"))
+    return _fitted(found[: request.limit], more=len(found) > request.limit)
 
 
 def show(runner: procs.Runner, checkouts: Mapping[str, Path], request: Show) -> str:
@@ -570,6 +660,89 @@ def files(runner: procs.Runner, checkouts: Mapping[str, Path], request: Files) -
         if path and (request.name is None or fnmatch.fnmatchcase(PurePosixPath(path).name, request.name))
     ]
     return _said("\n".join(named)) if named else f"No file at {request.rev} is named so, in what was asked."
+
+
+def _read_log(out: str) -> list[Commit]:
+    """Read what `log` printed in `LOG_FORMAT`, with `--name-status -z`.
+
+    Each commit is its six fields, then each file it changed: a status, then one path, or two for a rename or a copy.
+    The paths are counted, never matched, so no path is read as a commit; a status is never a commit's id.
+
+    Returns:
+        The commits, every hidden character named but a message's line breaks and tabs.
+
+    Raises:
+        Refused: git printed what is not in that form.
+    """
+    fields = out.split("\0")
+    if fields[-1:] == [""]:
+        fields.pop()
+    found: list[Commit] = []
+    at = 0
+    while at < len(fields):
+        if len(fields) - at < _LOG_FIELDS or not COMMIT_ID_RE.fullmatch(fields[at]):
+            raise Refused("git log printed what canopy cannot read")
+        commit, parents, author, email, date, message = fields[at : at + _LOG_FIELDS]
+        at += _LOG_FIELDS
+        files: list[Changed] = []
+        while at < len(fields) and not COMMIT_ID_RE.fullmatch(fields[at]):
+            # git puts a line break between a commit's message and the first file it changed.
+            status = fields[at].lstrip("\n")
+            moved = status[:1] in {"R", "C"}
+            paths = [visible(path) for path in fields[at + 1 : at + 3 if moved else at + 2]]
+            if not _STATUS_RE.fullmatch(status) or len(paths) != 1 + moved:
+                raise Refused("git log printed what canopy cannot read")
+            at += 1 + len(paths)
+            files.append(Changed(status=status[0], path=paths[-1], old_path=paths[0] if moved else None))
+        found.append(
+            Commit(
+                commit=commit,
+                parents=parents.split(),
+                author=visible(author),
+                email=visible(email),
+                date=date,
+                message=_shown(message.rstrip("\n")),
+                files=files,
+            ),
+        )
+    return found
+
+
+def _fitted(commits: Sequence[Commit], *, more: bool) -> Commits:
+    """`commits` as `log` returns them: as many as fit `MAX_CHARS` as JSON, newest first.
+
+    When not even the newest fits, it is returned with its message and the files it changed cut to fit.
+
+    Returns:
+        The commits, and what was left out, if anything.
+    """
+    budget = MAX_CHARS - 500  # the fields around the commits, and the note on what was cut
+    kept: list[Commit] = []
+    used = 0
+    for commit in commits:
+        used += len(commit.model_dump_json()) + 1
+        if used > budget:
+            break
+        kept.append(commit)
+    if len(kept) == len(commits):
+        return Commits(commits=kept, more=more, cut=None)
+    if kept:
+        cut = f"listed {len(kept)} of the {len(commits)} commits found: ask for fewer with limit, or name fewer paths"
+        return Commits(commits=kept, more=True, cut=cut)
+    newest = commits[0]
+    message = newest.message[: budget // 2]
+    files: list[Changed] = []
+    used = len(newest.model_copy(update={"message": message, "files": ()}).model_dump_json())
+    for changed in newest.files:
+        used += len(changed.model_dump_json()) + 1
+        if used > budget:
+            break
+        files.append(changed)
+    cut = (
+        f"commit {newest.commit} alone is past {MAX_CHARS} characters: its message and files are cut, and the "
+        "commits after it left out; name fewer paths"
+    )
+    return Commits(commits=[newest.model_copy(update={"message": message, "files": files})], more=True, cut=cut)
 
 
 def _checkout(checkouts: Mapping[str, Path], repo: str | None) -> Path:
@@ -703,8 +876,17 @@ def _said(text: str) -> str:
     Returns:
         The text, cut at a line's end within `MAX_CHARS`, with a line saying so when it was.
     """
-    shown = "\n".join("\t".join(visible(part) for part in line.split("\t")) for line in text.rstrip("\n").split("\n"))
+    shown = _shown(text.rstrip("\n"))
     if len(shown) <= MAX_CHARS:
         return f"{DATA_NOTE}\n\n{shown}"
     cut = shown[: shown.rfind("\n", 0, MAX_CHARS) + 1 or MAX_CHARS]
     return f"{DATA_NOTE}\n\n{cut}\n[cut at {MAX_CHARS} characters: name fewer paths, or a narrower range]"
+
+
+def _shown(text: str) -> str:
+    """`text` with every hidden character named but its line breaks and tabs.
+
+    Returns:
+        The text.
+    """
+    return "\n".join("\t".join(visible(part) for part in line.split("\t")) for line in text.split("\n"))

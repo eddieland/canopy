@@ -290,6 +290,25 @@ def test_a_closed_column_without_a_check_is_found(tmp_path: Path, journals: Jour
     assert unchecked(conn, {"checked", "unchecked"}) == ["unchecked.kind", "unchecked.phase"]
 
 
+def test_a_transaction_inside_another_commits_or_rolls_back_with_it(tmp_path: Path, journals: Journals) -> None:
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+
+    def fails_after_setting() -> None:
+        with db.transaction(conn):
+            db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.READY)
+            raise RuntimeError
+
+    with pytest.raises(RuntimeError):
+        fails_after_setting()
+    assert db.get_ticket(conn, "PROJ-1") is None
+    with db.transaction(conn):
+        db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.READY)
+        db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red")
+    assert not conn.in_transaction
+    assert present(db.get_ticket(conn, "PROJ-1")).phase == Phase.READY
+
+
 def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None:
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
