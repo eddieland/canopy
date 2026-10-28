@@ -14,6 +14,7 @@ from typing import Any, ClassVar, override
 from unittest import mock
 
 import canopy_github
+import canopy_http
 import click
 import pytest
 from canopy_github import Hosts, connect, post
@@ -717,7 +718,10 @@ def test_a_query_whose_reply_is_cut_off_is_sent_again(github: tuple[Fake, str]) 
     assert fake.ops().count("PullRequests") == 3
 
 
-@pytest.mark.parametrize(("failure", "message"), [("cut", "IncompleteRead"), ("drop", "RemoteDisconnected")])
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    [("cut", "without sending complete message body"), ("drop", "Server disconnected without sending a response")],
+)
 def test_a_query_whose_connection_breaks_each_time_is_named_and_the_read_still_ends(
     github: tuple[Fake, str],
     failure: str,
@@ -727,23 +731,23 @@ def test_a_query_whose_connection_breaks_each_time_is_named_and_the_read_still_e
     fake.fail["PullRequests"] = failure
     code, lines, err = read(url, {"prs": [PR]})
     assert (code, lines) == (1, [{"kind": "end", "prs": []}])
-    assert f"cannot read {PR}: the connection to {url} broke: " in err
+    assert f"cannot read {PR}: the connection to {url.removesuffix('/graphql')} broke: " in err
     assert message in err
     assert fake.ops().count("PullRequests") == 3
 
 
-def test_a_refusal_whose_reply_is_cut_off_is_still_a_server_error() -> None:
+def test_a_server_error_whose_reply_is_cut_off_is_still_one() -> None:
     _Api.fake = Fake(fail={"Viewer": "cut-500"})
-    with serving(_Api) as url, pytest.raises(canopy_github.ServerError, match="HTTP 502: its reply broke off"):
+    with serving(_Api) as url, pytest.raises(canopy_github.ServerError, match="without sending complete message body"):
         canopy_github.Client(url, "t").ask("query Viewer { viewer { login } }", {}, retry=False)
 
 
 def test_a_query_that_times_out_is_not_sent_again() -> None:
     _Api.fake = Fake(fail={"Viewer": "slow"})
     with (
-        mock.patch.object(canopy_github, "TIMEOUT_SECONDS", SLOW / 5),
+        mock.patch.object(canopy_http, "TIMEOUT_SECONDS", SLOW / 5),
         serving(_Api) as url,
-        pytest.raises(canopy_github.GitHubError, match=f"cannot reach {url}") as failed,
+        pytest.raises(canopy_github.GitHubError, match="GitHub did not answer in time") as failed,
     ):
         canopy_github.Client(url, "t").query("query Viewer { viewer { login } }", {})
     assert not isinstance(failed.value, canopy_github.ServerError)

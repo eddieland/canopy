@@ -125,6 +125,7 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 [tool.uv.sources]
 canopy-artifacts = { workspace = true }
 canopy-github = { workspace = true }
+canopy-http = { workspace = true }
 canopy-jira = { workspace = true }
 canopy-notify-slack = { workspace = true }
 canopy-review-bench = { workspace = true }
