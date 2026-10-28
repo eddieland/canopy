@@ -151,7 +151,16 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             pr_url=PR,
             cursors={"ci": str(item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, 5551, at=db.now()))},
         )
-        decide(conn, earlier, "PROJ-1", "attention:needs_author", "a reviewer asks about intent", repo="repo")
+        # The overseer keeps it, naming the check run the notice held (DESIGN §37): the block lists it so.
+        decide(
+            conn,
+            earlier,
+            "PROJ-1",
+            "attention:notice_rerun",
+            "build failed during the notice; rerun it",
+            repo="repo",
+            item=item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, 5551, at=db.now()),
+        )
         # The operator sent a run's reply to a review comment through canopy: the block names it by id (DESIGN §29).
         conn.execute(
             "INSERT INTO drafts (run_id, number, ticket_key, kind, repo, pr_url, comment_id, stance, status, basis, "
@@ -300,9 +309,22 @@ def decide(
     repo: str | None = None,
     chore: str | None = None,
     pr: str | None = None,
+    item: int | None = None,
 ) -> None:
-    """Record a decision at the clock's time: the schema's default is the real one."""
-    decision = db.record_decision(conn, tick_id, key, action, rationale, repo=repo, chore=chore, pr=pr)
+    """Record a decision at the clock's time: the schema's default is the real one; with `item`, a kept item's."""
+    kept = item is not None
+    decision = db.record_decision(
+        conn,
+        tick_id,
+        key,
+        action,
+        rationale,
+        repo=repo,
+        chore=chore,
+        pr=pr,
+        kept=kept,
+        item=item,
+    )
     conn.execute("UPDATE decisions SET created_at = ? WHERE id = ?", (db.now(), decision))
 
 

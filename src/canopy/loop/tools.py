@@ -38,7 +38,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticUndefined
 
-from canopy.core import config, contract, conversation, db, memory, recorded_runs, vocab
+from canopy.core import config, contract, conversation, db, kept_items, memory, recorded_runs, vocab
 from canopy.core.vocab import RecordedStatus, ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
 from canopy.loop import attention, claims, duties, harness, harness_dispatches
@@ -71,6 +71,8 @@ DECIDE_ACTIONS = ("wait", "skip", "done")
 DECIDED = "decided"
 #: The guard that refuses an attention item of a reason the harness raises from its causes (DESIGN §37).
 RAISED = "raised"
+#: The guard that refuses an item the overseer keeps that names nothing that could end it (DESIGN §37).
+UNNAMED = "unnamed"
 #: The phases the overseer sets. `split` is retired (M46): old tickets may still hold it, and nothing sets it.
 SETTABLE_PHASES = tuple(p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT)
 
@@ -846,11 +848,22 @@ class Attention(Request):
         PrUrl | None,
         Field(description="A PR the loop reviews; in place of key for a PR with no ticket."),
     ] = None
+    #: The journal number of what a `needs_author` waits on, or of the check run a `notice_rerun` holds.
+    item: Annotated[
+        StrictInt | None,
+        Field(
+            ge=1,
+            description="needs_author and notice_rerun: the number, as the state block shows it, of the comment, "
+            "review item, or review run a needs_author waits on, or of the check run a notice_rerun holds.",
+        ),
+    ] = None
 
     @model_validator(mode="after")
     def _about(self) -> Self:
         if self.key is None and self.pr is None:
             raise ValueError("key or pr is required (KEY, or --pr): an item is about a ticket, or a PR with no ticket")
+        if self.item is not None and self.reason not in kept_items.NAMING:
+            raise ValueError("item is only for needs_author and notice_rerun: what one waits on, or the check it holds")
         return self
 
 
@@ -873,10 +886,13 @@ def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
     Returns:
         What the command prints, and the same as fields.
 
+    One the overseer keeps (`kept_items.KEPT`) is recorded once, naming what it is about, and held until that ends it
+    (DESIGN §37).
+
     Raises:
         Refused: Outside a running tick, `repo` is not a repository in this workspace, the item is about a ticket the
-            harness decided this tick, or its reason is one the harness raises from its causes, each of which is
-            recorded.
+            harness decided this tick, its reason is one the harness raises from its causes, or it is one the overseer
+            keeps and names nothing that could end it, each of which is recorded.
     """
     current = running_tick(ctx)
     key, pr, detail = request.key, request.pr, request.detail
@@ -885,10 +901,14 @@ def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
         _refuse_decided(ctx, current.id, key, "attention")
         db.touch_ticket(ctx.conn, key, ctx.repo)
     _refuse_raised(ctx, current.id, request.reason, key=key, repo=unit, pr=pr)
+    kept = request.reason in kept_items.KEPT
+    if kept:
+        _refuse_unnamed(ctx, current.id, request, repo=unit)
     action = f"{attention.ACTION_PREFIX}{request.reason}"
-    db.record_decision(ctx.conn, current.id, key, action, detail, repo=unit, pr=pr)
+    db.record_decision(ctx.conn, current.id, key, action, detail, repo=unit, pr=pr, kept=kept, item=request.item)
     return Outcome(
-        f"recorded attention {request.reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}",
+        f"recorded attention {request.reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}"
+        + ("; the harness holds it until what it names ends it" if kept else ""),
         AttentionRecorded(reason=request.reason, key=key, repo=unit, pr=pr),
     )
 
@@ -1228,6 +1248,23 @@ def _refuse_raised(
     db.record_decision(ctx.conn, tick_id, key, f"refused:{RAISED}", why, repo=repo, pr=pr)
     logs.for_tick(tick_id).info("refused: raised by the harness", extra={"ticket": key, "reason": reason})
     raise Refused(f"attention refused ({RAISED}): {why}; the refusal was recorded")
+
+
+def _refuse_unnamed(ctx: Context, tick_id: int, request: Attention, *, repo: str | None) -> None:
+    """Refuse the overseer an item it keeps that names nothing that could end it (DESIGN §37, `core.kept_items`).
+
+    The harness holds such an item until what it names ends it, so one naming nothing would never end. The refusal is
+    recorded, as a guard's is, and counts as the ticket's decision.
+
+    Raises:
+        Refused: It names no ticket, a `notice_rerun` names no check run, or `item` is not one of its subject's.
+    """
+    why = kept_items.unnamed(ctx.conn, key=request.key, reason=request.reason, repo=repo, item=request.item)
+    if why is None:
+        return
+    db.record_decision(ctx.conn, tick_id, request.key, f"refused:{UNNAMED}", why, repo=repo, pr=request.pr)
+    logs.for_tick(tick_id).info("refused: names nothing", extra={"ticket": request.key, "reason": request.reason})
+    raise Refused(f"attention refused ({UNNAMED}): {why}; the refusal was recorded")
 
 
 # How the verbs above do their parts.

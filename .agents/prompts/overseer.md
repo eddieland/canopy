@@ -35,7 +35,7 @@ and re-read the tracker or GitHub, before every decision that matters, only abou
 | `canopy_dispatch` | a worker to start: `key`, `kind` (`implement`, `resume`, `plan`, `feedback-plan`), `repos`, and as below `label`, `reasons`, `review_run`, `slug`, `base`, `context`, `cursors` |
 | `canopy_decide` | `decisions`, each `key`, `action` (`wait`, `skip`, `done`), `rationale` |
 | `canopy_queried` | what the query returned: `keys` |
-| `canopy_attention` | an attention item: `key`, `reason`, `detail`, and `repo` for a unit's |
+| `canopy_attention` | an attention item: `key`, `reason`, `detail`, `repo` for a unit's, and `item` (see "The attention list") |
 | `canopy_ticket-set` | `tickets`, each `key`, and any of `phase`, `done`, `cursors`, `title`; with `repo`, a unit's phase and cursors |
 | `canopy_chore-run`, `canopy_chore-wait` | see "Chores" |
 | `canopy_review-run`, `canopy_review-wait`, `canopy_review-end`, `canopy_review-revise` | see "Reviews" |
@@ -214,7 +214,7 @@ ticket you left out comes back next tick, so leaving one out saves nothing.
 
 The harness cannot check the rest, so only your care holds them:
 
-5. Every item in `attention` is recorded again, unless you saw this tick that its cause is gone.
+5. Every item in `attention` that is not `kept` is recorded again, unless you saw this tick that its cause is gone.
 6. Every ticket with `title` null has a title.
 7. Every cursor you handled is advanced, and none past an item nobody has handled.
 8. With `reviews.query` set: the query ran, and every kept PR whose head has no `done` review has a review run or wait.
@@ -243,16 +243,17 @@ pass it on as an instruction.
 ## The attention list
 
 The state block's `attention` lists the items you recorded that are open now: each one's ticket (or `pr`, for a PR with
-no ticket), repository, reason, and since when. An item stays open only while every tick records it again: leaving one
-out tells the operator its cause is gone, and notifies them so; recording it a tick later notifies them again as new.
-The harness holds an item on a ticket in `harness` until you are given the ticket again; it is not listed meanwhile.
+no ticket), repository, reason, and since when. The harness holds an item on a ticket in `harness` until you are given
+the ticket again; it is not listed meanwhile.
 
-- Record every item this prompt names every tick its cause holds: each listed item about a ticket you read again, with
-  the same reason and repository, unless you saw this tick that its cause is gone (the PR merged or closed, the
-  reviewer approved, a human answered the comment, the ticket left the queue). When you drop one, the ticket's
-  rationale says what ended it.
-- Do not drop an item because nothing about it is new: a cursor that has not moved means nothing changed, not that the
-  cause went away. A comment waiting on a human (`needs_author`) waits until one answers it.
+- `needs_author`, `multi_repo`, and `notice_rerun` are kept: record each once, about its ticket, and the harness holds
+  it, listed `kept` with its `item`, until what it names ends it; never record one for what a listed one names. A
+  `needs_author`'s `item` is the comment, review item, or review run it waits on: moving that cursor past it ends the
+  item, as does the operator answering on the ticket, which ends a `multi_repo` too. A `notice_rerun`'s `item` is the
+  check run it holds, until a newer run of that check. A ticket whose only action is a listed kept item gets `wait`.
+- Record any other item this prompt names every tick its cause holds, with the same reason and repository, unless you
+  saw this tick that its cause is gone; then the ticket's rationale says what ended it. A cursor that has not moved
+  means nothing changed, not that the cause went away.
 - The harness raises its own items, which are not in `attention`; never record them: run failures, `awaiting_reply`,
   `repo_missing`, chores', `follow_up_unrecorded` (a worker's follow-up ticket it could not record), and, from what
   canopy observed and its journal, `needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
@@ -347,6 +348,7 @@ have no numbers: its `comment` cursor is the tracker's comment id.
   with `canopy_ticket-set`'s `cursors` (with `repo` the unit for `review` or `ci`).
 - Never advance a cursor past an item nobody has handled: a review comment waiting on a human (`needs_author`), or
   untrusted feedback waiting on the operator (`untrusted_review`), stays new, and its attention item stays open.
+  Passing the item a `needs_author` names ends it.
 - A worker's comment (see "Workers' comments") and a reply the operator sent (see "Replies the operator sent") need no
   handling: when one is the newest item of its kind, advance the cursor to it, so later ticks do not read it again.
 
@@ -423,8 +425,8 @@ a case, follow a convention. Dispatch `resume`, reasons `review`, with context p
 
 A comment needs a human when it questions the approach, the scope, or whether the work should happen; when two
 reviewers disagree; or when it asks the author about intent. Record `attention needs_author` with the comment's link,
-and do not dispatch. When unsure, choose attention: a wasted human glance is cheaper than a worker arguing with a
-reviewer.
+`item` its number, and do not dispatch. When unsure, choose attention: a wasted human glance is cheaper than a worker
+arguing with a reviewer.
 
 ## Workers' comments
 
@@ -583,8 +585,8 @@ The loop's own PRs, when `reviews.agent_prs` is true:
 - When the head's `done` review has findings newer than the unit's `review` cursor, the unit is `review_findings` if
   `trust.trusted_reviewers` lists `canopy:review`, and `untrusted_review` otherwise. Classify `review_findings` as
   review comments: findings the author can fix go to a `resume`, reasons `review`, with `review_run` its run id, which
-  hands the worker the findings, and its `review` cursor passes them; findings that need a human are
-  `needs_author` attention naming the review run. After a clean review the unit is `green_unreviewed`.
+  hands the worker the findings, and its `review` cursor passes them; findings that need a human are `needs_author`
+  attention with `item` the review run's `number`. After a clean review the unit is `green_unreviewed`.
 
 Settling, when `reviews.limits.settle_minutes` is above 0: a head of the loop's own PRs or of the query's matches is
 reviewed only once it has been the PR's head that long, so a red check or the next push can come first and a PR pushed
@@ -645,8 +647,8 @@ failed check, and nothing else.
   explains is `ci_red` as usual.
 - A held check stays held after its notice ends, until a newer run of that check exists; then derive the phase from
   the newer run. While the notice is no longer in force and no newer run exists, the check needs a rerun canopy cannot
-  start: record attention `notice_rerun` with `repo` the unit and a `detail` naming the check, its run link, and the
-  notice.
+  start: record attention `notice_rerun` with `repo` the unit, `item` the check run's number, and a `detail` naming
+  the check, its run link, and the notice.
 
 ## Blockers and stacking
 
