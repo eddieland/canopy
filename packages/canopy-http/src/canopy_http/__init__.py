@@ -21,17 +21,14 @@ from __future__ import annotations
 
 import email.utils
 import json
+import ssl
 import time
 import urllib.parse
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 import httpx2
-
-if TYPE_CHECKING:
-    import ssl
 
 #: How long a request waits on its reply, between reads of it.
 TIMEOUT_SECONDS = 30.0
@@ -42,6 +39,8 @@ MAX_QUOTE = 500
 #: The refusals that ask for a wait, when they name one: a rate limit, and GitHub's secondary rate limit, a 403.
 _WAIT_STATUSES = frozenset({403, 429})
 _TOO_MANY = 429
+#: How far down the errors one was raised from `_untrusted` looks: httpx2's wraps its transport's, which wraps TLS's.
+_MAX_CHAIN = 10
 
 
 class HttpError(Exception):
@@ -79,6 +78,13 @@ class RateLimitedError(RefusedError):
 
 class NotSentError(HttpError):
     """The request never left: no connection could be made to the service. It is `certain`."""
+
+
+class UntrustedError(HttpError):
+    """No connection was made: the service's certificate is not one the system trusts. It is `certain`.
+
+    Sending again would not change that, so it is not sent again.
+    """
 
 
 class FailedError(HttpError):
@@ -251,6 +257,7 @@ class Client:
             RefusedError: It answered with a refusal or a redirect.
             RateLimitedError: It refused it for now, as a rate limit does.
             NotSentError: No connection could be made.
+            UntrustedError: The service's certificate is not trusted.
             FailedError: It answered with a server error, or the connection broke before its reply came whole.
             TimedOutError: It did not answer in time.
         """
@@ -259,6 +266,8 @@ class Client:
             with httpx2.Client(verify=self._ssl, timeout=timeout, follow_redirects=False) as client:
                 response = client.send(request)
         except (httpx2.ConnectError, httpx2.ConnectTimeout, httpx2.ProxyError) as e:
+            if _untrusted(e):
+                raise UntrustedError(f"{self.origin}'s certificate is not trusted: {e}", certain=True) from e
             raise NotSentError(f"cannot reach {self.origin}: {e}", certain=True) from e
         except httpx2.TimeoutException as e:
             raise TimedOutError(f"{self.name} did not answer in time: {e!r}", certain=False) from e
@@ -307,6 +316,22 @@ class Client:
         if not harmless and not (again and isinstance(error, FailedError)):
             return None
         return max(pauses.pop(0), error.wait or 0.0)
+
+
+def _untrusted(error: BaseException) -> bool:
+    """Whether `error` came of a certificate the system does not trust, as the TLS error it was raised from says.
+
+    Returns:
+        Whether it did.
+    """
+    seen: BaseException | None = error
+    for _ in range(_MAX_CHAIN):
+        if seen is None:
+            return False
+        if isinstance(seen, ssl.SSLCertVerificationError):
+            return True
+        seen = seen.__cause__ or seen.__context__
+    return False
 
 
 def _retry_after(response: httpx2.Response) -> float | None:
