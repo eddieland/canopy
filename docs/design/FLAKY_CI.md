@@ -22,6 +22,11 @@ gets that many kicks, counted in code: the chain of kicks back from origin's hea
 does not rebase cleanly, is left as it was, named in the run's note, and handled as below. The harness kicks, never a
 worker: the worker's definition gains no force, and its judgment only starts a `resume` the attempt limit counts.
 
+**The worker's estimate.** With `trust.flaky_comment` (private, off by default) under `trust.review_replies =
+"approve"`, a public ticket's `resume` that sets `flaky` also puts its estimate of why in its PR's `pr` draft (§29): the
+check, what failed, its evidence, and how likely a rerun passes. The operator reads it and sends it unmarked, as their
+own, whether or not canopy kicked. Under `post` nothing is asked: a comment the worker posts itself carries the marks.
+
 Without a kick, while the same check run still fails, no newer than the `ci` cursor, the overseer records
 `flaky_rerun` (§14) naming the check, where it would otherwise wait for a newer run that no push will start. The
 operator reruns the check, or says with `canopy reply` that it is real. A rerun's checks, or a kick's, are newer than
