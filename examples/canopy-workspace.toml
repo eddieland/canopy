@@ -27,8 +27,8 @@ summary = "Public REST API. Owns the order schema and the generated OpenAPI spec
 # Optional: the checks that are not CI, each by its exact name. canopy does not wait on one, count it red, or need it to
 # pass. Every check not named here is CI. "human" waits on a person, such as a deploy approval or an ownership check,
 # and is shown with the PR's checks; "merge" gates the merge itself, such as a merge queue's status, never green on an
-# open PR; "ignore" is advisory or retired. Neither of those is shown. (`human_checks = [...]` in the table above is
-# the same as naming each "human" here; a check is named in one place only.)
+# open PR; "ignore" is advisory or retired. "merge" and "ignore" are not shown. An older `human_checks = [...]` under
+# [repos.api] still works, the same as naming each "human" here; a check is named in one place only.
 # [repos.api.checks]
 # "deploy/approval" = "human"
 # "merge-queue" = "merge"
