@@ -70,11 +70,11 @@ adds to, used or not. `first_call_weeks` gives each kind's first calls by local 
    from it over what they were sent, says by how much). With two or more `runtime_versions` on a snapshot with a
    `digest`, the runtime's version changed within it: name the versions, in their order, since a new runtime can move
    what the runs' prefix holds.
-6. **First-call drops.** In the 28 days' `first_call_weeks`, a kind's series with `by` `kind` whose latest week's
-   `hit_rate` is more than 0.15 below the week before's, each of the two weeks with 10 or more runs: a finding with
-   id `first-call/<kind>`. Name the latest week's `new_runtime_versions` and `new_digests`, what changed as it fell, or
-   say that neither changed. The kind's `chore` and `model` series for the same two weeks say whether one chore or one
-   model fell alone: name it.
+6. **First-call drops.** In the 28 days' `first_call_weeks`, a kind's series with `by` `kind` whose latest two weeks
+   with runs are consecutive ISO weeks, each with 10 or more runs, and the latest's `hit_rate` more than 0.15 below the
+   other's: a finding with id `first-call/<kind>`, naming both weeks. Name the latest week's `new_runtime_versions` and
+   `new_digests`, what changed as it fell, or say that neither changed. The kind's `chore` and `model` series for the
+   same two weeks say whether one chore or one model fell alone: name it.
 7. **Cost per ticket done.** `per_done` this week up by half or more on the 28 days' `per_done`: a finding with id
    `per-done`. Say which kind of spend grew, from `totals`.
 8. **Spend on failures.** From `health`, the failed `outcomes` whose `cost_usd` is a tenth or more of the week's total:
