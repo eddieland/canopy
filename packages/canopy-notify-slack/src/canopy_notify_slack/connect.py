@@ -38,9 +38,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
@@ -48,17 +45,18 @@ from datetime import UTC, date, datetime, time
 from pathlib import Path
 from typing import TextIO
 
+import canopy_http
 import click
 
 from canopy_notify_slack import (
     KEEP_DAYS,
-    TIMEOUT_SECONDS,
     SinkError,
     Threads,
     check_channel,
     default_threads_file,
     default_token_file,
     read_token,
+    slack_client,
 )
 
 #: The Web API, its methods named after it.
@@ -346,22 +344,14 @@ def _get(url: str, params: Mapping[str, str], token: str) -> dict[str, object]:
     Raises:
         SinkError: Slack could not be reached, answered other than 2xx, or refused the call.
     """
-    request = urllib.request.Request(  # noqa: S310
-        f"{url}?{urllib.parse.urlencode(params)}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
-            body = response.read().decode(errors="replace")
-    except urllib.error.HTTPError as e:
-        # 429 is Slack's rate limit: the next run reads it again.
-        raise SinkError(f"HTTP {e.code}") from e
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        raise SinkError(f"cannot reach Slack: {e}") from e
-    try:
-        parsed: object = json.loads(body)
-    except json.JSONDecodeError as e:
-        raise SinkError("Slack's reply is not JSON") from e
+        parsed = slack_client(url, {"Authorization": f"Bearer {token}"}).json("GET", url, params=params, again=True)
+    except canopy_http.RefusedError as e:
+        # A refusal's reply is not quoted. 429, Slack's rate limit, asking longer than canopy-http waits: the next run
+        # reads it again.
+        raise SinkError(f"HTTP {e.status}") from e
+    except canopy_http.HttpError as e:
+        raise SinkError(str(e)) from e
     if not isinstance(parsed, dict):
         raise SinkError("Slack's reply is not a JSON object")
     reply = {str(k): v for k, v in parsed.items()}
