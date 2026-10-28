@@ -207,7 +207,7 @@ text runs nothing.
   a GitHub PR's link shows only the `owner/repo#N` its own URL spells.
 
 Lint keeps the network out of the harness, as D015 keeps processes in one module: `urllib.request`, `http.client`, and
-`socket` are banned everywhere in `src/canopy`, and so is any import of the Slack sink.
+`socket` are banned everywhere in `src/canopy`, and so is any import of the Slack sink, of `canopy-http`, or of httpx2.
 
 ### Replies from Slack
 
