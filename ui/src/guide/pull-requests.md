@@ -13,7 +13,15 @@ only reviews has no ticket, so it shows `none` there; hover it for why. The name
 small icon beside it opens the PR itself. A link into a PR, say to one review thread, gets the same name wherever
 an agent's text mentions it: the name still opens the PR's page, and the icon takes you to that exact thread. The PR
 column is only as wide as the longest name in the list, and in a narrow window the phase goes first, then the age, so
-the title keeps the room.
+the title keeps the room. The **Reviews** link over the list opens [the reviews page](#the-reviews-page), with your
+filter kept, and says how many results you haven't opened yet: the same count the nav shows beside Pull requests.
+
+On a PR the loop doesn't own, a chip after the verdict says where your own review of it stands: `draft` while it waits
+on you, `staged` once it's a pending review on GitHub for you to submit, `unconfirmed` while canopy doesn't know whether
+a publish posted, `published` once it did ([Publishing your review](#publishing-your-review)), and `discarded` once you
+said it won't go out, with `canopy review discard RUN`. `staged` and `unconfirmed` are amber, since each waits on you
+or on GitHub; the rest stay grey. Scan the column for amber and you know which coworkers are still waiting on a review
+you think you sent.
 
 The field over the list keeps the PRs whose name, ticket, or title holds every word you type, in any case, so `web#88`
 or `debounce` finds the one you mean without scrolling. With PRs in more than one repository, a repository picker
@@ -27,6 +35,7 @@ read when canopy looks at the PR, not live: rename one on GitHub and canopy catc
 A PR's page opens with where the PR stands, in the line under its title: canopy's latest review and its verdict, such
 as `review:4 3 findings, 1 major` (or `not reviewed`), `at its review limit` once it is, and the run working it now.
 A PR canopy only reviews says so there too. Below that, it gathers what canopy knows of the PR: its ticket and branch,
+or, on a PR the loop doesn't own, **your review**, where your draft stands with a link to the review that holds it,
 what it has cost, its coworkers' review threads when canopy has read them (below), canopy's reviews of it, the runs
 that pushed to it, and the decisions that named it. A list with nothing in it shows its header and a `0`, and nothing
 else: an empty list doesn't need a paragraph. A PR with no ticket has no Runs at all, since runs belong to a ticket.
@@ -80,6 +89,13 @@ it in one click, which beats holding backspace through a worker's earnest paragr
 it. A send adds the reactions first, then the review. GitHub keeps one of each per person, so if the review then
 fails, the reaction stays, the card says so, and sending again won't stack a second 👍 on your coworker's comment.
 
+With feedback plans on, the `resume` after the plan you approved starts each reply from the one the plan proposed for
+its thread, and canopy compares what the run wrote with that proposal itself, rather than taking the worker's word
+for it. A reply the run kept as proposed wears `as planned`: you read it once already, in the plan. One whose text, or
+what it says it did, came out otherwise wears `changed from the plan`, says which item, and **Show the proposed
+reply** puts the plan's version under it, as plain text, to hold the two side by side. Those are the ones to reread.
+Your own edits don't count as a change: you know what you wrote.
+
 **Send N waiting**, at the top, sends every waiting draft together. Either way, one PR's drafts go as one comment
 review, so your coworker gets one notification rather than a burst. The button reads **Sending…** while the post is on
 its way, and once it lands a toast at the bottom of the window says what went and where it went, so you're not
@@ -105,6 +121,53 @@ card warns you that your edits didn't come along. A draft is never posted twice;
 whether it worked reads `unconfirmed` until canopy's next read of the PR settles it.
 
 The [attention list](attention) holds a `drafts waiting` item while any draft for the PR waits on you.
+
+## The feedback plan
+
+With `policy.feedback_plan = "approve"` in your own config, a round of review on one of the loop's PRs is planned
+before any worker touches it: a planner reads every new item (a review, a thread, whoever wrote it, and what the PR's
+own state raises: a failed check, a conflict with its base, or the PR it was stacked on having merged out from under it)
+and proposes what to do with each, and the resume waits for you. canopy raised those last three itself, so their rows
+name the check, the conflict, or the merged PR, and no author. The PR's page shows that plan under **Feedback plan**:
+above the threads' panel and its drafts while it waits on you, since it is what you came to answer, and below them once
+it is approved or spent. It stays where you found it while you approve it, so the button doesn't wander off mid-click.
+
+The panel says which run wrote it, when, and where it stands: `waiting on you`, `stale`, `approved`, or `spent` once
+a resume has gone ahead on it. Under that, a row for each item: its number, the first line of what was said, and where
+it is, which is a link: **on its thread** jumps to the thread's card on this page, and **the review** opens the review
+on GitHub. Under that line, what the plan proposes (`change`, `decline`, `ask`, or `leave`, each in a color of its own:
+`change`, the one that edits code, the loudest, and `leave`, which does nothing, none at all), who wrote the item,
+`trusted` if `trust.trusted_reviewers` names them, the plan's first line on it, which is why it proposes that, and
+the item's id on GitHub. Enough to decide each row without leaving the panel; the full thread is one click away when
+it is not. On a thread, the thread's card carries the proposal too, as **Plan item N** above the drafts, set off by a
+rule down its left edge, with the reply the planner would draft. Where it proposes a `change` and a worker's draft
+already waits on the same thread, it says so: the plan's resume writes a new reply there, and sending the draft first
+answers ahead of it. Both may go, or one; the page won't pick for you. A review, or an item with no thread on this page,
+shows its proposed reply in its row instead. **Show the plan**, at the panel's foot, unfolds the plan's file as it
+stands, as plain text, so an enthusiastic `<img>` in a coworker's comment stays a string of characters, in the rows as
+in the file.
+
+A plan goes `stale` when the PR moves after it was written: a new comment or reply, an edit, a resolved thread, a new
+head, a check that changed its mind, a conflict that came or went, or a blocker that merged. The panel lists each
+change, in the same words `canopy show` uses. The loop plans again once the PR has been quiet for
+`policy.feedback_quiet_minutes`, so a reviewer typing ten comments in five minutes gets one new plan, not ten.
+
+To approve, tick the items the resume should act on and press the button: **Approve whole** with every box ticked,
+**Approve 2 of 3** otherwise, and nothing at all with none ticked, or while the plan's file has gone missing, in which
+case the panel says so and the way out is a reply on the ticket asking for a new plan. Ticking a `leave` item approves
+leaving it be. An item you untick is **for the next plan**, which is not the same thing at all: its resume does nothing
+about it, and the next plan gets it to propose again. Each such row says so, and so does its thread's card. Hover the
+button for the command it is, `canopy plan KEY --approve`, with `--item` naming the ones you ticked or `--leave` the
+ones you didn't, whichever list is shorter. Yes, the flag says leave; the page doesn't, since a `leave` proposal already
+means something else. Anything you write in **Your words, for its resume** goes after the message the approval writes
+on the ticket, which names the items to address and those for the next plan by number, never by quoting them.
+
+A stale plan's button reads **Approve stale plan**, and the first press is refused by design, so you approve it knowing
+what changed: the panel says so calmly, not in red, and the button becomes **Approve as it is**. Press it and the plan
+is approved as it stands, and the new feedback waits for the next plan. An approval done gets the band an approved
+ticket plan gets, with its leaf and the way back to Attention, and clears your words; the button rests as **Approve
+again** until you tick other boxes or write other words, so the send key cannot approve it twice by accident. Approving
+again is allowed until its resume starts. To send the planner back instead, reply on the ticket.
 
 ## When canopy reviews
 
@@ -132,8 +195,15 @@ and every finding you didn't dismiss, and checks whether each still holds. A fin
 and one it didn't is reported again. It still reads the whole change, though. Being told where the last reviewer
 looked is useful; being told where not to look is how a bug lives through three reviews.
 
-The reviewer runs its own command, `runtime.review_cmd`, so point it at another model than your workers': a second
-model misses different things than the first, which is the point of asking it. canopy sends the reviewer no temperature
+A later review also gets no credit for finding old news. A finding on lines nothing has changed since the PR's first
+review, which read them, is held for you the same way, under `review late`: it starts no resume, so a reviewer that
+turns up a few more old bugs each round can't keep the loop spinning. canopy holds it only when git can place it,
+never a **blocking** one, and only on the loop's own PRs. Send it if it belongs in this PR, or dismiss it if it can
+wait for one of its own.
+
+The reviewer is its own agent, so give it another model than your workers', `runtime.models.reviewer` in your config
+(not a `--model` in its command, which canopy refuses, since it would override the choice unseen): a second model
+misses different things than the first, which is the point of asking it. canopy sends the reviewer no temperature
 (`runtime.review_temperature = -1`, the default), because OpenAI's reasoning models refuse a request that sets one, and
 a review that never starts finds nothing. If your reviewer's model takes one, set it low, such as `0.1`. Each new commit
 is reviewed again, and a reviewer sampling hot finds something fresh every time in code nobody touched; with the
@@ -149,30 +219,39 @@ one: the reviewer is wrong often enough that you'll want to read a few before it
 
 To have canopy review a PR the loop doesn't own, such as a coworker's, paste its URL into **Review a PR** on the
 [reviews page](#the-reviews-page) and press **Review**. This is `canopy start URL --review`. A link to one of its
-threads or its files tab works too: the page trims it back to the PR, so you needn't. The next tick reviews the PR
-once, at its latest commit, in whichever of your repositories holds it, and the request ends with that review.
-Until then it's a `requested` row at the head of the reviews list, so you can see it landed, and it waits on the
-[pull requests page](#the-pull-requests-page) wearing `requested` too. The PR's page shows the open request, with
-**Stop** to withdraw it, and says where it came from, `web` or `cli`. Once the request ends, the page says when and
-why: `reviewed`, `stopped`, `merged` or `closed` before a review got to it, or `unknown_repo` when none of your
-repositories holds the PR.
+threads or its files tab works too: the page trims it back to the PR, so you needn't. The page then opens the PR's
+own page, where the request now stands. The next tick reviews the PR once, at its latest commit, in whichever of your
+repositories holds it, and the request ends with that review. Until then it's a `requested` row at the head of the
+reviews list, so you can see it landed, and it waits on the [pull requests page](#the-pull-requests-page) wearing
+`requested` too. The PR's page shows the open request, with **Stop** to withdraw it, and says where it came from, `web`
+or `cli`. Once the request ends, the page says when and why: `reviewed`, `stopped`, `merged` or `closed` before a
+review got to it, or `unknown_repo` when none of your repositories holds the PR.
 
-Under the URL, **Notes for the reviewer** takes whatever you want the reviewer to know before it starts: what the author
-asked you to look at, the part of the change that worries you, or why the PR exists at all. It's optional, and it's
-`--notes` on the command line. The reviewer weighs your notes ahead of the overseer's pointers, but they don't narrow
-the review: it still reads the whole change. The PR's page shows the notes with the request. Asking again for a PR
-that's already waiting, with new notes, replaces the old ones; a review already running keeps the notes it started with.
+Already on the PR's page? Its **Pull request** panel asks for you: **Review this PR** on one canopy has never
+reviewed, and **Review again** once it has, or once your request has ended, say after the author pushed a fix. It's the
+same request, in the personas its menu names: the last request's, or those [Settings](settings#reviews) prefers. The
+loop's own PRs have neither button. `review.agent_prs` reviews those, and canopy would refuse the request anyway.
 
-**Persona** picks the voice the review is written in, as `--persona` does. Left alone, it reads `(default)` beside
-`[personas] reviewer`'s, which is usually `canopy`. Check one persona, say `skeptic`, and the review is written in it;
-check several, up to ten, and canopy reviews the PR once in each, side by side, which is the cheapest way to learn which
-reviewer you actually like. Each is a run of its own, billed as one. A persona canopy would refuse to run, such as a
-file past its size limit, is greyed out, and hovering it says why. Asking again for a PR that's waiting, with personas
-checked, replaces its personas; with none checked, it keeps them. The PR's page names the personas with the request.
+**Notes for the reviewer**, under the URL, takes whatever you want the reviewer to know before it starts: what the
+author asked you to look at, the part of the change that worries you, or why the PR exists at all. It's optional, and
+it's `--notes` on the command line. The reviewer weighs your notes ahead of the overseer's pointers, but they don't
+narrow the review: it still reads the whole change. The PR's page shows the notes with the request. Asking again for
+a PR that's already waiting, with new notes, replaces the old ones; a review already running keeps the notes it
+started with.
+
+**Show persona**, under the notes, opens the **Persona** menu, which picks the voice the review is written in, as
+`--persona` does. Left alone, it reads `(default)` beside `[personas] reviewer`'s, which is usually `canopy`; folded,
+the form says which it will use. Each persona in the menu
+says what it is under its name, in its own words. Check one persona, say `skeptic`, and the review is
+written in it; check several, up to ten, and canopy reviews the PR once in each, side by side, which is the cheapest
+way to learn which reviewer you actually like. Each is a run of its own, billed as one. A persona canopy would refuse
+to run, such as a file past its size limit, is greyed out, and hovering it says why. Asking again for a PR that's
+waiting, with personas checked, replaces its personas; with none checked, it keeps them. The PR's page names the
+personas with the request.
 
 If you always reach for the same reviewer, pick it once in [Settings](settings#reviews) and the form starts there,
-saying `as Settings prefers`. You can still check others for one request; the next one starts from your preference
-again. **Use the default** is still `[personas] reviewer`'s.
+saying `as Settings prefers`, and so does a PR's **Review this PR**. You can still check others for one request; the
+next one starts from your preference again. **Use the default** is still `[personas] reviewer`'s.
 
 The review stays in canopy until you say otherwise. Its page holds it as a draft of your review on the PR, which you
 can trim, reword, and publish ([below](#publishing-your-review)); whether you pass any of it on, and in what tone, is
@@ -180,18 +259,26 @@ between you and your coworker.
 
 ## The reviews page
 
-[Reviews](/reviews) lists every review, newest first: its verdict, its ticket, how big the change is (`low impact`,
-`normal impact`, `high impact`), the PR and commit, the persona it wrote in (`as skeptic`, where the list has room for
-it), and what it cost. A PR you had reviewed in several personas gets a row for each, and the persona is how you tell
-the skeptic from the minimalist. A verdict reads `clean`, or counts the findings with the worst among them, such as
-`3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. With no review yet, it points you to **Review a
-PR** above the list, which works with the defaults, and to `review.agent_prs` and `review.query`, which have the loop
-review PRs on its own. Either way, `capacity.max_reviews` must be above 0.
+**Reviews**, under [Pull requests](/pull-requests), lists every review, newest first: its verdict, its ticket, how
+big the change is (`low impact`, `normal impact`, `high impact`), the PR and its title, the commit, the persona it wrote
+in (`as skeptic`, where the list has room for it), and what it cost. The title is the PR's own, as a worker or a review
+reported it, else as canopy last read it from GitHub, else its ticket's, so you can tell which change a review is about
+without opening it or remembering what `#88` was. A coworker's PR gets its title from that read, so only one canopy has
+never read shows the PR's name alone, and on a narrow list the title is the first thing to go. A PR you had reviewed in
+several personas gets a row for each, and the persona is how you tell the skeptic from the minimalist. The reviews one
+request made of one commit sit together, with no rule between them: the first names the PR, and each after it says only
+`as minimalist`, since the PR and commit are the first's. The PR's page lists them the same way. A verdict reads
+`clean`, or counts the findings with the worst among them, such as `3 findings, 1 major`. A finding is `blocking`,
+`major`, or `minor`. A review of a PR the loop doesn't own carries its draft's chip after the verdict, as the pull
+requests list does. With no review yet, it points you to **Review a PR** above the list, which works with the defaults,
+and to `review.agent_prs` and `review.query`, which have the loop review PRs on its own. Either way,
+`capacity.max_reviews` must be above 0.
 
 A PR you asked for that no review has started on yet leads the list as `requested`, with a hollow ring: it has no
-verdict, commit, or cost because nothing has read it yet. Once a tick starts its review, the review's own row takes its
-place. If that review fails, the request is still open, so the `requested` row comes back and the next tick tries
-again.
+verdict, commit, or cost because nothing has read it yet. Where a ticket would be, it names the PR's author once canopy
+has read the PR, which it does at the next tick; until then it says `none`. Once a tick starts its review, the review's
+own row takes its place. If that review fails, the request is still open, so the `requested` row comes back and the
+next tick tries again.
 
 The reviews list filters as the PRs do: a field for words in the PR, its ticket, or the commit (the first few characters
 of a sha will do), and the same repository picker. A `requested` row drops out once you pick a repository, because
@@ -199,15 +286,19 @@ which one holds its PR is the next tick's to work out, not the page's to guess.
 
 A review that has finished since you last looked is new, if it has something to say: one that found anything, or
 any review you requested, clean or not. A clean review the loop started on its own stays quiet; it is in the list,
-but nobody needs a notification that nothing is wrong. A new review's row has a dot after its verdict, and **Reviews**
-in the side navigation counts the new ones on every page, in the color of the worst finding among them, so a blocking
-one stands out from a clean one you asked for. Opening a review's page marks it seen; **mark 3 seen** in the list's
-header does it for all of them at once, for the days you trust the summary. canopy keeps what you've seen in its
-journal, so your laptop, your desktop, and the terminal agree: `canopy review show` ends a new review's line with
-`new`, and `canopy review show ID` marks it seen as the page does. Only you can mark one: an agent that reads a review
-in full leaves it new, which is the point of a list of things you haven't read.
+but nobody needs a notification that nothing is wrong. A new review's row has a dot after its verdict, and **Pull
+requests** in the side navigation counts the new ones on every page, in the color of the worst finding among them, so a
+blocking one stands out from a clean one you asked for. So does the **Reviews** link over the pull requests list.
+Opening a review's page marks it seen; **mark 3 seen** in the list's header does it for all of them at once, for the
+days you trust the summary. canopy keeps what you've seen in its journal, so your laptop, your desktop, and the terminal
+agree: `canopy review show` ends a new review's line with `new`, and `canopy review show ID` marks it seen as the page
+does. Only you can mark one: an agent that reads a review in full leaves it new, which is the point of a list of things
+you haven't read.
 
 ## A review's page
+
+**on GitHub**, under the title, opens the PR itself in a new tab, for when the findings send you off to read the
+conversation around them.
 
 At the top, the reviewer's summary, since that's the answer you came for, then its verdict with how big the change is,
 the PR (with its other reviews, if any, on a line under it), the persona the reviewer wrote in, the commit it read and
@@ -218,7 +309,9 @@ the harness decided the review's status itself, such as failing a run that never
 sits, and the diff, a panel per file, with each finding pinned under the line it names. A finding on a line the diff
 doesn't show sits under its file's header, and one about a file the diff doesn't touch waits in a panel of its own after
 the files. A long diff shows the lines around each finding at first, with folds that open the rest. A renamed file is
-headed `old → new`, and a binary one is marked `binary`. A diff too long to keep whole says so at its end.
+headed `old → new`, and a binary one is marked `binary`. A diff too long to keep whole says so at its end. A review that
+holds a draft of yours leads with the draft instead, and folds all this but the diff under it
+([Publishing your review](#publishing-your-review)).
 
 An old review may have no diff kept, either from before canopy kept them or because your `[retention]` removed it with
 the review's log, which the page says as `removed after 30 days`. Its findings list is then the cards themselves, each
@@ -244,16 +337,23 @@ and on which model, and where its log is; then the reviewer's transcript, every 
 prompt canopy handed it, and the log's end as written, each folded until you open it.
 
 Open it when a verdict surprises you, or when a review failed and you want to know whether to blame the reviewer, the
-PR, or the runtime. A reviewer's events reach its log when it ends, so while it works the transcript says so and
-waits; there is no watching it think.
+PR, or the runtime. While it works, the transcript grows as the reviewer goes, as a worker's does, and what it has spent
+so far moves with each model call.
 
 ## Acting on findings
 
 A review changes nothing on its own: canopy never approves a PR, requests changes on it, or merges it. What you can do
 is tell canopy which findings matter.
 
-- **dismiss**, on a finding's card, as `canopy dismiss review:ID N`: no worker or tick acts on it. It stays listed, and
-  **undo** brings it back. If you dismiss every finding, the PR moves on as if the review were clean.
+- **dismiss**, on a finding's card, as `canopy dismiss review:ID N --reason REASON`: no worker or tick acts on it. It
+  asks why first: **wrong**, it doesn't hold; **intentional**, it holds and the change means it; **not worth it**, it
+  holds and isn't worth the fix; **out of scope**, it holds and is worth fixing, but in another PR. The card then says
+  `dismissed: wrong`, say. It stays listed, and **undo** brings it back. If you dismiss every finding, the PR moves on
+  as if the review were clean.
+
+  The reason is how canopy tells a noisy reviewer from one that's right about things you chose to live with.
+  `canopy review noise` counts them by severity, persona, and model: a high `wrong` rate is a reviewer worth retuning,
+  and a high `not worth it` rate is one that's worth asking for fewer minor findings.
 - **send to a worker**, on a finished review of one of the loop's own PRs: tick the findings worth fixing and press
   it, as `canopy send review:ID N`. canopy records a reply on the ticket naming them, and the next tick reads it as
   your go-ahead for a worker to fix those and leave the rest alone. For an untrusted reviewer it's the go-ahead the
@@ -265,28 +365,74 @@ belong to one review, so a new commit's review starts fresh.
 ## Publishing your review
 
 A finished review of a PR the loop doesn't own, a coworker's you asked for or one `review.query` matched, is also the
-first draft of a review you could leave on it. **Draft review**, under the findings, shows exactly what canopy would
-post in your name: the reviewer's summary as the body, each finding on a line of the diff as a comment on that line,
-and a finding the diff doesn't show tucked into the body under its location. The comments sit on the diff beside the
-findings they came from. Every word is the reviewer's, written after reading the PR, so read it as you'd read anything
-a stranger wrote about your coworker's code before signing it: hidden characters are named, never hidden.
+first draft of a review you could leave on it, and its page is about that draft. The title says so, **Your review of
+acme/api#14 by carol**, and the line under it says where the draft stands: waiting on you, staged on GitHub, published,
+discarded, or unconfirmed while canopy finds out whether a publish landed. **Draft review** comes first and shows
+exactly what canopy would post in your name: the body, which the reviewer leaves empty unless it has something to tell
+your coworker that no finding says, each finding on a line of the diff as a comment on that line, and a finding the diff
+doesn't show in the body under its location. The reviewer's summary is written for you, not your coworker, so it stays
+out of the draft. On the diff, each finding is
+one card: its severity and title from the reviewer, then the comment as it will post, marked **in your review** or
+**left out**. Every word is the reviewer's, written after reading the PR, so read it as you'd read
+anything a stranger wrote about your coworker's code before signing it: hidden characters are named, never hidden.
+Hover the version in its header to see who made it and the hash a publish carries.
+
+A request in several personas made a review, and so a draft, in each. The draft says so under its intro, **Also
+reviewed as skeptic, minimalist**, each name opening that review's page, so you can read them side by side and publish
+the one you'd sign. Publishing one leaves the others as they were: a draft you didn't pick is still a draft, not a
+second review waiting to surprise your coworker. The attention list's `review waiting` clears once any of them is
+published or staged.
+
+canopy's own review, the summary, verdict, and findings list from [a review's page](#a-reviews-page), folds under the
+draft as **What the reviewer found**, its status and verdict on the fold. **Show the review** opens it, for when you
+want to check the draft against what the reviewer actually said.
 
 Change it until it says what you would:
 
 - **edit**, beside **Body**, rewrites the body; empty, the comments post alone.
-- **edit** and **drop**, on a comment's card, reword it or leave it out. Dropping a comment leaves its finding alone;
-  **dismiss** on the finding drops its comment too, and **undo** puts it back.
-- The **+** beside a line's number on the diff, there when you hover the line, opens a comment of your own on it.
+- **Edit**, on a finding's card, rewords its comment in place.
+- **leave out**, on the same card, takes the finding out of your review: it dismisses the finding, for the reason you
+  pick, which drops its comment or its paragraph of the body. **put back** takes that back, in the reviewer's words,
+  so your edit of it goes with the dismissal. The **Comments** list says which findings you've left out.
+- The **+** beside a line's number on the diff, there when you hover the line, opens a comment of your own on it. Yours
+  keep cards of their own, with **Edit** and **Drop**.
+
+A finding can also leave your review without a dismissal: you rewrote the body it lived in, or dropped its comment with
+`canopy review edit --drop`. Its card then says **left out** and offers **dismiss**; canopy only puts a finding back by
+taking its dismissal back, so dismiss it, then **put back**. Two clicks, and the reviewer's words return.
 
 Each change is a new version, listed under **Versions** with who made it, and is the same as `canopy review edit`.
 A version holds at most 30 comments, which is more than any review worth reading needs.
 
-**Start the review on GitHub** publishes the version on the page, word for word, as a pending review on the commit the
-review read: only you can see it until you submit it, or delete it, on GitHub, and canopy's next read of the PR records
-which. Tick **Submit it on GitHub now** and the button reads **Publish version N**: canopy submits it for you. Either
-way it is one comment review that approves nothing and requests no change, and it's `canopy review publish RUN HASH`,
-with `--submit` for the second. The hash is the version you looked at, so if anything changed it since, the publish is
-refused as `stale` and you read it again. A draft publishes once; a later commit's review is a draft of its own. If
-the PR has moved on since, the panel says so: your comments would land on the old commit and show as outdated.
+Or have an agent do the rewording. Under **Revision**, say what should change in **What should change** and press
+**Ask for a revision**, the same as `canopy reply review:ID`. The next tick starts a revision: an agent reads the PR and
+the version on the page, with your note as its only instructions, and makes a new version, listed **by a revision**.
+It posts nothing. Write the note as you'd brief a colleague who takes every word literally, because this one does.
+Until then the panel shows your note and says a revision is asked for, then running; if you edit the draft first, your
+version answers the note and no revision starts. A note is refused while a revision runs, and once the draft has had
+its revisions (`policy.max_revisions_per_draft`, 3 by default), which `canopy grant review:ID revision` raises from
+your shell. A revision that fails leaves the draft as it was, and the panel says how it ended. The page shows what a
+revision did when you next read it; it doesn't follow the run as it goes, so reload to see the new version.
+
+Two buttons sit at the foot, as they do under a PR's thread drafts. **Publish version N** posts the version on the page,
+word for word, on the commit the review read, and submits it. **Start the review on GitHub**, beside it, posts the same
+as a pending review instead: only you can see it until you submit it, or delete it, on GitHub, and canopy's next read
+of the PR records which. The line beside them says exactly what goes out, the body and how many comments, on whose PR
+and which commit, so there's no guessing what your name is about to be attached to. Either way it is one comment review
+that approves nothing and requests no change, and it's `canopy review publish RUN HASH`, with `--submit` for the
+first. A toast says what went and where; the panel keeps a line linking to it on GitHub, and a published one drops a
+leaf, as an approved plan does. Staging gets none: nobody has seen it yet. The hash is the version you
+looked at, so if anything changed it since, the publish is refused as `stale` and you read it again. A draft publishes
+once; a later commit's review is a draft of its own. If the PR has moved on since, the panel says so: your comments
+would land on the old commit and show as outdated.
+
+Not every review deserves to go out. **Discard**, after the two, asks right there whether you mean it, and then marks
+the draft seen and not posted: nothing reaches GitHub, the draft takes no more edits, and it stops waiting on you. It's
+`canopy review discard RUN`. Nothing on the page undoes it, which is fine, since the only thing lost is a review you
+had already decided nobody needed to read.
+
+The [attention list](attention) holds a `review waiting` item while a review you asked for has a draft you
+haven't published, staged, or discarded, and a `review unsettled` one while a staged review waits for you on GitHub,
+or a post never said whether it landed. A review `review.query` found raises neither until you stage it.
 
 canopy can't take a published review back, and nothing on GitHub says a model wrote it but what you leave in.

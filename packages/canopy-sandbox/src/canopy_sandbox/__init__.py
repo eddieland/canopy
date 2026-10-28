@@ -4,7 +4,7 @@ A prefix on a command template in canopy's user config:
 
     canopy-sandbox ROLE [--read PATH]... [--] COMMAND [ARG]...
 
-ROLE is `worker`, `setup`, `chore`, or `review`, and picks the policy template `ROLE.json` in
+ROLE is `worker`, `setup`, `chore`, `review`, or `overseer`, and picks the policy template `ROLE.json` in
 `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy/sandbox/` when that is unset), where `canopy sandbox setup`
 copies the templates in `templates/`.
 `--read PATH`, which may repeat, names a path the command may read: pass the template's `{definitions_dir}`, so the
@@ -15,16 +15,19 @@ In order, it:
 
 1. Drops from its own environment what would point git at another repository (`GIT_DIR` and its kind), every
    relative `PATH` entry, which would find `git` or `srt` in the checkout, and `BASH_ENV` and `ENV`, which the shell
-   `srt` starts would source. The command inherits the same.
+   `srt` starts would source. The command inherits the same. On a Linux host whose kernel has no IPv6, it sets
+   `SOCAT_DEFAULT_LISTEN_IP=4` there, unless the operator set it, so that srt's network bridge inside the sandbox can
+   listen at all.
 2. Finds the worktrees the run works in, and each one's own and shared git directories: for a worker or setup, the
-   cwd, or each worktree a joint run's desk links to; for a review, the checkout its directory links to. A chore has
-   none.
+   cwd, or each worktree a joint run's desk links to; for a review, the checkout its directory links to. A chore and
+   the overseer have none. For the overseer, it checks that the cwd is a workspace root with its state directory, and
+   makes the journal's locks there if canopy has yet to (Overseer, below).
 3. Fills the template's placeholders with those paths and writes the policy to a private directory of its own, with
    the run's temp directory beside it, which is `srt`'s own TMPDIR too, so what `srt` leaves there goes with it.
    Whatever the template says, the policy denies reading the directory that holds every run's, so no run reads
-   another's temp directory, and the workspace's `.canopy/` when the run's directories name it, in case the workspace
-   is outside the HOME the template denies. It allows reading `srt`'s own `vendor/`
-   directory, whose seccomp helper runs inside the sandbox, wherever `srt` is installed.
+   another's temp directory, and, for every role but the overseer, the workspace's `.canopy/` when the run's
+   directories name it, in case the workspace is outside the HOME the template denies. It allows reading `srt`'s own
+   `vendor/` directory, whose seccomp helper runs inside the sandbox, wherever `srt` is installed.
 4. Points the command's caches at the role's own cache directory, `$XDG_CACHE_HOME/canopy/sandbox/ROLE/` (setup
    shares the worker's, which it warms): XDG_CACHE_HOME itself, and the variables of the tools whose caches do not
    follow it everywhere. Not the operator's: OpenCode imports packages and runs programs from its cache, the
@@ -62,11 +65,24 @@ A placeholder is a whole string in one of the template's lists, and expands to z
     @CACHE@          the role's cache directory, the command's XDG_CACHE_HOME
     @DATA@           the role's data directory, the command's XDG_DATA_HOME
     @READ@           each `--read` path
+    @JOURNAL@        for the overseer, what it writes in the workspace's state directory, each one there: the journal,
+                     its WAL and shared-memory files, the tick's and the dispatch's locks, and canopy's log
+    @WORKSPACE@      for the overseer, each entry of the workspace root but the state directory, then each entry of the
+                     state directory but the journal's
 
 `@GIT_SHARED@` names entries, not the directory, because of how `srt` (checked at 0.0.79) restores paths under a
 denied directory such as HOME: it binds each `allowWrite` path back, then each `allowRead` path read-only, so a common
 git directory in `allowRead` would cover the writable worktree directory inside it. An entry the common directory gains
-after the run starts is not visible to the run.
+after the run starts is not visible to the run. `@WORKSPACE@` names entries for the same reason, so that the journal's
+files stay writable; an entry the workspace root or its state directory gains later is not visible either.
+
+Overseer: canopy runs it in the workspace root (DESIGN §6), and it acts through canopy's tools, a server its runtime
+starts inside the sandbox, which reads the config and the workspace and writes the journal (DESIGN §27). So its policy
+reads the workspace and writes, of the state directory, only the journal's files: never the private config, the agent
+definitions, the chores' agents and prompts, or a directory another run starts in, which canopy and its agents load
+later. Nothing can be added to the state directory, so a lock canopy has yet to make could never be taken: the wrapper
+makes the journal's locks first, as canopy would. No run the overseer asks for starts inside its sandbox: the tick
+starts each once the overseer's run has ended (DESIGN §40), so none inherits this policy or ends with it.
 
 A key that starts with `#` is a comment, and is left out of the policy. The wrapper refuses a template with an unknown
 placeholder, a placeholder inside a longer string, no `filesystem.denyRead`, or no `network.allowedDomains`: `srt` runs
@@ -82,12 +98,14 @@ Stdlib only.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
 import shlex
 import shutil
 import signal
+import socket
 import stat
 import subprocess
 import sys
@@ -100,7 +118,7 @@ from canopy_sandbox import credentials
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, MutableMapping, Sequence
 
-ROLES = ("worker", "setup", "chore", "review")
+ROLES = ("worker", "setup", "chore", "review", "overseer")
 # The roles that commit, and so get the run's object directory and the run's `git`. A review reads its checkout and
 # writes nothing there; a chore has no worktree.
 COMMITTING = ("worker", "setup")
@@ -115,6 +133,14 @@ DESK_MARKER = ".canopy-desk"
 STATE_DIR = ".canopy"
 RUN_PARENTS = ("runs", "chores", "reviews")
 PLACEHOLDER = re.compile(r"@[A-Z_]+@")
+#: The workspace file, which marks the root of a workspace, where canopy runs the overseer (DESIGN §18).
+WORKSPACE_FILE = "canopy-workspace.toml"
+#: What the overseer writes in the workspace's state directory, through canopy's tools: the journal, its WAL and
+#: shared-memory files, the tick's and the dispatch's locks, and canopy's log, by canopy's names for them, which
+#: `tests/canopy_sandbox` holds to canopy's own. The journal comes first, and must be there.
+JOURNAL = ("canopy.db", "canopy.db-wal", "canopy.db-shm", "lock", "dispatch.lock", "canopy.log")
+#: The locks among them, which canopy makes when it first takes one.
+LOCKS = ("lock", "dispatch.lock")
 # What a worktree's own git directory holds that git reads as config or as where the rest of the repository is. With
 # `commondir` rewritten, every git on the host in the slot, canopy's and treehouse's, reads a config and hooks the
 # worker wrote (DESIGN §24).
@@ -136,6 +162,10 @@ SAFE_GIT = (
 UNSAFE_PATH = re.compile(r'[:"\n\r\\]')
 # Read by the shell `srt` runs the command in: a non-interactive bash sources BASH_ENV, and sh in some modes ENV.
 SHELL_STARTUP = ("BASH_ENV", "ENV")
+# On Linux, srt runs socat inside the sandbox to carry its network to srt's proxy outside. socat listens on IPv6
+# unless this says otherwise, and on a kernel without IPv6 exits at once, which srt does not report: every request from
+# the sandbox then fails to connect.
+SOCAT_LISTEN = "SOCAT_DEFAULT_LISTEN_IP"
 # The `git` the command finds first on PATH, for a worker or setup (git_shim). POSIX sh, so that a git call costs one
 # more git to find the repository, not a Python start.
 GIT_SHIM = r"""#!/bin/sh
@@ -210,7 +240,7 @@ SRT_SOCKET_NAME = "claude-socks-0123456789abcdef.sock"
 SOCKET_PATH_MAX = 107
 # The cache and data directories each role's runs share, under `$XDG_CACHE_HOME/canopy/sandbox/` and
 # `$XDG_DATA_HOME/canopy/sandbox/`. Setup warms the worker's caches.
-SHARED = {"worker": "worker", "setup": "worker", "chore": "chore", "review": "review"}
+CACHES = {"worker": "worker", "setup": "worker", "chore": "chore", "review": "review", "overseer": "overseer"}
 # Where the command's tools keep their caches, each relative to the role's cache directory. XDG_CACHE_HOME moves
 # OpenCode's, and most tools' on Linux; the rest are npm's, which never follows it, and Go's and pip's, which do not on
 # macOS. Each is the directory the tool takes under XDG_CACHE_HOME on Linux, or else its own name.
@@ -257,11 +287,15 @@ def run(argv: list[str]) -> int:
         `srt`'s exit status, or 2 when the command could not be sandboxed and did not run.
     """
     scrub(os.environ)
+    listen_without_ipv6(os.environ)
     try:
         role, reads, command = parse(argv)
         objects = objects_dir(role)
         cwd = Path.cwd()
         trees = worktrees(role, cwd)
+        state = workspace_state(role, cwd)
+        journal = journal_files(state) if state is not None else []
+        entries = workspace_entries(cwd, state, journal) if state is not None else []
         template = load_template(role)
         srt = find_srt()
         cache = cache_dir(role)
@@ -275,10 +309,23 @@ def run(argv: list[str]) -> int:
         check_socket_room(tmp)
         tmp.mkdir(mode=0o700)
         bin_dir = git_shim(run_dir, trees, objects) if objects is not None else None
-        policy = fill(template, placeholders(cwd, trees, objects, tmp, cache=cache, data=data, reads=reads))
+        values = placeholders(
+            cwd,
+            trees,
+            objects,
+            tmp,
+            cache=cache,
+            data=data,
+            reads=reads,
+            journal=journal,
+            workspace=entries,
+        )
+        policy = fill(template, values)
         readable = [*vendor_dirs(srt), *([bin_dir] if bin_dir is not None else [])]
         operator = data_home() / credentials.RUNTIME
-        denied = [run_dir.parent, cache.parent, data.parent, *state_dirs(objects, cwd)]
+        # The overseer's own state directory holds the journal it writes: a rule for this role alone.
+        states = state_dirs(objects, cwd) if state is None else []
+        denied = [run_dir.parent, cache.parent, data.parent, *states]
         check(policy, denied, readable, unwritable=operator_runtime(operator))
         settings = run_dir / "policy.json"
         settings.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
@@ -302,6 +349,28 @@ def scrub(env: MutableMapping[str, str]) -> None:
     for name in (*GIT_LOCATION, *SHELL_STARTUP):
         env.pop(name, None)
     env["PATH"] = os.pathsep.join(p for p in env.get("PATH", "").split(os.pathsep) if Path(p).is_absolute())
+
+
+def listen_without_ipv6(env: MutableMapping[str, str]) -> None:
+    """Have srt's network bridge inside the sandbox listen on IPv4 on a Linux host without IPv6, unless `env` says.
+
+    The sandbox's network namespace has IPv6 only when the host's kernel does. Off Linux, srt runs no such bridge.
+    """
+    if sys.platform == "linux" and ipv6_missing():
+        env.setdefault(SOCAT_LISTEN, "4")
+
+
+def ipv6_missing() -> bool:
+    """Whether this kernel has no IPv6, so that no IPv6 socket can be opened, as socat opens one to listen.
+
+    Returns:
+        True when it has none.
+    """
+    try:
+        socket.socket(socket.AF_INET6, socket.SOCK_STREAM).close()
+    except OSError as e:
+        return e.errno == errno.EAFNOSUPPORT
+    return False
 
 
 def parse(argv: list[str]) -> tuple[str, list[Path], list[str]]:
@@ -335,7 +404,7 @@ def worktrees(role: str, cwd: Path) -> list[Worktree]:
     A worker or setup works in `cwd`, or in each worktree a desk there links to. A review starts in a directory of
     canopy's, outside the checkout, which it reads through a link there (DESIGN §21); canopy made that directory
     private to the operator just before, so its links are canopy's. One with a `.git` is a checkout, whose links a
-    branch committed. A chore works in no worktree.
+    branch committed. A chore and the overseer work in no worktree.
 
     Returns:
         Each worktree, in the order of the links.
@@ -344,7 +413,7 @@ def worktrees(role: str, cwd: Path) -> list[Worktree]:
         SandboxError: a review's directory is a checkout, a desk or a review's directory links to no worktree, or a
             place is not a linked worktree.
     """
-    if role == "chore":
+    if role in {"chore", "overseer"}:
         return []
     if role == "review" and os.path.lexists(cwd / ".git"):
         raise SandboxError(f"{cwd} is a checkout: canopy-sandbox review runs only as canopy's review_cmd")
@@ -367,6 +436,90 @@ def desk(cwd: Path) -> bool:
     """
     marker = cwd / DESK_MARKER
     return marker.is_file() and not marker.is_symlink() and not os.path.lexists(cwd / ".git")
+
+
+def workspace_state(role: str, cwd: Path) -> Path | None:
+    """Return the state directory of the workspace whose root the overseer starts in.
+
+    canopy runs the overseer in the workspace root (DESIGN §6), and makes the state directory there private to the
+    operator (D053), with the journal in it.
+
+    Returns:
+        The state directory, or None for any role but the overseer.
+
+    Raises:
+        SandboxError: `cwd` holds no workspace file, or no state directory private to this user with a journal in it.
+    """
+    if role != "overseer":
+        return None
+    usage = "canopy-sandbox overseer runs only as canopy's overseer_cmd, in the workspace root"
+    if not stat.S_ISREG(mode(cwd / WORKSPACE_FILE)):
+        raise SandboxError(f"{cwd} holds no {WORKSPACE_FILE}: {usage}")
+    state = cwd / STATE_DIR
+    try:
+        info = state.lstat()
+    except OSError:
+        raise SandboxError(f"{cwd} holds no {STATE_DIR}: {usage}") from None
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise SandboxError(f"{state} is not a directory private to this user; remove it")
+    if not stat.S_ISREG(mode(state / JOURNAL[0])):
+        raise SandboxError(f"{state} holds no journal: {usage}")
+    return state
+
+
+def mode(path: Path) -> int:
+    """Return the mode of `path` itself, a link's and not its target's.
+
+    Returns:
+        The mode, or 0 when there is nothing there or it cannot be read.
+    """
+    try:
+        return path.lstat().st_mode
+    except OSError:
+        return 0
+
+
+def journal_files(state: Path) -> list[Path]:
+    """Make the journal's missing locks in `state`, and list the journal's files there, which the overseer writes.
+
+    The overseer cannot add to the state directory, so it could never take a lock canopy has yet to make. The wrapper
+    makes it as canopy would, empty and the operator's alone.
+
+    Returns:
+        Each of the journal's files there, in the order `JOURNAL` names them.
+
+    Raises:
+        SandboxError: a lock could not be made, or one of them is not a regular file: through a link, the policy would
+            let the overseer write what it points at.
+    """
+    for name in LOCKS:
+        try:
+            os.close(os.open(state / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600))
+        except FileExistsError:
+            pass
+        except OSError as e:
+            raise SandboxError(f"the lock {state / name} could not be made: {e}") from None
+    files: list[Path] = []
+    for name in JOURNAL:
+        kind = mode(state / name)
+        if kind and not stat.S_ISREG(kind):
+            raise SandboxError(f"{state / name} is not a regular file; remove it")
+        if kind:
+            files.append(state / name)
+    return files
+
+
+def workspace_entries(cwd: Path, state: Path, journal: Collection[Path]) -> list[Path]:
+    """List what the overseer reads: the workspace root's entries but the state directory, then the state directory's.
+
+    Entry by entry, and the journal's files left out, so that no read-only bind of a directory covers them.
+
+    Returns:
+        The workspace root's entries but `state`, then `state`'s but `journal`, each by name.
+    """
+    entries = sorted(p for p in cwd.iterdir() if p != state)
+    entries.extend(sorted(p for p in state.iterdir() if p not in journal))
+    return entries
 
 
 def objects_dir(role: str) -> Path | None:
@@ -444,9 +597,7 @@ def cache_dir(role: str) -> Path:
     Returns:
         The directory, with every link in its path resolved.
     """
-    base = Path(os.environ.get("XDG_CACHE_HOME", ""))
-    root = base if base.is_absolute() else Path.home() / ".cache"
-    return role_dir(root / "canopy" / "sandbox" / SHARED[role], "cache")
+    return role_dir(cache_root() / CACHES[role], "cache")
 
 
 def data_dir(role: str) -> Path:
@@ -455,7 +606,7 @@ def data_dir(role: str) -> Path:
     Returns:
         The directory, under the operator's XDG_DATA_HOME, with every link in its path resolved.
     """
-    return role_dir(data_home() / "canopy" / "sandbox" / SHARED[role], "data")
+    return role_dir(data_home() / "canopy" / "sandbox" / CACHES[role], "data")
 
 
 def data_home() -> Path:
@@ -487,6 +638,18 @@ def role_dir(path: Path, kind: str) -> Path:
     # mkdir sets the mode only on a directory it makes.
     path.chmod(0o700)
     return path.resolve()
+
+
+def cache_root() -> Path:
+    """The directory that holds each role's cache directory, where `canopy gc --caches` finds them.
+
+    Returns:
+        `canopy/sandbox` under the operator's XDG_CACHE_HOME when that is absolute, or else under `~/.cache`. It may not
+        exist.
+    """
+    base = Path(os.environ.get("XDG_CACHE_HOME", ""))
+    root = base if base.is_absolute() else Path.home() / ".cache"
+    return root / "canopy" / "sandbox"
 
 
 def make_run_dir() -> Path:
@@ -542,6 +705,8 @@ def placeholders(
     cache: Path,
     data: Path,
     reads: list[Path],
+    journal: list[Path],
+    workspace: list[Path],
 ) -> dict[str, list[str]]:
     """Return what each placeholder expands to for this run.
 
@@ -559,6 +724,8 @@ def placeholders(
         "@CACHE@": [cache],
         "@DATA@": [data],
         "@READ@": reads,
+        "@JOURNAL@": journal,
+        "@WORKSPACE@": workspace,
     }
     return {name: list(dict.fromkeys(str(p) for p in paths)) for name, paths in values.items()}
 

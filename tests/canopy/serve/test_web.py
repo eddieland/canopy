@@ -1,11 +1,16 @@
-"""The web UI over the operator's own journal (DESIGN §22, ROADMAP M20): its channel writes through the CLI's guards,
-its pages read what `canopy show` and `canopy status` print, and `canopy loop` serves it from a thread."""
+"""The web UI over the operator's own journal (DESIGN §22, ROADMAP M20).
+
+Its channel writes through the CLI's guards, its pages read what `canopy show` and `canopy status` print, and
+`canopy loop` serves it from a thread.
+"""
 
 import dataclasses
 import json
+import os
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import httpx2
 import pytest
@@ -20,7 +25,8 @@ from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.runtime.report import ModelUse, Usage
 from canopy.serve import live, secret, spend_views
-from canopy.serve.event_schema import LoopUpdated
+from canopy.serve.backend import Backend
+from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
     KEY,
     FakeTime,
@@ -32,10 +38,11 @@ from tests.canopy.helpers import (
     overseer_does,
     present,
     running_run,
+    with_events,
 )
-from tests.canopy.scenario_helpers import raises
-from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, free_port, refused, signed_in_client
-from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises
+from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, client, free_port, refused, signed_in_client
+from tests.conftest import SHARED_TOML, CanopyEnv, GitPool, user_toml
 
 
 def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journals(ctx: Context) -> None:
@@ -89,6 +96,7 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
         return c.get(f"/api/runs/{run_id}").json()["models"]
 
     assert models() == {"status": "running", "models": [], "error": None}
+    assert [r["models"] for r in c.get(f"/api/tickets/{KEY}").json()["runs"]] == [models()]  # its ticket's runs too
     db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
     assert models()["status"] == "no_session"  # the runtime reported none, so there is nothing to read
     db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", None)
@@ -110,6 +118,7 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
         "error": None,
     }
     assert [r["models"] for r in c.get("/api/runs").json()] == [models()]  # the runs list carries them too
+    assert [r["models"] for r in c.get(f"/api/tickets/{KEY}").json()["runs"]] == [models()]
     found = models()
     # Read again, as 0069 has every found run read: what was found stays shown while the read is due, fails, or finds
     # the session gone.
@@ -119,6 +128,50 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
     assert models() == found
     run_models.record(ctx.conn, due, ModelsRead.MISSING)
     assert models() == found
+
+
+def test_a_runs_page_names_the_model_canopy_asked_for_while_it_runs_before_its_session_is_read(
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    opencode_state.write_text(json.dumps({"models": ["acme/fake-model-1"]}))
+    scenario.configures(runtime={"models": {"worker": "acme/fake-model-1"}})
+    working = scenario.starts(worker=pushes())
+    c, _ = signed_in_client(context(scenario.env))
+
+    def asked() -> list[tuple[str | None, str]]:
+        found = [c.get(f"/api/runs/{working.id}").json(), *c.get("/api/runs").json()]
+        return [(r["model"], r["models"]["status"]) for r in found]
+
+    # Known from its start, while what served it is read only once it ends.
+    assert asked() == [("acme/fake-model-1", "running")] * 2
+    working.finishes()
+    assert [m for m, _ in asked()] == ["acme/fake-model-1"] * 2
+    # A run canopy chose no model for went to the runtime's default: it asked for none.
+    scenario.configures(runtime={"models": {"worker": None}})
+    ran = scenario.run(dispatches("PROJ-2"), worker=pushes())
+    assert c.get(f"/api/runs/{ran.id}").json()["model"] is None
+
+
+def test_a_transcript_names_each_calls_model_once_canopy_reads_a_session_two_models_served(
+    scenario: Scenario,
+    opencode_state: Path,
+    ctx: Context,
+) -> None:
+    with_events(scenario.env, "canopy-overseer")
+    # The fake overseer's two calls write replies `msg_1` and `msg_2`, which the session's record names the models of.
+    served = [["anthropic", "claude-x", 0.25], ["openai", "gpt-y", 0.5]]
+    opencode_state.write_text(json.dumps({"sessions": {"ses_fake": served}}))
+    tick_id = scenario.tick().tick.id
+    c, _ = signed_in_client(ctx)
+    steps = [e for e in c.get(f"/api/ticks/{tick_id}/transcript").json()["entries"] if e["kind"] == "step"]
+    assert [s["model"] for s in steps] == ["anthropic/claude-x", "openai/gpt-y"]
+    # One model's session names none: the tick's models name it.
+    opencode_state.write_text(json.dumps({"sessions": {"ses_fake": [served[0], served[0]]}}))
+    tick_id = scenario.tick().tick.id
+    steps = [e for e in c.get(f"/api/ticks/{tick_id}/transcript").json()["entries"] if e["kind"] == "step"]
+    assert [s["model"] for s in steps] == [None, None]
 
 
 def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context) -> None:
@@ -149,6 +202,11 @@ def test_meta_carries_each_repositorys_branch_url_when_set(canopy_env: CanopyEnv
         assert c.get("/api/meta").json()["branch_urls"] == {"repo": template}
     finally:
         other.conn.close()
+
+
+def test_meta_names_the_workspaces_repositories(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    assert c.get("/api/meta").json()["repos"] == ["repo"]
 
 
 def test_meta_carries_the_trackers_ticket_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
@@ -369,6 +427,206 @@ def test_a_persona_chosen_from_the_web_is_the_tickets_override_as_canopy_persona
     assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
 
 
+def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_makes_it(
+    ctx: Context,
+    opencode_state: Path,
+) -> None:
+    listed = ["acme/fake-model-2", "a plugin says hello", "acme/fake-model-1"]
+    opencode_state.write_text(json.dumps({"models": listed, "variants": {"acme/fake-model-1": ["low", "high"]}}))
+    c, headers = signed_in_client(ctx)
+
+    def choose(body: dict[str, str | None]) -> httpx2.Response:
+        return c.post(f"/api/tickets/{KEY}/models", json=body, headers=headers)
+
+    # The Model panel's choices, read from the runtime when it opens, in the workspace root, each model's variants
+    # with them.
+    assert c.get("/api/models").json() == {
+        "models": ["acme/fake-model-1", "acme/fake-model-2"],
+        "variants": {"acme/fake-model-1": ["high", "low"]},
+        "error": None,
+    }
+    # The CLI's guards hold, and a ticket canopy has not seen may have one.
+    assert refused(choose({"model": "acme/nope"})) == (
+        "unknown_model: OpenCode does not list the model acme/nope: name one `canopy models` lists, or set up its "
+        "provider"
+    )
+    assert refused(choose({"model": "acme/fake-model-2@high"})) == (
+        "unknown_model: OpenCode lists the model acme/fake-model-2 but not its variant high (it lists none for it): "
+        "name one it lists, or the model alone"
+    )
+    assert choose({"agent": "reviewer", "model": "acme/fake-model-1@high"}).json() == {
+        "agent": "reviewer",
+        "model": "acme/fake-model-1@high",
+        "source": "ticket",
+        "variant": "high",
+        "dropped_variant": None,
+        "last_served": None,
+    }
+    assert choose({"agent": "reviewer"}).json()["source"] == "default"
+    assert choose({"agent": "overseer", "model": "acme/fake-model-1"}).status_code == 422
+    assert choose({"model": "acme/" + "x" * 200}).status_code == 422
+    assert c.post(f"/api/tickets/{KEY}/models", json={}, headers={"origin": ORIGIN}).status_code == 403
+    with mock.patch.dict(os.environ, {conversation.TICK_ID_ENV: "7"}):
+        assert refused(choose({"model": "acme/fake-model-1"})).startswith("inside_run: ")
+    assert choose({"agent": "planner", "model": "acme/fake-model-2"}).json() == {
+        "agent": "planner",
+        "model": "acme/fake-model-2",
+        "source": "ticket",
+        "variant": None,
+        "dropped_variant": None,
+        "last_served": None,
+    }
+    ended_run(ctx, KEY, "implement")
+    got = c.get(f"/api/tickets/{KEY}").json()
+    assert [(m["agent"], m["model"], m["source"]) for m in got["models"]] == [
+        ("worker", None, "default"),
+        ("planner", "acme/fake-model-2", "ticket"),
+        ("reviewer", None, "default"),
+    ]
+    assert [tuple(r) for r in ctx.conn.execute("SELECT kind, channel FROM ticket_overrides")] == [("model", "web")]
+    # No model clears it, as `--clear` does.
+    assert choose({"agent": "planner"}).json() == {
+        "agent": "planner",
+        "model": None,
+        "source": "default",
+        "variant": None,
+        "dropped_variant": None,
+        "last_served": None,
+    }
+    assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
+    # A list that cannot be read says why, and refuses a choice as the CLI does.
+    opencode_state.write_text(json.dumps({"exit": 1}))
+    assert c.get("/api/models", params={"refresh": 1}).json() == {
+        "models": [],
+        "variants": {},
+        "error": "`opencode models --verbose` exited 1",
+    }
+    assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")
+
+
+def test_the_settings_page_reads_each_agents_and_chores_model_as_the_loop_runs_on_it(
+    ctx: Context,
+    canopy_env: CanopyEnv,
+) -> None:
+    canopy_env.configure(
+        canopy_env.user_file,
+        {
+            "runtime": {"models": {"worker": "acme/fake-model-1", "chore": "acme/fake-model-2@low"}},
+            "chores": {
+                "deps": {"prompt": "~/deps.md", "every_minutes": 60, "model": "acme/fake-model-1@high"},
+                "lint": {"prompt": "~/lint.md", "every_minutes": 60},
+                "sentry": {"prompt": "~/sentry.md", "every_minutes": 60, "cmd": "agent run --agent triage {prompt}"},
+                "elsewhere": {"prompt": "~/elsewhere.md", "every_minutes": 60, "workspaces": ["another"]},
+            },
+        },
+    )
+    c, _ = signed_in_client(dataclasses.replace(ctx, config=config.load(canopy_env.root, canopy_env.user_file)))
+
+    got = c.get("/api/config/models").json()
+
+    assert got["agents"] == [
+        {"agent": "worker", "model": "acme/fake-model-1", "variant": None, "source": "config"},
+        {"agent": "planner", "model": None, "variant": None, "source": "default"},
+        {"agent": "reviewer", "model": None, "variant": None, "source": "default"},
+        {"agent": "overseer", "model": None, "variant": None, "source": "default"},
+        {"agent": "chore", "model": "acme/fake-model-2", "variant": "low", "source": "config"},
+    ]
+    # This workspace's chores only, by name; one running an agent of the operator's own takes its model there.
+    assert got["chores"] == [
+        {"chore": "deps", "model": "acme/fake-model-1", "variant": "high", "source": "chore", "agent": None},
+        {"chore": "lint", "model": "acme/fake-model-2", "variant": "low", "source": "config", "agent": None},
+        {"chore": "sentry", "model": None, "variant": None, "source": "agent", "agent": "triage"},
+    ]
+    user, private = str(canopy_env.user_file), str(canopy_env.private_file)
+    files = (got["models_file"], got["chores_file"], got["user_file"], got["private_file"])
+    assert files == (user, user, user, private)
+    # A file that cannot be read names no file, and the page still shows what the loop runs on.
+    canopy_env.append_user("\n[capacity\n")
+    broken = c.get("/api/config/models").json()
+    assert (broken["models_file"], broken["chores_file"], broken["agents"]) == (None, None, got["agents"])
+
+
+def test_the_mocks_settings_page_names_a_model_for_the_overseer_and_the_chores(backend: Backend) -> None:
+    c = client(None, backend)
+    got = c.get("/api/config/models").json()
+    assert [(a["agent"], a["model"], a["source"]) for a in got["agents"]] == [
+        ("worker", None, "default"),
+        ("planner", None, "default"),
+        ("reviewer", None, "default"),
+        ("overseer", "anthropic/claude-sonnet-4-5", "config"),
+        ("chore", "anthropic/claude-haiku-4-5", "config"),
+    ]
+    assert [(ch["chore"], ch["model"], ch["variant"], ch["source"]) for ch in got["chores"]] == [
+        ("build-health", "anthropic/claude-haiku-4-5", None, "config"),
+        ("deps", "anthropic/claude-haiku-4-5", "high", "chore"),
+    ]
+    assert got["models_file"] == got["chores_file"] == str(backend.user_file)
+
+
+def test_a_configured_model_with_a_variant_is_sent_with_it_and_an_override_naming_none_says_it_drops_it(
+    ctx: Context,
+    opencode_state: Path,
+) -> None:
+    """Config's model at a variant names it; an override naming none runs at the model's default, and says so."""
+    listed = {"models": ["acme/fake-model-1"], "variants": {"acme/fake-model-1": ["high"]}}
+    opencode_state.write_text(json.dumps(listed))
+    runtime = ctx.config.runtime.model_copy(update={"models": {"worker": "acme/fake-model-1@high"}})
+    c, headers = signed_in_client(dataclasses.replace(ctx, config=ctx.config.model_copy(update={"runtime": runtime})))
+    ended_run(ctx, KEY, "implement")
+    assert c.get(f"/api/tickets/{KEY}").json()["models"][0] == {
+        "agent": "worker",
+        "model": "acme/fake-model-1@high",
+        "source": "config",
+        "variant": "high",
+        "dropped_variant": None,
+        "last_served": None,
+    }
+    chosen = c.post(f"/api/tickets/{KEY}/models", json={"model": "acme/fake-model-1"}, headers=headers).json()
+    assert (chosen["model"], chosen["variant"], chosen["dropped_variant"]) == ("acme/fake-model-1", None, "high")
+    assert c.get(f"/api/tickets/{KEY}").json()["models"][0]["dropped_variant"] == "high"
+
+
+def test_each_agent_names_the_model_that_served_its_latest_read_run_beside_the_one_its_next_runs_on(
+    ctx: Context,
+    opencode_state: Path,
+) -> None:
+    """The runtime's default names no model, so the page names what served the agent's runs instead (DESIGN §13)."""
+    opencode_state.write_text(json.dumps({"models": ["acme/fake-model-1"]}))
+    c, headers = signed_in_client(ctx)
+
+    def served(run_table: run_models.RunTable, run_id: int, *models: str) -> None:
+        used = [ModelUse(m, replies=1, cost_usd=1.0 / (i + 1)) for i, m in enumerate(models)]
+        run_models.record(ctx.conn, run_models.Due(run_table, run_id, "ses", 0), ModelsRead.FOUND, used)
+
+    def last_served() -> list[tuple[str, str | None]]:
+        return [(m["agent"], m["last_served"]) for m in c.get(f"/api/tickets/{KEY}").json()["models"]]
+
+    served("runs", ended_run(ctx, KEY, "implement"), "acme/older")
+    # The latest worker run, a resume after it, named by its most costly model.
+    served("runs", ended_run(ctx, KEY, "resume"), "acme/costly", "acme/cheap")
+    served("runs", ended_run(ctx, KEY, "plan"), "acme/planned")
+    served("runs", ended_run(ctx, KEY, "feedback-plan"))  # read, but it made no model call: the plan before names it
+    ended_run(ctx, KEY, "implement")  # not read yet: the run before it names the model
+    served("runs", ended_run(ctx, "PROJ-2", "implement"), "acme/another-tickets")
+    assert last_served() == [("worker", "acme/costly"), ("planner", "acme/planned"), ("reviewer", None)]
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    review = review_runs.insert_review_run(
+        ctx.conn,
+        tick_id=tick_id,
+        pr_url="https://github.com/acme/web/pull/1",
+        sha="a" * 40,
+        ticket=KEY,
+        repo=None,
+        purpose="own",
+        logs_dir=ctx.workspace.root,
+    )
+    served("review_runs", review, "acme/reviewed")
+    assert last_served()[2] == ("reviewer", "acme/reviewed")
+    # A choice says what served the agent before it, which its next run may not.
+    chosen = c.post(f"/api/tickets/{KEY}/models", json={"model": "acme/fake-model-1"}, headers=headers).json()
+    assert (chosen["model"], chosen["last_served"]) == ("acme/fake-model-1", "acme/costly")
+
+
 def test_the_web_lists_the_personas_canopy_personas_lists(ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     listed = c.get("/api/personas").json()
@@ -381,8 +639,16 @@ def test_the_web_lists_the_personas_canopy_personas_lists(ctx: Context) -> None:
         "yours": False,
         "defaults": ["worker", "planner", "reviewer"],
         "error": None,
+        "description": (
+            "canopy's own voice: plans as long as the work needs, reviews that read the change as an adversary, and "
+            "PR text left alone unless it is wrong."
+        ),
     }
     assert got["skeptic"]["defaults"] == []
+    assert got["minimalist"]["description"] == (
+        "The lazy senior developer: the smallest diff the ticket allows, what already exists before new code, and few "
+        "words."
+    )
 
 
 def test_grant_from_the_web_raises_a_prs_review_limit_as_canopy_grant_review_does(ctx: Context) -> None:
@@ -555,14 +821,14 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     result = {"status": "blocked", "summary": "half done\x1b[2J", "question": "Red <b>or</b> blue?"}
     assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.BLOCKED, json.dumps(result))
     tick_id = db.start_tick(ctx.conn, dry_run=False)
-    db.record_decision(ctx.conn, tick_id, KEY, "attention:needs_reviewer", "https://example.test/pr/9")
+    db.record_decision(ctx.conn, tick_id, KEY, "attention:needs_author", "https://example.test/pr/9")
     db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
 
     [item] = c.get("/api/attention").json()
     assert (item["ticket_key"], item["ticket_title"], item["reason"], item["detail"]) == (
         KEY,
         "Pick a color",
-        "needs_reviewer",
+        "needs_author",
         "https://example.test/pr/9",
     )
 
@@ -628,7 +894,13 @@ def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_30_days_a
 def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     first = running_run(ctx, KEY)
-    assert c.get(f"/api/tickets/{KEY}").json()["cost"] == {"runs": 1, "reviews": 0, "priced": 0, "cost_usd": None}
+    assert c.get(f"/api/tickets/{KEY}").json()["cost"] == {
+        "runs": 1,
+        "reviews": 0,
+        "priced": 0,
+        "cost_usd": None,
+        "models": [],
+    }
 
     second = running_run(ctx, KEY)
     running_run(ctx, "PROJ-2")  # another ticket's
@@ -648,7 +920,7 @@ def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Conte
     ctx.conn.execute("UPDATE ticks SET cost_usd = 3.0 WHERE id = ?", (tick_id,))  # the overseer's is the workspace's
 
     cost = c.get(f"/api/tickets/{KEY}").json()["cost"]
-    assert cost == {"runs": 2, "reviews": 1, "priced": 2, "cost_usd": pytest.approx(1.75)}
+    assert cost == {"runs": 2, "reviews": 1, "priced": 2, "cost_usd": pytest.approx(1.75), "models": []}
 
 
 def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) -> None:
@@ -852,7 +1124,7 @@ def test_a_loop_that_serves_the_ui_links_its_notifications_to_it(
     serve_on(canopy_env, port, f"{moved}[notify.sinks.slack]\ncmd = '{sink_script} {out}'\n")
     secret.create(secret.path(), rotate=False)
     term, _ = console()
-    with overseer_does(raises(KEY, "needs_reviewer")):
+    with overseer_does(raises(KEY, "needs_author")):
         statuses = repeat.run(
             context(canopy_env),
             dry_run=True,

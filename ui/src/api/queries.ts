@@ -32,6 +32,13 @@ export const keys = {
     ticketPlans: (key: string) => ['ticket', key, 'plans'] as const,
     ticketPlan: (key: string, id: number) => ['ticket', key, 'plans', id] as const,
     chores: ['chores'] as const,
+    tasks: ['tasks'] as const,
+    // A task's page, and its runs' reports, pages, and transcripts under it, so the stream's `task.changed` marks
+    // them all stale: a run that started, called a model, or ended moves its task's summary.
+    task: (id: number) => ['task', id] as const,
+    taskReport: (id: number, run: number) => ['task', id, 'report', run] as const,
+    taskRun: (id: number, run: number) => ['task', id, 'runs', run] as const,
+    taskRunTranscript: (id: number, run: number) => ['task', id, 'runs', run, 'transcript'] as const,
     chore: (name: string) => ['chore', name] as const,
     // A chore run, and its transcript: read again only when the stream says the run's status changed.
     choreRun: (name: string, id: number) => ['chore-run', name, id] as const,
@@ -44,6 +51,9 @@ export const keys = {
     // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale.
     spendBreakdown: (range: SpendBreakdownRange) =>
         ['spend', 'breakdown', range.hours === undefined ? `${range.days}d` : `${range.hours}h`] as const,
+    // Under the breakdowns' key too, so whatever marks them stale (a cost, a run's start or end, a tick's decisions)
+    // marks the months stale with them.
+    monthlyReport: (months: number) => ['spend', 'breakdown', 'months', months] as const,
     tick: ['tick'] as const,
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
@@ -68,6 +78,10 @@ export const keys = {
     ticketMemory: (key: string) => ['ticket', key, 'memory'] as const,
     runMemory: (id: number) => ['run-memory', id] as const,
     personas: ['personas'] as const,
+    config: ['config'] as const,
+    // Under the config's key, so what marks the config stale, a save that reloads the loop, marks it stale too.
+    configModels: ['config', 'models'] as const,
+    models: ['models'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -196,6 +210,18 @@ export function spendBreakdownQuery(range: SpendBreakdownRange) {
     })
 }
 
+/**
+ * What each of the last `months` local calendar months cost, by kind and by model, in dollars and tokens, and the
+ * tickets it landed with what each took. Marked stale with the spend breakdowns.
+ */
+export function monthlyReportQuery(months: number) {
+    return queryOptions({
+        queryKey: keys.monthlyReport(months),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/monthly', { params: { query: { months } }, signal })),
+    })
+}
+
 /** The latest tick. The stream sends it again whenever a tick starts or ends. */
 export const tickQuery = queryOptions({
     queryKey: keys.tick,
@@ -206,6 +232,24 @@ export const tickQuery = queryOptions({
 export const loopQuery = queryOptions({
     queryKey: keys.loop,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/loop', { signal })),
+})
+
+/**
+ * The limits and trust settings the settings page edits, as the config files say now, and the user file's hash a save
+ * carries. Not on the stream: read when the page opens, and again after a save.
+ */
+export const configQuery = queryOptions({
+    queryKey: keys.config,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/config', { signal })),
+})
+
+/**
+ * The model config chooses for each of canopy's agents and each chore, as the loop runs on it, and the files that set
+ * them: read only. Not on the stream: read when the settings page opens, and again after a reload.
+ */
+export const configModelsQuery = queryOptions({
+    queryKey: keys.configModels,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/config/models', { signal })),
 })
 
 /** Every ticket canopy has worked or been asked to. The stream sends the list again whenever it changes. */
@@ -252,6 +296,68 @@ export const choresQuery = queryOptions({
     queryKey: keys.chores,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/chores', { signal })),
 })
+
+/** Every task the operator submitted, the newest first. The stream sends the list again whenever it changes. */
+export const tasksQuery = queryOptions({
+    queryKey: keys.tasks,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/tasks', { signal })),
+})
+
+/** One task, as `canopy show task:N` prints it. The stream marks it stale when it says that task changed. */
+export function taskQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.task(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/tasks/{task_id}', { params: { path: { task_id: id } }, signal })),
+        // A task from another page's data is a different task: never show it while this one loads.
+        placeholderData: undefined,
+    })
+}
+
+/** The report a task's run left, as its file stands now: read again whenever its task changes. */
+export function taskReportQuery(id: number, run: number) {
+    return queryOptions({
+        queryKey: keys.taskReport(id, run),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/tasks/{task_id}/runs/{run_id}/report', {
+                    params: { path: { task_id: id, run_id: run } },
+                    signal,
+                }),
+            ),
+        placeholderData: undefined,
+    })
+}
+
+/** One run of a task, with the whole of what it said. The stream marks it stale with its task. */
+export function taskRunQuery(id: number, run: number) {
+    return queryOptions({
+        queryKey: keys.taskRun(id, run),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/tasks/{task_id}/runs/{run_id}', {
+                    params: { path: { task_id: id, run_id: run } },
+                    signal,
+                }),
+            ),
+        placeholderData: undefined,
+    })
+}
+
+/** A task run's session, read back from its log by the server on every fetch, as a run's is (DESIGN §22). */
+export function taskRunTranscriptQuery(id: number, run: number) {
+    return queryOptions({
+        queryKey: keys.taskRunTranscript(id, run),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/tasks/{task_id}/runs/{run_id}/transcript', {
+                    params: { path: { task_id: id, run_id: run } },
+                    signal,
+                }),
+            ),
+        placeholderData: undefined,
+    })
+}
 
 /** One chore, as `canopy show chore:NAME` prints it. The stream marks it stale whenever the chores list changes. */
 export function choreQuery(name: string) {
@@ -366,6 +472,29 @@ export const personasQuery = queryOptions({
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/personas', { signal })),
 })
 
+/**
+ * The models the runtime lists, as `canopy models` prints them: what a ticket's agent's model may be chosen from. Not
+ * on the stream, since a read can start the runtime: read when a Model menu opens, and again when one opens later,
+ * which the server answers from the list it read in the last few minutes, or until the loop reads its config again.
+ */
+export const modelsQuery = queryOptions({
+    queryKey: keys.models,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/models', { signal })),
+    staleTime: 0,
+})
+
+/**
+ * The models the runtime lists, read from it now rather than the list the server kept, which may still name a model
+ * a run has just found gone. Under the same key as `modelsQuery`, so the menus find it; the server keeps it in place
+ * of the old one, so their own reads agree with it.
+ */
+export const freshModelsQuery = queryOptions({
+    queryKey: keys.models,
+    queryFn: async ({ signal }) =>
+        unwrap(await api.GET('/api/models', { params: { query: { refresh: true } }, signal })),
+    staleTime: 0,
+})
+
 /** The PRs the journal knows, most recent activity first. Marked stale on every tick and every ticket change. */
 export const pullRequestsQuery = queryOptions({
     queryKey: keys.pullRequests,
@@ -406,8 +535,8 @@ export function reviewQuery(id: number) {
 }
 
 /**
- * A review run's session, read back from its log by the server on every fetch (DESIGN §22). The reviewer's output
- * reaches the log when it ends, so the stream marks it stale when the review's row moves (live.ts).
+ * A review run's session, read back from its log by the server on every fetch (DESIGN §22). The reviewer's events reach
+ * the log as it prints them, so the stream marks it stale when the review's row moves (live.ts).
  */
 export function reviewTranscriptQuery(id: number) {
     return queryOptions({

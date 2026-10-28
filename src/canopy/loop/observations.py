@@ -22,10 +22,11 @@ import json
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict, assert_never
 
-from canopy.core import conversation, db, observe, records, sql
+from canopy.core import conversation, db, item_numbers, observe, records, sql
 from canopy.core.vocab import CheckStatus, ReviewItem, ReviewState, SourceKind, TicketState
+from canopy.core.workspace import CheckRole
 from canopy.loop import phases
 
 if TYPE_CHECKING:
@@ -36,7 +37,7 @@ if TYPE_CHECKING:
 
 #: How many new items a subject shows, oldest first, before the rest are counted: a ticket's comments, and a unit's
 #: reviews and review comments together. The rest stay new, so a later tick shows them. Chosen conservatively, for the
-#: operator to set from the measurement's ticks (ROADMAP M37, Open): ten comments at the mirror's bound are about
+#: operator to set from the measurement's ticks (ROADMAP M37, Open): ten comments at their bound are about
 #: 5,000 tokens, and a busier subject waits a tick rather than swelling every tick's block.
 MAX_NEW_ITEMS = 10
 #: Why a ticket's subject is unobserved when no source reads tickets.
@@ -109,12 +110,13 @@ class BlockerState(TypedDict):
 
 
 class CommentState(TypedDict):
-    """A tracker comment, cut and marked as a mirrored one is. `truncated` only when it was cut.
+    """A tracker comment, cut and marked where it was recorded. `truncated` only when it was cut.
 
-    `authorized`: its author is in `trust.authorized_repliers`. `worker`: it carries the workers' marks (D069). Both
-    are decided in code.
+    `number` is its journal number, what the `comment` cursor names (DESIGN §35). `authorized`: its author is in
+    `trust.authorized_repliers`. `worker`: it carries the workers' marks (D069). Both are decided in code.
     """
 
+    number: int | None
     id: str
     author: str
     at: str
@@ -161,9 +163,9 @@ class PrObservation(TypedDict):
 class ChecksState(TypedDict):
     """The named checks at a PR's head, summarized: CI that passed is only counted, so a busy repository's stay short.
 
-    `stale` only when a check ended neither passing nor failing, and `human` only when the repository's
-    `human_checks` names a check at the head: those wait on a person, are not CI, and count in none of the others
-    (DESIGN §30).
+    `stale` only when a check ended neither passing nor failing, and `human` only when a check at the head is one its
+    repository says waits on a person: those are not CI, and count in none of the others. A check its repository says
+    gates the merge, or ignores, is in none of them (DESIGN §30).
     """
 
     passed: int
@@ -174,8 +176,9 @@ class ChecksState(TypedDict):
 
 
 class FailedCheck(TypedDict):
-    """A check that failed at a PR's head: what a `resume` for `ci` names, its run as the cursor."""
+    """A check that failed at a PR's head: what a `resume` for `ci` names, its run's journal number as the cursor."""
 
+    number: int | None
     name: str
     conclusion: str
     run_id: int | None
@@ -183,7 +186,7 @@ class FailedCheck(TypedDict):
 
 
 class HumanCheck(TypedDict):
-    """A check the repository's `human_checks` names, at a PR's head, as it stands."""
+    """A check its repository says waits on a person, at a PR's head, as it stands."""
 
     name: str
     status: str
@@ -201,10 +204,11 @@ class VerdictState(TypedDict):
 class ReviewItemState(TypedDict):
     """A review or review comment past the unit's `review` cursor. `state` only on a review.
 
-    `trusted`: its author is in `trust.trusted_reviewers`. `worker`: it carries the workers' marks (D069). Both are
-    decided in code.
+    `number` is its journal number, what the `review` cursor names (DESIGN §35). `trusted`: its author is in
+    `trust.trusted_reviewers`. `worker`: it carries the workers' marks (D069). Both are decided in code.
     """
 
+    number: int | None
     item: str
     id: int
     author: str | None
@@ -216,37 +220,66 @@ class ReviewItemState(TypedDict):
     body: str
 
 
-def section(ctx: Context, tick_id: int, now: datetime, tickets: Iterable[records.Ticket]) -> ObservationsState:
+def section(
+    ctx: Context,
+    tick_id: int,
+    now: datetime,
+    tickets: Iterable[records.Ticket],
+    *,
+    decided: AbstractSet[str] = frozenset(),
+) -> ObservationsState:
     """Read the observations of tick `tick_id` for the state block, as they stand at `now`.
 
     `tickets` are those the block lists: open and not stopped. The query's tickets join them, less those stopped or
-    marked done, as the derivation's do (§30).
+    marked done, as the derivation's do (§30), and less `decided`, those the harness decided this tick (§37).
 
     Returns:
         The block's `observations`.
     """
-    reader = Reader.read(ctx, tick_id, now, tickets)
+    reader = Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, tickets)
     found: ObservationsState = {
         "max_age_minutes": ctx.config.connect.max_age_minutes,
         "max_new_items": MAX_NEW_ITEMS,
         "query": reader.query(SourceKind.TRACKER),
-        "tickets": [reader.ticket(key) for key in reader.keys],
+        "tickets": [reader.ticket(key) for key in reader.keys if key not in decided],
     }
     if ctx.config.review.query.strip():
         found["review_query"] = reader.query(SourceKind.VCS)
     return found
 
 
-def past_comments(comments: Sequence[records.ObservedComment], *cursors: str | None) -> list[records.ObservedComment]:
-    """The comments past the earliest of `cursors`, oldest first: those not every cursor has passed.
+def fresh_query(ctx: Context, now: datetime) -> list[str] | None:
+    """The tracker query's result when the block shows it `fresh` at `now`: a source read it whole within its age.
 
-    A cursor names a comment by the tracker's id. One naming no observed comment is passed by the comments whose ids
-    are larger numbers, where both are numbers, as the trackers canopy reads number them; by none otherwise.
+    The harness then records it as `canopy queried` would, so the overseer neither runs nor records it (DESIGN §6).
 
     Returns:
-        The comments, in `comments`' order, which is the time they were written.
+        The keys, in the order the source read them; None when no source read the query within
+        `connect.max_age_minutes`, or none observes tickets.
     """
-    return list(comments[min((_after(comments, c) for c in cursors), default=0) :])
+    run = _query_run(ctx.conn, SourceKind.TRACKER, "query_result")
+    tracked = ctx.config.connect.observes_tickets()
+    found = _query_state(run, SourceKind.TRACKER, tracked=tracked, cutoff=_cutoff(ctx, now))
+    return found.get("result") if found["observed"] == "fresh" else None
+
+
+def past_comments(comments: Iterable[records.ObservedComment], cursor: int | None) -> list[records.ObservedComment]:
+    """The comments past the `comment` cursor, a journal number (DESIGN §35): first observed after the one it names.
+
+    Returns:
+        The comments, in `comments`' order, which is the order they were first observed.
+    """
+    return [c for c in comments if item_numbers.newer(c.number, cursor)]
+
+
+def new_reviews(reviews: Iterable[records.ObservedReview], cursor: int | None) -> list[records.ObservedReview]:
+    """The reviews and review comments past a unit's `review` cursor, a journal number (DESIGN §35).
+
+    Returns:
+        The items, in the order they were first observed, which a late submission does not backdate.
+    """
+    new = [r for r in reviews if item_numbers.newer(r.number, cursor)]
+    return sorted(new, key=lambda r: (r.number is None, r.number or 0))
 
 
 @dataclass(frozen=True)
@@ -270,21 +303,29 @@ class Reader:
     branches: Mapping[str, Sequence[records.ObservedBranch]]
     fresh_repos: AbstractSet[str]
     units_of: Mapping[str, Sequence[records.TicketUnit]]
-    #: This tick's derivation, by ticket and unit (None for the ticket's own).
-    derived: Mapping[tuple[str, str | None], records.Derivation]
+    #: The tick's derivation, by ticket and unit (None for the ticket's own).
+    derived: Mapping[tuple[str, str | None], phases.Derived]
     runs: Mapping[SourceKind, records.ConnectorRun]
     #: Whether a `tracker` source observes tickets at all.
     tracked: bool
 
     @classmethod
-    def read(cls, ctx: Context, tick_id: int, now: datetime, tickets: Iterable[records.Ticket]) -> Reader:
-        """Read the observations of tick `tick_id` as they stand at `now`, with `tickets` the ones the block lists.
+    def read(
+        cls,
+        ctx: Context,
+        derived: Iterable[phases.Derived],
+        now: datetime,
+        tickets: Iterable[records.Ticket],
+    ) -> Reader:
+        """Read the observations as they stand at `now`, with `tickets` the ones the block lists.
+
+        `derived` is the tick's derivation, which a tick has recorded and the loop's poll has not (DESIGN §39).
 
         Returns:
             The reader.
         """
         conn = ctx.conn
-        cutoff = now - timedelta(minutes=ctx.config.connect.max_age_minutes)
+        cutoff = _cutoff(ctx, now)
         listed = {t.key: t for t in tickets}
         stopped = set(conversation.stopped(conn))
         done = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets").where("done = 1"))}
@@ -294,7 +335,13 @@ class Reader:
         keys: list[str] = sorted(set(listed) | (set(queried) - stopped - done))
         journal = {t.key: t for t in records.fetch_all(conn, records.Ticket, sql.select("*").from_("tickets"))}
         comments: dict[str, list[records.ObservedComment]] = {}
-        query = sql.select("*").from_("observed_comments").where_in("ticket", keys).order_by("commented_at, id")
+        # In the order they were first observed, as their numbers say (DESIGN §35).
+        query = (
+            sql.select("*")
+            .from_("observed_comments")
+            .where_in("ticket", keys)
+            .order_by("number IS NULL, number, commented_at, id")
+        )
         for c in records.fetch_all(conn, records.ObservedComment, query):
             comments.setdefault(c.ticket, []).append(c)
         checks: dict[str, list[records.ObservedCheck]] = {}
@@ -311,11 +358,6 @@ class Reader:
         branches: dict[str, list[records.ObservedBranch]] = {}
         for b in records.fetch_all(conn, records.ObservedBranch, sql.select("*").from_("observed_branches")):
             branches.setdefault(b.repository, []).append(b)
-        derivations = records.fetch_all(
-            conn,
-            records.Derivation,
-            sql.select("*").from_("derivations").where("tick_id = ?", tick_id),
-        )
         return cls(
             ctx=ctx,
             cutoff=cutoff,
@@ -332,9 +374,9 @@ class Reader:
             branches=branches,
             fresh_repos=phases.fresh_repos(conn, branches, cutoff),
             units_of=db.all_units(conn),
-            derived={(d.ticket_key, d.repo): d for d in derivations},
+            derived={(d.ticket_key, d.repo): d for d in derived},
             runs=runs,
-            tracked=any(s.kind == SourceKind.TRACKER for s in ctx.config.connect.named().values()),
+            tracked=ctx.config.connect.observes_tickets(),
         )
 
     # The queries
@@ -345,16 +387,7 @@ class Reader:
         Returns:
             Its freshness, and the result when a run read it.
         """
-        if kind is SourceKind.TRACKER and not self.tracked:
-            return {"observed": "unobserved", "why": NO_TRACKER}
-        run = self.runs.get(kind)
-        if run is None:
-            return {"observed": "stale", "why": "never read to its end"}
-        found: QueryState = {"observed": "fresh", "read_at": run.ended_at, "result": _result(_query_of(run, kind))}
-        if db.parse_time(run.ended_at) < self.cutoff:
-            found["observed"] = "stale"
-            found["why"] = f"last read {run.ended_at}"
-        return found
+        return _query_state(self.runs.get(kind), kind, tracked=self.tracked, cutoff=self.cutoff)
 
     # A ticket
 
@@ -405,13 +438,13 @@ class Reader:
         if not self.units_of.get(key):
             found["body"] = seen.body
         record = self.journal[key]
-        new = past_comments(self.comments.get(key, []), record.last_comment_id, record.last_mirrored_id)
+        new = past_comments(self.comments.get(key, []), record.comment_cursor)
         found["comments"] = [self._comment(c) for c in new[:MAX_NEW_ITEMS]]
         if len(new) > MAX_NEW_ITEMS:
             found["more_comments"] = len(new) - MAX_NEW_ITEMS
         derived = self.derived.get((key, None))
         if derived is not None and derived.stale is None:
-            found["derived"] = json.loads(derived.phases)
+            found["derived"] = [str(p) for p in derived.phases]
         found["units"] = self.units(key)
         return found
 
@@ -447,6 +480,7 @@ class Reader:
 
     def _comment(self, c: records.ObservedComment) -> CommentState:
         found: CommentState = {
+            "number": c.number,
             "id": c.id,
             "author": c.author,
             "at": c.commented_at,
@@ -489,7 +523,7 @@ class Reader:
             }
         derived = self.derived.get((key, repo))
         if found["observed"] == "fresh" and derived is not None and derived.stale is None:
-            found["derived"] = json.loads(derived.phases)
+            found["derived"] = [str(p) for p in derived.phases]
         return found
 
     def _pr_unit(self, repo: str, unit: records.TicketUnit, url: str) -> UnitObservation:
@@ -504,11 +538,9 @@ class Reader:
         why = self._age(url, pr)
         if why is not None or pr is None:
             return {"repo": repo, "observed": "stale", "why": why or f"{url} never observed"}
-        found = self.ctx.workspace.repo(repo)
-        human = found.human_checks if found is not None else frozenset[str]()
+        roles = self.ctx.workspace.check_roles(repo)
         trusted = {t.lower() for t in self.ctx.config.trust.trusted_reviewers}
-        cursor = phases.review_cursor(unit.last_review_id)
-        new = [r for r in self.reviews.get(url, []) if phases.newer(r.created_at, cursor)]
+        new = new_reviews(self.reviews.get(url, []), unit.review_cursor)
         observed: UnitObservation = {
             "repo": repo,
             "observed": "fresh",
@@ -523,7 +555,7 @@ class Reader:
                 "mergeable_state": pr.mergeable_state,
                 "author": pr.author,
             },
-            "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], human),
+            "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], roles),
             "verdicts": _verdicts(self.reviews.get(url, []), trusted),
             "reviews": [self._review(r, trusted) for r in new[:MAX_NEW_ITEMS]],
         }
@@ -534,6 +566,7 @@ class Reader:
     def _review(self, r: records.ObservedReview, trusted: AbstractSet[str]) -> ReviewItemState:
         trust = self.ctx.config.trust
         found: ReviewItemState = {
+            "number": r.number,
             "item": r.item,
             "id": r.id,
             "author": r.author,
@@ -546,6 +579,34 @@ class Reader:
         if r.item is ReviewItem.REVIEW:
             found["state"] = r.state
         return found
+
+
+def _cutoff(ctx: Context, now: datetime) -> datetime:
+    # Before this, an observation is stale.
+    return now - timedelta(minutes=ctx.config.connect.max_age_minutes)
+
+
+def _query_state(
+    run: records.ConnectorRun | None,
+    kind: SourceKind,
+    *,
+    tracked: bool,
+    cutoff: datetime,
+) -> QueryState:
+    """A query's result as `run`, the newest run of `kind`'s source that read it to the end, left it.
+
+    Returns:
+        Its freshness, and the result when a run read it.
+    """
+    if kind is SourceKind.TRACKER and not tracked:
+        return {"observed": "unobserved", "why": NO_TRACKER}
+    if run is None:
+        return {"observed": "stale", "why": "never read to its end"}
+    found: QueryState = {"observed": "fresh", "read_at": run.ended_at, "result": _result(_query_of(run, kind))}
+    if db.parse_time(run.ended_at) < cutoff:
+        found["observed"] = "stale"
+        found["why"] = f"last read {run.ended_at}"
+    return found
 
 
 def _query_runs(conn: sqlite3.Connection) -> dict[SourceKind, records.ConnectorRun]:
@@ -585,24 +646,12 @@ def _result(stored: str | None) -> list[str]:
     return [str(x) for x in json.loads(stored)] if stored is not None else []
 
 
-def _after(comments: Sequence[records.ObservedComment], cursor: str | None) -> int:
-    """Where the comments past `cursor` start in `comments`.
-
-    Returns:
-        The index of the first comment past it: 0 with no cursor, or one that names nothing and is not a number.
-    """
-    if not cursor:
-        return 0
-    for i, c in enumerate(comments):
-        if c.id == cursor:
-            return i + 1
-    if not cursor.isdigit():
-        return 0
-    return next((i for i, c in enumerate(comments) if c.id.isdigit() and int(c.id) > int(cursor)), len(comments))
-
-
-def _checks(checks: Iterable[records.ObservedCheck], human: AbstractSet[str]) -> ChecksState:
+def _checks(checks: Iterable[records.ObservedCheck], roles: Mapping[str, CheckRole]) -> ChecksState:
     """Summarize the checks at a PR's head as the phase table reads them (DESIGN §7): passed, pending, or failed.
+
+    Args:
+        checks: The checks at the head.
+        roles: The role its repository gives each check it names; every other one is CI (DESIGN §30).
 
     Returns:
         How many passed, the names of those pending, each failure whole, and the stale and human checks when any.
@@ -611,14 +660,25 @@ def _checks(checks: Iterable[records.ObservedCheck], human: AbstractSet[str]) ->
     stale: list[str] = []
     people: list[HumanCheck] = []
     for c in checks:
-        if c.name in human:
-            people.append({"name": c.name, "status": c.status, "conclusion": c.conclusion})
-        elif c.status is not CheckStatus.COMPLETED:
+        role = roles.get(c.name, CheckRole.CI)
+        match role:
+            case CheckRole.CI:
+                pass
+            case CheckRole.HUMAN:
+                people.append({"name": c.name, "status": c.status, "conclusion": c.conclusion})
+                continue
+            case CheckRole.MERGE | CheckRole.IGNORE:
+                continue
+            case _:
+                assert_never(role)
+        if c.status is not CheckStatus.COMPLETED:
             found["pending"].append(c.name)
-        elif c.conclusion in phases.PASSED:
+        elif c.conclusion in observe.PASSED:
             found["passed"] += 1
-        elif c.conclusion is not None and c.conclusion in phases.FAILED:
-            found["failed"].append({"name": c.name, "conclusion": c.conclusion, "run_id": c.run_id, "url": c.url})
+        elif c.conclusion is not None and c.conclusion in observe.FAILED:
+            found["failed"].append(
+                {"number": c.number, "name": c.name, "conclusion": c.conclusion, "run_id": c.run_id, "url": c.url},
+            )
         else:
             stale.append(c.name)
     if stale:

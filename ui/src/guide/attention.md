@@ -15,29 +15,47 @@ stopped at lunch is a timestamp, not a verdict.
 ## The list
 
 The loop rebuilds the list at the end of every tick, so an item leaves when its cause is gone: the question answered,
-the PR merged, the failed ticket granted another run and dispatched. You can't clear an item by hand, only its cause,
-and chore findings are the one exception. When an item leaves while you're looking, it folds shut and a leaf drifts
-off.
+the PR merged, the failed ticket granted another run and dispatched. An item about a PR waiting on its reviewer or a
+plan waiting on you leaves only when a fresh read shows it so: a GitHub outage keeps it on the list rather than
+announcing it resolved, then raising it again an hour later. A judgment call the loop made stays until what it's
+about is settled: a comment that `needs author` until it's handled or you reply on the ticket, a ticket split across
+repositories (`multi repo`) until you reply, a check a notice held (`notice rerun`) until it runs again. You can't clear
+an item by hand, only its cause, and chore findings are the one exception. When an item leaves while you're looking, it
+folds shut and a leaf drifts off.
 
 The items come in four groups, in this order, and within a group the one open longest comes first:
 
 1. **Broken**, in red: a run that `crashed`, ended `unpushed`, or left an `unknown result`; a `worker failed`; a
-   ticket or PR at its `attempt limit` or `review limit`; a chore or review that failed; `canopy unavailable`, when
-   the overseer couldn't run canopy at all; or `disk low`, when the disk was too full for the overseer to run.
+   ticket or PR at its `attempt limit` or `review limit`; a chore or review that failed; a run refused because the
+   runtime no longer lists its model (`model missing`) or its list couldn't be read (`model list failed`);
+   `canopy unavailable`, when the overseer couldn't run canopy at all; or `disk low`, when the disk was too full for
+   the overseer to run.
 2. **Waiting on you**, in amber: a worker's question (`awaiting reply`), a review from someone the loop doesn't trust
-   (`untrusted review`), a plan to approve (`plan review`), and replies a run drafted for you to send
-   (`drafts waiting`).
+   (`untrusted review`), a comment on one of a ticket's artifacts by someone you haven't listed in
+   `artifacts.authorized_authors` (`untrusted artifact comment`), a review's rebuttal of a finding the worker
+   declined, which canopy holds for you to settle ([`review rebuttal`](pull-requests#when-canopy-reviews)), a later
+   review's finding on code its first review already read ([`review late`](pull-requests#when-canopy-reviews)), a plan
+   or a feedback plan to approve (`plan review`), replies a run drafted for you to send (`drafts waiting`), a review
+   you asked for that's done with its draft unpublished (`review waiting`), and a review you staged on GitHub, or whose
+   post never said how it went (`review unsettled`).
 3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, a
    lesson a worker proposed for [memory](memory), or a worker's report of follow-up tickets canopy couldn't record
    (`follow up unrecorded`), until its ticket is done or forgotten. The follow-ups it did record never land here:
-   [How the loop works](how-the-loop-works#public-and-private-tickets) says why.
+   [How the loop works](how-the-loop-works#public-and-private-tickets) says why. So is a PR held at `ci_running` by
+   one check still pending an hour after every other check on it finished (`check stuck`). It's usually a merge
+   queue's status or a sign-off, neither of which turns green on an open PR, however long you wait; the item names the
+   line to add under `[repos.<repo>.checks]` if it isn't CI. If it is, the item leaves when the build finally does.
 4. **Findings**: what your chores found.
 
-The counters above the list say how many runs are going, how many tickets wait on you and how long the oldest question
-has waited, and how many items the list holds. How those items break down is the nav's badge, on every page, so the
-counters don't say it again; one page saying a number five times doesn't make it truer. The browser tab's title counts
-the items that block work, so a glance at the tab says whether to look. Findings, `needs reviewer`, and
-`ready to merge` don't count there: they're news, not blockers.
+Forgot what `review late` is? Hover over a reason, or Tab to it, and its tip says what it means under the CLI's
+spelling. Nobody memorizes forty reasons, and nobody should have to.
+
+The counters above the list say how many runs are going, a task's among them, how many tickets and tasks wait on you
+(on your reply, or on your approval of a feedback plan) and how long the oldest question has waited, and how many items
+the list holds. How those items break down is the
+nav's badge, on every page, so the counters don't say it again; one page saying a number five times doesn't make it
+truer. The browser tab's title counts the items that block work, so a glance at the tab says whether to look.
+Findings, `needs reviewer`, and `ready to merge` don't count there: they're news, not blockers.
 
 The tab's icon says it too, for when you've pinned the tab and its title is gone: a dot on its corner while anything
 blocks, red for something broken, amber for something waiting on your answer, grey for the rest. No dot, no reason to
@@ -67,17 +85,40 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   another go, and never leave the page.
 - **A PR waiting on someone else** (`needs reviewer`, `ready to merge`): a button that opens the PR on GitHub, since the
   next move happens there, and someone other than canopy makes it. canopy never merges, however long the PR sits.
-- **A wait on your answer** (`awaiting reply`, `untrusted review`): the reply box is the action. A question's head
-  says which message waits and since when; the question itself is in the conversation, marked `waiting on you`.
+- **A wait on your answer** (`awaiting reply`, `untrusted review`, `untrusted artifact comment`): the reply box is the
+  action. A question's head says which message waits and since when; the question itself is in the conversation,
+  marked `waiting on you`.
 - **A plan to approve** (`plan review`): the plan's card, the same one the ticket's page shows: which plan it is, who
   wrote it, how many comments are open, **Approve**, and **Open plan**. Approve right there if you've already read it;
   open it if you haven't, which is the honest option more often than anyone admits. Once you approve it, skip it, or
   ask for changes, the item shows `answered` until the next tick clears it. See [Plans](plans).
+- **A feedback plan to approve** (`plan review` too, for the round of review feedback a ticket's next resume acts on):
+  which plan it is, the PR it covers, how many items it has, and whether the PR moved on since it was written, with a
+  button to the PR's page, straight to the plan, where you approve it item by item
+  ([The feedback plan](pull-requests#the-feedback-plan)). The resume waits on it, so the item stays unanswered until
+  you approve it; a plan nobody approves is a very patient way to stall a PR.
 - **Replies waiting on you** (`drafts waiting`): a button to the PR's page, where each reply a run drafted sits on the
   thread it answers, or for a comment on the ticket itself, the draft right here, with **Send**. See
   [Pull requests](pull-requests#replying-to-your-coworkers-reviews).
+- **A review's draft** (`review waiting`, `review unsettled`): a button to the review's page, where its draft is
+  read, edited, and published or staged ([Publishing your review](pull-requests#publishing-your-review)). A review
+  you asked for waits until you publish or stage a draft of the PR's newest reviewed commit, the PR merges or closes,
+  or you dismiss and delete everything the draft would post, which is how you say "thanks, no". A staged one waits
+  until you submit or delete it on GitHub and the next read notices. A review canopy found on its own waits on
+  nobody: read it or don't.
+- **A task** (`awaiting reply`, `task ticket unrecorded`): named by the first line of what you asked it, with a button
+  to its page, where its question waits, marked, and where you answer it
+  ([Replying and stopping](tasks#replying-and-stopping)). The other item, tickets its run reported that canopy
+  couldn't record, opens the task too: a reply or a stop clears it.
+- **A model that's gone** (`model missing`, `model list failed`): the ticket's models, the same menus its page
+  shows ([Choosing a model](tickets#choosing-a-model)). The runtime's list is read afresh as the item opens, not the
+  one canopy kept, so the agent whose model dropped off it is already amber: pick one it lists, or clear the override.
+  When the list itself can't be read, the menu says why and offers **Read again**, and the fix is the runtime, not the
+  ticket. Replying won't help either way. Nothing runs on a model nobody chose in the meantime, which is the point.
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
-  There's nothing to answer here; the item leaves once the command has fixed its cause.
+  There's nothing to answer here; the item leaves once the command has fixed its cause. The overseer and chores take
+  their models from your config alone, so when one of theirs is refused, the command is `canopy models`: it lists what
+  the runtime has, or says why it can't, and names any model in `[runtime.models]` it lacks, or whose variant it lacks.
 
 An item about a ticket then shows the ticket's conversation and a box to reply in. The conversation's header wears the
 ticket's `private` or `public` chip, which says where your reply goes ([below](#replying)). The ticket's own actions
@@ -90,8 +131,8 @@ Memory's items carry what they're about. A `memory proposal` lists the proposals
 points you to the memory page, where the lesson a run doubted heads the list. See
 [Memory](memory#keeping-lessons-honest).
 
-An item about a PR no ticket owns, such as one canopy only reviews, offers **Allow one more** when the PR is at its
-review limit. An item about nothing in particular has nothing to answer here: it leaves when you fix its cause.
+Any other item about a PR no ticket owns, such as one canopy only reviews, offers **Allow one more** when the PR is
+at its review limit. An item about nothing in particular has nothing to answer here: it leaves when you fix its cause.
 
 ## Replying
 
@@ -119,8 +160,9 @@ What happens next depends on the ticket:
 
 - On a **private** ticket, your reply is the next worker's instruction.
 - On a **public** ticket, it reaches the ticket's workers as an instruction too, and never the ticket itself. It's how
-  you tell a worker what to do about an untrusted review. To answer where the ticket's readers can see it, answer on
-  the tracker.
+  you tell a worker what to do about an untrusted review, or send on a comment on an artifact from someone you haven't
+  listed: say what of it a worker should act on, since the comment itself steers nothing. To answer where the ticket's
+  readers can see it, answer on the tracker.
 
 Either way, the loop reads it at its next tick. Until then your message carries `waiting for the next tick`, and the
 item shows `answered`, with a line saying it leaves at the next tick. Once a tick has read it, the chip turns to `seen`:

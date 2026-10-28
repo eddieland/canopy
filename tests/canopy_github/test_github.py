@@ -1,7 +1,6 @@
 """canopy's GitHub programs (DESIGN §29), against a local stand-in for GitHub's GraphQL API."""
 
 import contextlib
-import io
 import json
 import os
 import re
@@ -14,19 +13,24 @@ from typing import Any, ClassVar, override
 from unittest import mock
 
 import canopy_github
+import canopy_http
+import click
 import pytest
-from canopy_github import connect, post
+from canopy_github import Hosts, connect, post
 from canopy_github import read as read_module
 from canopy_github import repository as repository_module
 
 from canopy.core import config, observe, records, sql
 from canopy.core.vocab import CheckStatus, ConnectorRunStatus, MergeState
 from canopy.infra import logs, procs
-from tests.conftest import CanopyEnv, executable
+from tests.conftest import CanopyEnv, executable, invoke
 
 PR = "https://github.com/acme/api/pull/7"
 HEAD = "9b2f4c6e1a7d"
 PAGE = 2
+#: Set when the stand-in may answer a `slow` operation: it holds the answer while a test is `holding` it.
+RELEASED = threading.Event()
+RELEASED.set()
 
 
 @dataclass
@@ -73,6 +77,7 @@ class Pull:
     contexts: list[dict[str, Any]] | None = None
     state: str = "OPEN"
     merge_state: str = "CLEAN"
+    title: str = "Retry the upstream on a 503"
 
 
 def run(name: str, status: str = "COMPLETED", conclusion: str | None = "SUCCESS", id_: int = 1) -> dict[str, Any]:
@@ -98,7 +103,9 @@ def status(context: str, state: str, url: str | None = "https://ci.example.com/b
 class Fake:
     """GitHub's state, and what each operation should do.
 
-    `fail` maps an operation to `refuse`, `500`, or `lost`: carried out, but answered with a 502.
+    `fail` maps an operation to `refuse`, `500`, `lost` (carried out, but answered with a 502), `page` (an HTML page
+    answered with a 200), `cut` (carried out, its reply cut off), `cut-500` (a 502 whose reply is cut off), `drop` (the
+    connection closed with no reply), or `slow` (answered once a test `holding` it is done).
     """
 
     pulls: dict[tuple[str, str, int], Pull] = field(default_factory=dict)
@@ -112,6 +119,12 @@ class Fake:
     # The login the token is for; empty for a reply that has none.
     viewer: str = "me"
     fail: dict[str, str] = field(default_factory=dict)
+    # How many requests next, of any operation, are answered with GitHub's unicorn: a 502 whose page is HTML.
+    unicorns: int = 0
+    #: How many requests next, of any operation, are carried out and their replies cut off.
+    cuts: int = 0
+    # PRs' numbers a batch that names one is answered with a 502 for, as a query too heavy to answer in time is.
+    heavy: set[int] = field(default_factory=set)
     seen: list[tuple[str, str, dict[str, Any]]] = field(default_factory=list)
     next_id: int = 9000
 
@@ -131,6 +144,9 @@ class Fake:
                 if review.node == node:
                     return pull, review
         return None
+
+    def names_heavy(self, variables: Mapping[str, Any]) -> bool:
+        return any(variables[f"k{i}"] in self.heavy for i in range(len(variables) // 3))
 
     def handle(self, document: str, variables: dict[str, Any]) -> Mapping[str, Any]:  # noqa: C901, PLR0911, PLR0912, PLR0915
         match = re.match(r"\s*(?:query|mutation)\s+(\w+)", document)
@@ -284,6 +300,7 @@ class Fake:
             "id": pull.node,
             "url": PR,
             "number": 7,
+            "title": pull.title,
             "state": pull.state,
             "isDraft": False,
             "headRefOid": HEAD,
@@ -351,6 +368,38 @@ class _Api(BaseHTTPRequestHandler):
         op = re.match(r"\s*(?:query|mutation)\s+(\w+)", request["query"])
         assert op
         _Api.fake.seen.append((op.group(1), self.headers["Authorization"], request["variables"]))
+        if _Api.fake.unicorns or (op.group(1) == "PullRequests" and _Api.fake.names_heavy(request["variables"])):
+            _Api.fake.unicorns = max(_Api.fake.unicorns - 1, 0)
+            self.send_response(502)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><body><img alt='unicorn' src='data:image/png;base64,iVBORw0'></body></html>")
+            return
+        failure = _Api.fake.fail.get(op.group(1))
+        if failure == "drop":
+            self.close_connection = True
+            return
+        if failure == "slow":
+            RELEASED.wait()
+        if _Api.fake.cuts or failure in {"cut", "cut-500"}:
+            _Api.fake.cuts = max(_Api.fake.cuts - 1, 0)
+            whole = (
+                b"bad gateway"
+                if failure == "cut-500"
+                else json.dumps(_Api.fake.handle(request["query"], request["variables"])).encode()
+            )
+            self.send_response(502 if failure == "cut-500" else 200)
+            self.send_header("Content-Length", str(len(whole)))
+            self.end_headers()
+            self.wfile.write(whole[: len(whole) // 2])
+            self.close_connection = True
+            return
+        if _Api.fake.fail.get(op.group(1)) == "page":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><body>Service unavailable</body></html>")
+            return
         if _Api.fake.fail.get(op.group(1)) == "lost":
             _Api.fake.handle(request["query"], request["variables"])
         if _Api.fake.fail.get(op.group(1)) in {"500", "lost"}:
@@ -414,6 +463,16 @@ def serving(handler: type[BaseHTTPRequestHandler]) -> Generator[str]:
         thread.join()
 
 
+@contextlib.contextmanager
+def holding() -> Generator[None]:
+    """Hold the stand-in's answers to `slow` operations until the block ends."""
+    RELEASED.clear()
+    try:
+        yield
+    finally:
+        RELEASED.set()
+
+
 @pytest.fixture
 def github() -> Generator[tuple[Fake, str]]:
     """A stand-in for GitHub's GraphQL API, holding one PR with a review and two threads. Yields it and its URL."""
@@ -439,7 +498,7 @@ def github() -> Generator[tuple[Fake, str]]:
     )
     fake.issues["acme", "api", 12] = "I_12"
     _Api.fake = fake
-    with serving(_Api) as url:
+    with mock.patch.object(canopy_github, "RETRY_PAUSES", (0.0, 0.0)), serving(_Api) as url:
         yield fake, url
 
 
@@ -450,23 +509,19 @@ def read(
     *,
     token_of: Callable[[str], str] = lambda _: "t",
 ) -> tuple[int, list[dict[str, Any]], str]:
-    out, err = io.StringIO(), io.StringIO()
 
     def endpoint_of(host: str) -> str:
         if hosts is not None:
             hosts.append(host)
         return url
 
-    with contextlib.redirect_stderr(err):
-        code = connect.run([], io.StringIO(json.dumps(request)), out, endpoint_of=endpoint_of, token_of=token_of)
-    return code, [json.loads(line) for line in out.getvalue().splitlines()], err.getvalue()
+    result = invoke(connect.main, stdin=json.dumps(request), obj=Hosts(endpoint_of, token_of))
+    return result.exit_code, [json.loads(line) for line in result.stdout.splitlines()], result.stderr
 
 
 def send(url: str, request: object) -> tuple[int, list[dict[str, Any]], str]:
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stderr(err):
-        code = post.run([], io.StringIO(json.dumps(request)), out, endpoint_of=lambda _: url, token_of=lambda _: "t")
-    return code, [json.loads(line) for line in out.getvalue().splitlines()], err.getvalue()
+    result = invoke(post.main, stdin=json.dumps(request), obj=Hosts(lambda _: url, lambda _: "t"))
+    return result.exit_code, [json.loads(line) for line in result.stdout.splitlines()], result.stderr
 
 
 # Reading
@@ -498,6 +553,7 @@ def test_the_reader_prints_a_prs_reviews_and_threads_then_its_end(github: tuple[
         "mergeable": "mergeable",
         "mergeable_state": "clean",
         "author": "me",
+        "title": "Retry the upstream on a 503",
         "labels": [],
     }
     assert review["state"] == "commented"
@@ -632,7 +688,120 @@ def test_a_query_github_refuses_whole_reads_none_of_its_prs(github: tuple[Fake, 
     fake.fail["PullRequests"] = "500"
     code, lines, err = read(url, {"prs": [PR]})
     assert (code, lines) == (1, [{"kind": "end", "prs": []}])
-    assert "HTTP 502" in err
+    assert "HTTP 502: bad gateway" in err
+    assert fake.ops().count("PullRequests") == 3, "a query GitHub fails to answer is sent again, twice"
+
+
+def test_a_query_github_answers_with_its_unicorn_is_sent_again(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.unicorns = 2
+    code, lines, _ = read(url, {"prs": [PR]})
+    assert code == 0
+    assert lines[-1] == {"kind": "end", "prs": [PR]}
+    assert fake.ops().count("PullRequests") == 3
+
+
+def test_a_unicorn_is_named_rather_than_quoted(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.unicorns = 3
+    code, _, err = read(url, {"prs": [PR]})
+    assert code == 1
+    assert f"cannot read {PR}: HTTP 502: GitHub's error page" in err
+    assert "<html>" not in err
+
+
+def test_an_error_page_answered_as_a_success_is_named_and_sent_again(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.fail["PullRequests"] = "page"
+    code, _, err = read(url, {"prs": [PR]})
+    assert code == 1
+    assert f"cannot read {PR}: GitHub's reply is not JSON: GitHub's error page" in err
+    assert fake.ops().count("PullRequests") == 3
+
+
+def test_a_query_whose_reply_is_cut_off_is_sent_again(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.cuts = 2
+    code, lines, _ = read(url, {"prs": [PR]})
+    assert code == 0
+    assert lines[-1] == {"kind": "end", "prs": [PR]}
+    assert fake.ops().count("PullRequests") == 3
+
+
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    [("cut", "without sending complete message body"), ("drop", "Server disconnected without sending a response")],
+)
+def test_a_query_whose_connection_breaks_each_time_is_named_and_the_read_still_ends(
+    github: tuple[Fake, str],
+    failure: str,
+    message: str,
+) -> None:
+    fake, url = github
+    fake.fail["PullRequests"] = failure
+    code, lines, err = read(url, {"prs": [PR]})
+    assert (code, lines) == (1, [{"kind": "end", "prs": []}])
+    assert f"cannot read {PR}: the connection to {url.removesuffix('/graphql')} broke: " in err
+    assert message in err
+    assert fake.ops().count("PullRequests") == 3
+
+
+def test_a_server_error_whose_reply_is_cut_off_is_still_one() -> None:
+    _Api.fake = Fake(fail={"Viewer": "cut-500"})
+    with serving(_Api) as url, pytest.raises(canopy_github.ServerError, match="without sending complete message body"):
+        canopy_github.Client(url, "t").ask("query Viewer { viewer { login } }", {}, retry=False)
+
+
+def test_a_query_that_times_out_is_not_sent_again() -> None:
+    _Api.fake = Fake(fail={"Viewer": "slow"})
+    with (
+        mock.patch.object(canopy_http, "TIMEOUT_SECONDS", 0.1),
+        serving(_Api) as url,
+        holding(),
+        pytest.raises(canopy_github.GitHubError, match="GitHub did not answer in time") as failed,
+    ):
+        canopy_github.Client(url, "t").query("query Viewer { viewer { login } }", {})
+    assert not isinstance(failed.value, canopy_github.ServerError)
+    assert _Api.fake.ops() == ["Viewer"]
+
+
+def test_a_batch_github_cannot_answer_is_read_in_halves_down_to_the_pr_it_cannot(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    numbers = range(8, 14)
+    for n in numbers:
+        fake.pulls["acme", "api", n] = Pull(node=f"PR_{n}")
+    prs = [PR, *(f"https://github.com/acme/api/pull/{n}" for n in numbers)]
+    fake.heavy.add(12)
+    code, lines, err = read(url, {"prs": prs})
+    assert code == 1
+    assert lines[-1]["prs"] == [p for p in prs if not p.endswith("/12")]
+    assert "cannot read https://github.com/acme/api/pull/12: HTTP 502" in err
+    # Seven PRs, then 7 into 3 and 4, 4 into 2 and 2, 2 into 1 and 1: only the query of #12 alone is tried three times.
+    assert fake.ops().count("PullRequests") == 7 + 2
+
+
+def test_a_batch_github_answers_with_its_unicorn_is_read_in_halves_rather_than_sent_again(
+    github: tuple[Fake, str],
+) -> None:
+    fake, url = github
+    for n in (8, 9):
+        fake.pulls["acme", "api", n] = Pull(node=f"PR_{n}")
+    prs = [PR, *(f"https://github.com/acme/api/pull/{n}" for n in (8, 9))]
+    fake.unicorns = 1
+    code, lines, _ = read(url, {"prs": prs})
+    assert code == 0
+    assert lines[-1]["prs"] == prs
+    assert [len(variables) // 3 for op, _, variables in fake.seen if op == "PullRequests"] == [3, 1, 2]
+
+
+def test_a_batch_whose_halves_both_fail_is_not_split_again(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    for n in range(8, 12):
+        fake.pulls["acme", "api", n] = Pull(node=f"PR_{n}")
+    fake.fail["PullRequests"] = "500"
+    code, lines, _ = read(url, {"prs": [PR, *(f"https://github.com/acme/api/pull/{n}" for n in range(8, 12))]})
+    assert (code, lines) == (1, [{"kind": "end", "prs": []}])
+    assert fake.ops().count("PullRequests") == 3
 
 
 def test_the_reader_asks_each_prs_own_host(github: tuple[Fake, str]) -> None:
@@ -806,7 +975,7 @@ def test_the_reader_refuses_what_it_cannot_use(github: tuple[Fake, str], request
 def test_canopy_records_every_line_it_prints(github: tuple[Fake, str], canopy_env: CanopyEnv) -> None:
     fake, url = github
     pull = fake.pulls["acme", "api", 7]
-    pull.labels, pull.merge_state = ["agent"], "BLOCKED"
+    pull.labels, pull.merge_state, pull.title = ["agent"], "BLOCKED", "Retry the upstream\non a 503"
     pull.contexts = [run("build", id_=11), status("deploy/approval", "PENDING"), run("lint", id_=12)]
     fake.branches["acme", "api"] = {"agent/PROJ-1": "bbbbbbb", "agent/PROJ-2": "ccccccc", "main": "aaaaaaa"}
     fake.searches["is:pr"] = [PR]
@@ -832,6 +1001,7 @@ def test_canopy_records_every_line_it_prints(github: tuple[Fake, str], canopy_en
     assert found.review_query_result == [PR]
     [pr] = records.fetch_all(conn, records.ObservedPr, sql.select("*").from_("observed_prs"))
     assert (json.loads(pr.labels), pr.mergeable_state, pr.head_sha) == (["agent"], MergeState.BLOCKED, HEAD)
+    assert pr.title == "Retry the upstream on a 503", "the author's text, on one line"
     checks = records.fetch_all(conn, records.ObservedCheck, sql.select("*").from_("observed_checks").order_by("name"))
     assert [(c.name, c.status, c.run_id) for c in checks] == [
         ("build", CheckStatus.COMPLETED, 11),
@@ -862,19 +1032,11 @@ class InProcess:
     ) -> procs.Result:
         del cwd, env, timeout, on_start, stdout_to_file
         assert args[0] == "canopy-connect-github"
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stderr(err):
-            code = connect.run(
-                args[1:],
-                io.StringIO(stdin or ""),
-                out,
-                endpoint_of=lambda _: self.url,
-                token_of=lambda _: "t",
-            )
-        for line in out.getvalue().splitlines(keepends=True):
+        result = invoke(connect.main, args[1:], stdin=stdin or "", obj=Hosts(lambda _: self.url, lambda _: "t"))
+        for line in result.stdout.splitlines(keepends=True):
             if on_line is not None:
                 on_line(line)
-        return procs.Result(tuple(args), code, out.getvalue(), err.getvalue())
+        return procs.Result(tuple(args), result.exit_code, result.stdout, result.stderr)
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
         raise AssertionError(f"a connector is run, never spawned: {args}, {cwd}, {log_path}")
@@ -1176,6 +1338,16 @@ def test_a_submit_that_may_have_reached_github_prints_no_end(github: tuple[Fake,
     assert "Delete" not in fake.ops()
 
 
+def test_a_submit_whose_reply_is_cut_off_is_not_sent_again_and_prints_no_end(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.fail["Submit"] = "cut"
+    code, lines, err = send(url, {"pr": PR, "replies": [{"comment": 501, "text": "Renamed."}]})
+    assert code == 1
+    assert "the outcome is unknown" in err
+    assert [line["kind"] for line in lines] == ["as", "pending"]
+    assert fake.ops().count("Submit") == 1
+
+
 def test_a_pending_review_opened_without_a_reply_is_deleted(github: tuple[Fake, str]) -> None:
     fake, url = github
     fake.fail["AddReview"] = "lost"
@@ -1256,6 +1428,7 @@ def test_an_issue_comment_that_may_have_posted_prints_no_end(github: tuple[Fake,
     code, lines, _ = send(url, {"issue": "https://github.com/acme/api/issues/12", "ticket": "GH-12", "body": "?"})
     assert code == 1
     assert [line["kind"] for line in lines] == ["as"]
+    assert fake.ops().count("Comment") == 1, "a mutation GitHub fails to answer may have been carried out"
 
 
 @pytest.mark.parametrize(
@@ -1289,14 +1462,12 @@ def test_the_poster_refuses_what_it_cannot_use(github: tuple[Fake, str], request
     assert not fake.seen
 
 
-@pytest.mark.parametrize("main", [connect.run, post.run], ids=["connect", "post"])
-def test_help_never_reads_stdin(main: Callable[..., int], capsys: pytest.CaptureFixture[str]) -> None:
-    class Unread(io.StringIO):
-        @override
-        def read(self, size: int | None = -1, /) -> str:
-            raise AssertionError("read stdin")
-
-    with pytest.raises(SystemExit) as exit_:
-        main(["--help"], Unread(), io.StringIO())
-    assert exit_.value.code == 0
-    assert "usage: canopy-" in capsys.readouterr().out
+@pytest.mark.parametrize("main", [connect.main, post.main], ids=["connect", "post"])
+def test_the_command_line_is_read_before_stdin(main: click.Command) -> None:
+    helped = invoke(main, ["--help"], stdin="not JSON")
+    assert helped.exit_code == 0
+    assert helped.stdout.startswith(f"Usage: {main.name} [OPTIONS]")
+    refused = invoke(main, ["--nope"], stdin="not JSON")
+    assert refused.exit_code == 2
+    assert "No such option '--nope'" in refused.stderr
+    assert "stdin" not in refused.stderr

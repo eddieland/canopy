@@ -23,6 +23,7 @@ import { useTheme } from '@/theme/use-theme'
 
 import { Buddy } from './buddy'
 import { Favicon } from './favicon'
+import { JumpPalette } from './jump-palette'
 import { LiveReadouts, StreamReadout } from './live-readouts'
 import { LoopDownBand } from './loop-down-band'
 import { LoopPause } from './loop-pause'
@@ -46,7 +47,8 @@ export const PAGE_SCROLLER = 'page'
 /**
  * The frame every page renders in: header (with its ticker), side rail (search, navigation, what is working now, the
  * spend, Sprig once Settings turns it on and the rail has room for it, and a footer), the routed page, and over it
- * all the lightswitch rave while Settings' light switch is on, and the tab's icon (`Favicon`). Coming back to the tab
+ * all the jump palette while ⌘K has it open (`JumpPalette`) and the lightswitch rave while Settings' light switch is
+ * on, and the tab's icon (`Favicon`). Coming back to the tab
  * after a while away, a note of what changed (`useAwayNote`). Signed out, the sign-in page instead, whatever the
  * route: every API route but the session's needs a session (DESIGN §22).
  *
@@ -73,6 +75,7 @@ export function AppShell() {
     const buddy = useBuddy()
     const mode = useRailMode()
     const [railOpen, setRailOpen] = useState(false)
+    const [jumpOpen, setJumpOpen] = useState(false)
     const sheet = mode !== 'full'
     // Widened to a whole rail, the sheet is closed, so narrowing again does not bring it back by itself.
     if (!sheet && railOpen) {
@@ -100,6 +103,13 @@ export function AppShell() {
     if (!signedIn) {
         return <SignIn />
     }
+    // The palette opens over the page, so the rail's sheet, which it would cover, closes.
+    function jump(open: boolean) {
+        if (open) {
+            setRailOpen(false)
+        }
+        setJumpOpen(open)
+    }
     return (
         // What the stream says, for whatever under the shell reads it: the readout, the band, the loop's actions.
         <StreamContext value={stream}>
@@ -116,7 +126,7 @@ export function AppShell() {
                             aria-hidden
                             className={cn(
                                 'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90',
-                                'bg-linear-to-r from-section-attention via-section-pull-requests to-section-worktrees',
+                                'bg-linear-to-r from-section-attention via-section-pull-requests to-section-tickets',
                             )}
                         />
                         <div className="flex items-center gap-2.5">
@@ -154,7 +164,7 @@ export function AppShell() {
                                         'print:static print:h-auto',
                                     )}
                                 >
-                                    <RailColumn buddy={buddy === 'on'} />
+                                    <RailColumn buddy={buddy === 'on'} onJump={() => jump(true)} />
                                 </div>
                             </aside>
                         )}
@@ -197,9 +207,10 @@ export function AppShell() {
                         <SheetDescription className="sr-only">
                             Search, the pages, what is working now, and the spend
                         </SheetDescription>
-                        <RailColumn buddy={buddy === 'on'} />
+                        <RailColumn buddy={buddy === 'on'} onJump={() => jump(true)} />
                     </SheetContent>
                 )}
+                <JumpPalette open={jumpOpen} onOpenChange={jump} />
                 <Rave />
             </Sheet>
         </StreamContext>
@@ -240,11 +251,11 @@ function SkipToContent() {
 }
 
 /** What the rail holds, top to bottom, whether beside the page or in the sheet: DESIGN's Shape and space. */
-function RailColumn({ buddy }: { buddy: boolean }) {
+function RailColumn({ buddy, onJump }: { buddy: boolean; onJump: () => void }) {
     return (
         <>
             <div className="panel-scroll min-h-0">
-                <SearchBox />
+                <SearchBox onJump={onJump} />
                 <Nav />
                 <RailWorking />
                 <RailSpend />

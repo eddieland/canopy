@@ -1,25 +1,26 @@
-"""`canopy review`: `run`, `wait`, `end`, and `revise` for the overseer; `show`, and a review's draft, for you.
+"""`canopy review`: `run`, `wait`, `end`, and `revise` for the overseer; `show`, `noise`, `eval`, and drafts, for you.
 
 The detached `_review` does one review run (DESIGN §21), or one revision of a review's draft (§34). A review of a PR
 the loop does not own is a draft of a review on that PR (§34): `draft` shows it as it would post, `edit` changes it,
-and `publish` posts one version as the operator's own comment review, named by the hash `draft` printed. A draft's
-text is the reviewer's, or a reviser's, written from the PR's, until the operator publishes it, so it is printed as
-plain text with each character that hides text named. The commands that write refuse inside canopy's own ticks and
-runs; `canopy reply review:ID` notes what a revision should change.
+`publish` posts one version as the operator's own comment review, named by the hash `draft` printed, and `discard`
+says it will not post. A draft's text is the reviewer's, or a reviser's, written from the PR's, until the operator
+publishes it, so it is printed as plain text with each character that hides text named. The commands that write refuse
+inside canopy's own ticks and runs; `canopy reply review:ID` notes what a revision should change.
 """
 
 from __future__ import annotations
 
 import contextlib
+import json
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
 import click
 
 from canopy.cli.common import CliError, Group, OverseerCommand, leave_the_tick, open_context
-from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, verb
+from canopy.cli.params import EVAL_CASE, PERSONA, PR_URL, REPO, TICKET_KEY, TextType, verb
 from canopy.core import (
     conversation,
     db,
@@ -34,10 +35,12 @@ from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
 from canopy.loop import review_tools
-from canopy.reviews import execute, findings, view
+from canopy.reviews import evals, execute, findings, noise, view
 
 if TYPE_CHECKING:
     import sqlite3
+
+    from canopy.core.config import EvalCase
 
 #: The channel `show` marks a review seen through, and a draft's edit or publish is recorded with (DESIGN §22).
 CLI = "cli"
@@ -132,6 +135,90 @@ def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
         return 0
     lines = findings.listed(ctx.conn, db.format_time(datetime.now(UTC) - view.RECENT))
     click.echo("\n".join(lines) if lines else "no reviews in the last 14 days")
+    return 0
+
+
+@review_group.command("noise")
+@click.option(
+    "--days",
+    type=click.IntRange(min=1, max=3650),
+    default=90,
+    show_default=True,
+    metavar="N",
+    help="How many days of reviews to count.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Print the tallies as one JSON object instead.")
+@click.pass_context
+def cmd_review_noise(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
+    """Count the last days' review findings by severity, persona, and model, and what became of each.
+
+    A finding dismissed `wrong` is the reviewer's noise; `intentional`, `not_worth_it`, and `out_of_scope` held and were
+    left, the last for another PR. One not dismissed counts by a worker's latest answer to it, `fixed` or `declined`;
+    your dismissal wins over an answer. A rebuttal is a finding held as one of a worker's decline. The `wrong` rate is
+    the share of a group's findings dismissed so.
+    """
+    ctx = open_context(click_ctx)
+    found = noise.tally(ctx.conn, db.format_time(datetime.now(UTC) - timedelta(days=days)))
+    click.echo(json.dumps(found.as_json(), indent=2) if as_json else "\n".join(noise.lines(found)))
+    return 0
+
+
+@review_group.command("eval")
+@click.option(
+    "--case",
+    "names",
+    type=EVAL_CASE,
+    multiple=True,
+    help="Review this case alone; give it again for each. Default: every case.",
+)
+@click.option("--persona", type=PERSONA, help="Review in this persona. Default: [personas] reviewer's.")
+@click.option("--model", metavar="MODEL", help="Review on this model, provider/model. Default: runtime.models'.")
+@click.option("--dry-run", is_flag=True, help="Show the cases and what each would be reviewed with; start nothing.")
+@click.option("--json", "as_json", is_flag=True, help="Print the result as one JSON object instead.")
+@click.pass_context
+def cmd_review_eval(
+    click_ctx: click.Context,
+    *,
+    names: tuple[str, ...],
+    persona: str | None,
+    model: str | None,
+    dry_run: bool,
+    as_json: bool,
+) -> int:
+    """Score the reviewer on your cases, `[[review.eval_cases]]` in your private config, one review each, in turn.
+
+    A bug case is found when a finding is within 3 lines of a line you confirmed its bug on; every finding on a clean
+    case is a false alarm. A review that ends any way but done is not scored. The eval records nothing in the journal:
+    no review, draft, attention item, or notification. Its result, with the digests of the prompt and the persona and
+    the model, is saved in .canopy/review-evals/ to compare with the next, and printed as a section to paste into
+    docs/MEASUREMENTS.md. It gates nothing. A case the review guards refuse (the daily limit, review capacity,
+    max_workers) is skipped and not scored, so run it while the loop is idle.
+    """
+    try:
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"review eval refused ({r.guard}): {r.reason}") from None
+    ctx = open_context(click_ctx)
+    try:
+        setup = evals.prepare(ctx, names=names, persona=persona, model=model)
+    except evals.EvalError as e:
+        raise CliError(f"review eval refused: {e}") from None
+    if dry_run:
+        plan = {**evals.setup_json(setup), "cases": [evals.case_json(c) for c in setup.cases]}
+        click.echo(json.dumps(plan, indent=2) if as_json else "\n".join(evals.planned(ctx, setup)))
+        return 0
+    count = len(setup.cases)
+
+    def reviewing(case: EvalCase) -> None:
+        number = next(n for n, c in enumerate(setup.cases, 1) if c.name == case.name)
+        click.echo(f"reviewing case {number} of {count}, {case.name}: {case.pr} at {case.sha[:12]}", err=True)
+
+    try:
+        done = evals.run(ctx, setup, reviewing=reviewing)
+    except evals.EvalError as e:
+        raise CliError(f"review eval refused: {e}") from None
+    click.echo(json.dumps(done.as_json(), indent=2) if as_json else "\n".join(evals.lines(done)))
+    click.echo(f"saved to {done.saved}", err=True)
     return 0
 
 
@@ -246,11 +333,30 @@ def cmd_review_publish(click_ctx: click.Context, run_id: int, version_hash: str,
                 f"Version {number} of review run {run_id}'s draft may have been posted: the post ended without saying. "
                 "A read of the PR settles it; canopy posts it no other time.",
             )
-        case ReviewDraftStatus.WAITING | ReviewDraftStatus.PUBLISHING:
+        case ReviewDraftStatus.WAITING | ReviewDraftStatus.PUBLISHING | ReviewDraftStatus.DISCARDED:
             click.echo(f"Version {number} of review run {run_id}'s draft was not published: {done.failed}")
         case _:
             assert_never(draft.status)
     return 0 if done.failed is None and draft.status is not ReviewDraftStatus.UNCONFIRMED else 1
+
+
+@review_group.command("discard")
+@click.argument("run_id", type=click.IntRange(min=1))
+@click.pass_context
+def cmd_review_discard(click_ctx: click.Context, run_id: int) -> int:
+    """Discard the draft of review RUN_ID: you have seen it and will not post it.
+
+    Nothing is posted, the draft takes no edit, note, or publish from now on, and its PR stops waiting on you. A review
+    of a later commit is a new draft.
+    """
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        draft = review_drafts_manage.discard(ctx.conn, run_id, channel=CLI)
+    except conversation.Refused as r:
+        raise CliError(f"discard refused ({r.guard}): {r.reason}") from None
+    click.echo(f"Discarded review run {run_id}'s draft of {draft.pr_url}; nothing was posted.")
+    return 0
 
 
 def _print_draft(conn: sqlite3.Connection, draft: records.ReviewDraft) -> None:
@@ -275,7 +381,8 @@ def _print_draft(conn: sqlite3.Connection, draft: records.ReviewDraft) -> None:
     if draft.status is ReviewDraftStatus.WAITING:
         click.echo(
             f"\nTo leave it pending on GitHub for you to submit: canopy review publish {run_id} {current.hash}"
-            "\nTo submit it now, add --submit.",
+            "\nTo submit it now, add --submit."
+            f"\nTo post nothing and stop it waiting on you: canopy review discard {run_id}",
         )
 
 

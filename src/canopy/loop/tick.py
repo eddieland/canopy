@@ -1,11 +1,14 @@
-"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run and check the overseer, publish.
+"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check the overseer's tools, run and check it, publish.
 
-A live tick starts the operator's queued one-off tasks after reconcile, in code, before the overseer (DESIGN §36). A
+A live tick starts the operator's queued one-off tasks after reconcile, in code, before the overseer (DESIGN §36). The
+runs the overseer asks for are recorded, and the tick starts them once its run has ended, with the harness's own
+(`spawns.py`, DESIGN §40); one it did not start is closed unstarted as it closes, or by the next tick if it died. A
 tick that closes `ok` notes, on each ticket, what it did about the operator's messages it read (`acknowledge.py`).
 """
 
 from __future__ import annotations
 
+import json
 import shutil
 from collections import Counter
 from dataclasses import dataclass, replace
@@ -14,7 +17,10 @@ from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
+    agent_models,
+    artifact_authority,
     chore_view,
+    commit_hooks,
     connector_runs,
     conversation,
     db,
@@ -22,27 +28,48 @@ from canopy.core import (
     drafts,
     feedback_plans,
     follow_ups,
+    hostgit,
+    item_numbers,
     notice,
     plans,
     pools,
     progress,
+    recorded_runs,
     run_models,
     run_offers,
 )
 from canopy.core.config import render_command
 from canopy.core.items import one_line
-from canopy.core.vocab import TickStatus
+from canopy.core.vocab import Decider, TickStatus
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import acknowledge, archive, attention, connectors, duties, gc_pass, observations, phases, state
+from canopy.loop import (
+    acknowledge,
+    archive,
+    attention,
+    connectors,
+    duties,
+    gc_pass,
+    harness,
+    harness_cursors,
+    harness_dispatches,
+    harness_items,
+    mcp,
+    observations,
+    phases,
+    spawns,
+    state,
+)
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
+from canopy.reviews import waiting as review_waiting
 from canopy.runs import drafted, policy, reconcile
 from canopy.runs import tasks as task_starts
-from canopy.runtime import project_config, stdout
+from canopy.runtime import project_config, servers, stdout
 
 if TYPE_CHECKING:
+    import sqlite3
     from collections.abc import Iterable, Sequence
 
     from canopy.core import records
@@ -52,24 +79,26 @@ if TYPE_CHECKING:
 TICK_ID_ENV = conversation.TICK_ID_ENV
 # A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
 DONE_LINE = "CANOPY_TICK_DONE"
-# The overseer acts only through `canopy`, so a tick runs this as the overseer would, for nothing, before paying for
-# the overseer (DESIGN §6). When it fails, the tick closes with this status and raises an item of the same name.
-CANOPY_CHECK = ("canopy", "--version")
-CANOPY_CHECK_TIMEOUT_SECONDS = 60
+# The overseer acts only through canopy's tools, so a tick starts their server as the runtime would, and asks it to
+# `initialize`, before paying for the overseer (DESIGN §6, §27). When it fails, the tick closes `canopy_unavailable`
+# and raises an item of the same name.
+SERVER_CHECK_TIMEOUT_SECONDS = 60
 MIB = 1024 * 1024
 # How long a ticket marked done stays in the state block's `recently_done` while the query still finds it, so the
 # overseer leaves it out while a human has yet to close it in the tracker (DESIGN §7). One still open after that is read
 # again and marked done again, which lists it for as long once more.
 RECENTLY_DONE_DAYS = 30
+#: What the summary of a tick that ran no overseer starts with, after a dry run's prefix (DESIGN §39).
+NO_OVERSEER = "no overseer, nothing left to judge"
 #: How many of the runtime's errors a failed overseer's summary names; past it, the first and last, the rest counted.
 MAX_ERRORS_NAMED = 3
 # How a tick ended: the status it closed its row with, or, with no row, `lock_busy` when another tick held the lock and
 # `error` when `canopy loop` caught the tick raising before it had one or after it closed it.
 type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]
 # What ended `canopy loop`'s wait before its deadline: the operator's act (a message, a ticket started or stopped, a
-# grant, a task submitted, replied to, or stopped, a notice set or cleared), a run ending, the operator pressing the
-# loop's tick-now key, or the operator asking from the web UI.
-type Woken = Literal["message", "starts", "grant", "task", "notice", "run", "key", "web"]
+# grant, a task submitted, replied to, or stopped, a notice set or cleared), a run ending, a poll of the connectors
+# (DESIGN §39), the operator pressing the loop's tick-now key, or the operator asking from the web UI.
+type Woken = Literal["message", "starts", "grant", "task", "notice", "run", "poll", "key", "web"]
 # What started a tick the loop ran, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its
 # length, one a gate shortened, or what ended one early.
 type WokenBy = Woken | Literal["start", "timer", "gate"]
@@ -126,8 +155,8 @@ def state_block(
     Returns:
         The `## State` section, the overseer's whole message.
     """
-    block, _, _ = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
-    return block
+    rendered = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
+    return rendered.block
 
 
 def session_title(tick_id: int, woken_by: WokenBy | None, *, tickets: int, running: int, open_items: int) -> str:
@@ -153,7 +182,7 @@ def _woken_title(woken_by: WokenBy | None) -> str:
             return "by hand"
         case "start":
             return "loop start"
-        case "timer" | "gate" | "message" | "grant" | "task" | "notice":
+        case "timer" | "gate" | "message" | "grant" | "task" | "notice" | "poll":
             return woken_by
         case "starts":
             return "start or stop"
@@ -174,26 +203,48 @@ def _render(
     reconciled: reconcile.Reconciled,
     query_due: bool,
     woken_by: WokenBy | None = None,
-) -> tuple[str, duties.Duties, str]:
+) -> _Rendered:
     """Render the state block, and read what it asks of the overseer from the same journal reads (DESIGN §6 step 5).
 
     Returns:
-        The `## State` section, the overseer's duties this tick, and its session title, which `woken_by` starts.
+        The `## State` section, the overseer's duties this tick and what is left to it, and its session title, which
+        `woken_by` starts.
     """
     running = db.running_runs(ctx.conn, "runs")
     last_runs = db.latest_runs(ctx.conn)
     # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
     stopped = conversation.stopped(ctx.conn)
-    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped]
+    # A ticket the harness decided, or dispatches after the overseer, is named with what it does, and nothing else of
+    # it is shown (DESIGN §37).
+    by_harness = harness.recorded(ctx.conn, tick_id)
+    to_come = harness_dispatches.plan(ctx, tick_id, now)
+    decided = frozenset([*(str(d.ticket_key) for d in by_harness), *(r.key for r in to_come.runs)])
+    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in decided]
     private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
-    operator = {t.key: found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None}
+    # A public ticket's comments on artifacts that are authority are shown with its operator messages (DESIGN §38).
+    authors = frozenset(ctx.config.artifacts.authorized_authors)
+    operator: dict[str, conversation.OperatorSection] = {}
+    for t in tickets:
+        authorized = artifact_authority.authorized(ctx.conn, t.key, authors)
+        if (found := conversation.operator_section(ctx.conn, t, authorized=authorized)) is not None:
+            operator[t.key] = found
     planned = _plans(ctx, tickets)
     # Only those the query still finds open: one a human closed will not come back from it (DESIGN §7).
     found = duties.last_queried(ctx.conn)
     since = db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))
     recently_done = [t for t in db.recently_done(ctx.conn, since) if str(t["key"]) in found]
-    chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
+    # A chore with no `when` is the harness's: the block names it only as a dispatch to come (DESIGN §37).
+    chores = [
+        c for c in chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now) if c["when"]
+    ]
     shown = [*(int(r["id"]) for r in running), *(r.id for r in last_runs.values())]
+    reviews = review_view.state_section(ctx.conn, ctx.config, now)
+    units = db.all_units(ctx.conn)
+    # What each cursor names, so a live read of a stale subject can tell what it passed (DESIGN §35).
+    cursors = [
+        *(t.comment_cursor for t in tickets),
+        *(c for us in units.values() for u in us for c in (u.review_cursor, u.ci_cursor)),
+    ]
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
@@ -206,7 +257,9 @@ def _render(
         tickets=tickets,
         stopped=stopped,
         recently_done=recently_done,
-        units=db.all_units(ctx.conn),
+        harness=harness.section(by_harness),
+        dispatches_to_come=harness_dispatches.section(to_come),
+        units=units,
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, shown),
         run_reasons=db.run_reasons(ctx.conn, shown),
@@ -215,17 +268,17 @@ def _render(
         ci_cooldowns=policy.ci_cooldowns(ctx.conn, ctx.config, now),
         now=now,
         chores=chores,
-        reviews=review_view.state_section(ctx.conn, ctx.config, now),
+        reviews=reviews,
         notices=notice.recent(ctx.conn, now),
         private=private,
         operator=operator,
         planned=planned,
         feedback_planned=_feedback_plans(ctx, tickets, now),
-        mirror_delimiter=conversation.body_delimiter(),
-        attention=attention.for_overseer(ctx.conn),
+        attention=attention.for_overseer(ctx.conn, decided=decided),
         query_due=query_due,
         operator_sent=drafts.sent_by_pr(ctx.conn),
-        observations=observations.section(ctx, tick_id, now, tickets),
+        observations=observations.section(ctx, tick_id, now, tickets, decided=decided),
+        numbered=item_numbers.named(ctx.conn, [c for c in cursors if c is not None]),
     )
     owed = duties.owed(
         ctx.conn,
@@ -234,6 +287,7 @@ def _render(
         tickets=tickets,
         stopped=stopped,
         recently_done=recently_done,
+        decided=decided,
         chores=chores,
     )
     title = session_title(
@@ -243,7 +297,42 @@ def _render(
         running=len(running),
         open_items=len(attention.current(ctx.conn)),
     )
-    return block, owed, title
+    return _Rendered(block, owed, _left(ctx.conn, tick_id, owed, reviews), title)
+
+
+@dataclass(frozen=True)
+class _Rendered:
+    """The overseer's state block, and what reading it for the same tick found."""
+
+    #: The `## State` section, the overseer's whole message.
+    block: str
+    #: What the overseer owes this tick (DESIGN §6 step 5).
+    owed: duties.Duties
+    #: What the block leaves the overseer to judge, a phrase each; with none, the tick runs no overseer (DESIGN §39).
+    left: Sequence[str]
+    #: The overseer's session title.
+    title: str
+
+
+def _left(
+    conn: sqlite3.Connection,
+    tick_id: int,
+    owed: duties.Duties,
+    reviews: review_view.ReviewsSection | None,
+) -> list[str]:
+    """What the state block leaves the overseer to judge, after the harness's decisions (DESIGN §37, §39).
+
+    Each duty it owes, which before it runs is each one there is: a ticket listed or the query found, a due chore with
+    a `when`, the query when no source read it. And the reviews it starts: the review query's, the operator's requests,
+    and the revisions their notes ask for.
+
+    Returns:
+        A phrase for each; none when the harness has left it nothing.
+    """
+    left = duties.undone(conn, tick_id, owed)
+    if reviews is not None and (reviews["query"] or reviews["requests"] or reviews.get("revisions")):
+        left.append("reviews to start or wait on")
+    return left
 
 
 def _plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, plans.PlanState]:
@@ -277,7 +366,15 @@ def _feedback_plans(
         repos = [str(u.repo) for u in units.get(t.key, [])]
         attempts = {r: done.get(policy.unit(t.key, r), 0) for r in repos}
         limits = {r: policy.feedback_plan_limit(ctx.config, granted.get(policy.unit(t.key, r), {})) for r in repos}
-        section = feedback_plans.state_section(ctx.conn, ctx.config, t, attempts=attempts, limits=limits, now=now)
+        section = feedback_plans.state_section(
+            ctx.conn,
+            ctx.config,
+            ctx.workspace,
+            t,
+            attempts=attempts,
+            limits=limits,
+            now=now,
+        )
         if section is not None:
             found[t.key] = section
     return found
@@ -286,14 +383,20 @@ def _feedback_plans(
 def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome:
     applied = db.migrate(ctx.conn, resources.migrations_dir())
     abandoned = db.abandon_unfinished_ticks(ctx.conn)
+    # A run a dead tick recorded and did not start is never started: this tick decides again (DESIGN §40).
+    unstarted = recorded_runs.close_unstarted(ctx.conn)
     tick_id = db.start_tick(ctx.conn, dry_run=dry_run)
     log = logs.for_tick(tick_id)
     log.info("tick started", extra={"dry_run": dry_run, "repo": ctx.repo, "migrations_applied": applied})
     if abandoned:
         log.warning("closed ticks left running by a dead tick process", extra={"abandoned_ticks": abandoned})
+    if unstarted:
+        log.warning("closed runs a dead tick recorded and never started", extra={"unstarted": unstarted})
 
     def finish(status: TickStatus, summary: str, usage: Usage | None = None) -> Outcome:
         _record_overseer(ctx, tick_id, log)
+        # Whatever the tick did not start, because it ended early, belongs to it alone.
+        recorded_runs.close_unstarted(ctx.conn, tick_id=tick_id)
         db.finish_tick(ctx.conn, tick_id, status, summary)
         spent = usage.spent() if usage is not None else {}
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
@@ -349,19 +452,23 @@ def _steps(
             reconciled = replace(reconciled, capacity=replace(reconciled.capacity, running=running))
     archive_unpushed = archive.run(ctx, log, dry_run=dry_run)
     # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
-    drafted.reconcile(ctx, connectors.run(ctx, tick_id, log).read, log)
+    drafted.reconcile(ctx, connectors.run(ctx, tick_id, log, dry_run=dry_run).read, log)
     # What moved on a waiting feedback plan's PRs, first seen now: its quiet period runs from the newest (§32).
-    feedback_plans.note_moves(ctx.conn, ctx.config)
-    _derive(ctx, tick_id, log)
+    feedback_plans.note_moves(ctx.conn, ctx.config, ctx.workspace)
+    # Before the derivation and the block, so both read each cursor past what needs no handling (DESIGN §37).
+    _harness_cursors(ctx, tick_id, log, dry_run=dry_run)
+    derived = _derive(ctx, tick_id, log)
     # Before anything reads a message or a run: the harness items and the state block see at least every message, and
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
     db.set_tick_read(ctx.conn, tick_id)
     _record_harness_items(ctx, tick_id, archive_unpushed)
+    _record_from_causes(ctx, tick_id, derived, log)
+    # Before the overseer, which is then shown only the tickets left to it (DESIGN §37).
+    _harness_decides(ctx, tick_id, derived or [], log)
 
     now = datetime.now(UTC)
-    query_due = _query_due(ctx, now)
-    db.set_tick_query(ctx.conn, tick_id, due=query_due)
-    block, owed, title = _render(
+    query_due = _query(ctx, tick_id, now, log)
+    rendered = _render(
         ctx,
         tick_id=tick_id,
         dry_run=dry_run,
@@ -370,16 +477,23 @@ def _steps(
         query_due=query_due,
         woken_by=woken_by,
     )
-    halted = _halt(ctx, tick_id, log)
+    # With nothing left to judge, the overseer would be handed an empty block: the tick runs none, and owes nothing.
+    # The disk check still holds the harness's dispatches, which fill a disk as the overseer's do (DESIGN §39).
+    overseer = bool(rendered.left)
+    halted = _halt(ctx, tick_id, log, overseer=overseer)
+    db.set_tick_overseer(ctx.conn, tick_id, ran=overseer and halted is None)
     if halted is not None:
         return finish(*halted)
-    # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
-    failure, usage = _run_overseer(ctx, tick_id, block, title, dry_run=dry_run, log=log)
+    failure, usage = _overseer(ctx, tick_id, rendered, dry_run=dry_run, log=log)
+    # After the overseer, whatever its run ended as, every run it recorded and the harness's own; a tick halted before
+    # it starts none (DESIGN §37, §40).
+    _spawn(ctx, tick_id, log)
     if failure is not None:
         return finish(TickStatus.OVERSEER_FAILED, failure, usage)
+    owed = rendered.owed
 
     decisions = db.decisions_for_tick(ctx.conn, tick_id)
-    prefix = "dry run; " if dry_run else ""
+    prefix = ("dry run; " if dry_run else "") + ("" if overseer else f"{NO_OVERSEER}; ")
     # A tick-wide skip (mcp_unavailable, tracker_unsupported) means the overseer could not see the world. Closing it
     # `ok` would make its empty list the attention list and notify every open item as resolved.
     skips = [d.rationale for d in decisions if d.ticket_key is None and d.action == "skip"]
@@ -401,19 +515,89 @@ def _steps(
         return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
 
 
-def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+def _overseer(
+    ctx: Context,
+    tick_id: int,
+    rendered: _Rendered,
+    *,
+    dry_run: bool,
+    log: logs.TickAdapter,
+) -> tuple[str | None, Usage | None]:
+    """Run the overseer on the state block `rendered`, unless it leaves the overseer nothing to judge (DESIGN §39).
+
+    Returns:
+        Why it failed, or None, and what it cost if the runtime reported it; None and None when it did not run.
+    """
+    if not rendered.left:
+        log.info("overseer not run: the harness left it nothing to judge", extra={"dry_run": dry_run})
+        return None, None
+    # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
+    return _run_overseer(ctx, tick_id, rendered.block, rendered.title, dry_run=dry_run, log=log)
+
+
+def _harness_cursors(ctx: Context, tick_id: int, log: logs.TickAdapter, *, dry_run: bool) -> None:
+    """Move the cursors past what needs no handling, a worker's comment and a reply the operator sent (DESIGN §37).
+
+    A dry run moves none (D036). What it raises is logged, never the tick's outcome: what it recorded is undone with it,
+    so every cursor is where the overseer left it.
+    """
+    if dry_run:
+        return
+    try:
+        moved = harness_cursors.record(ctx.conn, tick_id, harness_cursors.moves(ctx, datetime.now(UTC)))
+    except Exception as e:
+        log.exception("the harness's cursor moves raised", extra={"error": str(e)})
+        return
+    if moved:
+        log.info("harness moved cursors", extra={"cursors": [m.rationale() for m in moved]})
+
+
+def _derive(ctx: Context, tick_id: int, log: logs.TickAdapter) -> list[phases.Derived] | None:
     """Derive §7's table from what the connectors observed, and record it beside the decisions (DESIGN §30).
 
-    In shadow: what it raises is logged, never the tick's outcome, and nothing the overseer reads changes.
+    What it raises is logged, never the tick's outcome: the harness then decides nothing, every ticket is the
+    overseer's, and every item the harness holds on an observation is kept.
+
+    Returns:
+        What it derived; None when it raised.
     """
     try:
         derived = phases.derive(ctx, datetime.now(UTC))
         phases.record(ctx.conn, tick_id, derived)
     except Exception as e:
         log.exception("deriving the phases raised", extra={"error": str(e)})
-        return
+        return None
     stale = sum(d.stale is not None for d in derived)
     log.info("phases derived", extra={"subjects": len(derived), "stale": stale})
+    return derived
+
+
+def _harness_decides(ctx: Context, tick_id: int, derived: Iterable[phases.Derived], log: logs.TickAdapter) -> None:
+    """Record the decisions the harness makes in code from the derivation, before the overseer runs (DESIGN §37).
+
+    What it raises is logged, never the tick's outcome: what it recorded is undone with it, so every ticket is the
+    overseer's.
+    """
+    try:
+        decided = harness.decide(ctx, derived)
+        harness.record(ctx.conn, tick_id, ctx.repo, decided)
+    except Exception as e:
+        log.exception("the harness's decisions raised", extra={"error": str(e)})
+        return
+    if decided:
+        log.info("harness decided", extra={"tickets": [d.key for d in decided]})
+
+
+def _spawn(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+    """Start the runs the overseer recorded and the harness's, after the overseer, in §7's order (DESIGN §37, §40).
+
+    Each is checked against every guard again. What it raises is logged, never the tick's outcome: what it started
+    stands, and what it did not is closed unstarted with the tick, and waits for a later tick to decide again.
+    """
+    try:
+        spawns.make(ctx, tick_id, log)
+    except Exception as e:
+        log.exception("starting the runs after the overseer raised", extra={"error": str(e)})
 
 
 def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
@@ -422,6 +606,29 @@ def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
         phases.record_overseer(ctx.conn, tick_id)
     except Exception as e:
         log.exception("recording the overseer's phases raised", extra={"error": str(e)})
+
+
+def _query(ctx: Context, tick_id: int, now: datetime, log: logs.TickAdapter) -> bool:
+    """Record whether tick `tick_id` runs the tracker query, and, when it does and a source read it, the query itself.
+
+    The harness records a query the state block shows `fresh` at `now`, before the overseer runs, as `canopy queried`
+    would, so what it records is what the overseer reads and the overseer owes no `canopy queried` (DESIGN §6 step 5).
+    With no `tracker` source, one read too long ago stays the overseer's to run. With one, the overseer reads no
+    tracker (§39): a query it did not read fresh does not run this tick, and a ticket it would find waits for the read
+    that finds it, the next tick's query due again.
+
+    Returns:
+        Whether the query runs this tick.
+    """
+    due = _query_due(ctx, now)
+    found = observations.fresh_query(ctx, now) if due else None
+    if found is None and ctx.config.connect.observes_tickets():
+        due = False
+    db.set_tick_query(ctx.conn, tick_id, due=due)
+    if found is not None:
+        named = duties.record_queried(ctx.conn, tick_id, ctx.repo, found)
+        log.info("recorded the query a source read", extra={"tickets": named})
+    return due
 
 
 def _query_due(ctx: Context, now: datetime) -> bool:
@@ -446,73 +653,131 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
     `archive_unpushed` is what this tick's archive pass found not pushed, if anything (DESIGN §25).
     """
     for item in attention.from_runs(ctx.conn):
-        db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
+        _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail)
     # A private ticket's question reaches the operator here: it is on no tracker (DESIGN §22). So does a planner's on a
     # public ticket, since the planner writes nothing to the ticket (DESIGN §25).
     for waiting in [*conversation.awaiting(ctx.conn), *plans.awaiting(ctx.conn)]:
-        db.record_decision(
-            ctx.conn,
-            tick_id,
-            waiting.key,
-            f"{attention.ACTION_PREFIX}awaiting_reply",
-            attention.awaiting_detail(waiting),
-        )
+        _harness_item(ctx, tick_id, waiting.key, "awaiting_reply", attention.awaiting_detail(waiting))
     # The tickets runs reported that the journal could not record (§18). Those it recorded the sinks heard of once.
     for item in follow_ups.unrecorded(ctx.conn):
-        db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
+        _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail)
     for remembered in memory_attention.items(ctx.conn, ctx.config):
-        action = f"{attention.ACTION_PREFIX}{remembered.reason}"
-        db.record_decision(ctx.conn, tick_id, remembered.ticket_key, action, remembered.detail)
-    for draft in drafted.waiting(ctx.conn):
-        action = f"{attention.ACTION_PREFIX}{drafted.WAITING_REASON}"
-        db.record_decision(ctx.conn, tick_id, draft.ticket_key, action, draft.detail, repo=draft.repo)
+        _harness_item(ctx, tick_id, remembered.ticket_key, remembered.reason, remembered.detail)
+    # A comment on an artifact by an author the operator does not list waits for them to send it on (DESIGN §38).
+    for untrusted in artifact_authority.untrusted(ctx.conn, frozenset(ctx.config.artifacts.authorized_authors)):
+        _harness_item(ctx, tick_id, untrusted.ticket_key, artifact_authority.REASON, untrusted.detail)
+    _record_drafts(ctx, tick_id)
     for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
-        action = f"{attention.ACTION_PREFIX}{chore_view.FAILED_REASON}"
-        db.record_decision(ctx.conn, tick_id, None, action, failed.detail, chore=failed.chore)
+        _harness_item(ctx, tick_id, None, chore_view.FAILED_REASON, failed.detail, chore=failed.chore)
     _record_connector_failed(ctx, tick_id)
     if archive_unpushed is not None:
-        db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{archive.REASON}", archive_unpushed)
+        _harness_item(ctx, tick_id, None, archive.REASON, archive_unpushed)
+    _record_git_items(ctx, tick_id)
+
+
+def _record_from_causes(
+    ctx: Context,
+    tick_id: int,
+    derived: Sequence[phases.Derived] | None,
+    log: logs.TickAdapter,
+) -> None:
+    """Record the items the harness raises from their causes, from the tick's derivation `derived` (DESIGN §37).
+
+    What it raises is logged, never the tick's outcome: every such item open is then recorded again as it was listed,
+    so a fault of the harness's drops none.
+    """
+    try:
+        found = harness_items.raised(ctx, derived, datetime.now(UTC))
+    except Exception as e:
+        log.exception("the harness's items from their causes raised", extra={"error": str(e)})
+        found = harness_items.kept(ctx.conn)
+    for item in found:
+        _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail, repo=item.repo, pr=item.pr)
+
+
+def _record_git_items(ctx: Context, tick_id: int) -> None:
+    """Record the items git raises: a clone missing or left to prune slots (§18), and a git too old for the hooks."""
     for repo in ctx.workspace.repos:
         # A tick never clones: a repository in the map with no clone waits for the operator (DESIGN §18).
         if not repo.cloned:
             detail = f"{repo.path} has no clone; run `canopy workspace sync` in {ctx.repo_root}"
-            db.record_decision(
-                ctx.conn,
-                tick_id,
-                None,
-                f"{attention.ACTION_PREFIX}repo_missing",
-                detail,
-                repo=repo.name,
+            _harness_item(ctx, tick_id, None, "repo_missing", detail, repo=repo.name)
+        elif keys := hostgit.maintenance_left_on(ctx.runner, repo.path):
+            detail = (
+                f"git's automatic maintenance is on in {repo.path} ({', '.join(keys)} not set), and can prune what "
+                f"running slots use; run `canopy workspace sync` in {ctx.repo_root}"
             )
+            _harness_item(ctx, tick_id, None, attention.MAINTENANCE_ON, detail, repo=repo.name)
+    if (old := commit_hooks.git_too_old(ctx.config, ctx.runner)) is not None:
+        _harness_item(ctx, tick_id, None, attention.GIT_TOO_OLD, old)
+
+
+def _record_drafts(ctx: Context, tick_id: int) -> None:
+    """Record the items of the drafts that wait on the operator: a run's replies (§29), and a review's (§34)."""
+    for draft in drafted.waiting(ctx.conn):
+        _harness_item(ctx, tick_id, draft.ticket_key, drafted.WAITING_REASON, draft.detail, repo=draft.repo)
+    # A review the operator asked for, and a draft staged or of unknown outcome, are about a PR no ticket owns; a held
+    # finding is about its ticket's own PR (§21).
+    for review in review_waiting.items(ctx.conn):
+        _harness_item(ctx, tick_id, review.ticket, review.reason, review.detail, pr=review.pr)
+
+
+def _harness_item(
+    ctx: Context,
+    tick_id: int,
+    key: str | None,
+    reason: str,
+    detail: str,
+    *,
+    repo: str | None = None,
+    chore: str | None = None,
+    pr: str | None = None,
+) -> None:
+    """Record an attention item the harness raises, marked as its own (DESIGN §37, TRUST_MODEL T5)."""
+    action = f"{attention.ACTION_PREFIX}{reason}"
+    db.record_decision(
+        ctx.conn,
+        tick_id,
+        key,
+        action,
+        detail,
+        repo=repo,
+        chore=chore,
+        pr=pr,
+        decider=Decider.HARNESS,
+    )
 
 
 def _record_connector_failed(ctx: Context, tick_id: int) -> None:
     """Record one item for every source whose run this tick read less than it was asked, each named in its detail."""
     sources = connector_runs.failures(ctx.conn, tick_id)
     if sources:
-        action = f"{attention.ACTION_PREFIX}{connector_runs.FAILED_REASON}"
-        db.record_decision(ctx.conn, tick_id, None, action, "; ".join(s.detail for s in sources))
+        _harness_item(ctx, tick_id, None, connector_runs.FAILED_REASON, "; ".join(s.detail for s in sources))
 
 
-def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter) -> tuple[TickStatus, str] | None:
-    """Check what the overseer needs before paying for it: free disk, then `canopy` as it runs it (DESIGN §6 step 5).
+def _halt(ctx: Context, tick_id: int, log: logs.TickAdapter, *, overseer: bool) -> tuple[TickStatus, str] | None:
+    """Check what the overseer needs before paying for it: free disk, its tools' server, its model (DESIGN §6 step 5).
 
+    The server and model checks are the overseer's, made only with `overseer`, for a tick that runs it (DESIGN §39).
     A check that fails records the attention item named for the status the tick closes with.
 
     Returns:
-        That status and the tick's summary, or None when both checks pass.
+        That status and the tick's summary, or None when every check passes.
     """
     low = _check_disk(ctx, log)
     if low is not None:
         status, summary, then = TickStatus.DISK_LOW, low, "Free space there, and the next tick runs it"
-    else:
-        unavailable = _check_canopy(ctx, tick_id, log)
-        if unavailable is None:
-            return None
+    elif not overseer:
+        return None
+    elif (unavailable := _check_server(ctx, tick_id, log)) is not None:
         status, summary = TickStatus.CANOPY_UNAVAILABLE, unavailable
-        then = "Make `canopy --version` work where the loop runs"
-    detail = f"{summary}; the overseer did not run. {then}"
-    db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{status}", detail)
+        then = "Make `canopy _mcp` start where the loop runs"
+    elif (refused := _check_model(ctx, log)) is not None:
+        status, summary = refused
+        then = "The next tick looks it up again"
+    else:
+        return None
+    _harness_item(ctx, tick_id, None, status, f"{summary}; the overseer did not run. {then}")
     return status, summary
 
 
@@ -541,33 +806,89 @@ def _check_disk(ctx: Context, log: logs.TickAdapter) -> str | None:
     return None
 
 
-def _check_canopy(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | None:
-    """Run `canopy --version` as the overseer would run `canopy`: from its PATH, cwd, and environment (DESIGN §6).
+def _check_server(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | None:
+    """Start `canopy _mcp` as the runtime would for the overseer, in its cwd, and ask it to `initialize` (DESIGN §6).
 
-    A launcher whose environment is gone (an uninstall, a cleared cache) fails to start as a missing one does.
+    An interpreter that is gone (an uninstall, a cleared cache) fails to start as a missing one does. The server exits
+    once its stdin closes, after answering.
 
     Returns:
-        Why `canopy` does not work for the overseer, or None when it does.
+        Why the overseer would have no tools, or None when the server answers.
     """
+    hello: dict[str, object] = {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": mcp.PROTOCOL_VERSIONS[0],
+            "capabilities": {},
+            "clientInfo": {"name": "canopy-tick", "version": db.CANOPY_VERSION},
+        },
+    }
     try:
         result = ctx.runner.run(
-            CANOPY_CHECK,
+            mcp.COMMAND,
             cwd=ctx.repo_root,
             env={TICK_ID_ENV: str(tick_id)},
-            timeout=CANOPY_CHECK_TIMEOUT_SECONDS,
+            stdin=json.dumps(hello) + "\n",
+            timeout=SERVER_CHECK_TIMEOUT_SECONDS,
         )
     except procs.ProcError as e:
-        failure = f"`canopy` does not start for the overseer: {e}"
+        failure = f"`canopy _mcp` does not start for the overseer: {e}"
     else:
         if result.timed_out:
-            failure = f"`canopy --version` did not finish in {CANOPY_CHECK_TIMEOUT_SECONDS} seconds"
+            failure = f"`canopy _mcp` did not answer initialize in {SERVER_CHECK_TIMEOUT_SECONDS} seconds"
         elif result.returncode != 0:
             said = one_line(result.stderr or result.stdout)[-300:]
-            failure = f"`canopy --version` exited {result.returncode}" + (f": {said}" if said else "")
+            failure = f"`canopy _mcp` exited {result.returncode}" + (f": {said}" if said else "")
+        elif not _initialized(result.stdout):
+            said = one_line(result.stdout)[:300]
+            failure = "`canopy _mcp` did not answer initialize" + (f": {said}" if said else "")
         else:
             return None
     log.error("overseer not started", extra={"reason": failure})
     return failure
+
+
+def _check_model(ctx: Context, log: logs.TickAdapter) -> tuple[TickStatus, str] | None:
+    """Look the overseer's chosen model up in the runtime's list, as a worker's dispatch does (DESIGN §13).
+
+    The model is the one `runtime.models` chooses for the agent `runtime.overseer_cmd` runs; the overseer works on no
+    one ticket, so no override reaches it. It is never fallen back from: an overseer on a model nobody chose would
+    decide for the loop unseen.
+
+    Returns:
+        The status the tick closes with, `model_missing` or `model_list_failed`, and why, or None when no model is
+        chosen or the runtime lists it.
+    """
+    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.overseer_cmd)
+    if model is None:
+        return None
+    try:
+        agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version)
+    except agent_models.ModelError as e:
+        refused = e
+    else:
+        return None
+    log.error("overseer not started", extra={"reason": refused.reason})
+    missing = refused.guard == agent_models.MISSING
+    return TickStatus.MODEL_MISSING if missing else TickStatus.MODEL_LIST_FAILED, refused.reason
+
+
+def _initialized(out: str) -> bool:
+    """Whether `out`, what `canopy _mcp` printed, opens with its answer to `initialize`, as canopy's server.
+
+    Returns:
+        True when its first line is a JSON-RPC result for request 0 from a server named canopy.
+    """
+    first = out.partition("\n")[0]
+    try:
+        answer = json.loads(first)
+    except json.JSONDecodeError:
+        return False
+    result = answer.get("result") if isinstance(answer, dict) and answer.get("id") == 0 else None
+    info = result.get("serverInfo") if isinstance(result, dict) else None
+    return isinstance(info, dict) and info.get("name") == mcp.SERVER
 
 
 def _run_overseer(
@@ -591,7 +912,7 @@ def _run_overseer(
         the runtime reported it.
     """
     # The runtime reads the repository's config too: it must not define an agent of canopy's (D044).
-    failure = project_config.refusal([ctx.repo_root])
+    failure = project_config.refusal([ctx.repo_root], version=ctx.config.runtime.version)
     if failure is not None:
         log.error("overseer not started", extra={"reason": failure, "dry_run": dry_run})
         return failure, None
@@ -603,16 +924,43 @@ def _run_overseer(
     command = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, title)
     argv = command.argv
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
+    # Its tools, in its process's environment alone (DESIGN §27). A call may take as long as the overseer may: a
+    # dispatch can wait on a lease, and one the runtime gave up on would still be served, holding up each call after.
+    served = servers.env(
+        {mcp.SERVER: mcp.COMMAND},
+        version=ctx.config.runtime.version,
+        cwd=ctx.repo_root,
+        timeout_seconds=timeout_minutes * 60,
+    )
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     out_dir = ctx.state_dir / "ticks"
     out_dir.mkdir(parents=True, exist_ok=True)
     logs.write_private(out_dir / f"{tick_id}.prompt", block)
     out_path = out_dir / f"{tick_id}.log"
     with logs.open_private(out_path) as out:
-        watch = progress.Progress(ctx.conn, "ticks", tick_id, out, log, agent="overseer", fields={})
-        env = {TICK_ID_ENV: str(tick_id)}
+        watch = progress.Progress(
+            ctx.conn,
+            "ticks",
+            tick_id,
+            out,
+            log,
+            agent="overseer",
+            fields={},
+            version=ctx.config.runtime.version,
+        )
+        env = {TICK_ID_ENV: str(tick_id), **served}
         try:
-            with run_offers.probing(ctx.conn, "ticks", tick_id, ctx.runner, argv, cwd=ctx.repo_root, env=env, log=log):
+            with run_offers.probing(
+                ctx.conn,
+                "ticks",
+                tick_id,
+                ctx.runner,
+                argv,
+                version=ctx.config.runtime.version,
+                cwd=ctx.repo_root,
+                env=env,
+                log=log,
+            ):
                 result = ctx.runner.run(
                     argv,
                     cwd=ctx.repo_root,
@@ -628,7 +976,7 @@ def _run_overseer(
             return str(e), None
         out.write(f"\n--- stderr ---\n{result.stderr}")
 
-    output = stdout.read(result.stdout)
+    output = stdout.read(result.stdout, version=ctx.config.runtime.version)
     db.set_tick_report(
         ctx.conn,
         tick_id,

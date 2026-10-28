@@ -19,10 +19,11 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, definitions, run_models
+from canopy.core import config, db, definitions, run_models, workspace
 from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
+from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
@@ -30,6 +31,7 @@ from tests.canopy.helpers import (
     has_deadline,
     pool,
     present,
+    private_worker_does,
     scripted,
     slot_of,
     tools_of,
@@ -73,6 +75,8 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
         "CANOPY_GIT_OBJECTS": str(objects),
         "CANOPY_DEADLINE": w["env"]["CANOPY_DEADLINE"],
         "OPENCODE_CONFIG_DIR": str(snapshot),
+        # The trailers canopy's git hooks add to its commits (TRUST_MODEL T5).
+        "CANOPY_COMMIT_TRAILERS": "Co-authored-by: canopy worker <noreply@canopy.invalid>",
     }
     assert not objects.exists()  # removed once the run was over
     argv = w["argv"]
@@ -93,11 +97,47 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
 @pytest.mark.usefixtures("git_pool")
 def test_a_worker_inherits_no_server_its_process_was_given(scenario: Scenario) -> None:
     """A server of canopy's is given to one run alone (DESIGN §27): a run started below it does not inherit it."""
-    given = servers.env("canopy_chore", ["canopy", "_mcp", "--chore"], cwd=scenario.env.root)
+    given = servers.env({"canopy_chore": ["canopy", "_mcp", "--chore"]}, cwd=scenario.env.root, version=Version.ONE)
     with mock.patch.dict(os.environ, given):
         scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)
     assert not set(given) & set(w["env"])
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_worker_that_may_publish_is_given_its_runs_origin_for_the_store(scenario: Scenario) -> None:
+    """canopy, not the worker, names the ticket an artifact is for (DESIGN §38): the store sets these pairs over its."""
+    scenario.configures("private", artifacts={"mcp_server": "louvre", "publish_roles": ["worker"]})
+    run = scenario.run(worker=pushes())
+    [w] = agent_runs(scenario.agent_log)
+    assert json.loads(w["env"]["CANOPY_ARTIFACT_ORIGIN"]) == {
+        "canopy.workspace": workspace.load(scenario.env.root).name,
+        "canopy.ticket": "PROJ-1",
+        "canopy.run": str(run.id),
+    }
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_worker_config_does_not_let_publish_is_given_no_origin(scenario: Scenario) -> None:
+    scenario.configures("private", artifacts={"mcp_server": "louvre", "publish_roles": []})
+    scenario.run(worker=pushes())
+    [w] = agent_runs(scenario.agent_log)
+    assert "CANOPY_ARTIFACT_ORIGIN" not in w["env"]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_private_tickets_worker_is_given_no_origin(scenario: Scenario) -> None:
+    """A private ticket's worker never publishes (DESIGN §22), so it is given nothing to name its ticket to a store."""
+    scenario.configures("private", artifacts={"mcp_server": "louvre", "publish_roles": ["worker"]})
+    scenario.operator("start", "PROJ-1")
+    done: dict[str, object] = {"status": "done", "summary": "did it"}
+    run = scenario.run(
+        dispatches(label=None),
+        worker=private_worker_does(*commit_and_push("agent/PROJ-1-work"), result=done),
+    )
+    assert run.row["private"] == 1
+    [w] = agent_runs(scenario.agent_log)
+    assert "CANOPY_ARTIFACT_ORIGIN" not in w["env"]
 
 
 @pytest.mark.parametrize(
@@ -127,26 +167,26 @@ def test_a_worker_template_that_places_no_prompt_gets_it_on_stdin(scenario: Scen
     scenario.configures(
         runtime={
             "worker_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker",
-            "worker_cmd_suffix": "--variant high",
+            "worker_cmd_suffix": "--log-level INFO",
         },
     )
     run = scenario.run(worker=pushes())
     assert run.status == "done"
     [w] = agent_runs(scenario.agent_log)
-    assert w["argv"] == ["run", "--agent", "canopy-worker", "--variant", "high"]
+    assert w["argv"] == ["run", "--agent", "canopy-worker", "--log-level", "INFO"]
     assert w["stdin"] == run.prompt
 
 
 def test_the_worker_runs_between_the_prefix_and_the_suffix(scenario: Scenario, git_pool: GitPool) -> None:
     """One prefix and suffix wrap every command a worker run starts, such as a sandbox wrapper (DESIGN §12)."""
     scenario.configures(
-        runtime={"worker_cmd_prefix": "env CANOPY_WRAPPED={title}", "worker_cmd_suffix": "--variant high"},
+        runtime={"worker_cmd_prefix": "env CANOPY_WRAPPED={title}", "worker_cmd_suffix": "--log-level INFO"},
     )
     run = scenario.run(worker=pushes())
     assert run.status == "done"
     [w] = agent_runs(scenario.agent_log)
     assert w["env"]["CANOPY_WRAPPED"] == "PROJ-1 implement"
-    assert w["argv"][-2:] == ["--variant", "high"]
+    assert w["argv"][-2:] == ["--log-level", "INFO"]
 
 
 def test_a_run_makes_no_local_branch(scenario: Scenario, git_pool: GitPool) -> None:
@@ -249,6 +289,28 @@ def test_a_rebase_dropped_with_work_of_its_own_is_unpushed(scenario: Scenario, g
     )
     assert run.status == "unpushed"
     assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run.row["result_json"])["harness"]
+
+
+def test_a_rebase_aborted_and_made_again_leaves_nothing_behind(scenario: Scenario, git_pool: GitPool) -> None:
+    """A copy the aborted attempt made is left behind, with the same patch as one the second attempt pushed.
+
+    `fix` changed the copy's file since, so merging the copy into origin's branch conflicts.
+    """
+    scenario.configures(trust={"rebase": True})
+    branch_behind_main(git_pool)
+    # Dated, so the first attempt's copy is not the commit the second makes.
+    first = "GIT_COMMITTER_DATE=2001-01-01T00:00:00 git rebase --quiet --exec false origin/main; git rebase --abort"
+    run = scenario.run(
+        worker=worker_does(
+            ["sh", "-c", "echo fix > a.txt && git commit --quiet -am 'PROJ-1: fix'"],
+            ["sh", "-c", first],
+            ["git", "rebase", "--quiet", "origin/main"],
+            ["git", "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
+        ),
+    )
+    assert run.status == "done", run.row["result_json"]
+    slot = Path(slot_of(scenario.conn, run.id).slot_path)
+    assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
 
 
 def test_without_rebase_a_rebased_branch_is_never_forced(scenario: Scenario, git_pool: GitPool) -> None:
@@ -485,7 +547,8 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     git_pool: GitPool,
     opencode_state: Path,
 ) -> None:
-    opencode_state.write_text(json.dumps({"sessions": {"ses_w1": [["anthropic", "claude-x", 0.25]]}}))
+    sessions = {"ses_w1": [["anthropic", "claude-x", 0.25]]}
+    opencode_state.write_text(json.dumps({"sessions": sessions, "version": "1.19.3"}))
     with report_events(scenario.env):
         run = scenario.run(worker=pushes())
 
@@ -500,7 +563,8 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
     assert tuple(row[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
     assert row["tokens_peak_context"] == 1000 + 4000 + 500  # one call's input, cache read, and cache write
-    assert (row["tokens_first_call"], row["tokens_first_cache_write"]) == (5500, 500)
+    first = ("tokens_first_call", "tokens_first_cache_write", "tokens_first_cache_read")
+    assert tuple(row[c] for c in first) == (5500, 500, 4000)
     assert (scenario.env.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()  # the one it loaded
     # Each command the fake ran is a `bash` call that returned its stdout.
     assert tools_of(scenario.conn, "runs", run.id) == tools_printed(scenario.agent_log, "canopy-worker") != []
@@ -508,12 +572,30 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     assert [(m.model, m.replies) for m in run_models.of_run(scenario.conn, "runs", run.id)] == [
         ("anthropic/claude-x", 1),
     ]
+    # And the OpenCode that ran it.
+    assert run_models.reads_of(scenario.conn, "runs", [run.id])[run.id].runtime_version == "1.19.3"
 
     out = scenario.operator("status").out
     assert re.search(r"\nRecent runs \(1\):\n  PROJ-1  implement  done  \d+s ago  https://example.test/pr/1\n", out)
-    # And the persona it ran in, by name and the start of its digest (DESIGN §31).
-    said = f"session ses_w1  $0.25, 3.5k tokens, 5.5k peak context  persona canopy {row['persona_digest'][:12]}"
+    # And the persona it ran in, by name and the start of its digest (DESIGN §31), and the model that served it.
+    persona = f"persona canopy {row['persona_digest'][:12]}"
+    said = f"session ses_w1  $0.25, 3.5k tokens, 5.5k peak context  {persona}  served anthropic/claude-x"
     assert f"\n    did it\n    {said}  log {row['log_path']}\n" in out
+
+
+def test_status_names_each_model_that_served_a_run_with_its_cost(
+    scenario: Scenario,
+    git_pool: GitPool,
+    opencode_state: Path,
+) -> None:
+    """A run more than one model served names each in `canopy status`, the most costly first (DESIGN §13)."""
+    calls = [["openai", "gpt-y", 0.1], ["anthropic", "claude-x", 0.25], ["anthropic", "claude-x", 0.15]]
+    opencode_state.write_text(json.dumps({"sessions": {"ses_w1": calls}}))
+    with report_events(scenario.env):
+        run = scenario.run(worker=pushes())
+
+    out = scenario.operator("status").out
+    assert f"  served anthropic/claude-x $0.40, openai/gpt-y $0.10  log {run.row['log_path']}\n" in out
 
 
 def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(scenario: Scenario, git_pool: GitPool) -> None:

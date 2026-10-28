@@ -3,8 +3,8 @@ import type { Locator, Page } from '@playwright/test'
 
 import { NOW, screenshotWhole, settled, signIn, spentInAll, storeTheme, THEMES } from './helpers.ts'
 
-// Tall enough that the rail has room for Sprig and its bubble under the mock's four working rows.
-test.use({ viewport: { width: 1280, height: 1200 } })
+// Tall enough that the rail has room for Sprig and its bubble under the mock's four working rows and `+1 more`.
+test.use({ viewport: { width: 1280, height: 1260 } })
 
 /** The longest Sprig waits before offering a tip unasked, in seconds (`WAIT_SECONDS` in buddy.tsx). */
 const LONGEST_WAIT = 360
@@ -30,7 +30,10 @@ async function fixRandom(page: Page): Promise<void> {
     })
 }
 
-/** Asks Sprig for a tip from the keyboard, then lets go of the focus: no pointer moves its eyes, no ring shows. */
+/**
+ * Asks Sprig, or the Ghost in its place, for a tip from the keyboard, then lets go of the focus: no pointer moves its
+ * eyes, no ring shows.
+ */
 async function askSprig(page: Page): Promise<void> {
     const sprig = page.getByTestId('buddy-sprig')
     await sprig.press('Enter')
@@ -53,6 +56,27 @@ test('Sprig is off until Settings turns it on', async ({ page }) => {
     await page.reload()
     await settled(page)
     await expect(page.getByTestId('buddy')).toBeVisible()
+})
+
+test("picking the Ghost in Settings turns it on in Sprig's place", async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    await expect(page.getByTestId('buddy')).toHaveCount(0)
+
+    await page.getByTestId('companion-ghost').click()
+    await expect(page.getByRole('complementary', { name: 'Ghost' })).toBeVisible()
+    await expect(page.getByTestId('fun-sprig')).toBeChecked()
+    await expect(page.getByTestId('fun-sprig')).toHaveAccessibleName('Ghost')
+})
+
+test('picking Sprig, already picked, turns it on', async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    await expect(page.getByTestId('companion-sprig')).toHaveAttribute('data-state', 'on')
+
+    await page.getByTestId('companion-sprig').click()
+    await expect(page.getByRole('complementary', { name: 'Sprig' })).toBeVisible()
+    await expect(page.getByTestId('companion-sprig')).toHaveAttribute('data-state', 'on')
 })
 
 test.describe('turned on', () => {
@@ -164,6 +188,59 @@ test.describe('turned on', () => {
         await expect(page.getByTestId('buddy-sprig')).toBeVisible()
     })
 
+    test("Settings puts a Ghost in Sprig's place, and the rail keeps it", async ({ page }) => {
+        await page.goto('settings')
+        await settled(page)
+        await expect(page.getByRole('complementary', { name: 'Sprig' })).toBeVisible()
+
+        await page.getByTestId('companion-ghost').click()
+        const ghost = page.getByRole('complementary', { name: 'Ghost' })
+        await expect(ghost).toBeVisible()
+        await expect(page.getByTestId('fun-sprig')).toHaveAccessibleName('Ghost')
+        await page.reload()
+        await settled(page)
+        await page.getByRole('button', { name: 'Ask Ghost for a tip' }).click()
+        await expect(page.getByTestId('buddy-tip')).toContainText('Ghost')
+
+        await page.getByTestId('companion-sprig').click()
+        await expect(page.getByRole('complementary', { name: 'Sprig' })).toBeVisible()
+    })
+
+    test("the Ghost's eye follows the pointer", async ({ page }) => {
+        await page.addInitScript(() => globalThis.localStorage.setItem('canopy-companion', 'ghost'))
+        await page.goto('attention')
+        await settled(page)
+        const pupil = page.getByTestId('ghost-body').locator('[data-pupil]')
+        await page.mouse.move(0, 0)
+        await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/u)
+    })
+
+    test('the Ghost floats around, its light swells and dims, faster at the rave, still under reduced motion', async ({
+        page,
+    }) => {
+        // The Ghost's running animations, by name, and how long a round of each takes.
+        const moving = () =>
+            page.evaluate(() =>
+                Object.fromEntries(
+                    document
+                        .getAnimations()
+                        .filter((a) => a instanceof CSSAnimation && a.animationName.startsWith('ghost-'))
+                        .map((a) => [(a as CSSAnimation).animationName, a.effect?.getTiming().duration]),
+                ),
+            )
+        await page.addInitScript(() => globalThis.localStorage.setItem('canopy-companion', 'ghost'))
+        await page.goto('settings')
+        await settled(page)
+        await expect.poll(moving).toMatchObject({ 'ghost-wander': 14_000, 'ghost-glow': 4200, 'ghost-light': 4200 })
+
+        await page.getByTestId('light-switch').click()
+        await expect.poll(moving).toMatchObject({ 'ghost-glow': 1200, 'ghost-spin': 2400 })
+        await page.getByTestId('light-switch').click()
+
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await expect.poll(moving).toEqual({})
+    })
+
     test("Sprig's eyes follow the pointer", async ({ page }) => {
         await page.goto('attention')
         await settled(page)
@@ -228,7 +305,7 @@ test.describe('turned on', () => {
         await expect(buddy).toBeHidden()
         await expect(page.getByTestId('buddy-sprig')).toBeHidden()
 
-        await page.setViewportSize({ width: 1280, height: 1200 })
+        await page.setViewportSize({ width: 1280, height: 1260 })
         await expect(buddy).toHaveAttribute('data-room', 'roomy')
         await askSprig(page)
         const sprig = await buddy.boundingBox()
@@ -242,7 +319,8 @@ test.describe('turned on', () => {
     test("Sprig stands over the spend a little in a laptop's window, and tips there only when asked", async ({
         page,
     }) => {
-        await page.setViewportSize({ width: 1280, height: 902 })
+        // Tall enough for the figure alone over the mock's rail, whose four working rows end in `+1 more`.
+        await page.setViewportSize({ width: 1280, height: 980 })
         await page.goto('attention')
         await settled(page)
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
@@ -266,7 +344,7 @@ test.describe('turned on', () => {
 
     test('a tight rail lets the tips Sprig would offer unasked pass, and a roomy one shows them', async ({ page }) => {
         await page.clock.install()
-        await page.setViewportSize({ width: 1280, height: 902 })
+        await page.setViewportSize({ width: 1280, height: 980 })
         await page.goto('attention')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')
@@ -274,7 +352,7 @@ test.describe('turned on', () => {
         await page.clock.runFor(LONGEST_WAIT * 2 * 1000)
         await expect(tip).toBeHidden()
 
-        await page.setViewportSize({ width: 1280, height: 1200 })
+        await page.setViewportSize({ width: 1280, height: 1260 })
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'roomy')
         await waitForTip(page, tip)
         await page.clock.runFor(21_000)
@@ -314,13 +392,68 @@ test.describe('turned on', () => {
         await expect(page.getByTestId('hat-party-wear')).toHaveText('Wear')
     })
 
-    test('the mock has spent too little for any hat', async ({ page }) => {
+    test("the Ghost's shells are bought from the hats' wallet, and one is always worn", async ({ page }) => {
+        // $450 in all buys a party hat, then a Sprig Shell and a Pumpkin Shell, but not a Gilded Shell.
+        await page.addInitScript(() => globalThis.localStorage.setItem('canopy-companion', 'ghost'))
+        await spentInAll(page, 450)
         await page.goto('settings')
         await settled(page)
-        await expect(page.getByTestId('hats-wallet')).toContainText('$11.25')
         await page.getByTestId('hats-toggle').click()
-        await expect(page.getByTestId('hat-party-buy')).toBeDisabled()
-        await expect(page.getByTestId('hat-party-buy')).toHaveAttribute('title', '$38.75 short')
+        await page.getByTestId('hat-party-buy').click()
+        const wallet = page.getByTestId('shells-wallet')
+        await expect(wallet).toContainText('$400.00')
+        await expect(page.getByTestId('shell-generalist')).toHaveCount(0)
+        await page.getByTestId('shells-toggle').click()
+        // The Generalist Shell comes free and worn, and comes off only for another.
+        await expect(page.getByTestId('shell-generalist-wear')).toHaveText('Worn')
+        await expect(page.getByTestId('shell-generalist-wear')).toBeDisabled()
+        await expect(page.locator('[data-testid=buddy] [data-shell=generalist]')).toHaveCount(1)
+        await expect(page.getByTestId('shell-gilded-buy')).toBeDisabled()
+
+        await page.getByTestId('shell-sprig-buy').click()
+        await expect(wallet).toContainText('$300.00')
+        await expect(page.getByTestId('hats-wallet')).toContainText('$300.00')
+        await expect(page.locator('[data-testid=buddy] [data-shell=sprig]')).toHaveCount(1)
+        await page.getByTestId('shell-pumpkin-buy').click()
+        await expect(wallet).toContainText('$0.00')
+        await expect(page.locator('[data-testid=buddy] [data-shell=pumpkin]')).toHaveCount(1)
+        await expect(page.getByTestId('hat-beanie-buy')).toBeDisabled()
+
+        // Owned, a shell goes back on without spending again, and the vault outlasts a reload.
+        await page.getByTestId('shell-sprig-wear').click()
+        await expect(page.locator('[data-testid=buddy] [data-shell=sprig]')).toHaveCount(1)
+        await page.reload()
+        await settled(page)
+        await expect(wallet).toContainText('$0.00')
+        await expect(page.locator('[data-testid=buddy] [data-shell=sprig]')).toHaveCount(1)
+        await page.getByTestId('shells-toggle').click()
+        await page.getByTestId('shell-generalist-wear').click()
+        await expect(page.locator('[data-testid=buddy] [data-shell=generalist]')).toHaveCount(1)
+        await expect(page.getByTestId('shell-sprig-wear')).toHaveText('Wear')
+    })
+
+    test('the Ghost in the Sprig Shell', async ({ page }) => {
+        await page.addInitScript(() => {
+            globalThis.localStorage.setItem('canopy-companion', 'ghost')
+            globalThis.localStorage.setItem('canopy-shells', JSON.stringify({ owned: ['sprig'], worn: 'sprig' }))
+        })
+        await page.clock.setFixedTime(NOW)
+        await fixRandom(page)
+        await storeTheme(page, 'dark')
+        await page.goto('attention')
+        await settled(page)
+        await askSprig(page)
+        await expect(page.getByTestId('buddy')).toHaveScreenshot('ghost-sprig-dark.png')
+    })
+
+    test('the mock has spent enough for a party hat and nothing dearer', async ({ page }) => {
+        await page.goto('settings')
+        await settled(page)
+        await expect(page.getByTestId('hats-wallet')).toContainText('$80.81')
+        await page.getByTestId('hats-toggle').click()
+        await expect(page.getByTestId('hat-party-buy')).toBeEnabled()
+        await expect(page.getByTestId('hat-beanie-buy')).toBeDisabled()
+        await expect(page.getByTestId('hat-beanie-buy')).toHaveAttribute('title', '$169.19 short')
     })
 
     for (const theme of THEMES) {
@@ -335,6 +468,17 @@ test.describe('turned on', () => {
             await settled(page)
             await askSprig(page)
             await expect(page.getByTestId('buddy')).toHaveScreenshot(`buddy-hat-${theme}.png`)
+        })
+
+        test(`the Ghost in ${theme}`, async ({ page }) => {
+            await page.addInitScript(() => globalThis.localStorage.setItem('canopy-companion', 'ghost'))
+            await page.clock.setFixedTime(NOW)
+            await fixRandom(page)
+            await storeTheme(page, theme)
+            await page.goto('attention')
+            await settled(page)
+            await askSprig(page)
+            await expect(page.getByTestId('buddy')).toHaveScreenshot(`ghost-${theme}.png`)
         })
 
         test(`Sprig in ${theme}`, async ({ page }) => {

@@ -10,6 +10,8 @@ import type {
     SpendGroup,
     SpendKind,
     SpendModel,
+    SpendMonth,
+    SpendSessions,
     SpendTicket,
     SpendTool,
 } from '@/api/types'
@@ -28,7 +30,16 @@ export const SPEND_WINDOWS: readonly SpendBreakdownRange[] = [{ hours: 24 }, DEF
 const CHARS_PER_TOKEN = 4
 
 /** A series of the by-day chart: a part of a day's spend no other series counts. */
-export type SeriesKey = 'idle' | 'overseer' | 'workers' | 'plans' | 'chores' | 'reviews' | 'tasks' | 'dry_run'
+export type SeriesKey =
+    | 'idle'
+    | 'overseer'
+    | 'workers'
+    | 'plans'
+    | 'chores'
+    | 'reviews'
+    | 'tasks'
+    | 'dry_run'
+    | 'outside'
 
 /**
  * One series: what it counts, its name, what that name means on hover, and its fill, written out so Tailwind finds
@@ -48,8 +59,9 @@ export interface Series {
 /**
  * The series bottom up. Idle ticks first, on the baseline under the rest of the overseer's, a deeper shade of the same
  * hue, so the two read as one: together they are the overseer's bar, and idle ticks a part of it. Then the runs the
- * overseer started, the plans among them, then your tasks' runs, then dry runs. Idle spend is a sliver beside a
- * worker's, so its trend across days is read from the table, not the bars.
+ * overseer started, the plans among them, then your tasks' runs, then dry runs, then the sessions outside canopy, on
+ * top as no part of canopy's work. Idle spend is a sliver beside a worker's, so its trend across days is read from the
+ * table, not the bars.
  */
 export const SERIES: readonly Series[] = [
     {
@@ -80,6 +92,12 @@ export const SERIES: readonly Series[] = [
     { key: 'reviews', label: 'reviews', hint: "canopy's reviews of PRs", fill: 'bg-spend-reviews' },
     { key: 'tasks', label: 'tasks', hint: 'The runs of the one-off tasks you submitted', fill: 'bg-spend-tasks' },
     { key: 'dry_run', label: 'dry runs', hint: 'Dry-run ticks, apart from the live ones', fill: 'bg-spend-dry-run' },
+    {
+        key: 'outside',
+        label: 'outside canopy',
+        hint: "The runtime's sessions none of canopy's runs started: yours, and other workspaces' canopy",
+        fill: 'bg-spend-outside',
+    },
 ]
 
 /** Each group of ticks in words, as `canopy spend` prints it. */
@@ -250,6 +268,21 @@ export function modelRows(models: readonly SpendModel[], kind: SpendKind | undef
     )
 }
 
+/** What a By model row's runs spent each, on average: its cost over its runs; null when they reported none. */
+export function perRun(row: ModelRow): number | null {
+    return row.cost_usd === null || row.runs === 0 ? null : row.cost_usd / row.runs
+}
+
+/**
+ * The share of the By model rows' spend on runs no session has named a model for yet, 0 to 1: the `none` row's cost
+ * over every row's. Null when there is no such spend.
+ */
+export function unattributedShare(rows: readonly ModelRow[]): number | null {
+    const total = rows.reduce((sum, m) => sum + (m.cost_usd ?? 0), 0)
+    const unnamed = rows.find((m) => m.model === null)?.cost_usd ?? 0
+    return unnamed > 0 && total > 0 ? unnamed / total : null
+}
+
 /**
  * The By tool table's rows: one kind's as the server sent them, or with no kind each tool summed over every kind, the
  * most characters returned first, its tokens estimated from the sum as the server estimates each kind's.
@@ -290,4 +323,77 @@ function firstOf(...diffs: number[]): number {
 // Two costs summed, null only when neither reported one.
 function addCost(a: number | null | undefined, b: number | null | undefined): number | null {
     return a === null || a === undefined ? (b ?? null) : a + (b ?? 0)
+}
+
+/**
+ * Where the month stands against its budget: `over` once it spent it, `headed` over when its pace says it will by the
+ * month's end, else `under`.
+ */
+export type BudgetState = 'under' | 'headed' | 'over'
+
+/** Where the month stands against its budget. */
+export function budgetState(month: SpendMonth): BudgetState {
+    if (budgetPercent(month) >= 100) {
+        return 'over'
+    }
+    return month.projected_usd !== null && month.projected_usd > month.budget_usd ? 'headed' : 'under'
+}
+
+/**
+ * The month's spend over its budget, from 0, as a whole percentage: past 100 once it is over. Floored, so a month short
+ * of its budget never reads 100%, and counted in whole cents, so `0.29 * 100` never floors a point away.
+ */
+export function budgetPercent(month: SpendMonth): number {
+    return Math.floor(Math.round((month.spent_usd ?? 0) * 100) / month.budget_usd)
+}
+
+/** The alerts a sink hears the month reach, in words: `A sink that takes loop events hears at 50%, 80%, and 100%.` */
+export function alertsText(month: SpendMonth): string {
+    const percents = new Intl.ListFormat('en-US').format(month.alerts.map((p) => `${p}%`))
+    return `A sink that takes loop events hears at ${percents}.`
+}
+
+/** The alerts below the budget, which the bar has room to mark: those at or past 100% are past its end. */
+export function alertMarks(month: SpendMonth): number[] {
+    return month.alerts.filter((p) => p < 100)
+}
+
+/** The month in words, `October 2026`, from its `YYYY-MM`, as the operator's calendar names it. */
+export function monthName(month: SpendMonth): string {
+    const [year, number] = month.month.split('-').map(Number)
+    return new Date(year ?? 1970, (number ?? 1) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+
+/**
+ * What the month spent against its budget, and where its pace takes it: `$15.76 of $40 (39%), on pace for $65.14.`
+ */
+export function budgetText(month: SpendMonth): string {
+    const spent = `${costText(month.spent_usd ?? 0)} of $${month.budget_usd} (${budgetPercent(month)}%)`
+    const pace = month.projected_usd === null ? '' : `, on pace for ${costText(month.projected_usd)}`
+    return `${spent}${pace}.`
+}
+
+/**
+ * When the runtime's sessions were last read, for the sessions panel's header: `read Oct 8 11:55`, with how the latest
+ * read ended when it did not find the record, `read Oct 8 11:55, last failed`; `never read` before the first.
+ */
+export function sessionsReadText(sessions: SpendSessions, clock: Clock): string {
+    if (sessions.read_at === null) {
+        return 'never read'
+    }
+    const read = `read ${stamp(sessions.read_at, clock)}`
+    return sessions.status === null || sessions.status === 'found' ? read : `${read}, last ${sessions.status}`
+}
+
+/**
+ * What the month's spend is made of: `Canopy's runs $12.50, outside canopy $3.26, as of Oct 8 11:55.` Outside canopy is
+ * the runtime's sessions none of canopy's runs started, as `canopy loop` last read them, so the time says how fresh it
+ * is; before the first read, that it counts none yet.
+ */
+export function budgetPartsText(month: SpendMonth, clock: Clock): string {
+    const runs = `Canopy's runs ${costText(month.runs_usd ?? 0)}`
+    if (month.sessions_read_at === null) {
+        return `${runs}. Sessions outside canopy count once canopy loop has read them.`
+    }
+    return `${runs}, outside canopy ${costText(month.outside_usd)}, as of ${stamp(month.sessions_read_at, clock)}.`
 }

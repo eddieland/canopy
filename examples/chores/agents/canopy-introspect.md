@@ -4,31 +4,23 @@
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
 # The agent of the example chores that look at canopy itself, canopy-health and canopy-efficiency.
 # `canopy chore install` copies it into the workspace beside the chore's prompt, and the chore's `cmd` loads that copy,
-# which stays as installed until the chore is installed again. It is `canopy-chore` with a shell for canopy's own
-# read-only commands. A chore reads and reports (DESIGN §19, TRUST_MODEL T6): its only output is its result line.
-# Everything but bash is `canopy-chore`'s; keep the two in step.
+# which stays as installed until the chore is installed again. It is `canopy-chore` with the reports of canopy's its
+# prompts read allowed as tools; like it, it has no shell. A chore reads and reports (DESIGN §19, TRUST_MODEL T6): its
+# only output is its result line. Everything but the reports it allows is `canopy-chore`'s; keep the two in step.
 description: canopy chore that reads canopy's own health, spend, and runs. Reports findings, changes nothing.
 mode: primary
 permission:
   edit: deny
-  # Its own chore's earlier runs (DESIGN §19, History), and the read-only commands its prompts name, each of which
-  # writes nothing: `canopy show` for runs and chores only, since a ticket's page holds its conversation. Everything
-  # else in bash is denied.
-  bash:
-    "*": deny
-    "canopy chore history *": allow
-    "canopy health --json*": allow
-    "canopy spend --json*": allow
-    "canopy decisions*": allow
-    "canopy show run:*": allow
-    "canopy show chore:*": allow
-    "canopy config show --json": allow
-    "canopy agents --json": allow
+  # It reads its history and canopy's reports through canopy's tools, below, not a shell.
+  bash: deny
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077).
   webfetch: deny
   websearch: deny
   codesearch: deny
+  # OpenCode 2's code mode runs the model's JavaScript, which can make HTTP requests of its own, so it is a web
+  # tool too (D077). An MCP server reached only through it is then out of reach: give it `codemode: false`.
+  execute: deny
   external_directory: deny
   # Subagents run with their own, wider permissions; a chore must not reach them.
   task: deny
@@ -59,12 +51,20 @@ permission:
   "*branch*": deny
   "*fork*": deny
   "*copilot*": deny
-  # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
-  # above reopens one.
-  "canopy_git_*": deny
-  # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
-  # chore's, allowed by exact name: last, so no pattern above closes it.
+  # canopy's own tools, the overseer's, the reviewer's and planner's git tools, and the reports this agent does not
+  # read, are not its (DESIGN §27): denied by pattern, before its exceptions below.
+  "canopy_*": deny
+  # Its tools of canopy's, each allowed by exact name: last, so no pattern above closes one. Its own chore's earlier
+  # runs (DESIGN §19, History), which refuses any other chore's, and the reports its prompts name (DESIGN §27), each
+  # of which writes nothing: `show-run` and `show-chore` and no ticket's page, which holds its conversation.
   "canopy_chore_history": allow
+  "canopy_reports_health": allow
+  "canopy_reports_spend": allow
+  "canopy_reports_decisions": allow
+  "canopy_reports_show-run": allow
+  "canopy_reports_show-chore": allow
+  "canopy_reports_config-show": allow
+  "canopy_reports_agents": allow
 ---
 
 The system prompt is supplied by the harness at invocation time via the

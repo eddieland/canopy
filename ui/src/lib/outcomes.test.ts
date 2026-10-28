@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/api/client'
-import { draft, mockCapacity } from '@/api/mocks'
+import { draft, mockCapacity, reviewDraft } from '@/api/mocks'
 import { DEFAULT_CLOCK } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 
@@ -17,6 +17,7 @@ import {
     failedText,
     forgotText,
     grantedText,
+    itemNames,
     memoryForgottenText,
     notedText,
     planText,
@@ -24,14 +25,20 @@ import {
     promotedText,
     rejectedText,
     reloadedText,
+    pinnedText,
     renewedText,
+    unpinnedText,
     repliedText,
     reviewDismissedText,
+    reviewDraftPublishedText,
+    reviewDraftPublishedToast,
     reviewRequestedText,
     reviewSentText,
     reviewStoppedText,
     startedText,
     stoppedText,
+    taskRepliedText,
+    taskStoppedText,
     triedText,
 } from './outcomes'
 
@@ -112,6 +119,24 @@ describe('outcomes', () => {
             'A-1 was already stopped; nothing dispatches it now. Run 4 was ended and its slots returned.',
         )
         expect(stoppedText('A-1', { already: true, running_run: 4, ended: false }, true)).toContain('had already ended')
+    })
+
+    it("say what a task's stop did, as canopy stop task:N does", () => {
+        const stop = { already: false, dropped: false, running_run: null, ended: false }
+        expect(taskStoppedText(7, { ...stop, dropped: true }, false)).toBe(
+            'task:7 is stopped; it had not started, and nothing starts it now.',
+        )
+        expect(taskStoppedText(3, { ...stop, already: true }, false)).toBe('task:3 was already stopped.')
+        expect(taskStoppedText(6, { ...stop, already: true, running_run: 6 }, true)).toBe(
+            'task:6 was already stopped. Its run 6 had already ended.',
+        )
+    })
+
+    it("say what a task's reply recorded, or that one already said it, and what starts its next run", () => {
+        expect(taskRepliedText(4, { message_id: 14, answers: 13, new: false, running_run: null })).toBe(
+            'Message 14 on task:4 already says this, answering message 13; nothing new recorded. The next tick ' +
+                'starts its next run, on its branch.',
+        )
     })
 
     it("say what a forget cleared, and that its PRs and branch are the operator's to close", () => {
@@ -196,10 +221,10 @@ describe('outcomes', () => {
     })
 
     it("say what a dismissal of a review's finding did", () => {
-        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: true })).toBe(
-            'review:4 finding 2 is dismissed: no worker or tick acts on it.',
+        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: true, reason: 'not_worth_it' })).toBe(
+            'review:4 finding 2 is dismissed as not_worth_it: no worker or tick acts on it.',
         )
-        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: false })).toBe(
+        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: false, reason: null })).toBe(
             'review:4 finding 2 is no longer dismissed: a resume hands it to the worker again.',
         )
     })
@@ -357,6 +382,7 @@ describe('outcomes', () => {
             used_by: [] as number[],
             last_used_at: null,
             review_at: '2027-01-06T12:00:00Z',
+            pinned_at: null,
             wrong_at: null,
             wrong_run_id: null,
             promoted_from: 2,
@@ -393,8 +419,58 @@ describe('outcomes', () => {
         expect(renewedText({ id: 9, review_at: '2027-01-06T12:00:00Z' })).toBe(
             `Lesson 9 is renewed: due for review at ${due}.`,
         )
+        const pinnedEdit = { ...edit, lesson: { ...edit.lesson, review_at: null, pinned_at: '2026-10-08T12:00:00Z' } }
+        expect(editedText(pinnedEdit)).toContain('version 3, pinned, never due for review. Lesson 9 stays')
+        expect(renewedText({ id: 9, review_at: null })).toBe(
+            'Lesson 9 is renewed: any report that it is wrong is cleared. Pinned, it is never due.',
+        )
+        expect(pinnedText({ id: 9, pinned_at: '2026-10-08T12:00:00Z' })).toBe(
+            'Lesson 9 is pinned: never due for review, and served before every lesson not pinned.',
+        )
+        expect(unpinnedText({ id: 9, review_at: '2027-01-06T12:00:00Z' })).toBe(
+            `Lesson 9 is unpinned: due for review at ${due}.`,
+        )
         const forgot = { id: 9, scope: 'lesson', key: 'web-tests', checkpointed: true } as const
         expect(memoryForgottenText(forgot)).toBe('Memory 9 (lesson `web-tests`) is forgotten: its text is deleted.')
         expect(memoryForgottenText({ ...forgot, checkpointed: false })).toContain('may stay in the log')
+    })
+})
+
+// A feedback plan's item `number`, its observed id 500 more.
+function item(number: number) {
+    return { number, item_id: 500 + number }
+}
+
+describe('itemNames', () => {
+    it("names a feedback plan's items by number and id, as canopy/core/prompts.py item_names does", () => {
+        expect(itemNames([item(2)])).toBe('item 2 (id 502)')
+        expect(itemNames([item(1), item(3)])).toBe('items 1 (id 501) and 3 (id 503)')
+        expect(itemNames([item(1), item(3), item(5)])).toBe('items 1 (id 501), 3 (id 503), and 5 (id 505)')
+    })
+})
+
+describe('reviewDraftPublishedToast', () => {
+    const pr = 'https://github.com/acme/api/pull/14'
+    const published = (status: 'published' | 'unconfirmed') => ({
+        draft: reviewDraft({ status, published_url: status === 'published' ? `${pr}#pullrequestreview-9` : null }),
+        published: 2,
+        failed: null,
+    })
+
+    it('says where a publish went, and crosses one whose outcome a read of the PR settles', () => {
+        expect(reviewDraftPublishedToast(5, pr, published('published'))).toEqual({
+            title: "Published version 2 of review run 5's draft",
+            detail: `${pr}#pullrequestreview-9`,
+            tone: 'done',
+        })
+        expect(reviewDraftPublishedToast(5, pr, published('unconfirmed'))).toEqual({
+            title: "Version 2 of review run 5's draft may have been posted",
+            tone: 'failed',
+        })
+    })
+
+    it('leaves the panel no line of its own for a publish its linked line says', () => {
+        expect(reviewDraftPublishedText(5, published('published'))).toBeNull()
+        expect(reviewDraftPublishedText(5, published('unconfirmed'))).toContain('A read of the PR settles it')
     })
 })

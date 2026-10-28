@@ -205,8 +205,10 @@ def test_a_request_in_several_personas_is_reviewed_once_in_each_side_by_side(
         ("skeptic", "done", both[0].row.tick_id),
         ("explainer", "done", both[0].row.tick_id),
     ]
-    # The request ends once each persona has had its review.
+    # The request ends once each persona has had its review, and both answer it, so the web UI shows them together.
     assert requests_of(scenario.conn) == [(PR, "cli", "reviewed")]
+    [(made,)] = scenario.conn.execute("SELECT id FROM review_requests").fetchall()
+    assert review_requests.answered_by(scenario.conn, [r.row for r in both]) == {both[0].id: made, both[1].id: made}
     # Each review keeps a draft of its own, and is named by its persona.
     hashes = {scenario.operator("review", "draft", str(r.id)).out.splitlines()[0] for r in both}
     assert len(hashes) == 2
@@ -230,7 +232,8 @@ def test_a_persona_is_reviewed_once_per_commit_and_waits_on_room_for_its_review(
     assert first.row.persona == "skeptic"
     # One slot: explainer's review waits, and the request with it.
     actions = [d.action for d in db.decisions_for_tick(scenario.conn, first.row.tick_id)]
-    assert actions == ["dispatch:review", "refused:review_capacity"]
+    # The refusal is at the ask; the review's decision as the tick starts it, after the overseer (DESIGN §40).
+    assert actions == ["refused:review_capacity", "dispatch:review"]
     assert requests_of(scenario.conn) == [(PR, "cli", None)]
     # At the same commit, skeptic's review is done: the next starts explainer's alone, and that ends the request.
     second = scenario.review(reviews(sha, PR), reviewer=reviewer_reports(CLEAN))
@@ -244,7 +247,12 @@ def test_a_persona_is_reviewed_once_per_commit_and_waits_on_room_for_its_review(
     assert requests_of(scenario.conn)[-1] == (PR, "cli", "reviewed")
     # A persona that has not reviewed this commit is owed one, though another persona has.
     scenario.operator("start", PR, "--review", "--persona", "minimalist")
-    assert scenario.review(reviews(sha, PR), reviewer=reviewer_reports(CLEAN)).row.persona == "minimalist"
+    third = scenario.review(reviews(sha, PR), reviewer=reviewer_reports(CLEAN)).row
+    assert third.persona == "minimalist"
+    # Each review answers the request it was started for: the latest made by then, never a later one.
+    made = [r[0] for r in scenario.conn.execute("SELECT id FROM review_requests ORDER BY id")]
+    asked = review_requests.answered_by(scenario.conn, [first.row, second.row, third])
+    assert asked == {first.id: made[0], second.id: made[0], third.id: made[2]}
 
 
 def test_each_personas_review_counts_against_the_prs_limit(
@@ -258,7 +266,7 @@ def test_each_personas_review_counts_against_the_prs_limit(
     [one] = scenario.reviews_each(reviews(head(git_pool), PR), reviewer=reviewer_reports(CLEAN))
     assert one.row.persona == "skeptic"
     actions = [d.action for d in db.decisions_for_tick(scenario.conn, one.row.tick_id)]
-    assert actions == ["dispatch:review", "refused:review_limit"]
+    assert actions == ["refused:review_limit", "dispatch:review"]
     assert (
         "several are for a PR's reviews"
         in scenario.operator("start", "PROJ-1", "--persona", "skeptic", "--persona", "explainer", code=2).err

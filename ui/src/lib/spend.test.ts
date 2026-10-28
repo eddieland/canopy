@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import type { SpendCosts, SpendDay, SpendModel, SpendTool } from '@/api/types'
+import type { SpendCosts, SpendDay, SpendModel, SpendMonth, SpendSessions, SpendTool } from '@/api/types'
 import type { Clock } from '@/lib/clock'
+import { stamp } from '@/lib/time'
 
 import {
+    alertMarks,
+    alertsText,
+    budgetPercent,
+    budgetState,
+    budgetPartsText,
+    budgetText,
+    sessionsReadText,
     chartTop,
     dayHint,
     dayLabel,
@@ -12,12 +20,15 @@ import {
     doneText,
     kindsOffered,
     modelRows,
+    monthName,
+    perRun,
     seriesCost,
     SERIES,
     shareText,
     spendLine,
     spendWindow,
     toolRows,
+    unattributedShare,
     windowId,
     windowName,
 } from './spend'
@@ -34,6 +45,7 @@ const NONE: SpendCosts = {
     chores: null,
     reviews: null,
     tasks: null,
+    outside: null,
     total: null,
 }
 
@@ -55,10 +67,19 @@ function tool(kind: SpendTool['kind'], name: string, chars: number): SpendTool {
 
 describe('spend', () => {
     it("takes idle ticks' part out of the overseer's, so the series sum to the day's total", () => {
-        const costs: SpendCosts = { ...NONE, overseer: 1.5, idle: 0.5, workers: 2, dry_run: 0.25, total: 3.75 }
+        const costs: SpendCosts = {
+            ...NONE,
+            overseer: 1.5,
+            idle: 0.5,
+            workers: 2,
+            dry_run: 0.25,
+            outside: 1.25,
+            total: 5,
+        }
         expect(seriesCost(costs, 'idle')).toBe(0.5)
         expect(seriesCost(costs, 'overseer')).toBe(1)
-        expect(SERIES.reduce((sum, s) => sum + seriesCost(costs, s.key), 0)).toBe(3.75)
+        expect(seriesCost(costs, 'outside')).toBe(1.25)
+        expect(SERIES.reduce((sum, s) => sum + seriesCost(costs, s.key), 0)).toBe(5)
         expect(seriesCost(NONE, 'overseer')).toBe(0)
     })
 
@@ -72,6 +93,9 @@ describe('spend', () => {
         expect(
             dayHint(day('2026-10-07', { overseer: 1, idle: 0.25, reviews: 0.5, tasks: 0.75, total: 2.25 }), H24),
         ).toBe('Oct 7: $2.25, overseer $1.00 (idle ticks $0.25), reviews $0.50, tasks $0.75')
+        expect(dayHint(day('2026-10-06', { workers: 1, outside: 0.5, total: 1.5 }), H24)).toBe(
+            'Oct 6: $1.50, workers $1.00, outside canopy $0.50',
+        )
         expect(dayHint(day('2026-10-02', {}), H24)).toBe('Oct 2: nothing reported')
         expect(dayHint(hourOf(14, { workers: 2, total: 2 }), H24)).toMatch(/^\S+ 8 14:00: \$2\.00, workers \$2\.00$/u)
         expect(dayHint(hourOf(14, { workers: 2, total: 2 }), H12)).toMatch(/^\S+ 8 2:00 PM: \$2\.00/u)
@@ -151,7 +175,17 @@ describe('spend', () => {
     it('names each series once, the same in the totals, the legend, and the table', () => {
         const labels = SERIES.map((s) => s.label)
         expect(new Set(labels).size).toBe(labels.length)
-        expect(labels).toEqual(['idle ticks', 'overseer', 'workers', 'plans', 'chores', 'reviews', 'tasks', 'dry runs'])
+        expect(labels).toEqual([
+            'idle ticks',
+            'overseer',
+            'workers',
+            'plans',
+            'chores',
+            'reviews',
+            'tasks',
+            'dry runs',
+            'outside canopy',
+        ])
     })
 
     it("sums each model's runs over every kind, the costliest first and the unnamed last, or keeps one kind's", () => {
@@ -171,6 +205,19 @@ describe('spend', () => {
         expect(modelRows(models, 'plans')).toEqual([])
     })
 
+    it("gives a model's spend per run, so two models' runs compare, and the share no session named a model for", () => {
+        const rows = [
+            { model: 'a/small', runs: 6, replies: 46, cost_usd: 1.5 },
+            { model: 'a/big', runs: 1, replies: 9, cost_usd: 0.5 },
+            { model: null, runs: 5, replies: 0, cost_usd: 2 },
+        ]
+        expect(rows.map((row) => perRun(row))).toEqual([0.25, 0.5, 0.4])
+        expect(perRun({ model: null, runs: 2, replies: 0, cost_usd: null })).toBeNull()
+        expect(unattributedShare(rows)).toBe(0.5)
+        expect(unattributedShare(rows.slice(0, 2))).toBeNull()
+        expect(unattributedShare([{ model: null, runs: 2, replies: 0, cost_usd: null }])).toBeNull()
+    })
+
     it("sums each tool's calls over every kind, the most returned first, its tokens from the sum", () => {
         const tools = [tool('overseer', 'read', 600), tool('workers', 'bash', 500), tool('workers', 'read', 3)]
         expect(toolRows(tools, undefined)).toEqual([
@@ -184,5 +231,82 @@ describe('spend', () => {
         const rows = [{ kind: 'reviews' as const }, { kind: 'overseer' as const }, { kind: 'reviews' as const }]
         expect(kindsOffered(rows, undefined)).toEqual(['overseer', 'reviews'])
         expect(kindsOffered(rows, 'plans')).toEqual(['overseer', 'plans', 'reviews'])
+    })
+})
+
+// October 2026 a quarter gone, with a $40 budget, and what it spent and where that pace takes it.
+function month(spent: number | null, projected: number | null): SpendMonth {
+    return {
+        month: '2026-10',
+        since: '2026-10-01T00:00:00Z',
+        until: '2026-11-01T00:00:00Z',
+        budget_usd: 40,
+        spent_usd: spent,
+        elapsed: 0.25,
+        projected_usd: projected,
+        alerts: [50, 80, 100],
+        runs_usd: spent,
+        outside_usd: 0,
+        sessions_read_at: null,
+    }
+}
+
+describe('monthly budget', () => {
+    it('is under while its pace stays within it, headed over when the pace passes it, and over once spent', () => {
+        expect(budgetState(month(5, 20))).toBe('under')
+        expect(budgetState(month(null, null))).toBe('under')
+        expect(budgetState(month(15.76, 65.14))).toBe('headed')
+        expect(budgetState(month(40, 160))).toBe('over')
+    })
+
+    it('says what it spent of the budget, and where its pace takes it', () => {
+        expect(budgetText(month(15.76, 65.14))).toBe('$15.76 of $40 (39%), on pace for $65.14.')
+        expect(budgetText(month(null, null))).toBe('$0.00 of $40 (0%).')
+        expect(budgetPercent(month(50, null))).toBe(125)
+        // Short of the budget never reads as all of it, and a float a hair under a whole point is still that point.
+        expect(budgetPercent(month(39.84, null))).toBe(99)
+        expect(budgetPercent({ ...month(29, null), budget_usd: 100 })).toBe(29)
+        expect(budgetPercent({ ...month(0.29, null), budget_usd: 1 })).toBe(29)
+    })
+
+    it("names canopy's runs and the sessions outside canopy as of their last read, or that none counts yet", () => {
+        const read = {
+            ...month(15.76, null),
+            runs_usd: 12.5,
+            outside_usd: 3.26,
+            sessions_read_at: '2026-10-08T11:55:00Z',
+        }
+        expect(budgetPartsText(read, H24)).toBe(
+            `Canopy's runs $12.50, outside canopy $3.26, as of ${stamp('2026-10-08T11:55:00Z', H24)}.`,
+        )
+        expect(budgetPartsText({ ...month(null, null), runs_usd: null }, H24)).toBe(
+            "Canopy's runs $0.00. Sessions outside canopy count once canopy loop has read them.",
+        )
+    })
+
+    it('names each alert, and marks those short of the budget on the bar', () => {
+        expect(alertsText(month(1, null))).toBe('A sink that takes loop events hears at 50%, 80%, and 100%.')
+        expect(alertMarks({ ...month(1, null), alerts: [50, 100, 150] })).toEqual([50])
+        expect(alertsText({ ...month(1, null), alerts: [100] })).toBe('A sink that takes loop events hears at 100%.')
+    })
+
+    it('names the month as a calendar does', () => {
+        expect(monthName(month(1, null))).toBe('October 2026')
+    })
+})
+
+describe('sessionsReadText', () => {
+    it('says when the sessions were read, how the latest read ended when it found nothing, or that none was', () => {
+        const at = '2026-10-08T11:55:00Z'
+        const sessions: SpendSessions = {
+            canopy: { sessions: 2, cost_usd: 1.5 },
+            outside: { sessions: 1, cost_usd: 2 },
+            directories: [{ directory: '/home/me/notes', sessions: 1, cost_usd: 2 }],
+            read_at: at,
+            status: 'found',
+        }
+        expect(sessionsReadText(sessions, H24)).toBe(`read ${stamp(at, H24)}`)
+        expect(sessionsReadText({ ...sessions, status: 'failed' }, H24)).toBe(`read ${stamp(at, H24)}, last failed`)
+        expect(sessionsReadText({ ...sessions, read_at: null, status: null }, H24)).toBe('never read')
     })
 })

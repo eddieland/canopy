@@ -9,8 +9,8 @@ import { E2E_SECRET } from './secret.ts'
 export const STORAGE_KEY = 'canopy-theme'
 /** Each theme's palettes besides its default (lavender, indigo), as src/theme/palette.ts names them. */
 export const OTHER_PALETTES = {
-    light: ['off-white', 'solarized', 'nord', 'gruvbox'],
-    dark: ['grey', 'black', 'solarized', 'gruvbox'],
+    light: ['off-white', 'sage', 'solarized', 'nord', 'gruvbox', 'rose-pine'],
+    dark: ['grey', 'black', 'forest', 'plum', 'solarized', 'gruvbox', 'monokai'],
 } as const
 /** Where the page keeps each theme's palette: the same key as src/theme/palette.ts. */
 export const PALETTE_KEY = 'canopy-palette'
@@ -20,24 +20,31 @@ export const ROUTES = [
     'runs',
     'runs/39',
     'runs/41',
-    'worktrees',
+    'runs/worktrees',
     'tickets',
+    'tickets?view=board',
     'tickets/ABC-102',
     'tickets/ABC-105',
     'tickets/ABC-105/plan',
+    'tasks',
+    'tasks/1',
+    'tasks/4',
+    'tasks/1/runs/1',
     'pull-requests',
     `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
-    'reviews',
-    'reviews/4',
-    'reviews/4/run',
-    'reviews/5',
+    'pull-requests/reviews',
+    'pull-requests/reviews/4',
+    'pull-requests/reviews/4/run',
+    'pull-requests/reviews/5',
     'chores',
     'chores/deps',
     'chores/deps/runs/2',
-    'ticks',
-    'ticks/2',
-    'spend',
+    'runs/ticks',
+    'runs/ticks/2',
+    'reports',
+    'reports/spend',
     'settings',
+    'settings/limits',
     'search?q=web',
     'plan-editor',
     'memory',
@@ -49,7 +56,13 @@ export type Route = (typeof ROUTES)[number]
  * The pages screenshotted whole, the shell included: the ones README.md shows. The rest show their main pane alone, so
  * a change to the header or the rail rewrites these images and not every one.
  */
-export const WHOLE_ROUTES: readonly Route[] = ['attention', 'tickets/ABC-102', 'runs/39', 'reviews/4', 'ticks/2']
+export const WHOLE_ROUTES: readonly Route[] = [
+    'attention',
+    'tickets/ABC-102',
+    'runs/39',
+    'pull-requests/reviews/4',
+    'runs/ticks/2',
+]
 /**
  * The pages screenshotted in light as well: the shell, a list, and a detail page. Both themes draw from the same
  * tokens, so a few pages in light catch a light token gone wrong without doubling every image.
@@ -57,7 +70,7 @@ export const WHOLE_ROUTES: readonly Route[] = ['attention', 'tickets/ABC-102', '
 export const LIGHT_ROUTES: readonly Route[] = ['attention', 'runs', 'tickets/ABC-102']
 /** The themes the app has; a page is screenshotted in light only if in LIGHT_ROUTES. */
 export const THEMES = ['light', 'dark'] as const
-/** Half an hour after the fixtures' T0 (canopy/serve/mock.py): every age on a page is the same on every run. */
+/** Half an hour after the fixtures' T0 (canopy/serve/mock/): every age on a page is the same on every run. */
 export const NOW = new Date('2026-10-08T12:30:00Z')
 
 /**
@@ -225,7 +238,9 @@ function arrayEnd(script: string, start: number): number {
 
 /**
  * Pads a ticket's decisions to `count`, cycling through the ones the mock records, as a long-lived ticket collects
- * them: the mock's are too few to fill a panel past its height.
+ * them: the mock's are too few to fill a panel past its height. A live event refetches the ticket, which can still be
+ * in the route when the page closes, failing the run outside any test, so a test that pads ends with
+ * `page.unrouteAll({ behavior: 'ignoreErrors' })`, after everything it checks. The same holds for `padMessages`.
  */
 export async function padDecisions(page: Page, ticketKey: string, count: number): Promise<void> {
     await page.route(`**/api/tickets/${ticketKey}`, async (route) => {
@@ -331,7 +346,15 @@ export async function serveReview(
     await page.route('**/api/reviews/4', async (route) => {
         const response = await route.fetch()
         const body = (await response.json()) as Record<string, unknown>
-        await route.fulfill({ response, json: { ...body, findings, diff: { files, truncated: true } } })
+        // The fields the API sends every finding, as it sends them for one no one dismissed, held, or answered.
+        const sent = findings.map((f) => ({
+            dismissed_reason: null,
+            held: false,
+            answer: null,
+            answer_reason: null,
+            ...f,
+        }))
+        await route.fulfill({ response, json: { ...body, findings: sent, diff: { files, truncated: true } } })
     })
 }
 

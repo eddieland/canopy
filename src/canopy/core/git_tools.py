@@ -1,21 +1,27 @@
 """Read-only git, served to the reviewer and the planner as MCP tools (DESIGN §27): they have no shell.
 
-`canopy _mcp --git NAME=PATH ...`, a server named `canopy_git` in a review's or a plan's inline config, serves five
-tools: `merge-base`, `diff`, `log`, `show`, and `blame`. The checkouts it reads are the run's own, named on its command
-line by the harness, never by the agent: the review's checkout, or each worktree of the planner's desk.
+`canopy _mcp --git NAME=PATH ...`, a server named `canopy_git` in a review's or a plan's inline config, serves seven
+tools: `merge-base`, `diff`, `log`, `show`, `blame`, `grep`, and `files`. The checkouts it reads are the run's own,
+named on its command line by the harness, never by the agent: the review's checkout, or each worktree of the planner's
+desk.
 
 Every argument is checked before git sees it: a revision is plain revision syntax, never an option, a range, or a path;
 a path is relative, inside the repository, and never an option; text to search for is printable and passed joined to
-its option; each revision must name a commit there. git then runs
-through `procs` with nothing it would run unasked: no hooks, filesystem monitor, external diff, textconv, pager,
-signature check, replace refs, or transport, so not the lazy fetch a promisor remote in the repository's config could
-ask for. The server drops every `GIT_*` variable it inherits, and system config is skipped. Every read is of commits,
-never the working tree, so no clean filter runs. What a call returns is cut at `MAX_CHARS`, every hidden character
-named, as the PR's own text is untrusted.
+its option, or after `-e`; each revision must name a commit there. git then runs through `procs` with nothing it would
+run unasked: no hooks, filesystem monitor, external diff, textconv, pager, signature check, replace refs, submodule, or
+transport, so not the lazy fetch a promisor remote in the repository's config could ask for. The server drops every
+`GIT_*` variable it inherits, and system config is skipped. Every read is of commits, never the working tree, so no
+clean filter runs. What a call returns is cut at `MAX_CHARS`, every hidden character named, as the PR's own text is
+untrusted.
+
+`log` answers with records, `Commits`, which its tool lists as its output schema and returns as structured content and,
+since the runtime shows the model only a tool's text, as JSON in its text: no commit's message or path can pass for
+another commit, or for a field. The rest answer with git's text.
 """
 
 from __future__ import annotations
 
+import fnmatch
 import re
 import sys
 from collections.abc import Mapping, Sequence
@@ -32,6 +38,8 @@ from canopy.runtime import servers
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from canopy.runtime.implementation import Version
+
 #: The MCP server canopy gives a review's or a plan's run, as its inline config names it. The runtime joins it to each
 #: tool's name, `canopy_git_diff`; no tool's own name holds an underscore, as none of canopy's tools do (DESIGN §27).
 SERVER = "canopy_git"
@@ -41,7 +49,9 @@ DIFF = "diff"
 LOG = "log"
 SHOW = "show"
 BLAME = "blame"
-TOOLS = (MERGE_BASE, DIFF, LOG, SHOW, BLAME)
+GREP = "grep"
+FILES = "files"
+TOOLS = (MERGE_BASE, DIFF, LOG, SHOW, BLAME, GREP, FILES)
 #: The most characters a call returns; past it the text is cut at a line's end, and says so.
 MAX_CHARS = 100_000
 #: The largest file `show` reads: one past it is refused by its size, before it is read.
@@ -52,12 +62,23 @@ MAX_PATH_CHARS = 1000
 #: How many commits `log` lists unless asked for another number, and the most it may ask for.
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
-#: The longest text `log` searches commits for, in their changes or their messages.
+#: The longest text `log` searches commits for, in their changes or their messages, and `grep` files for; the longest
+#: name `files` matches.
 MAX_SEARCH_CHARS = 200
 #: The most lines one `blame` reads.
 MAX_BLAME_LINES = 400
 #: How long one git command may take.
 TIMEOUT_SECONDS = 60
+#: A commit's full id, as `log` reads one: SHA-1's or SHA-256's.
+COMMIT_ID_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+#: How `log` prints each commit: its id, parents, author's name and email, author date, and message, each ended by NUL,
+#: which git never prints from a commit's message or a name, and the files it changed after them, each field ended by
+#: NUL too (`-z`).
+LOG_FORMAT = "%H%x00%P%x00%an%x00%ae%x00%aI%x00%B"
+#: How many fields `LOG_FORMAT` prints of each commit.
+_LOG_FIELDS = 6
+#: A file's status as `--name-status` prints it: a letter, and for a rename or a copy how alike the two are.
+_STATUS_RE = re.compile(r"[A-Z][0-9]*")
 #: A revision as the tools take one: a commit id, a ref, `HEAD~2`, `main^2`, `@{u}`. Never an option (no leading `-`),
 #: a range (`..`), a blob (`rev:path`), or anything a shell or a pathspec would read.
 REVISION_RE = re.compile(r"(?!.*\.\.)[A-Za-z0-9@][A-Za-z0-9_./~^@{}+-]{0,199}")
@@ -122,14 +143,17 @@ def parse_checkout(value: str) -> tuple[str, Path]:
     return name, Path(path)
 
 
-def run_env(checkouts: Mapping[str, Path], *, cwd: Path) -> dict[str, str]:
+def run_env(checkouts: Mapping[str, Path], *, version: Version, cwd: Path) -> dict[str, str]:
     """The environment that gives a run these tools over `checkouts`, by name, the server started in `cwd`.
+
+    The run is of the runtime `version` runs.
 
     Returns:
         The variables to set on the agent's process.
     """
     named = [checkout_arg(name, path.absolute()) for name, path in checkouts.items()]
-    return servers.env(SERVER, (*SERVER_COMMAND, *(arg for n in named for arg in ("--git", n))), cwd=cwd)
+    command = (*SERVER_COMMAND, *(arg for n in named for arg in ("--git", n)))
+    return servers.env({SERVER: command}, version=version, cwd=cwd)
 
 
 def tool_names() -> list[str]:
@@ -179,7 +203,8 @@ def _text(value: str) -> str:
 Revision = Annotated[StrictStr, AfterValidator(_revision)]
 #: A path in the repository, checked to stay inside it.
 RepoPath = Annotated[StrictStr, Field(max_length=MAX_PATH_CHARS), AfterValidator(_path)]
-#: Text `log` searches for, as written: never a pattern, and passed joined to its option, so never one itself.
+#: Text `log` and `grep` search for, as written: never a pattern, and passed joined to its option or after `-e`, so
+#: never one itself.
 SearchText = Annotated[StrictStr, Field(min_length=1, max_length=MAX_SEARCH_CHARS), AfterValidator(_text)]
 
 
@@ -220,6 +245,14 @@ class Diff(Request):
         Sequence[RepoPath],
         Field(max_length=MAX_PATHS, description="Only these paths, relative to the repository's root."),
     ] = ()
+    #: Each file changed with its lines added and removed, in place of the patch.
+    stat: Annotated[
+        StrictBool,
+        Field(
+            description="List each file changed with its lines added and removed, in place of the patch: a large "
+            "change's shape, before reading its patch a few paths at a time.",
+        ),
+    ] = False
 
 
 class Log(Request):
@@ -295,6 +328,19 @@ class Blame(Request):
         StrictInt,
         Field(ge=1, description=f"The last line to read: at most {MAX_BLAME_LINES} lines from start."),
     ]
+    #: Whether a line moved or copied names the commit that first wrote it.
+    moves: Annotated[
+        StrictBool,
+        Field(
+            description="Name the commit that first wrote a line moved or copied, within the file or from another "
+            "file the same commit changed, not the commit that moved it: past a refactor. Slower on a large file.",
+        ),
+    ] = False
+    #: Whether a change of whitespace alone is passed over.
+    ignore_whitespace: Annotated[
+        StrictBool,
+        Field(description="Pass over a commit that changed only a line's whitespace, such as a reindent."),
+    ] = False
 
     @model_validator(mode="after")
     def _some_lines(self) -> Self:
@@ -303,6 +349,117 @@ class Blame(Request):
         if self.end - self.start >= MAX_BLAME_LINES:
             raise ValueError(f"blame reads at most {MAX_BLAME_LINES} lines: narrow start to end")
         return self
+
+
+class Grep(Request):
+    """`grep`: the lines of the files at one commit that hold a text."""
+
+    #: The commit whose files to search.
+    rev: Annotated[Revision, Field(description="The commit whose files to search, such as the merge base or HEAD.")]
+    #: The text to find.
+    text: Annotated[SearchText, Field(description="The exact text to find, as written: never a pattern.")]
+    #: Only these paths.
+    paths: Annotated[
+        Sequence[RepoPath],
+        Field(max_length=MAX_PATHS, description="Only files under these paths, relative to the repository's root."),
+    ] = ()
+    #: Whether case is ignored.
+    ignore_case: Annotated[StrictBool, Field(description="Match the text whatever its case.")] = False
+
+
+class Files(Request):
+    """`files`: the paths of the files at one commit, by name."""
+
+    #: The commit whose files to list.
+    rev: Annotated[Revision, Field(description="The commit whose files to list.")]
+    #: Only files whose own name matches this.
+    name: Annotated[
+        SearchText | None,
+        Field(
+            description="Only files whose own name, not its directory, matches this: a name, or a glob such as "
+            "`*.py` or `test_*`, case sensitive.",
+        ),
+    ] = None
+    #: Only these paths.
+    paths: Annotated[
+        Sequence[RepoPath],
+        Field(max_length=MAX_PATHS, description="Only files under these paths, relative to the repository's root."),
+    ] = ()
+
+
+class Result(BaseModel):
+    """What a git tool that reads records returns: its fields are the tool's structured content, and its text's JSON."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+
+class Changed(BaseModel):
+    """A file a commit changed, as `log` lists it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    #: How it changed, git's letter for it.
+    status: Annotated[
+        StrictStr,
+        Field(description="How it changed: A added, M modified, D deleted, R renamed, C copied, T type changed."),
+    ]
+    #: Its path after the commit.
+    path: Annotated[StrictStr, Field(description="Its path after the commit, relative to the repository's root.")]
+    #: Its path before, for a rename or a copy.
+    old_path: Annotated[
+        StrictStr | None,
+        Field(description="The path it was renamed or copied from; null for any other change."),
+    ]
+
+
+class Commit(BaseModel):
+    """One commit `log` lists."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    #: Its full id.
+    commit: Annotated[StrictStr, Field(description="The commit's full id.")]
+    #: Its parents' ids.
+    parents: Annotated[Sequence[StrictStr], Field(description="Its parents' ids: none for a root, two for a merge.")]
+    #: Its author's name.
+    author: Annotated[StrictStr, Field(description="Its author's name.")]
+    #: Its author's email.
+    email: Annotated[StrictStr, Field(description="Its author's email.")]
+    #: When it was written.
+    date: Annotated[StrictStr, Field(description="When its author wrote it, in ISO 8601.")]
+    #: Its message, whole.
+    message: Annotated[StrictStr, Field(description="Its message, whole: the subject, then any body.")]
+    #: The files it changed.
+    files: Annotated[
+        Sequence[Changed],
+        Field(description="The files it changed; none for a merge, whose changes its parents list."),
+    ]
+
+
+class Commits(Result):
+    """What `log` returns: the commits it found, newest first."""
+
+    #: The commits.
+    commits: Annotated[Sequence[Commit], Field(description="The commits, newest first; none when none match.")]
+    #: Whether more match than are listed.
+    more: Annotated[
+        StrictBool,
+        Field(description="Whether more commits match than are listed: past limit, or left out to fit."),
+    ]
+    #: What was left out to fit, if anything.
+    cut: Annotated[
+        StrictStr | None,
+        Field(description=f"What was left out to fit {MAX_CHARS} characters; null when nothing was."),
+    ]
+
+
+def text(result: Result) -> str:
+    """The text a git tool that reads records returns: `DATA_NOTE`, then `result` as JSON.
+
+    Returns:
+        The text.
+    """
+    return f"{DATA_NOTE}\n\n{result.model_dump_json()}"
 
 
 def merge_base(runner: procs.Runner, checkouts: Mapping[str, Path], request: MergeBase) -> str:
@@ -326,7 +483,8 @@ def diff(runner: procs.Runner, checkouts: Mapping[str, Path], request: Diff) -> 
     """Show what changed from `request.base` to `request.head`, in `request.paths` if it names any.
 
     Returns:
-        The diff, cut at `MAX_CHARS`, or a line saying there is none.
+        The diff, or with `request.stat` each file's lines added and removed and its path, cut at `MAX_CHARS`; or a
+        line saying there is none.
 
     Raises:
         Refused: The checkout or a revision is unknown, or git failed.
@@ -334,19 +492,20 @@ def diff(runner: procs.Runner, checkouts: Mapping[str, Path], request: Diff) -> 
     where = _checkout(checkouts, request.repo)
     base, head = _commit(runner, where, request.base), _commit(runner, where, request.head)
     args = ("--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", "--submodule=short")
-    done = _git(runner, where, "diff", *args, "--end-of-options", base, head, "--", *_paths(request.paths))
+    shape = ("--numstat",) if request.stat else ()
+    done = _git(runner, where, "diff", *args, *shape, "--end-of-options", base, head, "--", *_paths(request.paths))
     text = _out(done, "diff")
     return _said(text) if text else f"No difference between {base} and {head} in what was asked."
 
 
-def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> str:
+def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> Commits:
     """List `request.range`'s commits, newest first, at most `request.limit`, each with the files it changed.
 
     Only those that change `request.paths`, add or remove `request.search`, or hold `request.message` in their
     message, when the request names any; `request.follow` follows its one path across renames.
 
     Returns:
-        The commits, cut at `MAX_CHARS`, or a line saying there are none.
+        The commits, every hidden character named, those that do not fit `MAX_CHARS` left out, and whether more match.
 
     Raises:
         Refused: The checkout or a revision is unknown, or git failed.
@@ -359,8 +518,8 @@ def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> st
         "--no-show-signature",
         "--no-ext-diff",
         "--no-textconv",
-        "--format=medium",
-        "--date=iso-strict",
+        f"--format={LOG_FORMAT}",
+        "-z",
     )
     # Each search's text joined to its option, so no text is read as one. `--fixed-strings` holds `--grep` to the text
     # as written; `-S` takes it so unless asked for a pattern.
@@ -376,14 +535,15 @@ def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> st
         *args,
         "--name-status",
         *searches,
-        f"--max-count={request.limit}",
+        # One past the limit, to tell whether more match.
+        f"--max-count={request.limit + 1}",
         "--end-of-options",
         dots.join(commits),
         "--",
         *_paths(request.paths),
     )
-    text = _out(done, "log")
-    return _said(text) if text else "No commits in that range."
+    found = _read_log(_out(done, "log"))
+    return _fitted(found[: request.limit], more=len(found) > request.limit)
 
 
 def show(runner: procs.Runner, checkouts: Mapping[str, Path], request: Show) -> str:
@@ -420,6 +580,9 @@ def show(runner: procs.Runner, checkouts: Mapping[str, Path], request: Show) -> 
 def blame(runner: procs.Runner, checkouts: Mapping[str, Path], request: Blame) -> str:
     """Name the commit that last changed each line from `request.start` to `request.end` of a file at `request.rev`.
 
+    With `request.moves`, a line moved or copied names the commit that first wrote it; with `request.ignore_whitespace`,
+    a change of whitespace alone is passed over.
+
     Returns:
         Each line after its commit's full id, the path the file had there if it was renamed since, its author,
         date, and line number.
@@ -437,8 +600,149 @@ def blame(runner: procs.Runner, checkouts: Mapping[str, Path], request: Blame) -
     # display keys are overridden, so every call prints the same columns. git 2.43's blame takes no
     # `--end-of-options`; the commit is a full id, never an option.
     args = ("--no-textconv", "--no-ignore-revs-file", "--no-show-email", "--root", "-l", "--date=short")
-    done = _git(runner, where, "blame", *args, f"-L{request.start},{request.end}", commit, "--", path)
+    # `-C` once looks for a line's origin in the files its commit changed, not every file in the repository, which
+    # `-C -C` would: bounded by the change, not the tree.
+    attribution = (*(("-M", "-C") if request.moves else ()), *(("-w",) if request.ignore_whitespace else ()))
+    done = _git(runner, where, "blame", *args, *attribution, f"-L{request.start},{request.end}", commit, "--", path)
     return _said(_out(done, "blame"))
+
+
+def grep(runner: procs.Runner, checkouts: Mapping[str, Path], request: Grep) -> str:
+    """Find the lines of the files at `request.rev` that hold `request.text`, in `request.paths` if it names any.
+
+    Returns:
+        Each line as `path:number:text`, cut at `MAX_CHARS`, or a line saying there is none. Files that are not text
+        are left out.
+
+    Raises:
+        Refused: The checkout or the revision is unknown, or git failed.
+    """
+    where = _checkout(checkouts, request.repo)
+    commit = _commit(runner, where, request.rev)
+    # Every setting the repository's config could change is set: the text as written, line numbers, no column, no
+    # submodule. git 2.43's grep takes no `--end-of-options`; the commit is a full id, and the text follows `-e`.
+    args = (
+        "--no-color",
+        "--fixed-strings",
+        "--line-number",
+        "--no-column",
+        "--full-name",
+        "--no-textconv",
+        "--no-recurse-submodules",
+        "-I",
+        *(("--ignore-case",) if request.ignore_case else ()),
+    )
+    done = _git(runner, where, "grep", *args, "-e", request.text, commit, "--", *_paths(request.paths))
+    if done.returncode == 1 and not done.stdout:
+        return f"No file at {request.rev} holds that text, in what was asked."
+    # git names each line's file after the commit it searched, `<commit>:path:number:text`: the commit goes.
+    found = "".join(line.removeprefix(f"{commit}:") for line in _out(done, "grep").splitlines(keepends=True))
+    return _said(found)
+
+
+def files(runner: procs.Runner, checkouts: Mapping[str, Path], request: Files) -> str:
+    """List the paths of the files at `request.rev`, in `request.paths` if it names any, named as `request.name` says.
+
+    Returns:
+        Each path on a line, cut at `MAX_CHARS`, or a line saying there is none.
+
+    Raises:
+        Refused: The checkout or the revision is unknown, or git failed.
+    """
+    where = _checkout(checkouts, request.repo)
+    commit = _commit(runner, where, request.rev)
+    # With no path after it, git 2.43's ls-tree reads `--` after `--end-of-options` as a path, and lists nothing; the
+    # commit is a full id, never an option.
+    done = _git(runner, where, "ls-tree", "-r", "--name-only", "-z", commit, "--", *_paths(request.paths))
+    named = [
+        path
+        for path in _out(done, "ls-tree").split("\0")
+        if path and (request.name is None or fnmatch.fnmatchcase(PurePosixPath(path).name, request.name))
+    ]
+    return _said("\n".join(named)) if named else f"No file at {request.rev} is named so, in what was asked."
+
+
+def _read_log(out: str) -> list[Commit]:
+    """Read what `log` printed in `LOG_FORMAT`, with `--name-status -z`.
+
+    Each commit is its six fields, then each file it changed: a status, then one path, or two for a rename or a copy.
+    The paths are counted, never matched, so no path is read as a commit; a status is never a commit's id.
+
+    Returns:
+        The commits, every hidden character named but a message's line breaks and tabs.
+
+    Raises:
+        Refused: git printed what is not in that form.
+    """
+    fields = out.split("\0")
+    if fields[-1:] == [""]:
+        fields.pop()
+    found: list[Commit] = []
+    at = 0
+    while at < len(fields):
+        if len(fields) - at < _LOG_FIELDS or not COMMIT_ID_RE.fullmatch(fields[at]):
+            raise Refused("git log printed what canopy cannot read")
+        commit, parents, author, email, date, message = fields[at : at + _LOG_FIELDS]
+        at += _LOG_FIELDS
+        files: list[Changed] = []
+        while at < len(fields) and not COMMIT_ID_RE.fullmatch(fields[at]):
+            # git puts a line break between a commit's message and the first file it changed.
+            status = fields[at].lstrip("\n")
+            moved = status[:1] in {"R", "C"}
+            paths = [visible(path) for path in fields[at + 1 : at + 3 if moved else at + 2]]
+            if not _STATUS_RE.fullmatch(status) or len(paths) != 1 + moved:
+                raise Refused("git log printed what canopy cannot read")
+            at += 1 + len(paths)
+            files.append(Changed(status=status[0], path=paths[-1], old_path=paths[0] if moved else None))
+        found.append(
+            Commit(
+                commit=commit,
+                parents=parents.split(),
+                author=visible(author),
+                email=visible(email),
+                date=date,
+                message=_shown(message.rstrip("\n")),
+                files=files,
+            ),
+        )
+    return found
+
+
+def _fitted(commits: Sequence[Commit], *, more: bool) -> Commits:
+    """`commits` as `log` returns them: as many as fit `MAX_CHARS` as JSON, newest first.
+
+    When not even the newest fits, it is returned with its message and the files it changed cut to fit.
+
+    Returns:
+        The commits, and what was left out, if anything.
+    """
+    budget = MAX_CHARS - 500  # the fields around the commits, and the note on what was cut
+    kept: list[Commit] = []
+    used = 0
+    for commit in commits:
+        used += len(commit.model_dump_json()) + 1
+        if used > budget:
+            break
+        kept.append(commit)
+    if len(kept) == len(commits):
+        return Commits(commits=kept, more=more, cut=None)
+    if kept:
+        cut = f"listed {len(kept)} of the {len(commits)} commits found: ask for fewer with limit, or name fewer paths"
+        return Commits(commits=kept, more=True, cut=cut)
+    newest = commits[0]
+    message = newest.message[: budget // 2]
+    files: list[Changed] = []
+    used = len(newest.model_copy(update={"message": message, "files": ()}).model_dump_json())
+    for changed in newest.files:
+        used += len(changed.model_dump_json()) + 1
+        if used > budget:
+            break
+        files.append(changed)
+    cut = (
+        f"commit {newest.commit} alone is past {MAX_CHARS} characters: its message and files are cut, and the "
+        "commits after it left out; name fewer paths"
+    )
+    return Commits(commits=[newest.model_copy(update={"message": message, "files": files})], more=True, cut=cut)
 
 
 def _checkout(checkouts: Mapping[str, Path], repo: str | None) -> Path:
@@ -572,8 +876,17 @@ def _said(text: str) -> str:
     Returns:
         The text, cut at a line's end within `MAX_CHARS`, with a line saying so when it was.
     """
-    shown = "\n".join("\t".join(visible(part) for part in line.split("\t")) for line in text.rstrip("\n").split("\n"))
+    shown = _shown(text.rstrip("\n"))
     if len(shown) <= MAX_CHARS:
         return f"{DATA_NOTE}\n\n{shown}"
     cut = shown[: shown.rfind("\n", 0, MAX_CHARS) + 1 or MAX_CHARS]
     return f"{DATA_NOTE}\n\n{cut}\n[cut at {MAX_CHARS} characters: name fewer paths, or a narrower range]"
+
+
+def _shown(text: str) -> str:
+    """`text` with every hidden character named but its line breaks and tabs.
+
+    Returns:
+        The text.
+    """
+    return "\n".join("\t".join(visible(part) for part in line.split("\t")) for line in text.split("\n"))

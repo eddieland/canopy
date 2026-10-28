@@ -69,6 +69,8 @@ EVERY_TOOL = (
 )
 #: The rules OpenCode 2 starts every agent from.
 DEFAULTS = [rule("*", "allow"), rule("read", "ask", "*.env"), rule("read", "ask", "*.env.*")]
+#: What OpenCode writes of its stdout to a pipe before it exits: what the pipe's buffer holds.
+PIPE_BUFFER = 64 * 1024
 
 
 @dataclass
@@ -77,8 +79,11 @@ class Serve:
 
     rules: Mapping[str, Sequence[dict[str, str]]]
     config: object = field(default_factory=lambda: CONFIG)
-    #: How many times `agent.list` answers that no agent has loaded yet.
+    skills: object = field(default_factory=lambda: SKILLS)
+    #: How many times `agent.list` answers with OpenCode's own agents alone, before the plugins load canopy's.
     loading: int = 0
+    #: Whether `agent.list` answers with no agent at all while loading, rather than OpenCode's own.
+    empty: bool = False
     #: What answers in place of the play, for a command it is given.
     fail: Callable[[Sequence[str]], procs.Result | None] = lambda _: None
     ran: list[tuple[tuple[str, ...], Path | None, dict[str, str]]] = field(default_factory=list)
@@ -93,7 +98,7 @@ class Serve:
         timeout: float | None = None,  # noqa: ARG002
         on_start: Callable[[int], None] | None = None,  # noqa: ARG002
         on_line: Callable[[str], None] | None = None,
-        stdout_to_file: bool = False,  # noqa: ARG002
+        stdout_to_file: bool = False,
     ) -> procs.Result:
         self.ran.append((tuple(args), cwd, dict(env or {})))
         failed = self.fail(args)
@@ -112,7 +117,8 @@ class Serve:
                 printed = self._answer(operation)
             case _:
                 raise AssertionError(args)
-        return procs.Result(tuple(args), 0, json.dumps(printed), "")
+        stdout = json.dumps(printed)
+        return procs.Result(tuple(args), 0, stdout if stdout_to_file else stdout[:PIPE_BUFFER], "")
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:  # noqa: ARG002
         raise AssertionError(args)
@@ -123,12 +129,12 @@ class Serve:
             case "agent.list":
                 if self.loading:
                     self.loading -= 1
-                    none: list[object] = []
-                    return {"location": location, "data": none}
+                    own: list[object] = [] if self.empty else [{"id": "build", "permissions": DEFAULTS}]
+                    return {"location": location, "data": own}
                 agents = [{"id": n, "mode": "primary", "permissions": [*DEFAULTS, *r]} for n, r in self.rules.items()]
                 return {"location": location, "data": [{"id": "build", "permissions": DEFAULTS}, *agents]}
             case "skill.list":
-                return {"location": location, "data": SKILLS}
+                return {"location": location, "data": self.skills}
             case "config.get":
                 return self.config
             case _:
@@ -193,6 +199,13 @@ def test_each_agent_is_offered_what_its_merged_rules_leave_it() -> None:
     assert all(e == env for _, _, e in serve.ran)
 
 
+def test_what_opencode_prints_past_a_pipes_buffer_is_read() -> None:
+    long = {"id": "long", "name": "long", "description": "x" * PIPE_BUFFER}
+    found = offered(Serve({"canopy-worker": []}, skills=[*SKILLS, long]), "canopy-worker")
+    assert found.error is None
+    assert "long" in found.skills
+
+
 def test_a_tool_is_kept_from_an_agent_only_by_a_deny_of_every_resource() -> None:
     rules = [rule("shell"), rule("shell", "allow", "git status"), rule("edit"), rule("webfetch", resource="https://*")]
     [worker] = offered(Serve({"canopy-worker": rules}), "canopy-worker").agents
@@ -215,7 +228,8 @@ def test_a_server_in_code_mode_is_reached_through_execute_alone() -> None:
 
 
 def test_an_agent_opencode_did_not_load_says_so() -> None:
-    found = offered(Serve({"canopy-worker": []}), "canopy-worker", "canopy-chore")
+    with mock.patch.object(offerings, "LOADED_SECONDS", 0):
+        found = offered(Serve({"canopy-worker": []}), "canopy-worker", "canopy-chore")
     assert found.agents[1] == AgentOffer(
         "canopy-chore",
         error="OpenCode has no agent canopy-chore: its definition did not load",
@@ -224,7 +238,7 @@ def test_an_agent_opencode_did_not_load_says_so() -> None:
 
 def test_a_server_that_never_loads_an_agent_is_the_error() -> None:
     with mock.patch.object(offerings, "LOADED_SECONDS", 0):
-        found = offered(Serve({"canopy-worker": []}, loading=10**6))
+        found = offered(Serve({"canopy-worker": []}, loading=10**6, empty=True), "canopy-worker")
     assert found.error == "`opencode serve` had loaded no agent after 0 seconds"
 
 

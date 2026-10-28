@@ -4,18 +4,28 @@
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
 # The planner writes one file, its plan, and nothing else anywhere (DESIGN §25, TRUST_MODEL T1, T6). It reads the
 # worktrees linked from its desk with OpenCode's read, list, glob, and grep tools, and the ticket with the tracker's
-# read tools only. canopy renders this file into its definitions directory with the tracker's MCP server and tools from
-# the operator's config (`tracker.mcp_server`, `tracker.read_tools`), at the marked line below, as for
-# canopy-worker-private. As shipped it names none, and dispatch refuses a plan then (`no_read_tools`).
+# read tools only, or the commands the operator allows it below. canopy renders this file into its definitions
+# directory with the tracker's MCP server and tools from the operator's config (`tracker.mcp_server`,
+# `tracker.read_tools`), at the marked line below, as for canopy-worker-private. As shipped it names none, and
+# dispatch refuses a plan then (`no_read_tools`).
 description: canopy planner. Writes a plan for one ticket before it is implemented; reads, and writes only its plan.
 mode: primary
+# canopy: model
 permission:
-  bash: deny
+  bash:
+    "*": deny
+    # The commands `runtime.allow_bash` names for the planner, such as a tracker's CLI reads while its MCP server is
+    # down, are rendered at the marked line, last, so that each is allowed (DESIGN §13). canopy refuses a shell, an
+    # interpreter, git, gh, or its own tools there.
+    # canopy: bash allows
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077).
   webfetch: deny
   websearch: deny
   codesearch: deny
+  # OpenCode 2's code mode runs the model's JavaScript, which can make HTTP requests of its own, so it is a web
+  # tool too (D077). An MCP server reached only through it is then out of reach: give it `codemode: false`.
+  execute: deny
   external_directory: deny
   # Subagents run with their own, wider permissions; the planner must not reach them.
   task: deny
@@ -105,15 +115,18 @@ permission:
   # The artifact store's MCP server, `artifacts.mcp_server`: this agent never publishes, whatever config says
   # (DESIGN §38), and canopy renders the server denied whole at the marked line.
   # canopy: artifact tools
+  # canopy's own tools, the overseer's, a chore's history, and the reports, are not this agent's (DESIGN §19, §27):
+  # denied by pattern, before the exceptions below.
+  "canopy_*": deny
   # canopy's read-only git tools, over this run's own checkouts alone (DESIGN §27), allowed by exact name: after every
-  # pattern, so none above, such as `*merge*`, closes one.
+  # pattern, so none above, such as `*merge*` or `canopy_*`, closes one.
   "canopy_git_merge-base": allow
   "canopy_git_diff": allow
   "canopy_git_log": allow
   "canopy_git_show": allow
   "canopy_git_blame": allow
-  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
-  "canopy_chore_history": deny
+  "canopy_git_grep": allow
+  "canopy_git_files": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy worker: plan" prompt, print

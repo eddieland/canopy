@@ -1,5 +1,7 @@
-"""The pass of garbage collection a live tick runs (DESIGN §26): the files it removes, what it never removes, and the
-`gc_passes` row it records, over journals and files written by hand."""
+"""The pass of garbage collection a live tick runs (DESIGN §26), over journals and files written by hand.
+
+The tests cover the files it removes, what it never removes, and the `gc_passes` row it records.
+"""
 
 import json
 import os
@@ -365,6 +367,36 @@ def test_with_fewer_ok_ticks_than_the_window_a_pass_deletes_no_row(canopy_env: C
         assert after["connector_runs"] == before["connector_runs"]
         assert after["derivations"] == before["derivations"]
         assert json.loads(row.removed) == {}
+
+
+def test_a_pass_deletes_the_kept_check_runs_its_dry_run_counts(
+    canopy_env: CanopyEnv,
+    ctx: Context,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A kept check run goes once old and off its PR's head; one at the head, as the `handled` guard reads it, stays."""
+    conn = canopy_env.journal()
+    old = earlier(datetime.now(UTC), 200)
+    conn.execute(
+        "INSERT INTO observed_prs (url, repository, number, head_sha, state, draft, observed_at) "
+        "VALUES ('https://x/1', 'o/r', 1, 'new', 'open', 0, ?)",
+        (old,),
+    )
+    for run_id, head in [(1, "old"), (2, "old"), (3, "new")]:
+        conn.execute(
+            "INSERT INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at) "
+            "VALUES ('https://x/1', ?, 'ci', ?, 'failure', ?)",
+            (run_id, head, old),
+        )
+    conn.commit()
+    assert main(["gc", "--dry-run", "--json"]) == 0
+    [kind] = [k for k in json.loads(capsys.readouterr().out)["kinds"] if k["name"] == "check runs"]
+
+    row = run_pass(ctx)
+
+    assert json.loads(row.removed)["check runs"] == {"rows": 2, "bytes": kind["removable_size"]}
+    left = sql.execute(conn, sql.select("run_id").from_("observed_check_runs")).fetchall()
+    assert [int(r[0]) for r in left] == [3]
 
 
 def test_a_pass_empties_the_journals_wal(canopy_env: CanopyEnv, ctx: Context) -> None:

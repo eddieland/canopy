@@ -6,7 +6,8 @@ Every route but `/session` needs a signed-in session: the cookie `POST /session`
 are the same ones, or, for what no command would do (marking reviews seen), a core function of their own; a guard's
 refusal is a 409 naming it, and a write that waited out another writer's hold on the journal a 503 saying so. A forget
 also carries the ticket's key as the operator typed it. A reload asks the loop to read its config again, as SIGHUP
-does; it writes nothing.
+does; it writes nothing. A config save writes the limits and, toward stricter, the trust settings in the workspace's
+private file, and then asks for a reload.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from canopy.serve.api import (
+    attachments,
     chores,
     deps,
     docs,
@@ -23,16 +25,20 @@ from canopy.serve.api import (
     events,
     loop,
     memory,
+    models,
     overview,
     personas,
     plans,
     pull_requests,
     refs,
+    reports,
     reviews,
     runs,
     search,
     seen,
     session,
+    settings,
+    tasks,
     tickets,
     ticks,
     worktrees,
@@ -50,7 +56,10 @@ _RESOURCES = (
     runs,
     ticks,
     chores,
+    tasks,
+    attachments,
     loop,
+    settings,
     worktrees,
     events,
     search,
@@ -58,8 +67,10 @@ _RESOURCES = (
     seen,
     pull_requests,
     personas,
+    models,
     drafts,
     memory,
+    reports,
 )
 
 # Each resource's tag, described by its module's docstring, in the order the schema lists them.

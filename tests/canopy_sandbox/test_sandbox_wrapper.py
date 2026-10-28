@@ -4,9 +4,11 @@ The fake `srt` on PATH records the policy and environment the wrapper hands it, 
 These tests check what the wrapper asks of the sandbox, not that the sandbox holds: that is the canary's job (§6).
 """
 
+import contextlib
 import json
 import os
 import shutil
+import signal
 import sqlite3
 import sys
 import tempfile
@@ -20,17 +22,31 @@ import canopy_sandbox
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, review_runs
-from canopy.infra import procs
+from canopy.core import config, context, db, review_runs, tasks
+from canopy.infra import lock, logs, procs
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import DEAD_PID, InlineRunner, in_tick, pool, present, slot_of, worker_does
+from canopy.runs import tasks as task_starts
+from tests.canopy.helpers import (
+    DEAD_PID,
+    InlineRunner,
+    decisions,
+    in_tick,
+    inline_context,
+    operator,
+    pool,
+    present,
+    private_worker_does,
+    slot_of,
+    tick_starts,
+    worker_does,
+)
 from tests.canopy.review_helpers import CLEAN, PR, reviewer_reports, run_inline
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, executable, git, user_toml
 
 # The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
 # slot's own directory first on the import path.
 WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
-ROLES = ("worker", "setup", "chore", "review")
+ROLES = ("worker", "setup", "chore", "review", "overseer")
 FAKES = Path(__file__).resolve().parents[1] / "fakes"
 SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
 # Quotes, a line break, and what a shell would expand: the command must receive it as it was given (§5 item 3).
@@ -56,8 +72,11 @@ MCP = {
 
 @dataclass(frozen=True)
 class Sandbox:
-    """The fake srt's log, the templates the wrapper reads, the temp directory it makes its run directories in, and
-    the operator's XDG_CACHE_HOME and XDG_DATA_HOME."""
+    """What a test of the wrapper reads and writes.
+
+    The fake srt's log, the templates the wrapper reads, the temp directory it makes its run directories in, and the
+    operator's XDG_CACHE_HOME and XDG_DATA_HOME.
+    """
 
     log: Path
     templates: Path
@@ -88,10 +107,10 @@ class Sandbox:
 
 @pytest.fixture
 def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Iterator[Sandbox]:
-    """The shipped templates where the wrapper reads them, the fake srt on PATH, a temp directory of the test's, and
-    XDG_CACHE_HOME in the test's HOME, as XDG_DATA_HOME is already.
+    """The shipped templates where the wrapper reads them, the fake srt on PATH, and a temp directory of the test's.
 
-    Under /tmp, not tmp_path, whose path is too long for the sockets srt would make in it, which the wrapper refuses.
+    XDG_CACHE_HOME is in the test's HOME, as XDG_DATA_HOME is already. The temp directory is under /tmp, not
+    tmp_path, whose path is too long for the sockets srt would make in it, which the wrapper refuses.
     """
     templates = canopy_env.home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
@@ -127,6 +146,18 @@ def operators(sandbox: Sandbox, name: str = "auth.json") -> object:
     return json.loads((sandbox.operators() / name).read_text())
 
 
+def wrap_here(*args: str, cwd: Path, ipv6: bool) -> int:
+    """Run the wrapper in this process, as `wrap` runs it in its own, on a host whose kernel has IPv6 or has none."""
+    with (
+        mock.patch.object(canopy_sandbox, "ipv6_missing", autospec=True, return_value=not ipv6),
+        mock.patch.object(signal, "signal", autospec=True),  # the handlers it sets would outlast it here
+        mock.patch.object(tempfile, "tempdir", None),  # read TMPDIR again, as a process of its own does
+        mock.patch.dict(os.environ),  # which it scrubs
+        contextlib.chdir(cwd),
+    ):
+        return canopy_sandbox.run(list(args))
+
+
 def linked_worktree(tmp_path: Path, name: str) -> tuple[Path, Path]:
     """A repository with one commit and a linked worktree of it, as a treehouse slot is: the primary and the slot."""
     primary = tmp_path / name / "primary"
@@ -139,7 +170,7 @@ def linked_worktree(tmp_path: Path, name: str) -> tuple[Path, Path]:
 
 
 def reading(objects: Path, primary: Path) -> dict[str, str]:
-    """git's variables that read a run's object directory as well as a slot's shared objects, as `_run` sets them."""
+    """The git variables that read a run's object directory as well as a slot's shared objects, as `_run` sets them."""
     return {"GIT_OBJECT_DIRECTORY": str(objects), "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(primary / ".git" / "objects")}
 
 
@@ -161,8 +192,10 @@ def caching(cache: Path) -> dict[str, str]:
 
 
 def storing(data: Path, data_home: Path) -> dict[str, str]:
-    """The data variables the wrapper sets for a run whose role's data directory is `data`, the operator's being
-    `data_home`."""
+    """The data variables the wrapper sets for a run whose role's data directory is `data`.
+
+    The operator's is `data_home`.
+    """
     return {
         "XDG_DATA_HOME": str(data),
         "UV_PYTHON_INSTALL_DIR": str(data_home / "uv" / "python"),
@@ -215,6 +248,7 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     cache = sandbox.caches() / "worker"
     assert str(cache) in filesystem["allowRead"]
     assert str(cache) in filesystem["allowWrite"]
+    call["env"].pop(canopy_sandbox.SOCAT_LISTEN, None)  # as this host has IPv6 or not
     assert call["env"] == {
         "CANOPY_GIT_OBJECTS": str(objects),
         "CLAUDE_CODE_TMPDIR": tmp,
@@ -279,8 +313,11 @@ def test_a_repository_a_tool_keeps_outside_the_worktree_keeps_its_own_objects(
     tmp_path: Path,
     script: str,
 ) -> None:
-    """A cache a tool keeps as a git repository (DESIGN §24): with git's variables set for every process, its
-    objects went to the run's directory and were gone with it. The worker's own commit still lands only there."""
+    """A cache a tool keeps as a git repository, outside the worktree, keeps its own objects (DESIGN §24).
+
+    With git's variables set for every process, its objects went to the run's directory and were gone with it. The
+    worker's own commit still lands only there.
+    """
     primary, slot = linked_worktree(tmp_path, "repo")
     objects = objects_dir(tmp_path)
     cache = tmp_path / "cache"
@@ -366,8 +403,11 @@ def test_the_workspaces_state_is_denied_even_outside_home(sandbox: Sandbox, tmp_
 
 
 def test_each_role_caches_in_a_directory_of_its_own_and_setup_in_the_workers(sandbox: Sandbox, tmp_path: Path) -> None:
-    """Never in the operator's caches, whatever they set them to: OpenCode, the overseer's included, runs packages
-    and programs from its cache, outside any sandbox. Setup warms the worker's."""
+    """No role caches in the operator's caches, whatever they set them to.
+
+    OpenCode, the overseer's included, runs packages and programs from its cache, outside any sandbox. Setup warms the
+    worker's.
+    """
     _, slot = linked_worktree(tmp_path, "repo")
     write = ["sh", "-c", 'mkdir -p "$XDG_CACHE_HOME/tool" && echo "$1" > "$XDG_CACHE_HOME/tool/$1"', "sh"]
     operators = {"GOMODCACHE": str(tmp_path / "go-mod"), "npm_config_cache": str(tmp_path / "npm")}
@@ -411,16 +451,27 @@ def test_a_cache_directory_that_is_a_link_runs_nothing(sandbox: Sandbox, tmp_pat
 
 @pytest.mark.parametrize("role", ROLES)
 def test_each_role_starts_with_the_operators_logins_in_a_data_directory_of_its_own(
+    canopy_env: CanopyEnv,
     sandbox: Sandbox,
     tmp_path: Path,
     role: str,
 ) -> None:
-    """OpenCode's data directory is the role's, and the wrapper copies the operator's logins into it: the operator's
-    OpenCode, and the overseer's, run code their own names, so no run writes it, whatever the template says. Setup
-    shares the worker's; uv, which the templates let a run read, still finds its own where the operator keeps it."""
+    """OpenCode's data directory is the role's, and the wrapper copies the operator's logins into it.
+
+    The operator's OpenCode runs code its own names, so no run writes it, whatever the template says. Setup shares the
+    worker's; uv, which the templates let a run read, still finds its own where the operator keeps it.
+    """
     _, slot = linked_worktree(tmp_path, "repo")
     logins(sandbox, {"anthropic": OAUTH, "openai": API}, {"jira": MCP})
-    places = {"worker": slot, "setup": slot, "chore": tmp_path, "review": review_dir(tmp_path, slot)}
+    if role == "overseer":
+        state_as_a_tick_leaves_it(canopy_env)
+    places = {
+        "worker": slot,
+        "setup": slot,
+        "chore": tmp_path,
+        "review": review_dir(tmp_path, slot),
+        "overseer": canopy_env.root,
+    }
     objects = {"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path))} if role in {"worker", "setup"} else {}
     read = 'cat "$XDG_DATA_HOME/opencode/auth.json" "$XDG_DATA_HOME/opencode/mcp-auth.json"'
 
@@ -451,7 +502,9 @@ def test_the_operators_opencode_data_is_denied_writing_wherever_it_leads(
     place: str,
 ) -> None:
     """Missing, it is made, as OpenCode would at its first start, so that it is denied before a run could make it.
-    A link, as a dotfile manager makes, is denied with where it leads."""
+
+    A link, as a dotfile manager makes, is denied with where it leads.
+    """
     target = tmp_path / "dotfiles" / "opencode"
     if place == "link":
         target.mkdir(parents=True)
@@ -466,8 +519,10 @@ def test_the_operators_opencode_data_is_denied_writing_wherever_it_leads(
 
 
 def test_a_refreshed_token_is_copied_back_and_nothing_else(sandbox: Sandbox, tmp_path: Path) -> None:
-    """Only the tokens and expiry of a login the operator has, of the same kind, and later: never a new login, a
-    `wellknown` one, an API key, where a token is sent, or whose account it is."""
+    """Only the tokens and expiry of a login the operator has, of the same kind, and later.
+
+    Never a new login, a `wellknown` one, an API key, where a token is sent, or whose account it is.
+    """
     logins(sandbox, {"anthropic": OAUTH, "openai": API, "github-copilot": OAUTH}, {"jira": MCP, "linear": MCP})
     refreshed = {"refresh": "refresh-2", "access": "access-2", "expires": 2_000}
     theirs = {
@@ -495,8 +550,10 @@ def test_a_refreshed_token_is_copied_back_and_nothing_else(sandbox: Sandbox, tmp
 
 
 def test_a_killed_runs_refreshed_token_is_copied_back_by_its_roles_next_run(sandbox: Sandbox, tmp_path: Path) -> None:
-    """canopy kills a timed-out run, wrapper and all: the next run of its role takes back what it left, and then
-    starts from the operator's logins, not from what the killed run left."""
+    """The next run of a killed run's role takes back what it left, then starts from the operator's logins.
+
+    canopy kills a timed-out run, wrapper and all, so the killed run's own wrapper never copies back.
+    """
     logins(sandbox, {"anthropic": OAUTH})
     left = sandbox.datas() / "chore" / "opencode" / "auth.json"
     left.parent.mkdir(parents=True)
@@ -539,9 +596,11 @@ def test_what_a_run_leaves_in_place_of_its_logins_is_never_followed(
     tmp_path: Path,
     script: str,
 ) -> None:
-    """The host reads what a run left in its data directory: a link is not followed, a fifo does not hang the
-    wrapper, and a file bigger than any login file is not read. The next run of the role starts from the operator's
-    logins all the same."""
+    """What a run left in its data directory is read without following a link, hanging on a fifo, or reading a lot.
+
+    A file bigger than any login file is not read. The next run of the role starts from the operator's logins all the
+    same.
+    """
     logins(sandbox, {"anthropic": OAUTH})
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
@@ -598,8 +657,11 @@ def test_a_chore_reads_its_cwd_and_gets_no_git(sandbox: Sandbox, tmp_path: Path)
 
 
 def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp_path: Path) -> None:
-    """The reviewer reads the PR's checkout through its directory's link, and writes nothing there: not the worktree,
-    not its git directories, and no objects, so it gets neither an object directory nor the run's git."""
+    """The reviewer reads the PR's checkout through its directory's link, and writes nothing there.
+
+    Not the worktree, not its git directories, and no objects, so it gets neither an object directory nor the run's
+    git.
+    """
     primary, slot = linked_worktree(tmp_path, "repo")
     cwd = review_dir(tmp_path, slot)
 
@@ -608,6 +670,7 @@ def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp
     assert done.ok, done.stderr
     assert done.stdout.strip() == git("rev-parse", "HEAD", cwd=slot)
     call = sandbox.only_call()
+    call["env"].pop(canopy_sandbox.SOCAT_LISTEN, None)  # as this host has IPv6 or not
     filesystem = call["settings"]["filesystem"]
     tmp = call["env"]["TMPDIR"]
     own, shared = primary / ".git" / "worktrees" / "slot", primary / ".git"
@@ -626,6 +689,156 @@ def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp
         **caching(cache),
         **storing(data, sandbox.data_home),
     }
+
+
+def state_as_a_tick_leaves_it(canopy_env: CanopyEnv) -> sqlite3.Connection:
+    """The workspace's state as the overseer finds it: its journal open, and what canopy keeps beside it.
+
+    The tick holds its journal open, so the WAL and shared-memory files are there, and has written canopy's log. Beside
+    them are the private config, a snapshot of the agent definitions, and a chore's agent, which the overseer reads and
+    must not write. No lock is there yet, as in a workspace that has never dispatched.
+    """
+    conn = canopy_env.journal()
+    state = canopy_env.state_dir
+    (state / "canopy.log").write_text("")
+    canopy_env.write_private("# the operator's\n")
+    (state / "runtime" / "0123abcd").mkdir(parents=True)
+    (state / "chore-agents" / "introspect").mkdir(parents=True)
+    return conn
+
+
+def test_the_overseer_reads_its_workspace_and_writes_only_the_journal(
+    canopy_env: CanopyEnv,
+    sandbox: Sandbox,
+) -> None:
+    """The overseer's policy: the journal's files writable, and nothing else of the state, which canopy loads later.
+
+    Not the private config, the agent definitions, a chore's agent, or the state directory itself, where a file the
+    overseer added could be an OpenCode config another run loads. Of the operator's config, the user file alone: the
+    listener's secret sits beside it. No `~/.ssh`, no host off the allowlist, and no GitHub but its API.
+    """
+    state_as_a_tick_leaves_it(canopy_env)
+    definitions = canopy_env.state_dir / "runtime" / "0123abcd"
+
+    done = wrap("overseer", "--read", str(definitions), "--", *PRINT_ARG, PROMPT, cwd=canopy_env.root)
+
+    assert done.ok, done.stderr
+    assert done.stdout == PROMPT
+    call = sandbox.only_call()
+    filesystem = call["settings"]["filesystem"]
+    state, tmp = canopy_env.state_dir, call["env"]["TMPDIR"]
+    journal = [str(state / name) for name in canopy_sandbox.JOURNAL]
+    cache, data = sandbox.caches() / "overseer", sandbox.datas() / "overseer"
+    assert filesystem["allowWrite"] == [*journal, tmp, str(data), "~/.local/state/opencode", str(cache)]
+    # The wrapper made the locks the overseer may take, as canopy would: the operator's alone.
+    assert all((state / name).stat().st_mode & 0o777 == 0o600 for name in canopy_sandbox.LOCKS)
+    # Entry by entry, so that no read-only bind of a directory covers the journal's files.
+    root = canopy_env.root
+    entries = [root / "canopy-workspace.toml", root / "repos"]
+    entries += [state / "chore-agents", state / "config.toml", state / "runtime"]
+    assert filesystem["allowRead"][: len(entries) + 2] == [*map(str, entries), tmp, str(definitions)]
+    assert not {str(root), str(state), *journal} & set(filesystem["allowRead"])
+    # The operator's own config, the user file alone; and no state directory denied, as it is to every other role.
+    assert "~/.config/canopy/config.toml" in filesystem["allowRead"]
+    assert not [p for p in filesystem["allowRead"] if p.startswith(("~/.ssh", "~/.config/canopy/listener"))]
+    assert "~/.config/canopy" not in filesystem["allowRead"]
+    assert filesystem["denyRead"] == ["~", str(sandbox.runs_root()), str(sandbox.caches()), str(sandbox.datas())]
+    assert filesystem["denyWrite"] == [str(sandbox.operators())]
+    assert call["settings"]["network"]["allowedDomains"] == [
+        "api.anthropic.com",
+        "api.github.com",
+        "api.githubcopilot.com",
+    ]
+    call["env"].pop(canopy_sandbox.SOCAT_LISTEN, None)  # as this host has IPv6 or not
+    assert call["env"] == {
+        "CLAUDE_CODE_TMPDIR": tmp,
+        "PATH": os.environ["PATH"],
+        "TMPDIR": tmp,
+        **caching(cache),
+        **storing(data, sandbox.data_home),
+    }
+
+
+def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(
+    canopy_env: CanopyEnv,
+    sandbox: Sandbox,
+) -> None:
+    """`canopy --version`, which the tick checks before the overseer starts, and a decision that lands in the journal.
+
+    The fake srt sandboxes nothing: the canary checks the same under the real one.
+    """
+    canopy = str(Path(sys.executable).parent / "canopy")
+    conn = state_as_a_tick_leaves_it(canopy_env)
+    with in_tick(conn) as tick_id:
+        version = wrap("overseer", "--", canopy, "--version", cwd=canopy_env.root)
+        skip = ["decide", "skip", "--rationale", "mcp_unavailable: the tracker is down"]
+        decided = wrap("overseer", "--", canopy, *skip, cwd=canopy_env.root)
+        recorded = decisions(conn, tick_id)
+
+    assert version.ok, version.stderr
+    assert version.stdout.startswith("canopy ")
+    assert decided.ok, decided.stderr
+    assert recorded == [("skip", "mcp_unavailable: the tracker is down")]
+
+
+@pytest.mark.parametrize(
+    ("place", "error"),
+    [
+        ("no-workspace-file", "holds no canopy-workspace.toml"),
+        ("no-state", "holds no .canopy"),
+        ("open-state", "is not a directory private to this user"),
+        ("no-journal", "holds no journal"),
+        ("linked-log", "canopy.log is not a regular file"),
+    ],
+)
+def test_an_overseer_outside_a_workspace_root_runs_nothing(
+    canopy_env: CanopyEnv,
+    sandbox: Sandbox,
+    tmp_path: Path,
+    place: str,
+    error: str,
+) -> None:
+    """The overseer runs in the workspace root, whose state canopy made private to the operator, with its journal.
+
+    A journal file that is a link would have the policy let the overseer write what it points at.
+    """
+    state = canopy_env.state_dir
+    if place not in {"no-state", "no-journal"}:
+        state_as_a_tick_leaves_it(canopy_env)
+    match place:
+        case "no-workspace-file":
+            canopy_env.shared_file.unlink()
+        case "no-state":
+            state.rmdir()
+        case "open-state":
+            state.chmod(0o755)
+        case "linked-log":
+            (state / "canopy.log").unlink()
+            (state / "canopy.log").symlink_to(canopy_env.home / ".bashrc")
+        case _:
+            pass
+
+    done = wrap("overseer", "true", cwd=canopy_env.root)
+
+    assert done.returncode == 2
+    assert error in done.stderr
+    assert not sandbox.log.exists()
+
+
+def test_the_journals_files_are_canopys() -> None:
+    """The wrapper names what canopy writes, by canopy's names, without importing canopy (D041)."""
+    canopys = (
+        db.DB_FILE_NAME,
+        f"{db.DB_FILE_NAME}-wal",
+        f"{db.DB_FILE_NAME}-shm",
+        lock.LOCK_FILE_NAME,
+        context.DISPATCH_LOCK,
+        logs.LOG_FILE_NAME,
+    )
+    assert canopys == canopy_sandbox.JOURNAL
+    assert canopy_sandbox.LOCKS == (lock.LOCK_FILE_NAME, context.DISPATCH_LOCK)
+    assert canopy_sandbox.WORKSPACE_FILE == config.WORKSPACE_FILE_NAME
+    assert canopy_sandbox.STATE_DIR == config.WORKSPACE_STATE_DIR
 
 
 @pytest.mark.parametrize("place", ["empty", "slot"])
@@ -680,7 +893,7 @@ def test_without_srt_nothing_runs(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(sys.platform != "linux", reason="srt bridges the network over Unix sockets on Linux")
 def test_a_temp_directory_too_deep_for_srts_sockets_runs_nothing(sandbox: Sandbox, tmp_path: Path) -> None:
-    """srt makes its sockets in the run's temp directory, and says only that it could not when the path is too long."""
+    """The run's temp directory holds srt's sockets; srt says only that it could not when the path is too long."""
     deep = sandbox.tmp / ("d" * 60)
     deep.mkdir()
 
@@ -690,6 +903,28 @@ def test_a_temp_directory_too_deep_for_srts_sockets_runs_nothing(sandbox: Sandbo
     assert f"the temp directory {deep} has too long a path for srt's sockets" in done.stderr
     assert not sandbox.log.exists()
     assert list((deep / f"canopy-sandbox-{os.getuid()}").iterdir()) == []
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="srt bridges the network with socat on Linux alone")
+@pytest.mark.parametrize(
+    ("ipv6", "operators", "listen"),
+    [(True, None, None), (False, None, "4"), (False, "6", "6")],
+    ids=["with-ipv6", "without", "without-but-the-operator-chose"],
+)
+def test_on_a_host_without_ipv6_srts_bridge_listens_on_ipv4(
+    sandbox: Sandbox,
+    tmp_path: Path,
+    ipv6: bool,  # noqa: FBT001  (a parameter)
+    operators: str | None,
+    listen: str | None,
+) -> None:
+    """socat, srt's bridge into the sandbox, listens on IPv6 unless told not to, and without it exits unreported."""
+    with mock.patch.dict(os.environ, {canopy_sandbox.SOCAT_LISTEN: operators or ""}):
+        if operators is None:
+            os.environ.pop(canopy_sandbox.SOCAT_LISTEN)
+        assert wrap_here("chore", "true", cwd=tmp_path, ipv6=ipv6) == 0
+
+    assert sandbox.only_call()["env"].get(canopy_sandbox.SOCAT_LISTEN) == listen
 
 
 def test_the_commands_exit_status_is_the_wrappers(sandbox: Sandbox, tmp_path: Path) -> None:
@@ -784,8 +1019,10 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
     treehouse_state: Path,
     sandbox: Sandbox,
 ) -> None:
-    """`_run` with the wrapper as `worker_cmd`'s prefix: the worker's commit lands in the run's object directory only,
-    `_run` pushes it from there, and the slot is tidied (DESIGN §8)."""
+    """`_run` with the wrapper as `worker_cmd`'s prefix pushes the worker's commit and tidies the slot (DESIGN §8).
+
+    The worker's commit lands in the run's object directory only, and `_run` pushes it from there.
+    """
     primary, _ = worktree_pool
     prefix = f"{WRAPPER} worker --read {{definitions_dir}} -- env"
     canopy_env.write_user(user_toml().replace("\nworker_cmd = 'env", f"\nworker_cmd = '{prefix}"))
@@ -796,6 +1033,7 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
         with in_tick(conn, ends_ok=True):
             args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
             assert main([*args, "--slug", "work"], runner=runner) == 0
+            tick_starts(runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 
@@ -840,3 +1078,115 @@ def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
     assert not [p for p in filesystem["allowWrite"] if p.startswith(str(slot.parent))]
     assert "CANOPY_GIT_OBJECTS" not in call["env"]
     assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
+def test_a_sandboxed_repositorys_worker_and_setup_run_in_the_wrapper_canopy_adds(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    worktree_pool: tuple[Path, list[Path]],
+    agent_log: Path,
+    treehouse_state: Path,
+    sandbox: Sandbox,
+) -> None:
+    """With `runtime.sandbox_repos` naming the repository and no prefix, `_run` starts the worker in the wrapper.
+
+    It starts setup and the worker in the wrapper itself, each with its role's policy, and pushes the commit the worker
+    made in the run's object directory.
+    """
+    primary, _ = worktree_pool
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"sandbox_repos": ["repo"], "setup_cmd": "sh -c true"}})
+    conn: sqlite3.Connection = canopy_env.journal()
+    commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
+    with worker_does(commit):
+        runner = InlineRunner()
+        with in_tick(conn, ends_ok=True):
+            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+            assert main([*args, "--slug", "work"], runner=runner) == 0
+            tick_starts(runner)
+        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
+        assert main(["_run", str(run_id)], runner=runner) == 0
+
+    assert present(db.get_run(conn, run_id))["status"] == "done"
+    setup, worker = [json.loads(line) for line in sandbox.log.read_text().splitlines()]
+    slot = Path(slot_of(conn, run_id).slot_path)
+    assert (setup["argv"][-2:], setup["cwd"]) == (["-c", "true"], str(slot))
+    # Each role caches in its own directory, setup in the worker's: the policy each run was given is its role's.
+    assert setup["env"]["XDG_CACHE_HOME"] == worker["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "worker")
+    definitions = next(w for w in worker["argv"] if w.startswith("OPENCODE_CONFIG_DIR=")).split("=", 1)[1]
+    assert definitions in worker["settings"]["filesystem"]["allowRead"]
+    pushed = present(git_pool.remote_head("agent/PROJ-1-work"))
+    assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok  # never in the shared one
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
+def test_a_repository_sandbox_repos_does_not_name_runs_unwrapped(
+    canopy_env: CanopyEnv,
+    worktree_pool: tuple[Path, list[Path]],
+    agent_log: Path,
+    sandbox: Sandbox,
+) -> None:
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"sandbox_repos": ["other"]}})
+    conn: sqlite3.Connection = canopy_env.journal()
+    with worker_does():
+        runner = InlineRunner()
+        with in_tick(conn, ends_ok=True):
+            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+            assert main([*args, "--slug", "work"], runner=runner) == 0
+            tick_starts(runner)
+        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
+        assert main(["_run", str(run_id)], runner=runner) == 0
+
+    assert present(db.get_run(conn, run_id))["status"] == "done"
+    assert not sandbox.log.exists()
+
+
+def test_a_sandboxed_repositorys_review_runs_in_the_wrapper_canopy_adds(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    worktree_pool: tuple[Path, list[Path]],
+    treehouse_state: Path,
+    sandbox: Sandbox,
+) -> None:
+    """`_review` starts its reviewer in the wrapper, as `review`.
+
+    It does so for a PR in a repository `runtime.sandbox_repos` names.
+    """
+    review_cmd = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
+    canopy_env.configure(
+        canopy_env.user_file,
+        {"runtime": {"sandbox_repos": ["repo"], "review_cmd": review_cmd}, "review": {"agent_prs": True}},
+    )
+    conn: sqlite3.Connection = canopy_env.journal()
+    db.set_unit(conn, "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
+    sha = git("rev-parse", "main", cwd=git_pool.origin)
+
+    with reviewer_reports(CLEAN, ["git", "-C", "checkout", "rev-parse", "HEAD"]):
+        run_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
+
+    row = present(review_runs.get_review_run(conn, run_id))
+    assert row.status == "done", Path(row.log_path).read_text()
+    call = sandbox.only_call()
+    assert call["cwd"] == str(canopy_env.state_dir / "reviews" / str(run_id))
+    assert call["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "review")
+    assert "CANOPY_GIT_OBJECTS" not in call["env"]
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
+@pytest.mark.usefixtures("worktree_pool")
+def test_a_sandboxed_repositorys_task_runs_in_the_wrapper_canopy_adds(canopy_env: CanopyEnv, sandbox: Sandbox) -> None:
+    """A task's run in a repository `runtime.sandbox_repos` names starts its worker in the wrapper, as `worker`."""
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"sandbox_repos": ["repo"]}})
+    ctx = inline_context(canopy_env)
+    assert operator("task", "submit", "Find out why the build is slow.") == 0
+    with in_tick(ctx.conn) as tick_id:
+        [started] = task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id))
+
+    with private_worker_does(result={"status": "done", "summary": "nothing to change"}):
+        assert main(["_task", str(started.run_id)], runner=InlineRunner()) == 0
+
+    run = present(tasks.get_run(ctx.conn, started.run_id))
+    assert run.status == "done"
+    call = sandbox.only_call()
+    assert call["cwd"] == present(tasks.get_run(ctx.conn, started.run_id)).slot_path
+    assert call["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "worker")
+    assert call["env"]["CANOPY_GIT_OBJECTS"]

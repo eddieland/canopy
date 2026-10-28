@@ -5,16 +5,21 @@ socket, and serves tools and nothing else: JSON-RPC 2.0, one message to a line, 
 `notifications/initialized`, `ping`, `tools/list`, and `tools/call`. Rejected: the `mcp` SDK, a runtime dependency
 with its own async stack and HTTP transports, for these few methods.
 
-It serves in one of three modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the
-same command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call
-at a time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every call. A chore's
-(`CHORE`, `canopy _mcp --chore`) is one tool, its own chore's history (`chores.history`, DESIGN §19), which `canopy
-chore history` also reads; it lists and serves it only where CANOPY_RUN_ID names a chore's run, and serves nothing of
-the overseer's. The reviewer's and the planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in
-the checkouts its command line names, the run's own (`core.git_tools`); it opens no workspace, and serves nothing else.
+It serves in one of four modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the same
+command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call at a
+time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every call. A chore's (`CHORE`,
+`canopy _mcp --chore`) is one tool, its own chore's history (`chores.history`, DESIGN §19), which `canopy chore history`
+also reads. The reports' (`REPORTS`, `canopy _mcp --reports`) are canopy's read-only reports, health, spend, the memory
+listings, the config's settings, and what each agent is offered, which those commands print with `--json`
+(`core.reports`), and the read-back of a tick's decisions, a run, and a chore (`loop.readback`). Each lists and serves
+its tools only where CANOPY_RUN_ID names a chore's run, and serves nothing of the overseer's. The reviewer's and the
+planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in the checkouts its command line names, the
+run's own (`core.git_tools`); it opens no workspace, and serves nothing else.
 
-A refusal or an invalid argument is a tool error, `isError`, with the text the command prints, and the server goes on.
-It writes nothing to stderr, which the runtime never reads, and logs no argument's text.
+An overseer's tool lists its result's schema as its output schema, and answers with the text the command prints and
+the result as structured content; git's `log` does too, its text the result as JSON. A refusal or an invalid argument
+is a tool error, `isError`, with the text the command prints and no structured content, and the server goes on. It
+writes nothing to stderr, which the runtime never reads, and logs no argument's text.
 """
 
 from __future__ import annotations
@@ -32,16 +37,25 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
 from canopy.chores import history
-from canopy.core import config, context, conversation, db, git_tools
+from canopy.core import config, context, conversation, db, git_tools, reports
 from canopy.infra import logs
-from canopy.loop import chore_tools, review_tools, tools
+from canopy.loop import chore_tools, readback, review_tools, tools
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
 
+    from pydantic.json_schema import JsonSchemaMode
+
     from canopy.core.context import Context
     from canopy.infra import procs
 
+#: The overseer's server, as its inline config names it, and as the server names itself: the runtime puts it before each
+#: tool's name, `canopy_dispatch`, and no workspace config may name a server so (DESIGN §13).
+SERVER = "canopy"
+#: How the runtime starts the server for the overseer, and how a tick checks it starts (DESIGN §6): this interpreter's
+#: canopy. `-P` keeps the working directory, the workspace root, off the import path, so no file a workspace holds can
+#: stand in for canopy's own modules (TRUST_MODEL T7).
+COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp")
 #: The protocol versions the server speaks, newest first: a client that asks for one of them is answered in it, and
 #: any other in the newest.
 PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
@@ -66,20 +80,36 @@ class Tool:
     description: str
     #: Its request, whose schema is the tool's input schema.
     request: type[BaseModel]
-    #: Validate its arguments, then do it in the context the opener opens: what the command prints.
-    call: Callable[[Mapping[str, object], Opener], str]
+    #: Validate its arguments, then do it in the context the opener opens: what the command prints, with its result
+    #: when it has one.
+    call: Callable[[Mapping[str, object], Opener], str | tools.Outcome[BaseModel]]
+    #: Its result, whose schema is the tool's output schema; None for a tool that answers with text alone.
+    result: type[BaseModel] | None = None
 
     def listed(self) -> dict[str, object]:
         """Describe the tool as `tools/list` lists it.
 
         Returns:
-            Its name, description, and input schema.
+            Its name, description, input schema, and output schema when it has a result.
         """
-        return {"name": self.name, "description": self.description, "inputSchema": schema(self.request)}
+        listed: dict[str, object] = {
+            "name": self.name,
+            "description": self.description,
+            "inputSchema": schema(self.request),
+        }
+        if self.result is not None:
+            listed["outputSchema"] = schema(self.result, "serialization")
+        return listed
 
 
-def tool[R: BaseModel](name: str, description: str, request: type[R], do: Callable[[Context, R], str]) -> Tool:
-    """Make verb `do` a tool, taking `request` as its arguments.
+def tool[R: BaseModel, O: tools.Result](
+    name: str,
+    description: str,
+    request: type[R],
+    result: type[O],
+    do: Callable[[Context, R], tools.Outcome[O]],
+) -> Tool:
+    """Make verb `do` a tool, taking `request` as its arguments and answering with `result`.
 
     Every call is refused inside a run, and outside a running tick, `ticket-set` included, which the command takes
     outside one.
@@ -88,7 +118,7 @@ def tool[R: BaseModel](name: str, description: str, request: type[R], do: Callab
         The tool.
     """
 
-    def call(arguments: Mapping[str, object], opened: Opener) -> str:
+    def call(arguments: Mapping[str, object], opened: Opener) -> tools.Outcome[O]:
         if os.environ.get(conversation.RUN_ID_ENV):
             raise tools.Refused(_inside_run())
         asked = request.model_validate(arguments)
@@ -96,20 +126,24 @@ def tool[R: BaseModel](name: str, description: str, request: type[R], do: Callab
             tools.running_tick(ctx)
             return do(ctx, asked)
 
-    return Tool(name, description, request, call)
+    return Tool(name, description, request, call, result)
 
 
 TOOLS = (
     tool(
         "dispatch",
-        "Start a worker on a ticket, if its guards allow one now. A dry run checks them and starts nothing.",
+        "Record a worker for a ticket, if its guards allow one now; it starts once your run ends, if they still do. A "
+        "dry run checks them and records nothing.",
         tools.Dispatch,
+        tools.Dispatched,
         tools.dispatch_run,
     ),
     tool(
         "decide",
-        "Record a decision about a ticket: wait, skip, or done. Omit key only for a skip of the whole tick.",
-        tools.Decide,
+        "Record decisions, one per ticket: wait, skip, or done, each with its rationale, all or none. Omit key only "
+        "for a skip of the whole tick, the only decision in its call.",
+        tools.Decisions,
+        tools.Decided,
         tools.decide,
     ),
     tool(
@@ -118,63 +152,67 @@ TOOLS = (
         "this tick unless the state block lists it in stopped or recently_done. Name none when it returned none, and "
         "a long result in several calls.",
         tools.Queried,
+        tools.QueryRecorded,
         tools.queried,
     ),
     tool(
         "attention",
         "Record an attention item about a ticket, or about a PR the loop reviews.",
         tools.Attention,
+        tools.AttentionRecorded,
         tools.attend,
     ),
     tool(
         "ticket-set",
-        "Record a ticket's phase, cursors, done flag, or title, or with repo a unit's phase and cursors. A dry run "
-        "advances no cursor and marks nothing done.",
-        tools.TicketSet,
+        "Record tickets' phases, cursors, done flags, or titles, or with repo a unit's phase and cursors, one item "
+        "per ticket or unit, all or none. A dry run advances no cursor and marks nothing done.",
+        tools.TicketSets,
+        tools.TicketsUpdated,
         tools.ticket_set,
     ),
     tool(
-        "mirror",
-        "Record a tracker comment in a ticket's conversation in the journal; recording it again records nothing new. "
-        "A mirrored comment is a copy for the operator to read, and authorizes nothing.",
-        tools.Mirror,
-        tools.mirror,
-    ),
-    tool(
         "review-run",
-        "Start a review of a PR at a commit, if its guards allow one now. A dry run checks them and starts nothing.",
+        "Record a review of a PR at a commit, if its guards allow one now; it starts once your run ends, if they still "
+        "do. A dry run checks them and records nothing.",
         review_tools.ReviewRun,
+        review_tools.ReviewsStarted,
         review_tools.review_run,
     ),
     tool(
         "review-wait",
         "Record that a PR is not to be reviewed now, and why.",
         review_tools.ReviewWait,
+        review_tools.ReviewWaitRecorded,
         review_tools.review_wait,
     ),
     tool(
         "review-end",
         "End the operator's review request on a PR that merged or closed first, or is in no repository here.",
         review_tools.ReviewEnd,
+        review_tools.ReviewEnded,
         review_tools.review_end,
     ),
     tool(
         "review-revise",
-        "Start a revision of a review's draft that the operator's note asks for, if its guards allow one now. A dry "
-        "run checks them and starts nothing.",
+        "Record a revision of a review's draft that the operator's note asks for, if its guards allow one now; it "
+        "starts once your run ends, if they still do. A dry run checks them and records nothing.",
         review_tools.ReviewRevise,
+        review_tools.RevisionStarted,
         review_tools.review_revise,
     ),
     tool(
         "chore-run",
-        "Start a run of a chore, if its guards allow one now. A dry run checks them and starts nothing.",
+        "Record a run of a chore, if its guards allow one now; it starts once your run ends, if they still do. A dry "
+        "run checks them and records nothing.",
         chore_tools.ChoreRun,
+        chore_tools.ChoreStarted,
         chore_tools.chore_run,
     ),
     tool(
         "chore-wait",
         "Record that a chore is due but should not run now, and why.",
         chore_tools.ChoreWait,
+        chore_tools.ChoreWaitRecorded,
         chore_tools.chore_wait,
     ),
 )
@@ -210,9 +248,118 @@ CHORE_TOOLS = (
 )
 
 
+#: Why a report is refused outside a chore's run, the one run the harness gives the reports' server today.
+_CHORES_ALONE = "canopy's reports are served to a chore's run alone, and this is none"
+
+
+def _report[R: BaseModel](name: str, description: str, request: type[R], do: Callable[[Context, R], str]) -> Tool:
+    """Make report `do` a tool, taking `request` as its arguments: what its command prints.
+
+    Every call is refused but in a chore's run, as the history tool's is, and a report that cannot say what was asked
+    is refused with what its command says.
+
+    Returns:
+        The tool.
+    """
+
+    def call(arguments: Mapping[str, object], opened: Opener) -> str:
+        asked = request.model_validate(arguments)
+        with opened() as ctx:
+            try:
+                history.run_chore(ctx.conn)
+            except history.Refused as r:
+                raise tools.Refused(f"{name} refused ({r.guard}): {_CHORES_ALONE}") from None
+            try:
+                return do(ctx, asked)
+            except reports.Refused as e:
+                raise tools.Refused(str(e)) from None
+
+    return Tool(name, description, request, call)
+
+
+#: canopy's read-only reports (`core.reports`), which the runtime names `canopy_reports_health` and so on. An agent
+#: given the server allows those it reads by name; `canopy-chore` reads none.
+REPORT_TOOLS = (
+    _report(
+        reports.HEALTH,
+        "How canopy's ticks and runs of the last days ended, as JSON: each kind of run by status and cost "
+        "(outcomes), the newest failures with an id and a note (failures), and the overseer's asks a guard refused "
+        "(refusals).",
+        reports.Health,
+        reports.read_health,
+    ),
+    _report(
+        reports.SPEND,
+        "What canopy's agent runs cost over the last days, as JSON: per day and kind, by ticket, by tool with what "
+        "its calls returned and how many errored (tools), by model, and the month against the operator's budget "
+        "(month, null with none set).",
+        reports.Spend,
+        reports.read_spend,
+    ),
+    _report(
+        reports.MEMORY_LESSONS,
+        "The lessons the operator promoted, as JSON (lessons), each with its reads, citations, review date, and any "
+        "run's report that it is wrong; and each memory tier's mode (modes).",
+        reports.MemoryLessons,
+        reports.read_lessons,
+    ),
+    _report(
+        reports.MEMORY_PROPOSALS,
+        "The lessons workers proposed that wait on the operator, as JSON (proposals), each with its ticket and run, "
+        "whether that ticket is done, and whether the run was a private ticket's; and each tier's mode (modes).",
+        reports.MemoryProposals,
+        reports.read_proposals,
+    ),
+    _report(
+        reports.MEMORY_LIST,
+        "The ticket notes workers recorded, as JSON (notes), of one ticket or every one, each with the run that "
+        "wrote it and how many runs read and cited it; and each tier's mode (modes).",
+        reports.MemoryList,
+        reports.read_notes,
+    ),
+    _report(
+        reports.DECISIONS,
+        "One tick's decisions, as text: the tick's status, summary, and cost, then each decision's subject, action, "
+        "and rationale, of one ticket if asked; the latest tick's unless tick names one. A failure in health names its "
+        "tick.",
+        readback.Decisions,
+        readback.read_decisions,
+    ),
+    _report(
+        reports.SHOW_RUN,
+        "One worker or plan run, as text: its ticket, kind, and status, its slots, PRs, cost, session, log, and the "
+        "messages it sent. A failure in health names its run.",
+        readback.ShowRun,
+        readback.read_run,
+    ),
+    _report(
+        reports.SHOW_CHORE,
+        "One chore, as text: when it last ran and is next due, its latest run, its open findings, and the operator's "
+        "notes its next run reads.",
+        readback.ShowChore,
+        readback.read_chore,
+    ),
+    _report(
+        reports.CONFIG_SHOW,
+        "Each number, switch, and choice in canopy's config, as JSON (settings): its value, default, the file that set "
+        "it, and the choices or bounds it takes. Keys that hold text, commands, or paths are left out.",
+        reports.ConfigShow,
+        reports.read_config,
+    ),
+    _report(
+        reports.AGENTS,
+        "What each of canopy's agents is offered once the operator's runtime config is merged into canopy's, as JSON: "
+        "every MCP server and skill, each server's reach per agent, and the commands runtime.allow_bash gives each. "
+        "It starts the runtime to ask, so it takes a few seconds.",
+        reports.Agents,
+        reports.read_agents,
+    ),
+)
+
+
 @dataclass(frozen=True)
 class Mode:
-    """What the server serves: the overseer's verbs, or a chore its history."""
+    """What the server serves: the overseer's verbs, a chore its history, canopy's reports, or git."""
 
     #: The tools it lists and serves.
     tools: Sequence[Tool]
@@ -220,11 +367,18 @@ class Mode:
     refusal: Callable[[Opener], str | None]
 
 
-def run_stdio(runner: procs.Runner, *, chore: bool = False, checkouts: Mapping[str, Path] | None = None) -> int:
+def run_stdio(
+    runner: procs.Runner,
+    *,
+    chore: bool = False,
+    serve_reports: bool = False,
+    checkouts: Mapping[str, Path] | None = None,
+) -> int:
     """Serve on this process's stdin and stdout until stdin closes, with `runner` for every process a call starts.
 
-    `chore` serves a chore's run its history (`CHORE`), from the workspace its run names; `checkouts`, a review's or a
-    plan's run read-only git in those checkouts, by name (`git_mode`); else it serves the overseer's verbs.
+    `chore` serves a chore's run its history (`CHORE`), and `serve_reports` canopy's reports (`REPORTS`), each from the
+    workspace its run names; `checkouts`, a review's or a plan's run read-only git in those checkouts, by name
+    (`git_mode`); else it serves the overseer's verbs.
 
     The protocol keeps its own copy of stdout; the process's stdout and stderr then go nowhere, so nothing a call
     prints, and no warning or traceback, reaches the runtime's pipes.
@@ -243,9 +397,9 @@ def run_stdio(runner: procs.Runner, *, chore: bool = False, checkouts: Mapping[s
         out.flush()
 
     # A chore's agent may run in a `cwd` outside the workspace; its run names the workspace it belongs to.
-    root = os.environ.get(history.WORKSPACE_ENV) if chore else None
+    root = os.environ.get(history.WORKSPACE_ENV) if chore or serve_reports else None
     start = Path(root) if root else Path.cwd()
-    mode = git_mode(runner, checkouts) if checkouts else CHORE if chore else OVERSEER
+    mode = git_mode(runner, checkouts) if checkouts else CHORE if chore else REPORTS if serve_reports else OVERSEER
     with contextlib.suppress(BrokenPipeError), out:
         serve(sys.stdin.buffer, write, lambda: opened(runner, start), mode)
     return 0
@@ -271,8 +425,8 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         ),
         _git_tool(
             git_tools.DIFF,
-            "Show the diff from one commit to another, in the paths named if any. Commits only, never the working "
-            "tree.",
+            "Show the diff from one commit to another, in the paths named if any, or with stat each file changed and "
+            "its lines added and removed. Commits only, never the working tree.",
             git_tools.Diff,
             git_tools.diff,
             runner=runner,
@@ -280,11 +434,13 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         ),
         _git_tool(
             git_tools.LOG,
-            "List commits, newest first, with each one's message and the files it changed: one commit's history, or "
-            "BASE..HEAD for those on HEAD and not BASE. Narrow it to commits that change some paths, add or remove a "
-            "text (search), or say one in their message (message); follow one path across renames.",
+            "List commits as JSON, newest first, each with its id, parents, author, date, message, and the files it "
+            "changed: one commit's history, or BASE..HEAD for those on HEAD and not BASE. Narrow it to commits that "
+            "change some paths, add or remove a text (search), or say one in their message (message); follow one path "
+            "across renames. more says whether more match than it lists.",
             git_tools.Log,
             git_tools.log,
+            result=git_tools.Commits,
             runner=runner,
             checkouts=checkouts,
         ),
@@ -299,9 +455,29 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         _git_tool(
             git_tools.BLAME,
             "Name the commit that last changed each of some lines of a file as it is at a commit, with its author and "
-            "date: which lines a branch wrote, and what commit to read for why the rest are so.",
+            "date: which lines a branch wrote, and what commit to read for why the rest are so. moves and "
+            "ignore_whitespace look past a refactor that moved or reindented them.",
             git_tools.Blame,
             git_tools.blame,
+            runner=runner,
+            checkouts=checkouts,
+        ),
+        _git_tool(
+            git_tools.GREP,
+            "Find the lines that hold an exact text in the files as they are at a commit, each as path:line:text: "
+            "who calls a function, or what used a name before a branch changed it. Not a pattern; files that are not "
+            "text are left out.",
+            git_tools.Grep,
+            git_tools.grep,
+            runner=runner,
+            checkouts=checkouts,
+        ),
+        _git_tool(
+            git_tools.FILES,
+            "List the paths of the files as they are at a commit, under some paths if named, and only those whose own "
+            "name matches a name or a glob such as `*.py` if one is given.",
+            git_tools.Files,
+            git_tools.files,
             runner=runner,
             checkouts=checkouts,
         ),
@@ -313,25 +489,32 @@ def _git_tool[R: git_tools.Request](
     name: str,
     description: str,
     request: type[R],
-    do: Callable[[procs.Runner, Mapping[str, Path], R], str],
+    do: Callable[[procs.Runner, Mapping[str, Path], R], str | git_tools.Result],
     *,
+    result: type[git_tools.Result] | None = None,
     runner: procs.Runner,
     checkouts: Mapping[str, Path],
 ) -> Tool:
     """Make git read `do` a tool over `checkouts`, taking `request` as its arguments.
 
+    A read that returns records, `result`, answers with them as structured content and as its text's JSON.
+
     Returns:
         The tool, which never opens the workspace.
     """
 
-    def call(arguments: Mapping[str, object], opened: Opener) -> str:  # noqa: ARG001  (git reads no journal)
+    def call(
+        arguments: Mapping[str, object],
+        opened: Opener,  # noqa: ARG001  (git reads no journal)
+    ) -> str | tools.Outcome[git_tools.Result]:
         asked = request.model_validate(arguments)
         try:
-            return do(runner, checkouts, asked)
+            found = do(runner, checkouts, asked)
         except git_tools.Refused as r:
             raise tools.Refused(str(r)) from None
+        return found if isinstance(found, str) else tools.Outcome(git_tools.text(found), found)
 
-    return Tool(name, description, request, call)
+    return Tool(name, description, request, call, result)
 
 
 def serve(lines: Iterable[bytes], write: Callable[[str], object], opener: Opener, mode: Mode | None = None) -> None:
@@ -390,17 +573,18 @@ def answer(line: bytes, opener: Opener, mode: Mode | None = None) -> Response:
     return {"jsonrpc": "2.0", "id": message.id, "result": result}
 
 
-def schema(request: type[BaseModel]) -> dict[str, object]:
-    """Return a request's JSON schema as a tool's input schema: every reference inlined, and no titles.
+def schema(model: type[BaseModel], mode: JsonSchemaMode = "validation") -> dict[str, object]:
+    """Return a model's JSON schema as a tool's: every reference inlined, and no titles.
 
+    A request's, in `mode` "validation", is its tool's input schema; a result's, in "serialization", its output schema.
     Some models' providers take no `$ref`, and a title only repeats its field's name. What a docstring says is for
     canopy's readers, so only the fields' own descriptions are kept.
 
     Returns:
-        The schema, an object that takes no field the request does not.
+        The schema, an object that holds no field the model does not.
     """
-    whole = request.model_json_schema()
-    # The request's docstring says what it is to canopy's readers; the tool's description says what it does.
+    whole = model.model_json_schema(mode=mode)
+    # The model's docstring says what it is to canopy's readers; the tool's description says what it does.
     whole.pop("description", None)
     definitions = whole.pop("$defs", {})
     inlined = _inlined(whole, definitions if isinstance(definitions, dict) else {})
@@ -475,7 +659,7 @@ def _initialize(params: Mapping[str, object], opener: Opener, mode: Mode) -> dic
     return {
         "protocolVersion": version,
         "capabilities": {"tools": {"listChanged": False}},
-        "serverInfo": {"name": "canopy", "version": db.CANOPY_VERSION},
+        "serverInfo": {"name": SERVER, "version": db.CANOPY_VERSION},
     }
 
 
@@ -493,13 +677,14 @@ def _call(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str,
     if found is None:
         raise _Failed(INVALID_PARAMS, f"no tool named {asked.name!r}")
     try:
-        return _said(found.call(asked.arguments or {}, opener))
+        said = found.call(asked.arguments or {}, opener)
     except ValidationError as e:
         return _said(tools.explain(e), error=True)
     except tools.Refused as e:
         return _said(str(e), error=True)
     except (config.ConfigError, db.MigrationError) as e:
         return _said(f"canopy: {e}", error=True)
+    return _said(said) if isinstance(said, str) else _said(said.text, structured=said.result)
 
 
 _METHODS: Mapping[str, Callable[[Mapping[str, object], Opener, Mode], dict[str, object]]] = {
@@ -548,6 +733,8 @@ def _chore_refusal(opener: Opener) -> str | None:
 OVERSEER = Mode(TOOLS, _overseer_refusal)
 #: A chore's history, served inside that chore's run alone.
 CHORE = Mode(CHORE_TOOLS, _chore_refusal)
+#: canopy's read-only reports, served inside a chore's run alone, the one run the harness gives their server today.
+REPORTS = Mode(REPORT_TOOLS, _chore_refusal)
 
 
 def _inside_run() -> str:
@@ -561,8 +748,11 @@ def _parsed[P: _Params](params_model: type[P], params: Mapping[str, object]) -> 
         raise _Failed(INVALID_PARAMS, tools.explain(e)) from None
 
 
-def _said(text: str, *, error: bool = False) -> dict[str, object]:
-    return {"content": [{"type": "text", "text": text}], "isError": error}
+def _said(text: str, *, error: bool = False, structured: BaseModel | None = None) -> dict[str, object]:
+    said: dict[str, object] = {"content": [{"type": "text", "text": text}], "isError": error}
+    if structured is not None:
+        said["structuredContent"] = structured.model_dump(mode="json")
+    return said
 
 
 def _error(request_id: object, code: int, message: str) -> dict[str, object]:

@@ -44,8 +44,9 @@ updates:
       - dependency-name: oxc-transform-react
         update-types: [version-update:semver-minor]
 
-  # The dev-only packages that type-check the plugin canopy ships for its agents (tests/plugins). Its runtime types
-  # follow the OpenCode canopy pins, so they move with that pin by hand, never on their own.
+  # The dev-only packages that type-check the plugin canopy ships for its agents (tests/plugins). Its runtime types,
+  # one package for each major version of OpenCode, follow the versions canopy pins, so they move with those pins by
+  # hand, never on their own.
   - package-ecosystem: npm
     directory: /tests/plugins
     schedule:
@@ -60,6 +61,7 @@ updates:
         update-types: [minor, patch]
     ignore:
       - dependency-name: "@opencode-ai/plugin"
+      - dependency-name: "@opencode/plugin"
       - dependency-name: typescript
         update-types: [version-update:semver-major]
       - dependency-name: "@types/node"
@@ -77,8 +79,9 @@ updates:
       prefix: build
       include: scope
 
+  # The workflows, and the composite actions they share, each in a directory of its own under .github/actions.
   - package-ecosystem: github-actions
-    directory: /
+    directories: [/, /.github/actions/*]
     schedule:
       interval: weekly
     cooldown:

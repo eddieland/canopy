@@ -3,6 +3,7 @@ name = "canopy-github"
 # From the latest v* tag, as canopy's is (D085), so every package canopy ships carries its version.
 dynamic = ["version"]
 description = "canopy's GitHub programs: read PRs and branches into canopy, and post the replies the operator approved."
+readme = "README.md"
 license = "MIT"
 authors = [{ name = "eddieland" }]
 keywords = ["canopy", "github", "graphql", "review"]
@@ -20,9 +21,9 @@ classifiers = [
     "Topic :: Software Development :: Version Control :: Git",
 ]
 requires-python = ">=3.12"
-# Stdlib only, and nothing from canopy: canopy runs these as commands, so the harness never holds a token or opens a
-# connection (D041, DESIGN §29).
-dependencies = []
+# click for their command lines (D025), canopy-http for every request they make (D130), and nothing from canopy:
+# canopy runs these as commands, so the harness never holds a token or opens a connection (D041, DESIGN §29).
+dependencies = ["canopy-http", "click>=8.5.0"]
 
 [project.scripts]
 canopy-connect-github = "canopy_github.connect:main"

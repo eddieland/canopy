@@ -1,18 +1,21 @@
-"""Each tick's run of the connectors (DESIGN §30, §6 step 3): the `tracker` source, then the `vcs` source, each once.
+"""Each tick's run of the connectors (DESIGN §30, §6 step 3): the `tracker`, `vcs`, `artifacts`, and `slack` sources.
 
-Each source is asked what the journal watches of its kind, and what it read whole replaces what the journal held; a
-source that fails, or whose output cannot be recorded, keeps its previous observations, and the tick goes on. Nothing
-the overseer reads changes: in M36 the observations are in shadow. The `vcs` run is also §29's reconcile read, so the
-drafts it covers are checked after it.
+Each source is asked what the journal watches of its kind, and what it read whole replaces what the journal held; the
+`artifacts` source is asked for its store's comment feed past its cursor, and moves it on (§38). A source that fails,
+or whose output cannot be recorded, keeps its previous observations, and the tick goes on. The `vcs` run is also §29's
+reconcile read, so the drafts it covers are checked after it. The `artifacts` source is in shadow: what it reads
+reaches no conversation, state block, or dispatch. The `slack` source is not: a listed operator's reply in the Slack
+sink's thread is their message, as `canopy reply` records one (§22, `slack_replies`), except in a dry run.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 from urllib.parse import urlsplit, urlunsplit
 
 from canopy.core import (
+    artifact_feed,
     connector_runs,
     conversation,
     db,
@@ -21,9 +24,11 @@ from canopy.core import (
     observe,
     review_drafts_manage,
     review_requests,
+    slack_replies,
     sql,
 )
 from canopy.core.vocab import ConnectorRunStatus, PrState, SourceKind
+from canopy.reviews import waiting
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -42,10 +47,11 @@ class Ran:
     read: frozenset[str]
 
 
-def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> Ran:
+def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter, *, dry_run: bool) -> Ran:
     """Run every source that reads, recording each run.
 
-    `tick_id` is the tick running them, or None for the loop's poll between ticks (`poll.run`).
+    `tick_id` is the tick running them, or None for the loop's poll between ticks (`poll.run`). In a dry run, the
+    `slack` source records no operator message (D036).
 
     Returns:
         How each source's run ended, and the PRs the `vcs` run read whole.
@@ -54,10 +60,33 @@ def run(ctx: Context, tick_id: int | None, log: logs.TickAdapter) -> Ran:
     read: frozenset[str] = frozenset()
     for name, source in ctx.config.connect.named().items():
         kind = SourceKind(source.kind)
-        request = tracker_request(ctx) if kind is SourceKind.TRACKER else vcs_request(ctx)
+        match kind:
+            case SourceKind.TRACKER:
+                request = tracker_request(ctx)
+            case SourceKind.VCS:
+                request = vcs_request(ctx)
+            case SourceKind.ARTIFACTS:
+                request = observe.Request(since=artifact_feed.cursor(ctx.conn, name))
+            case SourceKind.SLACK:
+                request = observe.Request(repo=ctx.repo, operators=source.operators)
+            case _:
+                assert_never(kind)
         started = db.now()
         try:
-            observed = observe.observe(ctx.conn, ctx.config, ctx.runner, source, request, log=log)
+            if kind is SourceKind.ARTIFACTS:
+                observed = artifact_feed.read(ctx.conn, ctx.config, ctx.runner, source, request, name=name, log=log)
+            elif kind is SourceKind.SLACK:
+                observed = slack_replies.read(
+                    ctx.conn,
+                    ctx.config,
+                    ctx.runner,
+                    source,
+                    request,
+                    dry_run=dry_run,
+                    log=log,
+                )
+            else:
+                observed = observe.observe(ctx.conn, ctx.config, ctx.runner, source, request, log=log)
         except Exception as e:
             # A bug, or a journal constraint the model let through, must not end the tick (DESIGN §30): what the run
             # was recording rolled back with its transaction, so the source keeps its old rows, as a failed run does.
@@ -101,8 +130,9 @@ def vcs_request(ctx: Context) -> observe.Request:
     """What a `vcs` source is asked: the PRs the journal watches, the map's repositories, and the review query.
 
     A PR is watched while its unit's ticket is not marked done, merged and closed ones included, while a draft waits
-    on a read of it (§29), a review's draft among them (§34), and while the reader last saw it open, so no PR's
-    observation stays open unread once its ticket is done or forgotten. A PR with the operator's open review request is
+    on a read of it (§29), a review's draft among them (§34), while a requested review's draft waits on the operator
+    and no read has seen it merged or closed (§34), and while the reader last saw it open, so no PR's observation stays
+    open unread once its ticket is done or forgotten. A PR with the operator's open review request is
     watched too, so its review knows the branch it merges into (§21). A PR that is not a PR's URL cannot be read, so it
     is not asked about.
 
@@ -124,6 +154,7 @@ def vcs_request(ctx: Context) -> observe.Request:
         drafts.unchecked_prs(ctx.conn),
         drafts_manage.unsettled_prs(ctx.conn),
         review_drafts_manage.unsettled_prs(ctx.conn),
+        (pr for pr in waiting.unread_prs(ctx.conn) if observe.is_pr_url(pr)),
         (str(r[0]) for r in sql.execute(ctx.conn, seen_open)),
         (r.pr_url for r in review_requests.open_requests(ctx.conn) if observe.is_pr_url(r.pr_url)),
     )

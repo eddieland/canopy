@@ -132,8 +132,8 @@ export const ROW_COLUMNS = {
     ],
     /** A review run on the reviews page: its verdict, id, ticket, impact, PR, commit, and persona, cost, and when. */
     review: [
-        // `3 findings, 1 blocking` on one line, with its dot.
-        ['verdict', '12rem', 5],
+        // `3 findings, 1 major` on one line, with its dot and its draft's chip, which a longer verdict is cut beside.
+        ['verdict', '14rem', 5],
         ['id', '5rem'],
         ['key', '6rem', 3],
         ['impact', '7rem', 2],
@@ -143,7 +143,7 @@ export const ROW_COLUMNS = {
     ],
     /** A review run on its PR's page: as on the reviews page, without the ticket and the PR. */
     'own-review': [
-        ['verdict', '12rem', 4],
+        ['verdict', '14rem', 4],
         ['id', '5rem'],
         ['impact', '7rem', 2],
         ['commit', FREE],
@@ -156,7 +156,8 @@ export const ROW_COLUMNS = {
      * a list in a 1280px window.
      */
     'pull-request': [
-        // `review:4 3 findings, 1 blocking` on one line, with its dot.
+        // `review:4 3 findings, 1 blocking` on one line, with its dot. Beside a draft's chip the verdict is cut, its
+        // whole on hover: any wider and the title is cut to a word in a narrow window.
         ['state', '16rem', 3],
         // As wide as the list's longest PR's name, so what is left goes to the title (`fitColumn`).
         ['pr', fitted('pr', PR_REM)],
@@ -176,6 +177,18 @@ export const ROW_COLUMNS = {
         ['access', '9rem', 1],
         ['title', FREE],
         ['age', AGE, 3],
+    ],
+    /**
+     * A task: where it stands (`waiting on you`, its latest run's status, `queued`, or `stopped`), its id, its
+     * repository, the first line of its text, and when it was submitted. Its latest run's summary goes under its text.
+     */
+    task: [
+        ['state', '8rem', 3],
+        // Room for `task:1234`.
+        ['id', '5.5rem'],
+        ['repo', '6rem', 1],
+        ['title', FREE],
+        ['age', AGE, 2],
     ],
     /**
      * A worktree slot: its state, its number, what holds it, its branch and processes, and for how long. The branch
@@ -213,6 +226,16 @@ export const ROW_COLUMNS = {
     'review-finding': [
         ['id', '2.5rem'],
         ['severity', '4rem'],
+        ['title', FREE],
+        ['facts', 'auto'],
+    ],
+    /**
+     * A comment in a review's draft: its number, what it came from (`yours` or `finding N`), its first line, and where
+     * it is. The chip's column has room for `finding 99` on one line, wider than a finding's severity.
+     */
+    'draft-comment': [
+        ['id', '2.5rem'],
+        ['from', '5.5rem'],
         ['title', FREE],
         ['facts', 'auto'],
     ],
@@ -401,6 +424,7 @@ const FROM: Record<RowColumn, string> = {
     decisions: 'col-[decisions/end]',
     facts: 'col-[facts/end]',
     findings: 'col-[findings/end]',
+    from: 'col-[from/end]',
     holder: 'col-[holder/end]',
     id: 'col-[id/end]',
     impact: 'col-[impact/end]',

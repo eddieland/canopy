@@ -9,7 +9,13 @@ The loop runs in ticks. A tick tidies up after the last one (a worker that died 
 returned), then runs the overseer, an agent that reads the world fresh: your tracker and GitHub, through the agent
 runtime's MCP servers, and the worktree pools. For each ticket it works out where things stand and decides what comes
 next: start a worker, wait, skip, or put something on the attention list. Every one of those is a decision, recorded
-with the overseer's reasons, and the [Ticks](/ticks) page shows them all.
+with the overseer's reasons, and the [ticks page](ticks#the-ticks-page) under Runs shows them all.
+
+Some of that needs no judgment, and canopy decides it in code before the overseer starts: a ticket whose worker is
+still running waits, and a chore with no `when` runs when it comes due. When that leaves the overseer nothing at all,
+no ticket to decide, no chore with a `when` due, no query to run, and no review to start, the tick doesn't run it. It
+makes canopy's own dispatches, closes `ok`, and leaves the attention list as it was. That tick costs nothing, which is
+the right price for being told nothing happened.
 
 Between ticks the loop waits `loop.interval_minutes`, 15 by default. When a tick finds nothing new, the next wait is
 longer, doubling up to `loop.idle_max_minutes`, so a quiet afternoon doesn't cost a tick every quarter hour. Anything
@@ -18,12 +24,20 @@ So does a run ending, a cooldown running out, a chore coming due, or a notice la
 `loop.min_gap_minutes` after the last tick ends, one minute by default. **Tick now** in the header skips even that.
 
 While it waits, the loop also polls: every `connect.every_minutes`, two by default, it runs the connectors that read
-your tracker and GitHub into canopy's own record. A poll runs no overseer, so it keeps that record fresh however long
-you set the wait between ticks. For now nothing acts on what a poll reads, and a poll never starts a tick early.
+your tracker and GitHub into canopy's own record, and the comments on your artifacts if you set up a source for them.
+A poll runs no overseer, so it keeps that record fresh however long you set the wait between ticks. After a poll that
+read everything, canopy works out what a tick would make of it, and when that's something the last tick didn't have, a
+ticket new to the queue, a new comment, a check gone red, a decision canopy would now make itself, the poll ends the
+wait, still no sooner than `loop.min_gap_minutes`. A poll that reads the same world again ends nothing, and neither
+does an edit to a comment the last tick already had: nobody pays for an overseer run to learn that nothing happened. A
+source that fails ends the wait once, so the tick reads it again and tells you if it's still down; after that the loop
+keeps to its timer until a poll reads everything again, and that poll ends the wait too. A
+[reply from Slack](slack#replying-from-slack) is yours, so it ends the wait like any other.
 
 ## Runs
 
-A run is a worker agent doing one piece of work on one ticket. The overseer starts it; the run leases a worktree from
+A run is a worker agent doing one piece of work on one ticket. The overseer asks for it, and the tick starts it once the
+overseer has finished, so nothing the overseer asked for goes down with it. The run leases a worktree from
 its repository's pool, does the work, pushes a branch, opens or updates a PR, and hands the worktree back. Runs
 outlive the tick that started them, so a long one spans many ticks. Each run has a kind:
 
@@ -57,7 +71,7 @@ Every ticket has a phase, and so does each of its PRs: where it stands, as the o
 is `ready`, `running`, `needs human`, `human replied`, `blocked` (on another ticket), or `plan proposed`. A PR
 goes through phases such as `ci running`, `ci red`, `review pending`, `review findings`, `changes requested`,
 `green unreviewed`, `approved`, and `merged`. The UI writes them with spaces; hover over one, or Tab to it, for the
-CLI's spelling.
+CLI's spelling and what the phase means.
 
 The overseer derives a phase from live state every tick and never takes the journal's word for it. If a PR merged at
 lunch, the next tick knows, whatever canopy last wrote down.
@@ -81,6 +95,11 @@ A ticket is **private** when you start it in canopy, from [Tickets](tickets#star
 `canopy start KEY`. It needs no label, and its conversation stays in canopy: workers read the ticket and write nothing
 to it. That's how you deliver a ticket a client filed without them reading the agent's working notes.
 
+You can still answer a private ticket's worker on the tracker, if you'd rather. List your own tracker account id in your
+`tracker` source's `operators`, and a comment you write on a private ticket after starting it counts as your reply, as
+if you'd sent it from canopy. Anyone else's comment there stays something its worker reads, never an instruction, and
+so does yours without the list.
+
 You can reply to either kind in canopy. On a public ticket your reply reaches its workers and never the ticket. That's
 also how you answer a review from someone outside `trust.trusted_reviewers`, whose comments wait for your word before
 any worker acts on them.
@@ -97,7 +116,7 @@ it as the CLI does. The ones you'll meet most:
   and **Allow one more** on its page grants it another run.
 - `cooldown`: a resume for failed checks alone waits `policy.ci_cooldown_minutes` after the last run that worked on
   CI. A resume with review comments or your reply goes at once, and fixes the build on the way.
-- `running`: one worker per ticket. A second one would only argue with the first.
+- `running`: one run per ticket, a worker's or a planner's. A second one would only argue with the first.
 
 And the guard that never lifts: canopy never approves or merges a PR, and never moves a ticket to Done. Those stay
 yours.

@@ -18,9 +18,24 @@ The options are the scope a Louvre token carries, set by whoever writes the MCP 
 - `--agent` (default `agent`): every comment and resolution written here is the author `agent:NAME`, `kind: agent`,
   on behalf of `operator`. The local store's tools never write as a person: a comment through them is an agent's, as
   one written with a Louvre token is, so it is never authority (§38, D069).
-- `--origin KEY=VALUE`, repeated: pairs set on every artifact made here, over the caller's, so canopy, not the worker,
-  names the workspace, ticket, and run.
+- `--origin KEY=VALUE`, repeated: pairs set on every artifact made here, over the caller's and the run's.
 - `--read-only`: every write is refused with `read_only`, as a `read` token's are.
+
+canopy gives each run whose agent may publish its origin in `CANOPY_ARTIFACT_ORIGIN`, a JSON object of strings:
+`canopy.workspace`, `canopy.ticket`, and `canopy.run`. The server inherits it from the agent before any tool is called,
+and sets its pairs over the caller's, so canopy, not the worker, names the ticket an artifact is for. A value that is not
+such an object is refused with exit 2. A hosted store takes the same pairs as its MCP config passes them on; one that
+does not leaves the ticket the worker's word.
+
+```sh
+canopy-artifacts feed --store DIR [--namespace NS] [--origin KEY=VALUE ...] [--most N]
+```
+
+canopy's `artifacts` source (DESIGN §30), configured as `[connect.sources.<name>]` with `kind = "artifacts"`. Given
+`{"since": SEQ}` on stdin, it prints the comment feed's changes after SEQ, a JSON object to a line, paging the feed
+until a page is not full or `--most` (default 1,000) are printed, then the last page's `end` line, which names where
+the next run reads from. `--origin` reads only the artifacts whose origin holds the pair. It never writes, as a
+`read` token cannot. A request it cannot read, or a store it cannot open, prints nothing and exits 2.
 
 ## Records
 
@@ -80,9 +95,10 @@ artifact or shares one.
   without one is incomplete. `through` is the last change's `seq` when the page is full, and otherwise the store's
   newest, past changes the filter or the namespace left out; the next page reads from it.
 - **A change** carries its `kind`, `seq`, and `at`; the artifact's id and origin; the thread's id, anchor,
-  `anchored_version`, and state; the comment's id, body, and times, null for a thread's change; and the `author` and
-  `via` of the change. The comment and thread are as they are when read, so a deleted comment's body is empty in every
-  change to it. Never the artifact's content.
+  `anchored_version`, state, and `anchor_status` in the artifact's latest version, as `thread_list` gives it; the
+  comment's id, body, and times, null for a thread's change; and the `author` and `via` of the change. The comment and
+  thread are as they are when read, so a deleted comment's body is empty in every change to it, and a passage reworded
+  since reads `passage_gone` in each. Never the artifact's content.
 
 ## Louvre's tokens
 

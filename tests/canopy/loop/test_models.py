@@ -1,5 +1,7 @@
-"""Which models served each agent run (DESIGN §13, Each agent's model): each live tick reads its overseer's session, and
-the wait after it reads the runs left unread."""
+"""Which models served each agent run (DESIGN §13, Each agent's model).
+
+Each live tick reads its overseer's session, and the wait after it reads the runs left unread.
+"""
 
 import json
 import sqlite3
@@ -73,6 +75,31 @@ def test_a_live_tick_reads_which_models_served_its_overseer_once(scenario: Scena
         ("ticks", second.tick.id, "found", None, 1),
     ]
     assert len(exports(opencode_state)) == 2
+
+
+def test_opencode_2_is_asked_for_its_session_by_its_own_command(scenario: Scenario, opencode_state: Path) -> None:
+    with_events(scenario.env, "canopy-overseer")
+    scenario.configures(runtime={"version": 2})
+    sessions(opencode_state, **{SESSION: [("anthropic", "claude-x", 0.25)]})
+    ticked = scenario.tick()
+    assert [(m.model, m.replies) for m in run_models.of_run(scenario.conn, "ticks", ticked.tick.id)] == [
+        ("anthropic/claude-x", 1),
+    ]
+    assert exports(opencode_state) == [
+        (["session", "export", "--standalone", "--sanitize", SESSION], str(scenario.env.root)),
+    ]
+
+
+def test_an_opencode_2_tick_its_events_left_unpriced_costs_what_its_session_says(
+    scenario: Scenario,
+    opencode_state: Path,
+) -> None:
+    with_events(scenario.env, "canopy-overseer")
+    scenario.configures(runtime={"version": 2})
+    sessions(opencode_state, **{SESSION: [("anthropic", "claude-x", 0.25), ("anthropic", "claude-x", 0.5)]})
+    # As OpenCode 2 prints a run: its last call's cost never is, so its events leave it unpriced.
+    ticked = scenario.tick(step_cost='"lost"')
+    assert scenario.conn.execute("SELECT cost_usd FROM ticks WHERE id = ?", (ticked.tick.id,)).fetchone()[0] == 0.75
 
 
 def test_a_dry_run_reads_no_session(scenario: Scenario, opencode_state: Path) -> None:

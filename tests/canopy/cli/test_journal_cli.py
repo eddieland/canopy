@@ -15,8 +15,8 @@ from tests.canopy.helpers import agent_runs, canopy, in_tick, waits
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool
 
-#: A review cursor as canopy keeps one: the newest handled item's time, in UTC.
-REVIEWED = "review=2026-10-07T20:58:50Z"
+#: A review cursor as canopy keeps one: the newest handled item's journal number (DESIGN §35).
+REVIEWED = "review=4127"
 
 
 @pytest.mark.parametrize(
@@ -24,7 +24,7 @@ REVIEWED = "review=2026-10-07T20:58:50Z"
     [
         ["dispatch", "{key}", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
         ["decide", "{key}", "wait", "--rationale", "r"],
-        ["attention", "{key}", "needs_reviewer", "--detail", "d"],
+        ["attention", "{key}", "needs_author", "--detail", "d"],
         ["ticket", "set", "{key}", "--repo", "repo", "--phase", "ready"],
     ],
 )
@@ -49,7 +49,7 @@ def test_journal_commands_need_a_running_tick(
     assert "CANOPY_TICK_ID is not set" in capsys.readouterr().err
     with in_tick(conn) as tick_id:
         db.finish_tick(conn, tick_id, TickStatus.OK, "done")
-        assert main(["attention", "PROJ-1", "needs_reviewer", "--detail", "d"]) == 1
+        assert main(["attention", "PROJ-1", "needs_author", "--detail", "d"]) == 1
         assert "does not name a running tick" in capsys.readouterr().err
         assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0
 
@@ -71,6 +71,40 @@ def test_decide_needs_a_key_except_for_skip(scenario: Scenario) -> None:
         scenario.overseer("decide", "PROJ-1", "dispatch:implement", "--rationale", "r", code=2)
         scenario.overseer("decide", "PROJ-1", "wait", "--rationale", "   ", code=2)
         scenario.overseer("decide", "PROJ-1", "wait", "extra", "--rationale", "r", code=2)
+
+
+def test_decide_records_several_in_one_call(scenario: Scenario) -> None:
+    with scenario.ticking() as tick_id:
+        said = scenario.overseer(
+            "decide",
+            "PROJ-1",
+            "wait",
+            "--rationale",
+            "checks pending",
+            "PROJ-2",
+            "done",
+            "--rationale",
+            "merged",
+        )
+        assert said.out == "recorded wait for PROJ-1\nrecorded done for PROJ-2\n"
+        # Each KEY ACTION pair needs its own --rationale, and a tick-wide skip goes alone.
+        scenario.overseer("decide", "PROJ-3", "wait", "PROJ-4", "wait", "--rationale", "r", code=2)
+        scenario.overseer("decide", "PROJ-3", "wait", "--rationale", "r", "--rationale", "s", code=2)
+        scenario.overseer(
+            "decide",
+            "PROJ-3",
+            "wait",
+            "--rationale",
+            "r",
+            "skip",
+            "--rationale",
+            "mcp_unavailable: x",
+            code=2,
+        )
+        scenario.overseer("decide", "PROJ-3", "wait", "--rationale", "r", "PROJ-4", "later", "--rationale", "s", code=2)
+    rows = [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(scenario.conn, tick_id)]
+    assert rows == [("PROJ-1", "wait", "checks pending"), ("PROJ-2", "done", "merged")]
+    assert {row["key"] for row in scenario.conn.execute("SELECT key FROM tickets")} == {"PROJ-1", "PROJ-2"}
 
 
 def test_only_a_tick_wide_reason_skips_the_tick(scenario: Scenario) -> None:
@@ -112,7 +146,7 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(scenario: Scenario)
         "dry run: not dispatched; would work on agent/PROJ-3-add-login in repo; label agent-ready-tester",
     ]
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-2'").fetchone()
-    assert ticket["last_comment_id"] is None  # a dry run never advances cursors
+    assert (ticket["comment_cursor"], ticket["last_comment_id"]) == (None, None)  # a dry run never advances cursors
     assert ticket["branch"] is None  # nor records a branch
 
 
@@ -127,7 +161,7 @@ def test_dry_run_ticket_set_records_the_phase_only(scenario: Scenario) -> None:
     assert (row["phase"], row["done"]) == (None, 0)
     # A phase about the PR is the unit's, implied in a single repository; its review cursor was not advanced.
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit.phase, unit.last_review_id) == ("merged", None)
+    assert (unit.phase, unit.review_cursor) == ("merged", None)
     assert [t.key for t in db.open_tickets(conn)] == ["PROJ-1"]  # the first live tick still sees it
 
 
@@ -209,7 +243,19 @@ def test_ticket_set_outside_a_tick_advances_cursors(scenario: Scenario) -> None:
     assert (row["last_comment_id"], row["done"]) == ("10001", 1)
     # In a single repository, the review cursor goes to the ticket's one unit without naming it.
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit.repo, unit.last_review_id) == ("repo", "2026-10-07T20:58:50Z")
+    assert (unit.repo, unit.review_cursor) == ("repo", 4127)
+
+
+def test_ticket_set_sets_several_tickets_alike_but_one_tickets_cursor_or_title(scenario: Scenario) -> None:
+    conn = scenario.conn
+    updated = scenario.operator("ticket", "set", "PROJ-1", "PROJ-2", "--phase", "ready", "--done")
+    assert updated.out == "updated PROJ-1\nupdated PROJ-2\n"
+    rows = conn.execute("SELECT key, phase, done FROM tickets ORDER BY key").fetchall()
+    assert [tuple(r) for r in rows] == [("PROJ-1", "ready", 1), ("PROJ-2", "ready", 1)]
+    for one_tickets in (("--cursor", "comment=10001"), ("--title", "Fix the login loop")):
+        refused = scenario.operator("ticket", "set", "PROJ-1", "PROJ-3", *one_tickets, code=2)
+        assert "--cursor and --title are one ticket's: name one KEY with them" in refused.err
+    assert db.get_ticket(conn, "PROJ-3") is None
 
 
 def test_a_ticket_is_named_on_one_line_and_renamed(scenario: Scenario, git_pool: GitPool) -> None:
@@ -243,49 +289,53 @@ def test_bad_cursors_are_rejected(canopy_env: CanopyEnv, value: str) -> None:
 @pytest.mark.parametrize(
     "value",
     [
-        "5448282907",  # a review's id: review comments and review runs are numbered apart from reviews
         "run:12",
         "PRR_kw1",
-        "2026-10-07T20:58:50.000Z",  # one form only, so cursors compare as strings
-        "2026-02-30T00:00:00Z",  # not a moment at all
+        "2026-10-07T20:58:50Z",  # the time form an earlier canopy kept, gone with journal numbers
+        "1.5",
     ],
 )
-def test_a_review_cursor_is_a_time(scenario: Scenario, value: str) -> None:
+def test_a_review_cursor_is_a_journal_number(scenario: Scenario, value: str) -> None:
     refused = scenario.operator("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", f"review={value}", code=2)
-    assert "a review cursor is the newest handled item's time in UTC" in refused.err
+    assert "a review cursor is an item's journal number" in refused.err
     scenario.operator("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", REVIEWED)
     [unit] = db.units(scenario.conn, "PROJ-1")
-    assert unit.last_review_id == "2026-10-07T20:58:50Z"
+    assert unit.review_cursor == 4127
 
 
 def test_status_and_attention_ages(scenario: Scenario) -> None:
     conn = scenario.conn
     assert "No ticks yet." in scenario.operator("status").out
 
-    def tick(items: Iterable[tuple[str, str]], status: TickStatus = TickStatus.OK) -> int:
+    def tick(items: Iterable[tuple[str, str]], status: TickStatus = TickStatus.OK, waits: Iterable[str] = ()) -> int:
         tick_id = db.start_tick(conn, dry_run=True)
         for key, reason in items:
             db.record_decision(conn, tick_id, key, f"attention:{reason}", f"https://example.test/{key}")
+        for key in waits:
+            db.record_decision(conn, tick_id, key, "wait", "nothing to do yet")
         db.finish_tick(conn, tick_id, status, "summary")
         return tick_id
 
-    tick([("PROJ-1", "needs_reviewer")])
+    tick([("PROJ-1", "needs_author")])
     conn.execute("UPDATE decisions SET created_at = '2020-01-01T00:00:00.000Z'")
-    tick([("PROJ-1", "needs_reviewer"), ("PROJ-2", "ready_to_merge")])
+    tick([("PROJ-1", "needs_author"), ("PROJ-2", "multi_repo")])
     tick([("PROJ-9", "needs_author")], status=TickStatus.OVERSEER_FAILED)  # a failed tick does not replace the list
 
     items = attention.current(conn)
-    assert [(i.ticket_key, i.reason) for i in items] == [("PROJ-1", "needs_reviewer"), ("PROJ-2", "ready_to_merge")]
+    assert [(i.ticket_key, i.reason) for i in items] == [("PROJ-1", "needs_author"), ("PROJ-2", "multi_repo")]
     assert items[0].since == "2020-01-01T00:00:00.000Z"
 
     out = scenario.operator("status").out
     assert "Last tick: 3 overseer_failed (dry run)" in out
     assert "Attention (2):" in out
-    assert "  needs_reviewer\n    PROJ-1  " in out
+    assert "  needs_author\n    PROJ-1  " in out
     assert "d  https://example.test/PROJ-1" in out  # age in days
     assert "Running workers (0/2):\n  none" in out
 
+    # A tick that decides nothing about a ticket did not give the overseer it, so its items stand (DESIGN §37).
     tick([])
+    assert len(attention.current(conn)) == 2
+    tick([], waits=["PROJ-1", "PROJ-2"])
     assert attention.current(conn) == []
 
 
@@ -294,6 +344,6 @@ def test_trailing_line_breaks_are_not_part_of_a_valid_key(scenario: Scenario, ke
     # `$` in a Python regex also matches before a trailing newline; validation must use the whole string.
     with scenario.ticking():
         scenario.overseer("decide", key, "wait", "--rationale", "r", code=2)
-        scenario.overseer("attention", "PROJ-1", "needs_reviewer\n", "--detail", "d", code=2)
+        scenario.overseer("attention", "PROJ-1", "needs_author\n", "--detail", "d", code=2)
         scenario.overseer("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", "comment=1\n", code=2)
     assert scenario.conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0

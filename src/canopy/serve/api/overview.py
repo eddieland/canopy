@@ -11,7 +11,7 @@ from canopy.core import spend as spending
 from canopy.serve import spend_views, views
 from canopy.serve.api.deps import BackendDep, SpaDep
 from canopy.serve.schema import AttentionItem, Meta
-from canopy.serve.spend_schema import Spend, SpendBreakdown
+from canopy.serve.schema.spend import Spend, SpendBreakdown
 
 TAG = "overview"
 router = APIRouter(tags=[TAG])
@@ -19,7 +19,10 @@ router = APIRouter(tags=[TAG])
 
 @router.get("/meta", operation_id="getMeta", summary="Get the server's meta")
 def meta(backend: BackendDep, spa: SpaDep) -> Meta:
-    """The server's version and UI build, whether its data is mock, its link templates, and the workspace root."""
+    """The server's version and UI build, whether its data is mock, its link templates, and the workspace.
+
+    The workspace is its root and the names of its repositories.
+    """
     return Meta(
         version=version("canopy"),
         build=spa.build(),
@@ -27,6 +30,7 @@ def meta(backend: BackendDep, spa: SpaDep) -> Meta:
         ticket_url=backend.config.tracker.ticket_url or None,
         branch_urls={r.name: r.branch_url for r in backend.workspace.repos if r.branch_url},
         workspace_root=str(backend.workspace.root),
+        repos=[r.name for r in backend.workspace.repos],
     )
 
 

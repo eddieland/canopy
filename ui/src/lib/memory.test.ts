@@ -11,6 +11,7 @@ import {
     leftText,
     leftOutText,
     lessonChars,
+    lessonGroups,
     memorySegments,
     readNothingText,
     readsText,
@@ -138,6 +139,26 @@ describe('hasVersions', () => {
         expect(hasVersions({ version: 1, status: 'superseded', scope: 'proposal' })).toBe(false)
         expect(hasVersions({ version: 1, status: 'active', scope: 'lesson' })).toBe(false)
         expect(hasVersions({ version: 1, status: 'invalid', scope: 'lesson' })).toBe(false)
+    })
+})
+
+/** A lesson pinned, as `lessonGroups` reads one. */
+const pinned = (id: number) => ({ id, pinned_at: '2026-10-01T00:00:00Z' })
+/** A lesson not pinned. */
+const rest = (id: number) => ({ id, pinned_at: null })
+
+describe('lessonGroups', () => {
+    it('heads the pinned lessons apart from the rest, each in the order it came', () => {
+        const groups = lessonGroups([pinned(5), pinned(4), rest(3), rest(1)])
+        expect(groups.map((g) => [g.label, g.pinned, g.entries.map((m) => m.id)])).toEqual([
+            ['Pinned', true, [5, 4]],
+            ['Up for review', false, [3, 1]],
+        ])
+    })
+
+    it('is one group, unheaded, while none is pinned, and the pinned alone while every one is', () => {
+        expect(lessonGroups([rest(1), rest(2)])).toEqual([{ label: 'Lessons', entries: [rest(1), rest(2)] }])
+        expect(lessonGroups([pinned(1)]).map((g) => g.label)).toEqual(['Pinned'])
     })
 })
 

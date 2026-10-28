@@ -82,18 +82,27 @@ If code and the design disagree, the design doc wins until a decision entry says
   agent plugin's JSDoc with `tsc`, from npm packages in `tests/plugins`, so it needs Node 22.12+ and npm, as `ui/` does.
 - ruff selects every stable rule, and preview rules named one by one, the pydoclint ones among them (D018): a public
   module, class, or function has a Google docstring, with Returns, Yields, and Raises sections that match its body.
-  Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow `select`.
+  Every docstring, a test's included, opens with a one-line summary ending in a period, and a blank line before
+  anything more. A function whose parameters its signature does not explain should have an Args section; it is not
+  required, and older code without one needs no bulk fix: add it to a function a PR is already changing. Opt out with
+  a commented `ignore` entry or a `noqa` with a code; never narrow `select`.
 - `make all` runs fmt, lint (including type checks), and tests; `make check` is the same without fmt, and never
   rewrites files. CI runs `make check`, as two jobs side by side (`lint test` and `ui-check`), and is the backstop
   for the whole suite. An agent does not run `make all` or `make check` before pushing unless the operator asks.
   Every formatter and linter is cheap, so it runs them all; the tests it runs are the ones its change reaches.
   - Always `make fmt` and `make lint`: every formatter, then every linter and the type checker, over the whole
     repository, in seconds. A change under `ui/` also runs `npm --prefix ui run lint` and `typecheck`.
+  - Optionally `make hooks`, once per clone: prek's git hooks (`prek.toml`) then run the same formatters and linters
+    on each commit's files, and `ui/`'s lint and type check on a push. They stop a commit that fails one; they do not
+    replace the step above. A Claude Code cloud session installs them when it starts (`.claude/settings.json`).
   - Tests: `uv run pytest -q <test modules>` for the package you changed, which sits parallel to it under `tests/`
     (add `-n auto` for a directory). Add the whole-canopy tests your change can trip: `tests/canopy/test_layers.py`
     for a new import, module, or test helper, `test_frozen.py` for a dataclass, `test_prompt_sizes.py` for a prompt,
     `core/test_db.py` and `core/test_records.py` for a migration or row type. A change to a shared fixture or helper
     in `tests/` runs the modules that use it. Under `ui/`, the unit tests and specs `ui/AGENTS.md` names.
+  - Bringing the base branch in, by a merge or a rebase: the tests of the files whose conflicts you resolved by hand,
+    and `core/test_db.py` and `core/test_records.py` for a migration you renumbered. A merge git made alone runs no
+    tests: CI runs the suite on the result. Never a whole directory, nor again the tests the branch ran before.
 
   CI skips every check on a pull request that changes only docs, and the Python tests on one that changes only `ui/`
   and docs, so there the checks you run are the only ones.
@@ -105,11 +114,13 @@ If code and the design disagree, the design doc wins until a decision entry says
   passed. A run GitHub has not started yet is waited for, not replaced; a job that failed is re-run in its own run.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
   stdlib makes the code materially worse, and say why in its PR. Adopted so far: `click` for every command line, the
-  workspace members' too, never argparse (D025),
-  `pydantic` for validating config and anything parsed from another program's output (D026), `hypothesis` for property
-  tests of input validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
-  (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), and `httpx2` for its test
-  client (D079, dev only), and `syrupy` for snapshot tests (dev only).
+  workspace members' too, never argparse (D025), `pydantic` for validating config and anything parsed from another
+  program's output (D026), `hypothesis` for property tests of input validators (dev only), `pytest-xdist` to run the
+  tests in parallel (dev only), `rich` for terminal output (D043), `fastapi` and `uvicorn` for the web UI's server
+  (D074, only in `canopy.serve`), `tomlkit` for its edits to the private config (D129, only in `canopy.serve`), and
+  `httpx2` for its test client (D079) and, only in the workspace member `canopy-http`, for every HTTP request the
+  programs canopy ships make (D130), `syrupy` for snapshot tests (dev only), and `jsonschema` to hold an MCP tool's
+  result to its output schema (dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported by the harness, `src/canopy`. No Jira client, no GitHub
@@ -147,20 +158,23 @@ If code and the design disagree, the design doc wins until a decision entry says
   a change through it. A class that keeps state it changes is not frozen. `tests/canopy/test_frozen.py` fails on a
   `list`, `dict`, or `set` field.
 - Deterministic core. The Python code never calls an LLM. It runs agent processes and reads their output.
-- Everything canopy knows of the agent runtime, OpenCode, lives in `src/canopy/runtime/opencode/` (D009): its command
-  line and variables, the events it prints, the format of canopy's agent definitions, and its config files. Code
-  elsewhere calls the `runtime` package's surface, which names no runtime; only `runtime/implementation.py` imports the
-  implementation. `tests/canopy/test_layers.py` fails on a string outside it that names OpenCode, or an import past it.
+- Everything canopy knows of the agent runtime, OpenCode, lives in its implementations, `src/canopy/runtime/opencode/`
+  (OpenCode 1, the default) and `src/canopy/runtime/opencode2/` (OpenCode 2, when `runtime.version` is 2) (D009): its
+  command line and variables, the events it prints, the format of canopy's agent definitions, and its config files.
+  Code elsewhere calls the `runtime` package's surface, which names no runtime and takes the version from config; only
+  `runtime/implementation.py` imports the implementations. `tests/canopy/test_layers.py` fails on a string outside
+  them that names OpenCode, or an import past it.
 - Every external process (`treehouse`, `git`, the agent runtime, `notify`) goes through `src/canopy/infra/procs.py`.
   Nothing else calls `subprocess`. This is the seam tests use. ruff's banned-api rule (`TID251`) fails the lint if
   anything else imports it.
 - Every command line is click, never argparse: canopy's CLI and every program it ships, the workspace members' too
-  (D025). Options or setup two programs share, such as reading an operator-only secret file, go in a common workspace
-  member, never copied into each. A program still on argparse is converted when a PR already changes its command line.
+  (D025); ruff's banned-api rule fails the lint on an argparse import in `src/canopy`. Options or setup two programs
+  share, such as reading an operator-only secret file, go in a common workspace member, never copied into each.
 - Modules are small and named for what they own, in the package for their layer (DESIGN §5): `core/db.py`,
   `infra/lock.py`, `runs/dispatch.py`, `loop/attention.py`, `cli/main.py`. Imports go down the layers, never between
-  features, and only `cli/` imports click; `tests/canopy/test_layers.py` fails otherwise. A new package gets a layer
-  there and a line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
+  features, and only `cli/` imports click, besides the two programs canopy ships in its own package, the desktop sink
+  and `python -m canopy.serve`; `tests/canopy/test_layers.py` fails otherwise. A new package gets a layer there and a
+  line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
 - No global mutable state. Pass a `Context` (config, db connection, paths).
 - Config is not downgrade-compatible. An unknown key stays an error, so an older release rejects a key a newer one
   added; that is expected, since a release already out cannot be fixed. A review finding about it needs no code.

@@ -7,6 +7,7 @@ import exampleWorkspace from '../../../examples/canopy-workspace.toml?raw'
 import exampleConfig from '../../../examples/config.toml?raw'
 import attention from '@/guide/attention.md?raw'
 import chores from '@/guide/chores.md?raw'
+import codeReview from '@/guide/code-review.md?raw'
 import configFiles from '@/guide/config-files.md?raw'
 import glossary from '@/guide/glossary.md?raw'
 import howTheLoopWorks from '@/guide/how-the-loop-works.md?raw'
@@ -15,9 +16,12 @@ import overview from '@/guide/overview.md?raw'
 import philosophy from '@/guide/philosophy.md?raw'
 import plans from '@/guide/plans.md?raw'
 import pullRequests from '@/guide/pull-requests.md?raw'
+import reports from '@/guide/reports.md?raw'
 import runs from '@/guide/runs.md?raw'
 import settings from '@/guide/settings.md?raw'
 import signingIn from '@/guide/signing-in.md?raw'
+import slack from '@/guide/slack.md?raw'
+import tasks from '@/guide/tasks.md?raw'
 import tickets from '@/guide/tickets.md?raw'
 import ticks from '@/guide/ticks.md?raw'
 import { parseWith } from '@/lib/rich-text'
@@ -85,7 +89,9 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['attention', attention],
             ['tickets', tickets],
             ['plans', plans],
+            ['tasks', tasks],
             ['pull-requests', pullRequests],
+            ['code-review', codeReview],
         ],
     },
     {
@@ -93,8 +99,10 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
         pages: [
             ['runs', runs],
             ['ticks', ticks],
+            ['reports', reports],
             ['chores', chores],
             ['memory', memory],
+            ['slack', slack],
             ['settings', settings],
         ],
     },
@@ -119,24 +127,45 @@ export const PAGE_GUIDES = {
     '/tickets/$key': 'tickets#a-tickets-page',
     '/tickets/$key_/plan': 'plans',
     '/plan-editor': 'plans',
+    '/tasks/': 'tasks',
+    '/tasks/$id': 'tasks#a-tasks-page',
+    '/tasks/$id_/runs/$run': 'tasks#a-tasks-run',
     '/pull-requests/': 'pull-requests',
     '/pull-requests/pr': 'pull-requests#the-pull-requests-page',
-    '/reviews/': 'pull-requests#the-reviews-page',
-    '/reviews/$id': 'pull-requests#a-reviews-page',
-    '/reviews/$id_/run': 'pull-requests#a-reviews-run',
+    '/pull-requests/reviews/': 'pull-requests#the-reviews-page',
+    '/pull-requests/reviews/$id': 'pull-requests#a-reviews-page',
+    '/pull-requests/reviews/$id_/run': 'pull-requests#a-reviews-run',
     '/runs/': 'runs',
     '/runs/$id': 'runs#a-runs-page',
-    '/worktrees': 'runs#worktrees',
+    '/runs/worktrees': 'runs#worktrees',
     '/chores/': 'chores',
     '/chores/$name': 'chores#a-chores-page',
     '/chores/$name_/runs/$id': 'chores#a-chores-page',
-    '/ticks/': 'ticks',
-    '/ticks/$id': 'ticks#a-ticks-page',
-    '/spend': 'ticks#the-spend-page',
+    '/runs/ticks/': 'ticks',
+    '/runs/ticks/$id': 'ticks#a-ticks-page',
+    '/reports/': 'reports',
+    '/reports/spend': 'reports#the-spend-page',
     '/memory': 'memory',
     '/search': 'overview#search',
     '/settings': 'settings',
-} as const satisfies Record<Exclude<keyof FileRoutesById, '__root__' | '/' | '/guide/' | '/guide/$page'>, string>
+    '/settings_/limits': 'settings#limits-and-trust',
+} as const satisfies Record<
+    Exclude<
+        keyof FileRoutesById,
+        | '__root__'
+        | '/'
+        | '/spend'
+        | '/reviews/'
+        | '/reviews/$id'
+        | '/reviews/$id_/run'
+        | '/ticks/'
+        | '/ticks/$id'
+        | '/worktrees'
+        | '/guide/'
+        | '/guide/$page'
+    >,
+    string
+>
 
 /**
  * The files a page of the guide shows whole, by the path its fence names after the language: the repository's own

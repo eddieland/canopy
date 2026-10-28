@@ -19,17 +19,27 @@ import json
 from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import conversation, db, observe, personas, plans, records, review_runs, sql
+from canopy.core import (
+    artifact_authority,
+    conversation,
+    db,
+    item_numbers,
+    observe,
+    personas,
+    plans,
+    records,
+    review_runs,
+    sql,
+)
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
-    CheckConclusion,
     CheckStatus,
     ConnectorRunStatus,
-    MergeState,
+    Decider,
     Phase,
     PrState,
     ReviewItem,
@@ -39,7 +49,8 @@ from canopy.core.vocab import (
     SourceKind,
     TicketState,
 )
-from canopy.loop import attention
+from canopy.core.workspace import CheckRole
+from canopy.loop import attention, harness
 from canopy.reviews import start as review_start
 from canopy.reviews.start import DISPATCH_ACTION as REVIEW_ACTION
 
@@ -49,21 +60,6 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-#: How a completed CI context ends red: what holds a unit at `ci_red`.
-FAILED: AbstractSet[CheckConclusion] = frozenset(
-    {
-        CheckConclusion.FAILURE,
-        CheckConclusion.ERROR,
-        CheckConclusion.CANCELLED,
-        CheckConclusion.TIMED_OUT,
-        CheckConclusion.ACTION_REQUIRED,
-        CheckConclusion.STARTUP_FAILURE,
-    },
-)
-#: How a completed CI context passes. One `stale` neither passes nor fails: GitHub left it for a newer run.
-PASSED: AbstractSet[CheckConclusion] = frozenset(
-    {CheckConclusion.SUCCESS, CheckConclusion.NEUTRAL, CheckConclusion.SKIPPED},
-)
 _DISPATCH = "dispatch:"
 _ATTENTION = attention.ACTION_PREFIX
 _RESUME = f"{_DISPATCH}resume"
@@ -122,6 +118,9 @@ class Derived:
     phases: Sequence[Phase] = ()
     #: The stale or missing observation the subject depends on; None when it was derived.
     stale: str | None = None
+    #: Whether `stale` is the `tracker` source's: a ticket's own observation, or a blocker's, old or never made. False
+    #: for what no source observes, and for what the `vcs` source left stale.
+    stale_tracker: bool = False
     #: On the ticket's own, unless stale: whether it is a candidate (§17), and whether the tracker said it is closed.
     candidate: bool | None = None
     closed: bool | None = None
@@ -162,6 +161,33 @@ def record(conn: sqlite3.Connection, tick_id: int, derived: Iterable[Derived]) -
         sql.execute_many(conn, sql.insert_rows("derivations", columns), rows)
 
 
+def recorded(conn: sqlite3.Connection, tick_id: int) -> list[Derived]:
+    """What tick `tick_id` derived, read back from the journal as `derive` returned it.
+
+    Returns:
+        Each ticket's own row, then its units', by key.
+    """
+    rows = records.fetch_all(
+        conn,
+        records.Derivation,
+        sql.select("*")
+        .from_("derivations")
+        .where("tick_id = ?", tick_id)
+        .order_by("ticket_key, repo IS NOT NULL, repo"),
+    )
+    return [
+        Derived(
+            r.ticket_key,
+            r.repo,
+            tuple(Phase(p) for p in json.loads(r.phases)),
+            stale=r.stale,
+            candidate=r.candidate,
+            closed=r.closed,
+        )
+        for r in rows
+    ]
+
+
 def record_overseer(conn: sqlite3.Connection, tick_id: int) -> None:
     """Record, on tick `tick_id`'s derivations, the phase the journal holds for each subject as the tick closes.
 
@@ -197,9 +223,11 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     A ticket agrees when the phase the overseer left each subject at is one of the rows that held for it, wherever any
     did, and its decision is one those rows allow. Its decision is its dispatches, waits, skips, and done marks, or,
     with none, the attention items the overseer recorded for it; the harness's items, refusals, and mirrors are not
-    the overseer's choice. A phase the ticket's own decision moved it to this tick (`MOVES_TO`), such as `running`
-    after a dispatch, stands for the row that allowed the decision. A subject with no rows held is compared on the
-    decision only, not its phase. A ticket with a stale subject is `stale`, never a disagreement.
+    the overseer's choice. Where the harness raised an item from its cause on the ticket (`attention.FROM_CAUSES`), a
+    `wait` is allowed too: that item is the action its row names. A phase the ticket's own decision moved it to this
+    tick (`MOVES_TO`), such as `running` after a dispatch, stands for the row that allowed the decision. A subject with
+    no rows held is compared on the decision only, not its phase. A ticket with a stale subject is `stale`, never a
+    disagreement. A ticket the harness decided (DESIGN §37) is not compared: the overseer decided nothing about it.
 
     Returns:
         One comparison per ticket the tick derived, by key.
@@ -216,10 +244,22 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     for row in rows:
         by_ticket.setdefault(row.ticket_key, []).append(row)
     decided: dict[str, list[str]] = {}
+    by_harness: set[str] = set()
+    raised: set[str] = set()
     for d in db.decisions_for_tick(conn, tick_id):
-        if d.ticket_key is not None and _overseers(d.action):
+        if d.ticket_key is None:
+            continue
+        if d.decider is Decider.HARNESS and not d.action.startswith(_ATTENTION) and d.action != harness.CURSOR_ACTION:
+            by_harness.add(d.ticket_key)
+        elif d.decider is Decider.HARNESS and d.action.removeprefix(_ATTENTION) in attention.FROM_CAUSES:
+            raised.add(d.ticket_key)
+        elif _overseers(d):
             decided.setdefault(d.ticket_key, []).append(d.action)
-    return [_compared(key, subjects, decided.get(key, [])) for key, subjects in by_ticket.items()]
+    return [
+        _compared(key, subjects, decided.get(key, []), raised=key in raised)
+        for key, subjects in by_ticket.items()
+        if key not in by_harness
+    ]
 
 
 def tally(conn: sqlite3.Connection, tick_id: int) -> Counter[Verdict]:
@@ -310,31 +350,6 @@ def branch_of(branches: Iterable[records.ObservedBranch], prefix: str, key: str,
     return None
 
 
-def review_cursor(value: str | None) -> datetime | None:
-    """Read a `review` cursor, a UTC time (DESIGN §7).
-
-    Returns:
-        The time; None when it is empty or not a time, as one an earlier canopy wrote.
-    """
-    try:
-        return datetime.fromisoformat(value).astimezone(UTC) if value else None
-    except ValueError:
-        return None
-
-
-def newer(stamp: str | None, cursor: datetime | None) -> bool:
-    """Whether an item at `stamp` is newer than `cursor`: one at the cursor's own second is handled (DESIGN §7).
-
-    Returns:
-        True when there is no cursor, or the item's second is after it; False for an item with no time.
-    """
-    if cursor is None:
-        return True
-    if stamp is None:
-        return False
-    return db.parse_time(stamp).replace(microsecond=0) > cursor.replace(microsecond=0)
-
-
 def is_feedback(review: records.ObservedReview) -> bool:
     """Whether an observed review or review comment is feedback (DESIGN §7).
 
@@ -349,18 +364,26 @@ def is_feedback(review: records.ObservedReview) -> bool:
     )
 
 
-def _overseers(action: str) -> bool:
-    """Whether `action` is the overseer's own choice about a ticket, not the harness's or a guard's.
+def _overseers(decision: records.Decision) -> bool:
+    """Whether `decision` is the overseer's own choice about a ticket, not the harness's or a guard's.
 
     Returns:
-        False for a harness's attention item, a refusal, or a mirror.
+        False for one the harness recorded, a harness's attention item from before the journal said who recorded it,
+        a refusal, or an older tick's mirror.
     """
-    if action.startswith("refused:") or action == conversation.MIRROR_ACTION:
+    action = decision.action
+    if decision.decider is Decider.HARNESS or action.startswith("refused:") or action == conversation.MIRROR_ACTION:
         return False
-    return not (action.startswith(_ATTENTION) and action.removeprefix(_ATTENTION) in attention.HARNESS_REASONS)
+    return not (action.startswith(_ATTENTION) and action.removeprefix(_ATTENTION) in attention.ALWAYS_HARNESS)
 
 
-def _compared(key: str, subjects: Sequence[records.Derivation], actions: Sequence[str]) -> Compared:
+def _compared(
+    key: str,
+    subjects: Sequence[records.Derivation],
+    actions: Sequence[str],
+    *,
+    raised: bool,
+) -> Compared:
     stale = [f"{_subject(s)}: {s.stale}" for s in subjects if s.stale is not None]
     if stale:
         return Compared(key, "stale", "; ".join(stale))
@@ -384,6 +407,8 @@ def _compared(key: str, subjects: Sequence[records.Derivation], actions: Sequenc
             wrong.append(f"{_subject(s)} set {s.overseer_phase or 'no phase'}, held {', '.join(held)}")
     if not allowed and not wrong:
         allowed |= NONE_ALLOWS
+    if raised:
+        allowed.add("wait")
     if not any(a in allowed for a in chosen):
         wrong.append(f"decided {', '.join(chosen) or 'nothing'}, allowed {', '.join(sorted(allowed)) or 'nothing'}")
     return Compared(key, "disagrees", "; ".join(wrong)) if wrong else Compared(key, "agrees")
@@ -483,7 +508,7 @@ class _World:
         else:
             stale = self._ticket_stale(key)
             if stale is not None:
-                return Derived(key, None, stale=stale)
+                return Derived(key, None, stale=stale, stale_tracker=self.tracked)
             seen = self.observed[key]
             closed = seen.state is TicketState.CLOSED
             labels = {label["name"] for label in labels_of(seen)}
@@ -567,7 +592,12 @@ class _World:
             )
             if not replied:
                 found.append(Phase.NEEDS_HUMAN)
-        if replied or operator:
+        # A comment on one of its artifacts that is authority is a reply as an operator message is (DESIGN §38).
+        authors = frozenset(self.ctx.config.artifacts.authorized_authors)
+        commented = record is not None and bool(
+            artifact_authority.authorized(self.ctx.conn, key, authors, after=cursor),
+        )
+        if replied or operator or commented:
             found.append(Phase.HUMAN_REPLIED)
         return found
 
@@ -640,7 +670,7 @@ class _World:
         if pr.state is not PrState.OPEN:
             return Derived(key, repo)
         phases: list[Phase] = []
-        if pr.mergeable == "conflicting" or pr.mergeable_state is MergeState.DIRTY:
+        if observe.conflicts(pr):
             phases.append(Phase.CONFLICTED)
         ci, passed = self._ci(repo, pr, unit)
         phases.extend(ci)
@@ -655,27 +685,30 @@ class _World:
         return Derived(key, repo, _in_order(phases))
 
     def _ci(self, repo: str, pr: records.ObservedPr, unit: records.TicketUnit) -> tuple[list[Phase], bool]:
-        """Derive the CI rows from the PR's checks at its head, less those the repository names `human_checks` (§30).
+        """Derive the CI rows from the PR's checks at its head, those its repository gives no other role (§30).
 
-        A failure is new when its check run is newer than the unit's `ci` cursor; a commit status, which has no run,
-        only while the cursor is empty.
+        A failure is new when its check run was first observed after the unit's `ci` cursor, a journal number (§35); a
+        commit status, which has no run, only while the cursor is empty.
 
         Returns:
             The rows that hold of `ci_running` and `ci_red`, and whether every check passed, as none at all do.
         """
-        found = self.ctx.workspace.repo(repo)
-        human = found.human_checks if found is not None else frozenset[str]()
-        ci = [c for c in self.checks.get(pr.url, []) if c.head_sha == pr.head_sha and c.name not in human]
+        roles = self.ctx.workspace.check_roles(repo)
+        ci = [
+            c
+            for c in self.checks.get(pr.url, [])
+            if c.head_sha == pr.head_sha and roles.get(c.name, CheckRole.CI) is CheckRole.CI
+        ]
         pending = any(c.status is not CheckStatus.COMPLETED for c in ci)
-        failed = [c for c in ci if c.status is CheckStatus.COMPLETED and c.conclusion in FAILED]
+        failed = [c for c in ci if c.status is CheckStatus.COMPLETED and c.conclusion in observe.FAILED]
         phases = [Phase.CI_RUNNING] if pending else []
-        cursor = _ci_cursor(unit.last_ci_run_id)
-        if any(cursor is None or (c.run_id is not None and c.run_id > cursor) for c in failed):
+        cursor = unit.ci_cursor
+        if any(cursor is None or (c.number is not None and c.number > cursor) for c in failed):
             phases.append(Phase.CI_RED)
-        return phases, not pending and all(c.conclusion in PASSED for c in ci)
+        return phases, not pending and all(c.conclusion in observe.PASSED for c in ci)
 
     def _feedback(self, key: str, pr: records.ObservedPr, unit: records.TicketUnit) -> list[Phase]:
-        """Derive the review rows (DESIGN §7, D089): feedback newer than the unit's `review` cursor, by whom it is from.
+        """Derive the review rows (DESIGN §7, D089): feedback past the unit's `review` cursor, by whom it is from.
 
         Feedback is a review that says something, or a review comment; an approval is not feedback. What the PR's own
         author writes is not either: canopy's workers post as the operator, who opens the PR.
@@ -683,7 +716,7 @@ class _World:
         Returns:
             The rows that hold of `review_findings`, `changes_requested`, and `untrusted_review`.
         """
-        cursor = review_cursor(unit.last_review_id)
+        cursor = unit.review_cursor
         trusted = {t.lower() for t in self.ctx.config.trust.trusted_reviewers}
         found: list[Phase] = []
         new = [
@@ -691,7 +724,7 @@ class _World:
             for r in self.reviews.get(pr.url, [])
             if is_feedback(r)
             and (pr.author is None or (r.author or "").lower() != pr.author.lower())
-            and newer(r.created_at, cursor)
+            and item_numbers.newer(r.number, cursor)
         ]
         if any((r.author or "").lower() in trusted for r in new):
             found.append(Phase.CHANGES_REQUESTED)
@@ -699,8 +732,12 @@ class _World:
         untrusted = [r for r in new if (r.author or "").lower() not in trusted]
         if any(not any(at > (r.created_at or "") for at in operator) for r in untrusted):
             found.append(Phase.UNTRUSTED_REVIEW)
-        if self.ctx.config.review.agent_prs and CANOPY_REVIEWER in trusted and self._findings(pr, cursor):
+        reviewed = self._findings(pr, cursor) if self.ctx.config.review.agent_prs else []
+        if reviewed and CANOPY_REVIEWER in trusted:
             found.append(Phase.REVIEW_FINDINGS)
+        # Untrusted, canopy's review waits on the operator as anyone's does (DESIGN §21).
+        elif any(not any(at > (r.ended_at or r.started_at) for at in operator) for r in reviewed):
+            found.append(Phase.UNTRUSTED_REVIEW)
         return found
 
     def _operator_times(self, key: str) -> list[str]:
@@ -728,19 +765,19 @@ class _World:
             return sha is not None and not review_start.owed_by(runs, sha, chosen)
         return any(r.sha == sha and r.status is ReviewRunStatus.DONE for r in runs)
 
-    # Whether a review of the head has findings the operator did not dismiss, and ended after the `review` cursor: its
+    # The reviews of the head with findings the operator did not dismiss, which ended after the `review` cursor: its
     # latest, or each persona's when several review it (§31).
-    def _findings(self, pr: records.ObservedPr, cursor: datetime | None) -> bool:
+    def _findings(self, pr: records.ObservedPr, cursor: int | None) -> list[records.ReviewRun]:
         done = [r for r in self._runs_of(pr.url) if r.sha == pr.head_sha and r.status is ReviewRunStatus.DONE]
         latest = {r.persona: r for r in reversed(done)}.values()
-        return any(self._kept_findings(r) and newer(r.ended_at, cursor) for r in latest)
+        return [r for r in latest if self._kept_findings(r) and item_numbers.newer(r.number, cursor)]
 
     def _kept_findings(self, run: records.ReviewRun) -> bool:
         stored = result.stored(run.result_json)
         if stored is None:
             return False
-        dismissed = review_runs.review_dismissals(self.ctx.conn, run.id)
-        return any(i not in dismissed for i in range(1, len(stored.findings) + 1))
+        withheld = review_runs.withheld(self.ctx.conn, run.id)
+        return any(i not in withheld for i in range(1, len(stored.findings) + 1))
 
 
 def _query_result(conn: sqlite3.Connection) -> list[str]:
@@ -778,11 +815,3 @@ def _approved(reviews: Collection[records.ObservedReview]) -> bool:
         if r.item is ReviewItem.REVIEW and not r.bot and r.author is not None and r.state in verdicts:
             latest[r.author.lower()] = r.state
     return any(state is ReviewState.APPROVED for state in latest.values())
-
-
-# The `ci` cursor, a check run's id; None when it is empty or not a number, so every failure is new.
-def _ci_cursor(value: str | None) -> int | None:
-    try:
-        return int(value) if value else None
-    except ValueError:
-        return None

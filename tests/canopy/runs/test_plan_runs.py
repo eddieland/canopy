@@ -26,6 +26,7 @@ from tests.canopy.helpers import (
     decisions,
     has_deadline,
     in_tick,
+    logged,
     plan_file,
     planner_does,
     pool,
@@ -91,8 +92,10 @@ def test_a_planner_reads_its_worktrees_history_through_canopys_git_tools(
     scenario: Scenario,
     git_pool: GitPool,
 ) -> None:
-    """#1130: the planner has no shell; canopy's read-only git tools, over its own worktrees alone, read their history,
-    each named for its repository."""
+    """#1130: the planner has no shell; canopy's read-only git tools read the history of its own worktrees.
+
+    They read over its own worktrees alone, each tool named for its repository.
+    """
     reads = [
         calls("canopy_git_log", range="HEAD", repo="repo"),
         calls("canopy_git_merge-base", base="origin/main", head="HEAD"),
@@ -107,7 +110,7 @@ def test_a_planner_reads_its_worktrees_history_through_canopys_git_tools(
     assert entry["command"][-1] in {f"repo={s}" for s in git_pool.slots}
     log, fork, other = planner["tools"]
     assert not log["error"], log["text"]
-    assert log["text"].endswith("\n\n    initial")
+    assert [c.message for c in logged(log["text"]).commits] == ["initial"]
     assert not fork["error"], fork["text"]
     assert fork["text"] == git_pool.remote_head("main")
     assert (other["error"], other["text"]) == (True, "no repository named 'web' here: this run reads repo")
@@ -205,11 +208,11 @@ def test_a_name_already_taken_is_never_overwritten(scenario: Scenario, git_pool:
 @pytest.mark.parametrize(
     ("args", "guard", "reason"),
     [
-        (["--slug", "work"], "bad_slug", "a plan writes down the work and names no branch; leave out --slug"),
+        (["--slug", "work"], "bad_slug", "a plan writes down the work and names no branch; leave out slug (--slug)"),
         (
             ["--base", "agent/PROJ-2-work"],
             "bad_base",
-            "a plan writes down the work and starts from no branch; leave out --base",
+            "a plan writes down the work and starts from no branch; leave out base (--base)",
         ),
     ],
 )
@@ -393,6 +396,30 @@ def test_a_plan_waits_on_the_operator_unless_the_key_is_on_and_its_planner_says_
     assert ("## Whether the operator reviews this plan" in run.prompt) is on
     [plan] = plans.history(scenario.conn, KEY)
     assert (plan.status, plan.approved_channel, plan.approved_reason) == (PlanStatus.PROPOSED, None, None)
+
+
+@pytest.mark.parametrize(
+    ("level", "bar"),
+    [
+        ("strict", "Say so only when the plan leaves the operator nothing to judge"),
+        ("normal", "Say so when the plan follows patterns the code already has and the ticket settles its scope."),
+        ("lenient", "Say so when the plan is your confident best reading of the ticket and leaves no real"),
+    ],
+)
+def test_at_each_level_the_planner_hears_its_bar_and_its_word_approves_the_plan(
+    scenario: Scenario,
+    git_pool: GitPool,
+    level: str,
+    bar: str,
+) -> None:
+    scenario.configures("private", policy={"planner_may_approve": level})
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=NO_REVIEW))
+    assert run.status == RunStatus.DONE
+    assert bar in run.prompt
+    # No level waives these.
+    assert "touches security, credentials," in run.prompt
+    [plan] = plans.history(scenario.conn, KEY)
+    assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, plans.PLANNER)
 
 
 def test_a_plan_the_operator_had_a_word_on_waits_on_them_whatever_its_planner_says(

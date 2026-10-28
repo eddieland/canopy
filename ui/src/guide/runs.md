@@ -5,57 +5,80 @@ and what it cost; the worktrees page is the pools they work in.
 
 ## The runs page
 
-[Runs](/runs) lists every agent canopy runs: workers on tickets, reviews of PRs, and chores. Each gets one row per
-subject, by its latest run: a ticket's, a PR's, a chore's. The running ones come first, then the ones that ended
-most recently. A subject with earlier runs shows **Show N earlier runs** under it, so a PR reviewed at every push is
-one row and not a wall of them.
+[Runs](/runs) lists every agent canopy runs: workers on tickets, reviews of PRs, chores, and tasks. Each gets one row
+per subject, by its latest run: a ticket's, a PR's, a chore's, a task's. The running ones come first, then the ones
+that ended most recently. A subject with earlier runs shows **Show N earlier runs** under it, so a PR reviewed at
+every push is one row and not a wall of them. The overseer's ticks are not among them: the **Ticks** link in the
+page's description opens [their page](ticks#the-ticks-page), also under Runs, and **Worktrees** beside it opens the
+[pools](#worktrees) the runs work in.
 
 Each row has the run's state, its id, what it works for, its kind, what it cost, and how long it ran or how long since
 it ended:
 
 - A **worker run** (`run:39`) names its ticket and kind, with a resume's reasons beside it (`resume (ci, review)`),
   and the ticket's title, marked `private` when the ticket is. Under it are its summary, its PRs, the worktrees it
-  holds, its session id with a button that copies it, and, while it runs, its latest tool call.
+  holds, the model that served it, its session id with a button that copies it, and, while it runs, its latest tool
+  call.
 - A **review** (`review:4`) names its ticket, if its PR has one, and the PR's title: its own, or its ticket's until
   a worker reports one. Under it are the PR, the commit it read, and what it found. The findings themselves are on
   [its page](pull-requests#a-reviews-page).
 - A **chore run** (`#2`, beside its chore, so it reads `chore:deps #2`) has its chore's title, the `# heading` its
   prompt opens with, and its summary under it. [Its chore's page](chores#a-chores-page) has every run; here you get the
   latest, and the one before it while one runs.
+- A **task run** (`task:6#6`) names the repository its task runs in and the first line of what you asked, with its
+  summary and any PRs it named under it. It is the task's newest run only: the rest, and the conversation, are on
+  [the task's page](tasks#a-tasks-page).
 
 A subject with no title says `untitled`, which for a chore is a hint its prompt could use a first line.
+
+A worker run's model line names the model its session says served it, without the provider unless two models in the
+list share a name, so `claude-opus-4-1` rather than `anthropic/claude-opus-4-1`, and `+1` when it switched partway.
+Hover it for each one whole, with its cost. Until canopy reads the session it names the model canopy asked for,
+`asked claude-opus-4-1`, or says `model none`, with why on hover. A run that got another model than it asked for says
+both, in amber, as [its page](#a-runs-page) does. A ticket's Runs panel shows the same line, so a canary ticket reads
+straight down its runs: opus, opus, opus, and not a sonnet slipped in where you weren't looking.
 
 A long summary shows its first four lines and **show N more lines** for the rest, so one worker with a lot to say
 doesn't push the other rows off the page. In a narrow window, such as half a monitor, the cost goes first and then
 the kind; how long stays.
 
-The chips filter by kind, `workers`, `reviews`, or `chores`, and by the latest run's state: `running`, `waiting on
-you` (the worker stopped to ask something), `failed`, `stopped`, and `done`. The two keep each other, so `reviews`
-then `failed` is every PR whose latest review failed. A cost of `–` means the runtime reported none, which is not the
-same as free.
+The chips filter by kind, `workers`, `reviews`, `chores`, or `tasks`, and by the latest run's state: `running`,
+`waiting on you` (the worker stopped to ask something), `failed`, `stopped`, and `done`. The two keep each other, so
+`reviews` then `failed` is every PR whose latest review failed. A cost of `–` means the runtime reported none, which
+is not the same as free.
+
+A model on [the spend page](reports#the-spend-page) opens this page filtered to it, `?model=`: the worker runs it
+served, or, until their sessions are read, the ones that asked for it, each ticket's latest of those leading its row.
+Reviews and chores drop out, since this list doesn't name their models, and so do runs older than the recent ones the
+page keeps. **all** beside the model takes the filter off.
 
 Under the page's description, one line says how full each limit is, counted the way canopy counts it before it starts
-anything: `workers 2 of 2` is `capacity.max_workers`, which reviews count toward, `reviews 0 of 1` is
-`capacity.max_reviews` within it, and `chores 1 of 1` is `capacity.max_chores`, which stands apart. A full one turns
-amber and says `full`: the next dispatch of its kind waits for a run to end, however urgent the overseer thinks it
-is. When a ticket sits in the queue looking neglected, this line usually explains why. A limit of 0 reads `off`.
+anything: `workers 2 of 2` is `capacity.max_workers`, which reviews and task runs count toward (its hover says how
+many of each are in it), `reviews 0 of 1` is `capacity.max_reviews` within it, and `chores 1 of 1` is
+`capacity.max_chores`, which stands apart. A full one turns amber and says `full`: the next dispatch of its kind waits
+for a run to end, however urgent the overseer thinks it is. When a ticket sits in the queue looking neglected, this
+line usually explains why. A limit of 0 reads `off`.
 
 ## A run's page
 
 The line under the title says how the run ended, its kind, and its ticket, whose key opens the ticket's page. Each
 of those is said there and nowhere else on the page, so the panels under it can get on with the rest.
 
-The **Run** panel leads with its summary, the run's own account of what it did, then, while it runs, its **last call**,
-then its PRs, then **when**: when it started and ended and how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m`
+The **Run** panel leads with its summary, the run's own account of what it did, then, for a `feedback-plan` run,
+**wrote**: the plan it wrote, `feedback-plan:7`, which opens the PR's page at the plan, with the PR and where the
+plan stands now. Then, while it runs, its **last call**, then its PRs, then **when**: when it started and ended and
+how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m`
 while it runs. **spent** gives its cost, the tokens it used, and its peak context, the most one model call was sent.
 **persona** is the voice it wrote in, with the start of its text's digest: two runs in one persona with different
 digests had it edited between them. **model** names the model that wrote its replies, as the runtime's own record of the
 session says, so it is right even when a template's option or the runtime's default picked it rather than you. A run
 that switched models partway lists each with its share of the cost. The runtime prints no model while a run works, so
 canopy reads the session as the run ends, and any it missed while the loop waits between ticks; until then, or once the
-runtime has forgotten the session, the field says why it names none. The runs list carries the same, so a run's page
-fills it in without a reload. Last come the places: the branch, its worktrees, and the path of its log, which only you
-can read.
+runtime has forgotten the session, the field says why it names none. When canopy chose the run's model, from
+`[runtime.models]` or the ticket's override, the field says `asked` and that model instead, from the moment it starts,
+with why none served yet on hover. Once the session is read, a model that served other than the one asked for reads
+`served X, asked Y`, in the color of a run waiting on you, since it is worth a look. Last come the places: the branch,
+its worktrees, and the path of its log, which only you can read.
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the
@@ -69,9 +92,14 @@ The **Transcript** is the run's session, from its log, oldest first:
   **show N more lines** for the rest, since a model that thinks out loud rarely thinks briefly. **All open**, or a
   search that finds a line in the folded part, shows it whole;
 - each tool call, with what it did and how long it took; click one to see its input and output. A canopy command the
-  harness refused is marked `refused`, with the guard;
+  harness refused is marked `refused`, with the guard. An overseer's `decide` names each ticket and its action on its
+  row, and opens to every decision on a line of its own with its rationale, so a tick that decided twelve tickets in
+  one call doesn't leave you reading them out of a JSON array;
 - each model call, with the tokens in and out, and its cost; click one to see what it was sent and what it did. The
-  first call was sent canopy's prompt, and every later one what the tools returned since;
+  first call was sent canopy's prompt, and every later one what the tools returned since. In a run that switched
+  models, the first call names its model, and so does each call where the model changed, By call too, so you can see
+  where the switch happened. A run on one model names none: **model** already said it. A split run from before canopy
+  kept each call's model gets its names when the loop reads its session again, if the runtime still has it;
 - any runtime error, tinted red.
 
 Near the run's timeout, its tool calls' output ends with a line from canopy saying how many minutes are left, and the
@@ -93,7 +121,8 @@ entry, drawn or not, so a search beats clicking the fold nineteen times; to star
 to newest first. All open opens only the rows drawn, and following an addition in the chart, or the error a run
 ended on, draws down to its row first.
 
-The session id in the transcript's header opens the same session in the runtime's own tools: `opencode export ID`. A
+The session id in the transcript's header opens the same session in the runtime's own tools: `opencode export ID`,
+or OpenCode 2's `opencode session export ID`. A
 transcript with nothing to show is its header alone, saying why in a word or two (`log gone`, `no session`,
 `no events yet`); hover it for the whole reason.
 
@@ -145,10 +174,10 @@ a private ticket's run at once. [Tickets](tickets#acting-on-a-ticket) covers it.
 
 ## Worktrees
 
-[Worktrees](/worktrees) shows every slot in canopy's pools, a pool per repository: what holds each slot, what it has
-checked out, and what processes run in it. The line under the title says how many pools and slots there are, and how
-long ago they were read. In a narrow window, what holds a slot goes before its branch is cut: the branch names the
-ticket anyway. The counters add them up: slots working, held (and by what), needing a look, and free.
+**Worktrees**, under [Runs](/runs), shows every slot in canopy's pools, a pool per repository: what holds each slot,
+what it has checked out, and what processes run in it. The line under the title says how many pools and slots there are,
+and how long ago they were read. In a narrow window, what holds a slot goes before its branch is cut: the branch names
+the ticket anyway. The counters add them up: slots working, held (and by what), needing a look, and free.
 Needing a look counts dirty slots, broken ones, and any pool that couldn't be read at all.
 
 Each pool's header has a strip of squares, a slot each in its state's color, so a pool that's full or sick shows at a
@@ -159,7 +188,8 @@ folds into one line, **Show 6 slots, #3 to #8**, so the slots with work in them 
 
 A slot is:
 
-- `working`: a run or review holds it.
+- `working`: a run, a review, or a task's run holds it. A ticket's run names the ticket and `run:N`; a task's names
+  `task:N` and its run, `task:N#M`, each opening its page.
 - `held`: something else holds it, such as your own shell or a pool sync.
 - `dirty`: nobody holds it, but it has changes nobody committed.
 - `idle`: free for the next run.

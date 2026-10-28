@@ -1,4 +1,4 @@
-"""Canary for DESIGN §16 question 1: do OpenCode agent permissions hold under `opencode run`? (ROADMAP M1, D021)
+"""Canary for DESIGN §16 question 1 (ROADMAP M1, D021): do OpenCode agent permissions hold under `opencode run`?
 
 An agent definition allows one bash command, denies other bash commands and all edits, and marks one command `ask`.
 The agent is told to try all of them. Only the allowed command may leave a marker file; the run must end on its own
@@ -51,6 +51,7 @@ import pytest
 from canopy.infra import resources
 from canopy.infra.procs import SubprocessRunner
 from canopy.runtime import definitions, offerings
+from canopy.runtime.implementation import Version
 
 requires_canary = pytest.mark.skipif(
     os.environ.get("CANOPY_OPENCODE_CANARY") != "1" or shutil.which("opencode") is None,
@@ -436,7 +437,7 @@ def attempted(calls: Iterable[str], needle: str) -> bool:
 @requires_canary
 def test_opencode_says_what_it_offers_each_of_canopys_agents(tmp_path: Path) -> None:
     config_dir = tmp_path / "definitions"
-    for relative, content in definitions.bundled().items():
+    for relative, content in definitions.bundled(version=Version.ONE).items():
         (config_dir / relative).parent.mkdir(parents=True, exist_ok=True)
         (config_dir / relative).write_bytes(content)
     found = offerings.offerings(
@@ -444,6 +445,7 @@ def test_opencode_says_what_it_offers_each_of_canopys_agents(tmp_path: Path) -> 
         cwd=tmp_path,
         definitions_dir=config_dir,
         agents=definitions.agent_names(),
+        version=Version.ONE,
     )
     assert found.error is None
     assert [a.agent for a in found.agents if a.error is not None] == []

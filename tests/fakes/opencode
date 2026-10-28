@@ -1,26 +1,41 @@
 #!/usr/bin/env python3
-"""Fake `opencode` for tests: plays `opencode export ID --sanitize` and `opencode debug` from a state file, and hands
-`opencode run` to the fake agent beside it.
+"""Fake `opencode` for tests: plays OpenCode 1's `export ID --sanitize`, `debug`, and `models`, and OpenCode 2's
+`serve`, `api`, and `session export`, from a state file, and hands `opencode run` to the fake agent beside it.
 
-On PATH ahead of any real one, so no test reaches the operator's OpenCode or its sessions. Configured through the
-environment:
+The two versions' commands share no name, so one fake plays whichever `runtime.version` canopy runs. On PATH ahead of
+any real one, so no test reaches the operator's OpenCode or its sessions. Configured through the environment:
 
     FAKE_OPENCODE_STATE     the state file, JSON, {"sessions": {ID: [[provider, model, cost], ...]}}. Missing, or no
-                            entry for ID: OpenCode's `Session not found: ID` on stderr, and exit 1.
-    FAKE_OPENCODE_LOG       if set, one JSON line {"argv": [...], "cwd": ...} is appended per run.
+                            entry for ID: OpenCode's `Session not found: ID` on stderr, and exit 1. With `version`,
+                            each export names it as the OpenCode that made the session.
+    FAKE_OPENCODE_LOG       if set, one JSON line {"argv": [...], "cwd": ..., "env": [...]} is appended per run, `env`
+                            the names of the OPENCODE_* variables it was started with.
 
-Keys of the state besides `sessions`, each optional:
+Keys of the state besides `sessions`, each optional, each read by both versions unless it says otherwise:
 
-    exit    the exit code of every export and debug command, with `stderr`, for an OpenCode that fails. Default none.
+    exit    the exit code of every command but `run`, with `stderr`, for an OpenCode that fails. Default none.
     stderr  text printed on stderr with `exit`.
-    config  what `debug config` prints, as JSON. Default `{"mcp": {}}`.
-    skills  the names `debug skill` lists. Default none.
-    agents  each agent's permission rules by name, `[permission, pattern, action]` each, that `debug agent NAME` prints
-            after an allow of everything. Default none.
-    tools   each agent's built-in tools by name, each to whether it keeps it, as `debug agent NAME` prints them.
-            Default none.
+    config  the MCP servers of the operator's config, `{"mcp": {NAME: {...}}}` in OpenCode 1's shape, or, for 2, in
+            its own, `{"mcp": {"servers": {NAME: {...}}}}`, 1's `"enabled": false` being 2's `"disabled": true`.
+            Default `{"mcp": {}}`. 1's `debug config` prints it with the servers of an inline config in
+            `OPENCODE_CONFIG_CONTENT`, as canopy gives a run its own, merged over its `mcp`; 2's `config.get` answers
+            with it and the inline config after it, as a document of its own, as OpenCode 2 merges it last.
+    skills  the names `debug skill` lists, and the ids `skill.list` answers with. Default none.
+    agents  each agent's permission rules by name, `[permission, pattern, action]` each. 1's `debug agent NAME` prints
+            them after an allow of everything; 2's `agent.list` answers with them beside every agent a definition in
+            `OPENCODE_CONFIG_DIR` defines, after OpenCode 2's defaults, the permissions renamed as 2 reads 1's (`bash`
+            is `shell`, `task` is `subagent`, `write` and `patch` are `edit`). Default none.
+    tools   OpenCode 1's only: each agent's built-in tools by name, each to whether it keeps it, as `debug agent NAME`
+            prints them. Default none.
+    models  the models, each a `provider/model`, or any other line. 1's `models` prints every line; 2's `model.list`
+            answers with the models and passes over any other line, as a line no list holds. Default none.
+    variants  each model's variants by its line: 1's `models --verbose` prints them in the model's JSON after its
+            line, indented as OpenCode indents it, `{"id": ..., "variants": {NAME: {...}}}`, and 2's `model.list`
+            lists them with it. Default none.
 
-It writes the export as OpenCode does, so a pipe gets at most what fits in its buffer. `run` runs `agent` with the same
+2's `serve` says where it listens, then waits to be stopped; `api --server URL` answers `agent.list`, `skill.list`, and
+`config.get` from the state, and `api --standalone model.list` the models. An export, and what 2's `api` prints, is
+written as OpenCode writes it, so a pipe gets at most what fits in its buffer. `run` runs `agent` with the same
 arguments, so a template that runs `opencode run` plays the fake agent. Any other command exits 2.
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
@@ -29,27 +44,49 @@ import contextlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
+
+# The rules OpenCode 2 starts every agent from, before its own.
+DEFAULTS = [["*", "*", "allow"], ["read", "*.env", "ask"], ["read", "*.env.*", "ask"]]
+# What OpenCode 2 reads each of OpenCode 1's permissions as.
+RENAMED = {"bash": "shell", "task": "subagent", "write": "edit", "patch": "edit"}
+# Where `serve` says it listens.
+URL = "http://127.0.0.1:41234"
 
 
 def main() -> int:
     log = os.environ.get("FAKE_OPENCODE_LOG")
     if log:
         with Path(log).open("a") as f:
-            f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd()}) + "\n")
+            env = sorted(name for name in os.environ if name.startswith("OPENCODE_"))
+            f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "env": env}) + "\n")
     match sys.argv[1:]:
         case ["export", session_id, "--sanitize"]:
             return export(session_id)
         case ["debug", *command]:
             return debug(command)
+        case ["models"]:
+            return models(verbose=False)
+        case ["models", "--verbose"]:
+            return models(verbose=True)
+        case ["session", "export", "--standalone", "--sanitize", session_id]:
+            return session_export(session_id)
+        case ["serve", "--hostname", "127.0.0.1", "--port", "0"]:
+            return serve()
+        case ["api", "--server", _, operation]:
+            return api(operation)
+        case ["api", "--standalone", "model.list"]:
+            return api("model.list")
         case ["run", *_]:
             agent = Path(__file__).with_name("agent")
             os.execv(agent, [str(agent), *sys.argv[1:]])  # noqa: S606  (stands in for OpenCode running an agent)
             return 1  # not reached: `execv` returns only by raising
         case _:
             sys.stderr.write(
-                f"fake opencode plays only `export ID --sanitize`, `debug`, and `run`, not {sys.argv[1:]}\n",
+                "fake opencode plays only 1's `export ID --sanitize`, `debug`, and `models`, 2's `serve`, `api`, and "
+                f"`session export`, and `run`, not {sys.argv[1:]}\n",
             )
             return 2
 
@@ -62,6 +99,8 @@ def debug(command: list[str]) -> int:
     match command:
         case ["config"]:
             printed: Any = state.get("config", {"mcp": {}})
+            inline = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
+            printed = {**printed, "mcp": {**printed.get("mcp", {}), **inline}}
         case ["skill"]:
             printed = [
                 {"name": name, "description": "d", "location": "x", "content": "x"} for name in state.get("skills", [])
@@ -80,6 +119,22 @@ def debug(command: list[str]) -> int:
     return 0
 
 
+def models(*, verbose: bool) -> int:
+    state = read_state()
+    if "exit" in state:
+        sys.stderr.write(str(state.get("stderr", "")))
+        return int(state["exit"])
+    variants = state.get("variants", {})
+    for line in state.get("models", []):
+        print(line)
+        if verbose:
+            model: dict[str, Any] = {"id": line.partition("/")[2], "name": line}
+            if line in variants:
+                model["variants"] = {name: {"reasoningEffort": name} for name in variants[line]}
+            print(json.dumps(model, indent=2))
+    return 0
+
+
 def export(session_id: str) -> int:
     state = read_state()
     sys.stderr.write(f"Exporting session: {session_id}\n")
@@ -94,13 +149,114 @@ def export(session_id: str) -> int:
     for i, (provider, model, cost) in enumerate(calls, start=1):
         info = {"id": f"msg_{i}", "role": "assistant", "providerID": provider, "modelID": model, "cost": cost}
         messages.append({"info": info, "parts": [{"type": "text", "text": f"[redacted:text:prt_{i}]"}]})
-    printed = json.dumps({"info": {"id": session_id}, "messages": messages}, indent=2) + "\n"
-    # As OpenCode does with stderr a pipe: one write that does not wait for a full pipe to drain, and what did not
-    # fit lost when it exits. A file takes it all.
+    write(json.dumps({"info": session_info(state, session_id), "messages": messages}, indent=2) + "\n")
+    return 0
+
+
+def serve() -> int:
+    state = read_state()
+    if "exit" in state:
+        sys.stderr.write(str(state.get("stderr", "")))
+        return int(state["exit"])
+    print(f"opencode server listening on {URL}", flush=True)
+    # Stopped by whoever started it, once its questions are answered.
+    time.sleep(600)
+    return 0
+
+
+def api(operation: str) -> int:
+    state = read_state()
+    if "exit" in state:
+        sys.stderr.write(str(state.get("stderr", "")))
+        return int(state["exit"])
+    match operation:
+        case "agent.list":
+            printed: Any = {
+                "data": [
+                    {
+                        "id": name,
+                        "permissions": [
+                            {"action": RENAMED.get(p, p), "resource": t, "effect": a} for p, t, a in [*DEFAULTS, *rules]
+                        ],
+                    }
+                    for name, rules in agents(state).items()
+                ],
+            }
+        case "skill.list":
+            printed = {"data": [{"id": name, "name": name, "description": "d"} for name in state.get("skills", [])]}
+        case "config.get":
+            printed = [{"type": "directory", "path": "/defs"}]
+            for config in (state.get("config", {}), json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}")):
+                if config.get("mcp"):
+                    printed.append({"type": "document", "info": {"mcp": {"servers": servers(config["mcp"])}}})
+        case "model.list":
+            variants = state.get("variants", {})
+            printed = {
+                "data": [
+                    {
+                        "providerID": line.partition("/")[0],
+                        "id": line.partition("/")[2],
+                        "variants": [{"id": name} for name in variants.get(line, [])],
+                    }
+                    for line in state.get("models", [])
+                    if "/" in line and " " not in line
+                ],
+            }
+        case _:
+            sys.stderr.write(f"fake opencode does not answer `api {operation}`\n")
+            return 2
+    write(json.dumps(printed, indent=2) + "\n")
+    return 0
+
+
+def agents(state: dict[str, Any]) -> dict[str, list[list[str]]]:
+    """Each agent a definition in the config directory defines, as OpenCode 2 loads it, with its rules in the state."""
+    config_dir = os.environ.get("OPENCODE_CONFIG_DIR")
+    defined = sorted(p.stem for p in Path(config_dir, "agents").glob("*.md")) if config_dir else []
+    found: dict[str, list[list[str]]] = {name: [] for name in defined}
+    return {**found, **state.get("agents", {})}
+
+
+def servers(mcp: dict[str, Any]) -> dict[str, Any]:
+    """The servers of `mcp`, either shape, in OpenCode 2's: `disabled` for 1's `enabled: false`."""
+    named = mcp["servers"] if isinstance(mcp.get("servers"), dict) else mcp
+    found = {}
+    for name, server in named.items():
+        entry = {k: v for k, v in server.items() if k != "enabled"}
+        if server.get("enabled") is False:
+            entry["disabled"] = True
+        found[name] = entry
+    return found
+
+
+def session_export(session_id: str) -> int:
+    state = read_state()
+    if "exit" in state:
+        sys.stderr.write(str(state.get("stderr", "")))
+        return int(state["exit"])
+    calls = state.get("sessions", {}).get(session_id)
+    if calls is None:
+        sys.stderr.write(f"Error: Session not found: {session_id}\n")
+        return 1
+    messages: list[dict[str, Any]] = [{"id": "msg_0", "type": "user", "text": "[redacted:text]", "files": []}]
+    for i, (provider, model, cost) in enumerate(calls, start=1):
+        ref = {"id": model, "providerID": provider}
+        messages.append({"id": f"msg_{i}", "type": "assistant", "model": ref, "content": [], "cost": cost})
+    write(json.dumps({"info": session_info(state, session_id), "messages": messages}, indent=2) + "\n")
+    return 0
+
+
+def session_info(state: dict[str, Any], session_id: str) -> dict[str, Any]:
+    """The session as an export names it: its id, and the OpenCode that made it when the state says."""
+    return {"id": session_id, **({"version": state["version"]} if "version" in state else {})}
+
+
+def write(printed: str) -> None:
+    """Print `printed` as OpenCode does with stderr a pipe: one write that does not wait for a full pipe to drain, and
+    what did not fit lost when it exits. A file takes it all."""
     os.set_blocking(sys.stdout.fileno(), False)
     with contextlib.suppress(BlockingIOError):
         os.write(sys.stdout.fileno(), printed.encode())
-    return 0
 
 
 def read_state() -> dict[str, Any]:

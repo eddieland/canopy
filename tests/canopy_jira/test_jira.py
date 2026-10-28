@@ -1,7 +1,6 @@
 """canopy's Jira connector (DESIGN §30), against a local stand-in for Jira Cloud's REST API."""
 
 import contextlib
-import io
 import json
 import os
 import threading
@@ -16,12 +15,13 @@ from unittest import mock
 import canopy_jira
 import pytest
 from canopy_jira import connect
+from canopy_jira.connect import Sites
 
 from canopy.core import config, db, observe, records, sql
 from canopy.core.config import Source
 from canopy.core.vocab import ConnectorRunStatus, TicketState
 from canopy.infra import logs, procs
-from tests.conftest import CanopyEnv
+from tests.conftest import CanopyEnv, invoke
 
 #: What the stand-in pages by: smaller than the connector asks for, so every read crosses a page.
 PAGE = 2
@@ -83,6 +83,8 @@ class Jira:
     #: Whether a fetch's changelog says how many entries the whole one has.
     totals: bool = True
     fail: dict[str, int] = field(default_factory=dict[str, int])
+    #: How many requests next, to any path, are answered in full but have their replies cut off halfway.
+    cuts: int = 0
     #: Each request: its method, path, query, Authorization header, and body.
     seen: list[tuple[str, str, dict[str, str], str | None, Any]] = field(
         default_factory=list[tuple[str, str, dict[str, str], str | None, Any]],
@@ -181,10 +183,16 @@ class _Api(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"errorMessages": ["no"]}')
             return
-        reply = _Api.jira.handle(self.command, url.path, params, body)
+        reply = json.dumps(_Api.jira.handle(self.command, url.path, params, body)).encode()
         self.send_response(200)
+        self.send_header("Content-Length", str(len(reply)))
         self.end_headers()
-        self.wfile.write(json.dumps(reply).encode())
+        if _Api.jira.cuts:
+            _Api.jira.cuts -= 1
+            self.wfile.write(reply[: len(reply) // 2])
+            self.close_connection = True
+            return
+        self.wfile.write(reply)
 
     @override
     def log_message(self, format: str, *args: Any) -> None:
@@ -236,7 +244,7 @@ def jira() -> Generator[tuple[Jira, str]]:
     """A stand-in for Jira Cloud's REST API, holding no tickets. Yields it and its URL."""
     fake = Jira()
     _Api.jira = fake
-    with serving(_Api) as url:
+    with mock.patch.object(canopy_jira, "RETRY_PAUSES", (0.0, 0.0)), serving(_Api) as url:
         yield fake, url
 
 
@@ -271,11 +279,9 @@ class Read:
 
 def read(url: str, request: object, credentials: Path, *, site: str = "acme.atlassian.net") -> Read:
     """Run the connector for `request`, against the stand-in at `url`."""
-    out, err = io.StringIO(), io.StringIO()
     argv = ["--site", site, "--credentials-file", str(credentials)]
-    with contextlib.redirect_stderr(err):
-        code = connect.run(argv, io.StringIO(json.dumps(request)), out, endpoint_of=lambda _: url)
-    return Read(code, [json.loads(line) for line in out.getvalue().splitlines()], err.getvalue())
+    result = invoke(connect.main, argv, stdin=json.dumps(request), obj=Sites(lambda _: url))
+    return Read(result.exit_code, [json.loads(line) for line in result.stdout.splitlines()], result.stderr)
 
 
 # Reading
@@ -460,6 +466,19 @@ def test_a_ticket_jira_does_not_return_is_left_off_the_end_even_when_the_query_r
     assert found.end() == {"kind": "end", "tickets": ["PROJ-1"], "query": ["PROJ-2"]}
     assert "cannot read GONE-1: Jira did not return it" in found.err
     assert "cannot read PROJ-2: HTTP 500" in found.err
+    assert fake.paths().count("GET /rest/api/3/issue/PROJ-2/comment") == 3, "a read Jira failed is sent again, twice"
+
+
+def test_a_read_whose_reply_is_cut_off_is_sent_again(jira: tuple[Jira, str], credentials: Path) -> None:
+    fake, url = jira
+    fake.add(Issue("PROJ-1"))
+    fake.cuts = 2
+
+    found = read(url, {"tickets": [{"key": "PROJ-1"}]}, credentials)
+
+    assert found.code == 0
+    assert found.end() == {"kind": "end", "tickets": ["PROJ-1"]}
+    assert fake.paths().count("POST /rest/api/3/issue/bulkfetch") == 3
 
 
 def test_a_blocker_jira_does_not_return_is_named_and_its_ticket_still_read(
@@ -563,13 +582,11 @@ class InProcess:
     ) -> procs.Result:
         del cwd, env, timeout, on_start, stdout_to_file
         assert args[0] == "canopy-connect-jira"
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stderr(err):
-            code = connect.run(args[1:], io.StringIO(stdin or ""), out, endpoint_of=lambda _: self.url)
-        for line in out.getvalue().splitlines(keepends=True):
+        result = invoke(connect.main, args[1:], stdin=stdin or "", obj=Sites(lambda _: self.url))
+        for line in result.stdout.splitlines(keepends=True):
             if on_line is not None:
                 on_line(line)
-        return procs.Result(tuple(args), code, out.getvalue(), err.getvalue())
+        return procs.Result(tuple(args), result.exit_code, result.stdout, result.stderr)
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
         raise AssertionError(f"a connector is run, never spawned: {args}, {cwd}, {log_path}")
@@ -709,30 +726,26 @@ def test_an_empty_request_reads_nothing_and_ends(jira: tuple[Jira, str], credent
     assert not fake.seen
 
 
-def test_help_never_reads_stdin(capsys: pytest.CaptureFixture[str]) -> None:
-    class Unread(io.StringIO):
-        @override
-        def read(self, size: int | None = -1, /) -> str:
-            raise AssertionError("read stdin")
-
+def test_help_ends_before_stdin_is_read() -> None:
     for flag in ("--help", "-h"):
-        assert connect.run([flag], Unread(), io.StringIO()) == 0
-        printed = capsys.readouterr().out
-        assert printed.startswith("Usage: canopy-connect-jira [OPTIONS]")
-        assert "--credentials-file" in printed
+        helped = invoke(connect.main, [flag], stdin="not JSON")
+        assert helped.exit_code == 0
+        assert helped.stdout.startswith("Usage: canopy-connect-jira [OPTIONS]")
+        assert "--credentials-file" in helped.stdout
 
 
 def test_a_command_line_it_cannot_use_is_a_usage_error_and_sends_nothing(
     jira: tuple[Jira, str],
     credentials: Path,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     fake, url = jira
-    assert connect.run([], io.StringIO("{}"), io.StringIO(), endpoint_of=lambda _: url) == 2
-    assert "Missing option '--site'" in capsys.readouterr().err
+    missing = invoke(connect.main, stdin="{}", obj=Sites(lambda _: url))
+    assert missing.exit_code == 2
+    assert "Missing option '--site'" in missing.stderr
     unknown = ["--site", "acme.atlassian.net", "--credentials-file", str(credentials), "--token", "x"]
-    assert connect.run(unknown, io.StringIO("{}"), io.StringIO(), endpoint_of=lambda _: url) == 2
-    assert "No such option '--token'" in capsys.readouterr().err
+    refused = invoke(connect.main, unknown, stdin="{}", obj=Sites(lambda _: url))
+    assert refused.exit_code == 2
+    assert "No such option '--token'" in refused.stderr
     assert not fake.seen
 
 

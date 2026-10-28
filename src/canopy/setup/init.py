@@ -42,7 +42,7 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
 """
 
 # The wrapper canopy installs beside itself, and the prefix it gives a worker run's commands (DESIGN §24).
-SANDBOX_WRAPPER = "canopy-sandbox"
+SANDBOX_WRAPPER = config.SANDBOX_WRAPPER
 SANDBOX_PREFIX = f"{SANDBOX_WRAPPER} worker --read {config.DEFINITIONS_DIR} --"
 SANDBOX_SUGGESTION = """\
 Optional: run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config. Run
@@ -97,8 +97,11 @@ def sandbox_suggestion(runtime: config.Runtime, user_file: Path, *, text: str = 
     Printed, never written: the sandbox is opt-in, and needs `canopy sandbox setup` run first (DESIGN §24).
 
     Returns:
-        The text to print, or "" when `worker_cmd` already runs through `canopy-sandbox`, by its prefix or its own.
+        The text to print, or "" when `worker_cmd` already runs through `canopy-sandbox`, by its prefix or its own,
+        or `runtime.sandbox_repos` chooses the repositories whose runs do.
     """
+    if runtime.sandbox_repos:
+        return ""
     if Path(config.command_words(runtime.worker_template(runtime.worker_cmd))[0]).name == SANDBOX_WRAPPER:
         return ""
     value = " ".join(part for part in (SANDBOX_PREFIX, runtime.worker_cmd_prefix) if part)

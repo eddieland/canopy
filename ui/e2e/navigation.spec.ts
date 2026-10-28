@@ -15,9 +15,9 @@ test('the root redirects to the attention list', async ({ page }) => {
 test('the tab names the page, after what blocks on the operator', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    // The mock's six items less the PR that waits on a reviewer and the chore's finding, which block nothing.
-    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(6)
-    const count = 4
+    // The mock's ten items less the PR that waits on a reviewer and the chore's finding, which block nothing.
+    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(10)
+    const count = 8
     await expect(page).toHaveTitle(`(${count}) Attention · canopy`)
 
     const nav = page.getByRole('navigation', { name: 'Main' })
@@ -42,9 +42,15 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
     await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('data-status', 'active')
 
-    await nav.getByRole('link', { name: 'Worktrees' }).click()
-    await expect(page).toHaveURL(/\/worktrees$/u)
+    // The worktrees and the ticks are under Runs: its page links them, and Runs stays current on theirs.
+    await page.getByTestId('runs-worktrees-link').click()
+    await expect(page).toHaveURL(/\/runs\/worktrees$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Worktrees')
+    await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('data-status', 'active')
+    await nav.getByRole('link', { name: 'Runs' }).click()
+    await page.getByTestId('runs-ticks-link').click()
+    await expect(page).toHaveURL(/\/runs\/ticks$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Ticks')
 
     await nav.getByRole('link', { name: 'Tickets' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tickets')
@@ -160,14 +166,15 @@ test('search params are typed: a known state filters, an unknown one is dropped'
     const filters = page.getByRole('navigation', { name: 'Filter by state' })
     await expect(filters.getByRole('link', { name: 'waiting on you' })).toHaveAttribute('data-selected', 'true')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'false')
-    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(1)
+    // A ticket's worker and task 4's run each asked a question.
+    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(2)
     // The panel is named for its noun and counts what it lists, as every Runs panel does.
-    await expect(page.getByTestId('runs-count')).toHaveText('1')
+    await expect(page.getByTestId('runs-count')).toHaveText('2')
 
     // The router leaves the URL as typed; what matters is the page never sees the value.
     await page.goto('runs?state=bogus')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'true')
-    await expect(page.getByTestId('runs').locator(':scope > li')).not.toHaveCount(1)
+    await expect(page.getByTestId('runs').locator(':scope > li')).not.toHaveCount(2)
 })
 
 test('the runs page lists a ticket once, by its latest run, and opens its earlier runs under it', async ({ page }) => {
@@ -200,8 +207,9 @@ test('the runs page lists the reviews and chore runs beside the workers, and wha
 }) => {
     await page.goto('runs')
     await settled(page)
-    // Two workers run, and a chore: both limits are full, so the next dispatch of either waits for one to end.
-    await expect(page.getByTestId('capacity-workers')).toHaveText('workers 2 of 2 · full')
+    // Two workers run, a task's run, and a chore: both limits are full, so the next dispatch of either waits for one to
+    // end.
+    await expect(page.getByTestId('capacity-workers')).toHaveText('workers 3 of 3 · full')
     await expect(page.getByTestId('capacity-reviews')).toHaveText('reviews 0 of 1')
     await expect(page.getByTestId('capacity-chores')).toHaveText('chores 1 of 1 · full')
     // The running chore is among the running workers; a PR reviewed twice is one row, by its latest review.
@@ -215,7 +223,7 @@ test('the runs page lists the reviews and chore runs beside the workers, and wha
     const filters = page.getByRole('navigation', { name: 'Filter by kind' })
     await expect(filters.getByRole('link', { name: 'reviews' })).toHaveAttribute('data-selected', 'true')
     await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(4)
-    await expect(page.getByTestId('runs-count')).toHaveText('5')
+    await expect(page.getByTestId('runs-count')).toHaveText('6')
 
     // The two filters keep each other: a state chosen under a kind keeps the kind.
     await page.getByRole('navigation', { name: 'Filter by state' }).getByRole('link', { name: 'running' }).click()
@@ -224,6 +232,35 @@ test('the runs page lists the reviews and chore runs beside the workers, and wha
     await filters.getByRole('link', { name: 'chores' }).click()
     await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(1)
     await expect(page.getByTestId('chore-run-build-health-4')).toBeVisible()
+})
+
+test('the runs page lists a task by its newest run, counted in the workers it fills, and opens its run', async ({
+    page,
+}) => {
+    await page.goto('runs')
+    await settled(page)
+    // Workers 3 of 3 is runs 41 and 43 and task 6's run: each is listed running, beside the chore that runs apart.
+    await expect(page.getByTestId('capacity-workers')).toHaveText('workers 3 of 3 · full')
+    await page.getByTestId('capacity-workers').hover()
+    await expect(page.getByRole('tooltip')).toHaveText(
+        'capacity.max_workers: worker runs, reviews, and task runs at once (0 running a review, 1 a task)',
+    )
+    await page.goto('runs?state=running')
+    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(4)
+    for (const id of ['run-41', 'run-43', 'task-run-6-6', 'chore-run-build-health-4']) {
+        await expect(page.getByTestId(id)).toBeVisible()
+    }
+
+    await page.goto('runs?kind=task')
+    const filters = page.getByRole('navigation', { name: 'Filter by kind' })
+    await expect(filters.getByRole('link', { name: 'tasks' })).toHaveAttribute('data-selected', 'true')
+    // Every task that has run, by its newest run; task 7 is queued and has none.
+    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(6)
+    const task = page.getByTestId('task-run-6-6')
+    await expect(task).toContainText("Add a dark launch screen to match the app's theme.")
+    await task.getByRole('link', { name: 'task:6#6' }).click()
+    await expect(page).toHaveURL(/\/tasks\/6\/runs\/6$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('task:6#6')
 })
 
 test('an unknown route renders the not-found page inside the shell', async ({ page }) => {
@@ -434,7 +471,7 @@ test('a chore not defined for this workspace says so', async ({ page }) => {
 })
 
 test('the worktrees page shows each pool of the workspace and what holds each slot', async ({ page }) => {
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     // Its command set as code, as an attention item's detail sets it.
     await expect(page.getByTestId('pool-api')).toContainText('no clone; run canopy workspace sync')
@@ -483,6 +520,23 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     expect((await reads).status()).toBe(200)
 })
 
+test("a slot a task's run holds names the task and the run, each opening its page", async ({ page }) => {
+    await page.goto('runs/worktrees')
+    await settled(page)
+    // Task 6's run 6 holds mobile's second slot, as run 43 holds its first.
+    const slot = page.getByTestId('pool-mobile').getByTestId('worktree-2')
+    await expect(slot).toHaveAttribute('data-state', 'working')
+    await expect(slot).toContainText('agent/task/6')
+    await expect(page.getByTestId('pool-counters')).toContainText('runs and tasks, in 2 pools')
+
+    await slot.getByRole('link', { name: 'task:6', exact: true }).click()
+    await expect(page).toHaveURL(/\/tasks\/6$/u)
+    await page.goBack()
+    await settled(page)
+    await slot.getByRole('link', { name: 'task:6#6', exact: true }).click()
+    await expect(page).toHaveURL(/\/tasks\/6\/runs\/6$/u)
+})
+
 test('a slot with long text keeps it inside its row', async ({ page }) => {
     // Treehouse can find many processes in one slot, and a branch or a note can be any length: each is cut to fit
     // or wrapped, never past the panel's edge.
@@ -501,7 +555,7 @@ test('a slot with long text keeps it inside its row', async ({ page }) => {
         slot.note = `left ${'/a/path/with/no/spaces'.repeat(12)}`
         await route.fulfill({ response, json: pools })
     })
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     const slot = page.getByTestId('pool-web').getByTestId('worktree-1')
     await expect(slot).toContainText('great_gasdbq_0 340928')
@@ -524,7 +578,7 @@ test('the worktrees page reads the pools again every 10 seconds, and only while 
             reads += 1
         }
     })
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     expect(reads).toBe(1)
 
@@ -554,9 +608,9 @@ test("the header's tick opens its decisions, each about its subject, the oversee
     await page.goto('runs')
     await settled(page)
     await page.getByTestId('last-tick').getByRole('link', { name: 'tick:2' }).click()
-    await expect(page).toHaveURL(/\/ticks\/2$/u)
+    await expect(page).toHaveURL(/\/runs\/ticks\/2$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick:2')
-    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Ticks' })).toHaveAttribute(
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' })).toHaveAttribute(
         'data-status',
         'active',
     )
@@ -577,10 +631,11 @@ test("the header's tick opens its decisions, each about its subject, the oversee
 test('the ticks page lists the latest ticks, and a ticket page why the loop did or did not work it', async ({
     page,
 }) => {
-    await page.goto('ticks')
+    await page.goto('runs/ticks')
     await settled(page)
     await expect(page.getByTestId('ticks').locator(':scope > li')).toHaveCount(2)
-    await expect(page.getByTestId('tick-1').getByTestId('tick-decisions')).toHaveText('5 decisions')
+    // Its five, and the `done` of each ticket the months before the mock's day landed or closed (history.py).
+    await expect(page.getByTestId('tick-1').getByTestId('tick-decisions')).toHaveText('26 decisions')
     // Its overseer's tokens beside its cost, and the most one model call was sent.
     await expect(page.getByTestId('tick-1').getByTestId('tick-tokens')).toHaveText('12.9k tokens')
     await expect(page.getByTestId('tick-1').getByTestId('tick-peak')).toHaveText('16.8k peak')
@@ -593,7 +648,7 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
     await expect(decisions.nth(0)).toContainText('tick:2')
     await expect(decisions.nth(1)).toContainText('dispatch: implement')
     await decisions.nth(1).getByRole('link', { name: 'tick:1' }).click()
-    await expect(page).toHaveURL(/\/ticks\/1$/u)
+    await expect(page).toHaveURL(/\/runs\/ticks\/1$/u)
     await expect(page.getByTestId('decisions')).toContainText('chore:deps')
 })
 
@@ -609,6 +664,8 @@ test('a long list scrolls inside its panel, so the panels under it stay in reach
     await region.focus()
     await page.keyboard.press('End')
     await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+    // A refetch of the ticket can still be in the padding route when the page closes (padDecisions).
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
 test("a run's summary keeps its lines and lists, its first four shown until the toggle opens the rest", async ({
@@ -628,19 +685,37 @@ test("a run's summary keeps its lines and lists, its first four shown until the 
     await expect(run).not.toContainText('ABC-112 owns it')
 })
 
+test('the worktrees page where it was before Runs held it leads to where it is, its filter kept', async ({ page }) => {
+    await page.goto('worktrees?state=dirty')
+    await expect(page).toHaveURL(/\/runs\/worktrees\?state=dirty$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Worktrees')
+})
+
+test('the ticks pages where they were before Runs held them lead to where they are', async ({ page }) => {
+    await page.goto('ticks')
+    await expect(page).toHaveURL(/\/runs\/ticks$/u)
+    await page.goto('ticks/2')
+    await expect(page).toHaveURL(/\/runs\/ticks\/2$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick:2')
+    // Under Runs, the trail goes back through the ticks.
+    const trail = page.getByRole('navigation', { name: 'Breadcrumb' })
+    await expect(trail.getByRole('link', { name: 'Runs' })).toBeVisible()
+    await expect(trail.getByRole('link', { name: 'Ticks' })).toHaveAttribute('href', /\/runs\/ticks$/u)
+})
+
 test('a tick that does not exist, or a path that names none, says so', async ({ page }) => {
-    await page.goto('ticks/99')
+    await page.goto('runs/ticks/99')
     await expect(page.getByText('no tick 99')).toBeVisible()
-    await page.goto('ticks/two')
+    await page.goto('runs/ticks/two')
     await expect(page.getByText("not a tick: a tick's id is a positive number")).toBeVisible()
 })
 
 test('the worktrees page counts every pool, and each pool shows its slots at a glance', async ({ page }) => {
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
-    // The mock: web's two runs, a shell, an idle and a dirty slot; mobile's run 43 slot and an idle one; api has
-    // no clone.
-    await expect(page.getByTestId('counter-working')).toContainText('3')
+    // The mock: web's two runs, a shell, an idle and a dirty slot; mobile's run 43 slot and a task's; api has no
+    // clone.
+    await expect(page.getByTestId('counter-working')).toContainText('4')
     await expect(page.getByTestId('counter-held')).toContainText('1')
     // The shell's slot has no lease: a process holds it.
     await expect(page.getByTestId('counter-held')).toContainText('1 in use')

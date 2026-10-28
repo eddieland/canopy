@@ -16,15 +16,18 @@ const ENCLOSING = 'a[href], button, summary, label, [role="button"], [role="link
  * mouse, the keyboard, and a touch screen all reach it, and its child, one element, becomes a stop for the keyboard.
  * With no fact it is its child alone. Inside a link or a button, which is the keyboard's stop already, or inside an
  * element with a `title`, the fact is the child's own `title`, as it was before tips. `mono` sets the fact in
- * monospace, as the CLI prints it.
+ * monospace, as the CLI prints it. `detail` goes on a line of its own under the fact, in the page's font: what a word
+ * the fact spells means.
  */
 export function Tip({
     fact,
     mono = false,
+    detail,
     children,
 }: {
     fact: string | null | undefined
     mono?: boolean
+    detail?: string | null
     children: ReactElement
 }) {
     const [open, setOpen] = useState(false)
@@ -57,7 +60,7 @@ export function Tip({
                 asChild
                 ref={place}
                 tabIndex={own ? 0 : undefined}
-                title={shown !== null && nested ? shown : undefined}
+                title={shown !== null && nested ? [shown, detail].filter(Boolean).join('\n') : undefined}
                 onFocus={() => {
                     settling.current = true
                     requestAnimationFrame(() => {
@@ -82,12 +85,12 @@ export function Tip({
             </TooltipTrigger>
             {own && (
                 <TooltipContent
-                    className={cn(mono && 'font-mono')}
                     onEscapeKeyDown={() => {
                         settling.current = false
                     }}
                 >
-                    {shown}
+                    <span className={cn(mono && 'font-mono')}>{shown}</span>
+                    {detail && `\n${detail}`}
                 </TooltipContent>
             )}
         </Tooltip>

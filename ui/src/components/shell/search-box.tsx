@@ -3,16 +3,20 @@ import { useEffect, useRef, useState } from 'react'
 
 import { SearchField } from '@/components/input'
 import { Kbd } from '@/components/ui/kbd'
+import { JumpButton } from './jump-palette'
+import { parseTaskRef } from '@/lib/refs'
 import { isSearchShortcut, SEARCH_DEBOUNCE_MS, SEARCH_MAX, searchQueryOf } from '@/lib/search'
 
 /**
  * The search box atop the nav, on every page (DESIGN §22, Search). `/` focuses it from anywhere but a text field, and
  * Escape leaves it. Typing opens the search page once the operator pauses, replacing the history entry while the page
- * is open, so Back leaves the search rather than stepping through each keystroke; Enter opens it at once. While it
- * holds text, a clear button takes the keycap's place: it empties the box and keeps the focus there. Emptying the box,
- * by the button or by deleting its text, clears the search page if it is open, and leaves any other page as it is.
+ * is open, so Back leaves the search rather than stepping through each keystroke; Enter opens it at once, or, when the
+ * box holds a task's reference alone (`task:4`), that task's page. While it holds text, a clear button takes the
+ * keycap's place: it empties the box and keeps the focus there. Emptying the box, by the button or by deleting its
+ * text, clears the search page if it is open, and leaves any other page as it is.
+ * While it is empty, its end shows the `/` that focuses it and the ⌘K that opens the jump palette, which `onJump` does.
  */
-export function SearchBox() {
+export function SearchBox({ onJump }: { onJump: () => void }) {
     const navigate = useNavigate()
     const matchRoute = useMatchRoute()
     const q = useSearch({ strict: false, select: (s) => searchQueryOf(s.q) })
@@ -69,7 +73,13 @@ export function SearchBox() {
             <form
                 onSubmit={(event) => {
                     event.preventDefault()
-                    open(value)
+                    const task = parseTaskRef(value)
+                    if (task === undefined) {
+                        open(value)
+                        return
+                    }
+                    globalThis.clearTimeout(timer.current)
+                    void navigate({ to: '/tasks/$id', params: { id: String(task) } })
                 }}
             >
                 <SearchField
@@ -92,7 +102,12 @@ export function SearchBox() {
                     }}
                     onClear={clear}
                     clearLabel="Clear search"
-                    idle={<Kbd aria-hidden>/</Kbd>}
+                    idle={
+                        <span className="flex items-center gap-1">
+                            <Kbd aria-hidden>/</Kbd>
+                            <JumpButton onOpen={onJump} />
+                        </span>
+                    }
                 />
             </form>
         </search>

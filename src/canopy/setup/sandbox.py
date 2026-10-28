@@ -6,7 +6,8 @@ the operator's OpenCode data, or leaves out the run's own, as templates from bef
 the `srt` that the wrapper's lockfile pins, with `npm ci`, into a directory of canopy's own, which no sandbox can
 write; and checks what it cannot install, because that needs root: bubblewrap, socat, and ripgrep on Linux, ripgrep
 on macOS, and unprivileged user namespaces. It also checks what srt itself only warns about, in a debug log nobody
-reads: a bubblewrap older than srt fully supports, and a machine srt has no seccomp filter for. It changes no config:
+reads: a bubblewrap older than srt fully supports, and a machine srt has no seccomp filter for. It notes a kernel with
+no IPv6, which the wrapper handles itself. It changes no config:
 the sandbox is opt-in until the operator prefixes the command templates, and `canopy init` prints the line for
 `worker_cmd_prefix`.
 """
@@ -48,6 +49,10 @@ srt has no seccomp filter for {machine}, only for {machines}. Without it, a sand
 Unix socket it can see, such as your SSH agent's or Docker's. Do not rely on the sandbox on this machine."""
 # Ubuntu 24.04 and later set this to 1, which leaves bubblewrap's user namespace without the capabilities it needs.
 APPARMOR_USERNS = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+# srt's bridge listens on IPv6 unless told otherwise. canopy-sandbox tells it, so a kernel without IPv6 is no To do.
+NO_IPV6 = """\
+this kernel has no IPv6, so canopy-sandbox has srt's network bridge inside the sandbox listen on IPv4
+(SOCAT_DEFAULT_LISTEN_IP=4), unless you set that variable yourself."""
 USERNS_FIX = """\
 bubblewrap cannot make a user namespace: AppArmor restricts unprivileged ones. Lift the restriction, now and at boot:
     sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -80,11 +85,14 @@ RUNTIME_ROLES = ("worker", "chore", "review")
 
 @dataclass
 class Report:
-    """What setup wrote and kept, what it did about srt, and each thing left for the operator to do, as a paragraph."""
+    """What setup wrote and kept, what it did about srt, what it found that canopy handles, and what is left to do."""
 
     written: list[Path] = field(default_factory=list)
     kept: list[Path] = field(default_factory=list)
     runtime: str = ""
+    #: What setup found on this machine that canopy-sandbox handles itself, each as a paragraph.
+    notes: list[str] = field(default_factory=list)
+    #: Each thing left for the operator to do, as a paragraph.
     todo: list[str] = field(default_factory=list)
 
 
@@ -273,6 +281,8 @@ def _check_platform(runner: procs.Runner, platform: str, report: Report) -> None
     if "bubblewrap" not in missing:
         _check_bwrap_version(runner, report)
         _check_userns(runner, report)
+    if canopy_sandbox.ipv6_missing():
+        report.notes.append(NO_IPV6)
     machine = os.uname().machine
     if machine not in SECCOMP_MACHINES:
         report.todo.append(NO_SECCOMP.format(machine=machine, machines=" and ".join(SECCOMP_MACHINES)))

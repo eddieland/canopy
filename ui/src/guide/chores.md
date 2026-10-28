@@ -18,6 +18,7 @@ test as Tuesday, that three PRs are failing for one reason, and which of forty S
   [below](#what-a-run-knows-of-the-last-ones).
 - **Run when it's worth it.** You set how often it may run and in which hours; the overseer decides whether a due run
   is worth it, guided by a `when` line in your words, such as "skip it on weekends unless the last run found something".
+  Without a `when` there's nothing to judge, so canopy starts it itself each time it's due, right after the overseer.
 
 What it can't do is change anything. A chore edits no file, pushes no branch, posts no comment, and files no ticket;
 the agent it runs under has no write tools. Its only output is its findings, and what to do about them is yours, or
@@ -38,6 +39,12 @@ and set `capacity.max_chores` above 0. Open the prompt with a heading, `# Depend
 title on [Runs](/runs) and its runs' pages, as a ticket's title is a worker run's. The overseer decides when a due
 chore runs, each tick, within the hours you allowed it. The schedule is a floor, not an alarm clock: "at most every
 120 minutes" means no sooner, not on the dot.
+
+A chore runs on `runtime.models.chore` unless its table sets a `model` of its own, spelled the same way,
+`provider/model@variant` included; canopy runs it on a copy of its chore agent made for that model. A chore whose
+command runs an agent of your own can't take one: canopy doesn't write that agent's definition, so the model goes
+there, and config refuses a `model` beside it rather than let two places disagree. [Settings](settings#models) shows
+which model each chore ends up on.
 
 You don't have to start from a blank page. `canopy chore install` lists the chores canopy ships, and
 `canopy chore install NAME` copies one's prompt, its table, and the agent it runs if it comes with one into this
@@ -127,4 +134,9 @@ reads its own chore's history and no other's, and the overseer reads none. You c
 `canopy chore history NAME`: it's the **Runs** list with the details left in.
 
 A chore with an agent definition of your own needs `"canopy_chore_history": allow` among its permissions to look back.
+A chore's run also gets a second server, of canopy's own reports, for a chore that looks at canopy itself:
+`canopy_reports_health`, `-spend`, `-decisions`, `-show-run`, `-show-chore`, `-config-show`, and `-agents`, and agent
+memory's `canopy_reports_memory-lessons`, `-proposals`, and `-list`. Each says what its command prints, the JSON where
+the command has `--json`; there's no page of a ticket, which holds its conversation. The agent canopy ships reads none
+of them; yours allows the ones it needs, each by name, and needs no shell for them.
 A sandboxed chore can't: the journal sits in the part of `.canopy/` its sandbox hides, so it makes do with its prompt.

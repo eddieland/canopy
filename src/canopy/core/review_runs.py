@@ -1,4 +1,4 @@
-"""Review runs (DESIGN §21): each review of a PR, the slot it leased, and the findings the operator dismissed.
+"""Review runs (DESIGN §21): each review of a PR, its slot, and the findings the operator dismissed or canopy holds.
 
 A review run's lifecycle, from its claim to its close, is the one every run table shares (`db.claim_run`,
 `db.finish_run`); what is here is the review's own: its start, its slot, and its runs as a PR's reviews read them.
@@ -9,10 +9,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from canopy.core import db, records, sql
+from canopy.core.vocab import DismissalReason, HoldKind, ReviewRunStatus
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
     from pathlib import Path
 
     from canopy.core.vocab import PoolKind
@@ -77,14 +78,25 @@ def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
     sql.execute(conn, sql.delete("review_runs").where("id = ? AND pid IS NULL", run_id))
 
 
-def review_dismissals(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
-    """Return the numbers, from 1, of review run `run_id`'s findings the operator dismissed (DESIGN §21)."""
-    query = sql.select("finding").from_("review_dismissals").where("review_run_id = ?", run_id)
-    return frozenset(int(r[0]) for r in sql.execute(conn, query))
+def review_dismissals(conn: sqlite3.Connection, run_id: int) -> dict[int, DismissalReason | None]:
+    """Return review run `run_id`'s findings the operator dismissed (DESIGN §21), by their numbers from 1.
+
+    Returns:
+        Each dismissed finding's number, with why it was dismissed: None for a dismissal from before canopy asked.
+    """
+    query = sql.select("finding, reason").from_("review_dismissals").where("review_run_id = ?", run_id)
+    return {int(r[0]): DismissalReason(r[1]) if r[1] is not None else None for r in sql.execute(conn, query)}
 
 
-def set_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int, *, channel: str) -> None:
-    """Record that the operator dismissed review run `run_id`'s finding number `finding` now."""
+def set_review_dismissal(
+    conn: sqlite3.Connection,
+    run_id: int,
+    finding: int,
+    *,
+    reason: DismissalReason,
+    channel: str,
+) -> None:
+    """Record that the operator dismissed review run `run_id`'s finding number `finding` now, for `reason`."""
     sql.execute(
         conn,
         sql.insert(
@@ -93,9 +105,70 @@ def set_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int, *,
             finding=finding,
             dismissed_at=db.now(),
             channel=channel,
+            reason=reason,
         ).on_conflict(
-            "(review_run_id, finding) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel",
+            "(review_run_id, finding) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel, "
+            "reason = excluded.reason",
         ),
+    )
+
+
+def held(conn: sqlite3.Connection, run_id: int, *, released: bool = False) -> dict[int, records.ReviewHold]:
+    """Return review run `run_id`'s findings the harness holds for the operator (DESIGN §21), by their numbers from 1.
+
+    A held finding reaches no worker and starts no `resume` until the operator sends it, which releases it.
+
+    Args:
+        conn: The journal.
+        run_id: The review run.
+        released: Also return the findings the operator has released, which were held once.
+
+    Returns:
+        Each finding still held, with its hold; one the operator released only with `released`.
+    """
+    query = sql.select("*").from_("review_holds").where("review_run_id = ?", run_id)
+    if not released:
+        query = query.where("released_at IS NULL")
+    return {h.finding: h for h in records.fetch_all(conn, records.ReviewHold, query)}
+
+
+def withheld(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
+    """Return review run `run_id`'s findings no worker or tick acts on: dismissed, or held for the operator (§21).
+
+    Returns:
+        Their numbers, from 1.
+    """
+    return frozenset(review_dismissals(conn, run_id)) | frozenset(held(conn, run_id))
+
+
+def hold(conn: sqlite3.Connection, run_id: int, finding: int, *, rebuts: tuple[int, int] | None) -> None:
+    """Hold review run `run_id`'s finding number `finding` for the operator: a rebuttal of `rebuts`'s finding, or late.
+
+    `rebuts` is the earlier review run, and its finding, that the worker declined; None holds the finding as `late`, on
+    code unchanged since the PR's first reviewed commit. A finding already held keeps its first hold.
+    """
+    sql.execute(
+        conn,
+        sql.insert(
+            "review_holds",
+            review_run_id=run_id,
+            finding=finding,
+            kind=HoldKind.LATE if rebuts is None else HoldKind.REBUTTAL,
+            rebuts_run_id=rebuts[0] if rebuts is not None else None,
+            rebuts_finding=rebuts[1] if rebuts is not None else None,
+            held_at=db.now(),
+        ).on_conflict("(review_run_id, finding) DO NOTHING"),
+    )
+
+
+def release_holds(conn: sqlite3.Connection, run_id: int, findings: Iterable[int], *, channel: str) -> None:
+    """Release the operator's hold on review run `run_id`'s `findings`: they reach a worker as any other finding."""
+    sql.execute_many(
+        conn,
+        sql.update("review_holds")
+        .set(released_at=db.now(), released_channel=channel)
+        .where("review_run_id = ? AND finding = ? AND released_at IS NULL", run_id, sql.ROW),
+        [(f,) for f in findings],
     )
 
 
@@ -173,3 +246,43 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
     for run in records.fetch_all(conn, records.ReviewRun, query):
         found.setdefault(run.pr_url, []).append(run)
     return found
+
+
+def see_review_head(conn: sqlite3.Connection, pr_url: str, sha: str, at: str) -> str:
+    """Record that `sha` was the PR's head at `at`, unless it already was the head canopy last saw (DESIGN §21).
+
+    A different commit replaces the PR's row, so its wait starts at `at`: a push, or a force push back to an earlier
+    commit, starts over.
+
+    Returns:
+        Since when `sha` has been the head: `at`, or the time it was first seen if it still was the head.
+    """
+    seen = sql.insert("review_heads", pr_url=pr_url, sha=sha, seen_at=at).on_conflict(
+        "(pr_url) DO UPDATE SET sha = excluded.sha, seen_at = excluded.seen_at WHERE review_heads.sha != excluded.sha",
+    )
+    sql.execute(conn, seen)
+    return review_head_seen_at(conn, pr_url, sha) or at
+
+
+def review_head_seen_at(conn: sqlite3.Connection, pr_url: str, sha: str) -> str | None:
+    """Return since when `sha` has been the PR's head canopy last saw, or None if that head is another commit."""
+    query = sql.select("*").from_("review_heads").where("pr_url = ? AND sha = ?", pr_url, sha)
+    head = records.fetch_one(conn, records.ReviewHead, query)
+    return None if head is None else head.seen_at
+
+
+def review_heads_seen_after(conn: sqlite3.Connection, since: str) -> list[records.ReviewHead]:
+    """Return the PR heads seen after `since` with no `done` review of them, newest first."""
+    reviewed = (
+        sql.select("1")
+        .from_("review_runs r")
+        .where("r.pr_url = h.pr_url AND r.sha = h.sha AND r.revises IS NULL AND r.status = ?", ReviewRunStatus.DONE)
+    )
+    query = (
+        sql.select("h.*")
+        .from_("review_heads h")
+        .where("h.seen_at > ?", since)
+        .where("NOT EXISTS ({})", reviewed)
+        .order_by("h.seen_at DESC, h.pr_url")
+    )
+    return records.fetch_all(conn, records.ReviewHead, query)

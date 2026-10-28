@@ -10,7 +10,16 @@ from typing import ClassVar
 import pytest
 
 from canopy.core import chore_runs, db, records, review_runs, sql
-from canopy.core.vocab import ChoreRunStatus, Phase, PlanSetting, PoolKind, ReviewRunStatus, StartStatus, TickStatus
+from canopy.core.vocab import (
+    ChoreRunStatus,
+    Decider,
+    Phase,
+    PlanSetting,
+    PoolKind,
+    ReviewRunStatus,
+    StartStatus,
+    TickStatus,
+)
 from tests.canopy.helpers import in_tick, present
 from tests.conftest import Journals
 
@@ -22,7 +31,7 @@ AFFINITY: dict[str, frozenset[object]] = {
     "BLOB": frozenset({bytes}),
 }
 PR = "https://github.com/acme/api/pull/7"
-DECISION_COLUMNS = "id, tick_id, ticket_key, action, rationale, created_at, repo, chore, pr"
+DECISION_COLUMNS = "id, tick_id, ticket_key, action, rationale, created_at, repo, chore, pr, decider, kept, item"
 
 
 def row_types() -> list[type[records.Row]]:
@@ -90,6 +99,9 @@ def test_a_query_builds_its_rows_as_the_row_type(conn: sqlite3.Connection) -> No
         repo="api",
         chore=None,
         pr=None,
+        decider=Decider.OVERSEER,
+        kept=False,
+        item=None,
     )
     assert (second.ticket_key, second.chore) == (None, "deps")
 
@@ -110,7 +122,10 @@ def test_fetch_one_is_none_when_the_query_returns_nothing(conn: sqlite3.Connecti
 @pytest.mark.parametrize(
     ("query", "error"),
     [
-        ("SELECT id, tick_id FROM decisions", "missing action, chore, created_at, pr, rationale, repo, ticket_key"),
+        (
+            "SELECT id, tick_id FROM decisions",
+            "missing action, chore, created_at, decider, item, kept, pr, rationale, repo, ticket_key",
+        ),
         (f"SELECT {DECISION_COLUMNS}, 1 AS extra FROM decisions", "no field for extra"),  # noqa: S608
         (f"SELECT {DECISION_COLUMNS}, id FROM decisions", "a column is repeated"),  # noqa: S608
     ],

@@ -58,6 +58,7 @@ const ENTRIES: TranscriptEntry[] = [
         split: tokens({ input: 1200, output: 300 }),
         tokens: 1500,
         cost_usd: 0.02,
+        model: null,
     },
     {
         kind: 'tool',
@@ -80,6 +81,7 @@ const ENTRIES: TranscriptEntry[] = [
         split: tokens({ input: 300, cache_read: 1200, output: 50, reasoning: 10 }),
         tokens: 1560,
         cost_usd: 0.01,
+        model: null,
     },
     { kind: 'text', call: 3, at: '2026-10-08T12:01:00Z', text: 'Trying again.', reasoning: false, cut: false },
 ]
@@ -100,10 +102,10 @@ function said(n: number): TranscriptEntry[] {
     }))
 }
 
-// Model call `n`'s end.
-function step(n: number): TranscriptEntry {
+// Model call `n`'s end, made by `model` when the API names it.
+function step(n: number, model: string | null = null): TranscriptEntry {
     const split = tokens({ input: 100 })
-    return { kind: 'step', call: n, at: AT, reason: 'tool-calls', split, tokens: 100, cost_usd: 0.01 }
+    return { kind: 'step', call: n, at: AT, reason: 'tool-calls', split, tokens: 100, cost_usd: 0.01, model }
 }
 
 // A page's view of the transcript, held outside the panel; the test sets its row last shown.
@@ -253,6 +255,31 @@ describe('TranscriptPanel', () => {
         expect(within(call('canopy decide')).getByText('refused: capacity')).toBeDefined()
     })
 
+    it('says a decide call’s decisions on its row, and opens to each with its rationale', () => {
+        const decisions = [
+            { key: 'ABC-1', action: 'wait', rationale: 'PR 8 waits on CI' },
+            { key: 'ABC-2', action: 'done', rationale: 'merged by the operator' },
+        ]
+        const decide: TranscriptEntry = {
+            kind: 'tool',
+            call: 1,
+            at: AT,
+            tool: 'canopy_decide',
+            title: null,
+            input: JSON.stringify({ decisions }, null, 2),
+            output: 'recorded wait for ABC-1\nrecorded done for ABC-2',
+            status: 'completed',
+            duration_ms: 20,
+            cut: false,
+        }
+        render(<TranscriptPanel transcript={transcript({ entries: [decide] })} running={false} page="tick" />)
+        const row = within(call('canopy_decide'))
+        expect(row.getByText('ABC-1 wait, ABC-2 done')).toBeDefined()
+        expect(row.getByText('2 decisions')).toBeDefined()
+        const items = row.getAllByRole('listitem').map((item) => item.textContent)
+        expect(items).toEqual(['ABC-1waitPR 8 waits on CI', 'ABC-2donemerged by the operator'])
+    })
+
     it('says each model call’s tokens in and out as the CLI counts them, and a reason other than tool calls', () => {
         render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         expect(call('1.2k in · 300 out').textContent).not.toContain('tool calls')
@@ -281,6 +308,31 @@ describe('TranscriptPanel', () => {
         fireEvent(first, new Event('toggle'))
         const sent = within(first).getByRole('region', { name: 'call 1 input' })
         expect(within(sent).getByText('Implement ABC-1: sign in with SSO.')).toBeDefined()
+    })
+
+    it('names the model of a split run’s first call, and of each call whose model is not the call before’s', () => {
+        const opus = 'anthropic/claude-opus-4-1'
+        const sonnet = 'anthropic/claude-sonnet-4-5'
+        const entries: TranscriptEntry[] = [1, 2, 3].flatMap((n): TranscriptEntry[] => [
+            { kind: 'text', call: n, at: AT, text: `said ${n}`, reasoning: false, cut: false },
+            step(n, n === 3 ? sonnet : opus),
+        ])
+        render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
+        expect(call('model call 1').textContent).toContain(opus)
+        expect(call('model call 2').textContent).not.toContain('anthropic/')
+        expect(call('model call 3').textContent).toContain(sonnet)
+        expect(screen.getByTitle(`made by ${sonnet}`)).toBeDefined()
+
+        // By call names them on the same calls.
+        fireEvent.click(screen.getByRole('button', { name: 'By call' }))
+        expect(screen.getByRole('button', { name: /call 1/u }).textContent).toContain(opus)
+        expect(screen.getByRole('button', { name: /call 2/u }).textContent).not.toContain('anthropic/')
+        expect(screen.getByRole('button', { name: /call 3/u }).textContent).toContain(sonnet)
+    })
+
+    it('names no model for a run one model served: its Run panel does', () => {
+        render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
+        expect(screen.queryByTitle(/^made by /u)).toBeNull()
     })
 
     it('names the session in its header', () => {
@@ -437,6 +489,20 @@ describe('TranscriptPanel', () => {
         expect(rows().getByText(/thought 8/u)).toBeDefined()
         fireEvent.click(rows().getByRole('button', { name: 'show less', expanded: true }))
         expect(rows().queryByText(/thought 8/u)).toBeNull()
+    })
+
+    it('drops the blank lines thinking ends on, whole or folded', () => {
+        const entries: TranscriptEntry[] = [
+            { kind: 'text', call: 1, at: AT, text: 'a plan\n\n', reasoning: true, cut: false },
+            { kind: 'text', call: 1, at: AT, text: 'one\ntwo\nthree\n\nfour\nfive', reasoning: true, cut: false },
+        ]
+        render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
+        expect(
+            rows()
+                .getByText(/a plan/u)
+                .closest('p')?.textContent,
+        ).toBe('thinkinga plan')
+        expect(rows().getByText(/one/u).closest('p')?.textContent).toBe('thinkingone\ntwo\nthree')
     })
 
     it('shows long thinking whole with All open, or when the search holds a line it folds away', () => {

@@ -19,8 +19,9 @@ The guide comes in four parts, in the order you'll need them.
   other page leans on, and [Philosophy](philosophy), why canopy is built the way it is. Read those two before anything
   surprises you, not after.
 - **Your work**: the pages where the loop waits on you. [Attention](attention) first, then [Tickets](tickets),
-  [Plans](plans), and [Pull requests and reviews](pull-requests).
-- **The loop**: the pages where you watch it work. [Runs and worktrees](runs), [Ticks and spend](ticks),
+  [Plans](plans), and [Pull requests and reviews](pull-requests), with [Code review](code-review) on how to spend
+  your reviewing time when agents write most of the code.
+- **The loop**: the pages where you watch it work. [Runs and worktrees](runs), [Ticks](ticks), [Reports](reports),
   [Chores](chores), [Memory](memory), and [Settings](settings).
 - **Reference**: the [Glossary](glossary), every word the other pages assume you know, for when one of them does.
 
@@ -35,18 +36,19 @@ The nav on the left lists them, most used first. If you learn only one, learn At
   It's the home page.
 - [Tickets](/tickets): every ticket canopy has worked on, and a form to start a new one.
 - [Pull requests](/pull-requests): every PR canopy knows about, the ones it opened and the ones it reviewed, with their
-  runs and reviews.
-- [Reviews](/reviews): the PR reviews canopy kept to itself instead of posting, with their findings pinned to the diff.
-- [Runs](/runs): every agent canopy runs, workers, reviews, and chores alike, the ones running now first, and how
-  full each limit is. A worker run's page has its session's transcript. When you want to know what an agent was
-  thinking, this is the receipt.
+  runs and reviews. Under it, [Reviews](pull-requests#the-reviews-page) has canopy's PR reviews, kept in the journal,
+  with their findings pinned to the diff. One of a coworker's PR is also a draft you may publish as your own; nothing
+  posts until you do.
+- [Runs](/runs): every agent canopy runs, workers, reviews, chores, and tasks alike, the ones running now first, and
+  how full each limit is. A worker run's page has its session's transcript. When you want to know what an agent was
+  thinking, this is the receipt. Under it, [Ticks](ticks#the-ticks-page) has the overseer's latest ticks, and what
+  each one decided, and [Worktrees](runs#worktrees) each repository's pool, its slots, and what's holding them.
 - [Chores](/chores): scheduled agents that look at your CI, PRs, tracker, or anything else they can read, and report
   what needs you. Each chore's runs and findings are here, and Try now on its page runs it at once, whatever its
   schedule.
-- [Spend](/spend): what agent runs cost each day, and what idle ticks spent deciding there was nothing to do. Some of
-  the priciest answers are "no".
-- [Ticks](/ticks): the overseer's latest ticks, and what each one decided.
-- [Worktrees](/worktrees): each repository's pool, its slots, and what's holding them.
+- [Reports](/reports): what canopy cost and got done month by month, in dollars and tokens, and under it the spend
+  page: what agent runs cost each day, and what idle ticks spent deciding there was nothing to do. Some of the
+  priciest answers are "no".
 - [Memory](/memory): what workers remember, the ticket notes and the lessons, and which runs read them. The header's
   `memory:` readout opens it too.
 
@@ -54,8 +56,8 @@ The nav on the left lists them, most used first. If you learn only one, learn At
 to workers, reloading your config, the fun, and your session, lives at the rail's foot.
 
 The nav counts what waits for you beside three of its pages: Attention's items, by how bad they are; the
-[reviews](pull-requests#the-reviews-page) you haven't opened yet; and the [proposals](memory#the-memory-page) workers
-made for memory.
+[reviews](pull-requests#the-reviews-page) you haven't opened yet, beside Pull requests; and the
+[proposals](memory#the-memory-page) workers made for memory.
 
 A list in time order with more than one row has a toggle for its order, newest or oldest first, and this browser
 remembers your choice for each list. Tickets, pull requests, and runs are sorted by their latest activity, so theirs
@@ -77,8 +79,8 @@ The bar across the top of every page. From the left:
   has been down a while. Before it, a `mock` pill when the server runs over a sample journal
   (`python -m canopy.serve --mock`) instead of your workspace's. No loop runs behind that one, and nothing you do there
   reaches a ticket.
-- **The ticker**, if you turned it on in [Settings](settings#fun). Joke headlines, and the odd real tip. It stops under
-  the pointer, for the ones worth reading twice.
+- **The ticker**, unless you turned it off in [Settings](settings#fun). Joke headlines, and the odd real tip. It stops
+  under the pointer, for the ones worth reading twice.
 - **Reload**, only when canopy now serves a newer build of the UI than the page you have open. Reloading loses what
   you've typed and not sent, so send it first.
 - **Pause**, then **Resume**, as `p` at the loop's terminal, or `canopy pause` and `canopy resume`. While paused, no
@@ -104,14 +106,19 @@ as `canopy notice` would, so a run already going keeps the words it started with
 ## The rail
 
 The strip beside the nav, on every page. From the top: a search box over the whole journal (below), everything working
-right now, and what the last 24 hours and the last 30 days cost, each a link to the spend page. **Working** lists every
-agent on the clock: worker runs by their ticket, reviews by their PR, and chore runs by their chore, with the runs
-waiting on you after them. Each row opens its run's page. It shows four rows at most, then `+N more`, which opens the
-page that lists the rest, and it dims while the loop isn't answering, since what it shows may have ended. The 24 hours
-open the spend page by the hour, and the 30 days by the day. A ticket you stopped drops out once its run ends; a
-question it left behind waits on nothing, so it is not listed either. Its foot names the version canopy is serving,
-which links to canopy's releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and
-**Settings**. On a narrow window the rail folds to icons; **Open the rail** brings it back.
+right now, and what the last 24 hours and the last 30 days cost, each a link to the spend page. Those count every
+agent session on this machine, canopy's runs and the sessions outside canopy alike; hover one to see when the outside
+ones were last read. **Working** lists every
+agent on the clock: worker runs by their ticket, reviews by their PR, chore runs by their chore, and task runs as
+`task:N#M` over your text's first line, with the runs waiting on you after them. A worker run's row says what it's
+doing under its ticket's title: `planning`, `implementing`, `fixing CI`. While it works, that comes as a quip of the
+ticket's own, `appeasing CI`; hover it for the plain words, or turn the quips off in [Settings](settings#fun). Each
+row opens its run's page. It shows four rows at most, then `+N more`, which opens the page that lists the rest, and
+it dims while the loop isn't answering, since what it shows may have ended. The 24 hours open the spend page by the
+hour, and the 30 days by the day. A ticket you stopped drops out once its run ends; a question it left behind waits
+on nothing, so it is not listed either. Its foot names the version canopy is serving, which links to canopy's
+releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a narrow
+window the rail folds to icons; **Open the rail** brings it back.
 
 From the keyboard, the first Tab on any page lands on **Skip to content**, which hides until then. Press Enter and the
 next Tab is the page's own, not the rail's dozen or so stops. Your Tab key has better things to do.
@@ -122,10 +129,19 @@ Press `/` from anywhere but a text field to jump to the search box, and type. Th
 or at once on Enter, and Escape leaves the box. A search wants 2 to 200 characters and at most eight words, and finds
 what holds every word, in any case, newest first.
 
-It searches tickets by key, title, and branch, every conversation, chore runs, the overseer's decisions, and ticks, each
-in its own panel, at most 20 of each; a panel that found more says `newest 20`. It doesn't search transcripts, reviews,
-or agent memory. While the next search loads, the last one's results stay, dimmed, so the page never blanks between
-keystrokes. The box's clear button starts over.
+It searches tickets by key, title, and branch, tasks by their reference, text, and branch, every conversation, chore
+runs, the overseer's decisions, and ticks, each in its own panel, at most 20 of each; a panel that found more says
+`newest 20`. A task's hit is `task:N` over the first line you wrote it with, and one of its run's messages opens that
+run. It doesn't search transcripts, reviews, a task's report, or agent memory. While the next search loads, the last
+one's results stay, dimmed, so the page never blanks between keystrokes. The box's clear button starts over.
+
+A task's reference alone, `task:4`, opens that task on Enter instead of searching for it: faster than remembering
+which page it was on.
+
+To get back to a ticket, press `⌘K` (`Ctrl+K` off a Mac) from anywhere, even mid-reply. It lists the tickets you've
+opened lately in this browser, newest first, each with where it stands now; Enter opens the top one, which is the
+ticket you were on before this one, so `⌘K` Enter flips between two. Type to narrow the list by key or title, or to
+find a ticket you haven't opened yet. The list lives in your browser, not the journal: canopy has enough to remember.
 
 ## Acting from the UI
 

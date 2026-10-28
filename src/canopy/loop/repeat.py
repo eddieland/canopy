@@ -16,9 +16,13 @@ Each tick's row records whether it was idle and what ended the wait before it (`
 spend can be split by what it bought (ROADMAP M33).
 
 A tick is the overseer's turn; between ticks the loop also polls the connectors, every `connect.every_minutes` from the
-last read, whatever `loop.*` paces the ticks at (`poll`, DESIGN §6). A poll reads the world into the journal and ends
-no wait, and none runs while the loop is paused. The wait after a live tick also reads which models served the runs
-left unread (`models`), one at a time, which ends no wait either.
+last read, whatever `loop.*` paces the ticks at (`poll`, DESIGN §6), and none runs while the loop is paused. After a
+poll that read every source whole, the loop reads what a tick would record and list (`outlook`), and ends the wait when
+that holds what the latest tick, read the same way as it ended, did not (DESIGN §39). A poll that read less than it
+was asked ends the wait once, so the tick reads the sources again and raises what still fails; until a run reads them
+whole, the polls end none, and the poll that does ends it. Either way the minimum gap holds the tick, which records
+`poll` as what woke it. The wait after a live tick also reads which models served the runs left unread (`models`), one
+at a time, which ends no wait.
 
 While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
@@ -38,6 +42,7 @@ the loop paused or resumed, through whichever channel. `tick_report` draws what 
 
 from __future__ import annotations
 
+import functools
 import os
 import signal
 import time
@@ -53,16 +58,31 @@ from rich.live import Live
 from rich.spinner import Spinner
 from rich.text import Text
 
-from canopy.core import config, db, notice, pause, tasks
+from canopy.core import config, connector_runs, db, notice, pause, tasks
+from canopy.core.vocab import ConnectorRunStatus
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import loop_view, models, pacing, phases, poll, reread, tick, tick_now, tick_report
+from canopy.loop import (
+    loop_view,
+    models,
+    outlook,
+    pacing,
+    phases,
+    poll,
+    reread,
+    sessions,
+    tick,
+    tick_now,
+    tick_report,
+)
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Mapping
     from types import FrameType
 
     from rich.console import Console
 
+    from canopy.core import observe
     from canopy.core.config import Config
     from canopy.core.context import Context
     from canopy.loop.tick import Woken, WokenBy
@@ -217,7 +237,7 @@ def run(
             # other `canopy` command, the ones the overseer and workers run included.
             from canopy.loop import web  # noqa: PLC0415
 
-            serving = web.start(ctx, log, settings.reload, settings.asked)
+            serving = web.start(ctx, log, settings.reload, settings.asked, interval_minutes)
             settings.backend = serving.backend
             settings.ui = serving.links
         try:
@@ -332,7 +352,8 @@ class _Settings:
 class _Polls:
     """When the wait after a tick polls the connectors (`poll.run`): `connect.every_minutes` after the last read.
 
-    The wait also reads which models served the runs left unread, through `backlog`, between its polls.
+    What a poll read can end the wait (`woke`, DESIGN §39). The wait also reads which models served the runs left
+    unread, through `backlog`, and records every session the runtime keeps, through `recorder`, between its polls.
     """
 
     settings: _Settings
@@ -340,11 +361,25 @@ class _Polls:
     log: logs.TickAdapter
     #: The runs' sessions left unread; None in a dry run, which reads none.
     backlog: models.Backlog | None
+    #: The runtime's sessions, canopy's and not; None in a dry run, which records none.
+    recorder: sessions.Recorder | None = None
+    #: Whether the loop is a dry run, whose polls record no operator message (D036).
+    dry_run: bool = False
     #: When the connectors last ran, a tick's or a poll's, on `clock`.
     last: float = 0.0
+    #: What a tick would record and list, read as the latest tick ended: what a whole poll is compared with. None
+    #: before the first tick, or when reading it raised.
+    seen: frozenset[outlook.Fact] | None = None
+    #: Whether the latest run of the connectors that ran any, a tick's or a poll's, read less than it was asked.
+    failing: bool = False
+    #: Whether a poll since the latest tick ended the wait.
+    woke: bool = False
 
-    def ticked(self) -> float:
-        """Note that a tick has just ended: it ran the connectors, unless its reconcile failed, so the next poll waits.
+    def ticked(self, outcome: tick.Outcome) -> float:
+        """Note that the tick that ended with `outcome` has just ended, and read what it left for the polls after it.
+
+        It ran the connectors, unless its reconcile failed, so the next poll waits. Whether it read every source whole
+        is where the polls go on from, and what a tick would record and list now is what they are compared with.
 
         Returns:
             The time, on `clock`.
@@ -352,23 +387,72 @@ class _Polls:
         self.last = self.clock()
         if self.backlog is not None:
             self.backlog.ticked()
+        ctx = self.settings.ctx
+        self.woke = False
+        whole = None if outcome.tick_id is None else connector_runs.read_whole(ctx.conn, outcome.tick_id)
+        if whole is not None:
+            self.failing = not whole
+        # With no source, no poll reads anything to compare.
+        self.seen = self._outlook(ctx) if ctx.config.connect.named() else None
         return self.last
 
     def step(self) -> None:
         """Read the config again if asked to, as every step of a wait does, then poll if one is due and not paused.
 
-        Before the poll, read a run's session if one is due (`models.Backlog.step`).
+        Before the poll, read a run's session if one is due (`models.Backlog.step`), and the runtime's sessions if
+        their read is due (`sessions.Recorder.step`).
         """
         self.settings.apply()
         ctx = self.settings.ctx
         if self.backlog is not None:
             self.backlog.step(ctx)
+        if self.recorder is not None:
+            self.recorder.step(ctx)
         if self.clock() - self.last < ctx.config.connect.every_minutes * 60 or pause.paused(ctx.conn) is not None:
             return
         self.last = self.clock()
-        polled = poll.run(ctx, self.log)
+        polled = poll.run(ctx, self.log, dry_run=self.dry_run)
         if not self.settings.console.is_terminal:
             loop_view.record_poll(self.settings.console, polled)
+        if polled:
+            self._compare(ctx, polled)
+
+    def _compare(self, ctx: Context, polled: Mapping[str, observe.Observed]) -> None:
+        """End the wait on what the poll `polled` read, by setting `woke` (DESIGN §39).
+
+        A poll that read less than it was asked ends it once, and those after it end none until one reads every source
+        whole, which ends it again. A whole poll after a whole read ends it when a tick would now record or list
+        what the latest tick did not.
+        """
+        failed = sorted(name for name, observed in polled.items() if observed.status is not ConnectorRunStatus.OK)
+        if failed:
+            if not self.failing:
+                self.failing = self.woke = True
+                self.log.info("a poll read less than it was asked, which ends the wait", extra={"sources": failed})
+            return
+        if self.failing:
+            self.failing, self.woke = False, True
+            self.log.info("a poll read every source whole again, which ends the wait")
+            return
+        if self.seen is None or (now := self._outlook(ctx)) is None:
+            return
+        found = outlook.news(self.seen, now)
+        if found:
+            self.woke = True
+            news = [" ".join(fact) for fact in found]
+            self.log.info("a poll found what the latest tick did not record or list", extra={"news": news})
+
+    def _outlook(self, ctx: Context) -> frozenset[outlook.Fact] | None:
+        """What a tick would record and list now. What it raises is logged, never the loop's end.
+
+        Returns:
+            It, or None when reading it raised.
+        """
+        try:
+            return outlook.read(ctx, datetime.now(UTC))
+        except Exception as e:
+            self.log.exception("reading what a tick would list raised", extra={"error": str(e)})
+            return None
 
 
 def _ticks(
@@ -391,7 +475,6 @@ def _ticks(
     next tick and the waits after it, not to the wait it happens in.
     """
     ctx = settings.ctx
-    conn = ctx.conn  # a reload keeps the journal's connection
     woken_by: WokenBy = "start"
     if defer_seconds:
         woken_by = (
@@ -415,7 +498,14 @@ def _ticks(
         woken_by = woken or "start"
     idle_count = 0
     # A dry run reads no session, as its tick reads none.
-    polls = _Polls(settings, clock, log, None if dry_run else models.Backlog(clock, log))
+    polls = _Polls(
+        settings,
+        clock,
+        log,
+        None if dry_run else models.Backlog(clock, log),
+        recorder=None if dry_run else sessions.Recorder(clock, log),
+        dry_run=dry_run,
+    )
     while not stop.requested:
         settings.apply()
         ctx, pace = settings.ctx, settings.pace
@@ -431,7 +521,7 @@ def _ticks(
                 outcome = _tick(ctx, dry_run=dry_run, woken_by=woken_by, ui=settings.ui, log=log)
         finally:
             settings.reload.ticking = False
-        ended = polls.ticked()
+        ended = polls.ticked(outcome)
         if keys is not None:
             # Keys pressed during the tick are dropped, all but a pause, which holds the next tick.
             _toggle_pause(ctx, keys(), log)
@@ -440,7 +530,7 @@ def _ticks(
         idle = pacing.idle(ctx, outcome)
         # Measured for the prompt, not acted on (ROADMAP M28): what the tick changed with nothing new to see.
         churn = pacing.churn(ctx, outcome, before)
-        idle_count = idle_count + 1 if pace.on and idle else 0
+        idle_count = pacing.count(ctx, outcome, idle_count, idle=idle, on=pace.on)
         if outcome.tick_id is not None:
             db.set_tick_loop(ctx.conn, outcome.tick_id, idle=idle, woken_by=woken_by)
         last = max_ticks is not None and statuses.total() >= max_ticks
@@ -467,11 +557,6 @@ def _ticks(
         since = read or begun
         read_at = read if pace.on else None
 
-        def wake(seen: int = seen, since: str = since, read_at: str | None = read_at) -> Woken | None:
-            if (acted := _operator_acted(settings, seen, since)) is not None:
-                return acted
-            return "run" if read_at is not None and db.runs_ended_after(conn, read_at) else None
-
         woken = _wait(
             console,
             ctx,
@@ -479,7 +564,7 @@ def _ticks(
             ended + wait,
             sleep=sleep,
             clock=clock,
-            wake=wake,
+            wake=functools.partial(_early, settings, polls, seen, since, read_at),
             earliest=ended + _gap_seconds(ctx),
             keys=keys,
             asked=settings.asked.take,
@@ -488,6 +573,22 @@ def _ticks(
         )
         _log_woken(console, log, woken, seen=seen, since=since, read_at=read_at)
         woken_by = woken or ("gate" if wait < pace.after(idle_count) else "timer")
+
+
+def _early(settings: _Settings, polls: _Polls, seen: int, since: str, read_at: str | None) -> Woken | None:
+    """What ends the wait after a tick early, if anything has: the operator's act, a run ending, or a poll.
+
+    `seen` is the newest operator message to a ticket before the tick, and `since` when it read the journal; a run
+    ending after `read_at` wakes the wait, with idle pacing on, when it is not None. A poll ends it as `polls` says.
+
+    Returns:
+        The first of those that happened, or None.
+    """
+    if (acted := _operator_acted(settings, seen, since)) is not None:
+        return acted
+    if read_at is not None and db.runs_ended_after(settings.ctx.conn, read_at):
+        return "run"
+    return "poll" if polls.woke else None
 
 
 def _log_wait(

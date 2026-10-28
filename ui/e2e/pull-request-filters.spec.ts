@@ -8,6 +8,25 @@ test.beforeEach(async ({ page }) => {
     await signIn(page)
 })
 
+// Each repository's PRs in the mock, as `prs` sorts them: the day's, and those its months before merged
+// (canopy/serve/mock/history.py).
+const API_PRS = ['acme/api#11', 'acme/api#12', 'acme/api#14', 'acme/api#3', 'acme/api#5', 'acme/api#7', 'acme/api#9']
+const WEB_PRS = [
+    'acme/web#41',
+    'acme/web#47',
+    'acme/web#52',
+    'acme/web#55',
+    'acme/web#58',
+    'acme/web#60',
+    'acme/web#64',
+    'acme/web#70',
+    'acme/web#73',
+    'acme/web#78',
+    'acme/web#81',
+    'acme/web#88',
+    'acme/web#91',
+]
+
 /** The names of the PRs the pull requests list shows, sorted: the order is the list's own, by activity. */
 async function prs(page: Page): Promise<string[]> {
     const names = await page
@@ -36,14 +55,14 @@ test('the pull requests list filters by repositories and by words, in the URL', 
 
     await repos.getByRole('option', { name: 'api', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\?repo=api$/u)
-    await expect.poll(() => prs(page)).toEqual(['acme/api#12', 'acme/api#14'])
-    await expect(page.getByTestId('pull-requests-count')).toHaveText(/^2 of \d+$/u)
+    await expect.poll(() => prs(page)).toEqual(API_PRS)
+    await expect(page.getByTestId('pull-requests-count')).toHaveText(/^7 of \d+$/u)
 
     // A second repository adds to the first while the list stays open; taking the first away leaves the second.
     await repos.getByRole('option', { name: 'web', exact: true }).click()
     await expect(page).toHaveURL(/[?&]repo=api%2Cweb/u)
     await expect(picker).toHaveAccessibleName('Filter by repository: api, web')
-    await expect.poll(() => prs(page)).toEqual(['acme/api#12', 'acme/api#14', 'acme/web#88', 'acme/web#91'])
+    await expect.poll(() => prs(page)).toEqual([...API_PRS, ...WEB_PRS])
     await repos.getByRole('option', { name: 'api', exact: true }).click()
     await expect(page).toHaveURL(/[?&]repo=web(?:&|$)/u)
     await page.keyboard.press('Escape')
@@ -66,14 +85,14 @@ test('a link to the pull requests list names its repositories in the URL, one or
     await page.goto('pull-requests?repo=web,api')
     await settled(page)
     await expect(page.getByRole('button', { name: 'Filter by repository: api, web' })).toBeVisible()
-    await expect.poll(() => prs(page)).toEqual(['acme/api#12', 'acme/api#14', 'acme/web#88', 'acme/web#91'])
+    await expect.poll(() => prs(page)).toEqual([...API_PRS, ...WEB_PRS])
     await page.goto('pull-requests?repo=api,Not-A-Repo')
     await settled(page)
-    await expect.poll(() => prs(page)).toEqual(['acme/api#12', 'acme/api#14'])
+    await expect.poll(() => prs(page)).toEqual(API_PRS)
 })
 
 test('the reviews list filters by repository and by words, and a request waits out a repository', async ({ page }) => {
-    await page.goto('reviews?q=web%2388')
+    await page.goto('pull-requests/reviews?q=web%2388')
     await settled(page)
     const field = page.getByRole('searchbox', { name: 'Filter reviews by PR, ticket, or commit' })
     await expect(field).toHaveValue('web#88')
@@ -86,8 +105,8 @@ test('the reviews list filters by repository and by words, and a request waits o
     await repos.getByRole('option', { name: 'api', exact: true }).click()
     await page.keyboard.press('Escape')
     await expect(page).toHaveURL(/[?&]repo=api/u)
-    await expect.poll(() => reviews(page)).toEqual(['review-2', 'review-5'])
-    await expect(page.getByTestId('reviews-count')).toHaveText(/^2 of \d+$/u)
+    await expect.poll(() => reviews(page)).toEqual(['review-2', 'review-5', 'review-6'])
+    await expect(page.getByTestId('reviews-count')).toHaveText(/^3 of \d+$/u)
 
     await field.fill('abc-099')
     await expect(page.getByText('no reviews in api with “abc-099”')).toBeVisible()

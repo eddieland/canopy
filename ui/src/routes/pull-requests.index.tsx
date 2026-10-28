@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 
-import { pullRequestsQuery } from '@/api/queries'
+import { pullRequestsQuery, reviewsQuery } from '@/api/queries'
 import type { PullRequest } from '@/api/types'
 import { Age } from '@/components/age'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestFilterBar } from '@/components/pull-request-filter'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { ReviewDraftChip } from '@/components/review-draft-chip'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
@@ -16,9 +17,11 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped } from '@/components/tip'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { phaseMeaning } from '@/lib/meanings'
 import { countText, filterWords, prQueryOf, pullRequestShown, reposOf } from '@/lib/pull-request-filter'
 import type { PullRequestFilter } from '@/lib/pull-request-filter'
 import { repoListOf } from '@/lib/repo-filter'
+import { unseenOf, unseenText } from '@/lib/seen-reviews'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { verdictText, verdictTone } from '@/lib/reviews'
 import { fitColumn } from '@/lib/rows'
@@ -28,7 +31,8 @@ import { NO_TICKET } from '@/lib/words'
 
 /**
  * Every PR the journal knows, most recent activity first, whoever's it is. `?repo=` keeps the PRs in its repositories,
- * and `?q=` those whose name, ticket, or title holds every word.
+ * and `?q=` those whose name, ticket, or title holds every word. canopy's reviews are under it, at
+ * `/pull-requests/reviews`, linked with how many results the operator has not opened, as the nav counts them.
  */
 export const Route = createFileRoute('/pull-requests/')({
     // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
@@ -45,6 +49,7 @@ function PullRequestsPage() {
     const shown = data?.filter((pr) => pullRequestShown(pr, filter))
     const filtered = filter.repo !== undefined || filter.q !== undefined
     const order = useListOrder('pull-requests')
+    const unseen = unseenOf(useQuery(reviewsQuery).data).length
     return (
         <>
             <PageHeader title="Pull requests">
@@ -55,6 +60,15 @@ function PullRequestsPage() {
             <Panel>
                 <PanelHeader label="Pull requests">
                     <span className="flex items-center gap-2">
+                        <Link
+                            to="/pull-requests/reviews"
+                            search={filter}
+                            className="text-xs text-accent underline-offset-4 hover:underline"
+                            title={unseen > 0 ? unseenText(unseen) : undefined}
+                            data-testid="pull-requests-reviews-link"
+                        >
+                            {unseen > 0 ? `Reviews, ${unseen} new` : 'Reviews'}
+                        </Link>
                         {shown !== undefined && shown.length > 1 && <OrderToggle list="pull-requests" />}
                         <span className="readout text-xs text-muted-foreground" data-testid="pull-requests-count">
                             {countText(shown?.length, data?.length, filtered)}
@@ -110,7 +124,9 @@ function Row({ pr }: { pr: PullRequest }) {
         <ListRow kind="pull-request" data-testid="pull-request">
             <State pr={pr} />
             <PullRequestLink url={pr.url} />
-            <span className="flex">{pr.phase && <Chip word={pr.phase} className="min-w-0 shrink" />}</span>
+            <span className="flex">
+                {pr.phase && <Chip word={pr.phase} meaning={phaseMeaning(pr.phase)} className="min-w-0 shrink" />}
+            </span>
             <span className="flex min-w-0 items-center gap-2">
                 {pr.ticket_key === null ? (
                     <None reason={NO_TICKET} brief className="shrink-0 font-mono text-xs" />
@@ -127,7 +143,8 @@ function Row({ pr }: { pr: PullRequest }) {
 /**
  * Where a PR stands, leading its row as a run's state does: while a run works it, the running dot and that run, then
  * its latest review and that review's verdict (the dot how the review's run ended, the verdict's color its worst
- * finding), or `not reviewed`, and `requested` while the operator's review request on it is open.
+ * finding), or `not reviewed`; then, for a PR the loop does not own, where the operator's review of it stands, its
+ * newest draft's state (`ReviewDraftChip`), and `requested` while the operator's review request on it is open.
  */
 function State({ pr }: { pr: PullRequest }) {
     const review = pr.latest_review
@@ -154,6 +171,7 @@ function State({ pr }: { pr: PullRequest }) {
             ) : (
                 'not reviewed'
             )}
+            {pr.draft !== null && <ReviewDraftChip status={pr.draft.status} />}
             {pr.review_request !== null && pr.review_request.ended_at === null && <Chip>requested</Chip>}
         </span>
     )

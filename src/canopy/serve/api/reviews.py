@@ -1,10 +1,10 @@
 """The reviews canopy keeps (DESIGN §21, D114), all untrusted; dismissing, sending findings, and a review's draft.
 
 Each review run is readable on its own too, apart from its results: its session's transcript and its log's end. A
-review of a PR the loop does not own is a draft of a review on it (DESIGN §34), edited and published through
-`canopy review edit` and `publish`'s functions, so with their refusals: what posts is the version the page showed,
-named by its hash, word for word, as the operator's own comment review, pending for them to submit unless they ask
-canopy to submit it.
+review of a PR the loop does not own is a draft of a review on it (DESIGN §34), edited, noted for a revision, and
+published or discarded through `canopy review edit`'s, `canopy reply review:ID`'s, `publish`'s, and `discard`'s
+functions, so with their refusals: what posts is the version the page showed, named by its hash, word for word, as the
+operator's own comment review, pending for them to submit unless they ask canopy to submit it.
 """
 
 from __future__ import annotations
@@ -15,11 +15,12 @@ from typing import TYPE_CHECKING, Annotated
 from fastapi import APIRouter, HTTPException, Path, Request, Response
 
 from canopy.core import chore_view, conversation, review_drafts, review_drafts_manage, review_runs
+from canopy.core.vocab import DismissalReason
 from canopy.infra import logs
 from canopy.serve import review_draft_views, reviews
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, ReviewId, not_found
-from canopy.serve.review_schema import (
+from canopy.serve.schema.review import (
     RequestedReview,
     ReviewDetail,
     ReviewDismissed,
@@ -28,18 +29,20 @@ from canopy.serve.review_schema import (
     ReviewDraftAddRequest,
     ReviewDraftBodyRequest,
     ReviewDraftCommentRequest,
+    ReviewDraftNoted,
+    ReviewDraftNoteRequest,
     ReviewDraftPublished,
     ReviewDraftPublishRequest,
     ReviewSendRequest,
     ReviewSent,
     ReviewSummary,
 )
-from canopy.serve.transcript_schema import RawOutput, Transcript
+from canopy.serve.schema.transcript import RawOutput, Transcript
 
 if TYPE_CHECKING:
-    import sqlite3
-
     from pydantic import BaseModel
+
+    from canopy.core.context import Context
 
 TAG = "reviews"
 router = APIRouter(tags=[TAG])
@@ -128,19 +131,29 @@ def review_output(run_id: ReviewId, backend: BackendDep) -> RawOutput:
     responses=REFUSED,
 )
 def dismiss(run_id: ReviewId, body: ReviewDismissRequest, backend: BackendDep) -> ReviewDismissed:
-    """`canopy dismiss review:ID N`: no worker or tick acts on the finding. With `undo`, `--undo` (DESIGN §21)."""
+    """`canopy dismiss review:ID N --reason R`: no worker or tick acts on the finding. With `undo`, `--undo` (§21)."""
     ref = conversation.Ref(conversation.REVIEW, str(run_id))
     with backend.open() as ctx:
         try:
             defined = chore_view.defined(ctx.config, ctx.workspace)
-            conversation.dismiss(ctx.conn, ref, [str(body.finding)], channel=WEB, chores=defined, undo=body.undo)
+            conversation.dismiss(
+                ctx.conn,
+                ref,
+                [str(body.finding)],
+                channel=WEB,
+                chores=defined,
+                undo=body.undo,
+                reason=DismissalReason(body.reason) if body.reason is not None else None,
+            )
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        # A requested review's draft emptied of all it would post waits on nobody (DESIGN §34).
+        backend.write_attention(ctx)
     _log.info(
         "finding dismissal taken back" if body.undo else "finding dismissed",
-        extra={"subject": str(ref), "finding": body.finding, "channel": WEB},
+        extra={"subject": str(ref), "finding": body.finding, "channel": WEB, "reason": body.reason},
     )
-    return ReviewDismissed(run=run_id, finding=body.finding, dismissed=not body.undo)
+    return ReviewDismissed(run=run_id, finding=body.finding, dismissed=not body.undo, reason=body.reason)
 
 
 @router.post(
@@ -197,8 +210,9 @@ def draft_body(run_id: ReviewId, body: ReviewDraftBodyRequest, backend: BackendD
             version = review_drafts_manage.edit_body(ctx.conn, run_id, body.text, channel=WEB)
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        backend.write_attention(ctx)
         _log.info("review draft edited", extra={"run_id": run_id, "version": version.number, "channel": WEB})
-        return _draft(ctx.conn, run_id)
+        return _draft(ctx, run_id)
 
 
 @router.post(
@@ -225,7 +239,7 @@ def draft_add(run_id: ReviewId, body: ReviewDraftAddRequest, backend: BackendDep
         except conversation.Refused as r:
             raise RefusedError(r) from None
         _log.info("review draft edited", extra={"run_id": run_id, "version": version.number, "channel": WEB})
-        return _draft(ctx.conn, run_id)
+        return _draft(ctx, run_id)
 
 
 @router.post(
@@ -250,7 +264,7 @@ def draft_comment(
         except conversation.Refused as r:
             raise RefusedError(r) from None
         _log.info("review draft edited", extra={"run_id": run_id, "version": version.number, "channel": WEB})
-        return _draft(ctx.conn, run_id)
+        return _draft(ctx, run_id)
 
 
 @router.post(
@@ -269,8 +283,32 @@ def draft_drop(run_id: ReviewId, number: CommentNumber, backend: BackendDep) -> 
             version = review_drafts_manage.drop_comment(ctx.conn, run_id, number, channel=WEB)
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        backend.write_attention(ctx)
         _log.info("review draft edited", extra={"run_id": run_id, "version": version.number, "channel": WEB})
-        return _draft(ctx.conn, run_id)
+        return _draft(ctx, run_id)
+
+
+@router.post(
+    "/reviews/{run_id}/draft/notes",
+    operation_id="noteReviewDraft",
+    summary="Ask for a revision of a review's draft",
+    responses=REFUSED,
+)
+def draft_note(run_id: ReviewId, body: ReviewDraftNoteRequest, backend: BackendDep) -> ReviewDraftNoted:
+    """`canopy reply review:ID TEXT`: what a revision of the review's draft should change, in the operator's words.
+
+    The next tick revises the draft with an agent, which reads the PR and the draft and makes a new version, posting
+    nothing, unless the operator changes the draft first. Refused as the CLI refuses it: `no_draft`, `not_ours` for a
+    PR a ticket holds now, a status past edits (`published`, `staged`, ...), `bad_body` for an empty note or one past
+    the bound, `no_diff`, `revising` while a revision of it runs, and `revision_limit` once it has had its revisions.
+    """
+    with backend.open() as ctx:
+        try:
+            noted = review_drafts_manage.note(ctx.conn, ctx.config, run_id, body.text, channel=WEB)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        _log.info("review draft noted", extra={"review_run_id": run_id, "note": noted.id, "channel": WEB})
+        return ReviewDraftNoted(note=noted.id, after_version=noted.after_version, draft=_draft(ctx, run_id))
 
 
 @router.post(
@@ -303,6 +341,8 @@ def draft_publish(run_id: ReviewId, body: ReviewDraftPublishRequest, backend: Ba
             )
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        # Published or staged, a requested review waits on the operator no more (DESIGN §34).
+        backend.write_attention(ctx)
         _log.info(
             "review draft published",
             extra={
@@ -313,10 +353,33 @@ def draft_publish(run_id: ReviewId, body: ReviewDraftPublishRequest, backend: Ba
                 "channel": WEB,
             },
         )
-        return ReviewDraftPublished(draft=_draft(ctx.conn, run_id), published=done.version.number, failed=done.failed)
+        return ReviewDraftPublished(draft=_draft(ctx, run_id), published=done.version.number, failed=done.failed)
 
 
-def _draft(conn: sqlite3.Connection, run_id: int) -> ReviewDraft:
+@router.post(
+    "/reviews/{run_id}/draft/discard",
+    operation_id="discardReviewDraft",
+    summary="Discard a review's draft, posting nothing",
+    responses=REFUSED,
+)
+def draft_discard(run_id: ReviewId, backend: BackendDep) -> ReviewDraft:
+    """`canopy review discard ID`: the operator has seen the draft and will not post it.
+
+    Nothing posts, and the draft takes no edit, note, or publish after. Refused as the CLI refuses it: `no_draft`, a
+    status past edits (`published`, `staged`, `discarded`, ...), and `revising` while a revision of it runs.
+    """
+    with backend.open() as ctx:
+        try:
+            review_drafts_manage.discard(ctx.conn, run_id, channel=WEB)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        # Discarded, a requested review waits on the operator no more (DESIGN §34).
+        backend.write_attention(ctx)
+        _log.info("review draft discarded", extra={"review_run_id": run_id, "channel": WEB})
+        return _draft(ctx, run_id)
+
+
+def _draft(ctx: Context, run_id: int) -> ReviewDraft:
     """Review run `run_id`'s draft as it now stands, its comments placed on the diff it kept.
 
     Returns:
@@ -325,8 +388,10 @@ def _draft(conn: sqlite3.Connection, run_id: int) -> ReviewDraft:
     Raises:
         HTTPException: 404 when the run or its draft is gone, which a verb that just changed it never leaves.
     """
-    run = review_runs.get_review_run(conn, run_id)
-    found = review_draft_views.of_review(conn, run, review_drafts.diff_of(run)) if run is not None else None
+    run = review_runs.get_review_run(ctx.conn, run_id)
+    found = (
+        review_draft_views.of_review(ctx.conn, ctx.config, run, review_drafts.diff_of(run)) if run is not None else None
+    )
     if found is None:
         raise HTTPException(status_code=404, detail=f"review run {run_id} has no draft")
     return found

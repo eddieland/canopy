@@ -1,5 +1,7 @@
-"""The derivation, in shadow (DESIGN §30): §7's table derived from journals written by hand, one case per row, against
-snapshots, and how a tick's derivation compares with what its overseer set and decided.
+"""The derivation, in shadow (DESIGN §30): §7's table derived from journals written by hand, one case per row.
+
+Each case is checked against snapshots; the tests also cover how a tick's derivation compares with what its overseer set
+and decided.
 
 The snapshots are syrupy's, in `__snapshots__/test_phases.ambr`; `make snapshots` records the ones that differ.
 """
@@ -14,10 +16,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.core import conversation, db, records, sql
+from canopy.core import conversation, db, item_numbers, records, sql
 from canopy.core.config import CANOPY_REVIEWER
+from canopy.core.vocab import Decider, NumberedItem, Phase
 from canopy.loop import phases
 from tests.canopy.helpers import KEY, canopy, context, in_tick, seen
+from tests.canopy.observation_helpers import artifact_comment
 
 if TYPE_CHECKING:
     import sqlite3
@@ -108,22 +112,36 @@ def check(
     name: str = "build",
     status: str = "completed",
     conclusion: str | None = "success",
-) -> None:
-    """Record a check at PR's head, its run 11."""
+) -> int | None:
+    """Record a check at PR's head, its run 11.
+
+    Returns:
+        The run's journal number once it completed, what the `ci` cursor names; None while it runs.
+    """
+    done = status == "completed" and conclusion is not None
+    number = item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, 11, at=FRESH) if done else None
     conn.execute(
-        "INSERT INTO observed_checks (pr_url, name, head_sha, status, conclusion, run_id, url, observed_at) "
-        "VALUES (?, ?, ?, ?, ?, 11, NULL, ?)",
-        (PR, name, HEAD, status, conclusion, FRESH),
+        "INSERT INTO observed_checks (pr_url, name, head_sha, status, conclusion, run_id, url, observed_at, number) "
+        "VALUES (?, ?, ?, ?, ?, 11, NULL, ?, ?)",
+        (PR, name, HEAD, status, conclusion, FRESH, number),
     )
+    return number
 
 
-def review(conn: sqlite3.Connection, author: str, state: str, *, at: str = FRESH, body: str = "") -> None:
-    """Record a review of PR by `author`."""
+def review(conn: sqlite3.Connection, author: str, state: str, *, at: str = FRESH, body: str = "") -> int:
+    """Record a review of PR by `author`.
+
+    Returns:
+        Its journal number, what the `review` cursor names.
+    """
+    ident = conn.execute("SELECT count(*) + 1 FROM observed_reviews").fetchone()[0]
+    number = item_numbers.take(conn, NumberedItem.REVIEW, PR, ident, at=FRESH)
     conn.execute(
-        "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, observed_at) "
-        "VALUES (?, 'review', (SELECT count(*) + 1 FROM observed_reviews), ?, 0, ?, ?, ?, ?)",
-        (PR, author, state, at, body, FRESH),
+        "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, observed_at, number) "
+        "VALUES (?, 'review', ?, ?, 0, ?, ?, ?, ?, ?)",
+        (PR, ident, author, state, at, body, FRESH, number),
     )
+    return number
 
 
 def a_tick(conn: sqlite3.Connection) -> int:
@@ -200,7 +218,8 @@ def case_ci_running(env: CanopyEnv, conn: sqlite3.Connection) -> None:
 
 
 def case_ci_red(env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    unit(env, conn, ci="10")
+    # A cursor that passed no run, as one the migration found passing nothing observed: the failure is newer.
+    unit(env, conn, ci="0")
     observe_pr(conn)
     check(conn, conclusion="failure")
 
@@ -352,7 +371,9 @@ def test_a_ticket_that_depends_on_a_stale_or_missing_observation_is_stale(
     if statement:
         observed.execute(statement)
     observed.commit()
-    assert derived(canopy_env) == [phases.Derived(KEY, None, stale=stale)]
+    # Stale by the `tracker` source's reads, but for the branches, which the `vcs` source's read.
+    tracker = not stale.startswith("branches")
+    assert derived(canopy_env) == [phases.Derived(KEY, None, stale=stale, stale_tracker=tracker)]
 
 
 def test_without_a_tracker_source_a_public_ticket_is_stale(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
@@ -368,17 +389,34 @@ def test_a_unit_whose_pr_is_stale_is_stale(canopy_env: CanopyEnv, observed: sqli
 
 
 def test_a_check_the_repository_names_human_is_not_ci(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
-    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"human_checks": ["deploy/approval"]}}})
+    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": {"deploy/approval": "human"}}}})
     green(canopy_env, observed)
     check(observed, "deploy/approval", "pending", None)
     observed.commit()
     assert derived(canopy_env)[1].phases == (phases.Phase.GREEN_UNREVIEWED,)
 
 
+@pytest.mark.parametrize("role", ["human", "merge", "ignore"])
+@pytest.mark.parametrize(("status", "conclusion"), [("queued", None), ("completed", "failure")])
+def test_a_check_the_repository_gives_a_role_but_ci_is_not_ci(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    role: str,
+    status: str,
+    conclusion: str | None,
+) -> None:
+    # A merge queue's status is never green on an open PR: the PR passes its checks while it waits or fails.
+    green(canopy_env, observed)
+    check(observed, "merge-queue", status, conclusion)
+    observed.commit()
+    assert phases.Phase.GREEN_UNREVIEWED not in derived(canopy_env)[1].phases
+    canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": {"merge-queue": role}}}})
+    assert derived(canopy_env)[1].phases == (phases.Phase.GREEN_UNREVIEWED,)
+
+
 def test_a_failure_the_ci_cursor_has_passed_is_not_ci_red(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
-    unit(canopy_env, observed, ci="11")
     observe_pr(observed)
-    check(observed, conclusion="failure")
+    unit(canopy_env, observed, ci=str(check(observed, conclusion="failure")))
     observed.commit()
     assert derived(canopy_env)[1].phases == ()
 
@@ -387,13 +425,29 @@ def test_a_bot_approval_is_no_approval_and_feedback_at_the_cursor_is_handled(
     canopy_env: CanopyEnv,
     observed: sqlite3.Connection,
 ) -> None:
-    unit(canopy_env, observed, review="2026-10-20T11:59:00Z")
     observe_pr(observed)
     check(observed)
-    review(observed, "stranger", "commented", body="Why?")
+    unit(canopy_env, observed, review=str(review(observed, "stranger", "commented", body="Why?")))
     observed.execute("UPDATE observed_reviews SET bot = 1, state = 'approved'")
     observed.commit()
     assert derived(canopy_env)[1].phases == (phases.Phase.GREEN_UNREVIEWED,)
+
+
+def test_a_comment_on_an_artifact_that_is_authority_is_a_reply(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    case_needs_human(canopy_env, observed)
+    canopy_env.configure(canopy_env.user_file, {"artifacts": {"authorized_authors": ["u_ana"]}})
+    artifact_comment(observed, "c1", "u_bob")
+    observed.commit()
+    [own] = [d for d in derived(canopy_env) if d.repo is None]
+    assert (Phase.NEEDS_HUMAN in own.phases, Phase.HUMAN_REPLIED in own.phases) == (True, False)
+    # A listed author's is, as an operator message is (DESIGN §38).
+    artifact_comment(observed, "c2", "u_ana")
+    observed.commit()
+    [own] = [d for d in derived(canopy_env) if d.repo is None]
+    assert Phase.HUMAN_REPLIED in own.phases
 
 
 def test_a_private_ticket_needs_a_human_from_the_journal_alone(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
@@ -477,6 +531,38 @@ def test_a_ticket_agrees_when_the_overseer_set_a_row_that_held_and_decided_what_
 
 
 @pytest.mark.parametrize(
+    ("decided", "verdict"),
+    [
+        ([("wait", Decider.OVERSEER), ("attention:needs_reviewer", Decider.HARNESS)], "agrees"),
+        ([("wait", Decider.OVERSEER)], "disagrees"),
+        ([("attention:needs_reviewer", Decider.OVERSEER)], "agrees"),
+    ],
+    ids=["wait-on-the-harnesss-item", "wait-alone", "the-item-an-older-overseer-recorded"],
+)
+def test_a_wait_agrees_where_the_harness_raised_the_item_the_row_names(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    decided: list[tuple[str, Decider]],
+    verdict: str,
+) -> None:
+    # The harness raises `green_unreviewed`'s item from its cause (DESIGN §37), and the overseer waits on it.
+    unit(canopy_env, conn)
+    with in_tick(conn) as tick_id:
+        recorded(
+            conn,
+            tick_id,
+            phases.Derived(KEY, None, (), candidate=True, closed=False),
+            phases.Derived(KEY, "repo", (phases.Phase.GREEN_UNREVIEWED,)),
+        )
+        db.set_unit(conn, KEY, str(canopy_env.root), "repo", phase=phases.Phase.GREEN_UNREVIEWED)
+        for action, by in decided:
+            db.record_decision(conn, tick_id, KEY, action, "because", decider=by)
+        phases.record_overseer(conn, tick_id)
+    [compared] = phases.compare(conn, tick_id)
+    assert compared.verdict == verdict, compared.why
+
+
+@pytest.mark.parametrize(
     ("action", "verdict"),
     [("dispatch:implement", "agrees"), ("dispatch:plan", "agrees"), ("wait", "disagrees")],
 )
@@ -547,6 +633,7 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
         canopy("decide", "PROJ-1", "wait", "--rationale", "waits on a human"),
         canopy("ticket", "set", "PROJ-2", "--phase", "needs_human"),
         canopy("decide", "PROJ-2", "wait", "--rationale", "waits on a human"),
+        queried=None,
     )
     tick_id = ticked.tick.id
     rows = records.fetch_all(
@@ -562,5 +649,5 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
         ("PROJ-1", "agrees"),
         ("PROJ-2", "disagrees"),
     }
-    # In shadow: the tick's decisions are the overseer's alone.
+    # In shadow: the derivation decides nothing. The query the source read is the harness's to record (DESIGN §6).
     assert [d.action for d in db.decisions_for_tick(scenario.conn, tick_id)] == ["queried", "wait", "wait"]

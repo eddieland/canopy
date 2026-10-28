@@ -12,6 +12,7 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.cli import gc as gc_cli
 from canopy.cli.main import main
 from canopy.core import conversation, db, plans
+from canopy.core.vocab import Decider
 from canopy.infra import lock, logs
 from canopy.loop import attention, gc
 from tests.canopy.helpers import KEY, PLAN, earlier, ended_tick, run_with_files, write_file
@@ -142,11 +143,19 @@ def test_harness_attention_goes_only_outside_the_window_and_after_journal_days(
     ticks = [ended_tick(conn, earlier(now, 200)) for _ in range(3)]
     recent = ended_tick(conn, earlier(now, 1))
     for tick_id in [*ticks, recent]:
+        at = earlier(now, 200 if tick_id != recent else 1)
+        # The harness's own, and one it raises from its cause, marked as its own (DESIGN §37).
         conn.execute(
             "INSERT INTO decisions (tick_id, ticket_key, action, rationale, created_at) VALUES (?, ?, ?, 'r', ?)",
-            (tick_id, KEY, "attention:crashed", earlier(now, 200 if tick_id != recent else 1)),
+            (tick_id, KEY, "attention:crashed", at),
         )
-        db.record_decision(conn, tick_id, KEY, "attention:needs_review", "the overseer's")
+        conn.execute(
+            "INSERT INTO decisions (tick_id, ticket_key, action, rationale, created_at, decider) "
+            "VALUES (?, ?, ?, 'r', ?, ?)",
+            (tick_id, KEY, "attention:needs_reviewer", at, Decider.HARNESS),
+        )
+        # The overseer's, of the same reason before the harness raised it: the corpus.
+        db.record_decision(conn, tick_id, KEY, "attention:needs_reviewer", "the overseer's")
     conn.commit()
 
     # With fewer `ok` ticks than the window, nothing goes, whatever `journal_days` says.
@@ -157,8 +166,8 @@ def test_harness_attention_goes_only_outside_the_window_and_after_journal_days(
     # The window is the newest two ticks here: the two before them are outside it, and older than 90 days.
     with mock.patch.object(attention, "HISTORY_TICKS", 2):
         kinds = dry_run(capsys)
-    assert kinds["harness attention"]["count"] == 4
-    assert kinds["harness attention"]["removable"] == 2
+    assert kinds["harness attention"]["count"] == 8
+    assert kinds["harness attention"]["removable"] == 4
     assert kinds["overseer attention"]["removable"] == 0
 
 
@@ -228,8 +237,43 @@ def test_a_ticks_derivations_go_outside_the_window_after_journal_days(
     assert (kinds["derivations"]["count"], kinds["derivations"]["removable"]) == (3, 2)
 
 
+def test_a_kept_check_run_goes_after_journal_days_once_its_pr_is_seen_past_its_head(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Only a check run at its PR's head is read (DESIGN §35), so one goes once its PR moved on or ended."""
+    conn = canopy_env.journal()
+    now = datetime.now(UTC)
+    old = earlier(now, 200)
+    prs = [
+        ("moved", "bbb", "open"),
+        ("merged", "aaa", "merged"),
+        ("closed", "aaa", "closed"),
+        ("at-head", "aaa", "open"),
+        ("no-head", None, "open"),
+    ]
+    for name, head, state in prs:
+        conn.execute(
+            "INSERT INTO observed_prs (url, repository, number, head_sha, state, draft, observed_at) "
+            "VALUES (?, 'o/r', 1, ?, ?, 0, ?)",
+            (f"https://x/{name}", head, state, old),
+        )
+    runs = [(*(f"https://x/{name}" for name, _, _ in prs), "https://x/unread"), ("https://x/moved", "https://x/merged")]
+    for run_id, (pr, observed_at) in enumerate([*((pr, old) for pr in runs[0]), *((pr, db.now()) for pr in runs[1])]):
+        conn.execute(
+            "INSERT INTO observed_check_runs (pr_url, run_id, name, head_sha, conclusion, observed_at) "
+            "VALUES (?, ?, 'ci', 'aaa', 'failure', ?)",
+            (pr, run_id, observed_at),
+        )
+    conn.commit()
+    kinds = dry_run(capsys)
+    # The old runs of the moved, merged, and closed PRs go; one at its PR's head, one of a PR read with no head, one of
+    # a PR no read recorded, and the recent ones stay.
+    assert (kinds["check runs"]["count"], kinds["check runs"]["removable"]) == (8, 3)
+
+
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
-@pytest.mark.parametrize("flag", ["--dry-run", "--vacuum"])
+@pytest.mark.parametrize("flag", ["--dry-run", "--vacuum", "--git", "--caches"])
 def test_an_agent_cannot_run_gc(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
@@ -241,14 +285,14 @@ def test_an_agent_cannot_run_gc(
     assert "gc refused (inside_run)" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("flags", [[], ["--dry-run", "--vacuum"]])
-def test_gc_takes_one_of_dry_run_and_vacuum(
+@pytest.mark.parametrize("flags", [[], ["--dry-run", "--vacuum"], ["--vacuum", "--git"], ["--git", "--caches"]])
+def test_gc_takes_one_of_dry_run_vacuum_git_and_caches(
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
     flags: list[str],
 ) -> None:
     assert main(["gc", *flags]) == 2
-    assert "give `--dry-run` or `--vacuum`" in capsys.readouterr().err
+    assert "give one of `--dry-run`, `--vacuum`, `--git`, and `--caches`" in capsys.readouterr().err
 
 
 def test_the_text_report(snapshot: SnapshotAssertion) -> None:

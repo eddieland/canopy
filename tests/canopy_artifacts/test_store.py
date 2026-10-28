@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import contextlib
-import io
 import itertools
 import json
 import os
-import sys
 import threading
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
@@ -27,6 +25,8 @@ from canopy_artifacts.store import (
     agent,
     open_store,
 )
+
+from tests.conftest import invoke
 
 NAMESPACE = "canopy/operator"
 #: A report as a worker publishes it: the passage people comment on sits in markup.
@@ -264,6 +264,23 @@ def test_a_change_carries_ids_anchor_author_and_body_never_the_content(client: C
     assert "content" not in change
     assert REPORT not in json.dumps(change)
     assert end == {"kind": "end", "through": made["seq"]}
+
+
+def test_each_change_says_whether_its_passage_is_in_the_latest_version(client: Client) -> None:
+    artifact = client.publish()["artifact_id"]
+    kept = client.call("comment_create", artifact_id=artifact, anchor={"exact": "every miss takes the lock"}, body="A")
+    reworded = client.call("comment_create", artifact_id=artifact, anchor={"exact": "shard it"}, body="B")
+    client.call("comment_create", artifact_id=artifact, body="Overall?")
+    assert [c["anchor_status"] for c in client.feed()[:-1]] == ["found", "found", None]
+
+    client.publish(REVISED, artifact_id=artifact)
+    client.call("comment_reply", thread_id=reworded["thread_id"], body="Still?")
+    *changes, _ = client.feed()
+    status = {c["comment_id"]: c["anchor_status"] for c in changes}
+    # Each change is as its thread is when read, so the change made before the rewording reads it gone too.
+    assert status[kept["comment_id"]] == "found"
+    assert status[reworded["comment_id"]] == "passage_gone"
+    assert changes[-1]["anchor_status"] == "passage_gone"
 
 
 def test_the_feeds_cursor_misses_no_change_and_repeats_none_across_pages(client: Client) -> None:
@@ -510,7 +527,7 @@ def test_it_serves_the_eight_tools_and_nothing_else(client: Client) -> None:
     assert server.answer(b'{"jsonrpc": "2.0", "method": "notifications/initialized"}', client.store) is None
 
 
-def test_serve_answers_on_stdio_until_stdin_closes(store_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_serve_answers_on_stdio_until_stdin_closes(store_dir: Path) -> None:
     lines = [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
@@ -524,11 +541,13 @@ def test_serve_answers_on_stdio_until_stdin_closes(store_dir: Path, capsys: pyte
             },
         },
     ]
-    stdin = io.TextIOWrapper(io.BytesIO("".join(json.dumps(m) + "\n" for m in lines).encode()))
-    with mock.patch.object(sys, "stdin", stdin):
-        code = cli.run(["serve", "--store", str(store_dir), "--namespace", NAMESPACE, "--origin", "canopy.run=7"])
-    assert code == 0
-    answers = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    served = invoke(
+        cli.main,
+        ["serve", "--store", str(store_dir), "--namespace", NAMESPACE, "--origin", "canopy.run=7"],
+        stdin="".join(json.dumps(m) + "\n" for m in lines),
+    )
+    assert served.exit_code == 0
+    answers = [json.loads(line) for line in served.stdout.splitlines()]
     assert [a["id"] for a in answers] == [1, 2]
     published = json.loads(answers[1]["result"]["content"][0]["text"])
     with opened(store_dir, Scope(NAMESPACE, agent("reader"))) as store:
@@ -538,20 +557,62 @@ def test_serve_answers_on_stdio_until_stdin_closes(store_dir: Path, capsys: pyte
     assert store_dir.stat().st_mode & 0o777 == 0o700
 
 
-def test_a_store_directory_open_to_others_is_refused(store_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_serve_sets_the_origin_canopy_named_the_run_by_under_the_command_lines(store_dir: Path) -> None:
+    publish = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "artifact_publish",
+            "arguments": {
+                "title": "Plan",
+                "content_type": "text/markdown",
+                "content": "# Plan",
+                "origin": {"canopy.ticket": "PROJ-9", "topic": "cache"},
+            },
+        },
+    }
+    run = {"canopy.workspace": "acme", "canopy.ticket": "PROJ-1", "canopy.run": "7"}
+    with mock.patch.dict(os.environ, {cli.ORIGIN_ENV: json.dumps(run)}):
+        served = invoke(
+            cli.main,
+            ["serve", "--store", str(store_dir), "--namespace", NAMESPACE, "--origin", "canopy.workspace=ops"],
+            stdin=json.dumps(publish) + "\n",
+        )
+    assert served.exit_code == 0
+    [answer] = [json.loads(line) for line in served.stdout.splitlines()]
+    published = json.loads(answer["result"]["content"][0]["text"])
+    with opened(store_dir, Scope(NAMESPACE, agent("reader"))) as store:
+        origin = Client(store).call("artifact_read", artifact_id=published["artifact_id"])["artifact"]["origin"]
+    # The worker's ticket gives way to the run's, and the run's workspace to the command line's.
+    assert origin == {"canopy.workspace": "ops", "canopy.ticket": "PROJ-1", "canopy.run": "7", "topic": "cache"}
+
+
+@pytest.mark.parametrize("value", ["not json", '["PROJ-1"]', '{"canopy.run": 7}', '{"": "x"}'])
+def test_an_origin_variable_that_names_no_pairs_is_refused(store_dir: Path, value: str) -> None:
+    with mock.patch.dict(os.environ, {cli.ORIGIN_ENV: value}):
+        refused = invoke(cli.main, ["serve", "--store", str(store_dir)])
+    assert refused.exit_code == 2
+    assert cli.ORIGIN_ENV in refused.stderr
+    assert not store_dir.exists()
+
+
+def test_a_store_directory_open_to_others_is_refused(store_dir: Path) -> None:
     store_dir.mkdir(mode=0o755)
     os.chmod(store_dir, 0o755)  # noqa: PTH101, S103  (past the umask: open to others is what is tested)
-    assert cli.run(["serve", "--store", str(store_dir)]) == 2
-    assert "open to others; run: chmod 700" in capsys.readouterr().err
+    refused = invoke(cli.main, ["serve", "--store", str(store_dir)])
+    assert refused.exit_code == 2
+    assert "open to others; run: chmod 700" in refused.stderr
     assert not (store_dir / "artifacts.db").exists()
 
 
-def test_a_symlinked_store_directory_is_refused(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_symlinked_store_directory_is_refused(tmp_path: Path) -> None:
     real = tmp_path / "real"
     real.mkdir(mode=0o700)
     (tmp_path / "link").symlink_to(real)
-    assert cli.run(["serve", "--store", str(tmp_path / "link")]) == 2
-    assert "is not a directory" in capsys.readouterr().err
+    refused = invoke(cli.main, ["serve", "--store", str(tmp_path / "link")])
+    assert refused.exit_code == 2
+    assert "is not a directory" in refused.stderr
 
 
 @pytest.mark.parametrize(
@@ -559,5 +620,5 @@ def test_a_symlinked_store_directory_is_refused(tmp_path: Path, capsys: pytest.C
     [["--origin", "no-equals"], ["--origin", "=v"], ["--namespace", "two words"], ["--agent", "two words"]],
 )
 def test_options_that_name_no_scope_are_refused(store_dir: Path, options: list[str]) -> None:
-    assert cli.run(["serve", "--store", str(store_dir), *options]) == 2
+    assert invoke(cli.main, ["serve", "--store", str(store_dir), *options]).exit_code == 2
     assert not store_dir.exists()

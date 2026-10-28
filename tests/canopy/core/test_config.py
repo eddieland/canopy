@@ -10,10 +10,14 @@ from canopy_artifacts import tools as store_tools
 
 from canopy.cli.main import main
 from canopy.core import config, workspace
-from canopy.core.config import ConfigError, load, render_command
+from canopy.core.config import ConfigError, PlannerApproval, load, render_command
 from canopy.core.context import Context
 from canopy.loop import reread
+from canopy.runtime.implementation import Version
 from tests.conftest import HERMETIC_GIT, SHARED_TOML, CanopyEnv, git, user_toml
+
+#: A reviewer's command the operator set, without a private server.
+REVIEW_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer"
 
 EXAMPLES = Path(__file__).parents[3] / "examples"
 
@@ -93,8 +97,12 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("paths", "plan_archive = '/tmp/x'"),
         # Turning prompts back on would push the operator's messages to a remote they chose for plans alone.
         ("paths", "plan_archive_prompts = true"),
+        # It chooses what is committed in the operator's own clone.
+        ("paths", "plan_archive_workspace_dir = false"),
         # A conversation, a private ticket's too, would go to a remote the operator never chose for it.
         ("paths", "plan_archive_conversations = true"),
+        # Comments are the operator's words, sent to a remote only they choose.
+        ("paths", "plan_archive_comments = true"),
         ("personas", "worker = 'canopy'"),
         ("personas", "planner = 'skeptic'"),
         ("personas", "reviewer = 'lenient'"),
@@ -119,6 +127,50 @@ def test_every_agent_writes_in_canopys_voice_until_the_operator_chooses(canopy_e
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert (cfg.personas.worker, cfg.personas.planner, cfg.personas.reviewer) == ("canopy", "canopy", "canopy")
     assert cfg.paths.personas is None
+
+
+#: An eval case's keys but `kind` and `lines` (DESIGN §21, Scoring the reviewer).
+EVAL_CASE = f'pr = "https://github.com/acme/api/pull/7"\nrepo = "api"\nsha = "{"a" * 40}"\nbase = "{"b" * 40}"\n'
+
+
+def test_an_eval_case_is_a_pr_at_a_commit_with_the_lines_its_bug_is_on(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_user(
+        f'\n[[review.eval_cases]]\nname = "retry"\n{EVAL_CASE}kind = "bug"\nlines = ["src/retry.py:42", "a.py:3-9"]\n'
+        f'\n[[review.eval_cases]]\nname = "sound"\n{EVAL_CASE}kind = "clean"\n',
+    )
+    retry, sound = load(canopy_env.root, canopy_env.user_file).review.eval_cases
+    assert (retry.name, retry.kind, retry.lines) == ("retry", "bug", ("src/retry.py:42", "a.py:3-9"))
+    assert (sound.name, sound.kind, sound.lines) == ("sound", "clean", ())
+
+
+@pytest.mark.parametrize(
+    ("toml", "message"),
+    [
+        (f'name = "x"\n{EVAL_CASE}kind = "bug"\n', "bug case x needs lines"),
+        (f'name = "x"\n{EVAL_CASE}kind = "clean"\nlines = ["a.py:1"]\n', "clean case x has no bug"),
+        (f'name = "x"\n{EVAL_CASE}kind = "bug"\nlines = ["a.py"]\n', "must be path:line or path:first-last"),
+        (f'name = "x"\n{EVAL_CASE}kind = "bug"\nlines = ["a.py:9-3"]\n', "ends before it starts"),
+        (f'name = "X"\n{EVAL_CASE}kind = "clean"\n', "must match"),
+        (f'name = "x"\n{EVAL_CASE.replace("a" * 40, "HEAD")}kind = "clean"\n', "must be a full commit"),
+        (f'name = "x"\n{EVAL_CASE.replace("https", "http")}kind = "clean"\n', "plain https:// URL"),
+    ],
+)
+def test_an_eval_case_that_cannot_be_scored_is_refused(canopy_env: CanopyEnv, toml: str, message: str) -> None:
+    canopy_env.append_user(f"\n[[review.eval_cases]]\n{toml}")
+    with pytest.raises(ConfigError, match=message):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_eval_cases_are_named_once_and_only_in_private_config(canopy_env: CanopyEnv) -> None:
+    case = f'\n[[review.eval_cases]]\nname = "x"\n{EVAL_CASE}kind = "clean"\n'
+    canopy_env.append_user(case * 2)
+    with pytest.raises(ConfigError, match="names x more than once"):
+        load(canopy_env.root, canopy_env.user_file)
+    canopy_env.write_user(user_toml())
+    # A case may name a private repository's PR, and authorizes a review of it (TRUST_MODEL T7).
+    canopy_env.append_shared(case)
+    with pytest.raises(ConfigError, match=r"review\.eval_cases is private and cannot be set in the workspace file"):
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_a_removed_key_says_what_to_do(canopy_env: CanopyEnv) -> None:
@@ -312,6 +364,15 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         ("[runtime]\nreview_temperature = true\n", r"runtime\.review_temperature: Input should be a valid number"),
         ("[runtime]\nreview_temperature = '0.1'\n", r"runtime\.review_temperature: Input should be a valid number"),
         ("[runtime]\noverseer_temperature = -0.5\n", "must be from 0 to 2, or -1 to set none"),
+        ("[runtime]\nsandbox_repos = ['API']\n", "repository name 'API' must match"),
+        (
+            "[runtime]\nsandbox_repos = ['api']\nworker_cmd_prefix = 'canopy-sandbox worker --'\n",
+            r"runtime\.worker_cmd_prefix starts with canopy-sandbox, and runtime\.sandbox_repos has canopy add it",
+        ),
+        (
+            "[runtime]\nsandbox_repos = ['api']\nsetup_cmd = '/opt/bin/canopy-sandbox setup -- make'\n",
+            r"runtime\.setup_cmd starts with canopy-sandbox",
+        ),
     ],
 )
 def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) -> None:
@@ -322,6 +383,18 @@ def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) ->
     canopy_env.write_user(text)
     with pytest.raises(ConfigError, match=message):
         load(canopy_env.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize("wrapper", ["canopy-sandbox", "/opt/bin/canopy-sandbox"])
+def test_an_overseer_in_the_sandbox_is_taken_since_the_tick_starts_its_runs(
+    canopy_env: CanopyEnv,
+    wrapper: str,
+) -> None:
+    """No run the overseer asks for is its descendant (DESIGN §40), so its command may start in the wrapper."""
+    overseer_cmd = f"{wrapper} overseer --read {{definitions_dir}} -- env OPENCODE_CONFIG_DIR={{definitions_dir}} agent"
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"overseer_cmd": overseer_cmd}})
+
+    assert load(canopy_env.root, canopy_env.user_file).runtime.overseer_cmd == overseer_cmd
 
 
 def test_idle_max_minutes_defaults_to_120_and_may_equal_the_interval(canopy_env: CanopyEnv) -> None:
@@ -410,9 +483,12 @@ def test_render_command_fills_in_the_title_and_nothing_inside_the_prompt() -> No
 
 
 def test_a_worker_template_runs_between_the_prefix_and_the_suffix() -> None:
-    runtime = config.Runtime(worker_cmd_prefix="wrap --read {definitions_dir} --", worker_cmd_suffix="--model 'a b'")
+    runtime = config.Runtime(
+        worker_cmd_prefix="wrap --read {definitions_dir} --",
+        worker_cmd_suffix="--log-level 'a b'",
+    )
     argv = render_command(runtime.worker_template("agent {prompt}"), "do it", Path("/defs"), "PROJ-1 implement").argv
-    assert argv == ["wrap", "--read", "/defs", "--", "agent", "do it", "--model", "a b"]
+    assert argv == ["wrap", "--read", "/defs", "--", "agent", "do it", "--log-level", "a b"]
     assert config.Runtime().worker_template("agent {prompt}") == "agent {prompt}"
 
 
@@ -461,6 +537,33 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         assert template.endswith(" --title={title}")
         # Events, with the model's reasoning among them, so a transcript shows why a call did what it did (DESIGN §22).
         assert " --format json --thinking " in template
+
+
+def test_runtime_version_2_runs_opencode_2_and_its_default_templates(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(
+        "\n".join(line for line in canopy_env.user_file.read_text().splitlines() if "_cmd" not in line),
+    )
+    assert load(canopy_env.root, canopy_env.user_file).runtime.version == Version.ONE
+    canopy_env.configure(
+        canopy_env.user_file,
+        {"runtime": {"version": 2, "review_cmd": REVIEW_CMD}},
+    )
+    runtime = load(canopy_env.root, canopy_env.user_file).runtime
+    assert runtime.version == Version.TWO
+    # Each on a private server of its own, but the one the operator set, which stays as they wrote it.
+    for template in (runtime.overseer_cmd, runtime.worker_cmd, runtime.private_worker_cmd, runtime.plan_cmd):
+        assert template.startswith(
+            "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --standalone --agent canopy-",
+        )
+    assert runtime.chore_cmd.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --standalone ")
+    assert runtime.review_cmd == REVIEW_CMD
+
+
+@pytest.mark.parametrize("version", [3, "2", 0, True, 2.0])
+def test_a_runtime_version_canopy_does_not_run_is_refused(canopy_env: CanopyEnv, version: object) -> None:
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"version": version}})
+    with pytest.raises(ConfigError, match=r"runtime\.version"):
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_xdg_config_home(tmp_path: Path) -> None:
@@ -591,6 +694,56 @@ def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: C
 
 
 @pytest.mark.parametrize(
+    ("value", "level"),
+    [
+        # The key was a switch first: an operator's file that set it reads as it did.
+        (True, PlannerApproval.STRICT),
+        (False, PlannerApproval.OFF),
+        ("strict", PlannerApproval.STRICT),
+        ("normal", PlannerApproval.NORMAL),
+        ("lenient", PlannerApproval.LENIENT),
+        ("off", PlannerApproval.OFF),
+    ],
+)
+def test_planner_may_approve_is_a_level_and_reads_its_old_switch(
+    canopy_env: CanopyEnv,
+    value: object,
+    level: PlannerApproval,
+) -> None:
+    assert load(canopy_env.root, canopy_env.user_file).policy.planner_may_approve is PlannerApproval.OFF
+    canopy_env.configure(canopy_env.private_file, {"policy": {"planner_may_approve": value}})
+    policy = load(canopy_env.root, canopy_env.user_file).policy
+    assert policy.planner_may_approve is level
+    assert policy.planner_approves() is (level is not PlannerApproval.OFF)
+
+
+@pytest.mark.parametrize("value", ["sometimes", "true", 1, ""])
+def test_a_level_planner_may_approve_does_not_have_is_refused(canopy_env: CanopyEnv, value: object) -> None:
+    canopy_env.configure(canopy_env.private_file, {"policy": {"planner_may_approve": value}})
+    with pytest.raises(ConfigError, match=r"policy\.planner_may_approve"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_then_the_slack_source(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_user(
+        '\n[connect.sources.a-slack]\nkind = "slack"\ncmd = "canopy-connect-slack --channel C1"\noperators = ["U1A"]\n'
+        '\n[connect.sources.a-feed]\nkind = "artifacts"\ncmd = "canopy-artifacts feed --store /s"\n'
+        '\n[connect.sources.b-jira]\nkind = "tracker"\ncmd = "canopy-connect-jira --site acme.atlassian.net"\n'
+        'operators = ["557058:f58131cb"]\n',
+    )
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert [(name, s.kind) for name, s in cfg.connect.named().items()] == [
+        ("b-jira", "tracker"),
+        ("github", "vcs"),
+        ("a-feed", "artifacts"),
+        ("a-slack", "slack"),
+    ]
+    assert cfg.connect.sources["a-slack"].operators == ("U1A",)
+    # A tracker source's are account ids, whatever the tracker's shape: no Slack id is asked of them.
+    assert cfg.connect.sources["b-jira"].operators == ("557058:f58131cb",)
+
+
+@pytest.mark.parametrize(
     ("toml", "message"),
     [
         ('[trust]\nreview_replies = "draft"\n', r"trust\.review_replies"),
@@ -603,6 +756,19 @@ def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: C
         (
             '[connect.sources.a]\nkind = "vcs"\ncmd = "r"\n[connect.sources.b]\nkind = "vcs"\ncmd = "s"\n',
             "at most one source of each kind",
+        ),
+        (
+            '[connect.sources.a]\nkind = "artifacts"\ncmd = "r"\n[connect.sources.b]\nkind = "artifacts"\ncmd = "s"\n',
+            "at most one source of each kind",
+        ),
+        ('[connect.sources.a]\nkind = "artifacts"\npost_cmd = "post"\n', "an artifacts source needs cmd"),
+        ('[connect.sources.a]\nkind = "artifacts"\ncmd = "r"\npost_cmd = "p"\n', "takes no post_cmd"),
+        ('[connect.sources.a]\nkind = "slack"\ncmd = "r"\n', "a slack source needs cmd and operators"),
+        ('[connect.sources.a]\nkind = "slack"\ncmd = "r"\noperators = ["U1A"]\npost_cmd = "p"\n', "takes no post_cmd"),
+        ('[connect.sources.a]\nkind = "slack"\ncmd = "r"\noperators = ["@me"]\n', "is not a Slack user id"),
+        (
+            '[connect.sources.a]\nkind = "vcs"\ncmd = "r"\noperators = ["U1A"]\n',
+            "operators is a slack or tracker source's",
         ),
     ],
 )

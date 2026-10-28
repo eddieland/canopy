@@ -4,13 +4,11 @@ import {
     Activity,
     Brain,
     CalendarClock,
-    Coins,
-    FileSearch,
-    FolderTree,
+    ChartColumn,
     GitPullRequest,
-    History,
     Inbox,
     MessagesSquare,
+    Sprout,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -43,23 +41,27 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
         hint: 'Every ticket canopy has worked, and a form to start one',
     },
     {
+        to: '/tasks',
+        icon: Sprout,
+        hint: 'One-off work you handed canopy in your own words, about no ticket, and a form to submit one',
+    },
+    {
         to: '/pull-requests',
         icon: GitPullRequest,
-        hint: "Every PR canopy knows: the loop's own and the ones it reviewed, with their runs and reviews",
+        hint: "Every PR canopy knows, the loop's own and the ones it reviewed, and canopy's reviews of them",
     },
     {
-        to: '/reviews',
-        icon: FileSearch,
-        hint: 'PR reviews canopy keeps instead of posting, with findings on the diff',
+        to: '/runs',
+        icon: Activity,
+        hint:
+            "Workers running now, then the ones that ended last; the overseer's ticks, and each repository's pool " +
+            'of worktrees',
     },
-    { to: '/runs', icon: Activity, hint: 'Workers running now, then the ones that ended last' },
     { to: '/chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
-    { to: '/spend', icon: Coins, hint: 'What agent runs cost each day, and what idle ticks spent for nothing' },
-    { to: '/ticks', icon: History, hint: "The overseer's latest ticks and what each decided" },
     {
-        to: '/worktrees',
-        icon: FolderTree,
-        hint: "Each repository's pool: its slots and what holds them",
+        to: '/reports',
+        icon: ChartColumn,
+        hint: 'What canopy cost and got done month by month, and what agent runs cost each day',
     },
     {
         to: '/memory',
@@ -71,10 +73,10 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
 /**
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
  * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes; a
- * ticket's page keeps Tickets active, a PR's Pull requests, a review's Reviews, a chore's Chores, and a tick's Ticks.
- * Attention shows how many items it lists, on every page, split by severity, Reviews how many results the operator has
- * not opened, and Memory how many proposals wait on the operator, while proposals are on. Hovering an item says what
- * its page holds.
+ * ticket's page keeps Tickets active, a PR's or a review's Pull requests, a chore's Chores, and a tick's Runs.
+ * Attention shows how many items it lists, on every page, split by severity, Pull requests how many review results the
+ * operator has not opened, and Memory how many proposals wait on the operator, while proposals are on. Hovering an item
+ * says what its page holds.
  *
  * `compact`, in the rail's strip under `lg`, shows the icons alone, each still named for a screen reader and on hover,
  * and each count as one number on its icon's corner: Attention's in its most severe item's color.
@@ -134,7 +136,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
                     {to === '/attention' && counts !== undefined && (
                         <AttentionCount counts={counts} compact={compact} />
                     )}
-                    {to === '/reviews' && unseen.length > 0 && <ReviewCount unseen={unseen} compact={compact} />}
+                    {to === '/pull-requests' && unseen.length > 0 && <ReviewCount unseen={unseen} compact={compact} />}
                     {to === '/memory' && waiting > 0 && <ProposalCount waiting={waiting} compact={compact} />}
                 </Link>
             ))}
@@ -181,10 +183,10 @@ function AttentionCount({ counts, compact }: { counts: Record<Severity, number>;
 }
 
 /**
- * How many reviews' results the operator has not opened beside Reviews' nav item (src/lib/seen-reviews.ts), in the
- * color of the worst finding among them, as a verdict wears it: a blocking one's in the failure color, a major one's
- * in the color of what waits on the operator, the rest muted. Said in words on hover and to a screen reader
- * (`2 new reviews to read`). `compact`, on the icon's corner.
+ * How many reviews' results the operator has not opened beside Pull requests' nav item, the section the reviews are in
+ * (src/lib/seen-reviews.ts), in the color of the worst finding among them, as a verdict wears it: a blocking one's in
+ * the failure color, a major one's in the color of what waits on the operator, the rest muted. Said in words on hover
+ * and to a screen reader (`2 new reviews to read`). `compact`, on the icon's corner.
  */
 function ReviewCount({ unseen, compact }: { unseen: ReviewSummary[]; compact: boolean }) {
     const said = unseenText(unseen.length)

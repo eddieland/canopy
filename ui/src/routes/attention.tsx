@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ChevronLeft, GitPullRequest, MessageSquareReply } from 'lucide-react'
+import { ChevronLeft, FileText, GitPullRequest, MessageSquareReply, Sprout } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -9,11 +9,13 @@ import {
     attentionQuery,
     choreQuery,
     pullRequestQuery,
+    taskQuery,
+    tasksQuery,
     ticketPlansQuery,
     ticketQuery,
     ticketsQuery,
 } from '@/api/queries'
-import type { AttentionItem, Draft, Run, Unit } from '@/api/types'
+import type { AttentionItem, Draft, Run, TicketSummary, Unit, WaitingFeedbackPlan } from '@/api/types'
 import { EmptyAttention } from '@/components/all-clear'
 import { Age } from '@/components/age'
 import { ChoreFindingText } from '@/components/chore-finding'
@@ -22,6 +24,7 @@ import { ChoreNotes } from '@/components/chore-notes'
 import { Copyable } from '@/components/copy-button'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
+import { FeedbackPlanWaits } from '@/components/feedback-plan-card'
 import { GrantLimits } from '@/components/grant-limits'
 import { Leaf } from '@/components/leaf'
 import { Notice } from '@/components/notice'
@@ -29,9 +32,11 @@ import { PlanCard } from '@/components/plan-card'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { LessonsDue, LessonsWrong, ProposalsWaiting } from '@/components/memory-attention'
+import { ModelAttention } from '@/components/model-attention'
 import { InlineCode } from '@/components/rich-text'
 import { RunsTable } from '@/components/runs-table'
 import { Chip } from '@/components/status'
+import { TaskLink } from '@/components/task-link'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLink } from '@/components/ticket-link'
@@ -41,11 +46,25 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { answered } from '@/lib/acknowledged'
-import { ask, bySeverity, commandOf, nextWaiting, pullRequestOf, severity, shownDetail } from '@/lib/attention'
+import {
+    ask,
+    bySeverity,
+    commandOf,
+    feedbackPlanOf,
+    modelRefused,
+    nextWaiting,
+    pullRequestOf,
+    reviewOf,
+    severity,
+    shownDetail,
+} from '@/lib/attention'
 import type { Ask, Severity } from '@/lib/attention'
 import { settled, withLeaving } from '@/lib/leaving'
 import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
+import { reasonMeaning } from '@/lib/meanings'
+import { reviewRef, taskRef } from '@/lib/refs'
+import { taskTitle } from '@/lib/tasks'
 import { cn } from '@/lib/utils'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import type { Tone } from '@/lib/tone'
@@ -84,12 +103,18 @@ const TURNS_REM = 48
 const BACK = 'attention-back'
 const rowId = (item: string): string => `attention-row-${item}`
 
+// What `canopy models` is for, on an item refused its model about no ticket: it fixes nothing itself, but says what to.
+const MODELS_NOTE =
+    "Nothing to answer here: it lists the runtime's models and names any in [runtime.models] it lacks. " +
+    'Choose one it lists, or set its provider up, and the item leaves when its cause is gone.'
+
 function AttentionPage() {
     const { item: wanted } = Route.useSearch()
     const navigate = Route.useNavigate()
     const toast = useToast()
     const { data } = useQuery(attentionQuery)
     const tickets = useQuery(ticketsQuery).data
+    const tasks = useQuery(tasksQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
     const rows = useLeavingRows(data, items)
     // The item asked for while it is listed; else the most severe one about a ticket, which has a thread to show.
@@ -117,7 +142,7 @@ function AttentionPage() {
     }
 
     function isDone(item: AttentionItem): boolean {
-        return answered(item, tickets)
+        return answered(item, tickets, tasks)
     }
 
     // A reply that answers its item moves on to the next that waits on the operator, its row chosen and focused, the
@@ -164,13 +189,17 @@ function AttentionPage() {
                                     <ul className="stagger flex flex-col gap-0.5 p-1.5">
                                         {rows.map(({ item, leaving }) =>
                                             leaving ? (
-                                                <Leaving key={item.id} item={item} done={answered(item, tickets)} />
+                                                <Leaving
+                                                    key={item.id}
+                                                    item={item}
+                                                    done={answered(item, tickets, tasks)}
+                                                />
                                             ) : (
                                                 <Row
                                                     key={item.id}
                                                     item={item}
                                                     selected={item.id === selected?.id}
-                                                    done={answered(item, tickets)}
+                                                    done={answered(item, tickets, tasks)}
                                                     onChoose={choose}
                                                 />
                                             ),
@@ -197,7 +226,8 @@ function AttentionPage() {
                                 <Detail
                                     key={selected.id}
                                     item={selected}
-                                    done={answered(selected, tickets)}
+                                    ticket={tickets?.find((t) => t.key === selected.ticket_key)}
+                                    done={answered(selected, tickets, tasks)}
                                     onReplied={(said) => moveOn(selected, said)}
                                 />
                             )}
@@ -326,7 +356,7 @@ function Row({
     )
 }
 
-/** What a row of the list says: the item's reason, its subject and age, its ticket's title, and its detail. */
+/** What a row of the list says: the item's reason, its subject and age, its ticket's or task's title, its detail. */
 function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
         <>
@@ -334,13 +364,15 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
                 <ReasonChip item={item} />
                 {done && <Answered />}
                 <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-                    {item.subject}
+                    {/* A PR no ticket owns is named as the PR is everywhere, not by its URL behind `pr:`. */}
+                    {item.pr === null ? item.subject : pullRequestLabel(item.pr)}
                     {item.finding ? ` ${item.reason}` : ''}
                 </span>
                 <Age at={item.since} className="ml-auto" />
             </span>
             {/* The title is the row's name and the detail its preview, as an inbox's subject over its first line. */}
             {item.ticket_key !== null && <TicketTitle title={item.ticket_title} className="font-semibold" />}
+            {item.task !== null && <TaskTitle id={item.task} />}
             <span className="line-clamp-2 text-sm break-words text-muted-foreground">
                 <InlineCode text={shownDetail(item)} links={false} />
             </span>
@@ -353,7 +385,11 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
  * chip says `finding` and the head line names the id beside its chore.
  */
 function ReasonChip({ item }: { item: AttentionItem }) {
-    return item.finding ? <Chip>finding</Chip> : <Chip tone={TONE[severity(item)]} word={item.reason} />
+    return item.finding ? (
+        <Chip>finding</Chip>
+    ) : (
+        <Chip tone={TONE[severity(item)]} word={item.reason} meaning={reasonMeaning(item.reason)} />
+    )
 }
 
 /** On an `awaiting_reply` or `plan_review` item the operator has answered: it stays until a tick reads the answer. */
@@ -363,20 +399,42 @@ function Answered() {
 
 /**
  * The selected item. Its reason picks the first block under its head, what it asks of the operator (`ask`, ui/DESIGN.md
- * "The attention detail"): a broken run's row, the PR's link out, the plan's card, the proposals or lessons memory's
- * items name, or the command to run. A ticket's item then shows its answer: its conversation and the reply form, with
- * the ticket's own actions and grants under them, or ahead of them when the reason asks for nothing else; a chore's
- * item its notes and the form for another, and for a finding the button to dismiss it; a PR's item its review limit
- * and its grant, for a PR no ticket owns; an item about none of them, what it says. `onReplied` hears each reply sent
- * from it, with what the form said of it.
+ * "The attention detail"): a broken run's row, the PR's link out, the plan's card, a feedback plan's line and the link
+ * to its PR's page, the proposals or lessons memory's items name, the ticket's models for a run refused its own, or the
+ * command to run. A ticket's item then shows its answer: its conversation and the reply form, with the ticket's own
+ * actions and grants under them, or ahead of them when the reason asks for nothing else; a chore's item its notes and
+ * the form for another, and for a finding the button to dismiss it; a review's draft's item the review's page, where
+ * the draft is read and published; a task's item the task's page, where it is read and answered; a PR's other item its
+ * review limit and its grant, for a PR no ticket owns; an item about none of them, what it says. `ticket` is the item's
+ * ticket as the tickets list has it, which tells a feedback plan's `plan_review` from a ticket plan's. `onReplied`
+ * hears each reply sent from it, with what the form said of it.
  */
-function Detail({ item, done, onReplied }: { item: AttentionItem; done: boolean; onReplied: (said: string) => void }) {
-    const asks = ask(item)
+function Detail({
+    item,
+    ticket,
+    done,
+    onReplied,
+}: {
+    item: AttentionItem
+    ticket: TicketSummary | undefined
+    done: boolean
+    onReplied: (said: string) => void
+}) {
+    const asks = ask(item, ticket)
     const command = asks === 'command' ? commandOf(item) : null
     return (
         <Panel data-testid="attention-detail">
             <ItemHead item={item} asks={asks} done={done} />
+            {/* First, as what the item asks: a chore's item refused its model shows its notes after it. */}
+            {command !== null && (
+                <RunCommand
+                    command={command}
+                    note={modelRefused(item) ? MODELS_NOTE : undefined}
+                    className={cn((item.chore !== null || item.pr !== null) && 'border-b')}
+                />
+            )}
             {asks === 'plan' && item.ticket_key !== null && <PlanReview ticketKey={item.ticket_key} />}
+            {asks === 'feedback-plan' && <FeedbackPlanReview item={item} plan={ticket?.feedback_plan ?? null} />}
             {item.reason === 'memory_proposal' && item.ticket_key !== null && (
                 <ProposalsWaiting ticketKey={item.ticket_key} />
             )}
@@ -386,8 +444,9 @@ function Detail({ item, done, onReplied }: { item: AttentionItem; done: boolean;
                 <Thread item={item} ticketKey={item.ticket_key} asks={asks} onReplied={onReplied} />
             )}
             {item.chore !== null && <ChoreThread name={item.chore} />}
-            {item.pr !== null && <PullRequestLimits url={item.pr} />}
-            {command !== null && <RunCommand command={command} />}
+            {asks === 'review' && <ReviewAction item={item} />}
+            {item.task !== null && <TaskAction item={item} task={item.task} />}
+            {item.pr !== null && asks !== 'review' && <PullRequestLimits url={item.pr} />}
             {asks === 'none' && item.ticket_key === null && item.chore === null && item.pr === null && (
                 <NothingToAnswer />
             )}
@@ -407,7 +466,10 @@ function ItemHead({ item, asks, done }: { item: AttentionItem; asks: Ask; done: 
     if (item.reason === 'awaiting_reply' && item.ticket_key !== null) {
         return <AwaitingHead item={item} ticketKey={item.ticket_key} done={done} />
     }
-    return <Head item={item} done={done} links={asks !== 'pull-request'} />
+    if (item.reason === 'awaiting_reply' && item.task !== null) {
+        return <TaskAwaitingHead item={item} task={item.task} done={done} />
+    }
+    return <Head item={item} done={done} asks={asks} links={asks !== 'pull-request'} />
 }
 
 /**
@@ -427,12 +489,32 @@ function PlanReview({ ticketKey }: { ticketKey: string }) {
 }
 
 /**
+ * A feedback plan waiting on the operator (DESIGN §32), as `FeedbackPlanWaits` says it: it is what the item asks for,
+ * so it comes before the ticket's actions and conversation. Once it waits no more, the PR the item's detail names is
+ * still linked.
+ */
+function FeedbackPlanReview({ item, plan }: { item: AttentionItem; plan: WaitingFeedbackPlan | null }) {
+    const named = pullRequestOf(item)
+    return (
+        <FeedbackPlanWaits
+            which={plan?.id ?? feedbackPlanOf(item)}
+            urls={plan?.pr_urls ?? (named === null ? [] : [named])}
+            plan={plan}
+            className="border-b p-3"
+            data-testid="attention-feedback-plan"
+        />
+    )
+}
+
+/**
  * What the item says: its reason, subject, and age, an action beside them, and its detail, or a `body` in its place,
- * with any notice below. Its detail's URLs and runs are linked unless `links` is false.
+ * with any notice below. Its detail's URLs and runs are linked unless `links` is false. `asks`, what the item asks
+ * of the operator, words the line an answered item shows.
  */
 function Head({
     item,
     done,
+    asks,
     action,
     notice,
     body,
@@ -440,6 +522,7 @@ function Head({
 }: {
     item: AttentionItem
     done: boolean
+    asks?: Ask
     action?: ReactNode
     notice?: ReactNode
     body?: ReactNode
@@ -461,7 +544,7 @@ function Head({
             )}
             {done && (
                 <p className="text-sm text-muted-foreground" data-testid="answered-note">
-                    {answeredNote(item)}
+                    {answeredNote(item, asks)}
                 </p>
             )}
             {notice}
@@ -470,7 +553,10 @@ function Head({
 }
 
 // What an answered item's head says under its detail: that it leaves at the next tick, which reads the answer.
-function answeredNote(item: AttentionItem): string {
+function answeredNote(item: AttentionItem, asks: Ask | undefined): string {
+    if (asks === 'feedback-plan') {
+        return 'You answered the feedback plan. The item leaves at the next tick, when the loop reads your answer.'
+    }
     return item.reason === 'plan_review'
         ? 'You answered the plan. The item leaves at the next tick, when the loop reads your answer.'
         : 'You answered it. The item leaves at the next tick, when the loop reads your reply.'
@@ -511,6 +597,27 @@ function AwaitingHead({ item, ticketKey, done }: { item: AttentionItem; ticketKe
     return <Head item={item} done={done} body={body} />
 }
 
+/**
+ * A task's question's head: as a ticket's, naming the question by its message and when it was asked, since the task's
+ * page holds it. Until the task is read the line is reserved; once nothing waits on it, the item's detail stands in.
+ */
+function TaskAwaitingHead({ item, task, done }: { item: AttentionItem; task: number; done: boolean }) {
+    const { data } = useQuery(taskQuery(task))
+    if (data === undefined) {
+        return <Head item={item} done={done} body={<Skeleton className="h-5 w-72 max-w-full" />} />
+    }
+    const waiting = data.messages.find((message) => message.id === data.task.question_id)
+    if (waiting === undefined) {
+        return <Head item={item} done={done} />
+    }
+    const body = (
+        <p className="text-sm" data-testid="awaiting-line">
+            Waits on your answer to message {waiting.id}, asked <Age at={waiting.at} variant="ago" />.
+        </p>
+    )
+    return <Head item={item} done={done} body={body} />
+}
+
 function Subject({ item }: { item: AttentionItem }) {
     if (item.ticket_key !== null) {
         return (
@@ -531,6 +638,14 @@ function Subject({ item }: { item: AttentionItem }) {
     if (item.pr !== null) {
         return <PullRequestLink url={item.pr} />
     }
+    if (item.task !== null) {
+        return (
+            <>
+                <TaskLink id={item.task} className="shrink-0" />
+                <TaskTitle id={item.task} />
+            </>
+        )
+    }
     return <span className="font-mono text-xs">{item.subject}</span>
 }
 
@@ -538,10 +653,13 @@ function NothingToAnswer() {
     return <Empty>nothing to answer here: it leaves when its cause is gone</Empty>
 }
 
-/** An item whose fix is a command for the operator to run, such as `repo_missing`'s: the command, to copy. */
-function RunCommand({ command }: { command: string }) {
+/**
+ * An item whose fix is a command for the operator to run, such as `repo_missing`'s: the command, to copy, and `note`,
+ * what running it does, for a command that does not fix the item itself.
+ */
+function RunCommand({ command, note, className }: { command: string; note?: string; className?: string }) {
     return (
-        <div className="flex flex-col items-start gap-2 p-3" data-testid="attention-command">
+        <div className={cn('flex flex-col items-start gap-2 p-3', className)} data-testid="attention-command">
             <Copyable
                 text={command}
                 label="command"
@@ -550,7 +668,7 @@ function RunCommand({ command }: { command: string }) {
                 {command}
             </Copyable>
             <p className="text-xs text-muted-foreground">
-                Nothing to answer here: run it, and the item leaves when its cause is gone.
+                {note ?? 'Nothing to answer here: run it, and the item leaves when its cause is gone.'}
             </p>
         </div>
     )
@@ -586,10 +704,10 @@ function ChoreThread({ name }: { name: string }) {
 }
 
 /**
- * A ticket's item under its head: what its reason asks first (a broken run's row and any grant it is stuck at, or the
- * PR's link out), then the ticket's answer (`TicketAnswer`): its conversation, the reply form (`ReplyForm`), and the
- * ticket's verbs and any other grant as a quiet row under them. On a reason that asks for nothing else, the verbs lead
- * instead, as what the item asks for.
+ * A ticket's item under its head: what its reason asks first (a broken run's row and any grant it is stuck at, the
+ * PR's link out, or the ticket's models for a run refused its own), then the ticket's answer (`TicketAnswer`): its
+ * conversation, the reply form (`ReplyForm`), and the ticket's verbs and any other grant as a quiet row under them. On
+ * a reason that asks for nothing else, the verbs lead instead, as what the item asks for.
  */
 function Thread({
     item,
@@ -625,6 +743,7 @@ function Thread({
             )}
             {asks === 'pull-request' && <PullRequestAction item={item} units={data.units} />}
             {asks === 'drafts' && <DraftsAction item={item} ticketKey={ticket.key} drafts={data.drafts} />}
+            {asks === 'model' && <ModelAttention ticketKey={ticket.key} models={data.models} />}
             {leads && <TicketVerbs ticket={ticket} limits={data.limits} place="lead" testId="attention-actions" />}
             <TicketAnswer
                 detail={data}
@@ -679,6 +798,59 @@ function DraftsAction({ item, ticketKey, drafts }: { item: AttentionItem; ticket
                 <Link to="/pull-requests/pr" search={{ url }}>
                     <MessageSquareReply />
                     Read the drafts on {pullRequestLabel(url)}
+                </Link>
+            </Button>
+        </div>
+    )
+}
+
+/**
+ * A review's draft that waits on the operator (DESIGN §34): the review's page, where the draft is read, edited, and
+ * published or staged; for one staged or of unknown outcome, where it says how it stands until a read settles it.
+ */
+function ReviewAction({ item }: { item: AttentionItem }) {
+    const id = reviewOf(item)
+    if (id === null) {
+        return null
+    }
+    return (
+        <div className="flex flex-wrap items-center gap-2 border-b p-3" data-testid="attention-review">
+            <Button asChild variant="outline">
+                <Link to="/pull-requests/reviews/$id" params={{ id: String(id) }}>
+                    <FileText />
+                    {item.reason === 'review_waiting' ? 'Read the draft of' : 'See the draft of'} {reviewRef(id)}
+                </Link>
+            </Button>
+        </div>
+    )
+}
+
+/**
+ * A task's title, the first line of the operator's text, as the tasks list names it: the item's name beside `task:N`,
+ * as a ticket's title is. Its line is reserved until the list is read.
+ */
+function TaskTitle({ id }: { id: number }) {
+    const { data } = useQuery(tasksQuery)
+    if (data === undefined) {
+        return <Skeleton className="h-5 w-48 max-w-full" />
+    }
+    const task = data.find((t) => t.id === id)
+    return <TicketTitle title={task === undefined ? null : taskTitle(task.text)} className="font-semibold" />
+}
+
+/**
+ * A one-off task's item (DESIGN §36): its page, where its conversation and report are read and it is answered. A
+ * question's is the way to answer it; any other's, such as tickets its run reported that canopy did not record, opens
+ * the task, which a reply or a stop clears.
+ */
+function TaskAction({ item, task }: { item: AttentionItem; task: number }) {
+    const answer = item.reason === 'awaiting_reply'
+    return (
+        <div className="flex flex-wrap items-center gap-2 border-b p-3" data-testid="attention-task">
+            <Button asChild variant="outline">
+                <Link to="/tasks/$id" params={{ id: String(task) }}>
+                    {answer ? <MessageSquareReply /> : <Sprout />}
+                    {answer ? 'Answer on' : 'Open'} {taskRef(task)}
                 </Link>
             </Button>
         </div>

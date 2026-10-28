@@ -66,11 +66,15 @@ class TickStatus(StrEnum):
     OK = "ok"
     # The overseer skipped the whole tick: it could not see the world (`mcp_unavailable`, `tracker_unsupported`).
     SKIPPED = "skipped"
-    # `canopy --version` failed from the overseer's environment, so the overseer did not run.
+    # The server of the overseer's tools did not answer `initialize` (DESIGN §27), so the overseer did not run.
     CANOPY_UNAVAILABLE = "canopy_unavailable"
     # The state directory's or the workspace's filesystem had less than `loop.min_free_disk_mib` free, so the overseer
     # did not run.
     DISK_LOW = "disk_low"
+    # The runtime does not list the overseer's chosen model, or its variant, so the overseer did not run (DESIGN §13).
+    MODEL_MISSING = "model_missing"
+    # The runtime's list of models could not be read to look the overseer's chosen model up, so it did not run.
+    MODEL_LIST_FAILED = "model_list_failed"
     OVERSEER_FAILED = "overseer_failed"
     RECONCILE_FAILED = "reconcile_failed"
     # The tick raised an unexpected exception; its summary names it.
@@ -196,6 +200,22 @@ class Proposal(StrEnum):
     ASK = "ask"
     #: Nothing to do: no change and no reply.
     LEAVE = "leave"
+
+
+class PlanItem(StrEnum):
+    """What a feedback plan's item is, `feedback_plan_items.item` (DESIGN §32, What a plan covers)."""
+
+    #: A review, by the id the `vcs` source observed.
+    REVIEW = "review"
+    #: A thread of review comments, by its item comment's observed id.
+    COMMENT = "comment"
+    #: A failed check at the PR's head, by an id canopy gives it (`feedback_items.check_id`).
+    CHECK = "check"
+    #: The PR's conflict with its base, by an id canopy gives it (`feedback_items.conflict_id`).
+    CONFLICT = "conflict"
+    #: A merged blocker: the PR is stacked on another ticket's PR that merged, by an id canopy gives it
+    #: (`feedback_items.blocker_id`).
+    BLOCKER = "blocker"
 
 
 class MoveKind(StrEnum):
@@ -353,6 +373,8 @@ class ReviewDraftStatus(StrEnum):
     #: In a pending review the operator opened through canopy, theirs to submit on GitHub; a read settles it.
     STAGED = "staged"
     PUBLISHED = "published"
+    #: Seen by the operator and not to be posted: it takes no edit, note, or publish.
+    DISCARDED = "discarded"
 
 
 class ReviewDraftAuthor(StrEnum):
@@ -363,6 +385,39 @@ class ReviewDraftAuthor(StrEnum):
     #: A revision run the operator's note asked for.
     REVISER = "reviser"
     OPERATOR = "operator"
+
+
+class DismissalReason(StrEnum):
+    """Why the operator dismissed a review's finding, `review_dismissals.reason` (DESIGN §21).
+
+    NULL on a dismissal from before canopy asked why.
+    """
+
+    #: The finding does not hold: the reviewer misread the code, or the guard it missed is there.
+    WRONG = "wrong"
+    #: It holds, and the change means it to: the behavior it names is the one wanted.
+    INTENTIONAL = "intentional"
+    #: It holds, and fixing it is not worth the change it takes.
+    NOT_WORTH_IT = "not_worth_it"
+    #: It holds, and is worth fixing, but not in this PR: it belongs in another.
+    OUT_OF_SCOPE = "out_of_scope"
+
+
+class FindingAnswer(StrEnum):
+    """What a resumed worker answered of a review's finding, `review_answers.answer` (DESIGN §21)."""
+
+    FIXED = "fixed"
+    #: Not changed, for a reason the worker gives, which the next review reads.
+    DECLINED = "declined"
+
+
+class HoldKind(StrEnum):
+    """Why the harness holds a review's finding for the operator, `review_holds.kind` (DESIGN §21)."""
+
+    #: A later review's answer to a finding the worker declined: the operator settles it, never another `resume`.
+    REBUTTAL = "rebuttal"
+    #: A later review's finding on a line unchanged since the PR's first reviewed commit, which the first review read.
+    LATE = "late"
 
 
 class Reaction(StrEnum):
@@ -396,6 +451,16 @@ class ReviewItem(StrEnum):
     COMMENT = "comment"
 
 
+class NumberedItem(StrEnum):
+    """What a journal number names, `item_numbers.kind` (DESIGN §35): what a cursor passes."""
+
+    COMMENT = "comment"
+    REVIEW = "review"
+    REVIEW_COMMENT = "review_comment"
+    CHECK_RUN = "check_run"
+    REVIEW_RUN = "review_run"
+
+
 class ReviewState(StrEnum):
     """A review's state as GitHub reports it, `observed_reviews.state` (DESIGN §29)."""
 
@@ -411,6 +476,10 @@ class SourceKind(StrEnum):
 
     TRACKER = "tracker"
     VCS = "vcs"
+    #: An artifact store's comment feed (DESIGN §38).
+    ARTIFACTS = "artifacts"
+    #: The replies people wrote in the Slack sink's ticket threads; a listed operator's is their message (DESIGN §22).
+    SLACK = "slack"
 
 
 class ConnectorRunStatus(StrEnum):
@@ -470,6 +539,29 @@ class MergeState(StrEnum):
     UNKNOWN = "unknown"
 
 
+class ThreadState(StrEnum):
+    """Whether a thread on an artifact is open, `observed_artifact_threads.state` (DESIGN §38)."""
+
+    OPEN = "open"
+    RESOLVED = "resolved"
+
+
+class AnchorStatus(StrEnum):
+    """Whether a thread's passage is in its artifact's latest version, `observed_artifact_threads.anchor_status`."""
+
+    FOUND = "found"
+    #: Its words are nowhere in the latest version: reworded or removed, and never moved to other words (DESIGN §38).
+    PASSAGE_GONE = "passage_gone"
+
+
+class AuthorKind(StrEnum):
+    """Who wrote a comment on an artifact as its store says, `observed_artifact_comments.author_kind` (DESIGN §38)."""
+
+    PERSON = "person"
+    #: An agent, writing with a token on behalf of the person who minted it: never authority.
+    AGENT = "agent"
+
+
 class ModelsRead(StrEnum):
     """How canopy's last read of a run's session for its models ended, `run_model_reads.status` (DESIGN §13)."""
 
@@ -478,6 +570,17 @@ class ModelsRead(StrEnum):
     #: The runtime keeps no session of that id, which reading again would not change.
     MISSING = "missing"
     #: The runtime could not be asked, or said what canopy cannot read; read again later.
+    FAILED = "failed"
+
+
+class SessionsRead(StrEnum):
+    """How canopy's last read of the runtime's sessions ended, `runtime_session_reads.status` (DESIGN §13)."""
+
+    #: The record was read: what it held after the cursor is in `runtime_sessions`.
+    FOUND = "found"
+    #: The runtime has kept no session yet.
+    MISSING = "missing"
+    #: The record could not be read; read again later.
     FAILED = "failed"
 
 
@@ -494,3 +597,38 @@ class GcPassStatus(StrEnum):
     OK = "ok"
     #: It raised before its end, and the tick went on; what it removed before is counted.
     FAILED = "failed"
+
+
+class RecordedKind(StrEnum):
+    """What a run the overseer asked for is, `recorded_runs.kind` (DESIGN §40): the verb that recorded it."""
+
+    #: A worker on a ticket, a run in `runs` once it starts.
+    DISPATCH = "dispatch"
+    #: A review of a PR, in `review_runs`.
+    REVIEW = "review"
+    #: A revision of a review's draft, in `review_runs` too (DESIGN §34).
+    REVISION = "revision"
+    #: A chore's run, in `chore_runs`.
+    CHORE = "chore"
+
+
+class RecordedStatus(StrEnum):
+    """Where a run the overseer asked for stands, `recorded_runs.status` (DESIGN §40)."""
+
+    #: Recorded at the ask, and not yet spawned: it counts as running.
+    RECORDED = "recorded"
+    #: The tick spawned it, as `recorded_runs.run_id`.
+    STARTED = "started"
+    #: A guard refused it at the spawn, a refusal recorded as any other.
+    REFUSED = "refused"
+    #: Its tick closed, or died, before spawning it.
+    UNSTARTED = "unstarted"
+
+
+class Decider(StrEnum):
+    """Who made a decision, `decisions.decider` (DESIGN §37, TRUST_MODEL T5)."""
+
+    #: The overseer, through one of its verbs: what it decided, or what a guard refused it.
+    OVERSEER = "overseer"
+    #: The harness on its own, in code: an attention item it raises, or a decision that needed no judgment.
+    HARNESS = "harness"

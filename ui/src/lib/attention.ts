@@ -1,4 +1,4 @@
-import type { AttentionItem } from '@/api/types'
+import type { AttentionItem, TicketSummary } from '@/api/types'
 import { splitLinks } from '@/lib/links'
 import { pullRequestUrl } from '@/lib/pull-request-label'
 import { codeSpans } from '@/lib/rich-text'
@@ -6,9 +6,19 @@ import { codeSpans } from '@/lib/rich-text'
 /** How urgent an attention item is: the order the attention list shows it in, and its chip's color (DESIGN.md). */
 export type Severity = 'failed' | 'waiting' | 'other' | 'finding'
 
-// Reasons raised because something broke: a run, a chore, a review, the overseer's `canopy`, or the disk (§14). A
-// reason not named here or below, the overseer's phase-table reasons included, is `other`.
+// Reasons a run is refused for its model (DESIGN §13): the runtime does not list the model chosen, or its list could
+// not be read. Nothing runs on another model, so the work stays stalled until the operator chooses one or fixes the
+// runtime.
+const MODEL_REASONS = new Set(['model_missing', 'model_list_failed'])
+
+// What an item refused its model names when no ticket's menu can fix it: the runtime's list, and which of
+// `[runtime.models]` it lacks.
+const MODELS_COMMAND = 'canopy models'
+
+// Reasons raised because something broke: a run, a run refused its model, a chore, a review, the overseer's `canopy`,
+// or the disk (§14). A reason not named here or below, the overseer's phase-table reasons included, is `other`.
 const FAILED = new Set([
+    ...MODEL_REASONS,
     'crashed',
     'unpushed',
     'unknown_result',
@@ -21,9 +31,24 @@ const FAILED = new Set([
     'disk_low',
 ])
 
+// The reasons a review's draft raises (DESIGN §34): a review the operator asked for, done with its draft unpublished,
+// and a draft staged on GitHub or of unknown outcome, until a read settles it.
+const REVIEW_DRAFT_REASONS = new Set(['review_waiting', 'review_unsettled'])
+
 // Reasons that wait on the operator's own answer: a private ticket's question or a planner's, an untrusted review's
-// go-ahead (D089), a plan to approve (DESIGN §25), or the replies a run drafted (DESIGN §29).
-const WAITING = new Set(['awaiting_reply', 'untrusted_review', 'plan_review', 'drafts_waiting'])
+// go-ahead (D089), an unlisted author's comment on an artifact to send on (§38), a review's rebuttal of a worker's
+// decline or its late finding (DESIGN §21), a plan to approve (§25), the replies a run drafted (§29), or a review's
+// draft (§34).
+const WAITING = new Set([
+    'awaiting_reply',
+    'untrusted_review',
+    'untrusted_artifact_comment',
+    'review_rebuttal',
+    'review_late',
+    'plan_review',
+    'drafts_waiting',
+    ...REVIEW_DRAFT_REASONS,
+])
 
 // Reasons for a PR that is done for now and waits on someone else: a reviewer, or the merge (DESIGN §7). Nothing is
 // stuck while one is open, so they never count as blocking.
@@ -35,8 +60,12 @@ const RUN_BROKE = new Set(['worker_failed', 'crashed', 'unpushed', 'unknown_resu
 // The reasons agent memory raises (DESIGN §28), each with the proposals or lessons to act on under its head.
 const MEMORY_REASONS = new Set(['memory_proposal', 'lesson_review', 'lesson_wrong'])
 
-// Reasons whose answer is a reply: a question, or the go-ahead an untrusted review waits on (D089).
-const ANSWERED_BY_REPLY = new Set(['awaiting_reply', 'untrusted_review'])
+// Reasons whose answer is a reply: a question, the go-ahead an untrusted review waits on (D089), or an unlisted
+// author's comment on an artifact, sent on (§38).
+const ANSWERED_BY_REPLY = new Set(['awaiting_reply', 'untrusted_review', 'untrusted_artifact_comment'])
+
+// How the overseer's `plan_review` detail names a feedback plan (DESIGN §32), with its id: `feedback plan 3 for ...`.
+const FEEDBACK_PLAN = /^feedback plan (\d+)\b/u
 
 const RANK: Record<Severity, number> = { failed: 0, waiting: 1, other: 2, finding: 3 }
 
@@ -129,16 +158,46 @@ export function breakdownText(parts: readonly BreakdownPart[]): string {
 /**
  * What an item's reason asks of the operator, which picks the first block of its detail, under its head (ui/DESIGN.md,
  * "The attention detail"): the ticket's latest run, for a run that broke; the PR, for one waiting on someone else; the
- * reply, for an answer; the plan's card, for a plan; the proposals or lessons memory's items name; the PR's threads,
- * for the replies a run drafted; the command to run, for an item about nothing canopy shows that names one. `ticket`
- * is any other ticket's item, which leads with the ticket's own actions; `none`, the rest.
+ * reply, for an answer; the plan's card, for a plan; the PR's page at the plan, for a feedback plan; the proposals or
+ * lessons memory's items name; the PR's threads, for the replies a run drafted; the review's page, for a review's
+ * draft; the task's page, for a one-off task's item; the ticket's models, for a ticket's run refused its model; the
+ * command to run, for an item about nothing canopy shows that names one, or one refused its model about no ticket.
+ * `ticket` is any other ticket's item, which leads with the ticket's own actions; `none`, the rest.
  */
-export type Ask = 'run' | 'pull-request' | 'reply' | 'plan' | 'memory' | 'drafts' | 'command' | 'ticket' | 'none'
+export type Ask =
+    | 'run'
+    | 'pull-request'
+    | 'reply'
+    | 'plan'
+    | 'feedback-plan'
+    | 'memory'
+    | 'drafts'
+    | 'review'
+    | 'task'
+    | 'model'
+    | 'command'
+    | 'ticket'
+    | 'none'
 
-/** The item's `Ask`. A chore's item and a PR's own are `none`: their detail is the chore's notes, or the PR's limit. */
-export function ask(item: AttentionItem): Ask {
+/**
+ * The item's `Ask`. A chore's item and a PR's own are `none`: their detail is the chore's notes, or the PR's limit. A
+ * `plan_review` item is a feedback plan's (`feedbackPlanReview`) or a ticket plan's, which `ticket`, its ticket as the
+ * tickets list has it, tells apart.
+ */
+export function ask(item: AttentionItem, ticket?: TicketSummary): Ask {
     if (MEMORY_REASONS.has(item.reason) && !item.finding) {
         return 'memory'
+    }
+    if (REVIEW_DRAFT_REASONS.has(item.reason) && !item.finding && reviewOf(item) !== null) {
+        return 'review'
+    }
+    // A task's item names `canopy` commands in its detail, but its page is where it is read and answered.
+    if (item.task !== null) {
+        return 'task'
+    }
+    // A chore's item too: its notes cannot fix a model, and its runs and the overseer's take theirs from config alone.
+    if (modelRefused(item)) {
+        return item.ticket_key === null ? 'command' : 'model'
     }
     if (item.ticket_key === null) {
         return item.chore === null && item.pr === null && commandOf(item) !== null ? 'command' : 'none'
@@ -155,7 +214,28 @@ export function ask(item: AttentionItem): Ask {
     if (ANSWERED_BY_REPLY.has(item.reason)) {
         return 'reply'
     }
-    return item.reason === 'plan_review' ? 'plan' : 'ticket'
+    if (item.reason !== 'plan_review') {
+        return 'ticket'
+    }
+    return feedbackPlanReview(item, ticket) ? 'feedback-plan' : 'plan'
+}
+
+/**
+ * Whether a `plan_review` item is a feedback plan's (DESIGN §32) rather than its ticket plan's: the overseer raises
+ * both with one reason. Its detail names the plan, so the item stays one once the plan is approved; else `ticket`, its
+ * ticket as the tickets list has it, has a feedback plan waiting and no plan of its own that does.
+ */
+export function feedbackPlanReview(item: AttentionItem, ticket?: TicketSummary): boolean {
+    if (feedbackPlanOf(item) !== null) {
+        return true
+    }
+    return ticket !== undefined && ticket.feedback_plan !== null && !ticket.plan_waits
+}
+
+/** The feedback plan a `plan_review` item's detail names, by its id, or null when it names none. */
+export function feedbackPlanOf(item: AttentionItem): number | null {
+    const match = item.reason === 'plan_review' ? FEEDBACK_PLAN.exec(item.detail) : null
+    return match?.[1] === undefined ? null : Number(match[1])
 }
 
 // What `awaiting_detail` ends an `awaiting_reply` item's detail with, for the CLI's reader (DESIGN §22).
@@ -166,10 +246,30 @@ export function shownDetail(item: AttentionItem): string {
     return item.detail.replace(REPLY_HINT, '')
 }
 
-/** The `canopy` command an item's detail names in a code span, such as `repo_missing`'s `canopy workspace sync`. */
+/**
+ * The `canopy` command an item's detail names in a code span, such as `repo_missing`'s `canopy workspace sync`; for an
+ * item refused its model about no ticket that names none, `canopy models`, which says what the runtime lists.
+ */
 export function commandOf(item: AttentionItem): string | null {
     const command = codeSpans(item.detail).find((piece) => piece.kind === 'code' && piece.text.startsWith('canopy '))
+    if (command === undefined && modelRefused(item) && item.ticket_key === null) {
+        return MODELS_COMMAND
+    }
     return command?.text ?? null
+}
+
+/** Whether the item is a run refused its model (`model_missing`, `model_list_failed`), not a chore's finding. */
+export function modelRefused(item: AttentionItem): boolean {
+    return MODEL_REASONS.has(item.reason) && !item.finding
+}
+
+// A review run named as the harness writes one, standing as a word of its own.
+const REVIEW_REF = /\breview:(\d+)\b/u
+
+/** The first review run an item's detail names as `review:5`, as a review's draft's items do, or null for none. */
+export function reviewOf(item: AttentionItem): number | null {
+    const match = REVIEW_REF.exec(item.detail)
+    return match?.[1] === undefined ? null : Number(match[1])
 }
 
 /**

@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import re
 import tomllib
-from collections.abc import Set as AbstractSet
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
 
 from canopy.core import hostgit, treehouse
 from canopy.core.config import (
@@ -40,7 +41,7 @@ REPOS_DIR = "repos"
 POOLS_DIR = ".treehouse"
 DESKS_DIR = "desks"
 MAX_SUMMARY = 200
-#: The longest name of a check a repository's `human_checks` lists: a connector's longest (DESIGN §30).
+#: The longest name of a check a repository's `checks` names: a connector's longest (DESIGN §30).
 MAX_CHECK_NAME = 200
 # Where a repository's `branch_url` puts a branch's name.
 BRANCH_NAME = "{branch}"
@@ -50,6 +51,19 @@ GITHUB_URL_RE = re.compile(
     r"(?:https://(?:[^@/\s]+@)?|ssh://git@|git@)github\.com[/:]([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?",
     re.IGNORECASE,
 )
+
+
+class CheckRole(StrEnum):
+    """What a check at a PR's head means to canopy, as its repository's map says (DESIGN §30). Unnamed, it is CI."""
+
+    #: CI: it holds the PR at `ci_running` while pending, makes it `ci_red` failing, and has to pass.
+    CI = "ci"
+    #: It waits on a person, such as an ownership or deploy approval: shown with the checks, never CI.
+    HUMAN = "human"
+    #: It gates the merge itself, such as a merge queue's status, never green on an open PR: left out of the checks.
+    MERGE = "merge"
+    #: Advisory or retired: left out of the checks.
+    IGNORE = "ignore"
 
 
 def _summary(value: str) -> str:
@@ -76,6 +90,17 @@ def _check_name(value: str) -> str:
     return value
 
 
+def _impact_path(value: str) -> str:
+    # Compared with the paths git names, which are from the root, by whole components (`canopy.reviews.impact`).
+    parts = value.removesuffix("/").split("/")
+    if not value.isprintable() or value.startswith("/") or any(p in {"", ".", ".."} for p in parts):
+        raise ValueError(
+            "must be a path from the repository's root, such as '.agents/' or 'docs/TRUST_MODEL.md', with no leading "
+            "'/', empty part, '.', or '..'",
+        )
+    return value
+
+
 def _url(value: str) -> str:
     error = url_error(value)
     if error is not None:
@@ -97,8 +122,21 @@ class _RepoTable(_Table):
     # A branch's page on the repository's host, with {branch} where its name goes: the web UI links branches there
     # (DESIGN §18). Unset means the one `url` gives on GitHub, if any; empty means no link.
     branch_url: Annotated[StrictStr, link_template(BRANCH_NAME)] | None = None
-    # The checks that are not CI: contexts that stay pending until a person acts (DESIGN §30).
-    human_checks: tuple[Annotated[StrictStr, AfterValidator(_check_name)], ...] = ()
+    # The role of each check named, by its exact name; every other check is CI (DESIGN §30).
+    checks: dict[Annotated[StrictStr, AfterValidator(_check_name)], CheckRole] = {}
+    # Paths whose change makes a review high impact, beside CI's workflows, which no entry removes (DESIGN §21).
+    high_impact_paths: tuple[Annotated[StrictStr, AfterValidator(_impact_path)], ...] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_human_checks(cls, data: object) -> object:
+        # The list `checks` replaced: an error that says what to write, not "extra inputs are not permitted".
+        if isinstance(data, Mapping) and "human_checks" in data:
+            raise ValueError(
+                'human_checks was removed: name each of its checks in `checks` instead, as "NAME" = "human" under '
+                "[repos.<name>.checks]",
+            )
+        return data
 
 
 class _Map(_Table):
@@ -115,8 +153,11 @@ class Repo:
     url: str | None = None
     summary: str = ""
     branch_url: str = ""
-    #: The contexts that are not CI, by name: each stays pending until a person acts (DESIGN §30).
-    human_checks: AbstractSet[str] = field(default_factory=frozenset[str])
+    #: The role of each check its map names, by exact name: every other check is CI (DESIGN §30).
+    checks: Mapping[str, CheckRole] = field(default_factory=dict[str, CheckRole])
+    #: The paths from the root, each covering itself and everything under it, whose change makes a review of this
+    #: repository `high` impact. They add to `.github/workflows/`, which covers every repository (DESIGN §21).
+    high_impact_paths: Sequence[str] = ()
 
     @property
     def cloned(self) -> bool:
@@ -149,6 +190,15 @@ class Workspace:
         if name is None:
             return None
         return next((r for r in self.repos if r.name == name), None)
+
+    def check_roles(self, name: str | None) -> Mapping[str, CheckRole]:
+        """Return the roles repository `name` gives its checks, by name: none for a repository the map does not have.
+
+        Returns:
+            The roles. A check they do not name is CI: read one as `check_roles(name).get(check, CheckRole.CI)`.
+        """
+        repo = self.repo(name)
+        return repo.checks if repo is not None else {}
 
     def treehouse_pool(self, name: str | None) -> treehouse.Pool:
         """Return where treehouse runs for repository `name`'s pool.
@@ -260,7 +310,8 @@ def load(root: Path) -> Workspace:
             url=table.url,
             summary=table.summary,
             branch_url=github_branch_url(table.url) if table.branch_url is None else table.branch_url,
-            human_checks=frozenset(table.human_checks),
+            checks=table.checks,
+            high_impact_paths=table.high_impact_paths,
         )
         for name, table in sorted(parsed.repos.items())
     )

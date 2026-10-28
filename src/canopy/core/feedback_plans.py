@@ -4,9 +4,10 @@ A feedback plan is §25's plan written for what came back to a ticket's PRs, bef
 file is a plan's file (`plans.path_for`): the same operator-only directory, named for the run that wrote it, written
 once and read bounded, never through a link. The journal's `feedback_plans` row holds what canopy decides by, its
 status, the file's hash as written, and the hash the operator approved; `feedback_plan_items` holds the items its
-result line named, each a review or review comment by the id the `vcs` source observed (DESIGN §29). The repositories a
-plan covers are its run's slots, and what it saw of its PRs is recorded with it (`feedback_items`). A ticket has at
-most one feedback plan that is not superseded.
+result line named, each a review or review comment by the id the `vcs` source observed (DESIGN §29), or a failed
+check, a conflict with the base, or a merged blocker by the id canopy gave it (`feedback_items.check_id`). The
+repositories a plan covers are its run's slots, and what it saw of its PRs is recorded with it (`feedback_items`). A
+ticket has at most one feedback plan that is not superseded.
 
 Under `policy.feedback_plan = "approve"`, every `resume` but one whose only reason is `no_pr` waits on an approved
 feedback plan that no `resume` has spent (`resume_refusal`), and the `resume` that starts on it spends it (`spend`), in
@@ -21,6 +22,7 @@ again).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Collection, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
@@ -29,8 +31,9 @@ from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import conversation, db, feedback_items, plans, prompts, records, replies, sql
 from canopy.core.conversation import Refused
-from canopy.core.vocab import PlanEffort, PlanStatus, Proposal, ResumeReason, ReviewItem, RunKind, RunStatus
+from canopy.core.vocab import PlanEffort, PlanItem, PlanStatus, Proposal, ResumeReason, RunKind, RunStatus
 from canopy.infra import lock
+from canopy.infra.text import printable
 
 if TYPE_CHECKING:
     import sqlite3
@@ -38,7 +41,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from canopy.core.config import Config, Policy, Trust
-    from canopy.core.feedback_items import Offered
+    from canopy.core.feedback_items import Item
+    from canopy.core.workspace import Workspace
 
 #: The most items one plan's result line names; past it, the rest are refused, each with a harness note.
 MAX_ITEMS = 100
@@ -49,6 +53,13 @@ MAX_REPLY = replies.MAX_DRAFT_CHARS
 MAX_WORDS = conversation.MAX_OPERATOR - 1000
 #: The most refused ids a run's harness note names one by one.
 _MAX_NAMED = 10
+#: The most characters of an item's excerpt or of a plan's line on it, as the PR's page shows them.
+MAX_LINE = 200
+# An item's heading in a plan's file, at any level, and any heading, which ends the item before it; a fenced code
+# block holds no item's first line.
+_ITEM_HEADING_RE = re.compile(r"#{1,6}[ \t]+Item[ \t]+(\d{1,20})(?![\d])")
+_ANY_HEADING_RE = re.compile(r"#{1,6}(?:[ \t]|$)")
+_FENCE_RE = re.compile(r"(?:`{3,}|~{3,})")
 
 
 @dataclass(frozen=True)
@@ -67,7 +78,7 @@ class Matched:
     A refusal is the harness's words, for the run's note.
     """
 
-    kept: Sequence[tuple[Offered, Named]]
+    kept: Sequence[tuple[Item, Named]]
     refused: Sequence[str]
 
     def note(self) -> str:
@@ -89,19 +100,20 @@ def needed(policy: Policy, reasons: Collection[str]) -> bool:
     return policy.feedback_plan == "approve" and set(reasons) != {ResumeReason.NO_PR}
 
 
-def match(offered: Sequence[Offered], named: Sequence[Named]) -> Matched:
+def match(offered: Sequence[Item], named: Sequence[Named]) -> Matched:
     """Check the planner's items against those it was given: an id it was not given is refused (DESIGN §32).
 
     So is an id named twice after the first, an id two items share, and every item past `MAX_ITEMS`. A reply is kept
-    only for a change or a decline.
+    only for a review item's change or decline: a failed check, a conflict, or a merged blocker has no author to
+    answer.
 
     Returns:
         The items kept, in the order named, and why each other one was refused.
     """
-    by_id: dict[int, list[Offered]] = {}
+    by_id: dict[int, list[Item]] = {}
     for o in offered:
         by_id.setdefault(o.id, []).append(o)
-    kept: list[tuple[Offered, Named]] = []
+    kept: list[tuple[Item, Named]] = []
     refused: list[str] = []
     seen: set[int] = set()
     for n, item in enumerate(named, start=1):
@@ -116,7 +128,8 @@ def match(offered: Sequence[Offered], named: Sequence[Named]) -> Matched:
             refused.append(f"{item.id}, named again")
         else:
             seen.add(item.id)
-            reply = item.reply if item.proposal in (Proposal.CHANGE, Proposal.DECLINE) else None
+            answers = found[0].item in (PlanItem.REVIEW, PlanItem.COMMENT)
+            reply = item.reply if answers and item.proposal in (Proposal.CHANGE, Proposal.DECLINE) else None
             kept.append((found[0], Named(item.id, item.proposal, reply)))
     return Matched(kept=kept, refused=refused)
 
@@ -126,7 +139,7 @@ def record(
     key: str,
     run_id: int,
     written: plans.Written,
-    kept: Sequence[tuple[Offered, Named]],
+    kept: Sequence[tuple[Item, Named]],
     *,
     snapshot: feedback_items.Snapshot,
     event: Callable[[int, str | None], db.Event | None] | None = None,
@@ -223,6 +236,19 @@ def get(conn: sqlite3.Connection, plan_id: int) -> records.FeedbackPlan | None:
     )
 
 
+def of_run(conn: sqlite3.Connection, run_id: int) -> records.FeedbackPlan | None:
+    """The feedback plan the run `run_id` wrote, whatever its status.
+
+    Returns:
+        The plan's row, or None when the run wrote none: a run of another kind, or a plan run that failed.
+    """
+    return records.fetch_one(
+        conn,
+        records.FeedbackPlan,
+        sql.select("*").from_("feedback_plans").where("run_id = ?", run_id),
+    )
+
+
 def history(conn: sqlite3.Connection, key: str) -> list[records.FeedbackPlan]:
     """Every feedback plan of the ticket, superseded ones included.
 
@@ -249,7 +275,7 @@ def items(conn: sqlite3.Connection, plan_id: int) -> list[records.FeedbackPlanIt
     )
 
 
-def authors(conn: sqlite3.Connection, plan_id: int) -> dict[tuple[str, ReviewItem, int], str | None]:
+def authors(conn: sqlite3.Connection, plan_id: int) -> dict[feedback_items.Key, str | None]:
     """Who wrote each item a feedback plan was given, as what it saw recorded them (`feedback_items.record`).
 
     Returns:
@@ -260,7 +286,7 @@ def authors(conn: sqlite3.Connection, plan_id: int) -> dict[tuple[str, ReviewIte
         records.FeedbackPlanSeen,
         sql.select("*").from_("feedback_plan_seen").where("plan_id = ? AND answers IS NULL", plan_id),
     )
-    return {(r.pr_url, r.item, r.item_id): r.author for r in rows}
+    return {(r.pr_url, PlanItem(r.item), r.item_id): r.author for r in rows}
 
 
 def repos(conn: sqlite3.Connection, plan: records.FeedbackPlan) -> tuple[str, ...]:
@@ -274,6 +300,58 @@ def repos(conn: sqlite3.Connection, plan: records.FeedbackPlan) -> tuple[str, ..
         sql.select("repo").from_("run_slots").where("run_id = ?", plan.run_id).order_by("repo"),
     ).fetchall()
     return tuple(str(r[0]) for r in rows)
+
+
+def rationales(text: str) -> dict[int, str]:
+    """Why a plan proposes what it does for each item: the first line under its `### Item <id>` heading, as text.
+
+    The heading is the one the planner writes, at any level, and the line is the first holding anything before the
+    next heading, a fenced code block passed over; the file's words, cut as `first_line` cuts them, model text for
+    the operator to weigh, never an instruction.
+
+    Returns:
+        Each item's line by its id; an item with no heading, or nothing under it, has none.
+    """
+    found: dict[int, str] = {}
+    item: int | None = None
+    fence = ""
+    for raw in text.splitlines():
+        line = raw.strip()
+        marker = _FENCE_RE.match(line)
+        if fence:
+            if marker is not None and marker.group(0)[0] == fence[0] and len(marker.group(0)) >= len(fence):
+                fence = ""
+            continue
+        if marker is not None:
+            fence = marker.group(0)
+            continue
+        heading = _ITEM_HEADING_RE.match(line)
+        if heading is not None:
+            item = int(heading.group(1))
+            continue
+        if _ANY_HEADING_RE.match(line):
+            item = None
+            continue
+        if item is None or item in found:
+            continue
+        said = first_line(line)
+        if said is not None:
+            found[item] = said
+    return found
+
+
+def first_line(text: str) -> str | None:
+    """The first line of `text` holding anything, cut to `MAX_LINE` characters: an excerpt of what was said.
+
+    Returns:
+        That line, control characters made spaces and whitespace collapsed, with "…" at its end when cut; None when
+        no line holds anything.
+    """
+    lines = (" ".join(printable(line).split()) for line in text.splitlines())
+    line = next((line for line in lines if line), None)
+    if line is None:
+        return None
+    return line if len(line) <= MAX_LINE else line[: MAX_LINE - 1] + "…"
 
 
 def approved_text(state_dir: Path, plan: records.FeedbackPlan) -> str | None:
@@ -361,7 +439,14 @@ def spend(conn: sqlite3.Connection, plan_id: int, run_id: int) -> bool:
     return row is not None
 
 
-def dispatch_refusal(conn: sqlite3.Connection, config: Config, key: str, *, now: datetime) -> tuple[str, str] | None:
+def dispatch_refusal(
+    conn: sqlite3.Connection,
+    config: Config,
+    ws: Workspace,
+    key: str,
+    *,
+    now: datetime,
+) -> tuple[str, str] | None:
     """Return the guard and reason that refuse a feedback plan run for `key` now, or None (DESIGN §32).
 
     Only with feedback plans on; and not while one approved waits for its `resume`, nor while the ticket's current
@@ -379,12 +464,13 @@ def dispatch_refusal(conn: sqlite3.Connection, config: Config, key: str, *, now:
         return None
     if plan.status is PlanStatus.APPROVED:
         return "bad_plan", f"feedback plan {plan.id} of {key} is approved: dispatch the resume that follows it"
-    return _waiting_refusal(conn, config, plan, now)
+    return _waiting_refusal(conn, config, ws, plan, now)
 
 
 def _waiting_refusal(
     conn: sqlite3.Connection,
     config: Config,
+    ws: Workspace,
     plan: records.FeedbackPlan,
     now: datetime,
 ) -> tuple[str, str] | None:
@@ -398,7 +484,7 @@ def _waiting_refusal(
     ticket = db.get_ticket(conn, key)
     if ticket is not None and changes_asked(conn, ticket) is not None:
         return None
-    found = stale(conn, config, plan, now)
+    found = stale(conn, config, ws, plan, now)
     if not found.changes:
         why = "who has asked for no change, and nothing changed on its PRs since it was written"
         return "bad_plan", f"feedback plan {plan.id} of {key} waits on the operator, {why}"
@@ -428,17 +514,23 @@ class Stale:
         return self.quiet_until is None or now >= self.quiet_until
 
 
-def stale(conn: sqlite3.Connection, config: Config, plan: records.FeedbackPlan, now: datetime) -> Stale:
+def stale(
+    conn: sqlite3.Connection,
+    config: Config,
+    ws: Workspace,
+    plan: records.FeedbackPlan,
+    now: datetime,
+) -> Stale:
     """Compare `plan` with what the connectors observe of its PRs now, in code (DESIGN §32, Planning again).
 
     The quiet period runs from the newest item or reply on its PRs, or from when the harness first saw the head or
     check conclusion they moved to, the newer: a stream of pushes or a flapping check holds a re-plan as a stream of
-    comments does (TRUST_MODEL T3).
+    comments does (TRUST_MODEL T3). A check `ws` gives a role other than CI neither makes it stale nor holds it.
 
     Returns:
         What changed, and when the quiet period on its PRs ends.
     """
-    changes = feedback_items.changes(conn, config.trust, plan)
+    changes = feedback_items.changes(conn, config.trust, plan, ws)
     made = feedback_items.newest(conn, config.trust, feedback_items.prs_of(conn, plan.id))
     moved = feedback_items.moved_at(conn, plan.id, changes, now)
     latest = max((t for t in (made, moved) if t is not None), default=None)
@@ -446,8 +538,8 @@ def stale(conn: sqlite3.Connection, config: Config, plan: records.FeedbackPlan, 
     return Stale(changes=changes, quiet_until=quiet)
 
 
-def note_moves(conn: sqlite3.Connection, config: Config) -> None:
-    """Record each waiting feedback plan's PR's head and checks, each value timed from when it was first seen.
+def note_moves(conn: sqlite3.Connection, config: Config, ws: Workspace) -> None:
+    """Record each waiting feedback plan's PR's head and CI checks, each value timed from when it was first seen.
 
     Call each tick after the connectors read, so the quiet period runs from the newest move (`stale`). Nothing is
     recorded with feedback plans off.
@@ -462,7 +554,7 @@ def note_moves(conn: sqlite3.Connection, config: Config) -> None:
     now = db.now()
     with db.transaction(conn):
         for plan in waiting:
-            feedback_items.record_values(conn, plan.id, feedback_items.prs_of(conn, plan.id), now)
+            feedback_items.record_values(conn, ws, plan.id, feedback_items.prs_of(conn, plan.id), now)
 
 
 def approve(
@@ -471,6 +563,7 @@ def approve(
     key: str,
     *,
     trust: Trust,
+    ws: Workspace,
     channel: str,
     dispatch_lock: Path,
     chosen: Collection[int] = (),
@@ -489,7 +582,8 @@ def approve(
 
     A waiting plan that is stale is refused once for what changed on its PRs since it was written, which the refusal
     names and records; approving it again, with nothing more changed, approves it, and what changed waits for the next
-    plan (DESIGN §32, Planning again). `trust` tells a worker's comments and the operator's sent replies from feedback.
+    plan (DESIGN §32, Planning again). `trust` tells a worker's comments and the operator's sent replies from feedback,
+    and `ws` the checks that are not CI from those that are.
 
     Returns:
         The approved plan's row.
@@ -518,7 +612,7 @@ def approve(
                 "bad_plan",
                 f"feedback plan {plan.id} of {key} is approved, and its file has not changed since",
             )
-        changed = feedback_items.changes(conn, trust, plan) if plan.status is PlanStatus.PROPOSED else []
+        changed = feedback_items.changes(conn, trust, plan, ws) if plan.status is PlanStatus.PROPOSED else []
         shown = feedback_items.digest(changed)
         if changed and plan.stale_shown != shown:
             # Recorded, and committed with the transaction before the refusal, so approving again approves it.
@@ -545,7 +639,7 @@ def approval_message(
     """
     named = prompts.item_names
     if not addressed and not left:
-        body = f"Go ahead on feedback plan {plan_id} as it says: it covers no review item."
+        body = f"Go ahead on feedback plan {plan_id} as it says: it covers no item."
     elif not left:
         body = f"Address {named(addressed)} of feedback plan {plan_id}, every item it covers, as it proposes."
     else:
@@ -774,6 +868,7 @@ class FeedbackPlanState(TypedDict):
 def state_section(
     conn: sqlite3.Connection,
     config: Config,
+    ws: Workspace,
     ticket: records.Ticket,
     *,
     attempts: Mapping[str, int],
@@ -815,15 +910,21 @@ def state_section(
         "needed": on,
         "attempts": dict(attempts),
         "limits": dict(limits),
-        "newest": None if newest is None else _newest(conn, config, newest, now),
+        "newest": None if newest is None else _newest(conn, config, ws, newest, now),
         "changes_asked": changes_asked(conn, ticket) is not None,
         "blocked": blocked,
     }
 
 
-def _newest(conn: sqlite3.Connection, config: Config, plan: records.FeedbackPlan, now: datetime) -> NewestFeedbackPlan:
+def _newest(
+    conn: sqlite3.Connection,
+    config: Config,
+    ws: Workspace,
+    plan: records.FeedbackPlan,
+    now: datetime,
+) -> NewestFeedbackPlan:
     waits = plan.status is PlanStatus.PROPOSED
-    found = stale(conn, config, plan, now) if waits else Stale(changes=(), quiet_until=None)
+    found = stale(conn, config, ws, plan, now) if waits else Stale(changes=(), quiet_until=None)
     return {
         "id": plan.id,
         "status": plan.status,

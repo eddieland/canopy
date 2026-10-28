@@ -8,6 +8,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -18,6 +19,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -32,6 +34,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -45,6 +48,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -56,6 +60,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -69,6 +74,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -79,6 +85,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -92,6 +99,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -102,6 +110,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -115,6 +124,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -126,6 +136,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -139,6 +150,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -149,6 +161,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -163,6 +176,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -173,6 +187,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -186,6 +201,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -196,6 +212,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -210,6 +227,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -220,6 +238,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -235,6 +254,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -248,6 +268,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -258,6 +279,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -272,6 +294,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -285,6 +308,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -296,6 +320,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -309,6 +334,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -320,6 +346,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -334,6 +361,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])
@@ -347,6 +375,7 @@
       ),
       repo=None,
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
     Derived(
@@ -358,6 +387,7 @@
       ),
       repo='repo',
       stale=None,
+      stale_tracker=False,
       ticket_key='PROJ-1',
     ),
   ])

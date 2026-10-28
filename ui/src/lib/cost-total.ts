@@ -14,13 +14,25 @@ export function costText(cost: number | null): string {
  * What a total cost counted, and how many of those reported no cost: `over 3 runs and 1 review, 1 unpriced`. A total
  * that counted nothing says so: `nothing has run`.
  */
-export function countedText(cost: CostTotal): string {
+export function countedText(cost: Omit<CostTotal, 'models'>): string {
     const counts = [counted(cost.runs, 'run'), counted(cost.reviews, 'review')].filter((c) => c !== '')
     if (counts.length === 0) {
         return 'nothing has run'
     }
     const unpriced = cost.runs + cost.reviews - cost.priced
     return `over ${counts.join(' and ')}${unpriced > 0 ? `, ${unpriced} unpriced` : ''}`
+}
+
+/**
+ * What part of a total cost no run's session named a model for: the total less what each model its runs' sessions
+ * named cost (`cost.models`), null when nothing is left, to the cent, or no model was named.
+ */
+export function unattributedCost(cost: Pick<CostTotal, 'cost_usd' | 'models'>): number | null {
+    if (cost.cost_usd === null || cost.models.length === 0) {
+        return null
+    }
+    const rest = cost.models.reduce((left, m) => left - m.cost_usd, cost.cost_usd)
+    return toCents(rest) > 0 ? rest : null
 }
 
 function counted(n: number, noun: string): string {

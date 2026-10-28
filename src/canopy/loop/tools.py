@@ -5,11 +5,13 @@ the overseer passes in, keys, reasons, phases, cursor ids, and free text, which 
 prompts, and the rules across its fields. The `canopy` commands and the MCP server (`loop.mcp`) both build a request
 and call its verb, so a tool and its command cannot drift apart.
 
-A verb returns the text its command prints. A request that does not validate is what the command calls misuse, exit
-2; a guard's refusal, or a call outside a running tick, is `Refused`, exit 1. Either way the text is the same.
+A verb returns an `Outcome`: the text its command prints, and a result, a model whose fields say what it did and whose
+schema is its tool's output schema. A request that does not validate is what the command calls misuse, exit 2; a
+guard's refusal, or a call outside a running tick, is `Refused`, exit 1. Either way the text is the same.
 
-This module holds what every verb shares, the bounds, the `Request` base, and the running tick, and the ticket's verbs:
-dispatch, decide, queried, attention, ticket set, and mirror. A feature's own verbs are in a module of their own, the
+This module holds what every verb shares, the bounds, the `Request` and `Result` bases, and the running tick, and the
+ticket's verbs:
+dispatch, decide, queried, attention, and ticket set. A feature's own verbs are in a module of their own, the
 reviews' in `loop.review_tools` and the chores' in `loop.chore_tools`.
 """
 
@@ -18,6 +20,7 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal, Self
 
@@ -35,11 +38,11 @@ from pydantic import (
 )
 from pydantic_core import PydanticUndefined
 
-from canopy.core import config, contract, conversation, db, memory, vocab
-from canopy.core.vocab import ResumeReason, RunKind, TickStatus
+from canopy.core import config, contract, conversation, db, kept_items, memory, recorded_runs, vocab
+from canopy.core.vocab import RecordedStatus, ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
-from canopy.loop import attention, claims, duties
-from canopy.reviews import findings, grants
+from canopy.loop import attention, claims, duties, harness, harness_dispatches
+from canopy.reviews import findings
 from canopy.runs import dispatch, policy
 
 if TYPE_CHECKING:
@@ -56,8 +59,6 @@ KEY_RE = dispatch.KEY_RE
 REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
 #: A cursor's id: it is rendered into prompts, so it is kept short and plain.
 CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
-#: A review cursor is a time, the one form every kind of review feedback shares (DESIGN §7).
-REVIEW_CURSOR_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 #: The most free text the overseer writes to the journal in one field.
 MAX_TEXT = 2000
 #: A ticket's title is a name, shown beside its key and in its runs' session titles (DESIGN §13).
@@ -66,8 +67,22 @@ MAX_TITLE = 80
 MAX_PR_URL = 300
 #: What `decide` records.
 DECIDE_ACTIONS = ("wait", "skip", "done")
+#: The guard that refuses what the overseer records about a ticket the harness decided (DESIGN §37).
+DECIDED = "decided"
+#: The guard that refuses an attention item of a reason the harness raises from its causes (DESIGN §37).
+RAISED = "raised"
+#: The guard that refuses an item the overseer keeps that names nothing that could end it (DESIGN §37).
+UNNAMED = "unnamed"
 #: The phases the overseer sets. `split` is retired (M46): old tickets may still hold it, and nothing sets it.
 SETTABLE_PHASES = tuple(p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT)
+
+
+#: What a verb's result says of the recorded run it returns (DESIGN §40).
+RECORDED_DESCRIPTION = (
+    "The recorded run, which the tick starts once your run ends, under its guards again; none in a dry run."
+)
+#: What a verb's text says of a run it recorded.
+STARTS_AFTER = "it starts once your run ends, if its guards still allow it"
 
 
 class Refused(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
@@ -78,7 +93,7 @@ def explain(error: ValidationError) -> str:
     """Say what was wrong with a request, as the overseer reads it from a tool's error or a command's usage error.
 
     It names each field and what was wrong with it, never pydantic's copy of the input; a check echoes a value only for
-    short, bounded fields, never a body: a mirrored comment's body is the tracker's.
+    short, bounded fields, never free text, which may be a tracker's or a reviewer's.
 
     Returns:
         One line per problem: a rule across fields as its own sentence, a field's as `field: problem`.
@@ -102,21 +117,6 @@ def valid_key(value: str) -> bool:
         True when `value` matches `KEY_RE` in full.
     """
     return KEY_RE.fullmatch(value) is not None
-
-
-def valid_review_cursor(value: str) -> bool:
-    """A review cursor names a real moment in one fixed form, so cursors compare as strings (DESIGN §7).
-
-    Returns:
-        True when `value` is in the form `YYYY-MM-DDTHH:MM:SSZ` and names a real time.
-    """
-    if REVIEW_CURSOR_RE.fullmatch(value) is None:
-        return False
-    try:
-        db.parse_time(value)
-    except ValueError:
-        return False
-    return True
 
 
 def truncate(value: str) -> str:
@@ -187,14 +187,16 @@ def cursor(name: str, cursor_id: str) -> tuple[str, str]:
         raise ValueError(f"cursor must be NAME=ID with NAME one of {', '.join(db.CURSOR_COLUMNS)}")
     if not CURSOR_VALUE_RE.fullmatch(cursor_id):
         raise ValueError(f"invalid cursor id {cursor_id!r}")
-    # A message cursor is a journal message id (DESIGN §22).
-    if name == "message" and not (cursor_id.isascii() and cursor_id.isdigit()):
-        raise ValueError(f"a message cursor is a message id, a number; got {cursor_id!r}")
-    if name == "review" and not valid_review_cursor(cursor_id):
-        raise ValueError(
-            f"a review cursor is the newest handled item's time in UTC, as YYYY-MM-DDTHH:MM:SSZ; got {cursor_id!r}",
-        )
+    # A message cursor is a journal message id (DESIGN §22); a review or ci cursor a journal number (§35). A comment
+    # cursor is one too, but on a ticket no tracker source observes, which only the call's context can tell.
+    if name in {"message", "review", "ci"} and not _digits(cursor_id):
+        what = "a message id, a number" if name == "message" else "an item's journal number, as the state block shows"
+        raise ValueError(f"a {name} cursor is {what}; got {cursor_id!r}")
     return name, cursor_id
+
+
+def _digits(value: str) -> bool:
+    return value.isascii() and value.isdigit()
 
 
 def matching(pattern: re.Pattern[str], what: str) -> AfterValidator:
@@ -300,8 +302,8 @@ Cursors = Annotated[
     _null_left_out(dict, Mapping[CursorName, str] | None),
     AfterValidator(_cursors),
     Field(
-        description="Cursors to advance past what you handled, by name. comment and message are the ticket's; review "
-        "(a UTC time, YYYY-MM-DDTHH:MM:SSZ) and ci a unit's, one repository's.",
+        description="Cursors to advance past what you handled, by name, each the number of the newest item handled as "
+        "the state block shows it. comment and message are the ticket's; review and ci a unit's, one repository's.",
     ),
 ]
 
@@ -314,7 +316,23 @@ class Request(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True, coerce_numbers_to_str=True)
 
 
-# The verbs, each its request, then its function.
+class Result(BaseModel):
+    """The base of every verb's result: its fields are the tool's structured content, its schema the output schema."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+
+@dataclass(frozen=True)
+class Outcome[R: BaseModel]:
+    """What a verb did, as its command prints it and as its tool returns it."""
+
+    #: What the command prints, and the tool's text.
+    text: str
+    #: The same as fields: the tool's structured content.
+    result: R
+
+
+# The verbs, each its request, its result, then its function.
 
 
 class Dispatch(Request):
@@ -372,8 +390,16 @@ class Dispatch(Request):
         Text | None,
         Field(description="What the worker should read or do. Never quoted ticket or PR text."),
     ] = None
-    #: The cursors to advance, only if the worker starts.
-    cursors: Cursors = Field(default_factory=dict)
+    #: The cursors to advance, only if the worker starts; a resume's reasons move theirs to the newest item shown.
+    cursors: Annotated[
+        Cursors,
+        Field(
+            description="Cursors to advance, only if the worker starts, by name, each the number of the newest item "
+            "handled as the state block shows it. A resume moves each cursor of its reasons it leaves out to the "
+            "newest item of that kind the state block shows, short of one it may not cover: pass one only to stop "
+            "shorter. comment and message are the ticket's; review and ci a unit's, one repository's.",
+        ),
+    ] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _one_unit(self) -> Self:
@@ -386,37 +412,73 @@ class Dispatch(Request):
         return self
 
 
-def dispatch_run(ctx: Context, request: Dispatch) -> str:
-    """Start a worker on a ticket, if its guards allow one now; in a dry run, check them and start nothing (D036).
+class Dispatched(Result):
+    """A worker recorded for a ticket, which the tick starts after the overseer, or a dry run's its guards allow."""
+
+    #: The ticket.
+    key: Annotated[str, Field(description="The ticket.")]
+    #: What the worker does.
+    kind: Annotated[RunKind, Field(description="What the worker does.")]
+    #: Whether this was a dry run, which records nothing.
+    dry_run: Annotated[bool, Field(description="Whether this was a dry run, which records nothing.")]
+    #: The recorded run, which the tick starts once the overseer's run ends; none in a dry run.
+    recorded: Annotated[int | None, Field(description=RECORDED_DESCRIPTION)]
+    #: The branch it works on; empty for a plan, which works on none.
+    branch: Annotated[str, Field(description="The branch it works on; empty for a plan, which works on none.")]
+    #: The repositories it works in, a unit each.
+    repos: Annotated[tuple[str, ...], Field(description="The repositories it works in, a unit each.")]
+
+
+def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
+    """Record a worker for a ticket, if its guards allow one now, for the tick to start after the overseer (§40).
+
+    In a dry run, check the guards and record nothing (D036). The tick starts the recorded run once the overseer's run
+    has ended (`spawn_dispatch`); until then it is the ticket's one run, and holds a worker.
 
     Returns:
-        What the command prints: the run that started, or what a dry run would have started.
+        What the command prints, the run recorded or what a dry run would have started, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or a guard refused the dispatch, which is recorded.
     """
     current = running_tick(ctx)
     key, kind, repos, reasons = request.key, request.kind, request.repos, request.reasons
-    cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
-    unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
+    _comment_cursor(ctx, request.cursors)
     tick_id = current.id
+    _refuse_decided(ctx, tick_id, key, "dispatch")
     log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
+    now = datetime.now(UTC)
+    # A resume's reasons move their cursors to the newest item the block showed, unless it passed one (DESIGN §37).
+    cursors = claims.default_cursors(
+        ctx,
+        current,
+        now,
+        key=key,
+        kind=kind,
+        repos=repos,
+        reasons=reasons,
+        cursors=dict[str, str](request.cursors.items()),
+        review_run=request.review_run,
+    )
+    cursor_pairs: list[tuple[str, str]] = list(cursors.items())
     handles = _handles(cursor_pairs, request.review_run)
+    # The workers the harness's runs to come hold ahead of this one, in §7's order (DESIGN §37).
+    reserved = harness_dispatches.reserved(ctx, tick_id, kind, reasons)
     try:
         dispatch.check_kind(kind)
-        review = _review_findings(ctx.conn, key, kind, repos, request.review_run)
+        _review_findings(ctx.conn, key, kind, repos, request.review_run)
         # The claims, checked against what the connectors observed, before §8's other guards (DESIGN §35).
         claims.check(
             ctx,
             tick_id,
-            datetime.now(UTC),
+            now,
             key=key,
             kind=kind,
             label=request.label,
             repos=repos,
             reasons=reasons,
-            cursors=dict(cursor_pairs),
+            cursors=cursors,
             review_run=request.review_run,
             base=request.base,
         )
@@ -433,11 +495,11 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
                 repos=repos,
                 reasons=reasons,
                 cursors=handles,
+                reserved=reserved,
             )
-            branch, queue_label, repo_names, starts = plan.branch, plan.label, plan.repos, plan.starts
-            started = None
+            recorded = None
         else:
-            started = dispatch.start(
+            recorded = dispatch.record(
                 ctx,
                 tick_id=tick_id,
                 key=key,
@@ -445,32 +507,24 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
                 label=request.label,
                 slug=request.slug,
                 base=request.base,
-                context=request.context,
+                # With its default cursors, so the spawn moves what the block showed at the ask (DESIGN §37, §40).
+                request=request.model_copy(update={"cursors": cursors}).model_dump(mode="json"),
                 repos=repos,
-                review=review,
                 reasons=reasons,
                 cursors=handles,
+                reserved=reserved,
             )
-            branch, queue_label, repo_names, starts = started.branch, started.label, started.repos, started.starts
+            plan = recorded.plan
     except dispatch.Refusal as r:
-        db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
-        if r.attention is not None:
-            # The overseer wants work a guard forbids, and only a human can lift it: the attempt limit, a retired
-            # prompt override, or a persona canopy cannot use (DESIGN §8, §14, §31). In a workspace of several, the
-            # item is about the unit it holds.
-            db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, repo=r.repo)
-        log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
+        _dispatch_refused(ctx, tick_id, key, kind, r)
         raise Refused(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    # `base` passed the guards, so it is the branch this run is stacked on. `queue_label` is the configured spelling, or
-    # empty for a private ticket, which its start record authorizes (DESIGN §22). Under `tracker.private` the label
-    # authorizes a ticket's first run, which starts it privately.
-    authorized = f"label {queue_label}" if queue_label else "private: started by the operator"
-    authorized += "; starts it privately (tracker.private)" if starts else ""
+    branch, repo_names = plan.branch, plan.repos
+    authorized = _authorized(plan.label, starts=plan.starts)
     in_repo = f" in {', '.join(repo_names)}"
     work = _work(key, kind, branch, request.base, repo_names)
     requested = f"; review run {request.review_run}" if request.review_run is not None else ""
     requested += f"; {_for(reasons)}" if reasons else ""
-    if started is None:
+    if recorded is None:
         extras = [
             *(f"cursor {name}={value}" for name, value in cursor_pairs),
             f"context={request.context}" if request.context else "",
@@ -490,17 +544,125 @@ def dispatch_run(ctx: Context, request: Dispatch) -> str:
         )
         db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
         log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
-        return f"dry run: recorded dispatch {kind} for {key}; nothing was started"
+        return Outcome(
+            f"dry run: recorded dispatch {kind} for {key}; nothing was started",
+            Dispatched(key=key, kind=kind, dry_run=True, recorded=None, branch=branch, repos=repo_names),
+        )
+    # The decision is recorded as the run starts, or with its refusal then: cursors move only once it starts.
+    log.info("dispatch recorded", extra={"ticket": key, "kind": kind, "recorded_run_id": recorded.recorded_id})
+    return Outcome(
+        f"recorded dispatch {kind} for {key} as recorded run {recorded.recorded_id}: {work}{in_repo}; "
+        f"{authorized}{requested}; {STARTS_AFTER}",
+        Dispatched(
+            key=key,
+            kind=kind,
+            dry_run=False,
+            recorded=recorded.recorded_id,
+            branch=branch,
+            repos=repo_names,
+        ),
+    )
+
+
+def spawn_dispatch(ctx: Context, recorded: records.RecordedRun) -> None:
+    """Start the worker `recorded` names, as its tick does once the overseer's run has ended (DESIGN §40).
+
+    Every guard is checked again, and a refusal is recorded as the overseer's dispatch's would be; the run's decision
+    is recorded as it starts, its cursors moved then, so what a refused one was meant to handle is still new next tick.
+    """
+    request = Dispatch.model_validate(recorded_runs.request_of(recorded))
+    tick_id = recorded.tick_id
+    key, kind, repos, reasons = request.key, request.kind, request.repos, request.reasons
+    cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
+    tracked = ctx.config.connect.observes_tickets()
+    unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
+    log = logs.for_tick(tick_id)
+    try:
+        review = _review_findings(ctx.conn, key, kind, repos, request.review_run)
+        # The claims again too: an observation fresh at the ask may have aged past its bound since (DESIGN §35, §40).
+        claims.check(
+            ctx,
+            tick_id,
+            datetime.now(UTC),
+            key=key,
+            kind=kind,
+            label=request.label,
+            repos=repos,
+            reasons=reasons,
+            cursors=dict(cursor_pairs),
+            review_run=request.review_run,
+            base=request.base,
+        )
+        started = dispatch.start(
+            ctx,
+            tick_id=tick_id,
+            key=key,
+            kind=kind,
+            label=request.label,
+            slug=request.slug,
+            base=request.base,
+            context=request.context,
+            repos=repos,
+            review=review,
+            reasons=reasons,
+            cursors=_handles(cursor_pairs, request.review_run),
+            spawning=recorded.id,
+        )
+    except dispatch.Refusal as r:
+        recorded_runs.close(ctx.conn, recorded.id, RecordedStatus.REFUSED)
+        _dispatch_refused(ctx, tick_id, key, kind, r)
+        return
+    recorded_runs.close(ctx.conn, recorded.id, RecordedStatus.STARTED, run_id=started.run_id)
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     ticket_cursors = {name: value for name, value in cursor_pairs if name in db.TICKET_CURSORS}
-    db.set_ticket(ctx.conn, key, ctx.repo, cursors=ticket_cursors)
+    db.set_ticket(ctx.conn, key, ctx.repo, cursors=ticket_cursors, tracked=tracked)
     if unit_cursors:
         cursors = {name: value for name, value in cursor_pairs if name in db.UNIT_CURSORS}
-        db.set_unit(ctx.conn, key, ctx.repo, repo_names[0], cursors=cursors)
+        db.set_unit(ctx.conn, key, ctx.repo, started.repos[0], cursors=cursors)
+    # `base` passed the guards, so it is the branch this run is stacked on.
+    work = _work(key, kind, started.branch, request.base, started.repos)
+    requested = f"; review run {request.review_run}" if request.review_run is not None else ""
+    requested += f"; {_for(reasons)}" if reasons else ""
+    authorized = _authorized(started.label, starts=started.starts)
     rationale = f"run {started.run_id}: {work}{_where(started)}; {authorized}{requested}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
-    log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
-    return f"dispatched {kind} for {key}: {rationale}"
+    log.info(
+        "dispatched",
+        extra={
+            "ticket": key,
+            "kind": kind,
+            "run_id": started.run_id,
+            "pid": started.pid,
+            "recorded_run_id": recorded.id,
+        },
+    )
+
+
+def _dispatch_refused(ctx: Context, tick_id: int, key: str, kind: str, r: dispatch.Refusal) -> None:
+    """Record a guard's refusal of a dispatch, at the ask or at the spawn, and the attention item it raises, if any."""
+    db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
+    if r.attention is not None:
+        # The overseer wants work a guard forbids, and only a human can lift it: the attempt limit, a retired
+        # prompt override, or a persona canopy cannot use (DESIGN §8, §14, §31). In a workspace of several, the
+        # item is about the unit it holds.
+        db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, repo=r.repo)
+    logs.for_tick(tick_id).info(
+        "dispatch refused",
+        extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason},
+    )
+
+
+def _authorized(label: str, *, starts: bool) -> str:
+    """What a dispatch's decision says authorized it: the queue label, or the operator's start (DESIGN §22).
+
+    `label` is the configured spelling, or empty for a private ticket, which its start record authorizes. Under
+    `tracker.private` the label authorizes a ticket's first run, which starts it privately.
+
+    Returns:
+        The words, for the decision's rationale.
+    """
+    authorized = f"label {label}" if label else "private: started by the operator"
+    return authorized + ("; starts it privately (tracker.private)" if starts else "")
 
 
 class Decide(Request):
@@ -536,26 +698,85 @@ class Decide(Request):
         if key is not None and action == "skip" and duties.tick_wide(rationale):
             raise ValueError(
                 f"{rationale.split(':', 1)[0].strip()!r} skips the whole tick, so it names no key: leave key out "
-                "(`canopy decide skip --rationale '...'`), only when the tick cannot go on; "
+                "(a decide of skip with only a rationale), only when the tick cannot go on; "
                 "otherwise decide each ticket under its own key",
             )
         return self
 
 
-def decide(ctx: Context, request: Decide) -> str:
-    """Record a decision.
+class Decisions(Request):
+    """One or more decisions, recorded together or not at all."""
+
+    #: Each decision, in the order it is recorded.
+    decisions: Annotated[
+        tuple[Decide, ...],
+        # Its one item is checked below, not by `min_length`, which would also refuse a call whose only item is wrong.
+        Field(
+            json_schema_extra={"minItems": 1},
+            description="Each decision, one per ticket, recorded together or not at all. A tick-wide skip is the "
+            "only one in its call.",
+        ),
+    ]
+
+    @model_validator(mode="after")
+    def _batch(self) -> Self:
+        if not self.decisions:
+            raise ValueError("name at least one decision")
+        if len(self.decisions) > 1 and any(d.key is None for d in self.decisions):
+            raise ValueError("a skip with no key skips the whole tick, so it is the only decision in its call")
+        keys = [d.key for d in self.decisions]
+        if twice := sorted({key for key in keys if key is not None and keys.count(key) > 1}):
+            raise ValueError(f"decide each ticket once in a call: {', '.join(twice)} decided twice")
+        return self
+
+
+class Decision(Result):
+    """A decision recorded about a ticket, or about the whole tick."""
+
+    #: The ticket; none for a tick-wide skip.
+    key: Annotated[str | None, Field(description="The ticket; none for a tick-wide skip.")]
+    #: What was decided.
+    action: Annotated[Literal["wait", "skip", "done"], Field(description="What was decided.")]
+
+
+class Decided(Result):
+    """The decisions a call recorded."""
+
+    #: Each decision recorded, in the order given.
+    decisions: Annotated[tuple[Decision, ...], Field(description="Each decision recorded, in the order given.")]
+
+
+def decide(ctx: Context, request: Decisions) -> Outcome[Decided]:
+    """Record decisions, all of them or none.
 
     Returns:
-        What the command prints.
+        What the command prints, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick.
+        Refused: Outside a running tick; about a ticket the harness decided this tick, whose refusal is recorded and
+            leaves every decision of the call unrecorded; or a tick-wide skip for a tracker a `tracker` source reads.
     """
     current = running_tick(ctx)
-    if request.key is not None:
-        db.touch_ticket(ctx.conn, request.key, ctx.repo)
-    db.record_decision(ctx.conn, current.id, request.key, request.action, request.rationale)
-    return f"recorded {request.action} for {request.key or 'this tick'}"
+    tick_wide = [d.rationale.split(":", 1)[0].strip() for d in request.decisions if d.key is None]
+    if duties.TRACKER_UNSUPPORTED in tick_wide and ctx.config.connect.observes_tickets():
+        raise Refused(
+            f"decide refused: a `tracker` source reads the tracker, and you read none, so no tick is skipped "
+            f"'{duties.TRACKER_UNSUPPORTED}' (DESIGN §39); decide each ticket under its own key",
+        )
+    keys = [d.key for d in request.decisions if d.key is not None]
+    if refused := [r for key in keys if (r := _decided_by_harness(ctx, current.id, key, "decide")) is not None]:
+        recorded = "the refusal was recorded" if len(refused) == 1 else "the refusals were recorded"
+        unrecorded = "" if len(request.decisions) == 1 else ", and nothing else in the call: decide the rest again"
+        raise Refused(f"decide refused ({DECIDED}): {'; '.join(refused)}; {recorded}{unrecorded}")
+    with db.transaction(ctx.conn):
+        for d in request.decisions:
+            if d.key is not None:
+                db.touch_ticket(ctx.conn, d.key, ctx.repo)
+            db.record_decision(ctx.conn, current.id, d.key, d.action, d.rationale)
+    return Outcome(
+        "\n".join(f"recorded {d.action} for {d.key or 'this tick'}" for d in request.decisions),
+        Decided(decisions=tuple(Decision(key=d.key, action=d.action) for d in request.decisions)),
+    )
 
 
 class Queried(Request):
@@ -575,22 +796,33 @@ class Queried(Request):
         return self
 
 
-def queried(ctx: Context, request: Queried) -> str:
+class QueryRecorded(Result):
+    """The tracker query recorded, with the open tickets it returned."""
+
+    #: Each open ticket named, once, in the order first named.
+    keys: Annotated[tuple[str, ...], Field(description="Each open ticket named, once, in the order first named.")]
+
+
+def queried(ctx: Context, request: Queried) -> Outcome[QueryRecorded]:
     """Record the tracker query, and each ticket it returned, which is owed a decision this tick.
 
     Returns:
-        What the command prints.
+        What the command prints, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick.
+        Refused: Outside a running tick, or where a `tracker` source reads the query, whose read canopy records.
     """
-    found = list(dict.fromkeys(request.keys))
     current = running_tick(ctx)
-    # Into the journal at once, so the next tick's block carries each one even if this tick ends without deciding it.
-    for key in found:
-        db.touch_ticket(ctx.conn, key, ctx.repo)
-    db.record_decision(ctx.conn, current.id, None, duties.QUERIED_ACTION, duties.queried_rationale(found))
-    return f"recorded the query: {len(found)} open ticket(s)"
+    if ctx.config.connect.observes_tickets():
+        raise Refused(
+            "queried refused: a `tracker` source reads the query, and canopy records its result itself (DESIGN §39); "
+            "run no query, and record none",
+        )
+    found = duties.record_queried(ctx.conn, current.id, ctx.repo, request.keys)
+    return Outcome(
+        f"recorded the query: {found} open ticket(s)",
+        QueryRecorded(keys=tuple(dict.fromkeys(request.keys))),
+    )
 
 
 class Attention(Request):
@@ -609,34 +841,69 @@ class Attention(Request):
         PrUrl | None,
         Field(description="A PR the loop reviews; in place of key for a PR with no ticket."),
     ] = None
+    #: The journal number of what a `needs_author` waits on, or of the check run a `notice_rerun` holds.
+    item: Annotated[
+        StrictInt | None,
+        Field(
+            ge=1,
+            description="needs_author and notice_rerun: the number, as the state block shows it, of the comment, "
+            "review item, or review run a needs_author waits on, or of the check run a notice_rerun holds.",
+        ),
+    ] = None
 
     @model_validator(mode="after")
     def _about(self) -> Self:
         if self.key is None and self.pr is None:
             raise ValueError("key or pr is required (KEY, or --pr): an item is about a ticket, or a PR with no ticket")
+        if self.item is not None and self.reason not in kept_items.NAMING:
+            raise ValueError("item is only for needs_author and notice_rerun: what one waits on, or the check it holds")
         return self
 
 
-def attend(ctx: Context, request: Attention) -> str:
+class AttentionRecorded(Result):
+    """An attention item recorded."""
+
+    #: Why the operator is needed.
+    reason: Annotated[str, Field(description="Why the operator is needed.")]
+    #: The ticket; none for a PR with no ticket.
+    key: Annotated[str | None, Field(description="The ticket; none for a PR with no ticket.")]
+    #: The repository of the ticket's unit it is about, if it names one.
+    repo: Annotated[str | None, Field(description="The repository of the unit it is about, if it names one.")]
+    #: The PR it is about, if it names one.
+    pr: Annotated[str | None, Field(description="The PR it is about, if it names one.")]
+
+
+def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
     """Record an attention item.
 
     Returns:
-        What the command prints.
+        What the command prints, and the same as fields.
+
+    One the overseer keeps (`kept_items.KEPT`) is recorded once, naming what it is about, and held until that ends it
+    (DESIGN §37).
 
     Raises:
-        Refused: Outside a running tick, or `repo` is not a repository in this workspace.
+        Refused: Outside a running tick, `repo` is not a repository in this workspace, the item is about a ticket the
+            harness decided this tick, its reason is one the harness raises from its causes, or it is one the overseer
+            keeps and names nothing that could end it, each of which is recorded.
     """
     current = running_tick(ctx)
     key, pr, detail = request.key, request.pr, request.detail
     unit = _unit(ctx, request.repo)
     if key is not None:
+        _refuse_decided(ctx, current.id, key, "attention")
         db.touch_ticket(ctx.conn, key, ctx.repo)
-    if request.reason == "review_limit" and pr is not None:
-        # However the overseer words it, the item names what lifts the limit (DESIGN §21).
-        detail = f"{detail}; {grants.hint(pr)}"
+    _refuse_raised(ctx, current.id, request.reason, key=key, repo=unit, pr=pr)
+    kept = request.reason in kept_items.KEPT
+    if kept:
+        _refuse_unnamed(ctx, current.id, request, repo=unit)
     action = f"{attention.ACTION_PREFIX}{request.reason}"
-    db.record_decision(ctx.conn, current.id, key, action, detail, repo=unit, pr=pr)
-    return f"recorded attention {request.reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}"
+    db.record_decision(ctx.conn, current.id, key, action, detail, repo=unit, pr=pr, kept=kept, item=request.item)
+    return Outcome(
+        f"recorded attention {request.reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}"
+        + ("; the harness holds it until what it names ends it" if kept else ""),
+        AttentionRecorded(reason=request.reason, key=key, repo=unit, pr=pr),
+    )
 
 
 class TicketSet(Request):
@@ -644,10 +911,13 @@ class TicketSet(Request):
 
     #: The ticket.
     key: Key
-    #: The unit a phase about a PR, and the review and ci cursors, are for.
+    #: The unit a phase about a PR, and the review and ci cursors, are for; left out, the ticket's one unit.
     repo: Annotated[
         Repo | None,
-        Field(description="The unit a phase about a PR, and the review and ci cursors, are for."),
+        Field(
+            description="The unit a phase about a PR, and the review and ci cursors, are for. Left out, the ticket's "
+            "one unit, or the workspace's one repository while the ticket has none.",
+        ),
     ] = None
     #: The ticket's phase, or a unit's with `repo`.
     phase: Annotated[
@@ -673,38 +943,145 @@ class TicketSet(Request):
         Field(description="A short name for the ticket, from its own title: shown beside its key."),
     ] = None
 
+
+class TicketSets(Request):
+    """One or more tickets' or units' settings, recorded together or not at all."""
+
+    #: Each ticket's, or unit's, settings, in the order they are recorded.
+    tickets: Annotated[
+        tuple[TicketSet, ...],
+        # Its one item is checked below, not by `min_length`, which would also refuse a call whose only item is wrong.
+        Field(
+            json_schema_extra={"minItems": 1},
+            description="Each ticket's settings, or a unit's with repo, recorded together or not at all.",
+        ),
+    ]
+
     @model_validator(mode="after")
-    def _units(self) -> Self:
-        unit_pairs = [name for name in self.cursors if name in db.UNIT_CURSORS]
-        unit_phase = self.phase if self.phase in vocab.UNIT_PHASES else None
-        if self.repo is None and (unit_pairs or unit_phase is not None):
-            what = f"a {unit_pairs[0]} cursor" if unit_pairs else f"the {unit_phase} phase"
-            raise ValueError(f"repo is required (--repo): {what} belongs to one unit")
+    def _batch(self) -> Self:
+        if not self.tickets:
+            raise ValueError("name at least one ticket")
+        named = [(t.key, t.repo) for t in self.tickets]
+        if twice := sorted({attention.subject(*n) for n in named if named.count(n) > 1}):
+            raise ValueError(f"set each ticket, or unit, once in a call: {', '.join(twice)} set twice")
         return self
 
 
-def ticket_set(ctx: Context, request: TicketSet) -> str:
-    """Record a ticket's phase, cursors, done flag, or title, or a unit's phase and cursors.
+class TicketUpdated(Result):
+    """What was recorded of a ticket, or of one of its units."""
+
+    #: The ticket.
+    key: Annotated[str, Field(description="The ticket.")]
+    #: The unit's repository, when the call named one.
+    repo: Annotated[str | None, Field(description="The unit's repository, when the call named one.")]
+    #: The phase set, if one was.
+    phase: Annotated[str | None, Field(description="The phase set, if one was.")]
+    #: The cursors advanced; a dry run advances none.
+    cursors: Annotated[tuple[CursorName, ...], Field(description="The cursors advanced; a dry run advances none.")]
+    #: Whether the ticket was marked done; a dry run marks none.
+    done: Annotated[bool, Field(description="Whether the ticket was marked done; a dry run marks none.")]
+    #: Whether this was in a dry run.
+    dry_run: Annotated[bool, Field(description="Whether this was in a dry run.")]
+
+
+class TicketsUpdated(Result):
+    """What a call recorded of each ticket, or unit, it named."""
+
+    #: Each ticket or unit updated, in the order given.
+    tickets: Annotated[
+        tuple[TicketUpdated, ...],
+        Field(description="Each ticket or unit updated, in the order given."),
+    ]
+
+
+def ticket_set(ctx: Context, request: TicketSets) -> Outcome[TicketsUpdated]:
+    """Record tickets' phases, cursors, done flags, or titles, or units' phases and cursors, all of them or none.
 
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
-    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in. It runs
-    outside a tick too.
+    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in; a setting
+    that sets one and names no `repo` is about the ticket's one unit. It runs outside a tick too, where the operator
+    runs it and its cursors are not checked. Every setting is checked before any is recorded.
 
     Returns:
-        What the command prints, naming what a dry run did not do.
+        What the command prints, a line for each setting, naming what a dry run did not do, and the same as fields.
 
     Raises:
-        Refused: CANOPY_TICK_ID names no running tick, or `repo` is not a repository in this workspace.
+        Refused: CANOPY_TICK_ID names no running tick, or a setting is refused: its `repo` is not a repository in this
+            workspace, it sets a unit's phase or cursor with no `repo` and the ticket has no one unit, it is inside a
+            tick the harness decided the ticket in, or a cursor names no item observed or passes one the state block
+            left out, each of which is recorded. Nothing else in the call is then recorded.
     """
-    key, phase, done = request.key, request.phase, request.done
-    cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
-    unit_pairs = [(name, value) for name, value in cursor_pairs if name in db.UNIT_CURSORS]
-    unit_phase = phase if phase in vocab.UNIT_PHASES else None
-    unit = _unit(ctx, request.repo)
     current = current_tick(ctx)
+    several = len(request.tickets) > 1
+    checked: list[_Checked] = []
+    refusals: list[str] = []
+    # Every setting is checked, so one call names every refusal, and each refusal names its ticket among several.
+    for setting in request.tickets:
+        try:
+            checked.append(_check_setting(ctx, current, setting))
+        except Refused as e:
+            refusals.append(f"{attention.subject(setting.key, setting.repo)}: {e}" if several else str(e))
+    if refusals:
+        rest = "\nnothing else in the call was recorded: set the rest again" if several else ""
+        raise Refused("\n".join(refusals) + rest)
     # A dry run must not advance cursors or mark a ticket done: the first live tick would then miss everything the dry
     # runs saw, or never see the ticket at all.
     dry_run = current is not None and current.dry_run
+    with db.transaction(ctx.conn):
+        outcomes = [_record_setting(ctx, c, dry_run=dry_run) for c in checked]
+    return Outcome(
+        "\n".join(o.text for o in outcomes),
+        TicketsUpdated(tickets=tuple(o.result for o in outcomes)),
+    )
+
+
+@dataclass(frozen=True)
+class _Checked:
+    """A ticket's or unit's setting that passed its checks, with what they resolved, to record with the rest."""
+
+    #: The setting as the call gave it.
+    setting: TicketSet
+    #: The unit its unit's phase and cursors are for, if it names or sets one.
+    unit: str | None
+    #: The phase, when it is a unit's.
+    unit_phase: str | None
+    #: Whether a tracker source observes tickets, which says where the comment cursor is kept.
+    tracked: bool
+
+
+def _check_setting(ctx: Context, current: records.Tick | None, setting: TicketSet) -> _Checked:
+    """Check one ticket's or unit's setting, recording nothing but a refusal.
+
+    Returns:
+        The setting, with the unit and phase its checks resolved.
+
+    Raises:
+        Refused: As `ticket_set` says, for this setting.
+    """
+    key, phase = setting.key, setting.phase
+    cursors: dict[str, str] = dict(setting.cursors.items())
+    unit_cursor = next((name for name in cursors if name in db.UNIT_CURSORS), None)
+    unit_phase = phase if phase in vocab.UNIT_PHASES else None
+    unit = _unit(ctx, setting.repo)
+    if unit is None and (unit_cursor is not None or unit_phase is not None):
+        unit = _only_unit(ctx, key, f"a {unit_cursor} cursor" if unit_cursor else f"the {unit_phase} phase")
+    tracked = _comment_cursor(ctx, setting.cursors)
+    if current is not None:
+        _refuse_decided(ctx, current.id, key, "ticket set")
+        if cursors:
+            _check_cursors(ctx, current.id, key, unit, cursors)
+    return _Checked(setting, unit, unit_phase, tracked)
+
+
+def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcome[TicketUpdated]:
+    """Record one checked setting, inside the call's transaction.
+
+    Returns:
+        What the command prints of it, and the same as fields.
+    """
+    setting, unit, unit_phase = checked.setting, checked.unit, checked.unit_phase
+    key, phase, done = setting.key, setting.phase, setting.done
+    cursor_pairs: list[tuple[str, str]] = list(setting.cursors.items())
     ignored = [
         *(["cursors not advanced"] if dry_run and cursor_pairs else []),
         *(["not marked done"] if dry_run and done else []),
@@ -717,81 +1094,62 @@ def ticket_set(ctx: Context, request: TicketSet) -> str:
         phase=None if phase is None or unit_phase is not None else vocab.Phase(phase),
         cursors=ticket_cursors,
         done=done and not dry_run,
-        title=request.title,
+        title=setting.title,
+        tracked=checked.tracked,
     )
     if done and not dry_run:
         # A done ticket's notes are invalidated: its work merged or was closed (DESIGN §28, Retention).
         memory.end_ticket_notes(ctx.conn, key, "ticket done")
-    unit_cursors: dict[str, str] = {} if dry_run else dict(unit_pairs)
+    unit_cursors: dict[str, str] = {} if dry_run else {n: v for n, v in cursor_pairs if n in db.UNIT_CURSORS}
     if unit is not None and (unit_phase is not None or unit_cursors):
         db.set_unit(ctx.conn, key, ctx.repo, unit, phase=unit_phase, cursors=unit_cursors)
     note = f"; dry run, {' and '.join(ignored)}" if ignored else ""
-    return f"updated {key if request.repo is None else attention.subject(key, unit)}{note}"
+    return Outcome(
+        f"updated {key if unit is None else attention.subject(key, unit)}{note}",
+        TicketUpdated(
+            key=key,
+            repo=unit,
+            phase=phase,
+            cursors=() if dry_run else tuple(setting.cursors),
+            done=done and not dry_run,
+            dry_run=dry_run,
+        ),
+    )
 
 
-class Mirror(Request):
-    """A tracker comment, copied into a ticket's conversation in the journal for the operator to read."""
+def _comment_cursor(ctx: Context, cursors: Mapping[CursorName, str]) -> bool:
+    """Refuse a comment cursor that is not a journal number where a tracker source observes tickets (DESIGN §35).
 
-    #: What the comment is on: a ticket key, REPO#N, or a PR's URL.
-    ref: Annotated[str, Field(description="What the comment is on: a ticket key, REPO#N, or a PR's URL.")]
-    #: The tracker's id of the comment.
-    comment: Annotated[str, Field(description="The tracker's id of the comment.")]
-    #: Its author's account id on the tracker.
-    author: Annotated[str, Field(description="Its author's account id on the tracker.")]
-    #: When the tracker says it was written.
-    at: Annotated[str, Field(description="When the tracker says it was written, ISO 8601.")]
-    #: Its text, cut to `conversation.MAX_MIRRORED` characters and marked truncated.
-    body: Annotated[
-        str,
-        Field(description=f"Its text; cut to {conversation.MAX_MIRRORED} characters, and marked truncated."),
-    ]
-
-
-def mirror(ctx: Context, request: Mirror) -> str:
-    """Record a tracker comment in a ticket's conversation. Recording it again records nothing new.
-
-    A mirrored comment is a copy for the operator to read, and authorizes nothing.
+    Without one, a ticket's comments have no numbers, so its comment cursor is the tracker's comment id.
 
     Returns:
-        What the command prints.
+        Whether a tracker source observes tickets, which says where the comment cursor is kept.
 
     Raises:
-        Refused: Outside a running tick, or a guard refused the comment, which is recorded.
+        Refused: The comment cursor is not a number where it must be one; nothing is recorded.
     """
-    current = running_tick(ctx)
-    tick_id = current.id
-    log = logs.for_tick(tick_id)
-    ref, comment_id = request.ref, request.comment
-    key: str | None = None
+    tracked = ctx.config.connect.observes_tickets()
+    comment = cursors.get("comment")
+    if tracked and comment is not None and not _digits(comment):
+        raise Refused(f"a comment cursor is a comment's journal number, as the state block shows it; got {comment!r}")
+    return tracked
+
+
+def _check_cursors(ctx: Context, tick_id: int, key: str, repo: str | None, cursors: Mapping[str, str]) -> None:
+    """Check a `ticket set`'s cursors against what the connectors observed, as a dispatch's are (DESIGN §35).
+
+    A dry run checks them too, so its plan holds the refusals a live tick would get (D036).
+
+    Raises:
+        Refused: A cursor names no item observed, or passes one the state block left out; the refusal is recorded.
+    """
+    db.touch_ticket(ctx.conn, key, ctx.repo)
     try:
-        subject = conversation.parse_ref(ref)
-        key = subject.id if subject.kind == conversation.TICKET else None
-        mirrored = conversation.mirror(
-            ctx.conn,
-            ctx.config,
-            subject,
-            tick_id=tick_id,
-            dry_run=current.dry_run,
-            repo=ctx.repo,
-            comment_id=comment_id,
-            author=request.author,
-            at=request.at,
-            body=request.body,
-        )
-    except conversation.Refused as r:
-        if key is not None:
-            db.touch_ticket(ctx.conn, key, ctx.repo)
+        claims.check_cursors(ctx, tick_id, datetime.now(UTC), key=key, repo=repo, cursors=cursors)
+    except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
-        log.info("mirror refused", extra={"ticket": key, "comment": comment_id[:100], "guard": r.guard})
-        raise Refused(f"mirror refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    log.info(
-        "comment mirrored",
-        extra={"ticket": key, "comment": comment_id, "message_id": mirrored.message_id, "new": mirrored.new},
-    )
-    if mirrored.new:
-        cut = ", truncated" if mirrored.truncated else ""
-        return f"mirrored comment {comment_id} on {ref} as message {mirrored.message_id} ({mirrored.source}{cut})"
-    return f"comment {comment_id} on {ref} is already message {mirrored.message_id}; nothing new recorded"
+        logs.for_tick(tick_id).info("ticket set refused", extra={"ticket": key, "guard": r.guard, "reason": r.reason})
+        raise Refused(f"ticket set refused ({r.guard}): {r.reason}; the refusal was recorded") from None
 
 
 # The running tick, which every verb but `ticket set` needs (D020).
@@ -826,7 +1184,101 @@ def running_tick(ctx: Context) -> records.Tick:
     return row
 
 
+def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
+    """Refuse the overseer's `verb` about ticket `key` when the harness decided it in tick `tick_id` (DESIGN §37).
+
+    The harness decided it before the overseer ran, or dispatches it after. The overseer was not shown the ticket, and
+    the harness's decision stands: a steered overseer cannot overrule it (TRUST_MODEL T1). The refusal is recorded, as
+    a guard's is.
+
+    Raises:
+        Refused: The harness decided the ticket this tick.
+    """
+    if (reason := _decided_by_harness(ctx, tick_id, key, verb)) is not None:
+        raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")
+
+
+def _decided_by_harness(ctx: Context, tick_id: int, key: str, verb: str) -> str | None:
+    """Record the refusal of `verb` about `key` if the harness decided the ticket in tick `tick_id`.
+
+    Returns:
+        The refusal's reason, or None when the ticket is the overseer's to decide.
+    """
+    if harness.decided(ctx.conn, tick_id, key):
+        where = "decided"
+        shown = "harness"
+    elif key in harness_dispatches.tickets(ctx, tick_id):
+        where = "dispatches"
+        shown = "dispatches_to_come"
+    else:
+        return None
+    reason = f"the harness {where} {key} this tick (the state block's `{shown}`); record nothing about it"
+    db.record_decision(ctx.conn, tick_id, key, attention.REFUSED_DECIDED, reason)
+    logs.for_tick(tick_id).info("refused: decided by the harness", extra={"ticket": key, "verb": verb})
+    return reason
+
+
+def _refuse_raised(
+    ctx: Context,
+    tick_id: int,
+    reason: str,
+    *,
+    key: str | None,
+    repo: str | None,
+    pr: str | None,
+) -> None:
+    """Refuse the overseer an attention item of `reason` when the harness raises it from its causes (DESIGN §37).
+
+    The harness raises it while its cause holds and ends it when the cause is gone, so the overseer neither records nor
+    drops one (TRUST_MODEL T1). The refusal is recorded, as a guard's is, and counts as the ticket's decision.
+
+    Raises:
+        Refused: `reason` is one the harness raises.
+    """
+    if reason not in attention.FROM_CAUSES and reason != attention.CHECK_STUCK:
+        return
+    why = f"the harness raises {reason} itself while its cause holds, and ends it when the cause is gone"
+    db.record_decision(ctx.conn, tick_id, key, f"refused:{RAISED}", why, repo=repo, pr=pr)
+    logs.for_tick(tick_id).info("refused: raised by the harness", extra={"ticket": key, "reason": reason})
+    raise Refused(f"attention refused ({RAISED}): {why}; the refusal was recorded")
+
+
+def _refuse_unnamed(ctx: Context, tick_id: int, request: Attention, *, repo: str | None) -> None:
+    """Refuse the overseer an item it keeps that names nothing that could end it (DESIGN §37, `core.kept_items`).
+
+    The harness holds such an item until what it names ends it, so one naming nothing would never end. The refusal is
+    recorded, as a guard's is, and counts as the ticket's decision.
+
+    Raises:
+        Refused: It names no ticket, a `notice_rerun` names no check run, or `item` is not one of its subject's.
+    """
+    why = kept_items.unnamed(ctx.conn, key=request.key, reason=request.reason, repo=repo, item=request.item)
+    if why is None:
+        return
+    db.record_decision(ctx.conn, tick_id, request.key, f"refused:{UNNAMED}", why, repo=repo, pr=request.pr)
+    logs.for_tick(tick_id).info("refused: names nothing", extra={"ticket": request.key, "reason": request.reason})
+    raise Refused(f"attention refused ({UNNAMED}): {why}; the refusal was recorded")
+
+
 # How the verbs above do their parts.
+
+
+def _only_unit(ctx: Context, key: str, what: str) -> str:
+    """Return the unit a `ticket set` that names no repository is about: the ticket's one unit.
+
+    A ticket with no unit yet has the workspace's one repository, if it has one.
+
+    Raises:
+        Refused: The ticket has several units, or none in a workspace of several repositories.
+    """
+    units = [u.repo for u in db.units(ctx.conn, key) if u.repo is not None]
+    names = units or [r.name for r in ctx.workspace.repos]
+    if len(names) == 1:
+        return names[0]
+    has = (
+        f"{key} has units in {', '.join(units)}" if units else f"{key} has no unit yet: name one of {', '.join(names)}"
+    )
+    raise Refused(f"repo is required (--repo): {what} belongs to one unit, and {has}")
 
 
 def _unit(ctx: Context, repo: str | None) -> str | None:

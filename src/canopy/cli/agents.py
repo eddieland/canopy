@@ -7,16 +7,12 @@ run starts it, with canopy's definitions, so what it prints is what a run would 
 
 from __future__ import annotations
 
-import dataclasses
 from typing import TYPE_CHECKING
 
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.cli.render import report_json
-from canopy.core import bash_allows, definitions
-from canopy.runtime import definitions as runtime_definitions
-from canopy.runtime import offerings
+from canopy.core import reports
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -36,19 +32,12 @@ def cmd_agents(click_ctx: click.Context, *, as_json: bool) -> int:
     """
     ctx = open_context(click_ctx)
     try:
-        snapshot = definitions.ensure(ctx.ws.state_dir, ctx.config)
-    except definitions.DefinitionsError as e:
-        raise CliError(f"agents: {e}") from None
-    found = offerings.offerings(
-        ctx.runner,
-        cwd=ctx.ws.root,
-        definitions_dir=snapshot,
-        agents=runtime_definitions.agent_names(),
-    )
+        found, allows = reports.offered(ctx)
+    except reports.Refused as e:
+        raise CliError(str(e)) from None
     failed = found.error is not None or any(a.error is not None for a in found.agents)
-    allows = bash_allows.by_agent(ctx.config.runtime.allow_bash)
     if as_json:
-        click.echo(report_json({**dataclasses.asdict(found), "allow_bash": {a: list(p) for a, p in allows.items()}}))
+        click.echo(reports.agents_json(found, allows))
         return int(failed)
     for line in render(found, allows):
         click.echo(line)

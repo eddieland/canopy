@@ -42,13 +42,11 @@ const TEXT = [
     'status-failed',
     'section-attention',
     'section-runs',
-    'section-worktrees',
     'section-tickets',
+    'section-tasks',
     'section-pull-requests',
-    'section-reviews',
     'section-chores',
-    'section-ticks',
-    'section-spend',
+    'section-reports',
     'section-memory',
     'section-settings',
     'diff-add',
@@ -57,6 +55,9 @@ const TEXT = [
     'syntax-string',
     'syntax-number',
     'syntax-literal',
+    'proposal-change',
+    'proposal-decline',
+    'proposal-ask',
 ]
 const BASES = ['background', 'surface', 'surface-raised']
 
@@ -70,13 +71,14 @@ const SERIES = [
     'spend-reviews',
     'spend-tasks',
     'spend-dry-run',
+    'spend-outside',
 ]
 // A transcript's context chart: fills on a panel's surface, and on the raised one behind the call picked.
 const CONTEXT = ['context-carried', 'context-added']
 
 // A status word also sits on its own tint: a chip (10%) in a selected inbox row (the accent at 14%), a destructive
-// button (12%, 20% hovered), a question's bubble (12%) on a raised surface.
-const STATUSES = TEXT.filter((name) => name.startsWith('status-'))
+// button (12%, 20% hovered), a question's bubble (12%) on a raised surface. So does a feedback plan's proposal, a chip.
+const TINTED = TEXT.filter((name) => name.startsWith('status-') || name.startsWith('proposal-'))
 
 describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
     const token = (name: string): Rgb => {
@@ -94,9 +96,9 @@ describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
         expect(low).toEqual([])
     })
 
-    it('reads every status on its own tint', () => {
+    it('reads every status and proposal on its own tint', () => {
         const selected = over(token('accent'), 0.14, token('surface'))
-        const low = STATUSES.flatMap((name) => {
+        const low = TINTED.flatMap((name) => {
             const fg = token(name)
             return [
                 below(`${name} on its 10% in a selected row`, fg, over(fg, 0.1, selected)),

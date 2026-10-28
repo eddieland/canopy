@@ -10,7 +10,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const plugin = path.join(here, "..", "..", ".agents", "plugins", "canopy.js");
-const { Canopy, ...others } = await import(pathToFileURL(plugin).href);
+const { default: canopy } = await import(pathToFileURL(plugin).href);
+/** The plugin's hooks as OpenCode 1 gets them; `canopy.test.mjs` drives them through OpenCode 2's entry point too. */
+const Canopy = canopy.server;
 
 /** The time the run's clock starts at in these tests, in milliseconds. */
 const START = 1_800_000_000_000;
@@ -53,11 +55,6 @@ async function after(hooks, output, session = "ses_1") {
     await hooks["tool.execute.after"]({ tool: "bash", sessionID: session, callID: "call_1", args: {} }, output);
     return output;
 }
-
-test("it exports one plugin, since the runtime calls every export as one", () => {
-    assert.equal(typeof Canopy, "function");
-    assert.deepEqual(Object.keys(others), []);
-});
 
 test("no line before the last fifth of the run", async () => {
     const hooks = await load(15);
@@ -143,6 +140,6 @@ test("nothing without the variable, or with one that is not a time", async () =>
         } else {
             process.env.CANOPY_DEADLINE = value;
         }
-        assert.deepEqual(await Canopy({}), {}, `CANOPY_DEADLINE=${value}`);
+        assert.equal("tool.execute.after" in (await Canopy({})), false, `CANOPY_DEADLINE=${value}`);
     }
 });

@@ -5,9 +5,10 @@ review on that PR, which the operator may edit, and publish in their own name (`
 names a ticket, or of a PR a ticket's unit holds, has none: the loop's own PRs keep §21's send.
 
 A version is exactly what would post: a body, and comments, each on a line of the diff the review kept (`review_diff`),
-on the commit's side. canopy makes the first from the review's summary and findings, a comment for each finding at its
+on the commit's side. canopy makes the first from the review's body and findings, a comment for each finding at its
 `path:line`; a finding whose location is on no such line goes into the body under its location as the version is
-made, so canopy composes nothing when it publishes. Each text is held to a draft's bounds (DESIGN §29) and refused
+made, so canopy composes nothing when it publishes. The review's summary is not in it: it briefs the operator on the
+PR, and its author needs no briefing on their own change. Each text is held to a draft's bounds (DESIGN §29) and refused
 alone, recorded on the version, never cut or cleaned. Dismissing a finding drops what it made, and taking the
 dismissal back restores it, each a new version.
 
@@ -124,6 +125,12 @@ def of_review(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | No
     return records.fetch_one(conn, records.ReviewDraft, _DRAFTS.where("review_run_id = ?", run_id))
 
 
+def of_reviews(conn: sqlite3.Connection, run_ids: Collection[int]) -> dict[int, records.ReviewDraft]:
+    """Return the drafts of those of review runs `run_ids` that have one, by run id."""
+    found = records.fetch_all(conn, records.ReviewDraft, _DRAFTS.where_in("review_run_id", run_ids))
+    return {draft.review_run_id: draft for draft in found}
+
+
 def get(conn: sqlite3.Connection, draft_id: int) -> records.ReviewDraft | None:
     """Return draft `draft_id`, or None."""
     return records.fetch_one(conn, records.ReviewDraft, _DRAFTS.where("id = ?", draft_id))
@@ -232,6 +239,15 @@ def checked(text: object) -> str:
     return check_text(text, MAX_DRAFT_CHARS)
 
 
+def in_body(body: str, findings: Sequence[review_result.Finding]) -> list[int]:
+    """The findings, by number, whose text `body` holds, put there where no line of the diff took them.
+
+    Returns:
+        Their numbers, from 1, in order.
+    """
+    return [number for number, finding in enumerate(findings, 1) if _held(body, _block(finding))]
+
+
 def dismissed(
     conn: sqlite3.Connection,
     run_id: int,
@@ -325,7 +341,7 @@ def _make(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | None:
     )
     draft_id = int(cursor.lastrowid or 0)
     body, comments, refused = _first(stored, review_runs.review_dismissals(conn, run.id), diff_of(run))
-    change = f"made from review run {run.id}'s summary and findings"
+    change = f"made from review run {run.id}'s body and findings"
     _insert_version(
         conn,
         draft_id,
@@ -345,18 +361,18 @@ def _first(
     dismissed: Collection[int],
     diff: review_diff.Diff | None,
 ) -> tuple[str, list[Comment], list[str]]:
-    """The first version of a review's draft: its summary as the body, and a comment for each finding kept.
+    """The first version of a review's draft: the review's body, and a comment for each finding kept, or in the body.
 
     Returns:
         The body, the comments, and what was left out, and why.
     """
     refused: list[str] = []
     body = ""
-    if stored.summary.strip():
+    if stored.body.strip():
         try:
-            body = checked(stored.summary)
+            body = checked(stored.body)
         except TextRefused as e:
-            refused.append(f"the summary: {e}")
+            refused.append(f"the body: {e}")
     comments: list[Comment] = []
     for number, finding in enumerate(stored.findings, 1):
         if number not in dismissed:
@@ -392,13 +408,15 @@ def _placed(
 
 
 def _text(finding: review_result.Finding) -> str:
-    """A finding as a comment on its line says it: its severity, its title, and its detail.
+    """A finding as a comment on its line says it: its title, and its detail.
+
+    canopy adds no severity: what posts is the reviewer's words alone, so a persona that labels its titles (a
+    Conventional Comments `suggestion:`) has its label open the comment.
 
     Returns:
         The text.
     """
-    head = f"**{finding.severity}**: {finding.title}"
-    return f"{head}\n\n{finding.detail.strip()}" if finding.detail.strip() else head
+    return f"{finding.title}\n\n{finding.detail.strip()}" if finding.detail.strip() else finding.title
 
 
 def _block(finding: review_result.Finding) -> str:
@@ -407,9 +425,8 @@ def _block(finding: review_result.Finding) -> str:
     Returns:
         The text, trimmed as a checked text is.
     """
-    at = f" at `{finding.location.strip()}`" if finding.location.strip() else ""
-    head = f"**{finding.severity}**{at}: {finding.title}"
-    return (f"{head}\n\n{finding.detail.strip()}" if finding.detail.strip() else head).strip()
+    at = f"`{finding.location.strip()}`\n\n" if finding.location.strip() else ""
+    return f"{at}{_text(finding)}".strip()
 
 
 def _held(body: str, block: str) -> bool:

@@ -62,14 +62,17 @@ replaced, keeps its text until the operator forgets it.
 
 - Past a cap on pending proposals a new one is refused, so a flood cannot push older ones out.
 - The operator promotes a proposal or a note into a lesson, under the same bounds, or rejects a proposal; both work at
-  `record`. Promoting a private ticket's run's own words warns that they may hold what was kept off the tracker.
+  `record`. Promoting a private ticket's run's own words warns that they come from a conversation kept off the
+  tracker, which a lesson would carry into public tickets' runs.
 - An edit writes a lesson anew, the old words kept as history and served to no run. Rejected: an edit in place, which
   would leave a run's citations naming words it never read.
 - At `use`, lessons are in every worker prompt that carries the standing instructions (§8),
-  framed as the operator's words that the prompt's obligations come before; capped, and a lesson naming a repository
-  only in runs that lease it.
-- A lesson unused for a while comes up for review: the operator renews it, graduates it into a repository's AGENTS.md
-  or a skill through a PR they merge, or forgets it.
+  framed as the operator's words that the prompt's obligations come before; capped, pinned lessons kept first, and a
+  lesson naming a repository only in runs that lease it.
+- A lesson unused for a while comes up for review: the operator renews it, pins it, graduates it into a repository's
+  AGENTS.md or a skill through a PR they merge, or forgets it. A pinned lesson never comes up for review, and keeps its
+  pin through each new version under its key until the operator unpins it; a run's report that it is wrong still
+  raises `lesson_wrong`.
 - The attention items (§14), none while proposals are off: `memory_proposal` once a ticket is done, so proposals are
   judged after a merge checked the work, and at `use`, `lesson_review` and `lesson_wrong`.
 
@@ -90,7 +93,7 @@ delete text, leaving no copy in free pages, so a purged poison or leaked secret 
 inside a tick or a run (T1).
 
 The web UI takes every verb but `purge` through the same functions and guards, as the web channel (§22, T8). A promote
-that would replace a lesson in force or publish a private ticket's run's own words is never one click. Forget shows on
+that would replace a lesson in force or promote a private ticket's run's own words is never one click. Forget shows on
 a ticket's notes even with proposals off, so a leaked secret can leave from where the operator sees it (operator's
 decision, 2026-10-18). Recorded memory never reads as memory in use, and a worker's text shows as plain text, never
 Markdown or a link (D113), every character the bounds refuse named.

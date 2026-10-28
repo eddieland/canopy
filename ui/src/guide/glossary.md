@@ -36,7 +36,7 @@ and a few more. No prompt talks its way past one, and a refusal names it. See
 ### Idle tick
 
 A tick that started no work: it dispatched no run, and nothing new reached the journal since the tick before. The loop
-waits longer after each one, up to `loop.idle_max_minutes`. See [Ticks and spend](ticks#idle-ticks).
+waits longer after each one, up to `loop.idle_max_minutes`. See [Ticks](ticks#idle-ticks).
 
 ### Journal
 
@@ -85,7 +85,7 @@ comments, copied in. See [Attention](attention#replying).
 
 A plan for what came back to a PR, written before the resume that acts on it, with `policy.feedback_plan = "approve"`
 in your own config: you read whose each item is and approve what gets addressed. A run of its own kind,
-`feedback-plan`. See [Plans](plans).
+`feedback-plan`. It lives on the PR's page. See [The feedback plan](pull-requests#the-feedback-plan).
 
 ### Follow-up
 

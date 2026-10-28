@@ -11,6 +11,7 @@
 # request that sets one.
 description: canopy reviewer. Adversarial review of one PR at one commit; read-only; posts nothing, never approves.
 mode: primary
+# canopy: model
 # canopy: temperature
 permission:
   edit: deny
@@ -20,6 +21,9 @@ permission:
   webfetch: deny
   websearch: deny
   codesearch: deny
+  # OpenCode 2's code mode runs the model's JavaScript, which can make HTTP requests of its own, so it is a web
+  # tool too (D077). An MCP server reached only through it is then out of reach: give it `codemode: false`.
+  execute: deny
   external_directory: deny
   # Subagents run with their own, wider permissions; the reviewer must not reach them.
   task: deny
@@ -79,15 +83,18 @@ permission:
   # The artifact store's MCP server, `artifacts.mcp_server`, is for the agents `artifacts.publish_roles` names
   # (DESIGN §38): canopy renders it denied whole at the marked line.
   # canopy: artifact tools
+  # canopy's own tools, the overseer's, a chore's history, and the reports, are not this agent's (DESIGN §19, §27):
+  # denied by pattern, before the exceptions below.
+  "canopy_*": deny
   # canopy's read-only git tools, over this run's own checkouts alone (DESIGN §27), allowed by exact name: after every
-  # pattern, so none above, such as `*merge*`, closes one.
+  # pattern, so none above, such as `*merge*` or `canopy_*`, closes one.
   "canopy_git_merge-base": allow
   "canopy_git_diff": allow
   "canopy_git_log": allow
   "canopy_git_show": allow
   "canopy_git_blame": allow
-  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
-  "canopy_chore_history": deny
+  "canopy_git_grep": allow
+  "canopy_git_files": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy reviewer" or "# canopy reviser" prompt,

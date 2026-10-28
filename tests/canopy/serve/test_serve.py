@@ -1,5 +1,8 @@
-"""The web UI's server (canopy.serve): the guard, the SPA fallback and caching, base paths, signing in, the stream, and
-the mock journal. The API over a real journal, and the loop serving it, are in test_web.py."""
+"""The web UI's server (canopy.serve) and the mock journal.
+
+The guard, the SPA fallback and caching, base paths, signing in, and the stream. The API over a real journal, and the
+loop serving it, are in test_web.py.
+"""
 
 import asyncio
 import dataclasses
@@ -24,17 +27,22 @@ import uvicorn
 from pydantic import ValidationError
 from starlette.types import Message, Receive, Scope, Send
 
-from canopy.core import conversation, db, review_runs
+from canopy.core import conversation, db, review_runs, tasks
 from canopy.core.context import Context, db_path
 from canopy.infra import logs
-from canopy.serve import live, mock_reviews, secret, server, views
+from canopy.serve import live, secret, server, views
 from canopy.serve import mock as serve_mock
-from canopy.serve.__main__ import main
+from canopy.serve import options as serve_options
+from canopy.serve.__main__ import KEEP_ALIVE_SECONDS, main
 from canopy.serve.api import session
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
 from canopy.serve.backend import Backend
-from canopy.serve.event_schema import (
+from canopy.serve.guard import MAX_BODY_BYTES, host_name
+from canopy.serve.mock import reviews as mock_reviews
+from canopy.serve.options import ServeOptions
+from canopy.serve.schema import TicketSummary
+from canopy.serve.schema.event import (
     AttentionUpdated,
     ChoresUpdated,
     LoopUpdated,
@@ -44,18 +52,17 @@ from canopy.serve.event_schema import (
     SpendUpdated,
     StreamEnding,
     StreamEvent,
+    TaskChanged,
+    TasksUpdated,
     TicketChanged,
     TicketsUpdated,
     TickUpdated,
 )
-from canopy.serve.guard import MAX_BODY_BYTES, host_name
-from canopy.serve.options import ServeOptions
-from canopy.serve.schema import TicketSummary
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
 from tests.canopy.helpers import granted_meanwhile, present
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, SECRET, client, free_port, signed_in
-from tests.conftest import Journals
+from tests.conftest import Journals, invoke
 
 INDEX = """<!doctype html>
 <html lang="en">
@@ -474,16 +481,20 @@ def read_events(port: int, n: int) -> tuple[httpx2.Headers, list[StreamEvent]]:
 
 
 def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) -> None:
-    headers, events = read_events(served, 11)
+    headers, events = read_events(served, 12)
     assert headers["content-type"].startswith("text/event-stream")
     assert headers["x-accel-buffering"] == "no"
     assert headers["cache-control"] == "no-cache"
-    first, runs, tickets, chores, reviews, requested, spend, tick, loop, changed, spent = (e.root for e in events)
+    first, runs, tickets, chores, tasks_event, reviews, requested, spend, tick, loop, changed, spent = (
+        e.root for e in events
+    )
     assert isinstance(first, AttentionUpdated)
     assert isinstance(runs, RunsUpdated)
     assert isinstance(tickets, TicketsUpdated)
     assert isinstance(chores, ChoresUpdated)
     assert [c.name for c in chores.chores] == ["build-health", "deps"]
+    assert isinstance(tasks_event, TasksUpdated)
+    assert [t.id for t in tasks_event.tasks] == [7, 6, 5, 4, 3, 2, 1]
     assert isinstance(reviews, ReviewsUpdated)
     assert reviews.reviews
     assert isinstance(requested, ReviewRequestsUpdated)
@@ -591,6 +602,13 @@ def test_a_stream_with_a_lifetime_ends_on_its_own_after_its_first_events(ui: Pat
     assert not any(isinstance(e.root, StreamEnding) for e in events[:-1])
 
 
+def test_every_server_ends_its_streams_on_its_own(ui: Path, backend: Backend) -> None:
+    # A forwarder can hold a stream open after its page has gone (#1299): only the lifetime ends it then.
+    with mock.patch.object(serve_options, "STREAM_SECONDS", 0.3):
+        response = client(ui, backend).get("/api/events")
+    assert response.text.rstrip().endswith('data: {"type":"stream.ending"}')
+
+
 def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None:
     recent = db.recent_tickets
     replied: list[bool] = []
@@ -619,6 +637,34 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None
     [tickets] = [e for e in events if isinstance(e, TicketsUpdated)]
     assert tickets.tickets[0].key == "ABC-103"
     assert [e.key for e in events if isinstance(e, TicketChanged)] == ["ABC-103"]
+
+
+def test_a_task_submitted_sends_the_tasks_again(backend: Backend) -> None:
+    with backend.open() as ctx:
+        sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+        sent.changes(backend, ctx)
+        task = tasks.submit(ctx.conn, ctx.workspace, "Tidy the README.", repo="web", project=None, channel="cli")
+        events = [e.root for e in sent.changes(backend, ctx)]
+    [tasks_event] = [e for e in events if isinstance(e, TasksUpdated)]
+    assert [(t.id, t.standing) for t in tasks_event.tasks[:1]] == [(task.id, "queued")]
+
+
+def test_a_message_about_a_task_names_the_task_though_its_summary_holds(backend: Backend) -> None:
+    with backend.open() as ctx:
+        task = tasks.submit(ctx.conn, ctx.workspace, "Tidy the README.", repo="web", project=None, channel="cli")
+        sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+        first = [e.root for e in sent.changes(backend, ctx)]
+        # A reply while its run still runs queues nothing: the list is as it was, but its page shows the reply.
+        ctx.conn.execute(
+            "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
+            "VALUES ('task', ?, '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')",
+            (str(task.id),),
+        )
+        events = [e.root for e in sent.changes(backend, ctx)]
+    # The first read names no task: there was nothing sent before it to differ from.
+    assert not any(isinstance(e, TaskChanged) for e in first)
+    assert not any(isinstance(e, TasksUpdated) for e in events)
+    assert [e.id for e in events if isinstance(e, TaskChanged)] == [task.id]
 
 
 def test_a_review_run_starting_sends_the_reviews_again(backend: Backend, tmp_path: Path) -> None:
@@ -666,7 +712,7 @@ def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(
     async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
         with closing(live.Stream(backend)) as opened:
             stream = opened.events(poll_seconds=0.01)
-            first = [await anext(stream) for _ in range(9)]
+            first = [await anext(stream) for _ in range(10)]
             # A reload commits nothing to the journal: the stream sees it in the config it serves.
             chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
             backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
@@ -758,8 +804,10 @@ def test_a_client_leaving_a_stream_mid_send_logs_no_error(ui: Path, backend: Bac
 
 
 def test_the_loop_stopping_its_server_with_a_stream_open_logs_the_cancel_as_info(ui: Path, backend: Backend) -> None:
-    """uvicorn cancels a request still open once the grace period ends, and logs its `CancelledError` as an exception:
-    in canopy.log, at ERROR with a traceback, for a tab left open when the loop stopped."""
+    """Uvicorn cancels a request still open once the grace period ends, and logs its `CancelledError` as an exception.
+
+    It would land in canopy.log, at ERROR with a traceback, for a tab left open when the loop stopped.
+    """
     options = ServeOptions(ui_dir=ui, mock=True, mock_event_seconds=0.05, port=free_port())
     sessions = Sessions(None, port=options.port, base_path="", hosts=options.hosts)
     web = server.WebServer(create_app(options, backend, sessions), options, logs.for_tick(None))
@@ -797,17 +845,37 @@ def test_the_loop_stopping_its_server_with_a_stream_open_logs_the_cancel_as_info
     assert cancelled.levelno == logging.INFO
 
 
+_SHUTDOWN_CANCEL = "Task cancelled, timeout graceful shutdown exceeded"
+
+
+def _while_handling(error: BaseException, handled: BaseException) -> BaseException:
+    """`error`, as Python leaves it when raised in an `except` block that caught `handled`."""
+    error.__context__ = handled
+    return error
+
+
 @pytest.mark.parametrize(
     ("error", "level"),
     [
+        pytest.param(asyncio.CancelledError(_SHUTDOWN_CANCEL), logging.INFO, id="shutdown"),
         pytest.param(
-            asyncio.CancelledError("Task cancelled, timeout graceful shutdown exceeded"),
+            _while_handling(asyncio.CancelledError(), asyncio.CancelledError(_SHUTDOWN_CANCEL)),
             logging.INFO,
-            id="shutdown",
+            id="raised by a task group while handling the shutdown",
         ),
         pytest.param(asyncio.CancelledError(), logging.ERROR, id="cancelled by the app"),
         pytest.param(
-            ValueError("Task cancelled, timeout graceful shutdown exceeded"),
+            _while_handling(asyncio.CancelledError(), asyncio.CancelledError("by the app")),
+            logging.ERROR,
+            id="cancelled by the app while handling another cancel",
+        ),
+        pytest.param(
+            _while_handling(ValueError(), asyncio.CancelledError(_SHUTDOWN_CANCEL)),
+            logging.ERROR,
+            id="an error raised while handling the shutdown",
+        ),
+        pytest.param(
+            ValueError(_SHUTDOWN_CANCEL),
             logging.ERROR,
             id="not a cancel",
         ),
@@ -982,18 +1050,26 @@ def test_the_mock_journal_covers_every_run_state_and_message_source(ui: Path, ba
     assert sources == {"worker", "operator", "tracker"}
 
 
-def test_the_development_server_serves_mock_data_only(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit):
-        main(["serve"])
-    assert "--mock" in capsys.readouterr().err
-    with pytest.raises(SystemExit):
-        main(["serve", "--mock", "--host", "10.0.0.5"])
-    assert "loopback" in capsys.readouterr().err
+def test_the_development_server_serves_mock_data_only() -> None:
+    unseeded = invoke(main, ["serve"])
+    assert unseeded.exit_code == 2
+    assert "--mock" in unseeded.stderr
+    public = invoke(main, ["serve", "--mock", "--host", "10.0.0.5"])
+    assert public.exit_code == 2
+    assert "loopback" in public.stderr
 
 
-def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFixture[str]) -> None:
-    main(["openapi"])
-    schema = json.loads(capsys.readouterr().out)
+def test_the_development_server_keeps_an_idle_connection_past_any_test(ui: Path) -> None:
+    """The e2e tests' request contexts reuse a connection idle for 5 s, uvicorn's default, and read ECONNRESET."""
+    with mock.patch.object(uvicorn, "run", autospec=True) as run:
+        assert invoke(main, ["serve", "--mock", "--ui-dir", str(ui)]).exit_code == 0
+    assert run.call_args.kwargs["timeout_keep_alive"] == KEEP_ALIVE_SECONDS
+    # Past Playwright's 30 s test timeout, so no connection a test opens idles out while the test runs.
+    assert KEEP_ALIVE_SECONDS > 30
+
+
+def test_openapi_names_the_stream_event_and_every_route() -> None:
+    schema = json.loads(invoke(main, ["openapi"]).stdout)
     names = {
         "Run",
         "RunState",
@@ -1039,12 +1115,15 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/memory/{memory_id}/promote",
         "/api/memory/{memory_id}/reject",
         "/api/memory/{memory_id}/renew",
+        "/api/memory/{memory_id}/pin",
+        "/api/memory/{memory_id}/unpin",
         "/api/memory/{memory_id}/edit",
         "/api/memory/{memory_id}/history",
         "/api/memory/{memory_id}/forget",
         "/api/tickets/{key}/memory",
         "/api/spend",
         "/api/spend/breakdown",
+        "/api/reports/monthly",
         "/api/tick",
         "/api/tickets",
         "/api/tickets/{key}",
@@ -1054,9 +1133,11 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/tickets/{key}/forget",
         "/api/tickets/{key}/grants",
         "/api/tickets/{key}/personas",
+        "/api/tickets/{key}/models",
         "/api/tickets/{key}/plans",
         "/api/tickets/{key}/plans/{plan_id}",
         "/api/tickets/{key}/plan",
+        "/api/tickets/{key}/feedback-plan",
         "/api/tickets/{key}/plans/{plan_id}/file",
         "/api/tickets/{key}/plan-threads",
         "/api/tickets/{key}/plan-threads/{thread_id}",
@@ -1068,6 +1149,15 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/chores/{name}/tries",
         "/api/chores/{name}/runs/{run_id}",
         "/api/chores/{name}/runs/{run_id}/transcript",
+        "/api/tasks",
+        "/api/tasks/{task_id}",
+        "/api/tasks/{task_id}/replies",
+        "/api/tasks/{task_id}/stop",
+        "/api/tasks/{task_id}/runs/{run_id}",
+        "/api/tasks/{task_id}/runs/{run_id}/transcript",
+        "/api/tasks/{task_id}/runs/{run_id}/report",
+        "/api/tickets/{key}/attachments/{name}",
+        "/api/tasks/{task_id}/attachments/{name}",
         "/api/ticks",
         "/api/ticks/{tick_id}",
         "/api/ticks/{tick_id}/transcript",
@@ -1087,7 +1177,9 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/reviews/{run_id}/draft/comments",
         "/api/reviews/{run_id}/draft/comments/{number}/edit",
         "/api/reviews/{run_id}/draft/comments/{number}/drop",
+        "/api/reviews/{run_id}/draft/notes",
         "/api/reviews/{run_id}/draft/publish",
+        "/api/reviews/{run_id}/draft/discard",
         "/api/seen",
         "/api/pull-requests",
         "/api/pull-request",
@@ -1096,6 +1188,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/pull-request/stop",
         "/api/pull-request/threads",
         "/api/personas",
+        "/api/models",
         "/api/runs/{run_id}/drafts/{number}/edit",
         "/api/runs/{run_id}/drafts/{number}/drop",
         "/api/drafts/send",
@@ -1106,13 +1199,14 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/loop/notice/clear",
         "/api/loop/reload",
         "/api/loop/tick",
+        "/api/config",
+        "/api/config/models",
     }
     assert set(schema["paths"]) == paths
 
 
-def test_openapi_describes_every_route_parameter_error_and_field(capsys: pytest.CaptureFixture[str]) -> None:
-    main(["openapi"])
-    schema = json.loads(capsys.readouterr().out)
+def test_openapi_describes_every_route_parameter_error_and_field() -> None:
+    schema = json.loads(invoke(main, ["openapi"]).stdout)
     assert schema["info"]["version"] == version("canopy")
     assert schema["info"]["description"]
     tags = {t["name"] for t in schema["tags"] if t["description"]}

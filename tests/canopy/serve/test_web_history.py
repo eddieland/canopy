@@ -1,5 +1,8 @@
-"""The web UI on a journal with a long history (DESIGN §22): what a page or the event stream reads costs what the page
-shows, not what the journal has recorded; and the reads that weigh only candidates find what weighing every row did."""
+"""The web UI on a journal with a long history (DESIGN §22).
+
+What a page or the event stream reads costs what the page shows, not what the journal has recorded; and the reads that
+weigh only candidates find what weighing every row did.
+"""
 
 import dataclasses
 import json
@@ -18,12 +21,14 @@ from canopy.loop import attention, web
 from canopy.serve import chore_views, live, pull_requests, reviews, spend_views, tick_views, views
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
+from canopy.serve.mock import history as serve_history
 from tests.conftest import Journals
 
 # The mock's own PR, which the old history leaves alone.
 PR = "https://github.com/acme/web/pull/88"
-# How old the oldest of the mock's own rows is, in minutes; the history this adds is older than 30 days.
-HISTORY_STARTS = 40 * 24 * 60
+# How old the oldest of the mock's own rows is, in minutes, its months before T0 among them (mock/history.py); the
+# history this adds is older than that.
+HISTORY_STARTS = 200 * 24 * 60
 # SQLite calls the progress handler once per this many virtual machine instructions: a step.
 STEP = 10
 # How much more work a read may do over five times the history: a deeper index, never another pass over it.
@@ -80,9 +85,12 @@ def test_the_stream_reads_the_same_lists_over_a_long_history(backend: Backend) -
         add_history(ctx.conn, 0, 1_500)
         events = [e.root for e in live._Sent().changes(backend, ctx)]  # noqa: SLF001  (the stream's own record)
     [tickets] = [e for e in events if isinstance(e, live.TicketsUpdated)]
-    # The mock's seven, newest first, then the history's newest.
-    newest = ["ABC-101", "ABC-104", "ABC-102", "ABC-105", "ABC-099", "ABC-100", "ABC-103", "OLD-0"]
-    assert [t.key for t in tickets.tickets[:8]] == newest
+    # The mock's seven of the day, newest first, the two it landed in October, its feedback plans' seven of eight days
+    # before, the rest it landed, then the history's newest.
+    landed = [t.key for t in sorted(serve_history.TICKETS, key=lambda t: t.done_at, reverse=True)]
+    newest = ["ABC-101", "ABC-104", "ABC-102", "ABC-105", "ABC-099", "ABC-100", "ABC-103", *landed[:2]]
+    newest += ["ABC-136", "ABC-135", "ABC-134", "ABC-133", "ABC-132", "ABC-131", "ABC-130", *landed[2:], "OLD-0"]
+    assert [t.key for t in tickets.tickets[: len(newest)]] == newest
     assert len(tickets.tickets) == views.TICKETS
     [runs] = [e for e in events if isinstance(e, live.RunsUpdated)]
     assert len([r for r in runs.runs if r.state != "running"]) == views.RECENT_RUNS
@@ -230,8 +238,10 @@ def ok_run(conn: sqlite3.Connection, run_id: int, minutes: float, findings: list
 
 
 def instructions(ctx: Context, read: Callable[[], object]) -> int:
-    """How many hundred SQLite instructions `read` ran on `ctx`'s connection: what it read, in a measure that never
-    depends on the machine running the test."""
+    """How many hundred SQLite instructions `read` ran on `ctx`'s connection.
+
+    That is what it read, in a measure that never depends on the machine running the test.
+    """
     counted = [0]
 
     def count() -> int:

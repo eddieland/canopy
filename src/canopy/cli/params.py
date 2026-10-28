@@ -27,10 +27,8 @@ from canopy.loop.tools import (
     MAX_TEXT,
     MAX_TITLE,
     REASON_RE,
-    REVIEW_CURSOR_RE,
     truncate,
     valid_key,
-    valid_review_cursor,
 )
 from canopy.runs import dispatch
 
@@ -46,16 +44,14 @@ __all__ = [
     "MAX_TEXT",
     "MAX_TITLE",
     "REASON_RE",
-    "REVIEW_CURSOR_RE",
     "truncate",
     "valid_key",
-    "valid_review_cursor",
 ]
 
 
 def verb[R: BaseModel](
     click_ctx: click.Context,
-    do: Callable[[Context, R], str],
+    do: Callable[[Context, R], tools.Outcome[tools.Result]],
     request: type[R],
     **fields: object,
 ) -> int:
@@ -74,7 +70,7 @@ def verb[R: BaseModel](
         said = do(ctx, built)
     except tools.Refused as e:
         raise CliError(str(e)) from None
-    click.echo(said)
+    click.echo(said.text)
     return 0
 
 
@@ -227,3 +223,5 @@ CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", chore_names)
 # One of the example chores canopy ships, which `canopy chore install` sets up.
 EXAMPLE_CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", install.available)
 PR_URL = PrUrlType()
+PERSONA = PatternType("NAME", config.PERSONA_NAME_RE, "persona name")
+EVAL_CASE = PatternType("NAME", config.EVAL_CASE_RE, "eval case name")

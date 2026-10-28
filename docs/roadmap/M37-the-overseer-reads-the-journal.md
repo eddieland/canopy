@@ -79,9 +79,62 @@ ticket, a named unit's PR, and a stacked dispatch's blocker's PR; none for a pri
 Chosen conservatively: cursors are checked as they are today, a `review` cursor naming an item by its time to the
 second; a ticket the query found this tick is stale until the next read records its comments, so its first dispatch
 waits a tick, as the block already said; the prompt is unchanged, its refusals section covering the new codes.
-Left: the duties check owing `canopy queried` only when no source read the query (it needs the harness to touch the
-source's tickets into the journal, so it is not small), the cursor check on `canopy ticket set`, `handled`,
-journal-numbered cursors and their migration, the mirror's retirement with comments recorded in the conversation, the
-design folded into the sections it names, and the live re-measurement. Open for the operator: whether a tracker with
-no connector keeps the live-read procedure or a `tracker` source is required (recommended: required), and how many
-new items a subject shows before the rest are counted.
+Built (2026-10-22): the duties check owing `canopy queried` only on a tick whose query no source read. When the query is
+due and the block shows it `fresh`, the harness records its result before the overseer runs as `canopy queried` would,
+touching each ticket into the journal, and each is owed a decision; the prompt neither runs nor records such a query.
+Chosen conservatively: a fresh read is any within `connect.max_age_minutes`, the poll's included, so the harness
+records what the block shows; a query not due is not recorded though a source read it, so `query_every_minutes` still
+spaces out new tickets.
+Built (2026-10-22): the cursor check on `canopy ticket set`, through the command and the tool alike, in a tick
+(`claims.check_cursors`): `unobserved` for a cursor naming nothing observed or passing what the block left out; none
+for a private ticket or an unobserved subject. Chosen conservatively: it is never refused `stale`, since it starts
+nothing, but a stale subject's cursors move no further than what they already passed, since the block shows none of its
+items; a unit with no PR is unobserved; a `review` cursor may name the end of any canopy review run of the PR; and the
+operator's own `canopy ticket set`, outside a tick, is not checked.
+Built (2026-10-22): `handled`, on the `ci` cursor as it is: each completed check run a source observes is kept by its
+run id across reads (`observed_check_runs`), so a re-run at the same head is told from the run it repeats, and a
+`resume` for `ci` alone is refused `handled` when every failure at the head is at or behind the cursor or repeats, at
+the same head and context, one that is; tests through the command and the tool, and of a held check's re-run observed at
+the same head. Chosen conservatively, for the operator to change: a failure with no run (a commit status) is new; a `ci`
+cursor empty or not a number refuses nothing, nor does a head whose only failures are `human_checks` or that has none;
+and the prompt has the overseer record `flaky_rerun` on a `handled` refusal, a new head or an operator message starting
+the next.
+Built (2026-10-24): the fourth bullet's mirror retired. Each comment the tracker source observes is recorded in its
+ticket's conversation in code (`conversation.record_comment`, which another source's comments can reuse), once per ticket
+and comment id, in the transaction that first records its observation and with the same text, source `worker` when it
+carries the workers' marks (D069), else `tracker`; the `mirror` tool and command, the prompt's section and duty, the
+state block's `mirror` and `mirror` cursor, and the per-tick bound go, and the block's comments start past the `comment`
+cursor alone. Migration 0095 records each comment observed before it that the overseer had not mirrored, at the time it
+was observed. Tests with the fakes: observed comments in the conversation once each across reads, marked by source, an
+edit not followed, in a private worker's prompt as data and authorizing nothing, a mirrored comment kept, and the
+migration. Chosen conservatively: a dry run records the comment, as it records the observation and as the mirror did;
+a comment is recorded for every ticket the source reads, a candidate or not, private or public, since only the
+operator's views and a private ticket's own worker read the conversation; a comment the overseer mirrored keeps its
+message, text, and source, found by its comment id, so the mirror's residual stays for those alone; an edit after the
+first read is not followed; the mirror cursor's column stays, unread, since no migration drops a column; and a tracker
+with no connector records no comment, since its tool is gone.
+Built (2026-10-24): `observed_check_runs` pruned by M47's pass, a run going after `journal_days` once a read shows its
+PR at another head, merged, or closed; one of a PR no read recorded stays.
+Built (2026-10-24): journal-numbered cursors. Each comment, review, review comment, and completed check run takes the
+next number in `item_numbers` when a source first observes it, and keeps it across reads that replace its row; a canopy
+review run takes one when it ends. The `comment`, `review`, and `ci` cursors are those numbers, in new columns, and
+"newer" is a larger number everywhere the derivation, the block, and the claims read it; the block shows each item's
+`number`, the latest review run's in place of `reviewed_at`, and what each cursor names (`cursor_items`), so a live read
+of a stale subject can tell what it passed; the `review` cursor's time form is gone. Migration 0098 numbers what the
+journal holds in the order each old cursor read it and converts each cursor to the number of the item it names, a
+`review` time to the newest item at or before it to the second. Tests with the fakes: the migration over a journal with
+each old form, a review submitted after a later comment still new, and the claims and derivation on numbers.
+Chosen conservatively: a check run is numbered once observed completed, not while it runs, since only a failure is
+handed to a worker; a ticket no tracker source observes keeps its `comment` cursor as the tracker's id
+(`last_comment_id`), since its comments have no numbers, until "required" is settled; a cursor whose old form passed
+nothing observed becomes 0, so a set `ci` cursor still passes a commit status, and one in no old form the readers read
+stays empty; the old `review` and `ci` columns stay, unread; `item_numbers` is not pruned, its rows being small and a
+pruned number able to come back as a new one.
+Built (2026-10-24): the design folded into the sections it names. What the overseer is shown, and how fresh, is §30's;
+the claims and their refusals, and cursors as journal numbers, §7's, with §8's guards pointing there; §4 principle 1,
+§5's overseer, §10, §17, §22, and §27 say the overseer reads the observations and the harness checks them; §35 is cut
+to its open questions. TRUST_MODEL T1, T2 (`canopy-connect-jira`), and T7 (`connect.*` private, the widened query's
+residual left to "required") and D003 record what is built; D051 and D089 already had their code checks.
+Left: the live re-measurement.
+Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker` source is
+required (recommended: required), and how many new items a subject shows before the rest are counted.

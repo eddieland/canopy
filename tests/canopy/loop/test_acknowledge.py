@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, records
-from canopy.core.vocab import RunKind
+from canopy.core.vocab import Decider, RunKind
 from canopy.loop import acknowledge
 from tests.canopy.helpers import KEY, present, waits
 from tests.canopy.scenario_helpers import dispatches, raises
@@ -123,6 +123,9 @@ def decision(action: str, rationale: str) -> records.Decision:
         repo=None,
         chore=None,
         pr=None,
+        decider=Decider.OVERSEER,
+        kept=False,
+        item=None,
     )
 
 
@@ -131,7 +134,6 @@ def test_a_note_says_each_decision_in_a_few_words_and_cuts_a_long_reason() -> No
         decision("refused:capacity", "every slot is busy."),
         decision("skip", "the ticket\nis closed"),
         decision("done", "merged"),
-        decision(conversation.MIRROR_ACTION, "mirrored 2 comments"),
         decision(f"dispatch:{RunKind.RESUME}", "dry run: not dispatched; would resume"),
     ]
     assert acknowledge.body(7, KEY, [40], made) == (

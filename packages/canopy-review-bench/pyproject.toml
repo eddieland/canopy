@@ -1,0 +1,55 @@
+[project]
+name = "canopy-review-bench"
+# From the latest v* tag, as canopy's is (D085), so every package in the workspace carries its version.
+dynamic = ["version"]
+description = "Score any code review bot on blind PRs whose bugs you know, opened in a repository it reviews."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "eddieland" }]
+keywords = ["code review", "evaluation", "github", "review bot"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    # Makes PyPI refuse an upload (D046).
+    "Private :: Do Not Upload",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+]
+requires-python = ">=3.12"
+# click for its command line (D025) and pydantic for the bench file and gh's output (D026), and nothing from canopy:
+# it scores another reviewer, through git and gh, and canopy never runs it.
+dependencies = ["click>=8.5.0", "pydantic>=2.14.1"]
+
+[project.scripts]
+canopy-review-bench = "canopy_review_bench:main"
+
+[project.urls]
+Homepage = "https://github.com/eddieland/canopy"
+Repository = "https://github.com/eddieland/canopy/tree/main/packages/canopy-review-bench"
+Issues = "https://github.com/eddieland/canopy/issues"
+
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning==0.14.1"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+# The same scheme as canopy's, in the root pyproject.toml.
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
+fallback-version = "0.0.0"
+
+# The version is built from git, so a new commit or tag rebuilds the metadata, not only a changed pyproject.toml.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/canopy_review_bench"]

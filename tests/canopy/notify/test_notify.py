@@ -1,9 +1,11 @@
 """Notification sinks (DESIGN §20, ROADMAP M10): per-sink delivery of the attention diff, events, and digests."""
 
 import dataclasses
+import functools
 import json
 import os
 import re
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -12,17 +14,19 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, outbox, runtime_sessions, spend
 from canopy.core.config import ConfigError, load
 from canopy.core.items import Item, fingerprint
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
+from canopy.runtime.report import SessionPage, SessionSpend
 from tests.canopy.helpers import (
     InlineRunner,
     canopy,
     chore_reports,
     in_tick,
     messages,
+    tick_starts,
     waits,
     with_events,
     worker_does,
@@ -44,8 +48,8 @@ def json_messages(out: Path) -> list[dict[str, Any]]:
 
 
 def needing_reviewers(*keys: str) -> list[list[str]]:
-    """The overseer raises each of `keys` on the attention list as needing a reviewer."""
-    return [raises(key, "needs_reviewer") for key in keys]
+    """The overseer raises each of `keys` on the attention list, an item it records every tick its cause holds."""
+    return [raises(key, "flaky_rerun") for key in keys]
 
 
 @pytest.mark.parametrize(
@@ -97,21 +101,21 @@ def test_notify_cmd_is_the_sink_named_default(scenario: Scenario, sink_script: P
     conn = scenario.conn
     conn.execute(
         "INSERT INTO notifications (sink, fingerprint, ticket_key, reason, repo, sent_at) "
-        "VALUES ('default', ?, 'PROJ-3', 'needs_reviewer', NULL, 'x')",
-        (fingerprint("PROJ-3", "needs_reviewer"),),
+        "VALUES ('default', ?, 'PROJ-3', 'flaky_rerun', NULL, 'x')",
+        (fingerprint("PROJ-3", "flaky_rerun"),),
     )
     out = tmp_path / "notified.txt"
     scenario.configures(notify={"cmd": f"{sink_script} {out}"})
     scenario.tick(*needing_reviewers("PROJ-3"))
     assert messages(out) == []
     rows = [tuple(r) for r in conn.execute("SELECT sink, ticket_key, reason FROM notifications")]
-    assert rows == [("default", "PROJ-3", "needs_reviewer")]
+    assert rows == [("default", "PROJ-3", "flaky_rerun")]
 
     # Renamed to a sink of its own, it is new there and hears about every open item once.
     scenario.configures(notify={"cmd": None, "sinks": {"mine": {"format": "text", "cmd": f"{sink_script} {out}"}}})
     scenario.tick(*needing_reviewers("PROJ-3"))
     [message] = messages(out)
-    assert "+ PROJ-3 needs_reviewer: PROJ-3 detail\n" in message
+    assert "+ PROJ-3 flaky_rerun: PROJ-3 detail\n" in message
     assert [tuple(r) for r in conn.execute("SELECT sink FROM notifications")] == [("mine",)]
 
 
@@ -134,7 +138,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
             "ticket": "PROJ-9",
             "title": None,  # not named yet
             "repo": None,
-            "reason": "needs_reviewer",
+            "reason": "flaky_rerun",
             "detail": "PROJ-9 detail",
             "since": message["attention"]["added"][0]["since"],
             "ui": None,  # a tick run by hand serves no web UI to link to
@@ -156,7 +160,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
     assert ended["line"].startswith("< PROJ-1 run 1 implement ended blocked: x question: Should the retry")
     assert message["omitted"] == 0
     assert message["digest"] is None
-    assert message["text"].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-9 needs_reviewer: PROJ-9 detail\n> ")
+    assert message["text"].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-9 flaky_rerun: PROJ-9 detail\n> ")
 
     # Delivered events are not sent again.
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
@@ -243,6 +247,148 @@ def test_a_long_failing_streak_is_one_streak(scenario: Scenario, sink_script: Pa
     assert "! loop recovered after 1105 failed ticks\n" in messages(out)[1]
 
 
+def test_the_month_reaching_its_budget_is_sent_once_per_budget(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 3})
+    conn = scenario.conn
+    chore_costs = functools.partial(chore_cost, conn)
+    chore_costs(2.0)
+    scenario.tick()
+    assert messages(out) == []  # $2 of $3
+    chore_costs(2.0)
+    scenario.tick()
+    month = f"{datetime.now().astimezone():%Y-%m}"
+    [over] = messages(out)
+    assert over.startswith(f"canopy: 1 event\n! spend for {month} reached its budget: $4.00 of $3")
+    # canopy loop never read the runtime's sessions, so the part outside canopy is not known.
+    assert "; canopy's runs $4.00, outside canopy not read yet\n" in over
+    # Told once, even after pruning would have taken the event that says so.
+    conn.execute("UPDATE notify_events SET at = ?", (db.format_time(datetime.now(UTC) - timedelta(days=8)),))
+    scenario.tick()
+    assert len(messages(out)) == 1
+    # A budget raised past the month's spend is heard of again once the month reaches it.
+    scenario.configures(spend={"monthly_budget_usd": 5})
+    scenario.tick()
+    assert len(messages(out)) == 1
+    chore_costs(2.0)
+    scenario.tick()
+    assert f"! spend for {month} reached its budget: $6.00 of $5" in messages(out)[1]
+
+
+def test_each_budget_alert_is_sent_once_as_the_month_reaches_it(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 10, "budget_alerts": [150, 50, 80]})
+    month = f"{datetime.now().astimezone():%Y-%m}"
+    scenario.tick()  # a new sink hears nothing from before it
+    for usd, told in (
+        (6.0, "50% of its budget: $6.00"),
+        (3.0, "80% of its budget: $9.00"),
+        (2.0, "its budget: $11.00"),
+    ):
+        chore_cost(scenario.conn, usd)
+        scenario.tick()
+        assert f"! spend for {month} reached {told} of $10" in messages(out)[-1]
+    scenario.tick()
+    assert len(messages(out)) == 3
+    chore_cost(scenario.conn, 6.0)
+    scenario.tick()
+    assert f"! spend for {month} reached 150% of its budget: $17.00 of $10" in messages(out)[-1]
+
+
+def test_a_month_past_several_alerts_at_once_hears_only_the_highest(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 10, "budget_alerts": [50, 80]})
+    scenario.tick()  # a new sink hears nothing from before it
+    chore_cost(scenario.conn, 12.0)
+    scenario.tick()
+    [told] = messages(out)
+    assert "! spend for " in told
+    assert " reached its budget: $12.00 of $10" in told
+    # An alert added below what the sink already heard of is not news.
+    scenario.configures(spend={"budget_alerts": [30, 50, 80]})
+    scenario.tick()
+    assert len(messages(out)) == 1
+
+
+def test_the_sessions_outside_canopy_count_toward_the_budget(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 3})
+    chore_cost(scenario.conn, 2.0)
+    scenario.tick()
+    assert messages(out) == []  # $2 of $3
+    # The operator's own session, outside canopy, as canopy loop reads it between ticks.
+    ms = int(datetime.now(UTC).timestamp() * 1000)
+    mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
+    read = datetime(2026, 10, 28, 13, 5, tzinfo=UTC)
+    page = SessionPage("found", (mine,), cursor=(ms, "ses_mine"))
+    runtime_sessions.record(scenario.conn, page, now=db.format_time(read))
+    scenario.tick()
+    month = f"{datetime.now().astimezone():%Y-%m}"
+    [over] = messages(out)
+    assert over.startswith(f"canopy: 1 event\n! spend for {month} reached its budget: $3.50 of $3")
+    # The message names both parts, and when canopy loop last read the runtime's sessions, in local time.
+    at = f"{read.astimezone():%Y-%m-%d %H:%M}"
+    assert f"; canopy's runs $2.00, outside canopy $1.50 (sessions read {at})\n" in over
+
+
+def test_a_budget_alert_after_a_failed_read_of_the_sessions_says_it_failed(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 3})
+    chore_cost(scenario.conn, 2.0)
+    scenario.tick()
+    ms = int(datetime.now(UTC).timestamp() * 1000)
+    mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
+    runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
+    failed = datetime(2026, 10, 28, 14, 10, tzinfo=UTC)
+    runtime_sessions.record(scenario.conn, SessionPage("failed", error="locked"), now=db.format_time(failed))
+    scenario.tick()
+    [over] = messages(out)
+    # The part outside canopy is what the earlier read found, and the message says the latest read failed.
+    at = f"{failed.astimezone():%Y-%m-%d %H:%M}"
+    assert f"; canopy's runs $2.00, outside canopy $1.50 (the last read of sessions failed {at})\n" in over
+
+
+def test_a_budget_alerts_parts_add_up_to_its_total() -> None:
+    month = spend.Month("2026-10", "", "", 3, 2.01, 0.5, None, runs_usd=1.005, outside_usd=1.005)
+    fields = outbox.budget_reached(month, 100).fields
+    # Each part rounded on its own would read $1.00 and $1.00 of a $2.01 total.
+    assert (fields["spent"], fields["runs"], fields["outside"]) == (2.01, 1.0, 1.01)
+
+
+def chore_cost(conn: sqlite3.Connection, usd: float) -> None:
+    """A chore run that started now and cost `usd`, as the month's spend counts it."""
+    conn.execute(
+        "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path, cost_usd) "
+        "VALUES (NULL, 'deps', ?, 'ok', 'l', ?)",
+        (db.now(), usd),
+    )
+
+
 def test_a_digest_arrives_on_its_interval_even_when_quiet(
     scenario: Scenario,
     sink_script: Path,
@@ -315,7 +461,7 @@ def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held
         scenario.run(dispatches("PROJ-2"), worker=asks("Which?"))
     else:
         scenario.run(dispatches("PROJ-2"), worker=worker_does())
-        attention.append(raises("PROJ-8", "ready_to_merge"))
+        attention.append(raises("PROJ-8", "multi_repo"))
     scenario.tick(*attention, *waits("PROJ-1", "PROJ-2"))
     [_, sent] = json_messages(out)
     assert [(e["kind"], e["ticket"]) for e in sent["events"]] == [
@@ -399,6 +545,25 @@ def test_a_digest_says_what_its_runs_cost_by_kind(
     assert "  spent: $0.25 (workers $0.25)\n" in message["text"]
 
 
+def test_a_digest_names_the_sessions_outside_canopy_last(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "digest.txt"
+    add_sink(scenario, sink_script, "daily", out, events=[], digest_every_minutes=60)
+    ms = int(datetime.now(UTC).timestamp() * 1000)
+    mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
+    runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
+    chore_cost(scenario.conn, 0.5)
+    scenario.tick()
+
+    [message] = json_messages(out)
+    spent = message["digest"]["spend"]
+    assert (spent["total"], spent["chores"], spent["outside"]) == (2.0, 0.5, 1.5)
+    assert "  spent: $2.00 (chores $0.50, outside canopy $1.50)\n" in message["text"]
+
+
 def test_a_digest_under_a_spend_floor_waits_until_the_runs_since_the_last_cost_that_much(
     scenario: Scenario,
     git_pool: GitPool,
@@ -419,8 +584,12 @@ def test_a_digest_under_a_spend_floor_waits_until_the_runs_since_the_last_cost_t
     [message] = json_messages(out)
     assert message["digest"]["spend"]["workers"] == 0.5
     scenario.time_passes(minutes=61)
+    # The operator's own session outside canopy is no run of the loop's: however dear, it meets no floor.
+    ms = int(datetime.now(UTC).timestamp() * 1000)
+    mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 9.0, 1, 1, 0, 0, 0)
+    runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
     scenario.tick(*waits("PROJ-1", "PROJ-2"))
-    assert len(messages(out)) == 1  # due again, but nothing spent since
+    assert len(messages(out)) == 1  # due again, but no run of canopy's spent anything since
 
 
 def test_bounds_count_what_they_leave_out(scenario: Scenario, sink_script: Path, tmp_path: Path) -> None:
@@ -510,7 +679,9 @@ def test_chore_runs_reach_a_sink_that_takes_chores(scenario: Scenario, sink_scri
     prompt = scenario.env.home / "chore.md"
     prompt.write_text("Check.\n")
     chore_cmd = "agent run --agent canopy-chore {prompt}"
-    scenario.configures(chores={"check": {"prompt": str(prompt), "every_minutes": 60, "cmd": chore_cmd}})
+    # With a `when`, the overseer's to run or hold off (DESIGN §37).
+    check = {"prompt": str(prompt), "every_minutes": 60, "cmd": chore_cmd, "when": "Weekdays only."}
+    scenario.configures(chores={"check": check})
     out = tmp_path / "chores.txt"
     add_sink(scenario, sink_script, "s", out, format="text", events=["chores"])
     scenario.tick(canopy("chore", "wait", "check", "--rationale", "not needed yet"))
@@ -519,6 +690,7 @@ def test_chore_runs_reach_a_sink_that_takes_chores(scenario: Scenario, sink_scri
     with chore_reports(chore):
         with in_tick(scenario.conn, ends_ok=True):
             assert main(["chore", "run", "check"], runner=InlineRunner()) == 0
+            tick_starts(InlineRunner())
             assert main(["_chore", "1"], runner=InlineRunner()) == 0
         scenario.tick()
     [message] = messages(out)
@@ -540,7 +712,7 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
     since = "2026-10-19T12:00:00Z"
     pr = "https://github.test/o/r/pull/7"
     added = [
-        Item("PROJ-1", "needs_reviewer", "d", since),
+        Item("PROJ-1", "needs_author", "d", since),
         Item("chore:deps", "lodash", "d", since, finding=True),
         Item(f"pr:{pr}", "review_requested", "d", since),
         Item(None, "repo_missing", "d", since, repo="web"),
@@ -553,6 +725,9 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         message.Event(5, "review.ended", since, {"pr": pr, "run": 6}),
         message.Event(6, "loop.failing", since, {"tick": 9}),
         message.Event(7, "loop.recovered", since, {"failed": 3}),
+        message.Event(8, "loop.budget_reached", since, {"month": "2026-10", "budget": 30, "percent": 100}),
+        message.Event(9, "reply.recorded", since, {"ticket": "PROJ-1", "message": 4, "ts": "1.2", "body": "go"}),
+        message.Event(10, "reply.refused", since, {"ticket": None, "ts": "1.3", "guard": "no_ticket", "reason": "r"}),
     ]
     change = notify_journal.Diff(added, [], [], [])
     sent = message.Message("slack", "/r", Path("/r/attention.md"), change, 4, events, ui=UI)
@@ -573,6 +748,9 @@ def test_a_json_message_links_each_subject_to_its_page_in_the_web_ui() -> None:
         f"{UI}chores/deps/runs/5",
         f"{UI}reviews/6",
         f"{UI}ticks/9",
+        None,
+        f"{UI}spend",
+        f"{UI}tickets/PROJ-1",
         None,
     ]
     # The text format links nothing, so `notify.cmd` sees no change.
@@ -612,3 +790,19 @@ def test_serve_url_ends_in_a_slash_and_is_private(canopy_env: CanopyEnv) -> None
     canopy_env.append_shared('\n[serve]\nurl = "https://evil.test/"\n')
     with pytest.raises(ConfigError, match="is private"):
         load(canopy_env.root, canopy_env.user_file)
+
+
+def test_what_came_of_a_reply_from_slack_reads_as_a_line() -> None:
+    recorded = {"ticket": "PROJ-1", "message": 4, "ts": "1.2", "body": "use the staging config"}
+    refused = {"ticket": "PROJ-9", "ts": "1.3", "guard": "unknown", "reason": "canopy has no record of PROJ-9"}
+    unnamed = {"ticket": None, "ts": "1.4", "guard": "no_ticket", "reason": "it names no ticket"}
+    assert (
+        message.event_line("reply.recorded", recorded)
+        == "+ PROJ-1 your reply from Slack recorded: use the staging config"
+    )
+    assert message.event_line("reply.refused", refused) == (
+        "! your reply from Slack on PROJ-9 not recorded (unknown): canopy has no record of PROJ-9"
+    )
+    assert message.event_line("reply.refused", unnamed) == (
+        "! your reply from Slack not recorded (no_ticket): it names no ticket"
+    )

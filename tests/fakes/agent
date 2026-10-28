@@ -14,11 +14,12 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
     FAKE_AGENT_TOOLS    a JSON list of [tool, arguments] pairs, each called in order before the commands, `tool` named
                         as OpenCode names it, `<server>_<tool>`, through the local MCP server of that name its inline
                         config names (OPENCODE_CONFIG_CONTENT), as OpenCode starts it: its command, in its cwd, with
-                        the agent's whole environment. Stands in for a chore calling `canopy_chore_history`. Default
-                        none. A call no server named answers fails as OpenCode's would.
+                        the agent's whole environment. Stands in for an overseer calling `canopy_decide`, or a chore
+                        `canopy_chore_history`. Default none. A call no server named answers fails as OpenCode's would.
     FAKE_AGENT_QUERIED  for an overseer whose state block says `"query_due": true`: a JSON list of the ticket keys it
-                        records with `canopy queried` before its commands, as the prompt's step 1 does once it has run
-                        the query. Default `[]`, the query found nothing open. `skip` records no query.
+                        records before its commands, as the prompt's step 1 does once it has run the query: with the
+                        `canopy_queried` tool, first, when it calls tools, else with `canopy queried`. Default `[]`, the
+                        query found nothing open. `skip` records no query.
     FAKE_AGENT_LOG      if set, a JSON object of "argv", "stdin", "cwd", "env", "tools", and "commands", on one line,
                         is appended to this file per run. `stdin` is what was piped to it, None from a terminal or
                         /dev/null, as `opencode run` takes a piped prompt. `env` holds the CANOPY_* and OPENCODE_*
@@ -33,7 +34,7 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
 
 With `--format json` it prints what `opencode run --format json` does: one JSON event per line, its text as `text`
 events, each command it ran as a `bash` `tool_use` event once it ends, each tool it called as a `tool_use` event of its
-name, and two model calls as `step_finish` events.
+name, and two model calls as `step_finish` events, their replies `msg_1` and `msg_2`.
 Otherwise it prints its text as plain lines.
 
 A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_SAYS, FAKE_WORKER_EXIT,
@@ -51,6 +52,7 @@ Stdlib only, no canopy imports: this runs as a separate process under whatever p
 """
 
 import functools
+import itertools
 import json
 import os
 import subprocess  # noqa: TID251  (stands in for an agent runtime, so a fake overseer can run the CLI)
@@ -72,7 +74,11 @@ SERVER_TIMEOUT = 60
 
 def role(argv: list[str]) -> str:
     if "--agent" in argv[:-1]:
-        return argv[argv.index("--agent") + 1].removeprefix("canopy-").upper().replace("-", "_")
+        agent = argv[argv.index("--agent") + 1]
+        # A chore's own copy of the chore's agent, `canopy-chore-<name>`, plays the chore.
+        if agent.startswith("canopy-chore-"):
+            return "CHORE"
+        return agent.removeprefix("canopy-").upper().replace("-", "_")
     return "AGENT"
 
 
@@ -108,36 +114,60 @@ def run_commands(argv: list[str]) -> list[dict[str, object]]:
 
 
 def queried(argv: list[str]) -> list[list[str]]:
+    keys = queried_keys(argv)
+    return [] if keys is None or calls_tools(argv) else [["canopy", "queried", *keys]]
+
+
+def queried_keys(argv: list[str]) -> list[str] | None:
+    """The keys an overseer whose query is due records it found, or None when it records no query."""
     found = setting(argv, "QUERIED", "[]")
     if role(argv) != "OVERSEER" or found == "skip" or not query_due(prompt(argv)):
-        return []
-    return [["canopy", "queried", *json.loads(found)]]
+        return None
+    keys: list[str] = json.loads(found)
+    return keys
+
+
+def calls_tools(argv: list[str]) -> bool:
+    return bool(json.loads(setting(argv, "TOOLS", "[]")))
 
 
 def call_tools(argv: list[str]) -> list[dict[str, object]]:
-    """Call each tool the script names, through the server the inline config names for it, one session per server."""
-    calls: list[list[Any]] = json.loads(setting(argv, "TOOLS", "[]"))
-    if not calls:
-        return []
-    servers = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
-    made: list[dict[str, object]] = []
-    for name, arguments in calls:
+    """Call each tool the script names, the query's record first, through the server the inline config names for it.
+
+    One session for each run of calls to the same server, as OpenCode keeps one open for the whole run.
+    """
+    keys = queried_keys(argv) if calls_tools(argv) else None
+    calls: list[list[Any]] = [*([] if keys is None else [["canopy_queried", {"keys": keys}]])]
+    calls += json.loads(setting(argv, "TOOLS", "[]"))
+    mcp: dict[str, Any] = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
+    # OpenCode 2's shape, `mcp.servers`, or 1's, the servers by name under `mcp`.
+    servers: dict[str, dict[str, Any]] = mcp["servers"] if isinstance(mcp.get("servers"), dict) else mcp
+
+    def owner(call: list[Any]) -> str | None:
         # The longest server name the tool's name starts with, as `<server>_<tool>`.
-        owner = max((s for s in servers if name.startswith(f"{s}_")), key=len, default=None)
-        if owner is None:
-            text, error = f"no MCP server serves {name}", True
+        return max((s for s in servers if call[0].startswith(f"{s}_")), key=len, default=None)
+
+    made: list[dict[str, object]] = []
+    for server, run in itertools.groupby(calls, key=owner):
+        group = list(run)
+        if server is None:
+            answers = [(f"no MCP server serves {name}", True) for name, _ in group]
         else:
-            [(text, error)] = served(servers[owner], [[name.removeprefix(f"{owner}_"), arguments]])
-        made.append({"name": name, "arguments": arguments, "text": text, "error": error})
-        if events(argv):
-            outcome = {"status": "error", "error": text} if error else {"status": "completed", "output": text}
-            emit(argv, "tool_use", {"type": "tool", "tool": name, "state": {**outcome, "input": arguments}})
+            answers = served(servers[server], [[name.removeprefix(f"{server}_"), args] for name, args in group])
+        for (name, arguments), (text, error) in zip(group, answers, strict=True):
+            made.append({"name": name, "arguments": arguments, "text": text, "error": error})
+            if events(argv):
+                outcome = {"status": "error", "error": text} if error else {"status": "completed", "output": text}
+                emit(argv, "tool_use", {"type": "tool", "tool": name, "state": {**outcome, "input": arguments}})
     return made
 
 
 def served(entry: dict[str, Any], calls: list[list[Any]]) -> list[tuple[str, bool]]:
-    """Open a session with the local server `entry` names, call each of `calls` in it, and close it: each call's text
-    and whether it was a tool error. A server that does not answer fails every call left."""
+    """Open a session with the local server `entry` names, call each of `calls` in it, and close it.
+
+    It gives back each call's text and whether it was a tool error. A server that does not answer fails every call
+    left.
+    """
     proc = subprocess.Popen(  # noqa: S603  (the command canopy's inline config names)
         entry["command"],
         cwd=entry.get("cwd"),
@@ -226,10 +256,12 @@ def say(argv: list[str], text: str) -> None:
         print(text, flush=True)
 
 
-def step(argv: list[str]) -> None:
+# The call's reply is message `msg_N`, the Nth model call, as the fake `opencode` exports the session's replies.
+def step(argv: list[str], n: int) -> None:
     if events(argv):
         cost = json.loads(setting(argv, "STEP_COST", "0.125"))
-        emit(argv, "step_finish", {"type": "step-finish", "reason": "stop", "cost": cost, "tokens": STEP_TOKENS})
+        part = {"type": "step-finish", "messageID": f"msg_{n}", "reason": "stop", "cost": cost, "tokens": STEP_TOKENS}
+        emit(argv, "step_finish", part)
 
 
 def main(argv: list[str]) -> int:
@@ -238,7 +270,7 @@ def main(argv: list[str]) -> int:
     says = setting(argv, "SAYS", "")
     if says:
         say(argv, says)
-    step(argv)
+    step(argv, 1)
     tools = call_tools(argv)
     commands = run_commands(argv)
 
@@ -255,7 +287,7 @@ def main(argv: list[str]) -> int:
     result = setting(argv, "RESULT", json.dumps(DEFAULT_RESULT))
     if result:
         say(argv, result)
-    step(argv)
+    step(argv, 2)
     for error in json.loads(setting(argv, "ERRORS", "[]")) if events(argv) else []:
         session = setting(argv, "SESSION", "ses_fake")
         event = {"type": "error", "timestamp": int(time.time() * 1000), "sessionID": session}

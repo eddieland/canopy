@@ -5,7 +5,9 @@ the operator replies, and the test checks what canopy did. The `scenario` fixtur
 functions below it are the moves in it, the overseer's (`dispatches`, `reviews`, `raises`, `sets_phase`, `skips_tick`,
 and `waits` from `helpers.py`) and a worker's (`pushes`, `asks`, `fails`, or any `*_does` helper). Each is a helper of
 `helpers.py` with the plumbing folded in: a tick's exit code checked, the runs it started waited for, a dispatch's
-flags spelled as keywords.
+flags spelled as keywords. Those moves run the overseer's commands; a tick's move may instead be a call of one of
+canopy's tools, `calls("canopy_decide", key=..., ...)` from `helpers.py`, made through the server as the overseer makes
+it.
 
     def test_a_red_check_resumes_the_branch(scenario: Scenario, git_pool: GitPool) -> None:
         scenario.run(worker=pushes())
@@ -105,6 +107,9 @@ one in a tick of its own, or in the one `ticking` holds open, so what several ra
             scenario.overseer("attention", "PROJ-2", "needs_human", "--detail", "two")
         assert len(scenario.attention()) == 2
 
+The loop is told the same way: `loops(scenario, ...)` runs `canopy loop`, dry, on a fake clock, acting at the minutes
+it is given, and gives back each tick with what woke it and the minute it started at.
+
 A step the verbs do not cover is written as before, in the same test: the verbs are argv lists and context managers, so
 they mix with `canopy(...)`, `overseer_does`, and the journal's own queries.
 
@@ -141,10 +146,11 @@ from typing import Any, Literal, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
-from canopy.core import db, records, review_runs
+from canopy.core import db, feedback_items, records, review_runs
+from canopy.core.context import Context
 from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TickStatus
 from canopy.infra import logs, procs
-from canopy.loop import attention, poll
+from canopy.loop import attention, poll, repeat, tick
 from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,
@@ -153,20 +159,26 @@ from tests.canopy.helpers import (
     TICK_DONE,
     WORKER_DONE,
     Behavior,
+    Called,
+    FakeTime,
     InlineRunner,
     Script,
     blocked_result,
     canopy,
+    comment,
     commit_and_push,
     context,
     in_tick,
     last_run,
     last_tick,
+    log_file,
     operator,
     overseer_does,
+    planner_does,
     present,
     seen,
     state_block,
+    tick_starts,
     wait_for_run,
     worker_does,
 )
@@ -181,12 +193,37 @@ type Worker = AbstractContextManager[None]
 #: file, or the workspace's private file.
 type ConfigFile = Literal["user", "workspace", "private"]
 
+#: A feedback plan's text, as `feedback_planned`'s planner writes it.
+FEEDBACK_TEXT = "# Feedback plan: PROJ-1\n\n## Items\n\n### Item 501: change\n\nRename it.\n"
+#: alice's comment, which `with_a_pr` trusts her for, and bob's, on a thread of its own, both on DRAFTS_PR's head.
+ALICES_COMMENT = comment(501)
+BOBS_COMMENT = comment(502, "PRRT_2", author="bob", body="Drop this argument.")
+#: DRAFTS_PR's head in `github_shows`, and the check that is red there.
+FEEDBACK_HEAD = "abc1234"
+FEEDBACK_RED = {"name": "build", "status": "completed", "conclusion": "failure"}
+#: `feedback_planned`'s planner's result: a change for alice's comment, a decline for bob's, and an id it was never
+#: given.
+FEEDBACK_PLANNED = {
+    "status": "done",
+    "summary": "planned the round",
+    "items": [
+        {"id": 501, "proposal": "change", "reply": "Renamed."},
+        {"id": 502, "proposal": "decline", "reply": "Kept, since the API needs it."},
+        {"id": 999, "proposal": "change"},
+    ],
+}
+#: PROJ-9's PR in `with_a_blocker`, the blocker DRAFTS_PR is stacked on in `github_stacked`, and its branch.
+BLOCKER_PR = "https://github.com/acme/api/pull/6"
+BLOCKER_BRANCH = "agent/PROJ-9-base"
+
 #: How many lines of what a command printed to stdout its step in the story keeps; what it printed to stderr, where a
 #: refusal says why, the story keeps whole.
 TOLD_LINES = 2
 
 #: How long a held worker, or a test waiting on one, waits before it gives up.
 HOLD_TIMEOUT = 60
+#: How long a test waits on a chore run to end.
+CHORE_SECONDS = 30
 
 #: The overseer's commands that start a review run: a review, and a revision of a review's draft (DESIGN §34).
 REVIEW_COMMANDS = (["canopy", "review", "run"], ["canopy", "review", "revise"])
@@ -412,8 +449,10 @@ class Reviewing:
 
 
 class Refused(UserList[tuple[str, str]]):
-    """What canopy refused: the decisions of the tick it refused in, as (action, rationale), the refusal and the
-    attention it raised, if any, and beside them that tick, its decisions whole, and what the refused command printed.
+    """What canopy refused: the decisions of the tick it refused in, as (action, rationale).
+
+    Those are the refusal and the attention it raised, if any. Beside them it holds that tick, its decisions whole, and
+    what the refused command printed.
     """
 
     def __init__(
@@ -467,6 +506,30 @@ class Ticked:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class Looped:
+    """What `canopy loop` did: the ticks it ran, each with the minute of its clock it started at."""
+
+    #: The ticks' rows, closed, in the order they ran.
+    ticks: Sequence[records.Tick]
+    #: The minute of the loop's clock each tick started at, the first at 0: a tick takes none of it.
+    started: Sequence[float]
+    #: What the loop printed, a logfmt line for each event, as to the daemon's file.
+    printed: str
+
+    @property
+    def woken_by(self) -> list[str | None]:
+        """What started each tick, as its row records it: `start`, `timer`, `poll`, ..."""
+        return [t.woken_by for t in self.ticks]
+
+    def __str__(self) -> str:
+        """Each tick, by when it started, what woke it, and how it ended."""
+        return "\n".join(
+            f"  at minute {m:g}, tick {t.id} woken by {t.woken_by}: {t.status}: {t.summary}"
+            for m, t in zip(self.started, self.ticks, strict=True)
+        )
+
+
 @dataclass
 class Scenario:
     """A workspace of one repository, `repo`, where a test plays the overseer, the workers, and the operator in turn."""
@@ -487,7 +550,7 @@ class Scenario:
 
     def tick(
         self,
-        *commands: list[str],
+        *moves: list[str] | Called,
         worker: Worker | None = None,
         workers: Mapping[str, Script] | None = None,
         dry_run: bool = False,
@@ -497,7 +560,10 @@ class Scenario:
         result: str = TICK_DONE,
         **overseer: Unpack[Behavior],
     ) -> Ticked:
-        """Run one tick, `canopy tick`, its overseer running `commands`, and wait for each run it dispatches to end.
+        """Run one tick, `canopy tick`, its overseer making `moves`, and wait for each run it dispatches to end.
+
+        A move is a command it runs, such as `dispatches(...)`, or a call of one of canopy's tools, `calls(...)`: it
+        makes every call first, then runs every command.
 
         Each run's worker does `worker`, the fake's default `done` if None, or what `workers` gives for its ticket: a
         script each ticket's run plays as made for that ticket, so `pushes()` pushes the branch of the ticket it runs
@@ -511,11 +577,13 @@ class Scenario:
         """
         argv = ["tick", "--dry-run"] if dry_run else ["tick"]
         recorded = "skip" if queried is None else json.dumps(list(queried))
+        commands = [move for move in moves if not isinstance(move, Called)]
+        tools = [move for move in moves if isinstance(move, Called)]
         with ExitStack() as stack:
-            stack.enter_context(overseer_does(*commands, result=result, queried=recorded, **overseer))
+            stack.enter_context(overseer_does(*commands, tools=tools, result=result, queried=recorded, **overseer))
             if worker is not None:
                 stack.enter_context(worker)
-            stack.enter_context(_each_ticket(worker, workers or {}, commands))
+            stack.enter_context(_each_ticket(worker, workers or {}, moves))
             if hold:
                 stack.enter_context(self._held())
             exited, printed = _printing(lambda: main(argv))
@@ -538,8 +606,9 @@ class Scenario:
         worker: Worker | None = None,
         runner: InlineRunner | None = None,
     ) -> Ran:
-        """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and run it in this
-        process, its worker doing `worker`, made for the ticket `command` names.
+        """Dispatch `command` in a tick of its own, and run it in this process, its worker doing `worker`.
+
+        `command` is a `dispatches(...)`, KEY's `implement` if None, and `worker` is made for the ticket it names.
 
         The overseer is not run, so a run's story can start without a tick's. `runner` runs its processes, one that
         times a worker out, say, or a plain `InlineRunner` if None.
@@ -558,6 +627,7 @@ class Scenario:
                 if exited != 0:
                     self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                tick_starts(runner, tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
                 exited, printed = _printing(lambda: main(["_run", str(run_id)], runner=runner))
@@ -567,8 +637,10 @@ class Scenario:
         return ran
 
     def starts(self, command: list[str] | None = None, *, worker: Worker | None = None) -> Working:
-        """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and hold its worker
-        at work, the worker set to do `worker`, made for the ticket `command` names, once the test lets it go on.
+        """Dispatch `command` in a tick of its own, and hold its worker at work.
+
+        `command` is a `dispatches(...)`, KEY's `implement` if None. The worker is set to do `worker`, made for the
+        ticket `command` names, once the test lets it go on.
 
         The run is detached, as a tick's is, and the overseer is not run.
 
@@ -586,6 +658,7 @@ class Scenario:
                 if exited != 0:
                     self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                tick_starts(tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
         working = self._at_work(run_id)
@@ -599,8 +672,10 @@ class Scenario:
         reviewer: Worker | None = None,
         runner: InlineRunner | None = None,
     ) -> Reviewed:
-        """Start the review `command`, a `reviews(...)` or a `revises(...)`, in a tick of its own, and do it in this
-        process, its reviewer doing `reviewer`, a `reviewer_reports(...)`, or the fake's default report if None.
+        """Start the review `command` in a tick of its own, and do it in this process, its reviewer doing `reviewer`.
+
+        `command` is a `reviews(...)` or a `revises(...)`, and `reviewer` a `reviewer_reports(...)`, or the fake's
+        default report if None.
 
         The overseer is not run. `runner` runs the reviewer's processes, one that times it out, say, or a plain
         `InlineRunner` if None.
@@ -617,6 +692,7 @@ class Scenario:
                 if exited != 0:
                     self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                tick_starts(InlineRunner(), tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
                 exited, printed = _printing(lambda: main(["_review", str(run_id)], runner=runner or InlineRunner()))
@@ -627,8 +703,10 @@ class Scenario:
         return reviewed
 
     def reviews_each(self, command: list[str], *, reviewer: Worker | None = None) -> list[Reviewed]:
-        """Start the reviews `command`, a `reviews(...)`, starts in a tick of its own, one in each persona chosen for
-        the PR, side by side, then do each in this process in turn, its reviewer doing `reviewer`.
+        """Start the reviews `command`, a `reviews(...)`, starts in a tick of its own, then do each in this process.
+
+        It starts one in each persona chosen for the PR, side by side, and they are done in turn, each reviewer doing
+        `reviewer`.
 
         Returns:
             The review runs, closed, in the order they started.
@@ -643,6 +721,7 @@ class Scenario:
                 if exited != 0:
                     self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                tick_starts(InlineRunner(), tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 started = self.conn.execute("SELECT id FROM review_runs WHERE tick_id = ? ORDER BY id", (tick_id,))
                 ids = [int(r[0]) for r in started]
@@ -657,8 +736,10 @@ class Scenario:
         return done
 
     def starts_review(self, command: list[str], *, reviewer: Worker | None = None) -> Reviewing:
-        """Start the review `command`, a `reviews(...)` or a `revises(...)`, in a tick of its own, and hold its
-        reviewer at work, the reviewer set to do `reviewer`, a `reviewer_reports(...)`, once the test lets it go on.
+        """Start the review `command` in a tick of its own, and hold its reviewer at work.
+
+        `command` is a `reviews(...)` or a `revises(...)`. The reviewer is set to do `reviewer`, a
+        `reviewer_reports(...)`, once the test lets it go on.
 
         The review run is detached, as the overseer's is, and the overseer is not run.
 
@@ -675,6 +756,7 @@ class Scenario:
                 if exited != 0:
                     self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
                 assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                tick_starts(tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
         reviewing = self._reviewing(run_id)
@@ -682,8 +764,10 @@ class Scenario:
         return reviewing
 
     def refuses(self, command: list[str], *, dry_run: bool = False) -> Refused:
-        """Dispatch `command`, a `dispatches(...)`, or start the review `command`, a `reviews(...)` or a
-        `revises(...)`, in a tick of its own, which canopy must refuse, starting no run.
+        """Dispatch or start the review `command` in a tick of its own, which canopy must refuse, starting no run.
+
+        `command` is a `dispatches(...)`, or a `reviews(...)` or a `revises(...)`. canopy refuses it at the ask, the
+        command exiting 1, or at the spawn, when the tick starts what it recorded (DESIGN §40).
 
         Returns:
             The tick's decisions, as (action, rationale): the refusal, and the attention it raised, if any; the tick,
@@ -693,9 +777,16 @@ class Scenario:
         assert review or command[:2] == ["canopy", "dispatch"], command
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
             exited, printed = _printing(lambda: main(command[1:], runner=InlineRunner()))
-        refused = Refused(tick=tick_id, made=db.decisions_for_tick(self.conn, tick_id), printed=printed)
-        self._tell(f"tick {tick_id} {'refuses' if exited == 1 else 'does not refuse'} {shlex.join(command)}", tick_id)
-        assert exited == 1, f"{shlex.join(command[:3])} exited {exited}, not refused: {list(refused)} {printed.err}"
+            if exited == 0:
+                tick_starts(InlineRunner(), tick_id=tick_id)
+        made = db.decisions_for_tick(self.conn, tick_id)
+        refused = Refused(tick=tick_id, made=made, printed=printed)
+        at_spawn = exited == 0 and any(d.action.startswith("refused:") for d in made)
+        said = "refuses" if exited == 1 else "refuses at the spawn" if at_spawn else "does not refuse"
+        self._tell(f"tick {tick_id} {said} {shlex.join(command)}", tick_id)
+        assert exited == 1 or at_spawn, (
+            f"{shlex.join(command[:3])} exited {exited}, not refused: {list(refused)} {printed.err}"
+        )
         # The table's name is one of two literals.
         runs = "review_runs" if review else "runs"
         started = self.conn.execute(f"SELECT count(*) FROM {runs} WHERE tick_id = ?", (tick_id,)).fetchone()[0]  # noqa: S608
@@ -703,8 +794,11 @@ class Scenario:
         return refused
 
     def polls(self) -> None:
-        """The connectors read the world between ticks, as the loop's poll does (DESIGN §6): a PR a run opened is then
-        observed, as the next tick's sources would observe it before its dispatches rest on it (DESIGN §35)."""
+        """The connectors read the world between ticks, as the loop's poll does (DESIGN §6).
+
+        A PR a run opened is then observed, as the next tick's sources would observe it before its dispatches rest on it
+        (DESIGN §35).
+        """
         assert poll.run(context(self.env), logs.for_tick(None)) is not None, "a tick holds the lock"
         self.story.append("the connectors poll")
 
@@ -743,8 +837,9 @@ class Scenario:
         return printed
 
     def overseer(self, *args: str, code: int = 0, dry_run: bool = False) -> Printed:
-        """Run one of the overseer's commands, `canopy ARGS`, in the tick `ticking` holds open, or in a tick of its own
-        that ends ok, a dry run with `dry_run`; it must exit `code`.
+        """Run one of the overseer's commands, `canopy ARGS`, which must exit `code`.
+
+        It runs in the tick `ticking` holds open, or in a tick of its own that ends ok, a dry run with `dry_run`.
 
         Returns:
             What it printed, as the overseer would read it.
@@ -757,6 +852,9 @@ class Scenario:
             else:
                 assert not dry_run, "a command in the tick `ticking` holds open runs as that tick does"
             exited, printed = _printing(lambda: main(list(args)))
+            if self.open_tick is None:
+                # Its tick ends here, so it starts what the command recorded, as a tick does after its overseer.
+                tick_starts(tick_id=tick_id)
         said = f"the overseer runs {command} in tick {tick_id}, which exits {exited}"
         self.story.append("\n".join([said, *printed.told()]))
         assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
@@ -764,9 +862,10 @@ class Scenario:
 
     @contextmanager
     def ticking(self, *, dry_run: bool = False) -> Iterator[int]:
-        """Hold a tick open for the overseer's commands, a dry run with `dry_run`: each `overseer` move inside the block
-        runs in it, the test may look at the tick while it is still running, and it ends ok as the block does, as one
-        whose overseer finished, so what they raised is the attention list.
+        """Hold a tick open for the overseer's commands, a dry run with `dry_run`.
+
+        Each `overseer` move inside the block runs in it, the test may look at the tick while it is still running, and
+        it ends ok as the block does, as one whose overseer finished, so what they raised is the attention list.
 
         Yields:
             The tick's id.
@@ -780,6 +879,8 @@ class Scenario:
                 yield tick_id
             finally:
                 self.open_tick = None
+            # It ends as one whose overseer finished: the runs its commands recorded start now.
+            tick_starts(tick_id=tick_id)
         self.story.append(f"tick {tick_id} ends ok")
 
     def configures(self, file: ConfigFile = "user", /, **tables: Mapping[str, object]) -> None:
@@ -846,8 +947,10 @@ class Scenario:
         return Ran(row, reasons, self.env.state_dir / "runs" / f"{run_id}.prompt")
 
     def close(self) -> None:
-        """Stop what is left of every run held at work, its `canopy _run` and its worker both, and of every review run,
-        its `canopy _review` and its reviewer, as the test ends."""
+        """Stop what is left of every run and review run held at work, as the test ends.
+
+        That is a run's `canopy _run` and its worker both, and a review run's `canopy _review` and its reviewer.
+        """
         for run_id in self.held:
             row = present(db.get_run(self.conn, run_id))
             if row["status"] == RunStatus.RUNNING:
@@ -955,8 +1058,10 @@ def reviews(
     ticket: str | None = None,
     context: str | None = None,
 ) -> list[str]:
-    """The overseer starts a review of `pr` at `sha` in `repo`, of `ticket`'s PR if given, with `context` for the
-    reviewer."""
+    """The overseer starts a review of `pr` at `sha` in `repo`.
+
+    It reviews `ticket`'s PR if given, with `context` for the reviewer.
+    """
     flags = _option("--ticket", ticket) + _option("--context", context)
     return canopy("review", "run", "--pr", pr, "--sha", sha, "--repo", repo, *flags)
 
@@ -991,8 +1096,9 @@ def pushes(
     repos: Sequence[str] = (),
     **reported: object,
 ) -> Script:
-    """The worker commits `message`, pushes `branch`, and reports it done with a PR, its result carrying `reported`
-    too: `pushes(notes=[...])`.
+    """The worker commits `message`, pushes `branch`, and reports it done with a PR.
+
+    Its result carries `reported` too: `pushes(notes=[...])`.
 
     What is left out is its ticket's own: the branch an `implement` without a slug pushes, `agent/<KEY>-work`; the
     message `<KEY>: the change`; and the PR, `https://example.test/pr/<the key's number>`. A joint run's worker, in a
@@ -1033,15 +1139,177 @@ def fails(summary: str = "could not build") -> Script:
 
 
 def sends_drafts(entries: object, *, pr: str = DRAFTS_PR) -> Script:
-    """The worker pushes its ticket's branch and reports it done with `pr` open in `repo`, sending `entries` as its
-    drafts, whatever they hold, so a test can send ones canopy refuses."""
+    """The worker pushes its ticket's branch and reports it done with `pr` open in `repo`.
+
+    It sends `entries` as its drafts, whatever they hold, so a test can send ones canopy refuses.
+    """
     return pushes(prs={"repo": pr}, drafts=entries)
 
 
+def loops(
+    scenario: Scenario,
+    *moves: list[str],
+    ticks: int = 2,
+    at: Mapping[float, Callable[[], None]] | None = None,
+) -> Looped:
+    """Run `canopy loop` in `scenario`, dry, for `ticks` ticks on a fake clock, its overseer running `moves`.
+
+    `at` acts during the waits: each action runs once, as the loop's clock reaches that many minutes, such as a
+    source that answers otherwise from then on. The clock starts at 0 and only a wait moves it. The overseer records
+    no query: a `tracker` source's read is the harness's to record.
+
+    Returns:
+        The ticks the loop ran, and the minute each started at.
+    """
+    clock = FakeTime()
+    pending = sorted((at or {}).items())
+    started: list[float] = []
+    ran = tick.run
+
+    def acts() -> None:
+        while pending and clock.now >= pending[0][0] * 60:
+            pending.pop(0)[1]()
+
+    def ticks_at(
+        ctx: Context,
+        *,
+        dry_run: bool,
+        woken_by: tick.WokenBy | None = None,
+        ui: str | None = None,
+    ) -> tick.Outcome:
+        started.append(clock.now / 60)
+        return ran(ctx, dry_run=dry_run, woken_by=woken_by, ui=ui)
+
+    clock.on_sleep = acts
+    before = int(scenario.conn.execute("SELECT coalesce(max(id), 0) FROM ticks").fetchone()[0])
+    term, out = log_file()
+    with (
+        overseer_does(*moves, queried="skip"),
+        mock.patch.object(
+            tick,
+            "run",
+            autospec=True,
+            side_effect=ticks_at,
+        ),
+    ):
+        repeat.run(
+            context(scenario.env),
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=ticks,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=clock.sleep,
+            clock=clock.clock,
+        )
+    rows = scenario.conn.execute("SELECT id FROM ticks WHERE id > ? ORDER BY id", (before,)).fetchall()
+    looped = Looped([present(db.get_tick(scenario.conn, int(r["id"]))) for r in rows], started, out.getvalue())
+    scenario.story.append(f"the loop runs {len(looped.ticks)} ticks\n{looped}")
+    return looped
+
+
+def with_a_pr(scenario: Scenario, *, approve: bool = True) -> None:
+    """KEY's implement pushes its branch and opens DRAFTS_PR.
+
+    With `approve`, feedback plans are on, and alice is trusted (DESIGN §32).
+    """
+    scenario.run(dispatches(slug="work"), worker=pushes(prs={"repo": DRAFTS_PR}))
+    if approve:
+        scenario.configures("private", policy={"feedback_plan": "approve"}, trust={"trusted_reviewers": ["alice"]})
+
+
+def github_shows(
+    state: Path,
+    *reviews: dict[str, Any],
+    head: str = FEEDBACK_HEAD,
+    checks: Sequence[Mapping[str, object]] = (FEEDBACK_RED,),
+    mergeable: str = "mergeable",
+) -> None:
+    """Make the fake GitHub hold DRAFTS_PR at `head`, by `me`.
+
+    It has `reviews` on it, `checks` at its head, and `mergeable` as its mergeability.
+    """
+    shown = {"pr": {"head_sha": head, "mergeable": mergeable}, "reviews": list(reviews), "checks": list(checks)}
+    state.write_text(json.dumps({"prs": {DRAFTS_PR: shown}}))
+
+
+def due_chore(scenario: Scenario, name: str, *, when: str | None = None) -> None:
+    """Configure chore `name`, due as it has never run, its command the fake agent, and its `when` if given.
+
+    One with no `when` is the harness's, which it runs after the overseer (DESIGN §37).
+    """
+    prompt = scenario.env.home / "chores" / f"{name}.md"
+    prompt.parent.mkdir(exist_ok=True)
+    prompt.write_text(f"# {name}\n")
+    table: dict[str, Any] = {
+        "prompt": str(prompt),
+        "cmd": "agent run --agent canopy-chore {prompt}",
+        "every_minutes": 120,
+    }
+    if when is not None:
+        table["when"] = when
+    scenario.configures(chores={name: table})
+
+
+def chores_ended(conn: sqlite3.Connection) -> None:
+    """Wait for every chore run to end, so none outlives the test."""
+    deadline = time.monotonic() + CHORE_SECONDS
+    while conn.execute("SELECT count(*) FROM chore_runs WHERE status = 'running'").fetchone()[0]:
+        assert time.monotonic() < deadline, "a chore run did not end"
+        time.sleep(0.05)
+
+
+def with_a_blocker(scenario: Scenario) -> None:
+    """PROJ-9 implemented on BLOCKER_BRANCH, BLOCKER_PR its PR: the blocker `github_stacked` stacks DRAFTS_PR on."""
+    run = scenario.run(dispatches("PROJ-9", slug="base"), worker=pushes(BLOCKER_BRANCH, prs={"repo": BLOCKER_PR}))
+    assert run.status == RunStatus.DONE, run
+
+
+def github_stacked(state: Path, *reviews: dict[str, Any], merged: bool = True, base: str = BLOCKER_BRANCH) -> None:
+    """Make the fake GitHub hold DRAFTS_PR at FEEDBACK_HEAD targeting `base`, `build` red, and BLOCKER_PR.
+
+    BLOCKER_PR is merged, or open with `merged` false; DRAFTS_PR has `reviews` on it.
+    """
+    pr = {"pr": {"head_sha": FEEDBACK_HEAD, "base_ref": base}, "reviews": list(reviews), "checks": [FEEDBACK_RED]}
+    blocker = {"pr": {"head_sha": "fed4321", "state": "merged" if merged else "open"}}
+    state.write_text(json.dumps({"prs": {DRAFTS_PR: pr, BLOCKER_PR: blocker}}))
+
+
+def feedback_planned(
+    scenario: Scenario,
+    github_state: Path,
+    result: object = None,
+    *,
+    mergeable: str = "mergeable",
+) -> int:
+    """A feedback plan run on alice's and bob's comments, `build` red.
+
+    It writes FEEDBACK_TEXT and reports `result`, FEEDBACK_PLANNED by default, with the PR `mergeable` as given.
+
+    Returns:
+        Its run id.
+    """
+    github_shows(github_state, ALICES_COMMENT, BOBS_COMMENT, mergeable=mergeable)
+    line = FEEDBACK_PLANNED if result is None else result
+    assert isinstance(line, dict)
+    worker = planner_does(["cat", feedback_items.ITEMS], plan=FEEDBACK_TEXT, result=line)
+    run = scenario.run(dispatches(kind=RunKind.FEEDBACK_PLAN), worker=worker)
+    assert run.status == RunStatus.DONE, run
+    return run.id
+
+
 @contextmanager
-def _each_ticket(worker: Worker | None, workers: Mapping[str, Script], commands: Iterable[list[str]]) -> Iterator[None]:
-    # Each ticket a command dispatches, and each `workers` names, gets its script made for it; a run reads its own.
-    dispatched = [command[2] for command in commands if command[:2] == ["canopy", "dispatch"]]
+def _each_ticket(
+    worker: Worker | None,
+    workers: Mapping[str, Script],
+    moves: Iterable[list[str] | Called],
+) -> Iterator[None]:
+    # Each ticket a move dispatches, and each `workers` names, gets its script made for it; a run reads its own.
+    dispatched = [
+        str(move.arguments["key"]) if isinstance(move, Called) else move[2]
+        for move in moves
+        if (move.name == "canopy_dispatch" if isinstance(move, Called) else move[:2] == ["canopy", "dispatch"])
+    ]
     every = worker if isinstance(worker, Script) else None
     made = {
         key: script.for_ticket(key)

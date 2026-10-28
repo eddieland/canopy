@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 from canopy.core import contract, db, records, spend, sql
 from canopy.core.items import Item, age
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, SessionsRead
 
 if TYPE_CHECKING:
     from canopy.notify.journal import Diff
@@ -75,6 +75,8 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
             f"? {f.get('ticket')} run {f.get('run')} filed follow-ups {', '.join(named) or '-'}: "
             "label or `canopy start` each one you want worked",
         )
+    if kind == "ci.flaky":
+        return _flaky_line(f)
     if kind == "task.ended":
         text = f"< task:{f.get('task')} run {f.get('run')} ended {f.get('status')}"
         extras = [str(x) for x in (f.get("pr"), f.get("summary")) if x]
@@ -97,6 +99,11 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
         text = f"< review run {f.get('run')} of {f.get('pr')}{ticket} ended {f.get('status')}"
         findings = f.get("findings") or 0
         return _line(f"{text}: {verdict} ({findings} findings)" if verdict else text)
+    if kind == "reply.recorded":
+        return _line(f"+ {f.get('ticket')} your reply from Slack recorded: {f.get('body')}")
+    if kind == "reply.refused":
+        about = f" on {f.get('ticket')}" if f.get("ticket") else ""
+        return _line(f"! your reply from Slack{about} not recorded ({f.get('guard')}): {f.get('reason')}")
     if kind == "loop.failing":
         return (
             f"! loop failing: {f.get('count')} ticks in a row ended other than ok; latest tick {f.get('tick')} "
@@ -106,9 +113,30 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
         return f"! loop recovered after {f.get('failed')} failed ticks"
     if kind == "loop.sink_failing":
         return _line(f"! sink {f.get('sink')} has failed 3 deliveries in a row: {f.get('error')}")
+    if kind == "loop.budget_reached":
+        return _line(_budget_line(f))
     if kind == "test":
         return _line(f"* {f.get('text')}")
     return _line(f"{kind} {json.dumps(f)}")
+
+
+def _flaky_line(f: Mapping[str, object]) -> str:
+    """The line of a `ci.flaky` event.
+
+    Returns:
+        The line, led by `+` when canopy kicked the check, or `?` when it waits on the operator's rerun.
+    """
+    given = f.get("kicked")
+    kicked = [str(r) for r in cast("list[object]", given)] if isinstance(given, list) else []
+    given = f.get("prs")
+    prs = [str(u) for u in cast("list[object]", given)] if isinstance(given, list) else []
+    head = f"{f.get('ticket')} run {f.get('run')} left a failed check as flaky"
+    if kicked:
+        text = f"+ {head}; canopy pushed {', '.join(kicked)} again to rerun it"
+    else:
+        text = f"? {head}; rerun it, or `canopy reply` that it is real"
+    extras = [*prs, f"why: {f.get('estimate')}" if f.get("estimate") else "", str(f.get("note") or "")]
+    return _line(f"{text}: {' '.join(x for x in extras if x)}")
 
 
 def item_page(ui: str | None, ticket_key: str | None) -> str | None:
@@ -126,25 +154,29 @@ def item_page(ui: str | None, ticket_key: str | None) -> str | None:
     return page(ui, "tickets", ticket_key)
 
 
-def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str | None:
-    """The web UI's page for what an event is about: a run, a plan, a chore run, a review run, or a failed tick.
+def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str | None:  # noqa: PLR0911  (a page per kind)
+    """The web UI's page for what an event is about: a run, a plan, a chore run, a review run, a failed tick, or spend.
 
     Returns:
         The page's URL under `ui`, or None when `ui` is None or the event is about nothing with a page of its own.
     """
     f = fields
     match kind:
-        case "run.started" | "run.ended" | "follow_ups.filed" if f.get("run"):
+        case "run.started" | "run.ended" | "follow_ups.filed" | "ci.flaky" if f.get("run"):
             return page(ui, "runs", f["run"])
         case "plan.proposed" | "plan.approved" if f.get("ticket"):
             # A feedback plan has no page of its own yet: its ticket's page is where its PRs are.
             return page(ui, "tickets", f["ticket"], *(() if f.get("feedback") else ("plan",)))
+        case "reply.recorded" if f.get("ticket"):
+            return page(ui, "tickets", f["ticket"])
         case "chore.ended" if f.get("chore") and f.get("run"):
             return page(ui, "chores", f["chore"], "runs", f["run"])
         case "review.ended" if f.get("run"):
             return page(ui, "reviews", f["run"])
         case "loop.failing" if f.get("tick"):
             return page(ui, "ticks", f["tick"])
+        case "loop.budget_reached":
+            return page(ui, "spend")
         case _:
             return None
 
@@ -237,7 +269,7 @@ class DigestSpend(TypedDict):
     """What the runs that started in a digest's span cost, in US dollars, in total and by kind (DESIGN §11).
 
     Each is None when none of its runs reported a cost. `idle` is the part of `overseer` that idle ticks spent, and
-    `dry_run` the dry runs' overseers, apart from it.
+    `dry_run` the dry runs' overseers, apart from it. `total` counts the sessions outside canopy too.
     """
 
     total: float | None
@@ -250,6 +282,8 @@ class DigestSpend(TypedDict):
     reviews: float | None
     #: The operator's one-off tasks' runs (DESIGN §36).
     tasks: float | None
+    #: No run of canopy's: the runtime's sessions outside canopy, as `canopy loop` last read them.
+    outside: float | None
 
 
 class DigestJson(TypedDict):
@@ -343,13 +377,34 @@ class Digest:
                 "chores": self.costs.chores,
                 "reviews": self.costs.reviews,
                 "tasks": self.costs.tasks,
+                "outside": self.costs.outside,
             },
             "lines": self.lines(),
         }
 
 
+# A `loop.budget_reached` event's line: the month's spend against its budget, then canopy's runs' part and the part
+# outside canopy, as of when `canopy loop` last read the runtime's sessions, or last tried to, when that read failed.
+# An event recorded before it carried the parts names none.
+def _budget_line(f: Mapping[str, object]) -> str:
+    spent, projected, percent = f.get("spent"), f.get("projected"), f.get("percent")
+    so_far = _usd(spent) if isinstance(spent, int | float) else "-"
+    pace = f", on pace for {_usd(projected)}" if isinstance(projected, int | float) else ""
+    what = "its budget" if percent == spend.FULL else f"{percent}% of its budget"
+    text = f"! spend for {f.get('month')} reached {what}: {so_far} of ${f.get('budget')}{pace}"
+    runs, outside, read = f.get("runs"), f.get("outside"), f.get("sessions_read_at")
+    if not isinstance(runs, int | float):
+        return text
+    if not isinstance(read, str) or not isinstance(outside, int | float):
+        return f"{text}; canopy's runs {_usd(runs)}, outside canopy not read yet"
+    at = db.parse_time(read).astimezone().strftime("%Y-%m-%d %H:%M")
+    how = "the last read of sessions failed" if f.get("sessions_read") == SessionsRead.FAILED else "sessions read"
+    return f"{text}; canopy's runs {_usd(runs)}, outside canopy {_usd(outside)} ({how} {at})"
+
+
 # The digest's line for what its span cost: the total, then each kind that reported a cost, the idle ticks' part of
-# the overseer's beside it, and the dry runs' last, since they are no part of the loop's work.
+# the overseer's beside it, the dry runs', since they are no part of the loop's work, and the sessions outside canopy
+# last, since they are none of canopy's.
 def _spend_line(costs: spend.Costs) -> str:
     total = costs.total
     if total is None:
@@ -365,7 +420,8 @@ def _spend_line(costs: spend.Costs) -> str:
         ("tasks", costs.tasks),
     ]
     parts = [overseer] if overseer is not None else []
-    parts += [f"{name} {_usd(usd)}" for name, usd in (*kinds, ("dry runs", costs.dry_run)) if usd is not None]
+    rest = (*kinds, ("dry runs", costs.dry_run), ("outside canopy", costs.outside))
+    parts += [f"{name} {_usd(usd)}" for name, usd in rest if usd is not None]
     return f"  spent: {_usd(total)} ({', '.join(parts)})"
 
 
@@ -383,7 +439,14 @@ def titles(conn: sqlite3.Connection) -> dict[str, str]:
     return {str(r[0]): str(r[1]) for r in sql.execute(conn, q)}
 
 
-def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now: datetime) -> Digest:
+def digest(
+    conn: sqlite3.Connection,
+    items: Collection[Item],
+    *,
+    since: str,
+    now: datetime,
+    state_dir: Path,
+) -> Digest:
     """Build the digest for the time since `since`: ticks, runs and what they cost, the open attention list, workers.
 
     Returns:
@@ -424,7 +487,7 @@ def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now
         attention=dict(Counter(i.reason for i in items)),
         oldest=age(oldest, now) if oldest is not None else None,
         running=len(db.running_runs(conn, "runs")),
-        costs=spend.costs(conn, since, db.format_time(now)),
+        costs=spend.costs(conn, since, db.format_time(now), state_dir=state_dir),
     )
 
 

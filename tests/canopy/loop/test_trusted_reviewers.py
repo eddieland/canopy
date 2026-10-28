@@ -1,6 +1,8 @@
-"""Trusted and untrusted reviewers (DESIGN §7, D089): the trusted list reaches the overseer and resume workers, and the
-operator's reply on a public ticket is its go-ahead, carried in the state block and every public worker's prompt
-(D093)."""
+"""Trusted and untrusted reviewers (DESIGN §7, D089).
+
+The trusted list reaches the overseer and resume workers, and the operator's reply on a public ticket is its go-ahead,
+carried in the state block and every public worker's prompt (D093).
+"""
 
 import json
 from typing import cast
@@ -49,14 +51,14 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     # A public ticket: no `private` key, and its operator messages under `operator`.
     assert "private" not in tickets[KEY]
     operator = tickets[KEY]["operator"]
-    assert operator["message_cursor"] is None
+    assert "message_cursor" not in operator  # null, so the block leaves it out
     assert [(m["id"], m["body"]) for m in operator["new_operator_messages"]] == [(message, GO_AHEAD)]
     assert "operator" not in tickets["PROJ-2"]
 
     # Handled, the message moves the cursor past it, and the ticket has nothing new from the operator.
     scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={message}")
     ticket = present(db.get_ticket(conn, KEY))
-    assert conversation.operator_section(conn, ticket) is None
+    assert conversation.operator_section(conn, ticket, authorized=()) is None
 
 
 def test_a_started_tickets_messages_stay_in_its_private_section(scenario: Scenario) -> None:
@@ -64,7 +66,7 @@ def test_a_started_tickets_messages_stay_in_its_private_section(scenario: Scenar
     scenario.operator("start", KEY)
     reply(scenario, GO_AHEAD)
     ticket = present(db.get_ticket(conn, KEY))
-    assert conversation.operator_section(conn, ticket) is None
+    assert conversation.operator_section(conn, ticket, authorized=()) is None
     private = present(conversation.state_section(conn, ticket))
     assert [m["body"] for m in private["new_operator_messages"]] == [GO_AHEAD]
 
@@ -96,7 +98,7 @@ def test_a_public_resume_hears_the_operator_and_knows_whom_to_trust(scenario: Sc
     # The dispatch carried the message cursor, so the next tick does not read the go-ahead again.
     ticket = present(db.get_ticket(scenario.conn, KEY))
     assert ticket.last_message_id == message
-    assert conversation.operator_section(scenario.conn, ticket) is None
+    assert conversation.operator_section(scenario.conn, ticket, authorized=()) is None
 
 
 def test_with_nobody_trusted_the_resume_worker_is_told_so(scenario: Scenario, git_pool: GitPool) -> None:
@@ -173,4 +175,4 @@ def test_forgetting_a_ticket_leaves_its_operator_messages_behind(scenario: Scena
     assert conversation.has_operator_messages(scenario.conn, KEY)
     scenario.operator("forget", KEY)
     assert not conversation.has_operator_messages(scenario.conn, KEY)
-    assert conversation.prompt_operator_messages(scenario.conn, KEY) is None
+    assert conversation.prompt_operator_messages(scenario.conn, KEY, authorized=()) is None

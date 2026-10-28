@@ -7,6 +7,7 @@
 # exactly those tools, never in a repository's `.opencode/`.
 description: canopy chore. Recurring read-only check the operator defines; reports findings, changes nothing.
 mode: primary
+# canopy: model
 permission:
   edit: deny
   # It reads its history through its tool, below, not a shell.
@@ -16,6 +17,9 @@ permission:
   webfetch: deny
   websearch: deny
   codesearch: deny
+  # OpenCode 2's code mode runs the model's JavaScript, which can make HTTP requests of its own, so it is a web
+  # tool too (D077). An MCP server reached only through it is then out of reach: give it `codemode: false`.
+  execute: deny
   external_directory: deny
   # Subagents run with their own, wider permissions; a chore must not reach them.
   task: deny
@@ -55,11 +59,12 @@ permission:
   # The artifact store's MCP server, `artifacts.mcp_server`, is for the agents `artifacts.publish_roles` names
   # (DESIGN §38): canopy renders it denied whole at the marked line.
   # canopy: artifact tools
-  # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
-  # above reopens one.
-  "canopy_git_*": deny
+  # canopy's own tools, the overseer's, the reviewer's and planner's git tools, and the reports, whose server a chore's
+  # run is also given, are not this agent's (DESIGN §27): denied by pattern, before the one exception below. An agent
+  # of the operator's allows each report it reads by name.
+  "canopy_*": deny
   # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
-  # chore's, allowed by exact name: last, so no pattern above closes it.
+  # chore's, allowed by exact name: last, so no pattern above closes it, `canopy_*` among them.
   "canopy_chore_history": allow
 ---
 

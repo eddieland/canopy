@@ -7,8 +7,8 @@ overseer](WITHOUT_THE_OVERSEER.md).
 
 ## 38. Artifacts and Louvre
 
-The local store and publishing from runs are built; comments back to the ticket are designed, not built (ROADMAP
-M62). Until they are, a comment on an artifact reaches a worker only as the operator passes it on.
+The local store, publishing from runs, comments back to the ticket, and canopy setting an artifact's ticket per run are
+built (ROADMAP M62).
 
 An **artifact** is a page a worker publishes for people to read: a report, a design, an HTML mock-up. People comment
 on its passages, and the comments come back to the ticket that produced it, where they count as review feedback does.
@@ -56,7 +56,9 @@ The contract in full, field by field and tool by tool, is the local store's READ
 ([packages/canopy-artifacts](../../packages/canopy-artifacts/README.md)). What canopy relies on:
 
 - **Versions and origin.** A revision is a new version of the same artifact, so its threads carry over. Each artifact
-  carries origin keys canopy sets (workspace, ticket, run), opaque to the store, which a reader filters on.
+  carries origin keys canopy sets (workspace, ticket, run), opaque to the store, which a reader filters on. canopy
+  gives each publishing run its keys in a variable the store's server inherits, set over the worker's, so the ticket
+  a comment reaches is canopy's word; on a store that does not take them, it is the worker's.
 - **Anchors by words.** A thread is anchored by its passage's words and the text either side, as a plan's comments are
   (§25), never by a position. On a new version a thread is looked for again by its words; one not found is
   `passage_gone` and never moves to other words.
@@ -72,14 +74,17 @@ The contract in full, field by field and tool by tool, is the local store's READ
 ### canopy's part
 
 Artifacts are a channel (§22). Comments come in through an `artifacts` source, a connector beside the tracker's and
-GitHub's (§30), polled between ticks as they are, and reach the conversation in code as tracker comments do (§35),
+GitHub's (§30), polled between ticks as they are, and reach the conversation in code as tracker comments do (§22),
 each quoting its passage. The overseer judges each as it judges review feedback; a worker that acts on them publishes
 a new version, replies on the threads it addressed, and resolves them.
 
 - **Whose comment counts.** Louvre authors the operator lists, in private config (TRUST_MODEL T7), are authority, as an
-  authorized replier's comment is. Anyone else's is untrusted feedback that waits on the attention list until the
-  operator sends it on (D089). A comment marked as an agent's, or carrying every comment mark (D069), is never
-  authority. On the local store, comments are the operator's, behind the listener secret (T8).
+  authorized replier's comment is: shown to the overseer with the operator's messages, citable by a `resume` for
+  `reply`, and heard by the worker. Anyone else's is untrusted feedback that waits on the attention list until the
+  operator sends it on in a reply (D089). A comment marked as an agent's, or carrying every comment mark (D069), is
+  never authority, nor is any comment on a private ticket, which only the operator authorizes (§22). Each comment
+  counts by its own author, decided in code from the store's id. On the local store, comments are the operator's,
+  behind the listener secret (T8).
 - **Which runs publish.** Only the agents the operator names in private config hold the tools, each by its exact
   name, and every other definition denies the store's server whole. Never the planner or a private ticket's worker,
   so nothing of a private ticket reaches a store (§22).
@@ -91,6 +96,7 @@ a new version, replies on the threads it addressed, and resolves them.
 - Louvre's design system: public, so the web UI depends on it from npm, or internal, so canopy copies its components
   in. An install from git must still build without the organization's registry (D046, D079).
 - A listed author's reply in a thread an unlisted person opened: authority for the thread, or only for its own words.
+  Until settled, only its own words.
 - What Louvre keeps of an artifact whose ticket canopy forgets (`canopy forget`).
 - Whether Louvre is the name.
 - Whether a private ticket may publish to the local store alone, which needs a second server in config.

@@ -22,6 +22,7 @@ from tests.canopy.helpers import (
     pool,
     present,
     slot_of,
+    tick_starts,
     waits,
     worker_does,
 )
@@ -44,6 +45,7 @@ def dispatch(conn: sqlite3.Connection, runner: InlineRunner) -> int:
     with in_tick(conn) as tick_id:
         args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main([*args, "--slug", "work"], runner=runner) == 0
+        tick_starts(runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         return int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
 
@@ -53,7 +55,7 @@ def objects_of(canopy_env: CanopyEnv, run_id: int) -> Path:
 
 
 def assert_healthy(slot: Path, primary: Path) -> None:
-    """git works in the slot and the primary clone, and names no missing object, now the run's objects are gone."""
+    """`git` works in the slot and the primary clone, and names no missing object, now the run's objects are gone."""
     for args, cwd in (
         (("status", "--porcelain"), slot),
         (("for-each-ref",), slot),

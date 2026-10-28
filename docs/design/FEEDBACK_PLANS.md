@@ -7,7 +7,8 @@ map. Previous: [Personas](PERSONAS.md). Next: [A clock for running agents](CLOCK
 ## 32. Plans before feedback runs
 
 Built in part (REQUIREMENTS R21, ROADMAP M54): the setting, the planner, approval whole or by item from the CLI and
-its message, the guards, and planning again.
+the PR's page and its message, the guards, planning again, the plan on the PR's threads, failed checks, conflicts, and
+merged blockers as items, and drafts starting from the plan.
 
 §7, §8, §21, and §29 describe what comes back to a PR without feedback plans; this section says what they change. A
 **feedback plan** is §25's plan written for one unit's PR rather than a ticket's first work, so a `resume` starts from
@@ -30,9 +31,12 @@ canopy's review findings (§21), a failed check, a conflict with the base, a blo
 authorized reply on the ticket. Fixing CI is part of `resume` (§8), so one plan, and one run, covers a round's
 comments and its red CI together, and a round of red CI alone waits on its plan too. A worker's comments and the
 replies the operator sent through canopy (§29) are not items. A review item's id is the one the `vcs` source observed
-(§29, §30), so a plan's item, a draft's thread, and an observed comment share it. A review thread is one item, its
-other comments replies given beside it, so an answer such as the PR author's "won't do" informs the item's proposal
-rather than becoming work of its own.
+(§29, §30), so a plan's item, a draft's thread, and an observed comment share it; a failed check, a conflict, and a
+merged blocker, which the source gives no id, have one canopy gives them from the head they are at, apart from any
+observed id. A blocker has merged, in code, when the PR still targets the branch of another ticket whose PR there
+merged (§10), so the plan carries it, not only the overseer's context. A review thread is one item, its other comments
+replies given beside it, so an answer such as the PR author's "won't do" informs the item's proposal rather than
+becoming work of its own.
 
 Feedback no longer splits by reviewer: the plan shows each item's author and whether `trust.trusted_reviewers` lists
 them, so the operator weighs it, and `untrusted_review` is not raised for an item a feedback plan covers.
@@ -67,14 +71,13 @@ ticket's plan, the items named, and only those, beside the approval's message. T
 the `resume` that starts; its items stay handled unless that run ends other than `done` or `blocked`, when the next
 plan gets them, as it gets the items left out. Later feedback waits for the next plan.
 
-**A plan that changes nothing.** A plan whose items are all `decline`, `ask`, or `leave` changes no code. Under
-`trust.review_replies = "approve"` (§29) it needs no approval, and `unplanned` lets its `resume` through: that run
-only drafts the replies, which wait on the operator anyway. Under `post` it is approved as any plan is, since its
-replies would go out unseen.
+**A plan that changes nothing** waits for approval as any plan does, though its items are all `decline`, `ask`, or
+`leave`. Doing nothing is a decision too: it may want a reply on the PR or a follow-up ticket, which only the operator
+weighs, and a `leave` drafts nothing the operator would see after.
 
 ### Planning again
 
-A feedback plan records what it was written against: the PR's head, each check's conclusion at that head, and each
+A feedback plan records what it was written against: the PR's head, each CI check's conclusion at that head, and each
 item and reply it was given, by id with a hash of its body, never its text. While it waits, the harness marks it stale,
 in code, with a reason for each change, when what the connectors observe (§30) shows the head moved, a check's
 conclusion changed, an item or a reply arrived, or an item it covers was edited or its thread resolved. A stale plan is
@@ -108,4 +111,3 @@ only where the work departed from the plan, and the thread marks those changes, 
 - How the planner reads a failed check's log: the `vcs` source observes no logs (§30), and the planner reads only its
   desk and the tracker.
 - Whether a round's first plan waits out the quiet period, as a re-plan does.
-- Whether the `resume` of a plan that changes nothing is held in code to pushing nothing; only its prompt says so.

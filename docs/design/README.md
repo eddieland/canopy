@@ -77,7 +77,7 @@ not go in the middle of the sequence.
   - [22. Conversations](CONVERSATIONS.md#22-conversations)
 - [Flaky CI](FLAKY_CI.md): what happens to a CI failure the change did not cause.
   - [23. Flaky CI](FLAKY_CI.md#23-flaky-ci)
-- [Sandboxed runs](SANDBOXING.md): the opt-in OS sandbox around every agent run but the overseer's.
+- [Sandboxed runs](SANDBOXING.md): the opt-in OS sandbox around each agent run, the overseer's included.
   - [24. Sandboxed runs](SANDBOXING.md#24-sandboxed-runs)
 - [Plans](PLANNING.md): a plan for a ticket, approved by the operator before any `implement`.
   - [25. Plans before implementing](PLANNING.md#25-plans-before-implementing)
@@ -103,8 +103,8 @@ not go in the middle of the sequence.
 - [Published reviews](PUBLISHED_REVIEWS.md): a review of a PR the loop does not own, revised in canopy and published
   as the operator's comment review.
   - [34. Publishing a review](PUBLISHED_REVIEWS.md#34-publishing-a-review)
-- [The overseer reads the journal](READING_THE_JOURNAL.md): the overseer deciding from what the connectors observed,
-  and the harness checking in code what was its word.
+- [The overseer reads the journal](READING_THE_JOURNAL.md): what is still open of the overseer deciding from what
+  the connectors observed.
   - [35. The overseer reads the journal](READING_THE_JOURNAL.md#35-the-overseer-reads-the-journal)
 - [One-off tasks](TASKS.md): work the operator hands canopy in their own words, about no ticket.
   - [36. One-off tasks](TASKS.md#36-one-off-tasks)
@@ -116,6 +116,9 @@ not go in the middle of the sequence.
 - [A tick without the overseer](WITHOUT_THE_OVERSEER.md): the tick that runs no overseer when nothing is left to
   judge, and the loop that ticks when the connectors see a change.
   - [39. A tick without the overseer](WITHOUT_THE_OVERSEER.md#39-a-tick-without-the-overseer)
+- [The overseer per decision](OVERSEER_PER_DECISION.md): one overseer run for each subject left to judgment, and the
+  runs it asks for, which the tick starts outside its process tree.
+  - [40. The overseer per decision](OVERSEER_PER_DECISION.md#40-the-overseer-per-decision)
 
 ## 1. Problem
 
@@ -143,17 +146,17 @@ cannot reach internal systems and require handing a vendor write access.
   loopback or the operator's private network, behind the operator's secret (TRUST_MODEL T8, D055); none is built yet.
 - Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
   provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
-- A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), and the harness
-  never learns whether a run is sandboxed (D118).
+- A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), which canopy adds
+  itself only for the repositories the operator lists; beyond that, the harness never learns whether a run is
+  sandboxed (D118).
 
 ## 4. Principles
 
-1. **Ownership split.** The tracker and GitHub own facts about the world:
-   ticket status, branches, PRs, CI, reviews. treehouse owns worktrees and
-   leases. The SQLite journal owns facts about the loop: what it saw, decided,
-   dispatched, and what came back. The journal is never consulted as a
-   substitute for world facts. Before any action that matters, re-read live
-   state. Drift is then a stale cache, not a correctness bug.
+1. **Ownership split.** The tracker and GitHub own facts about the world: ticket status, branches, PRs, CI, reviews.
+   treehouse owns worktrees and leases. The SQLite journal owns facts about the loop: what it saw, decided,
+   dispatched, and what came back. What it saw is an observation, a dated copy of a world fact (§30), never the fact
+   itself: an action that matters rests on one observed within `connect.max_age_minutes`, or no dispatch (§7), and a
+   subject no source observes is re-read live. Drift is then a stale cache, not a correctness bug.
 2. **Policy in prompts, guards in code.** What to do about a ticket is decided
    by the overseer prompt. What the loop may never do (exceed capacity, run two
    workers on one ticket, merge, retry forever) is enforced by the harness.
@@ -205,13 +208,14 @@ skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands, such as the Slack sink
-                 (§20) and the sandbox wrapper (§24)
+                 (§20) and the sandbox wrapper (§24); canopy-http, the HTTP client those programs share (D130); and
+                 the review bench, a dev tool canopy neither ships nor runs
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 ```
 
 `prompts/`, `personas/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository; the
 wheel bundles them with `migrations/` and the built UI. canopy installs from git with `uv tool install` (D046), which
-puts `canopy` and every workspace member's script on `PATH`. Dispatch, chores, and reviews start their detached
+puts `canopy` and every shipped workspace member's script on `PATH`. Dispatch, chores, and reviews start their detached
 processes via `sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it.
 
 Where later work goes:
@@ -228,10 +232,11 @@ Where later work goes:
 Roles:
 
 - **Harness**: schedules, locks, guards, journals, renders. Runs the overseer once per tick and workers on demand.
-- **Overseer**: an agent run with `overseer_cmd`. Reads the world through MCP and the state summary, decides one next
-  action per ticket, and acts only through `canopy dispatch`, `canopy decide`, `canopy queried`, `canopy attention`,
-  `canopy chore run`, `canopy chore wait` (§19), `canopy review run`, `canopy review wait` (§21), and `canopy mirror`
-  (§22). Read-only everywhere else. What it owes every tick is checked when it ends (§6 step 5).
+- **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations, and through MCP
+  only about a subject they leave stale or unobserved (§30), decides one next action per ticket, and acts only through
+  `canopy dispatch`, `canopy decide`, `canopy queried`, `canopy attention`, `canopy chore run`, `canopy chore wait`
+  (§19), `canopy review run`, and `canopy review wait` (§21). Read-only everywhere else. What it owes every tick is
+  checked when it ends (§6 step 5).
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
   opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
   to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).

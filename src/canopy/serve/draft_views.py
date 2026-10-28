@@ -10,7 +10,15 @@ from typing import TYPE_CHECKING, cast
 
 from canopy.core import db, drafts, drafts_manage, records, sql
 from canopy.core.vocab import DraftKind
-from canopy.serve.draft_schema import Draft, DraftKindName, DraftStanceName, DraftStatusName, ReactionName
+from canopy.serve.schema.draft import (
+    Draft,
+    DraftFromPlan,
+    DraftKindName,
+    DraftStanceName,
+    DraftStatusName,
+    ProposalName,
+    ReactionName,
+)
 
 if TYPE_CHECKING:
     import sqlite3
@@ -34,6 +42,7 @@ def draft(conn: sqlite3.Connection, found: records.Draft) -> Draft:
         .where("d.superseded_by = ?", found.id)
         .where("v.version > 1"),
     ).fetchone()
+    planned = drafts.from_plan(conn, found)
     return Draft(
         run=found.run_id,
         number=found.number,
@@ -53,6 +62,16 @@ def draft(conn: sqlite3.Connection, found: records.Draft) -> Draft:
         sent_url=found.sent_url,
         reacted=cast("ReactionName", found.reacted.value) if found.reacted is not None else None,
         created_at=db.parse_time(found.created_at),
+        from_plan=None
+        if planned is None
+        else DraftFromPlan(
+            number=planned.number,
+            item_id=planned.item_id,
+            proposal=cast("ProposalName", planned.proposal.value),
+            reply=planned.reply,
+            left_out=planned.left_out,
+            departs=planned.departs,
+        ),
     )
 
 

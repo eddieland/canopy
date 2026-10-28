@@ -1,18 +1,31 @@
-// Typed fixtures for unit tests, a few of the rows canopy/serve/mock.py seeds its journal with. The dev server and the
+// Typed fixtures for unit tests, a few of the rows canopy/serve/mock/ seeds its journal with. The dev server and the
 // end-to-end tests get the whole seeded journal from `python -m canopy.serve --mock`.
 import type {
+    Attachments,
     AttentionItem,
     Capacity,
     ChoreSummary,
     Draft,
+    FeedbackPlan,
+    FeedbackPlanItem,
     PullRequestThreads,
     ReviewDraft,
     ReviewSummary,
     ReviewThread,
     Run,
     SearchHit,
+    TaskRun,
+    TaskSummary,
     TicketSummary,
 } from './types'
+
+/** A ticket's or a task's attachments while it has none, under the default limits (DESIGN §22). */
+export const mockNoAttachments: Attachments = {
+    items: [],
+    max_files: 5,
+    max_file_bytes: 512 * 1024,
+    max_total_bytes: 1024 * 1024,
+}
 
 /** The default `[capacity]`: two workers, one review among them, and one chore apart. */
 export const mockCapacity: Capacity = { workers: 2, reviews: 1, chores: 1 }
@@ -43,7 +56,9 @@ export const mockRuns: Run[] = [
         activity: { tool: 'bash', did: 'npm test -- login', at: '2026-10-08T12:27:00Z' },
         persona: 'canopy',
         persona_digest: '6c1f0a3e9b2d4c5a7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d',
+        model: null,
         models: { status: 'running', models: [], error: null },
+        feedback_plan: null,
     },
     {
         id: 42,
@@ -69,11 +84,13 @@ export const mockRuns: Run[] = [
         activity: null,
         persona: null,
         persona_digest: null,
+        model: null,
         models: {
             status: 'found',
             models: [{ model: 'anthropic/claude-sonnet-4-5', replies: 52, cost_usd: 1.07 }],
             error: null,
         },
+        feedback_plan: null,
     },
 ]
 
@@ -91,6 +108,7 @@ export const mockAttention: AttentionItem[] = [
         since: '2026-10-08T11:56:00Z',
         finding: false,
         pr: null,
+        task: null,
     },
 ]
 
@@ -110,6 +128,7 @@ export const mockTickets: TicketSummary[] = [
         awaiting: 5,
         running_run: null,
         plan_waits: false,
+        feedback_plan: null,
     },
 ]
 
@@ -133,8 +152,10 @@ export const mockReviews: ReviewSummary[] = [
         ended_at: null,
         cost_usd: 0.04,
         persona: 'canopy',
+        request_id: null,
         news: false,
         seen: false,
+        draft: null,
     },
 ]
 
@@ -185,6 +206,112 @@ export const mockChores: ChoreSummary[] = [
     },
 ]
 
+/** A run of a task, ended done in web, with whatever `fields` replace. */
+export function mockTaskRun(fields: Partial<TaskRun> = {}): TaskRun {
+    return {
+        id: 1,
+        status: 'done',
+        state: 'done',
+        started_at: '2026-10-08T05:02:00Z',
+        ended_at: '2026-10-08T05:40:00Z',
+        branch: 'agent/task/1',
+        head: '5e0b7c2a9d41f3e86a2c4b7d9e1f0a3c5b8d2e4f',
+        summary: 'Cut the checkout bundle from 934 kB to 612 kB; filed two tickets for what is left.',
+        prs: ['https://github.com/acme/web/pull/97'],
+        reported: true,
+        session_id: 'ses_task1',
+        cost_usd: 2.12,
+        new_tokens: 48210,
+        peak_context: 61200,
+        log_path: '.canopy/task-runs/1.log',
+        ...fields,
+    }
+}
+
+/** Four tasks, the newest first as `GET /api/tasks` sends them: queued, running, waiting on a reply, and done. */
+export const mockTasks: TaskSummary[] = [
+    {
+        id: 7,
+        text: 'List the endpoints that still accept API keys in the query string.',
+        repo: 'api',
+        project: null,
+        branch: 'agent/task/7',
+        channel: 'cli',
+        submitted_at: '2026-10-08T11:59:00Z',
+        stopped_at: null,
+        standing: 'queued',
+        question_id: null,
+        latest: null,
+        runs: 0,
+    },
+    {
+        id: 6,
+        text: "Add a dark launch screen to match the app's theme.",
+        repo: 'mobile',
+        project: null,
+        branch: 'agent/task/6',
+        channel: 'cli',
+        submitted_at: '2026-10-08T11:58:00Z',
+        stopped_at: null,
+        standing: 'running',
+        question_id: null,
+        latest: mockTaskRun({
+            id: 8,
+            status: 'running',
+            state: 'running',
+            started_at: '2026-10-08T11:58:30Z',
+            ended_at: null,
+            branch: 'agent/task/6',
+            head: null,
+            summary: null,
+            prs: [],
+            reported: false,
+            cost_usd: 0.31,
+        }),
+        runs: 1,
+    },
+    {
+        id: 4,
+        text: 'Rename the `billing_v1` feature flag to `billing_legacy` everywhere it is read.',
+        repo: 'web',
+        project: 'ABC',
+        branch: 'agent/task/4',
+        channel: 'cli',
+        submitted_at: '2026-10-08T11:20:00Z',
+        stopped_at: null,
+        standing: 'awaiting_reply',
+        question_id: 41,
+        latest: mockTaskRun({
+            id: 5,
+            status: 'blocked',
+            state: 'blocked',
+            started_at: '2026-10-08T11:21:00Z',
+            ended_at: '2026-10-08T11:34:00Z',
+            branch: 'agent/task/4',
+            head: null,
+            summary: 'The flag is also read by the billing worker in api; rename it there too?',
+            prs: [],
+            reported: false,
+            cost_usd: 0.44,
+        }),
+        runs: 1,
+    },
+    {
+        id: 1,
+        text: "The checkout page's bundle grew past 900 kB.\n\nFind out what grew and cut it back.",
+        repo: 'web',
+        project: 'ABC',
+        branch: 'agent/task/1',
+        channel: 'web',
+        submitted_at: '2026-10-08T05:00:00Z',
+        stopped_at: null,
+        standing: 'done',
+        question_id: null,
+        latest: mockTaskRun(),
+        runs: 1,
+    },
+]
+
 /** A search hit: a worker's report on ABC-099, with whatever `fields` replace. */
 export function hit(fields: Partial<SearchHit> = {}): SearchHit {
     return {
@@ -193,6 +320,8 @@ export function hit(fields: Partial<SearchHit> = {}): SearchHit {
         snippet: 'Search now debounces input and cancels stale requests.',
         ticket_key: 'ABC-099',
         chore: null,
+        task_id: null,
+        task_title: null,
         run_id: 39,
         tick_id: null,
         label: 'report',
@@ -221,13 +350,14 @@ export function draft(fields: Partial<Draft> = {}): Draft {
         sent_url: null,
         reacted: null,
         created_at: '2026-10-08T11:38:00Z',
+        from_plan: null,
         ...fields,
     }
 }
 
 /**
- * Review 5's draft of a review on Carol's PR 14, waiting at its first version: the summary and a finding off the diff
- * in the body, and a comment made from finding 1 on line 15 of the diff's first file, `fields` over it.
+ * Review 5's draft of a review on Carol's PR 14, waiting at its first version: the reviewer's body and a finding off
+ * the diff in the body, and a comment made from finding 1 on line 15 of the diff's first file, `fields` over it.
  */
 export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
     return {
@@ -237,34 +367,41 @@ export function reviewDraft(fields: Partial<ReviewDraft> = {}): ReviewDraft {
         hash: '3f9a1c27b0de',
         author: 'reviewer',
         channel: null,
-        change: "made from review run 5's summary and findings",
+        change: "made from review run 5's body and findings",
         refused: [],
-        body: 'The retry works for a 503.\n\n**minor** at `tests/test_upstream.py`: No test stops the backoff',
+        body:
+            "Could the client's own retry transport do this, rather than a loop of our own?\n\n" +
+            '`tests/test_upstream.py`\n\nNo test stops the backoff',
         comments: [
             {
                 number: 1,
                 path: 'api/upstream.py',
                 line: 15,
-                text: '**major**: The last 503 is returned as if it were an answer',
+                text: 'The last 503 is returned as if it were an answer',
                 finding: 1,
                 file: 0,
                 diff_line: 15,
             },
         ],
         max_comments: 30,
+        in_body: [3],
         versions: [
             {
                 number: 1,
                 hash: '3f9a1c27b0de',
                 author: 'reviewer',
                 channel: null,
-                change: "made from review run 5's summary and findings",
+                change: "made from review run 5's body and findings",
                 created_at: '2026-10-08T11:30:00Z',
             },
         ],
+        pr_author: 'carol',
         moved_head: null,
         published_at: null,
         published_url: null,
+        notes: [],
+        revisions: [],
+        revision_limit: 3,
         ...fields,
     }
 }
@@ -309,6 +446,68 @@ export function pullRequestThreads(fields: Partial<PullRequestThreads> = {}): Pu
         threads: [reviewThread()],
         pr_drafts: [],
         unplaced: [],
+        feedback_plan: null,
+        ...fields,
+    }
+}
+
+/** Item 2 of run 46's feedback plan for ABC-099: a change for alice's thread on PR 88, `fields` over it. */
+export function feedbackPlanItem(fields: Partial<FeedbackPlanItem> = {}): FeedbackPlanItem {
+    return {
+        number: 2,
+        pr_url: 'https://github.com/acme/web/pull/88',
+        item: 'comment',
+        item_id: 2468013579,
+        proposal: 'change',
+        reply: 'Moved it into a `finally`.',
+        left_out: false,
+        author: 'alice',
+        trusted: true,
+        thread_id: 'PRRT_1',
+        excerpt: 'Can it move into a `finally`?',
+        rationale: 'Move it into a `finally`.',
+        url: 'https://github.com/acme/web/pull/88#discussion_r2468013579',
+        check: null,
+        blocker: null,
+        ...fields,
+    }
+}
+
+/**
+ * Run 46's feedback plan for ABC-099, waiting: alice's review to leave, item 1, and her thread to change, item 2,
+ * `fields` over it.
+ */
+export function feedbackPlan(fields: Partial<FeedbackPlan> = {}): FeedbackPlan {
+    return {
+        id: 1,
+        ticket_key: 'ABC-099',
+        run: 46,
+        created_at: '2026-10-08T11:48:00Z',
+        status: 'waiting',
+        changes: [],
+        stale_shown: false,
+        approved_at: null,
+        approved_channel: null,
+        approved_reason: null,
+        approved_message: null,
+        spent_run: null,
+        path: '/home/op/acme/.canopy/plans/ABC-099/46.md',
+        text: '# Feedback plan: ABC-099\n\n### Item 2468013579: change\n\nMove it into a `finally`.\n',
+        problem: null,
+        items: [
+            feedbackPlanItem({
+                number: 1,
+                item: 'review',
+                item_id: 4102337001,
+                proposal: 'leave',
+                reply: null,
+                thread_id: null,
+                excerpt: 'Two small things, then good to go.',
+                rationale: null,
+                url: 'https://github.com/acme/web/pull/88#pullrequestreview-4102337001',
+            }),
+            feedbackPlanItem(),
+        ],
         ...fields,
     }
 }

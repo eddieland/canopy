@@ -24,10 +24,10 @@ test('the nav highlight slides to the item a navigation lands on', async ({ page
 
     await expect(highlight).toHaveClass(/\bbg-section-attention\/16\b/u)
 
-    await nav.getByRole('link', { name: 'Worktrees' }).click()
-    await covers(highlight, nav.getByRole('link', { name: 'Worktrees' }))
+    await nav.getByRole('link', { name: 'Reports' }).click()
+    await covers(highlight, nav.getByRole('link', { name: 'Reports' }))
     // It takes on the color of the section it lands on.
-    await expect(highlight).toHaveClass(/\bbg-section-worktrees\/16\b/u)
+    await expect(highlight).toHaveClass(/\bbg-section-reports\/16\b/u)
 
     await page.getByRole('link', { name: 'Tickets' }).click()
     await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102', exact: true }).click()
@@ -38,7 +38,7 @@ test('under reduced motion, counters read their values and nothing waits on an a
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('attention')
     await settled(page)
-    await expect(page.getByTestId('counter-attention')).toContainText('6')
+    await expect(page.getByTestId('counter-attention')).toContainText('10')
     const running = await page.evaluate(() => document.getAnimations().map((a) => a.constructor.name))
     expect(running).toEqual([])
 })

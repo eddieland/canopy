@@ -57,7 +57,11 @@ test('a reply answers the waiting question, and a retry records nothing new', as
     // No tick has read it yet: the reply says so, and the inbox keeps the question, marked answered, until one does.
     await expect(mine).toContainText('waiting for the next tick')
     await page.goto('attention')
-    const item = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting reply' })
+    const item = page
+        .getByTestId('attention-list')
+        .getByRole('link')
+        .filter({ hasText: 'awaiting reply' })
+        .filter({ hasText: 'ABC-102' })
     await expect(item).toContainText('answered')
     await item.click()
     await expect(page.getByTestId('answered-note')).toContainText('leaves at the next tick')
@@ -168,6 +172,55 @@ test('the settings page asks the loop to read its config again and says what it 
     await expect(page.getByRole('status').filter({ hasText: 'Nothing changed' })).toContainText(
         'the config files say what the loop already runs on.',
     )
+})
+
+test('the settings page saves a limit and drops a trusted reviewer, but raises nothing past its ceiling', async ({
+    page,
+}) => {
+    await page.goto('settings')
+    await page.getByTestId('limits-open').click()
+    await expect(page).toHaveURL(/\/canopy\/settings\/limits$/u)
+    const form = page.getByTestId('config-form')
+    await expect(form.getByTestId('config-pending')).toHaveText('No unsaved changes')
+    const workers = form.getByTestId('capacity.max_workers')
+    // The count the mock's fixtures set, whatever it is: the test raises it by one, so it holds when they change.
+    await expect(workers).toHaveValue(/^\d+$/u)
+    const before = await workers.inputValue()
+    const after = String(Number(before) + 1)
+    await expect(form.getByTestId('config-save')).toBeDisabled()
+
+    await workers.fill(after)
+    await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
+    await form.getByTestId('config-discard').click()
+    await expect(workers).toHaveValue(before)
+    await workers.fill('many')
+    await expect(form.getByRole('alert')).toHaveText('capacity.max_workers: a whole number')
+    await expect(form.getByTestId('config-save')).toBeDisabled()
+    await workers.fill('33')
+    await form.getByTestId('config-save').click()
+    await expect(form.getByRole('alert')).toContainText('refused (past_bound): capacity.max_workers may be at most 32')
+
+    await workers.fill(after)
+    await form.getByTestId('trust.trusted_reviewers-lint-bot').click()
+    // Only web has a count of its own; api gets one through the repository picker, not a field per repository.
+    const slots = form.getByTestId('repo-slots')
+    await expect(slots.getByRole('textbox', { name: /^capacity\.repo_slots\./u })).toHaveCount(1)
+    const repos = await openRepoPicker(
+        slots.getByRole('button', { name: 'Repository to give its own count: pick a repository' }),
+    )
+    await repos.getByRole('option', { name: 'api' }).click()
+    await slots.getByTestId('capacity.repo_slots.api').fill('3')
+    await form.getByTestId('config-save').click()
+    await expect(form.getByRole('status')).toContainText(
+        "Saved capacity.max_workers, capacity.repo_slots, trust.trusted_reviewers to this workspace's config.",
+    )
+    await expect(slots.getByTestId('capacity.repo_slots.api')).toHaveValue('3')
+    // Read again from the file: the reviewer is gone, and only the stricter side of a trust switch is offered.
+    await expect(workers).toHaveValue(after)
+    await expect(form.getByTestId('trust.trusted_reviewers-lint-bot')).toHaveCount(0)
+    await expect(form.getByTestId('trust.trusted_reviewers-canopy:review')).toBeChecked()
+    await expect(form.getByTestId('trust.rebase')).toBeDisabled()
+    await expect(form.getByTestId('trust.commit_trailer')).toBeDisabled()
 })
 
 test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ page }) => {
@@ -314,39 +367,43 @@ test('an oversized notice, sent with Enter as a reply is, is refused, naming its
     await expect(page.getByTestId('worker-notice')).toHaveCount(0)
 })
 
-test("a review's finding is dismissed on its card, and kept again", async ({ page }) => {
-    await page.goto('reviews/4')
+test("a review's finding is dismissed on its card for a reason, and kept again", async ({ page }) => {
+    await page.goto('pull-requests/reviews/4')
     const card = page.locator('#finding-2')
     await card.getByTestId('dismiss-finding-2').click()
-    await expect(card.getByRole('status')).toHaveText('review:4 finding 2 is dismissed: no worker or tick acts on it.')
+    await page.getByRole('menuitem', { name: /^intentional/u }).click()
+    await expect(card.getByRole('status')).toHaveText(
+        'review:4 finding 2 is dismissed as intentional: no worker or tick acts on it.',
+    )
     await expect(card).toHaveAttribute('data-dismissed', 'true')
+    await expect(card).toContainText('dismissed: intentional')
     await card.getByTestId('undismiss-finding-2').click()
     await expect(card).not.toHaveAttribute('data-dismissed', 'true')
     await expect(card.getByTestId('dismiss-finding-2')).toBeVisible()
 })
 
 test('a review new to the operator is counted in the nav until its page shows it', async ({ page }) => {
-    // The mock operator has seen every review but review 2 (canopy/serve/mock_reviews.py).
-    await page.goto('reviews')
+    // The mock operator has seen every review but review 2 (canopy/serve/mock/reviews.py).
+    await page.goto('pull-requests/reviews')
     const nav = page.getByRole('navigation', { name: 'Main' })
-    await expect(nav.getByRole('link', { name: 'Reviews 1 new review to read' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Pull requests 1 new review to read' })).toBeVisible()
     const row = page.getByTestId('review-2')
     await expect(row.getByText('new', { exact: true })).toHaveCount(1)
     await expect(page.getByRole('button', { name: 'mark 1 seen' })).toBeVisible()
 
     await row.getByRole('link', { name: 'review:2' }).click()
-    await expect(page).toHaveURL(/\/reviews\/2$/u)
-    await expect(nav.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible()
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/2$/u)
+    await expect(nav.getByRole('link', { name: 'Pull requests', exact: true })).toBeVisible()
 
     // Kept in the journal, not the page: it is seen after a reload too.
-    await page.goto('reviews')
-    await expect(nav.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible()
+    await page.goto('pull-requests/reviews')
+    await expect(nav.getByRole('link', { name: 'Pull requests', exact: true })).toBeVisible()
     await expect(row.getByText('new', { exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^mark \d+ seen$/u })).toHaveCount(0)
 })
 
 test("a review's findings are sent to a worker from its list, as a reply on its ticket", async ({ page }) => {
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     const send = page.getByTestId('send-findings')
     await expect(send).toBeDisabled()
     await page.getByTestId('pick-finding-3').click()
@@ -365,52 +422,96 @@ test("a review's findings are sent to a worker from its list, as a reply on its 
 test("a coworker's PR's review is edited as a draft on its page and published, as canopy review publish does", async ({
     page,
 }) => {
-    // Review 5, of Carol's PR, is the one review with a draft no other test changes (canopy/serve/mock_reviews.py).
-    await page.goto('reviews/5')
+    // Review 5, of Carol's PR, is the one review with a draft no other test changes (canopy/serve/mock/reviews.py).
+    await page.goto('pull-requests/reviews/5')
+    // The page is the draft's record: its title names whose review it is, and its line says where the draft stands.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:5 Your review of acme/api#14 by carol')
+    await expect(page.getByTestId('draft-state')).toHaveText('waitingversion 1 · posts nothing until you publish it')
     const draft = page.getByTestId('review-draft')
-    await expect(draft).toContainText('version 1,')
+    await expect(draft.getByTestId('draft-version')).toHaveText('version 1')
+    // What canopy's reviewer found is folded under the draft until it is opened.
+    const fold = page.getByTestId('reviewer-fold')
+    await expect(fold).not.toContainText('summary')
+    await fold.getByRole('button', { name: 'Show the review' }).click()
+    await expect(fold.getByRole('heading', { name: /^Findings/u })).toBeVisible()
+    // Each finding is one card on the diff, the comment it posts as on it: no comment's card beside a finding's.
+    const points = page.getByTestId('review-point')
+    await expect(points).toHaveCount(3)
     const comments = page.getByTestId('draft-comment')
-    await expect(comments).toHaveCount(2)
+    await expect(comments).toHaveCount(0)
 
+    // A note asks the next tick for a revision, as canopy reply review:5 does; the mock runs no tick, so it waits.
+    const revision = draft.getByTestId('draft-revision')
+    await expect(revision).toContainText('0 of 3 revisions')
+    const ask = revision.getByRole('form', { name: "Ask for a revision of review run 5's draft" })
+    await ask.getByRole('textbox', { name: 'What should change' }).fill('Fold the test finding into comment 1.')
+    await ask.getByRole('button', { name: /Ask for a revision/u }).click()
+    await expect(revision.getByRole('status')).toHaveText(
+        /^Recorded note \d+ on review run 5's draft, at version 1\. The next tick revises it, unless/u,
+    )
+    await expect(revision).toContainText('Your note asks for a revision: the next tick starts one')
+    await expect(revision.getByRole('list', { name: 'Your notes' })).toContainText(
+        'Fold the test finding into comment 1.',
+    )
+
+    // A version of the operator's own answers the note instead. What the panel says of it is beside the note's.
+    const said = draft.getByRole('status').filter({ hasNotText: /^Recorded note/u })
     await draft.getByTestId('draft-body').getByRole('button', { name: 'edit' }).click()
     await draft.getByRole('textbox', { name: 'In your words' }).fill('One thing to fix before this goes in.')
     await draft.getByRole('button', { name: 'Save' }).click()
-    await expect(draft.getByRole('status')).toHaveText(
-        /^Review run 5's draft is version 2 now, hash [0-9a-f]{12}: edited the body\.$/u,
-    )
+    await expect(said).toHaveText(/^Review run 5's draft is version 2 now, hash [0-9a-f]{12}: edited the body\.$/u)
     await expect(draft.getByTestId('draft-body')).toContainText('One thing to fix before this goes in.')
+    await expect(revision.getByRole('list', { name: 'Your notes' })).toHaveCount(0)
+    await expect(revision).toContainText('Tell an agent what to change')
 
-    // Each comment is edited and dropped on its card, at its line of the diff.
-    const first = comments.filter({ hasText: 'Comment 1' })
-    await first.getByRole('button', { name: 'edit' }).click()
+    // A finding's comment is edited in place on its card, and left out and put back with one control.
+    const first = points.filter({ hasText: 'The last 503 is returned' })
+    await first.getByRole('button', { name: 'Edit' }).click()
     await first.getByRole('textbox', { name: 'In your words' }).fill('Raise once the attempts run out.')
     await first.getByRole('button', { name: 'Save' }).click()
     await expect(first).toContainText('Raise once the attempts run out.')
-    await comments.filter({ hasText: 'Comment 2' }).getByRole('button', { name: 'drop' }).click()
-    await expect(comments).toHaveCount(1)
+    const second = points.filter({ hasText: 'is never read' })
+    await second.getByRole('button', { name: 'leave out' }).click()
+    await page.getByRole('menuitem', { name: /^not worth it/u }).click()
+    await expect(second).toContainText('left out')
+    // Finding 3 went with the body the operator replaced, which held it: left out, not dismissed.
+    await expect(draft.getByTestId('draft-left-out')).toHaveText(
+        'Left out: findings 2 and 3. Put one back on its card.',
+    )
+    await expect(points.filter({ hasText: 'No test stops the backoff' })).toContainText(
+        'To have it back, dismiss the finding, then put it back.',
+    )
+    await second.getByRole('button', { name: 'put back' }).click()
+    await expect(second).toContainText('in your review')
+    await expect(draft.getByTestId('draft-left-out')).toHaveText('Left out: finding 3. Put one back on its card.')
 
-    // A comment of the operator's own, on any line of the diff.
+    // A comment of the operator's own, on any line of the diff, is a card of its own.
     await page.getByRole('button', { name: 'Comment on api/upstream.py:14' }).click()
     const form = page.getByRole('form', { name: 'Comment on api/upstream.py:14' })
     await form.getByRole('textbox', { name: 'In your words' }).fill('Cap the delay?')
     await form.getByRole('button', { name: 'Save' }).click()
-    await expect(comments).toHaveCount(2)
+    await expect(comments).toHaveCount(1)
     await expect(comments.filter({ hasText: 'Cap the delay?' })).toContainText('yours')
-    await expect(draft).toContainText('version 5,')
+    await expect(draft.getByTestId('draft-version')).toHaveText('version 6')
+    await expect(draft.getByTestId('draft-versions')).toContainText('dismissed finding 2')
     await expect(draft.getByTestId('draft-versions')).toContainText('added a comment on api/upstream.py:14')
 
-    // Staged by default; ticked, canopy submits it. The mock answers for canopy's GitHub programs: it posts nowhere.
+    // Publish submits it; the outline button beside it would stage it. The mock answers for canopy's GitHub programs:
+    // it posts nowhere.
     await expect(draft.getByRole('button', { name: 'Start the review on GitHub' })).toBeVisible()
-    await draft.getByRole('checkbox', { name: 'Submit it on GitHub now' }).click()
-    await draft.getByRole('button', { name: 'Publish version 5' }).click()
-    await expect(draft.getByRole('status')).toContainText(
-        "Published version 5 of review run 5's draft: https://github.com/acme/api/pull/14#pullrequestreview-",
-    )
-    await expect(draft.getByTestId('draft-published')).toBeVisible()
+    await expect(draft.getByTestId('draft-posts')).toContainText('the body and 3 comments as your comment review')
+    await expect(draft.getByTestId('draft-posts')).toContainText("on carol's PR, at a61f7c0")
+    await draft.getByRole('button', { name: 'Publish version 6' }).click()
+    await expect(page.getByTestId('toast')).toContainText("Published version 6 of review run 5's draft")
+    await expect(page.getByTestId('toast')).toContainText('https://github.com/acme/api/pull/14#pullrequestreview-')
+    await expect(draft.getByTestId('draft-published')).toContainText('Published version 6 as your review on GitHub.')
     // A draft publishes once: nothing on the page changes it now.
     await expect(draft.getByRole('button')).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^Comment on /u })).toHaveCount(0)
     await expect(comments.getByRole('button')).toHaveCount(0)
+    // A finding's card keeps only its dismissal, which changes the draft no more.
+    await expect(points.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+    await expect(points.getByRole('button', { name: 'leave out' })).toHaveCount(0)
 })
 
 test('a ticket at its attempt limit is granted one more run from its page, as canopy grant does', async ({ page }) => {
@@ -446,6 +547,48 @@ test("a ticket's worker persona is chosen from its page and cleared, as canopy p
         "ABC-104's worker runs write in canopy from their next run: canopy's default.",
     )
     await expect(personas.getByRole('button', { name: 'worker persona: canopy' })).toBeVisible()
+})
+
+test("a ticket's worker model is chosen from its page, among those the runtime lists, and cleared", async ({
+    page,
+}) => {
+    await page.goto('tickets/ABC-104')
+    const models = page.getByTestId('ticket-models')
+    const worker = models.getByTestId('ticket-model').first()
+    await models.getByRole('button', { name: 'worker model: runtime default' }).click()
+    // The mock's runtime lists the models its runs' sessions name, under their providers; the default is pinned
+    // above them as a state, not a choice.
+    const list = page.getByRole('listbox', { name: 'Models' })
+    await expect(list.getByRole('option', { name: 'runtime default nothing sets one' })).toBeDisabled()
+    const first = list.getByRole('option', { name: /^[\w.-]+\/[\w.:@/+-]+$/u }).first()
+    const model = (await first.textContent()) ?? ''
+    await first.click()
+    // Confirmed in the worker's row, in place.
+    await expect(worker.getByRole('status')).toHaveText(
+        `saved: ABC-104's worker runs use ${model} from their next run: this ticket's override.`,
+    )
+    const chosen = models.getByRole('button', { name: `worker model: ${model}` })
+    await expect(chosen).toBeVisible()
+    await expect(worker).toContainText("this ticket's override")
+    await chosen.click()
+    // Pinned at the top and checked, in a list a field narrows to what is typed.
+    await expect(list.getByRole('option', { name: `${model} this ticket's override` })).toHaveAttribute(
+        'aria-checked',
+        'true',
+    )
+    // Each model's variants are offered under it, as `canopy model KEY MODEL@VARIANT` takes one.
+    await list.getByRole('option', { name: `${model}@high`, exact: true }).click()
+    await expect(worker.getByRole('status')).toHaveText(
+        `saved: ABC-104's worker runs use ${model}@high from their next run: this ticket's override.`,
+    )
+    await models.getByRole('button', { name: `worker model: ${model}@high` }).click()
+    await page.getByRole('combobox', { name: 'Find a model for the worker' }).fill('no such model')
+    await expect(list.getByText('no model has that name')).toBeVisible()
+    await page.getByRole('option', { name: 'Clear the override' }).click()
+    await expect(worker.getByRole('status')).toHaveText(
+        "saved: ABC-104's worker runs use the runtime's default from their next run: nothing sets one.",
+    )
+    await expect(models.getByRole('button', { name: 'worker model: runtime default' })).toBeVisible()
 })
 
 test("a PR at its review limit is granted one more review from its ticket's attention item", async ({ page }) => {
@@ -502,6 +645,35 @@ test("a draft's reaction is changed and sent alone from the PR's page, with no r
     await expect(nit).toHaveAttribute('data-status', 'sent')
 })
 
+test("a stale feedback plan is approved by item from the PR's page, refused once first, as canopy plan does", async ({
+    page,
+}) => {
+    await page.goto('pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88')
+    const feedback = page.getByTestId('feedback-plan')
+    // carol reviewed the PR after the plan was written; bob's thread carries what the plan proposes for it.
+    await expect(feedback.getByTestId('feedback-plan-stale')).toContainText('new review 4102337050 on')
+    const bob = page.getByTestId('review-thread').filter({ hasText: 'Why 250?' })
+    await expect(bob.getByTestId('plan-proposal')).toContainText('Plan item 3')
+    await feedback.getByRole('checkbox', { name: 'approve item 1' }).click()
+    const approve = feedback.getByRole('button', { name: 'Approve stale plan' })
+    await expect(approve).toHaveAttribute('title', 'canopy plan ABC-099 --approve --leave 1')
+    await approve.click()
+    // Refused once, as the step it is: a calm note, no error, and the button named for the step after.
+    await expect(feedback.getByRole('status')).toContainText('Refused once, as a stale plan is the first time')
+    await expect(feedback.getByRole('alert')).toHaveCount(0)
+    await expect(feedback.getByTestId('feedback-plan-stale')).toContainText('Approving it again approves it as it is')
+    await feedback.getByRole('button', { name: 'Approve as it is' }).click()
+    await expect(feedback.getByTestId('plan-approved')).toContainText(
+        'Feedback plan 1 of ABC-099 is approved as its file stands now, for 2 of its 3 items: ' +
+            'items 2 (id 2468013579) and 3 (id 2468013601).',
+    )
+    await expect(feedback).toHaveAttribute('data-status', 'approved')
+    await expect(feedback.getByRole('checkbox', { name: 'approve item 1' })).not.toBeChecked()
+    await expect(feedback.getByTestId('feedback-plan-item').first()).toContainText('for the next plan')
+    // At rest, so the send key cannot approve it twice: a box or the words have to change first.
+    await expect(feedback.getByRole('button', { name: 'Approve again' })).toBeDisabled()
+})
+
 test('a long conversation scrolled away from its end stays put as a message arrives', async ({ page }) => {
     // Thirty copies of its first messages, then any added since, so the reply arrives at the end of a long thread.
     // The first ones kept, and new ones told apart by id: the server sends only the latest 100, so after many runs a
@@ -548,7 +720,7 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     page,
 }) => {
     const pr = 'https://github.com/acme/web/pull/120'
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     const form = page.getByTestId('review-request-form')
     // One of the loop's own PRs is refused, as `canopy start URL --review` refuses it.
     await form.getByLabel('PR URL').fill('https://github.com/acme/web/pull/88')
@@ -557,34 +729,45 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
 
     await form.getByLabel('PR URL').fill(pr)
     await expect(form.getByTestId('review-request-submit')).toHaveAttribute('title', 'canopy start URL --review')
-    // Its review is written in skeptic, as `--persona skeptic` asks.
+    // Its review is written in skeptic, as `--persona skeptic` asks: the persona is folded under the notes.
+    await form.getByRole('button', { name: 'Show persona' }).click()
     await form.getByRole('button', { name: 'Persona: canopy (default)' }).click()
+    await expect(page.getByRole('menuitemcheckbox', { name: 'skeptic' })).toHaveAccessibleDescription(
+        /^Plans and reviews by naming the input that would break each claim/u,
+    )
     await page.getByRole('menuitemcheckbox', { name: 'skeptic' }).click()
     await page.keyboard.press('Escape')
     await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
     await form.getByTestId('review-request-submit').click()
-    await expect(form.getByRole('status')).toHaveText(
-        `${pr} is requested for review. The next tick reviews its head, once. Its review is written in skeptic.`,
-    )
-    // It is in the reviews list at once, waiting on a tick to start its review.
+    // It opens the PR's page, where the request waits on a tick. canopy only reviews it, so it has no ticket's title
+    // to lead with.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
+    const request = page.getByTestId('review-request')
+    await expect(request).toContainText('canopy reviews its head once')
+    await expect(request.getByTestId('review-request-personas')).toHaveText('Its review is written in skeptic.')
+    // It is in the reviews list, waiting on a tick to start its review, and on the pull requests page too.
+    await page.goto('pull-requests/reviews')
     await expect(page.getByTestId('reviews').getByTestId(`requested-${pr}`)).toContainText('requested')
-    // The request waits on the pull requests page too, until the next tick reviews it.
     await page.goto('pull-requests')
     const row = page.getByTestId('pull-requests').getByTestId('pull-request').filter({ hasText: 'acme/web#120' })
     await expect(row).toContainText('requested')
 
     await row.getByRole('link', { name: 'acme/web#120', exact: true }).click()
-    // canopy only reviews it, so it has no ticket's title to lead with.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
-    const request = page.getByTestId('review-request')
-    await expect(request).toContainText('canopy reviews its head once')
-    await expect(request.getByTestId('review-request-personas')).toHaveText('Its review is written in skeptic.')
     await request.getByTestId('review-request-stop').click()
     await expect(request.getByRole('status')).toHaveText(`${pr}'s review request is stopped; nothing reviews it now.`)
     await expect(request).toContainText('Your review request ended')
     await expect(request.getByTestId('review-request-stop')).toHaveCount(0)
+    // Asked again from its page, in the personas the request had, and stopped again.
+    await expect(request.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
+    await request.getByRole('button', { name: 'Review again' }).click()
+    await expect(request.getByRole('status')).toHaveText(
+        `${pr} is requested for review. The next tick reviews its head, once. Its review is written in skeptic.`,
+    )
+    await request.getByTestId('review-request-stop').click()
+    await expect(request.getByRole('button', { name: 'Review again' })).toBeVisible()
     // Nothing waits on a tick for it any more.
-    await page.goto('reviews')
+    await page.goto('pull-requests/reviews')
     await expect(page.getByTestId('reviews').getByTestId('review-4')).toBeVisible()
     await expect(page.getByTestId(`requested-${pr}`)).toHaveCount(0)
 })
@@ -655,7 +838,7 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await expect(page.getByTestId('plan-card')).toContainText('superseded')
 })
 
-// The mock's lessons are recording (canopy/serve/mock_memory.py): a promoted lesson is served to no run.
+// The mock's lessons are recording (canopy/serve/mock/memory.py): a promoted lesson is served to no run.
 test("a proposal is promoted in the operator's words and another rejected from the memory page", async ({ page }) => {
     await page.goto('memory')
     const proposals = page.getByTestId('memory-proposals')
@@ -772,4 +955,85 @@ test('a lesson is edited from the memory page, and its versions keep the old wor
     await expect(said).toHaveText('Memory 8 (lesson billing-client) is forgotten: its text is deleted.')
     await expect(old).toContainText('text deleted')
     await expect(edited).toContainText('Billing goes through src/billing/client.ts, v2 included.')
+})
+
+test('a task submitted from the tasks page opens its page, and its row arrives on the list', async ({ page }) => {
+    await page.goto('tasks')
+    const form = page.getByRole('form', { name: 'Submit a task' })
+    await expect(form.getByRole('status')).toContainText('opens a draft PR only if your text asks for one')
+    // Other tests may submit at the same time, so this task is found by its text.
+    const text = `Find out why the nightly export is slow (${test.info().testId}).`
+    const picker = await openRepoPicker(form.getByRole('button', { name: /^Runs in: /u }))
+    await picker.getByRole('option', { name: 'mobile' }).click()
+    await form.getByRole('textbox', { name: 'Task' }).fill(text)
+    await form.getByRole('button', { name: /^Submit/u }).click()
+
+    await expect(page.getByText(/^Submitted task:\d+; the next tick starts it\.$/u)).toBeVisible()
+    await expect(page).toHaveURL(/\/canopy\/tasks\/\d+$/u)
+    const id = /\/tasks\/(\d+)$/u.exec(page.url())?.[1] ?? ''
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(`task:${id}`)
+
+    // The list had no row for it when the form sent it: the stream brings it.
+    await page.goBack()
+    const row = page.getByTestId(`task-${id}`)
+    await expect(row).toContainText(text)
+    await expect(row).toContainText('mobile')
+    await expect(row).toContainText('queued')
+    await row.getByRole('link', { name: `task:${id}` }).click()
+    await expect(page).toHaveURL(new RegExp(`/canopy/tasks/${id}$`, 'u'))
+})
+
+test('a task the server refuses says why, naming its guard, and the form keeps it', async ({ page }) => {
+    await page.goto('tasks')
+    const form = page.getByRole('form', { name: 'Submit a task' })
+    await form.getByRole('textbox', { name: 'Task' }).fill('Plan the offline mode.')
+    await form.getByRole('textbox', { name: 'Tracker project' }).fill('not a project')
+    await form.getByRole('button', { name: /^Submit/u }).click()
+    await expect(form.getByRole('alert')).toContainText('refused (bad_project)')
+    await expect(form.getByRole('status')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/canopy\/tasks$/u)
+    await expect(form.getByRole('textbox', { name: 'Task' })).toHaveValue('Plan the offline mode.')
+})
+
+test("a reply answers a task's question, which clears, and its reply shows", async ({ page }) => {
+    await page.goto('tasks/4')
+    const question = page.getByRole('region', { name: 'A question waiting on you' })
+    await expect(question).toBeVisible()
+    const form = page.getByRole('form', { name: 'Reply' })
+    await form.getByRole('textbox').fill('Yes: rename it in api too.')
+    await form.getByRole('button', { name: 'Reply' }).click()
+    await expect(form.getByRole('status')).toHaveText(
+        /^Recorded message \d+ on task:4, answering message \d+\. The next tick starts its next run, on its branch\.$/u,
+    )
+    const conversation = page.getByTestId('conversation')
+    const mine = conversation.locator('[data-source=operator]').filter({ hasText: 'Yes: rename it in api too.' })
+    await expect(mine).toContainText('via web')
+    await expect(conversation.getByText('waiting on you')).toHaveCount(0)
+    await expect(question).toHaveCount(0)
+    // It still takes a reply, now a plain one: the next run reads every one.
+    await expect(form.getByRole('textbox', { name: 'Reply', exact: true })).toBeVisible()
+})
+
+test('stopping a queued task asks once more, then drops it, and its reply goes', async ({ page }) => {
+    await page.goto('tasks/7')
+    const actions = page.getByTestId('task-actions')
+    await actions.getByRole('button', { name: 'Stop', exact: true }).click()
+    await actions.getByRole('button', { name: 'Stop task:7' }).click()
+    await expect(actions.getByRole('status')).toHaveText(
+        'task:7 is stopped; it had not started, and nothing starts it now.',
+    )
+    await expect(page.getByRole('form', { name: 'Reply' })).toHaveCount(0)
+    await expect(page.locator('main header p')).toContainText('stopped')
+})
+
+test("stop now ends a task's running run after asking once more", async ({ page }) => {
+    await page.goto('tasks/6')
+    const actions = page.getByTestId('task-actions')
+    await actions.getByRole('button', { name: 'Stop now' }).click()
+    await actions.getByRole('button', { name: 'End run 6 now' }).click()
+    await expect(actions.getByRole('status')).toHaveText(
+        'task:6 is stopped; nothing starts it again. Its run 6 was ended and its slot returned.',
+    )
+    await expect(page.getByTestId('working-now')).toHaveCount(0)
+    await expect(page.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })

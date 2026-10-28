@@ -11,7 +11,7 @@ from canopy.core import config, db, definitions, workspace
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
-from tests.canopy.conftest import Ws, bare_origin, map_text, th
+from tests.canopy.conftest import Ws, bare_origin, map_text, th, turn_off_auto_maintenance
 from tests.canopy.helpers import (
     LABEL,
     InlineRunner,
@@ -89,7 +89,16 @@ def load_both(root: Path, user_file: Path) -> None:
         ),
         ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "http://x.test/a/tree/{branch}"\n', "plain https://"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "https://x.test/{repo}/tree/{branch}"\n', "braces"),
-        ('[repos.api]\nurl = "https://x.test/a.git"\nhuman_checks = [""]\n', "repos.api.human_checks"),
+        # The list `checks` replaced is refused, naming what to write instead.
+        (
+            '[repos.api]\nurl = "https://x.test/a.git"\nhuman_checks = ["owners"]\n',
+            r'repos\.api: .*human_checks was removed: .*"NAME" = "human" under \[repos\.<name>\.checks\]',
+        ),
+        ('[repos.api]\nurl = "https://x.test/a.git"\n[repos.api.checks]\n"" = "merge"\n', "repos.api.checks"),
+        ('[repos.api]\nurl = "https://x.test/a.git"\n[repos.api.checks]\nqueue = "later"\n', "'ci', 'human', 'merge'"),
+        ('[repos.api]\nurl = "https://x.test/a.git"\nhigh_impact_paths = "infra/"\n', "repos.api.high_impact_paths"),
+        # The key is a repository's, in the map, never the config's.
+        ('[review]\nhigh_impact_paths = ["infra/"]\n', "review.high_impact_paths"),
         ("[desks]\nx = 1\n", "unknown key desks.x"),
     ],
 )
@@ -97,6 +106,49 @@ def test_the_map_is_validated(ws: Ws, canopy_env: CanopyEnv, table: str, error: 
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text() + "\n" + table)
     with pytest.raises(config.ConfigError, match=error):
         load_both(ws.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize("entry", ["", "/etc/", "a/../b", "./a", "a//b", "a\nb"])
+def test_a_high_impact_path_is_a_path_from_the_repositorys_root(ws: Ws, entry: str) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text()
+        + f'\n[repos.api]\nurl = "https://x.test/a.git"\nhigh_impact_paths = [".agents/", {json.dumps(entry)}]\n',
+    )
+    error = r"canopy-workspace\.toml: repos\.api\.high_impact_paths\.1: .*a path from the repository's root"
+    with pytest.raises(config.ConfigError, match=error):
+        workspace.load(ws.root)
+
+
+def test_a_repositorys_high_impact_paths_are_read_from_its_table(ws: Ws) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(("web", "https://x.test/web.git"))
+        + '\n[repos.api]\nurl = "https://x.test/a.git"\nhigh_impact_paths = [".agents/", "docs/TRUST_MODEL.md"]\n',
+    )
+    found = {r.name: r.high_impact_paths for r in workspace.load(ws.root).repos}
+    assert found == {"api": (".agents/", "docs/TRUST_MODEL.md"), "web": ()}
+
+
+def test_a_repositorys_checks_have_the_roles_its_table_gives_them(ws: Ws) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(("web", "https://x.test/web.git"))
+        + '\n[repos.api]\nurl = "https://x.test/a.git"\n'
+        + '[repos.api.checks]\n"deploy/approval" = "human"\n"merge-queue" = "merge"\n'
+        + 'owners = "human"\n"lint-legacy" = "ignore"\nbuild = "ci"\n',
+    )
+    found = workspace.load(ws.root)
+    assert {r.name: dict(r.checks) for r in found.repos} == {
+        "api": {
+            "deploy/approval": workspace.CheckRole.HUMAN,
+            "merge-queue": workspace.CheckRole.MERGE,
+            "owners": workspace.CheckRole.HUMAN,
+            "lint-legacy": workspace.CheckRole.IGNORE,
+            "build": workspace.CheckRole.CI,
+        },
+        "web": {},
+    }
+    # A check the map does not name is CI; so is every check of a repository it does not have.
+    assert found.check_roles("api").get("test", workspace.CheckRole.CI) is workspace.CheckRole.CI
+    assert found.check_roles("docs") == {}
 
 
 def test_a_repositorys_branch_url_comes_from_its_github_url_unless_the_map_sets_one(ws: Ws) -> None:
@@ -216,7 +268,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
         ("dispatch:implement", f"dry run: not dispatched; would work on agent/PROJ-1-work in api; label {LABEL}"),
         (
             "refused:unknown_repo",
-            "--repo is required: name the repositories for PROJ-2 (api, docs, web)",
+            "repos is required (--repo): name the repositories for PROJ-2 (api, docs, web)",
         ),
     ]
     [item] = attention.current(conn)
@@ -236,6 +288,7 @@ def test_items_about_two_repositories_are_two_items(ws_scenario: Scenario, ws: W
     assert notified.read_text().startswith("canopy attention: 2 new, 0 resolved\n+ a repo_missing: ")
 
     git("clone", "--quiet", str(ws.origins["api"]), str(ws.root / "repos" / "a"), cwd=ws.root)
+    turn_off_auto_maintenance(ws.root / "repos" / "a")
     ws_scenario.tick(dry_run=True)
     assert "canopy attention: 0 new, 1 resolved\n- a repo_missing\n" in notified.read_text()
 
@@ -251,7 +304,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
     with_docs(ws)
     conn = ws_scenario.conn
     assert ws_scenario.refuses(canopy(*dispatch("PROJ-1"))) == [
-        ("refused:unknown_repo", "--repo is required: name the repositories for PROJ-1 (api, docs, web)"),
+        ("refused:unknown_repo", "repos is required (--repo): name the repositories for PROJ-1 (api, docs, web)"),
     ]
     assert ws_scenario.refuses(dispatches(repo="nope")) == [
         ("refused:unknown_repo", "'nope' is not a repository in this workspace (api, docs, web)"),
@@ -288,7 +341,10 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
         return dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI], repo=repo)
 
     assert ws_scenario.refuses(resume("web")) == [
-        ("refused:no_branch", "PROJ-1 has no branch in web for resume to continue; dispatch implement with --repo web"),
+        (
+            "refused:no_branch",
+            "PROJ-1 has no branch in web for resume to continue; dispatch implement with repos web (--repo web)",
+        ),
     ]
     assert ws_scenario.run(resume("api"), worker=pushes("agent/PROJ-1-login")).status == "done"
 
@@ -409,6 +465,7 @@ def test_sync_turns_off_gits_automatic_maintenance_in_every_clone_but_not_in_a_d
     extra = bare_origin(tmp_path / "origins" / "docs.git", tmp_path)
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("api", str(ws.origins["api"])), ("docs", str(extra))))
     off = {"maintenance.auto=false", "gc.auto=0"}
+    unset_auto_maintenance(ws.clone("api"))
 
     def local_config(name: str) -> set[str]:
         return set(git("config", "--local", "--list", cwd=ws.clone(name)).splitlines())
@@ -418,6 +475,42 @@ def test_sync_turns_off_gits_automatic_maintenance_in_every_clone_but_not_in_a_d
     assert main(["workspace", "sync"]) == 0
     assert off <= local_config("api")  # a clone from before
     assert off <= local_config("docs")  # and one sync made
+
+
+def test_a_tick_says_where_a_clone_leaves_gits_automatic_maintenance_on_until_sync_turns_it_off(
+    ws_scenario: Scenario,
+    ws: Ws,
+) -> None:
+    unset_auto_maintenance(ws.clone("api"))
+    git("config", "--local", "--unset", "gc.auto", cwd=ws.clone("web"))
+    ticked = ws_scenario.tick(dry_run=True)
+
+    found = [d for d in decisions(ws_scenario.conn, ticked.tick.id) if d[0] == f"attention:{attention.MAINTENANCE_ON}"]
+    fix = f"and can prune what running slots use; run `canopy workspace sync` in {ws.root}"
+    assert found == [
+        (
+            f"attention:{attention.MAINTENANCE_ON}",
+            f"git's automatic maintenance is on in {ws.clone('api')} (maintenance.auto, gc.auto not set), {fix}",
+        ),
+        (
+            f"attention:{attention.MAINTENANCE_ON}",
+            f"git's automatic maintenance is on in {ws.clone('web')} (gc.auto not set), {fix}",
+        ),
+    ]
+    assert [i.subject for i in attention.current(ws_scenario.conn) if i.reason == attention.MAINTENANCE_ON] == [
+        "api",
+        "web",
+    ]
+
+    assert main(["workspace", "sync"]) == 0
+    ws_scenario.tick(dry_run=True)
+    assert not [i for i in attention.current(ws_scenario.conn) if i.reason == attention.MAINTENANCE_ON]
+
+
+def unset_auto_maintenance(clone: Path) -> None:
+    """Take out of `clone`'s config what sync sets there, as in a clone from before sync set it."""
+    for key in ("maintenance.auto", "gc.auto"):
+        git("config", "--local", "--unset", key, cwd=clone)
 
 
 def test_sync_refuses_a_path_that_is_not_a_clone_and_never_prints_a_credential(

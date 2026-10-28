@@ -1,12 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
 
-import { useDismissFinding, useDismissReviewFinding } from './dismiss-finding'
+import { dismissedLabel, useDismissFinding, useDismissReviewFinding } from './dismiss-finding'
 
 // Every dismissal sent, and what the server stand-in answers it.
 let sent: { path: string; body: unknown }[] = []
@@ -14,14 +14,14 @@ let answer: Response | undefined
 
 const server: Middleware = {
     async onRequest({ request }) {
-        const body = (await request.json()) as { finding: unknown; undo: boolean }
+        const body = (await request.json()) as { finding: unknown; undo: boolean; reason?: string }
         sent.push({ path: new URL(request.url).pathname, body })
         if (answer !== undefined) {
             return answer
         }
         return request.url.includes('/chores/')
             ? Response.json({ chore: 'deps', finding: body.finding, dismissed: !body.undo })
-            : Response.json({ run: 4, finding: body.finding, dismissed: !body.undo })
+            : Response.json({ run: 4, finding: body.finding, dismissed: !body.undo, reason: body.reason ?? null })
     },
 }
 
@@ -112,13 +112,23 @@ describe('useDismissFinding', () => {
 })
 
 describe('useDismissReviewFinding', () => {
-    it("dismisses a review's finding by its number, and undoes it, as canopy dismiss review:ID N says", async () => {
+    it("dismisses a review's finding by its number for the reason picked, and undoes it, as the CLI says", async () => {
         const { unmount } = renderWith(<ReviewDismissal dismissed={false} />)
         const dismiss = screen.getByRole('button', { name: 'dismiss' })
-        expect(dismiss.title).toBe('No worker or tick acts on it')
-        fireEvent.click(dismiss)
+        expect(dismiss.title).toBe('Say why, and no worker or tick acts on it')
+        // A click alone sends nothing: the dismissal waits on its reason.
+        fireEvent.pointerDown(dismiss, { button: 0, ctrlKey: false })
+        const reasons = within(screen.getByRole('menu')).getAllByRole('menuitem')
+        expect(reasons.map((r) => r.textContent)).toEqual([
+            'wrongIt does not hold: the reviewer misread the code',
+            'intentionalIt holds, and the change means it to',
+            'not worth itIt holds, and is not worth the fix',
+            'out of scopeIt holds, and belongs in another PR',
+        ])
+        expect(sent).toEqual([])
+        fireEvent.click(reasons[0] as HTMLElement)
         expect((await screen.findByRole('status')).textContent).toBe(
-            'review:4 finding 2 is dismissed: no worker or tick acts on it.',
+            'review:4 finding 2 is dismissed as wrong: no worker or tick acts on it.',
         )
         unmount()
 
@@ -130,8 +140,28 @@ describe('useDismissReviewFinding', () => {
             'review:4 finding 2 is no longer dismissed: a resume hands it to the worker again.',
         )
         expect(sent).toEqual([
-            { path: '/api/reviews/4/dismissals', body: { finding: 2, undo: false } },
+            { path: '/api/reviews/4/dismissals', body: { finding: 2, undo: false, reason: 'wrong' } },
             { path: '/api/reviews/4/dismissals', body: { finding: 2, undo: true } },
         ])
+    })
+})
+
+describe('dismissedLabel', () => {
+    it('names why a finding was dismissed, when the operator said', () => {
+        const finding = {
+            severity: 'minor' as const,
+            title: 't',
+            location: '',
+            detail: '',
+            file: null,
+            line: null,
+            dismissed: true,
+            held: false,
+            answer: null,
+            answer_reason: null,
+        }
+        expect(dismissedLabel({ ...finding, dismissed_reason: 'not_worth_it' })).toBe('dismissed: not worth it')
+        expect(dismissedLabel({ ...finding, dismissed_reason: 'out_of_scope' })).toBe('dismissed: out of scope')
+        expect(dismissedLabel({ ...finding, dismissed_reason: null })).toBe('dismissed')
     })
 })

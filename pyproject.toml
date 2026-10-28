@@ -37,11 +37,12 @@ dependencies = [
     "canopy-notify-slack",
     "canopy-sandbox",
     "click>=8.5.0",
-    "fastapi>=0.143.1",
+    "fastapi>=0.143.2",
     "pydantic>=2.14.1",
     "rich>=15.0.0",
     # FastAPI's own foundation; canopy.serve's middleware and responses import it directly, so it is declared too.
     "starlette>=1.8.0",
+    "tomlkit>=0.15.1",
     "uvicorn>=0.54.0",
 ]
 
@@ -51,6 +52,8 @@ canopy = "canopy.cli.launcher:main"
 canopy-notify-desktop = "canopy.notify.desktop:main"
 # Its own distribution, a workspace member (D041); listed so the install that puts canopy on PATH puts it there too.
 canopy-notify-slack = "canopy_notify_slack:main"
+# Its reader of the replies in the sink's ticket threads, a connector's command (ROADMAP M64).
+canopy-connect-slack = "canopy_notify_slack.connect:main"
 # canopy's GitHub reader and poster, a workspace member too: commands, so the harness holds no token (DESIGN §29).
 canopy-connect-github = "canopy_github.connect:main"
 canopy-post-github = "canopy_github.post:main"
@@ -122,27 +125,38 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 [tool.uv.sources]
 canopy-artifacts = { workspace = true }
 canopy-github = { workspace = true }
+canopy-http = { workspace = true }
 canopy-jira = { workspace = true }
 canopy-notify-slack = { workspace = true }
+canopy-review-bench = { workspace = true }
 canopy-sandbox = { workspace = true }
 
 [dependency-groups]
 dev = [
     "actionlint-py>=1.7.12.25",
+    # A program of its own that scores another code review bot on blind PRs (packages/canopy-review-bench); canopy
+    # never runs it, so it is here for its tests and type checks, not among canopy's dependencies.
+    "canopy-review-bench",
     "editorconfig-checker>=3.11.1",
     "httpx2>=2.13.1",
-    "hypothesis>=6.169.1",
-    "pyrefly>=1.3.2",
+    "hypothesis>=6.170.0",
+    # Holds what an MCP tool returns to the schema it lists, as a client would check it (tests/canopy/loop/test_mcp.py).
+    "jsonschema>=4.26.0",
+    # Git hooks (prek.toml) that run the formatters and linters on a commit: `make hooks` installs them.
+    "prek>=0.5.7",
+    "pyrefly>=1.4.0",
     "pytest>=9.1",
     # Line and branch coverage: `make coverage`, and `make check COVERAGE=1`, whose coverage.xml CI sends to Codecov.
     "pytest-cov>=7.1.0",
     "pytest-xdist>=3.8.0",
-    "ruff>=0.17.0",
+    "ruff>=0.17.1",
     "rumdl>=0.2.79",
     "shellcheck-py>=0.11.0.1",
     # Snapshot tests: what canopy renders whole, held to a file under a test's `__snapshots__/` (AGENTS.md, Testing).
     "syrupy>=6.1.1",
     # Security lint for the GitHub workflows, beside actionlint's correctness checks: pins, triggers, token handling.
+    # jsonschema's types, for the type checker.
+    "types-jsonschema>=4.26.0.20261006",
     "zizmor>=1.31.1",
 ]
 
@@ -194,7 +208,7 @@ ignore = [
 convention = "google"
 
 # pydantic resolves a model's annotations when its class is made, so what they name is imported for real (TC001): the
-# API's models in serve are built on schema.Model, and each feature's *_schema.py imports the shared ones it names.
+# API's models in serve are built on schema.Model, and each feature's module in schema/ imports the shared ones.
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = ["canopy.serve.schema.Model"]
 
@@ -221,6 +235,8 @@ ban-relative-imports = "all"
 # A mock is specced, so a call the real thing would refuse fails the test (AGENTS.md, Testing).
 "unittest.mock.Mock".msg = "Spec it: `mock.patch.object(..., autospec=True)` or `mock.create_autospec(...)`."
 "unittest.mock.MagicMock".msg = "Spec it: `mock.patch.object(..., autospec=True)` or `mock.create_autospec(...)`."
+# Every command line is click (D025). The workspace members turn TID251 off below, so review holds them to it.
+"argparse".msg = "Every command line is click (D025)."
 
 # `from unittest import mock`, then `mock.patch`, `mock.create_autospec` (AGENTS.md, Testing).
 [tool.ruff.lint.flake8-import-conventions]
@@ -231,7 +247,7 @@ banned-from = ["unittest.mock"]
 "src/canopy/infra/procs.py" = ["TID251", "S603"]
 "tests/**" = [
     "ARG001",  # Fixtures requested only for their side effects (fakes on PATH, state files set).
-    "D",       # Docstrings are optional in tests and unchecked when present; test names are the documentation.
+    "D1",      # Docstrings are optional in tests; test names are the documentation. One that is there is checked.
     "DOC",     # Same as D: a test's docstring, when it has one, needs no sections.
     "PLR0917", # pytest passes fixtures as positional arguments; a test's signature is its fixture list.
     "PLR2004", # Expected exit codes and counts are clearer inline than as named constants.
@@ -251,20 +267,19 @@ banned-from = ["unittest.mock"]
 # The GitHub programs are separate programs whose job is the token and the calls the harness never holds or makes
 # (DESIGN §29): they run gh for its token and talk to GitHub's API.
 "packages/canopy-github/**" = ["TID251"]
-# The Jira connector is a separate program whose job is the credentials and the calls the harness never holds or makes
-# (DESIGN §30).
-"packages/canopy-jira/**" = ["TID251"]
 # The wheel's build hook runs npm (D079); it is part of packaging, not of canopy.
 "hatch_build.py" = ["S603", "TID251"]
-# The Slack sink is a separate program whose job is the network call the harness never makes (DESIGN §20).
-"packages/canopy-notify-slack/**" = ["TID251"]
+# The review bench is a separate program whose job is running git and gh against a copy of a repository.
+"packages/canopy-review-bench/**" = ["TID251"]
+# Its commands' docstrings are their --help text, so a Raises section would print there.
+"packages/canopy-review-bench/src/canopy_review_bench/__init__.py" = ["DOC501"]
 # FastAPI reads a route's annotations at runtime to validate and to build the schema, so its models and dependencies
 # are imported for real (TC001). A route's docstring is its description in the schema, and the errors it answers are
 # its decorator's `responses`, so Returns, Yields, and Raises sections would only repeat them there.
 "src/canopy/serve/api/*" = ["DOC201", "DOC402", "DOC501", "TC001"]
 # The API's models are pydantic's, built on schema.Model, which ruff cannot see is pydantic's from another module:
 # pydantic copies a field's mutable default for each instance (RUF012).
-"src/canopy/serve/*_schema.py" = ["RUF012"]
+"src/canopy/serve/schema/*.py" = ["RUF012"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -284,7 +299,15 @@ filterwarnings = [
 # What coverage measures: canopy and its workspace members, not the tests or the fakes.
 [tool.coverage.run]
 branch = true
-source_pkgs = ["canopy", "canopy_artifacts", "canopy_github", "canopy_jira", "canopy_notify_slack", "canopy_sandbox"]
+source_pkgs = [
+    "canopy",
+    "canopy_artifacts",
+    "canopy_github",
+    "canopy_jira",
+    "canopy_notify_slack",
+    "canopy_review_bench",
+    "canopy_sandbox",
+]
 
 [tool.coverage.report]
 skip_empty = true
@@ -310,6 +333,7 @@ search-path = [
     "packages/canopy-github/src",
     "packages/canopy-jira/src",
     "packages/canopy-notify-slack/src",
+    "packages/canopy-review-bench/src",
     "packages/canopy-sandbox/src",
     ".",
 ]

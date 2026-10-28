@@ -41,7 +41,9 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
+| `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
+| `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
 
@@ -70,26 +72,25 @@ Rules:
   is for (`src/lib/sections.ts`; the current one from `useSection`):
   - Attention rose, an alarm light: something needs you.
   - Tickets sky, a message bubble: a ticket is a conversation with the operator.
-  - Pull requests violet, the purple a merged PR turns, where every PR is headed.
-  - Reviews fuchsia, the proofreader's pen.
+  - Tasks chartreuse, a new shoot: a task seeds the tickets that follow it, and a shoot is yellow-green before it
+    is emerald, which is `status-running`'s hue and would read as a running task on its own page.
+  - Pull requests violet, the purple a merged PR turns, where every PR is headed. The reviews are under it.
   - Runs indigo, the night shift: workers carry on after the operator logs off.
   - Chores orange, a hi-vis vest: scheduled maintenance.
-  - Spend gold, coins.
-  - Ticks lime, a heart monitor's trace: each tick is the loop's pulse.
-  - Worktrees teal, water in the pool each repository's slots come from.
+  - Reports gold, coins: what canopy cost, by the month and, on the spend page under it, by the day.
   - Memory pale azure, the forget-me-not. It shares done's hue, which costs nothing: its page shows no run state.
   - Settings slate, the machinery. It is in the rail's footer rather than the nav, so it needs no hue of its own and
     wears its color on its trail alone.
 
   A new section takes a color the same way, from what its page holds, and stays apart from its neighbours in the nav
-  and from the status colors on its own page. Ten nav hues, five statuses, and the accent leave the wheel full, so a
+  and from the status colors on its own page. Eight nav hues, five statuses, and the accent leave the wheel full, so a
   new one may mean moving another. They go on the nav's icons and highlight, the first step of the page header's trail,
   and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no
   section (the 404) takes the accent.
-- **Spend series** (`src/lib/spend.ts`) color a kind of agent run in the spend page's chart and its legend, and
-  nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
-  spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
-  bar for a graphic, which `tokens.test.ts` measures.
+- **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the spend page's
+  chart and its legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
+  beside a swatch. Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on
+  `surface` in both themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
@@ -98,8 +99,9 @@ Rules:
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
 - **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
   only the neutrals over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. Light has
-  off-white, a warm paper, and the light tones of Solarized, Nord, and Gruvbox; dark has grey (the near-colorless
-  neutrals the 2026-10-19 exploration drew for Mailroom), black, and the dark tones of Solarized and Gruvbox. A light
+  off-white, a warm paper, sage, and the light tones of Solarized, Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the
+  near-colorless neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of
+  Solarized, Gruvbox, and Monokai. A light
   canvas is never grey, which only looks dim. Every hue, the accent's included, is the same in all, so a component never
   knows which it is on; where a scheme's own bases would drop a hue below 4.5:1, the bases move, never the hue. A scheme
   whose bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts`
@@ -150,27 +152,28 @@ Rules:
   by script: `#main` under the base path would be another page's address.
 - **The rail** holds, top to bottom: the search box, the nav, what is working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
-  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check now
-  and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav item is height
-  the sticky part has none to spare of in an 800px window. Each nav item says on hover what its page holds, and each
-  spend window what it covers, as a native `title`; a spend window opens the spend page over its week or month. Each
-  block under the nav is a hairline and a `panel-label` over its content, but the spend's, where each window's name is
-  the label. What is working is every agent run running,
-  worker runs, reviews of PRs, and chore runs alike, then the worker runs waiting on the operator's answer, each oldest
-  first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the PR, the
-  chore), how long it has run (or `waiting on you` in `status-blocked`), and under it the ticket's title, the review's
-  reference and ticket, or `chore run #N`, opening the run's page; at most four, then `+N more` to the page of
+  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Tasks, Pull requests), then what they
+  check now and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav item
+  is height the sticky part has none to spare of in an 800px window. Each nav item says on hover what its page holds,
+  and each spend window what it covers, as a native `title`; a spend window opens the spend page over its week or
+  month. Each block under the nav is a hairline and a `panel-label` over its content, but the spend's, where each
+  window's name is the label. What is working is every agent run running,
+  worker runs, reviews of PRs, chore runs, and task runs alike, then the worker runs waiting on the operator's answer,
+  each oldest first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the
+  PR, the chore, the task run's `task:N#M`), how long it has run (or `waiting on you` in `status-blocked`), and under it
+  the ticket's title, the review's reference and ticket, `chore run #N`, or the task's first line, opening the run's
+  page; at most four, then `+N more` to the page of
   the ones left out, or the runs page for a mix, so the sticky part fits an 800px window. The
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, on one line, each cost in a
   small readout after its window's name, so the block takes a line's height (a cost too long to share it puts the 30
   days under the 24 hours): it is shown
-  nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer is two lines, the
-  version, a link out to canopy's releases on GitHub, with the width to itself and cut short only past a long build's
-  hash, then the guide and Settings as two filled pills alike, `foreground` on `surface-raised` with no border, in the
-  rail's body size, so they stand out from the version's print, with a little room under them so they do not sit on
-  the window's edge. It sits at the foot of the sticky column, so at the window's foot however long the page; in a
-  window too short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer
-  is Sprig's (Fun, below).
+  nowhere else, but for the lifetime total Sprig's hats and the Ghost's shells are bought with (Fun, below). The
+  footer is two lines, the version, a link out to canopy's releases on GitHub, with the width to itself and cut
+  short only past a long build's hash, then the guide and Settings as two filled pills alike, `foreground` on
+  `surface-raised` with no border, in the rail's body size, so they stand out from the version's print, with a little
+  room under them so they do not sit on the window's edge. It sits at the foot of the sticky column, so at the
+  window's foot however long the page; in a window too short for the rest, the part above it scrolls on its own. The
+  room left between the blocks and the footer is Sprig's (Fun, below).
 - **Narrower than `lg`, the rail is a strip** (`useRailMode`), since a narrow window is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to a
   screen reader, each count one number on its icon's corner, Attention's in its most severe item's color. A button
@@ -264,8 +267,11 @@ Rules:
   screen reader, and `Show memory` opens the rows; it reads `none, recording only` for a run that read nothing because
   its tier was recording. The memory page leads with what waits on the operator: a Proposals panel, counted in
   `status-blocked` while one waits as the nav counts them, and saying that none reaches a run until promoted;
-  then Lessons under the tier's band, the digest folded at its foot (`Show what every run is served`); then Ticket
-  notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. From 120rem,
+  then Lessons under the tier's band, the pinned ones first as runs are served them, under a `Pinned` heading with a
+  filled pin in `foreground` and their count, then the rest under `Up for review` (headings only while one is pinned),
+  and a pinned row's line of where it came from leads with the same pin and `pinned`, the digest folded at its foot
+  (`Show what every run is served`); then Ticket notes, a row a ticket opening to its notes, which it reads only then,
+  counted `2 tickets · 3 notes`. From 120rem,
   the tickets sit beside the queue in 34rem, where their opened notes' columns fit and the queue still keeps a
   proposal's verbs on one line; narrower, they stack under it. Under every panel, and under the panel saying memory
   is off, a muted `xs` line says purge deletes many memories' text from the shell alone, then `canopy memory purge` in
@@ -370,9 +376,10 @@ Rules:
   route to it. A list of links named by its region (the guide's sidebar groups) is not a heading.
 - **A detail page leads with what it is about.** Its title is its subject's, after its reference in a muted
   monospace (`PageHeader`'s `subject`), as a ticket's page has always led: `run:39 Debounce search input`,
-  `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its ticket's title. With no subject (a
-  tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference alone is the title. Its
-  description is that subject's state, a line of facts (`src/lib/descriptions.ts`): `done · implement · ABC-099`,
+  `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its PR's title, its ticket's while the
+  PR has none. With no subject (a tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference
+  alone is the title. Its description is that subject's state, a line of facts (`src/lib/descriptions.ts`):
+  `done · implement · ABC-099`,
   `review:4 3 findings, 1 major · at its review limit`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`,
   so no two pages of a kind say the same thing there. What every page of its kind shows, the same each time, is its
   `help`, on the title's hover, as the nav's items say what their pages hold. A ticket is named one way in every
@@ -387,30 +394,31 @@ Rules:
   leave it out: on a ticket's page its runs leave out the ticket (`ticket={false}`); on a PR's page its runs and
   decisions leave out the PR (`ownPr`), and so does its review limit (`reviews`). A PR's phase is its title's chip, not
   a field too; a ticket's phase is its Work panel's field, not its description too; whether a ticket is private is
-  its title's chip, not a notice under its actions. A run's, a tick's, and
-  a chore run's pages put each fact in the same home: the state, a run's kind, and its ticket in the description, so
-  the identity panel's header is its name alone and its fields leave out the ticket; a chore run's chore in the trail,
-  never a field; the session in the transcript's header, never a field; and the paths in the identity panel, but a
-  tick's output, whose path its Output panel names.
+  its title's chip, not a notice under its actions. A run's, a tick's, a chore run's, and
+  a task run's pages put each fact in the same home: the state, a run's kind, and its ticket in the description, so
+  the identity panel's header is its name alone and its fields leave out the ticket; a chore run's chore and a task
+  run's task in the trail, never a field; the session in the transcript's header, never a field; and the paths in the
+  identity panel, but a tick's output, whose path its Output panel names.
 - **A detail page has one skeleton**: what it is, then its thread or main content, then the lists that support it.
   First the identity panel, its subject's fields (a ticket's Work, a run's Run, a PR's Pull request, a chore's
   Schedule); its actions sit in that panel's foot, under a hairline, never in a panel of their own above the content,
   but for a ticket's, which follow its reply (The answer, below).
-  What runs and ends, a run, a tick, a chore run, keeps one order there, the page's answer first: `summary`; then what
-  came of it (a failed run's `ended on`, a running run's `last call`, a run's PRs, a chore run's `harness` note; a
-  chore run's findings are counted in its description and listed under the panel); `when` (`WhenField`), started,
-  ended, and how long it took in one field, `Oct 8 06:30 → 06:59 · 29m`, and its `span` age (`for 3m` while it
-  runs); `spent`; then a tick's canopy version; then the paths, a run's branch, worktrees, and log, a chore run's
-  log.
+  What runs and ends, a run, a tick, a chore run, a task run, keeps one order there, the page's answer first:
+  `summary`; then what came of it (a task run's `question`, a failed run's `ended on`, a running run's `last call`, a
+  run's PRs, a chore run's and a task run's `harness` note, a task run's tickets; a chore run's findings are counted
+  in its description and listed under the panel); `when` (`WhenField`), started, ended, and how long it took in one
+  field, `Oct 8 06:30 → 06:59 · 29m`, and its `span` age (`for 3m` while it runs); `spent`; then a tick's canopy
+  version; then the paths, a run's branch, worktrees, and log, a chore run's log, a task run's branch, pushed commit,
+  and log.
   Then the thread the operator came to answer, with its form: a ticket's conversation and the reply, then the
   ticket's actions. A page with no
-  thread has its main content there instead: a run's transcript, a chore's open findings and runs, a chore run's
-  findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
-  thread nothing waits on, written now and then, so they follow its main content, with its spend. Then the supporting
-  lists: runs, decisions, spend, and a ticket's memory last, the least read. So in a narrow window a ticket's reply is
-  reached before its runs and decisions, and the attention detail, the other place a ticket is answered, reads in the
-  same order: the item, then what its reason asks for first (below, "The attention detail"), then its conversation,
-  the reply, and the ticket's actions. An action over a whole list
+  thread has its main content there instead: a run's and a task run's transcript, a chore's open findings and runs, a
+  chore run's findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's
+  notes are a thread nothing waits on, written now and then, so they follow its main content, with its spend. Then
+  the supporting lists: runs, decisions, spend, and a ticket's memory last, the least read. So in a narrow window a
+  ticket's reply is reached before its runs and decisions, and the attention detail, the other place a ticket is
+  answered, reads in the same order: the item, then what its reason asks for first (below, "The attention detail"),
+  then its conversation, the reply, and the ticket's actions. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
   panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
   the trail; the ticket's page has its card (`PlanCard`), and a `plan_review` item shows it too: the plan's reference
@@ -424,9 +432,9 @@ Rules:
   A ticket whose plan waits on the operator (proposed, no planner running) leads with the card, above its Work panel,
   since the plan is what they came to answer; otherwise the card follows the lists. Where it sits is settled as the
   page opens, so a plan approved meanwhile leaves its card where it was read. A review's run is on a page of its own
-  too, `/reviews/$id/run`, under the review in the trail, with a run's skeleton: its Run panel, its transcript, its
-  prompt, and its output. The review's page is its results, so it says only when the run ended and links there from a
-  `run` field.
+  too, `/pull-requests/reviews/$id/run`, under the review in the trail, with a run's skeleton: its Run panel, its
+  transcript, its prompt, and its output. The review's page is its results, so it says only when the run ended and links
+  there from a `run` field.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
@@ -458,13 +466,14 @@ Rules:
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
 - **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Pull
-  requests' violet to Worktrees' teal. It is static.
+  requests' violet to Tickets' sky. It is static.
 
 ## Fun
 
 canopy should be a little fun to use (PRODUCT.md): the header's ticker, Sprig at the foot of the rail, the empty inbox
-and the leaf a cleared item drops, and the lightswitch rave. Fun is ancillary, so this design holds only the rules it
-all keeps; what each one does is written in its code. None of it is journal text.
+and the leaf a cleared item drops (an approved plan drops one too, and so does a review draft once published, not
+staged), and the lightswitch rave. Fun is ancillary, so this design holds only the rules it all keeps; what each one
+does is written in its code. None of it is journal text.
 
 - **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
@@ -590,7 +599,11 @@ side.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
   kind of their own (`own-review`, `own-run`). A run names the PRs it pushed to under its row, so on a PR's page
-  `ownPr` leaves that PR out of them, as it does from `Decisions`.
+  `ownPr` leaves that PR out of them, as it does from `Decisions`. The reviews one request made of one commit, one per
+  persona (DESIGN §31), are adjacent rows where the first of them falls (`requestGroups`), with no hairline between
+  them: each keeps its own verdict, draft chip, cost, and age, and after the first, the free column says only
+  `as skeptic`, at any width, in place of the PR and commit it shares, its ticket's cell empty. Rows, not a nested
+  card: the request is one entry read down its personas.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
@@ -633,6 +646,12 @@ side.
   A `sticky` foot stays at the bottom of the page while its panel scrolls over it, as a sticky header stays at its
   top, opaque on `surface`; the page's scroll padding (`.page-scroll` in `src/index.css`) keeps what Tab moves to and
   what is scrolled into view above it. A bar of actions never floats in a box of its own: it is its panel's foot.
+- **A draft's card** (`DraftCardFrame`, `src/components/draft-card.tsx`): text canopy holds that would post as the
+  operator on a PR, a thread's reply (`DraftCard`) or a review's comment (`DraftCommentCard`, `NewCommentCard`,
+  `ReviewPointCard`), is one card: `surface`, a `status-blocked/40` border while it waits on the operator, a header of
+  its `panel-label` and what names it, its text, then its verbs in a row under it, `sm` buttons with the CLI's command
+  on hover, `Edit` outline (`EditVerb`) and `Drop` ghost (`DropVerb`). `Edit` opens `DraftForm`: a `Textarea` with its
+  count against 4,000, `Save` disabled past it or while the text is not one the draft may hold, and `Cancel`.
 - **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
   `panel-label` type, its figures right-aligned readouts. A row head that names something (a ticket, a tool) is its
   name in medium weight at the table's size, as `TicketTitle` sets a ticket's title, after its reference (a ticket's
@@ -756,6 +775,42 @@ sliver beside four others; and its axis names short call numbers without measuri
   word, its age, then where it stands; a worktree's what holds it, before its branch is cut, since the branch names the
   ticket too, then its age. At half a monitor (an 820px window, a list about 44rem wide) a run keeps its age and a
   slot its branch. Money and tokens go before what names a row. Each kind's order is in `ROW_COLUMNS`.
+- **The tickets board** (`?view=board`, `TicketBoard`): the tickets list's tickets, under its filters and order, in a
+  column per stage (`BOARD_COLUMNS` in `src/lib/ticket-board.ts`), every column shown, an empty one saying `none`. A
+  column is a well on `background`, its name an h3 with its count as a readout and its phases in the name's `title`;
+  a card is on `surface`: its key and age, its title, then where it stands, its phase, and `private`. Done shows its
+  most recent few and links to the done list. It only reads: no drag, since the loop moves a ticket. Past the panel's
+  width the columns scroll sideways inside it, a focusable region; a `list`/`board` `ToggleGroup` heads the panel.
+- **The tasks list**: where the task stands (`TASK_LOOK` in `src/lib/tasks.ts`, a run state's dot and color: `waiting
+  on you` in blocked's, `queued` muted, else its latest run's status), `task:N` (opening its page), the repository,
+  the text's first line in the free column, and the age since it was submitted; under the text, the first line of
+  what its latest run said.
+  The tasks waiting on the operator's reply come first, the rest newest first, so it has no `OrderToggle`. Narrow, the
+  repository goes first, then the age, then where it stands. A repository picker (`?repo=`) narrows it.
+  Above it, as the reviews page's `Review a PR` panel is, a `Submit a task` panel (`TaskSubmitForm`) on one line: the
+  text in a `Textarea` one line high that grows as it is written (to `15rem`, then scrolls), the repository it runs in
+  (`RepoSelect`, only with several, starting at the one the list is narrowed to, else the newest task's), the tracker
+  project in monospace, and an outline `Submit` with its send keycap; under them one muted line says what a task may
+  do, which a refusal replaces. On success a toast says what the CLI says and the form opens the task's page; the row
+  arrives on the stream, never added by the page.
+- **A task** (`/tasks/$id`) is one story: its title `task:N` and its text's first line, its description where it
+  stands (in its look's color), its runs, and when it was submitted. Then the detail skeleton, with the story as its
+  thread: a Conversation panel (`TaskStory`) whose oldest end is the operator's instruction, whole, as their own bubble
+  (`task:4 you instruction via cli`), then its messages, each naming its run as `task:4#5`, which opens the run's page
+  (`/tasks/$id_/runs/$run`, a chore run's skeleton, its task in the trail); no tick chips, since no tick reads them.
+  It ends on the run working now, as a ticket's does. The panel's foot is its answer, as a ticket's is: the
+  `ReplyForm`, then its stop (`TaskActions`) under a hairline. While a question waits, the form sits on the
+  `status-blocked` tint under a line naming its message, one element either way, so what the form said stays as its
+  reply clears the question. Stop asks once more (`Stop task:N`, `Keep it`), since a task has no start to undo it, and
+  Stop now, while a run works, asks as a ticket's does; a task stopped while its run works keeps Stop now alone. A
+  stopped task has no form. Its main content is the Report panel
+  (`TaskReportPanel`), its newest run's report that left one, laid out read only through the plan's schema
+  (`PlanDocument`), so it reads as a document and stays text; its header names the run and `edited`, its foot the
+  file's path, and with none an `Empty` saying what comes next or why. Then What it left (`TaskLeft`): its repository,
+  its branch, each run's pushed head commit (its run, then the short hash, the whole in its tip and copied whole), the
+  draft PR, the tickets filed (`TicketLink`, with the run that filed each), a `None` with its reason for what it left
+  nothing of, and under them one muted line saying all of it is throwaway until given a pass. Then its Runs, oldest
+  first. Wide, the report takes the second column beside the rest.
 - **The tickets filters** narrow the list two ways at once (`src/lib/ticket-filter.ts`). Where a ticket stands is the
   runs page's chips, in the Tickets panel's header (`?show=`): `open` (not done), `working` (a run on it now) and
   `waiting on you` (a question waiting), each with its run's dot, `blocked` (the overseer's phase for a ticket an
@@ -774,14 +829,17 @@ sliver beside four others; and its axis names short call numbers without measuri
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
   the CLI's spelling stays in its tip, so it can still be found in `attention.md` or typed into the CLI
-  (`src/lib/words.ts`). Outside a chip, a phase in a field or a list and a status in a header or a row read the same
+  (`src/lib/words.ts`). A reason's or a phase's tip says under the spelling what it means, in a line
+  (`src/lib/meanings.ts`, `meaning` on `Chip` and `Word`), so its tip opens even when the word needs no spelling.
+  Outside a chip, a phase in a field or a list and a status in a header or a row read the same
   way (`Word`, `phaseLabel`); no journal word shows with its underscores. Journal text that is not a fixed word (a
   chore finding's id, `review.query`) and a count (`1 finding`) are muted monospace, never a chip. A chip with a
   long word in a narrow column cuts it to fit (`min-w-0 shrink`), the whole word in its tip, as the search page's
   labels do; none is stretched to its column. Its color is its `tone`, from the one map of them (`Chip` in
   `src/components/status.tsx`): its color's hairline at 40% over the same color at 10%, so it holds its edge on a
   selected row's tint; `plain` in `muted-foreground`, else the status color of the state it marks, `failed`,
-  `blocked`, or `running`. No chip is colored by classes of its own.
+  `blocked`, or `running`, or, for a feedback plan's proposal, that proposal's own hue (`ProposalTone`). No chip is
+  colored by classes of its own.
 - **A status on a detail page** (a run's, a chore run's, a tick's, a review's) is its description's first word
   alone; the identity panel's header names the panel and nothing else, so the state is said once. Of the two homes
   it had, the description was kept, as the smaller change: it is the page's line of state on every detail page, and a
@@ -860,10 +918,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   view, and a toast says what the reply did, since the form that said it goes with its item; the row it left keeps
   its `answered` chip. With nothing else waiting the item stays, its form's line saying what the reply did. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
-  `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
+  `attempt_limit`, `chore_failed`, the review reasons, and a run refused its model, `model_missing` and
+  `model_list_failed`, which only the operator clears), then what waits on the operator's answer (`awaiting_reply`,
   `untrusted_review`, `plan_review`), then every other reason, then chores' findings; within each, the item open longest
   first. A row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`, semibold) when
-  it is about a ticket, as a message's subject, then its detail, muted, as the preview; the selected item's head puts
+  it is about a ticket, or its task's text's first line when it is about a task, as a message's subject, then its
+  detail, muted, as the preview; the selected item's head puts
   the title, semibold, after the key. A reason chip takes `status-failed` or `status-blocked` for the first two, plain
   otherwise. A finding's reason is its id, the agent's text, so its chip says `finding` and the id follows its chore in
   muted monospace. An item's detail is the harness's line, with its `code` spans set as code and nothing else read
@@ -886,17 +946,27 @@ sliver beside four others; and its axis names short call numbers without measuri
   text, so the PR is one tab stop. A wait on the operator's answer (`awaiting_reply`, `untrusted_review`): the reply
   form is the action, and a question's head names it, `Waits on your answer to message 5, asked 3m ago`, rather than
   saying it, since the conversation holds it, marked `waiting on you` (One home per fact). A plan (`plan_review`): the
-  plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`. Memory's items
+  plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`; a feedback plan's,
+  which shares the reason and is told apart by its detail or its ticket's `feedback_plan`, a line naming the plan, its
+  PRs, its items, and whether it is stale, with an outline `Approve it on org/repo#N`, a router link to the PR's page at
+  `#feedback-plan`, where it is approved. Memory's items
   (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above).
   Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
   where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,
-  `bare`). An item about nothing the page shows
-  whose detail names a `canopy` command to run (`repo_missing`): the command,
-  `Copyable`, and nothing to answer. A broken run's item shows any limit it is stuck at (below) under its run, as
+  `bare`). A review's draft (`review_waiting`, `review_unsettled`): an outline `Read the draft of review:N` (`See`
+  for one unsettled), a router link to the review's page its detail names, in place of the PR's review limit. A task's
+  (`awaiting_reply`, `task_ticket_unrecorded`): named `task:N` (`TaskLink`) and its text's first line, as its row is,
+  a question's head as a ticket's, then an outline `Answer on task:N` (`Open` for the other), a router link to the
+  task's page, which holds its question and its answer, never the `canopy` commands its detail names. A ticket's run
+  refused its model (`model_missing`, `model_list_failed`): the ticket's models (`TicketModels`), as its page shows
+  them, the runtime's list read as the item opens rather than when a menu does, so the model it no longer lists is
+  marked already. An item about nothing the page shows whose detail names a `canopy` command to run (`repo_missing`),
+  or the overseer's or a chore's run refused its model, `canopy models`: the command, `Copyable`, and nothing to
+  answer. A broken run's item shows any limit it is stuck at (below) under its run, as
   what it asks for. A ticket's item then shows its answer (below): its conversation, the reply form, and on the
   reasons above the ticket's own verbs (Start or Stop, Forget) and any other limit as a quiet row under the reply,
   Start and Stop as ghost buttons; on any other reason the verbs and the limit lead, under the head, as what it asks.
-  An item about a PR no ticket owns shows its review limit; a chore's item (a finding or `chore_failed`) shows
+  Any other item about a PR no ticket owns shows its review limit; a chore's item (a finding or `chore_failed`) shows
   the chore's notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`) and, in
   place of its detail, the finding as its chore's page has it (`ChoreFindingText`): the title whole, then what it says
   of itself, then its link on its own line, where the item's detail runs title and link together; an item about none of
@@ -1210,16 +1280,17 @@ sliver beside four others; and its axis names short call numbers without measuri
   button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
   goes under the row, once clicked.
 - **Names** (`src/lib/refs.ts`): what canopy keeps by id is named as the CLI reads a reference, `KIND:ID`, in rows,
-  trails, titles, and the tab alike: `run:41`, `review:4`, `chore:deps`, and in the same grammar `tick:2`, which the
-  CLI takes no reference for. A chore run has no reference of its own, so it is its chore's and its number,
-  `chore:deps#2`, as GitHub writes an issue's. Each has a link component that opens its page (`RunLink`, `TickLink`,
-  `ReviewLink`, `ChoreLink`, `ChoreRunLink`), used wherever it is named, a message's head and a worktree's holder
-  included; a page's title calls the same function. A message is `#5`, as its conversation numbers it, and a worktree
-  slot `#3`, as treehouse does (`messageRef`, `slotRef`). A note, proposal, or lesson is `memory:3` in the same
-  grammar (`memoryRef`), so a list of them never shows a bare number that reads as a row's. Nothing builds a
-  reference in place. A PR is named as GitHub writes a reference, `org/repo#123` (`pullRequestLabel`; any other
-  host's URL as written without `https://`), and only through `PullRequestLink`. A link into a GitHub PR, such as to
-  one of its threads, is the PR all the same: its name goes in to the PR's page and its icon out to the thread.
+  trails, titles, and the tab alike: `run:41`, `review:4`, `chore:deps`, and in the same grammar `tick:2`, which the CLI
+  takes no reference for. A chore run has no reference of its own, so it is its chore's and its number, `chore:deps#2`,
+  as GitHub writes an issue's, and a task's run the same, `task:4#5`. Each has a link component that opens its page
+  (`RunLink`, `TickLink`, `ReviewLink`, `ChoreLink`, `ChoreRunLink`, `TaskLink`, `TaskRunLink`), used wherever it is
+  named, a message's head and a worktree's holder included; a page's title calls the same function. A message is
+  `#5`, as its conversation numbers it, and a worktree slot `#3`, as treehouse does (`messageRef`, `slotRef`). A note,
+  proposal, or lesson is `memory:3` in the same grammar (`memoryRef`), so a list of them never shows a bare number
+  that reads as a row's. Nothing builds a reference in place. A PR is named as GitHub writes a reference, `org/repo#123`
+  (`pullRequestLabel`; any other host's URL as written without `https://`), and only through `PullRequestLink`. A link
+  into a GitHub PR, such as to one of its threads, is the PR all the same: its name goes in to the PR's page and its
+  icon out to the thread.
 - **The label goes in, the icon goes out.** A PR or a ticket named anywhere is its name linking to its page in canopy,
   then a small icon (`LinkOut`) opening the same thing outside canopy in a new tab, named for a screen reader and on
   hover (`acme/web#88 on GitHub`, `ABC-102 in the tracker`): `PullRequestLink`, and `TicketLink` when
@@ -1308,8 +1379,9 @@ sliver beside four others; and its axis names short call numbers without measuri
     then its order, By call, and All open.
   - A panel kept at hand but seldom read whole arrives folded (`FoldPanel`, `src/components/fold-panel.tsx`): its
     header, a readout that says what it holds in a few words, and a `Disclosure` that opens its rows under it, built
-    only once opened. A run's Memory is one, and the Prompt on a run's, a tick's, and a chore run's pages
-    (`PromptPanel`), its length and a copy button as its readout, `none kept` alone when canopy kept none.
+    only once opened. A run's Memory is one, a review draft's `What the reviewer found`, and the Prompt on a run's, a
+    tick's, and a chore run's pages (`PromptPanel`), its length and a copy button as its readout, `none kept` alone
+    when canopy kept none.
 - **Buttons come in three sizes**, each one look: the default (`h-9`, `text-sm` at 500) in a form and a panel's foot;
   `sm` (`h-8`, the same type) in the header and for a link out, whose label is the accent's monospace at that size and
   weight (`LinkOutButton`); and `xs` (`h-6`, `text-xs` monospace at 400, as a readout beside it is) in a panel's header
@@ -1331,6 +1403,18 @@ sliver beside four others; and its axis names short call numbers without measuri
   opened is listed first, so nothing moves under the pointer. It is kept in `?repo=` as names joined by commas
   (`src/lib/repo-filter.ts`), replacing the history entry as a filter field does, and a row shows when it is in any of
   them. In a form (`RepoSelect`) it takes one, and picking it closes the list.
+- **A config page** (`ConfigForm`, `/settings/limits`, which Settings links to from a one-line panel so Settings stays
+  short): the keys in panels by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), two to a row on a
+  wide window and Trust across the whole row, a key no panel names in an `Other` panel. A row is the key in words over
+  its name in the file in monospace, where its value comes from, and how far the page may take it, and its control at
+  the row's end: a numeric field in `readout` type, a checkbox for a switch, and a list's entries as checkboxes to
+  clear. A switch already on its stricter side is disabled, not hidden, so the page still says what it is.
+  `capacity.repo_slots` lists only the repositories with a count of their own, a field each, and under them a repository
+  picker (`RepoSelect`) to give another one a count, so a workspace of many repositories does not get a field per
+  repository. One save bar, sticky at the page's foot so a change far down the page is never left unseen, says how many
+  changes wait, with Discard and Save, each disabled until something changed; a field that is not a whole number is
+  named in its `Notice` and keeps Save disabled. A save reads the file again, and the `Notice` keeps what the save did
+  over the fresh form.
 - **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above), under a
   ticket's reply (The answer, above), or under its form, with one line under it (`Notice`): what the action did, in
   the CLI's words, or its refusal in
@@ -1348,6 +1432,34 @@ sliver beside four others; and its axis names short call numbers without measuri
   header's Pause and Tick now say the same on hover. A public ticket
   has no Stop, since its queue label authorizes it; while a worker runs on one, a muted line stands in Stop's place:
   `Public: remove its queue label to stop it, or start it privately.`
+- **A choice of persona** is a menu (`DropdownMenu`) on an outline `xs` button naming the choice
+  (`src/components/personas-menu.tsx`): a ticket's agent's picks one (`PersonaRadioItem`), a review request's checks
+  several (`PersonasMenu`). Each item is the persona's name in monospace over its description, its file's own or
+  else its opening sentence, in muted `text-xs`: the name is the item's accessible name, the description its accessible
+  description.
+  A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
+  to the config: `Clear the override`, or `Use the default`.
+- **A choice of model** (`src/components/ticket-models.tsx`) is the same menu over the models the runtime lists, read
+  when it opens, in a row per agent laid out as the persona rows are: `worker model`, then the button, then where it
+  comes from in muted `text-xs`, beside the persona rows once the Work panel is `@3xl`, so each agent's model is level
+  with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
+  is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
+  `last served` names the model that served the agent's latest read run when it is not the button's. A variant on the
+  button follows the model's id, muted. Each model's variants are items of their own under it, indented, each
+  `@variant` to the eye and named whole for a screen reader. A choice saved is confirmed in its row, a `saved` in
+  `status-done`, so nothing below moves, until the ticket's models change after it; one that sets aside config's
+  variant says so after it in muted text. The menu offers only what the server would take: the model chosen now, when
+  it is not one, is a disabled item with why in muted text after it (`no longer listed; its next run is refused`,
+  `variant no longer listed; its next run is refused`), and a model or variant gone from the list marks its trigger in
+  `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
+  `Read again` item. While a choice saves, its trigger names it with a trailing `…` and is `aria-busy`; a refusal's
+  `Notice` names the agent before its guard.
+- **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, under the
+  verbs at the foot of a ticket's or a task's conversation, beside the reply that says what to do with them: each file a
+  row of its name in monospace, its size muted, and a ghost `icon-xs` ✕ named `Remove NAME`; an outline `xs` **Attach a
+  file** beside the heading opens the browser's file picker, from a visually hidden input. A muted line says how much of
+  the limits it holds. The page refuses a file over the bound or not UTF-8 before sending it, as an `ApiError` naming
+  the CLI's guard, so it reads in the `Notice` as the server's refusal would.
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, after its reply on its page and
   on its attention item (The answer, above), but under the run on a broken run's item, which asks for another try
   first, and in the foot of a PR's Pull request panel, under the operator's review request. While something is stuck
@@ -1361,18 +1473,27 @@ sliver beside four others; and its axis names short call numbers without measuri
   something to type. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
-  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list: a line saying
-  nothing is posted on the PR, the PR's URL in a monospace field, and a `Review` button beside it, the form's submit,
-  with the CLI's command on hover. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open
-  request wears a `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its
-  Pull request panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has; what
-  Stop did goes under it (`Notice`).
-- **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posting nothing itself (D114): the
-  review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Each fact is said
-  once. The description is the run's status alone (`done`), and the Review panel's header has no dot. The panel leads
-  with the reviewer's summary, the answer the operator came for, then the `harness` line when the harness decided the
-  status, then the verdict, in its worst finding's color with its impact chip (its one home, since the description is
-  plain words and could carry neither), the PR, with the PR's other reviews on a muted line under it (`also review:1,
+  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list, as compact as a ticket's
+  `Start privately` (`StartTicket`): the PR's URL in a monospace field and an outline `Review` beside it, the form's
+  submit, with the CLI's command on hover; under them the notes, always open since the operator often has some, then
+  `Show persona`, a `Disclosure`, beside a muted line naming the personas it will use, and a `Notice` saying its
+  review is a draft the operator may publish as their own, which a refusal replaces. On success the form opens the
+  PR's page. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open request wears a
+  `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its Pull request
+  panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has. While none is
+  open on a PR the loop does not own (`loop_pr` false), the line's end holds the personas menu and an outline
+  `Review this PR`, `Review again` once the PR has a review or an ended request; the loop's own PR without a request
+  has no line. What either button did goes under it (`Notice`). Until its review starts, the reviews list has a
+  `requested` row for it, whose ticket's place names the PR's author in muted monospace once canopy has read the PR,
+  since it has no ticket.
+- **A review** (`/pull-requests/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop
+  does not own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page
+  holds the review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Its
+  header has the PR's link out, as the PR's page does (`PullRequestLinksOut`), with or without a draft. Each fact is
+  said once. The description is the run's status alone (`done`), and the Review panel's header has no dot. The panel
+  leads with the reviewer's summary, the answer the operator came for, then the `harness` line when the harness decided
+  the status, then the verdict, in its worst finding's color with its impact chip (its one home, since the description
+  is plain words and could carry neither), the PR, with the PR's other reviews on a muted line under it (`also review:1,
   1 blocking finding`, each verdict in its color), the ticket, the commit, when it ended, and what it spent. A diff is a
   monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
   that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel, while a
@@ -1418,38 +1539,66 @@ sliver beside four others; and its axis names short call numbers without measuri
   `status-blocked`, else plain), so a review with a blocking finding never reads as calm as a clean one, and the worst
   in words, since color alone says nothing to some (`verdictText`: `3 findings, 1 major`, or `1 blocking finding` when
   every finding is that bad); the review's link; its ticket
-  (or `None`, its reason on hover), its impact, then in the free column the PR (`PullRequestLink`) and the commit's
-  first 7 characters, then cost and age. A review's page colors its verdict the same way.
-- **A review's draft** (`ReviewDraftPanel`, DESIGN §34), on a review of a PR the loop does not own, sits under the
-  findings: a `Draft review` panel, its status chip (`REVIEW_DRAFT_TONE`: staged and unconfirmed in `status-blocked`,
-  publishing as running, the rest plain, since nothing waits on a draft) and its version and hash in muted monospace at
-  the header's end; a muted line saying it is what would post, word for word, on which commit, and what made the
-  version; a `status-blocked` line when the PR's head has moved past that commit; the body as `MemoryText` with a ghost
-  `xs` `edit`; its comments as rows linking to their cards; every version in muted monospace, the newest in the
-  foreground; and in its foot an outline `Start the review on GitHub`, which stages it, with a `Submit it on GitHub now`
-  checkbox that turns it into a default `Publish version N`, each with its command on hover. Staged or published, the
-  foot says so with a link to GitHub instead. Each comment's card (`DraftCommentCard`, `surface`, an `accent/40` border
-  to tell it from a finding's `surface-raised`) sits under its line after the findings there, with ghost `xs` `edit` and
-  `drop`. While the draft waits, each line of the new side has a ghost `+` beside its number (`DiffPanels`' `onAdd`),
-  shown on the row's hover or its focus, which opens a new comment's form under the line. Each form is a `Textarea` with
-  its count against 4,000, as a draft's.
+  (or `None`, its reason on hover), its impact, then in the free column the PR (`PullRequestLink`), its title
+  (`TicketTitle`: the PR's own, else as canopy's reader last read it, else its ticket's, and nothing without one) in
+  what room the rest leaves, left out below `@6xl`, where that room is a word at best, and the commit's first 7
+  characters, then cost and age. A review's page colors its verdict the same way.
+- **A review's draft** (`ReviewDraftPanel`, DESIGN §34), on a review of a PR the loop does not own, leads its page,
+  which is the draft's one record: the title is `review:5 Your review of acme/api#14 by carol` (the PR alone while
+  canopy has not read its author), and the description the draft's state (`ReviewDraftState`), its status chip
+  (`REVIEW_DRAFT_TONE`: staged and unconfirmed in `status-blocked`, publishing as running, the rest plain, since nothing
+  waits on a draft), its version, and what the status means. The `Draft review` panel comes first; canopy's Review
+  fields and Findings fold under it into one `FoldPanel`, `What the reviewer found`, its readout the run's status and
+  verdict, its findings an `h3` under the fields; the diff follows. A review with no draft keeps the page above. The
+  panel's header names the version in a muted readout, what made it and its hash in its `Tip`; then a muted line saying
+  it is what would post, word for word, on which commit, and to read it first; a `status-blocked` line when the PR's
+  head has moved past that commit; the body as `MemoryText` with a ghost `xs` `edit`; its comments as rows linking to
+  their cards (a `draft-comment` row: its number, `finding N` or `yours`, its first line, its line), and a muted line
+  under them naming the findings it leaves out; every version in muted monospace, the newest in the foreground; and in
+  its foot the one way canopy posts as the operator, as a PR's thread drafts are sent (A PR's threads, below): a default
+  `Publish version N`, which submits it, and beside it an outline `Start the review on GitHub`, which stages it, each
+  with its command on hover, and a muted line by them saying what posts: as you, on the PR's author's PR (`the PR` when
+  canopy has not read it), the body and how many comments, on which commit. A publish says what it did in a toast;
+  staged or published, the foot says so in one line linked to GitHub instead, never a raw URL. A ghost `Discard` after
+  them asks in its place, as skipping a plan does (Keep focused, Escape keeps), and a discarded draft's foot says so in
+  one line. On the diff, one card per point of the review: each finding's card is its comment's too (`ReviewPointCard`,
+  a draft's card, above, never a `FindingCard` beside a comment's card). It heads with the finding's number, severity,
+  title, and location, then a chip, `in your review` or `left out`; in the review as a comment, its text is that comment
+  as it will post, with `Edit` while the draft waits; through the body, or left out, the reviewer's detail, and a muted
+  line saying where it posts or how to have it back. One ghost `xs` control ends its head line where a finding's
+  `dismiss` is: `leave out` dismisses it, `put back` takes that back (`useDismissReviewFinding` with the draft's words),
+  so the two are one choice, as DESIGN §34 ties them. A finding left out by a drop or a body edit rather than a
+  dismissal shows `dismiss`, since the server puts a finding back only by taking its dismissal back. Once the draft is
+  published or on its way, the control is the plain `dismiss` or `undo`. A comment the operator added keeps a card of
+  its own (`DraftCommentCard`) under its line after the findings there, with `Edit` and `Drop` while the draft waits;
+  with no diff kept, every comment's card is in the panel's list, as before. While it waits, each line of the new side
+  has a ghost `+` beside its number (`DiffPanels`' `onAdd`), shown on the row's hover or its focus, which opens a new
+  comment's card under the line, its form open.
+  A review whose request made others of the same commit in other personas names them in a muted line under the intro,
+  `Also reviewed as skeptic, eddie`, each persona a `ReviewLink` to its page, and that each is a draft of its own:
+  the operator picks one to publish, and publishing it changes none of the others.
+  Outside its review's page a draft is its status alone (`ReviewDraftChip`): `draft` while it waits, else the
+  journal's word, in `REVIEW_DRAFT_TONE`, with the word and what it means on hover. A review's row and a PR's carry it
+  after the verdict (a PR's, its newest review's draft that has one), where its state is, so the list's left edge says
+  which of the operator's reviews wait on them; the verdict is cut first. A PR's Pull request panel carries it as
+  `your review`, with the review's `review:N`.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: where it stands, which is
   the run working it now while one does (a pulsing dot and `run:N`), then its latest review (its state's dot unless a
-  run's leads, `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted) and `requested` while
-  the operator's request is open; the PR (`PullRequestLink`, the URL on hover); its unit's phase as a chip; then its
-  ticket and title (or `none: canopy only reviews it`, `None`) in the free column, and its age. The ticket shares the
-  free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px window. Its
-  page: the PR's name (`org/repo#123`) as the title, then its own title as its worker reported it, else its ticket's,
-  with its phase as a chip. Its description is where it stands, as its row leads with it: its latest review and that
-  review's verdict (`review:4 3 findings, 1 major`, or `not reviewed`), `at its review limit` while it is, the run
-  working it now, and for a PR canopy only reviews, `canopy only reviews it`, said there alone; its ticket and how many
-  reviews it has are said in its panels, not again there. A link out follows, as a ticket's page has
+  run's leads, `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted), its draft's chip, and
+  `requested` while the operator's request is open; the PR (`PullRequestLink`, the URL on hover); its unit's phase as a
+  chip; then its ticket and title (or `none: canopy only reviews it`, `None`) in the free column, and its age. The
+  ticket shares the free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px
+  window. Its page: the PR's name (`org/repo#123`) as the title, then its own title as its worker reported it, else its
+  ticket's, with its phase as a chip. Its description is where it stands, as its row leads with it: its latest review
+  and that review's verdict (`review:4 3 findings, 1 major`, or `not reviewed`), `at its review limit` while it is, the
+  run working it now, and for a PR canopy only reviews, `canopy only reviews it`, said there alone; its ticket and how
+  many reviews it has are said in its panels, not again there. A link out follows, as a ticket's page has
   (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title. Then panels: its fields (its
   ticket, a `TicketField` left out when it has none; its branch; its total cost; no repository, which its name says),
   with a grant of another review in its foot when it is at its review limit; its review threads when canopy has read
-  them or holds a draft for it (below); then its reviews (`ReviewsTable`), the runs that pushed to it (`RunsTable`),
-  and its decisions, each a `ListPanel`, so an empty one is its header alone, and no Runs at all on a PR with no
-  ticket, since runs are a ticket's.
+  them or holds a draft for it (below), led by its feedback plan while that waits on the operator; then its reviews
+  (`ReviewsTable`), the runs that pushed to it (`RunsTable`), and its decisions, each a `ListPanel`, so an empty one is
+  its header alone, and no Runs at all on a PR with no ticket, since runs are a ticket's.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
   them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
   whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`
@@ -1461,17 +1610,44 @@ sliver beside four others; and its axis names short call numbers without measuri
   `Send N waiting`, which sends every waiting draft as one comment review, its command on hover, and an outline `Start a
   review on GitHub` beside it, which stages them in a pending review instead, its reactions added at once, with a muted
   line saying what each does; while the PR holds a staged review, neither shows, and a `staged-review` line links to the
-  PR's files on GitHub to finish it. Then the diff (`DiffPanels`), each thread's card
+  PR's files on GitHub to finish it. While its ticket has a current feedback plan (docs/design §32), a `Feedback plan`
+  panel (`FeedbackPlanPanel`) comes before the `Review threads` panel while the plan waits on the operator, stale or
+  not, so its Approve is in a 1720×1440 window's first screen, and after it once approved or spent; where it sits is
+  settled as each plan is first read, so one approved meanwhile stays put, its band in view. The panel:
+  `feedback-plan:N` and its status as a chip in its header (`waiting on you` and stale in `status-blocked`, approved as
+  running, spent plain), a muted line of who planned it and what its status means, cut to the status once it is
+  approved, a
+  stale plan's changes in `status-blocked`, a row per item (a `Checkbox` until a resume spends it, its number, the
+  first line of what was said as `MemoryText`, and where it is: `on its thread`, a router `Link` to the thread's card
+  by its `threadAnchor`, `the review`, a link out to it on its host, or the other PR it is on; under that, muted, its
+  proposal as a chip in its tone, its author, `trusted`, `for the next plan` on one an approval did not tick, the
+  plan's first line on it as `MemoryText`, and its id; and a reply no
+  thread card shows, under `Proposed reply`, as `MemoryText`), and
+  in its foot the operator's words and `Approve whole` or `Approve N of M`, its command on hover (`Approve stale
+  plan` then `Approve as it is` for a stale plan's two steps, the first refusal a muted `output` rather than a
+  `Notice`; disabled with no box ticked or no file; an outline `Approve again` once approved, at rest until a box or
+  the words change), an approval done as the `ApprovedBand` a ticket's plan gets, then a `Disclosure` of the plan's
+  file as `MemoryText`, or a muted line naming the file's problem. Then the diff (`DiffPanels`), each thread's card
   (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
   `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
   placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
   `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain,
   its line breaks and tabs kept and every other hidden character named, never Markdown or a link; a draft's text the
-  same. A comment's `<details>` blocks are the one thing read in it (`CommentText`, `src/lib/details.ts`): each folds,
+  same. A thread the feedback plan covers carries its proposal above its drafts (`PlanProposal`, an inset rule, a
+  hairline `border-l-2` on the thread's card, not a card of its own): `Plan item N`, the proposal as a chip in its
+  tone, `for the next plan` once an approval did not tick it, and the reply as `MemoryText`; a `change` its resume is
+  still to act on, over a waiting draft, says in `status-blocked` that the resume writes a new reply there and sending
+  the draft first answers ahead of it, the draft's `Send` left as it is. An item an approval did not tick is `for the
+  next plan` wherever the page says so (its chip, the hint beside the button), and its box is named `approve item N`,
+  never `left out` or `leave`: `leave` is a proposal, to leave the item be, which ticking it approves; the CLI's flag
+  stays `--leave`, on the button's hover.
+  Each proposal's chip has a quiet tone of its own (`proposal-*`), so `change`, the one that edits code, stands out,
+  `decline` and `ask` sit apart from it and from each other, and `leave`, which does nothing, stays plain.
+  A comment's `<details>` blocks are the one thing read in it (`CommentText`, `src/lib/details.ts`): each folds,
   as on GitHub, in a hairline box under a `Collapsible` row of a chevron and its summary in `font-medium`, open when
   written `<details open>`, and a closed one that folds a hidden character carries `hides a character` in
   `status-failed`. Only bare `<details>`, `<details open>`, and `<summary>` are read, so a dropped tag hides nothing.
-  A draft's card (`DraftCard`, `surface`, a `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and
+  A draft's card (`DraftCard`, a draft's card, above) heads with `Draft`, `run:N` and
   its number, its status as a chip (`DRAFT_TONE`: waiting, unconfirmed, and staged in `status-blocked`, refused in
   `status-failed`, sending as running, the rest plain), the run's stance as a muted word, `your text` once edited, and
   its hash at the end in muted monospace, the one a send carries; then the harness's reason for a status other than
@@ -1480,9 +1656,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   left out when the draft sends its reaction alone. A thread's draft that stages a reaction says so in a muted line
   under the text (`draft-reaction`): the emoji, hidden from screen readers, then its name and whether it goes with the
   reply or alone; one a failed send already added says so in `status-blocked` (`draft-reacted`). Its
-  verbs, `sm` buttons each with the CLI's command on hover: `Send` (default) on a waiting draft, outline `Edit` and
-  ghost `Drop` on one waiting or unchecked, ghost `Undo` on a dropped one, and a `LinkOut` to a sent one. `Edit` opens
-  the text in a `Textarea` with its count against 4,000, `Save` disabled past it, and on a thread's draft a `Reaction`
+  verbs: `Send` (default) on a waiting draft, `Edit` and `Drop` on one waiting or unchecked, ghost `Undo` on a dropped
+  one, and a `LinkOut` to a sent one. `Edit`'s form holds, on a thread's draft, a `Reaction`
   `ToggleGroup` of GitHub's eight in its picker's order, each an emoji named for screen readers, the lit one pressed
   again for none; `Save` also takes an empty text beside a reaction. What each verb did goes under it
   (`Notice`), in `canopy draft`'s words. `Send` reads `Sending…` until the post returns, and a toast says what the send
@@ -1495,12 +1670,23 @@ sliver beside four others; and its axis names short call numbers without measuri
   keycap, its shortcut from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the
   keycap's `bg-muted` when hovered) takes the keycap's place: it empties the field and keeps the focus there. An empty
   field, by the button or by deleting its text, empties the search page if it is open, and leaves any other page as it
-  is. The search page has a panel per source with hits, in the server's order, its count in the header (`newest 20` when
-  the source has more). A hit is a row: where it opens (its ticket or chore with the run that said it, a chore run as
-  itself, `chore:deps#2` opening its page, or the tick that decided it), its label as a chip (a chore run's status as
+  is. Enter on a task's reference alone (`task:4`) opens the task instead of searching. The search page has a panel per
+  source with hits, in the server's order, its count in the header (`newest 20` when the source has more). A hit is a
+  row: where it opens (its ticket or chore with the run that said it, a chore run as itself, `chore:deps#2` opening its
+  page, the tick that decided it, or a task, `task:4`, or its run that said it, `task:4#5`, over the task's first line
+  in `muted-foreground`, cut to the column), its label as a chip (a chore run's status as
   its dot and word, as its chore's page lists it), the snippet with the query's words marked on the accent's tint
   (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL short. While the
-  next query's hits load, the last ones stay, dimmed to 60%.
+  next query's hits load, the last ones stay, dimmed to 60%. While empty, the field's end also holds the jump palette's
+  keys (`⌘K`, `Ctrl+K` off an Apple keyboard) in a keycap that opens it.
+- **The jump palette** (`JumpPalette`, `src/components/shell/jump-palette.tsx`) jumps to a ticket from anywhere: `⌘K`
+  opens and closes it, from a text field too, as a `Dialog` in the window's top sixth over the canvas at 70%. Its field
+  is over the tickets viewed last, newest first, without the one on screen, so `⌘K` Enter goes back to the ticket
+  before it; typing narrows them by key or title and lists the other tickets that match under them, at most 20 then
+  `+N more` to the tickets page, and with none, the journal's search for the words. A row is the key, the title, where
+  the ticket stands now in its state's color (waiting on you, its plan waiting, its run) or its phase muted, and for a
+  ticket viewed, how long ago. What was viewed, a ticket's page or its plan's, is this browser's alone: localStorage
+  (`src/lib/recent-tickets.ts`), never the journal, and a ticket the journal no longer holds leaves it.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.
   Signed out by a 401 to an action, the card says under its heading, in `status-failed`, that the action was not sent
   (`unsentQuery`). A reply being written outlives the page that held it: the reply form keeps what is written, with its

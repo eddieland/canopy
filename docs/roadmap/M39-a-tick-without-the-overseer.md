@@ -60,7 +60,7 @@ three minutes, and no action missed, checked against the derivation as in M36. O
 few polls: `connector_failed` raised within a poll, the loop on its timer while it is down, and early ticks again
 within a poll of its recovery.
 
-Status: not started. Designed 2026-10-22 (DESIGN §39); the build waits on M38, and on S27's overnight run and its
+Status: in progress. Designed 2026-10-22 (DESIGN §39); the build waits on M38, and on S27's overnight run and its
 re-measurement. The design settles what the sketch left open: a tick with nothing left still runs steps 1 to 3 and the
 disk check, owes no duties, and skips the `canopy` check; the poll's comparison counts anything newly listed to the
 overseer, not only a new decision, so a reply on a ticket it waited on is seen within a poll; a stale or unobserved
@@ -68,6 +68,44 @@ subject is the harness's `wait`; the overseer's tick-wide skip goes with its ser
 by the tick it wakes, as a tick's own read raises it (M36's question about one failed run stays M36's). Chosen
 conservatively, for the operator to change: every early tick is held by `loop.min_gap_minutes`, as every wake is; a tick
 that runs no overseer leaves idle pacing's count as it was; the operator's tick-now runs no overseer with nothing
-listed; and the fallback gate keeps `loop.idle_max_minutes` as its backstop. Open for the operator: whether a `tracker`
-source is required, M37's question, which this needs settled (recommended: required, before the build), and whether
-`runtime.allow_bash`, the overseer's alone, goes with its MCP servers (recommended: yes, and the key with it).
+listed; and the fallback gate keeps `loop.idle_max_minutes` as its backstop. Started 2026-10-23 at the operator's word,
+ahead of S27's overnight run, on M38's hold of the overseer's attention items (M38, 2026-10-23). Built (2026-10-23): the
+first bullet. After the harness's decisions and the state block, a tick whose block leaves the overseer nothing (no
+ticket listed or found by a query the harness recorded, no due chore with a `when`, no query owed, and no review to
+start: the review query, an operator's request, or a revision) runs no overseer: it still runs steps 1 to 3 and the disk
+check, skips the `canopy` check, owes no duty, makes the harness's dispatches, and closes `ok` with a summary saying so
+and the attention list as it stands, the overseer's items held through it (`loop/tick.py`). `ticks.overseer_ran`
+(migration 0090) records whether it ran, 0 too for a tick halted before it; `canopy spend`, its `--json`, and the spend
+page count a tick without it at nothing, never among the runs that reported no cost, and split each group and each cause
+in `woken_by` by how many ran none; `canopy health` names such a tick `no overseer`. Held to the conservative choices
+above: every early tick by `loop.min_gap_minutes`; an `ok` tick that ran no overseer leaves idle pacing's count as it
+was (`pacing.count`), a halted one resetting it as before; and the operator's tick-now runs no overseer with nothing
+listed. Chosen conservatively, for the operator to change: a query due that no source read fresh, and every review the
+overseer starts, still leave it something, so a workspace with no `tracker` source and the query due every tick, or with
+`review.query` set, ticks with the overseer as before. Built (2026-10-24): the second bullet, and the fourth with it.
+After a poll that read every source whole, the loop reads what a tick would record and list, recording nothing
+(`loop/outlook.py`): the harness's decisions and dispatches to come, each ticket the state block would list with the
+rows of §7 on it and its units, the comments and review items past their cursors it would show, each due chore, and the
+review query's PRs. It ends the wait when that holds a fact the latest tick did not, each named by what it is, never by
+its text, and the tick it wakes records `poll` in `woken_by`, held by `loop.min_gap_minutes`. A poll that read less than
+it was asked ends the wait once, and the tick raises `connector_failed` as any tick does; the polls after it end none
+until one reads every source whole, which ends it again. Chosen conservatively, for the operator to change: the latest
+tick is read as it ended, not as its block was rendered, so what it started, such as a run the harness then waits on,
+wakes nothing; only what is added wakes, so a ticket marked done or a comment a cursor passed does not, nor an item past
+a subject's bound until the block shows it; and a workspace with no source wakes on no poll. A run ending is seen by the
+next whole poll, since the ticket the harness waited on is then listed, so with idle pacing off it now ends the wait
+within a poll too. Settled by the operator (2026-10-28): a `tracker` source is required. Built (2026-10-28): the fifth
+bullet's tracker half, where a `tracker` source runs, ahead of config requiring one. A public ticket whose own
+observation, or a blocker's, the source left stale or never made is the harness's `wait`, naming what is old, its phase
+left as it was, so it is never listed to the overseer (`loop/harness.py`); a query it did not read fresh does not run
+that tick and stays due, so no tick owes `canopy queried`, and `canopy queried` and a `tracker_unsupported` skip are
+refused; the overseer's definition denies the tracker's server whole, and GitHub's issue reads, and carries no
+tracker skill, its skill tool denied (`runtime/opencode/definitions.py`). A workspace with no `tracker` source keeps
+the overseer's live reads until config requires one. Chosen conservatively, for the operator to change: a ticket a
+query found but the source has not read yet waits a poll for that read; with no tracker server named, by
+`tracker.mcp_server` or a provider canopy knows, only GitHub's issue reads are denied. Left: config requiring
+a `tracker` source, with the tests' workspaces given the fake one; the GitHub half (the `vcs` source reading the
+review query's and requests' PRs into the block, a stale unit the harness's `wait`, the GitHub server denied, and
+`mcp_unavailable` gone); the third bullet; and the design folded into the sections it names.
+Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended:
+yes, and that entry with it), the fifth bullet's.

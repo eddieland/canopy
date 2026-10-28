@@ -11,11 +11,14 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/componen
 import { ListRow } from '@/components/rows'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, RunDot } from '@/components/status'
+import { TicketBoard } from '@/components/ticket-board'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketState } from '@/components/ticket-state'
 import { TicketTitle } from '@/components/ticket-title'
 import { Tip } from '@/components/tip'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { phaseMeaning } from '@/lib/meanings'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 import {
     TICKET_QUERY_MAX,
@@ -28,27 +31,33 @@ import {
 import type { TicketShow } from '@/lib/ticket-filter'
 import { cn } from '@/lib/utils'
 
+/** How the page lays the tickets out: rows in a list, the default, or a board of a column per stage. */
+const VIEWS = ['list', 'board'] as const
+
 interface TicketsSearch {
     show?: TicketShow | undefined
     q?: string | undefined
+    view?: 'board' | undefined
 }
 
 /**
  * Every ticket canopy has worked or been asked to, most recent activity first, and a form to start one. `?show=` keeps
  * the tickets standing there (open, working, waiting on you, blocked, done), and `?q=` those whose key or title holds
- * every word.
+ * every word. `?view=board` lays them out as a board, a column per stage (`TicketBoard`), under the same filters.
  */
 export const Route = createFileRoute('/tickets/')({
     // Typed search params, as the runs page's: every key returned, undefined when the page does not offer it.
     validateSearch: (search: Record<string, unknown>): TicketsSearch => ({
         show: ticketShowOf(search['show']),
         q: ticketQueryOf(search['q']),
+        view: search['view'] === 'board' ? 'board' : undefined,
     }),
     component: TicketsPage,
 })
 
 function TicketsPage() {
-    const { show, q } = Route.useSearch()
+    const { show, q, view } = Route.useSearch()
+    const navigate = Route.useNavigate()
     const { data } = useQuery(ticketsQuery)
     const shown = data?.filter((ticket) => ticketShown(ticket, show, q))
     const filtered = show !== undefined || q !== undefined
@@ -65,6 +74,26 @@ function TicketsPage() {
             <Panel>
                 <PanelHeader label="Tickets">
                     <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                        <ToggleGroup
+                            type="single"
+                            value={view ?? 'list'}
+                            aria-label="Lay out as"
+                            onValueChange={(value) => {
+                                // Pressing the view shown turns it off: keep it. The list, the default, has no search.
+                                const picked = VIEWS.find((v) => v === value)
+                                if (picked !== undefined) {
+                                    void navigate({
+                                        search: (prev) => ({ ...prev, view: picked === 'board' ? 'board' : undefined }),
+                                    })
+                                }
+                            }}
+                        >
+                            {VIEWS.map((v) => (
+                                <ToggleGroupItem key={v} value={v}>
+                                    {v}
+                                </ToggleGroupItem>
+                            ))}
+                        </ToggleGroup>
                         <nav aria-label="Filter by where it stands" className="flex flex-wrap items-center gap-1">
                             <FilterLink show={undefined}>all</FilterLink>
                             {TICKET_SHOWS.map((s) => (
@@ -90,6 +119,8 @@ function TicketsPage() {
                     </Empty>
                 ) : shown.length === 0 ? (
                     <Empty size="panel">{emptyText(show, q)}</Empty>
+                ) : view === 'board' ? (
+                    <TicketBoard tickets={ordered('tickets', order, shown)} />
                 ) : (
                     <ul className="divide-y" data-testid="tickets">
                         {ordered('tickets', order, shown).map((ticket) => (
@@ -163,7 +194,7 @@ function Row({ ticket }: { ticket: TicketSummary }) {
             <TicketState ticket={ticket} />
             <TicketLink ticketKey={ticket.key} className="truncate" />
             {/* Cut to fit, the whole in its tip in the CLI's spelling. */}
-            <Tip fact={phaseWord(ticket)} mono>
+            <Tip fact={phaseWord(ticket)} mono detail={phaseMeaning(ticket.phase)}>
                 <span className="truncate font-mono text-xs text-muted-foreground">{phaseLabel(ticket)}</span>
             </Tip>
             <span className="flex">

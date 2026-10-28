@@ -44,6 +44,10 @@ def test_each_key_says_its_value_its_default_and_the_file_that_set_it(
     )
     assert found["policy.plan"]["choices"] == ["off", "approve"]
     assert found["memory.ticket_notes"]["choices"] == ["off", "record", "use"]
+    assert (found["policy.planner_may_approve"]["choices"], found["policy.planner_may_approve"]["default"]) == (
+        ["off", "strict", "normal", "lenient"],
+        "off",
+    )
     # Optional, and bounded through the type it is optional of.
     assert (found["capacity.slots_per_repo"]["value"], found["capacity.slots_per_repo"]["minimum"]) == (None, 0)
 
@@ -57,6 +61,16 @@ def test_a_workspace_files_policy_value_that_does_not_tighten_is_not_what_set_it
     assert main(["config", "show", "--json"]) == 0
     [found] = [s for s in json.loads(capsys.readouterr().out)["settings"] if s["key"] == "policy.max_resume_attempts"]
     assert (found["value"], found["set_in"]) == (config.Policy().max_resume_attempts, None)
+
+
+def test_planner_may_approve_set_as_the_switch_it_was_shows_its_level(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    canopy_env.configure(canopy_env.private_file, {"policy": {"planner_may_approve": True}})
+    assert main(["config", "show", "--json"]) == 0
+    [found] = [s for s in json.loads(capsys.readouterr().out)["settings"] if s["key"] == "policy.planner_may_approve"]
+    assert (found["value"], found["default"], found["set_in"]) == ("strict", "off", "private")
 
 
 def test_text_commands_and_paths_are_left_out(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

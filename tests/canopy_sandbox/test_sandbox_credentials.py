@@ -148,8 +148,10 @@ def test_an_mcp_login_that_never_expires_takes_no_refresh() -> None:
 
 @given(theirs=st.one_of(REFRESHED, LOGIN, JSON))
 def test_whatever_a_run_writes_a_login_taken_back_is_ours_with_its_tokens_alone(theirs: object) -> None:
-    """The fields that say where a token goes and whose it is stay the operator's, and the entry stays one OpenCode
-    decodes: an OAuth login with string tokens and a whole, later expiry."""
+    """The fields that say where a token goes and whose it is stay the operator's.
+
+    The entry stays one OpenCode decodes: an OAuth login with string tokens and a whole, later expiry.
+    """
     taken = credentials.refreshed_login(OAUTH, theirs)
 
     if taken is not None:

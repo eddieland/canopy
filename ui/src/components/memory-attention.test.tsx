@@ -30,6 +30,7 @@ const ENTRY: MemoryEntry = {
     used_by: [],
     last_used_at: null,
     review_at: null,
+    pinned_at: null,
     wrong_at: null,
     wrong_run_id: null,
     promoted_from: null,
@@ -94,7 +95,7 @@ describe('ProposalsWaiting', () => {
 })
 
 describe('LessonsDue', () => {
-    it('lists the lessons whose review date has come, each with Renew', async () => {
+    it('lists the lessons whose review date has come, each with Renew and Pin', async () => {
         await renderOver(<LessonsDue />, {
             lessons: [lesson(8, '2020-01-01T00:00:00Z'), lesson(9, '2999-01-01T00:00:00Z')],
         })
@@ -105,7 +106,7 @@ describe('LessonsDue', () => {
             within(section)
                 .getAllByRole('button')
                 .map((b) => b.textContent),
-        ).toEqual(['Renew'])
+        ).toEqual(['Renew', 'Pin'])
     })
 })
 

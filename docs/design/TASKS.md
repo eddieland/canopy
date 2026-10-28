@@ -18,9 +18,10 @@ a chore (§19), which recurs, reads only, and reports findings.
 ### Submitting
 
 The operator submits a task's text, naming the repository when the workspace has more than one; `task:N` names it
-afterwards (D075). The submission is the authorization: only the operator's channels write it, refused inside a tick or
-any agent's run (TRUST_MODEL T1), and its text is the operator's instruction. A task never reaches the overseer, which
-neither sees its text nor decides whether it runs, so no tracker or PR text can start, steer, or stop one.
+afterwards (D075). The submission is the authorization: only the operator's channels write it, the CLI and the web UI
+behind the listener secret, refused inside a tick or any agent's run (TRUST_MODEL T1), and its text is the operator's
+instruction; a reply and a stop take the same channels. A task never reaches the overseer, which neither sees its
+text nor decides whether it runs, so no tracker or PR text can start, steer, or stop one.
 
 ### Starting
 
@@ -92,4 +93,3 @@ reaches only sinks that list its group).
 ### Open
 
 - A task across several repositories, in a desk (§18), when one asks for it.
-- Tasks in the web UI: submitting, replying, and reading the report.

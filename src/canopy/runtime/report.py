@@ -3,14 +3,16 @@
 The harness reads these and nothing else of a run's output. The runtime's implementation makes them from what it
 printed (`canopy.runtime.stdout`); a template that asks for no events reports text alone. What holds whatever the
 runtime is lives here, for the implementation to build on: a session id canopy prints, the sum of the model calls, and
-the bounded rollup of the tool calls, and which models served a session, as the runtime's record of it says.
+the bounded rollup of the tool calls, and which models served a session, as the runtime's record of it says, and
+which models it lists to run an agent on, and what each session the runtime keeps cost, canopy's or not.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
+from dataclasses import dataclass, field
 from typing import Annotated, Literal
 
 from pydantic import Field, StrictInt
@@ -38,7 +40,14 @@ SKILL_PREFIX = "skill:"
 #: `MAX_MODELS` count under `OTHER_MODELS`, which no runtime names a model.
 MAX_MODELS = 20
 MAX_MODEL_NAME = 200
+#: How long a runtime's version, as a session's record names it, may be: `1.19.3` and its like are far shorter.
+MAX_RUNTIME_VERSION = 40
 OTHER_MODELS = "(other models)"
+#: A message the runtime names in a session's record and on each event of a model call: the reply the call wrote, the
+#: key that joins a call in the run's log to the model the record names for it. As a session id is shaped.
+MESSAGE_ID_RE = SESSION_ID_RE
+#: How many replies' models one session's record keeps, each by its message: far more calls than a transcript shows.
+MAX_REPLIES = 10_000
 
 #: How reading a session's models ended: they were read; the runtime keeps no session of that id, which reading again
 #: would not change; or the runtime could not be asked, or said what canopy cannot read.
@@ -64,9 +73,9 @@ class ToolUse:
 class Usage:
     """What a run cost: dollars as the runtime priced them, tokens by kind, and the most one model call was sent.
 
-    `first_call` is what its first model call was sent, from the cache or not, and `first_cache_write` what that call
-    wrote to the cache. Each of the three is None for a run recorded before canopy kept it; the first call's are None
-    too for a run that made no model call.
+    `first_call` is what its first model call was sent, from the cache or not, `first_cache_write` what that call wrote
+    to the cache, and `first_cache_read` what it read from it. Each of these and the peak context is None for a run
+    recorded before canopy kept it; the first call's are None too for a run that made no model call.
     """
 
     cost_usd: float
@@ -78,6 +87,7 @@ class Usage:
     peak_context: int | None = None
     first_call: int | None = None
     first_cache_write: int | None = None
+    first_cache_read: int | None = None
 
     @property
     def new_tokens(self) -> int:
@@ -161,6 +171,85 @@ class SessionModels:
     models: Sequence[ModelUse] = ()
     #: Why it `failed`, in canopy's words, never what the runtime printed.
     error: str | None = None
+    #: The model that wrote each reply, as `models` names it, by the reply's message (`MESSAGE_ID_RE`), in order, at
+    #: most `MAX_REPLIES`; empty unless more than one model wrote the session's replies, since one names them all.
+    replies: Mapping[str, str] = field(default_factory=dict)
+    #: The runtime's version the session's record names, as `runtime_version` keeps it; None where it names none.
+    runtime_version: str | None = None
+
+
+def runtime_version(named: str | None) -> str | None:
+    """The runtime's version a session's record names, as canopy keeps it: printable, with no space, and short.
+
+    Returns:
+        It, or None for none, or one with nothing canopy keeps.
+    """
+    if named is None:
+        return None
+    kept = "".join(c for c in named if c.isprintable() and not c.isspace())[:MAX_RUNTIME_VERSION]
+    return kept or None
+
+
+#: Where a read of the runtime's sessions stopped, to start the next after: the last session's update, in
+#: milliseconds since the epoch, and its id. Sessions are read in that order, so one updated since is read again.
+type SessionCursor = tuple[int, str]
+#: How reading the runtime's sessions ended: read; the runtime has kept none yet, which reading again may change; or
+#: its record could not be read.
+type SessionsRead = Literal["found", "missing", "failed"]
+#: How many sessions one read returns at most: a page, so a long history is read a page at a time.
+MAX_SESSIONS = 500
+#: How long a session's directory may be, as the record keeps it; a longer one is cut.
+MAX_DIRECTORY = 4096
+
+
+@dataclass(frozen=True)
+class SessionSpend:
+    """What one session the runtime keeps cost, whoever ran it: canopy, the operator, or a session it ran for."""
+
+    session_id: str
+    #: The session it ran for, as a subagent; None for a session of its own.
+    parent_id: str | None
+    #: Where it ran, printable, at most `MAX_DIRECTORY` characters.
+    directory: str
+    #: When it was made and last updated, in milliseconds since the epoch.
+    created_ms: int
+    updated_ms: int
+    #: What its replies cost, in US dollars, as the runtime priced them, and their tokens by kind.
+    cost_usd: float
+    input: int
+    output: int
+    reasoning: int
+    cache_read: int
+    cache_write: int
+    #: Each model's replies and their cost, the most costly first, at most `MAX_MODELS`.
+    models: Sequence[ModelUse] = ()
+
+
+@dataclass(frozen=True)
+class SessionPage:
+    """The runtime's sessions updated after a cursor, in the order of their update, and how reading them ended."""
+
+    outcome: SessionsRead
+    #: At most `MAX_SESSIONS`, and the limit the read was given; empty unless `found`.
+    sessions: Sequence[SessionSpend] = ()
+    #: Where the next read starts: after the last session read, any skipped among them; None when none was read.
+    cursor: SessionCursor | None = None
+    #: How many sessions the read passed over as ones canopy cannot read.
+    skipped: int = 0
+    #: Why it `failed`, in canopy's words, never what the runtime wrote.
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class ModelList:
+    """The models the runtime lists to run an agent on, the list it looks a run's model up in, or why it listed none."""
+
+    #: Each model, as `provider/model`; empty when the list could not be read, and when the runtime lists none.
+    models: AbstractSet[str] = frozenset()
+    #: The variants each model lists, by model, when they were asked for; a model with none maps to an empty set.
+    variants: Mapping[str, AbstractSet[str]] = field(default_factory=dict)
+    #: Why the list could not be read, in canopy's words, never what the runtime printed; None when it was read.
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -178,12 +267,31 @@ def session_id(value: object) -> str | None:
     return value if isinstance(value, str) and SESSION_ID_RE.fullmatch(value) else None
 
 
+def model_uses(replies: Iterable[tuple[str, int, float]]) -> tuple[ModelUse, ...]:
+    """Each model's replies and their cost, from rows of a model's name, its replies, and their cost.
+
+    A name is kept printable, with no space, cut to `MAX_MODEL_NAME`, or `?` when nothing is left; past `MAX_MODELS`
+    models, a new one counts under `OTHER_MODELS`.
+
+    Returns:
+        The models, the most costly first.
+    """
+    found: dict[str, ModelUse] = {}
+    for model, count, cost in replies:
+        name = "".join(c for c in model if c.isprintable() and not c.isspace())[:MAX_MODEL_NAME] or "?"
+        if name not in found and len(found) >= MAX_MODELS:
+            name = OTHER_MODELS
+        was = found.get(name, ModelUse(name, 0, 0.0))
+        found[name] = ModelUse(name, was.replies + count, was.cost_usd + cost)
+    return tuple(sorted(found.values(), key=lambda m: (-m.cost_usd, m.model)))
+
+
 def total(calls: Sequence[Call]) -> Usage:
     """What a run's model calls cost together.
 
     Returns:
-        Their summed cost and tokens, the most one call was sent as the peak context, and what the first call was sent
-        and wrote to the cache; those two None when there was no call.
+        Their summed cost and tokens, the most one call was sent as the peak context, and what the first call was sent,
+        wrote to the cache, and read from it; those three None when there was no call.
     """
     first = calls[0] if calls else None
     return Usage(
@@ -196,6 +304,7 @@ def total(calls: Sequence[Call]) -> Usage:
         peak_context=max((c.sent for c in calls), default=0),
         first_call=first.sent if first is not None else None,
         first_cache_write=first.cache_write if first is not None else None,
+        first_cache_read=first.cache_read if first is not None else None,
     )
 
 

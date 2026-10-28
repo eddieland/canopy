@@ -9,7 +9,7 @@ from typing import Unpack
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.review_drafts import Comment
-from tests.canopy.helpers import Behavior, Called, InlineRunner, in_tick, present, reported, scripted
+from tests.canopy.helpers import Behavior, Called, InlineRunner, in_tick, present, reported, scripted, tick_starts
 from tests.conftest import GitPool, git
 
 # A PR the loop opened.
@@ -44,9 +44,9 @@ REPORT = {
     ],
 }
 #: What `REPORT`'s draft makes of its finding on a line of the diff: a comment on it.
-ON_LINE = Comment("retry.py", 1, "**blocking**: loops forever\n\nNothing ends it.", finding=1)
+ON_LINE = Comment("retry.py", 1, "loops forever\n\nNothing ends it.", finding=1)
 #: What it makes of its finding off the diff: a part of the body.
-OFF_DIFF = "**minor** at `tests/test_retry.py:3`: no tests\n\nAdd one."
+OFF_DIFF = "`tests/test_retry.py:3`\n\nno tests\n\nAdd one."
 
 
 def run_inline(
@@ -59,6 +59,7 @@ def run_inline(
     """Start a review in its own tick and do its `_review` in this process, as the detached one would."""
     with in_tick(conn, ends_ok=True):
         assert main(review(*args, sha=sha, pr=pr), runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
         run_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
         assert main(["_review", str(run_id)], runner=runner or InlineRunner()) == 0
     return run_id
@@ -76,8 +77,10 @@ def reviewer_reports(
     tools: Sequence[Called] = (),
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
-    """Until the block ends, the fake reviewer prints `report`, verbatim if it is a string, after making the calls
-    `tools` names and running `commands`, if given."""
+    """Until the block ends, the fake reviewer prints `report`, verbatim if it is a string.
+
+    It prints it after making the calls `tools` names and running `commands`, if given.
+    """
     with scripted("REVIEWER", reported(report, commands, tools), behavior):
         yield
 

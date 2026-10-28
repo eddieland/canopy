@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 from canopy.chores import history, start
+from canopy.core import agent_models, chore_runs, db, definitions, outbox, progress, run_models, run_offers
 from canopy.core import chore_result as result
-from canopy.core import chore_runs, db, definitions, outbox, progress, run_models, run_offers
 from canopy.core import chore_view as view
 from canopy.core.config import render_command
 from canopy.core.vocab import ChoreRunStatus
@@ -117,10 +117,12 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, R
     # The shipped `canopy-chore` is merged with whatever runtime config its working directory has (D044), and the
     # runtime reads project config from the directories above it too.
     here = cwd.resolve()
-    refused = project_config.refusal((here, *here.parents))
+    refused = project_config.refusal((here, *here.parents), version=ctx.config.runtime.version)
     if refused is not None:
         raise SetupError(refused)
     template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
+    # A chore with a model of its own runs the copy of the chore's agent canopy renders for it (DESIGN §19).
+    template = agent_models.chore_template(template, name, chore.model)
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     return cwd, render_command(template, prompt, snapshot, f"chore:{name}"), snapshot.name
 
@@ -165,7 +167,17 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
     # The operator's commands refuse inside canopy's own runs (DESIGN §22); its history tool reads this chore's runs
     # from this workspace's journal, wherever `cwd` is.
     env = history.run_env(ctx, f"{history.RUN_PREFIX}{run_id}")
-    with run_offers.probing(ctx.conn, "chore_runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
+    with run_offers.probing(
+        ctx.conn,
+        "chore_runs",
+        run_id,
+        ctx.runner,
+        argv,
+        version=ctx.config.runtime.version,
+        cwd=cwd,
+        env=env,
+        log=log,
+    ):
         done = ctx.runner.run(
             argv,
             cwd=cwd,
@@ -183,12 +195,13 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
                 log,
                 agent="chore",
                 fields={"chore_run_id": run_id},
+                version=ctx.config.runtime.version,
             ),
         )
     out.write(f"\n--- chore stderr ---\n{done.stderr}\n")
     out.write(f"--- chore exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
-    output = stdout.read(done.stdout)
+    output = stdout.read(done.stdout, version=ctx.config.runtime.version)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn,

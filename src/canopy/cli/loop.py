@@ -12,7 +12,6 @@ from rich.console import Console
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
-from canopy.cli.render import chore_line, named, persona_of, phase_of, prs_of, result_of, run_kind, spent
 from canopy.core import (
     chore_result,
     chore_view,
@@ -23,14 +22,28 @@ from canopy.core import (
     memory,
     notice,
     pause,
+    reports,
     review_requests,
     review_runs,
+    run_models,
     tasks,
 )
 from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
 from canopy.infra.text import one_line, printable
-from canopy.loop import attention, repeat, reread, tick
+from canopy.loop import attention, readback, repeat, reread, tick
+from canopy.loop.render import (
+    chore_line,
+    model_of,
+    named,
+    persona_of,
+    phase_of,
+    prs_of,
+    result_of,
+    run_kind,
+    served_of,
+    spent,
+)
 from canopy.notify import deliver
 from canopy.runs import drafted
 
@@ -165,7 +178,11 @@ def _print_connectors(ctx: Context) -> None:
             continue
         how = f"{s.latest.status}: {s.latest.missed}" if s.latest.missed else str(s.latest.status)
         ages = [f"oldest observation {attention.age(s.oldest)} old"] if s.oldest is not None else []
-        if s.never:
+        if s.through is not None:
+            # An artifact store's feed is read past a cursor, never whole: its one observation is how far.
+            read = f"read to its end {attention.age(s.oldest)} ago" if s.oldest is not None else "never read to its end"
+            ages = [f"feed through change {s.through}, {read}"]
+        elif s.never:
             ages.append(f"{s.never} never observed")
         stale = ", stale" if s.stale else ""
         seen = f"; {', '.join(ages)}{stale}" if ages else ""
@@ -257,7 +274,7 @@ def _print_workers(ctx: Context) -> None:
         where = ", ".join(f"{s.repo} {s.slot_path}" for s in slots[int(r["id"])])
         click.echo(
             f"  {named(r['ticket_key'], r['ticket_title'])}  {run_kind(r)}  {attention.age(r['started_at'])}  {where}"
-            f"{persona_of(r)}",
+            f"{persona_of(r)}{model_of(r)}",
         )
         # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
         if r["session_id"]:
@@ -286,8 +303,12 @@ def _doing(run: sqlite3.Row) -> str:
 
 
 def _print_recent_runs(ctx: Context) -> None:
-    """Three lines per run that ended, the last to end first: what it was and its PRs, what it said, where to look."""
+    """Three lines per run that ended, the last to end first: what it was and its PRs, what it said, where to look.
+
+    The third names its session, cost, persona, the model canopy asked for, and the models its session says served it.
+    """
     runs = db.recent_runs(ctx.conn, RECENT_RUNS)
+    served = run_models.of_runs(ctx.conn, "runs", [int(r["id"]) for r in runs])
     click.echo(f"\nRecent runs ({len(runs)}):")
     for r in runs:
         result = result_of(r)
@@ -298,7 +319,8 @@ def _print_recent_runs(ctx: Context) -> None:
         if said:
             click.echo(f"    {said}")
         session = f"session {r['session_id']}" if r["session_id"] else "no session reported"
-        click.echo(f"    {session}{spent(r)}{persona_of(r)}  log {r['log_path']}")
+        models = f"{model_of(r)}{served_of(served[int(r['id'])])}"
+        click.echo(f"    {session}{spent(r)}{persona_of(r)}{models}  log {r['log_path']}")
     if not runs:
         click.echo("  none")
 
@@ -326,34 +348,8 @@ def _print_chores(ctx: Context) -> None:
 def cmd_decisions(click_ctx: click.Context, tick_id: int | None, ticket_key: str | None) -> int:
     """Print a tick's decisions, optionally filtered by ticket. Default: the latest tick."""
     ctx = open_context(click_ctx)
-    row = db.last_tick(ctx.conn) if tick_id is None else db.get_tick(ctx.conn, tick_id)
-    if row is None:
-        if tick_id is not None:
-            raise CliError(f"no tick {tick_id}")
-        click.echo("No ticks yet.")
-        return 0
-    dry = " (dry run)" if row.dry_run else ""
-    started = f"started {row.started_at} ({attention.age(row.started_at)} ago)"
-    ran_on = f" on canopy {row.canopy_version}" if row.canopy_version else ""
-    click.echo(f"Tick {row.id}: {row.status}{dry}, {started}{ran_on}")
-    if row.summary:
-        click.echo(f"  {row.summary}")
-    if row.session_id or row.cost_usd is not None:
-        session = f"session {row.session_id}" if row.session_id else "no session reported"
-        click.echo(f"  overseer {session}{spent(row)}")
-    output = ctx.state_dir / "ticks" / f"{row.id}.log"
-    if output.exists():
-        click.echo(f"  overseer output: {output}")
-    rows = db.decisions_for_tick(ctx.conn, row.id)
-    if ticket_key is not None:
-        rows = [decision for decision in rows if decision.ticket_key == ticket_key]
-    click.echo(f"\nDecisions ({len(rows)}):")
-    keys = [attention.decided_about(d) for d in rows]
-    key_width = max((len(k) for k in keys), default=0)
-    action_width = max((len(d.action) for d in rows), default=0)
-    for key, d in zip(keys, rows, strict=True):
-        rationale = " ".join(d.rationale.split())
-        click.echo(f"  {key:<{key_width}}  {d.action:<{action_width}}  {rationale}")
-    if not rows:
-        click.echo(f"  none for ticket {ticket_key}" if ticket_key is not None else "  none")
+    try:
+        click.echo(readback.read_decisions(ctx, readback.Decisions(tick=tick_id, ticket=ticket_key)))
+    except reports.Refused as e:
+        raise CliError(str(e)) from None
     return 0

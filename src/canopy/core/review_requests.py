@@ -104,6 +104,31 @@ def personas_of(conn: sqlite3.Connection, request_id: int) -> list[str]:
     return [p.persona for p in found]
 
 
+def answered_by(conn: sqlite3.Connection, runs: Iterable[records.ReviewRun]) -> dict[int, int]:
+    """Return the request each of `runs` answers, by run id: a review in each persona of one request shares it (§31).
+
+    The journal ties a review to its request as `db.finish_run` does: a `request` review answers its PR's latest request
+    made by the time it started, since a PR has at most one open at a time. A revision of a draft answers none (§34).
+
+    Returns:
+        Each run that answers a request, mapped to the request's id; a review the loop started on its own is left out.
+    """
+    asked = [r for r in runs if r.purpose == PURPOSE and r.revises is None]
+    if not asked:
+        return {}
+    made = records.fetch_all(
+        conn,
+        records.ReviewRequest,
+        sql.select("*").from_("review_requests").where_in("pr_url", sorted({r.pr_url for r in asked})).order_by("id"),
+    )
+    found: dict[int, int] = {}
+    for run in asked:
+        before = [q.id for q in made if q.pr_url == run.pr_url and q.created_at <= run.started_at]
+        if before:
+            found[run.id] = before[-1]
+    return found
+
+
 def load_persona(config: Config, pr_url: str, name: str) -> personas.Persona:
     """Return persona `name`, one the operator chose for the review the PR's open request asks for, read now (§31).
 
@@ -278,7 +303,7 @@ def end(conn: sqlite3.Connection, pr_url: str, reason: str, *, dry_run: bool = F
             PR with no open request.
     """
     if reason not in OVERSEER_REASONS:
-        raise conversation.Refused("bad_reason", f"--reason must be one of {', '.join(OVERSEER_REASONS)}")
+        raise conversation.Refused("bad_reason", f"reason (--reason) must be one of {', '.join(OVERSEER_REASONS)}")
     with db.transaction(conn):
         found = open_request(conn, pr_url)
         if found is None:

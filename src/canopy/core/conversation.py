@@ -7,9 +7,10 @@ within its bound. Agents never write a message: `_run` records a run's report an
 (`close_run`), and nothing else a worker can call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
-without reading the tracker (D003, D072). The overseer records one other kind of message, a tracker comment it
-mirrors (`mirror`), which authorizes nothing. The last is canopy's own: a tick's note of what it did about the
-operator's messages (`note`), which no agent writes and no agent's prompt carries.
+without reading the tracker (D003, D072). A source's connector records another kind, each comment it observes on a
+ticket (`record_comment`), which authorizes nothing, but a comment on an artifact that `artifact_authority` finds is
+authority. The last is canopy's own: a tick's note of what it did about the operator's messages (`note`), which no
+agent writes and no agent's prompt carries.
 """
 
 from __future__ import annotations
@@ -18,12 +19,10 @@ import contextlib
 import hashlib
 import os
 import re
-import secrets
 import sqlite3
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from canopy.core import (
     chore_runs,
@@ -40,9 +39,9 @@ from canopy.core import (
 )
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
-from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
+from canopy.core.vocab import DismissalReason, PlanSetting, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
 from canopy.infra import lock
-from canopy.infra.text import printable
+from canopy.infra.text import printable, quoted
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -69,11 +68,14 @@ SUBMISSION_RE = re.compile(r"[A-Za-z0-9_-]{8,64}")
 #: as its instruction, such as a feedback plan's approval (DESIGN §32), never a reply. No reply's submission, a
 #: channel's id behind its channel's name or a body's hash, can start so.
 INSTRUCTION = "instruction/"
-# A mirrored tracker comment's body is cut to this, and marked truncated (DESIGN §22).
-MAX_MIRRORED = 2000
-# How many `canopy mirror` calls one tick may make: a ticket's first mirror covers its whole history, and this spreads
-# a long one over several ticks.
-MIRRORS_PER_TICK = 100
+#: A tracker comment's body is cut to this where a source records it, and marked truncated (DESIGN §22, §35).
+MAX_COMMENT = 2000
+#: The channel of a comment on an artifact a source observed (DESIGN §38), apart from a tracker comment's `tracker`.
+ARTIFACTS = "artifacts"
+#: The channel of a tracker comment a source observed, the operator's own on a private ticket included (§22, §35).
+TRACKER = "tracker"
+#: The decision each `mirror` recorded, before M37 retired the overseer's mirror of tracker comments: a copy of one,
+#: which decided nothing. Older ticks hold them.
 MIRROR_ACTION = "mirror"
 # A tracker's comment id, as a cursor id is: plain and short. An author is the tracker's account id: printable, no
 # whitespace.
@@ -97,13 +99,27 @@ PR = "pr"
 CHORE = "chore"
 RUN = "run"
 REVIEW = "review"
+# What a review's dismissal may give as its reason, as a refusal names them.
+_REASONS = ", ".join(f"`{r}`" for r in DismissalReason)
 #: A one-off task the operator submitted (DESIGN §36), `task:N`.
 TASK = "task"
 # The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review`, `stop`, and
 # `persona` (a review request and its persona, `core/review_requests.py`), and `show`; working one is PR-scoped work
-# (ROADMAP M14). `mirror` is the overseer's, not the operator's (DESIGN §22).
+# (ROADMAP M14).
 VERBS: Mapping[str, tuple[str, ...]] = {
-    TICKET: ("start", "stop", "reply", "forget", "grant", "show", "plan", "persona", MIRROR_ACTION),
+    TICKET: (
+        "start",
+        "stop",
+        "reply",
+        "forget",
+        "grant",
+        "show",
+        "plan",
+        "persona",
+        "model",
+        "attach",
+        "detach",
+    ),
     PR: ("grant", "start", "stop", "show", "persona"),
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
@@ -112,8 +128,8 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     # change, or grant its draft more revisions (§34).
     REVIEW: ("dismiss", "send", "seen", "reply", "grant"),
     # Submitted with `canopy task submit`; a reply queues its next run, and stopping one ends it, and drops it while it
-    # waits (DESIGN §36).
-    TASK: ("stop", "reply", "show"),
+    # waits (DESIGN §36). A ticket's or a task's attachments are text its runs read (§22, `core/attachments.py`).
+    TASK: ("stop", "reply", "show", "attach", "detach"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
 _PR_WORK = (
@@ -211,9 +227,9 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, grants attempts, plans, submits tasks, chooses personas, dismisses or sends "
-                "findings, marks reviews seen, edits or sends drafts, pauses, resumes, collects garbage, or reads the "
-                "commands agents start with",
+                "stops, replies, forgets, grants attempts, plans, submits tasks, attaches files, chooses personas or "
+                "models, dismisses or sends findings, marks reviews seen, edits or sends drafts, pauses, resumes, "
+                "collects garbage, or reads the commands agents start with",
             )
 
 
@@ -353,6 +369,7 @@ def reply(
     channel: str,
     submission: str | None = None,
     chores: Collection[str] = (),
+    event: Callable[[int], db.Event | None] | None = None,
 ) -> Replied:
     """Record the operator's reply to a ticket canopy knows or a task, or a note to a chore in `chores` (§19, §22, §36).
 
@@ -362,7 +379,8 @@ def reply(
     to it, answering its waiting question, if any, and it queues the task's next run. A chore's is a note its next
     runs read. A channel whose form draws a submission id passes it, and it is stored as `<channel>:<id>`; without one
     the id is derived from the subject, the message it answers, and the body. Either way the same reply sent again
-    after an uncertain result records nothing new.
+    after an uncertain result records nothing new. `event` builds, from a new message's id, the event a channel tells
+    the sinks it with (§20), recorded in the same transaction.
 
     Returns:
         The message's id, the question it answers, if any, and whether it was new. A repeated submission returns the
@@ -392,8 +410,12 @@ def reply(
     if ref.kind == CHORE and ref.id not in chores:
         raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
     with db.transaction(conn):
-        _check_subject(conn, ref)
-        return write_reply(conn, ref, text, channel=channel, submission=submission)
+        check_subject(conn, ref)
+        replied = write_reply(conn, ref, text, channel=channel, submission=submission)
+        built = event(replied.message_id) if event is not None and replied.new else None
+        if built is not None:
+            db.record_event(conn, built)
+        return replied
 
 
 def write_reply(
@@ -404,13 +426,15 @@ def write_reply(
     channel: str,
     submission: str | None,
     answers: bool = True,
+    comment: db.Comment | None = None,
 ) -> Replied:
     """Record an operator message `reply` checked, or another verb of the operator's writes. Call inside a transaction.
 
     Approving a feedback plan writes its message so, in the transaction that approves it (DESIGN §32): the caller has
     checked the operator, the subject, and the body's bound. Without `answers`, the message is the verb's instruction
     and answers no question: a question asked before it still waits on a reply (`latest_question`), and `submission`,
-    which the verb makes distinct for each message it means to write, is recorded marked so (`INSTRUCTION`).
+    which the verb makes distinct for each message it means to write, is recorded marked so (`INSTRUCTION`). With
+    `comment`, the message is the operator's own tracker comment, and names it (`record_operator_comment`).
 
     Returns:
         What `reply` returns.
@@ -433,6 +457,7 @@ def write_reply(
         body=text,
         answers=answered,
         submission=stored,
+        comment=comment,
     )
     new = message_id > before
     if not new:
@@ -442,8 +467,8 @@ def write_reply(
     return Replied(message_id=message_id, answers=answered, new=new)
 
 
-def _check_subject(conn: sqlite3.Connection, ref: Ref) -> None:
-    """Check that a reply's subject can take one: a ticket canopy knows, a task not stopped, or a chore.
+def check_subject(conn: sqlite3.Connection, ref: Ref) -> None:
+    """Check that a subject can take a reply or an attachment: a ticket canopy knows, a task not stopped, or a chore.
 
     Raises:
         Refused: (`unknown`) a ticket that was neither started nor seen by a tick, or a task canopy has no record of;
@@ -486,6 +511,7 @@ def dismiss(
     channel: str,
     chores: Mapping[str, Chore],
     undo: bool = False,
+    reason: DismissalReason | None = None,
 ) -> None:
     """Dismiss findings: a chore's, named by their ids (DESIGN §19), or a review run's, by their numbers (§21).
 
@@ -493,21 +519,37 @@ def dismiss(
     page still shows it, marked dismissed, and once an `ok` run leaves it out the dismissal is spent, so the finding is
     listed again if it comes back. A review's finding stays on the review's page, marked, and is left out of what a
     `resume` hands a worker and of the overseer's state block; on a review of a PR the loop does not own, what it made
-    of the review's draft is dropped, and taking the dismissal back restores it (DESIGN §34). Dismissing one again
-    records the time anew; `undo` takes a dismissal back. The findings are dismissed together or not at all: one
-    refused leaves every other as it was.
+    of the review's draft is dropped, and taking the dismissal back restores it (DESIGN §34). A review's finding is
+    dismissed for a `reason`, which tells the reviewer's noise from a finding that held; a chore's takes none.
+    Dismissing one again records the time and the reason anew; `undo` takes a dismissal back. The findings are
+    dismissed together or not at all: one refused leaves every other as it was.
 
     Raises:
         Refused: `unsupported` for a subject that is not a chore or a review, `unknown` for a chore not in `chores`, a
             review run that does not exist or found nothing, or a finding the subject does not have (with `undo`, one
-            not dismissed), and `bad_finding` for no findings, or an id or number no finding can have.
+            not dismissed), `bad_finding` for no findings, or an id or number no finding can have, and `bad_reason`
+            for a review's dismissal without a reason, or a reason given to a chore's dismissal or to an `undo`.
     """
     check_verb(ref, "dismiss")
     if not findings:
         raise Refused("bad_finding", "name one or more findings")
+    if reason is not None and (undo or ref.kind != REVIEW):
+        raise Refused("bad_reason", "only a review's dismissal takes a reason; taking one back takes none")
     if ref.kind == REVIEW:
-        _dismiss_review(conn, ref, findings, channel=channel, undo=undo)
-        return
+        _dismiss_review(conn, ref, findings, channel=channel, undo=undo, reason=reason)
+    else:
+        _dismiss_chore(conn, ref, findings, channel=channel, chores=chores, undo=undo)
+
+
+def _dismiss_chore(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    findings: Collection[str],
+    *,
+    channel: str,
+    chores: Mapping[str, Chore],
+    undo: bool,
+) -> None:
     if ref.id not in chores:
         raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
     if any(len(f) > MAX_ID or not FINDING_ID_RE.fullmatch(f) for f in findings):
@@ -527,7 +569,15 @@ def dismiss(
             chore_runs.set_dismissal(conn, ref.id, finding, channel=channel)
 
 
-def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str], *, channel: str, undo: bool) -> None:
+def _dismiss_review(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    findings: Collection[str],
+    *,
+    channel: str,
+    undo: bool,
+    reason: DismissalReason | None,
+) -> None:
     if not all(f.isascii() and f.isdigit() and 0 < len(f) <= 2 and int(f) > 0 for f in findings):  # noqa: PLR2004
         raise Refused("bad_finding", f"a review's finding is its number, from 1 to {review_result.MAX_FINDINGS}")
     numbers, run_id = sorted({int(f) for f in findings}), int(ref.id)
@@ -537,6 +587,8 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str
                 if not review_runs.delete_review_dismissal(conn, run_id, number):
                     raise Refused("unknown", f"{ref} has no dismissed finding {number}")
         else:
+            if reason is None:
+                raise Refused("bad_reason", f"say why: a review's finding is dismissed as {_REASONS}")
             run = review_runs.get_review_run(conn, run_id)
             if run is None:
                 raise Refused("unknown", f"there is no review run {run_id}")
@@ -545,7 +597,7 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, findings: Collection[str
             if numbers[-1] > found:
                 raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
             for number in numbers:
-                review_runs.set_review_dismissal(conn, run_id, number, channel=channel)
+                review_runs.set_review_dismissal(conn, run_id, number, reason=reason, channel=channel)
         # A review of a PR the loop does not own drafts a review on it: a dismissal drops what the finding made of the
         # draft, and taking it back restores it (DESIGN §34).
         review_drafts.dismissed(conn, run_id, numbers, undo=undo, channel=channel)
@@ -599,7 +651,9 @@ def send(
     It records an operator message on the review's ticket that names the findings by number and the run by id, and
     the ones it leaves alone. The message is the instruction, as any reply is: the next tick reads it as the operator's
     go-ahead (DESIGN §7, D089) and resumes a worker with the run's findings, which addresses the ones it names. It names
-    them and never quotes them, since a finding is the reviewer's text and the message is the operator's.
+    them and never quotes them, since a finding is the reviewer's text and the message is the operator's. A finding
+    canopy held for the operator, a rebuttal of a worker's decline or a late one, is released, so the resume hands it
+    on.
 
     Returns:
         The ticket, and the reply it recorded.
@@ -634,6 +688,8 @@ def send(
     if left:
         body += f" Leave its {_numbered(left, verb=False)} alone."
     replied = reply(conn, Ref(TICKET, key), body, channel=channel, submission=submission)
+    # A finding canopy held for the operator is theirs to send: sent, it reaches a worker (DESIGN §21).
+    review_runs.release_holds(conn, run_id, numbers, channel=channel)
     return Sent(ticket=key, replied=replied)
 
 
@@ -710,99 +766,59 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
     return Forgot(branch=ticket.branch, prs=prs)
 
 
-# The overseer's mirror of tracker comments
+# Comments a source observed
 
 
-@dataclass(frozen=True)
-class Mirrored:
-    """What `mirror` recorded: the message, whether it was new, its source, and whether its body was cut."""
-
-    message_id: int
-    new: bool
-    source: str
-    truncated: bool
-
-
-def mirror(
+def record_comment(
     conn: sqlite3.Connection,
-    config: Config,
-    ref: Ref,
+    key: str,
+    comment: db.Comment,
     *,
-    tick_id: int,
-    dry_run: bool,
-    repo: str,
-    comment_id: str,
-    author: str,
-    at: str,
+    source: str,
     body: str,
-) -> Mirrored:
-    """Record a tracker comment the overseer read in the subject's journal conversation (DESIGN §22, M19).
+    channel: str,
+) -> bool:
+    """Record a comment a source observed on ticket `key` in its conversation, once per ticket and comment id (§35).
 
-    Idempotent on the subject and comment id. A comment carrying the workers' marks (D069) is recorded with source
-    `worker`, any other with source `tracker`; either way it authorizes nothing. A live tick moves the subject's mirror
-    cursor to the comment; a dry run records the comment and moves no cursor. Records a `mirror` decision in the same
-    transaction, which is what the per-tick bound counts.
+    The source cut the body and decided whether it carries the workers' marks (D069), as it recorded the observation:
+    `source` is `worker` for one that does, else the source's own, such as `tracker`. Either way it authorizes
+    nothing here: phases, `awaiting_reply`, and the loop's wake read operator messages, and phases a comment on an
+    artifact only as `artifact_authority` decides it is authority. A comment already in the
+    conversation, such as one the overseer mirrored before M37, keeps the message it was recorded as. Call inside the
+    transaction that records the observation.
 
     Returns:
-        The message's id, whether it was new, and its source and truncation. A comment mirrored before keeps the source
-        and truncation it was recorded with.
-
-    Raises:
-        Refused: `unsupported` for a subject that is not a ticket, `bad_comment` for a malformed comment id,
-            `bad_author` for a malformed account id, `bad_time` for a time that is not ISO 8601, `bad_body` for an empty
-            body, and `mirror_limit` once the tick has mirrored its most.
+        True if it was new to the conversation.
     """
-    check_verb(ref, MIRROR_ACTION)
-    if not COMMENT_ID_RE.fullmatch(comment_id):
-        raise Refused("bad_comment", f"{comment_id[:MAX_KEY]!r} is not a comment id: {COMMENT_ID_RE.pattern}")
-    if not author or len(author) > MAX_AUTHOR or not author.isprintable() or any(c.isspace() for c in author):
-        raise Refused(
-            "bad_author",
-            f"the author is the tracker's account id, at most {MAX_AUTHOR} characters, no spaces",
-        )
-    commented_at = _comment_time(at)
-    text = body.strip()
-    if not text:
-        raise Refused("bad_body", "the comment's body is empty; mirror a comment with no text as `(no text)`")
-    truncated = len(text) > MAX_MIRRORED
-    if truncated:
-        text = text[:MAX_MIRRORED]
-    source = "worker" if worker_marked(body, config.trust.comment_prefix, config.trust.comment_suffix) else "tracker"
-    comment = db.Comment(id=comment_id, author=author, at=commented_at, truncated=truncated)
-    with db.transaction(conn):
-        if db.count_decisions(conn, tick_id, MIRROR_ACTION) >= MIRRORS_PER_TICK:
-            raise Refused(
-                "mirror_limit",
-                f"this tick mirrored {MIRRORS_PER_TICK} comments, its most; the rest wait for the next tick",
-            )
-        db.touch_ticket(conn, ref.id, repo)
-        before = db.mirrored_comment(conn, TICKET, ref.id, comment_id)
-        message_id = db.insert_message(
-            conn,
-            TICKET,
-            ref.id,
-            source=source,
-            kind="comment",
-            channel="tracker",
-            body=text,
-            comment=comment,
-        )
-        if not dry_run:
-            db.set_mirror_cursor(conn, ref.id, comment_id)
-        if before is None:
-            cut = ", truncated" if truncated else ""
-            rationale = f"comment {comment_id} by {author} at {commented_at}: message {message_id}, {source}{cut}"
-        else:
-            rationale = f"comment {comment_id}: already message {message_id}"
-        if dry_run:
-            rationale += "; dry run, mirror cursor not advanced"
-        db.record_decision(conn, tick_id, ref.id, MIRROR_ACTION, rationale)
-    return Mirrored(
-        message_id=message_id,
-        new=before is None,
-        source=before.source if before is not None else source,
-        truncated=before.truncated if before is not None else truncated,
-    )
+    if db.comment_message(conn, TICKET, key, comment.id) is not None:
+        return False
+    db.insert_message(conn, TICKET, key, source=source, kind="comment", channel=channel, body=body, comment=comment)
+    return True
+
+
+def record_operator_comment(conn: sqlite3.Connection, key: str, comment: db.Comment, text: str) -> bool:
+    """Record the operator's own comment on private ticket `key` as their message, as `canopy reply` records one (§22).
+
+    The tracker source decided, in code, that a listed account of the operator's wrote it without the workers' marks
+    (D069), as a `slack` source decides a reply is theirs. Only a comment written since the ticket's latest start
+    counts: a ticket's first read brings its whole history, and what the operator wrote before starting it was not
+    said to its workers. It answers the ticket's latest question, and names the comment, whose id is its submission,
+    so a second read records nothing new. Call inside the transaction that records the observation.
+
+    Returns:
+        True if it is the operator's message; False, for the caller to record the comment as data, on a ticket that is
+        not started, for a comment written before its start or already in the conversation, or for an empty text or
+        one past `MAX_OPERATOR`, which `reply` would refuse.
+    """
+    record = start_of(conn, key)
+    if record is None or not is_started(record) or comment.at <= record.started_at:
+        return False
+    if db.comment_message(conn, TICKET, key, comment.id) is not None:
+        return False
+    if not text or len(text) > MAX_OPERATOR:
+        return False
+    write_reply(conn, Ref(TICKET, key), text, channel=TRACKER, submission=comment.id, comment=comment)
+    return True
 
 
 def worker_marked(body: str, prefix: str, suffix: str) -> bool:
@@ -819,27 +835,6 @@ def worker_marked(body: str, prefix: str, suffix: str) -> bool:
     if prefix and not text.startswith(prefix):
         return False
     return not suffix or (text.endswith(suffix) and not text.splitlines()[-1].lstrip().startswith(">"))
-
-
-def body_delimiter() -> str:
-    """Return a heredoc delimiter for this tick's `canopy mirror` bodies that no comment's author can predict.
-
-    The overseer passes a comment's body on stdin through a quoted heredoc, which bash never expands. A body holding the
-    delimiter on a line of its own would end the heredoc early and run the rest as commands; a fresh random delimiter
-    each tick means no comment can be written to do that.
-    """
-    return f"CANOPY_BODY_{secrets.token_hex(8)}"
-
-
-def _comment_time(text: str) -> str:
-    try:
-        moment = datetime.fromisoformat(text) if len(text) <= MAX_TIME else None
-    except ValueError:
-        moment = None
-    if moment is None:
-        raise Refused("bad_time", f"{text[:MAX_TIME]!r} is not an ISO 8601 time")
-    # A time with no offset is the tracker's UTC.
-    return db.format_time(moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC))
 
 
 # What the harness reads
@@ -976,10 +971,27 @@ class PrivateSection(TypedDict):
 
 
 class OperatorSection(TypedDict):
-    """A public ticket's `operator` key in the overseer's state block (DESIGN §7, D089)."""
+    """A public ticket's `operator` key in the overseer's state block (DESIGN §7, D089).
+
+    `artifact_comments` only when it has some: the comments on its artifacts that are authority (DESIGN §38).
+    """
 
     message_cursor: int | None
     new_operator_messages: list[OperatorMessage]
+    artifact_comments: NotRequired[list[ArtifactComment]]
+
+
+class ArtifactComment(TypedDict):
+    """A comment on an artifact that is authority, as the overseer's state block carries it (DESIGN §38).
+
+    `id` is its message's, which a `message` cursor names; `comment` the store's comment, as the message names it.
+    """
+
+    id: int
+    at: str
+    author: str | None
+    comment: str | None
+    body: str
 
 
 def state_section(conn: sqlite3.Connection, ticket: records.Ticket) -> PrivateSection | None:
@@ -1008,12 +1020,18 @@ def state_section(conn: sqlite3.Connection, ticket: records.Ticket) -> PrivateSe
     }
 
 
-def operator_section(conn: sqlite3.Connection, ticket: records.Ticket) -> OperatorSection | None:
+def operator_section(
+    conn: sqlite3.Connection,
+    ticket: records.Ticket,
+    *,
+    authorized: Sequence[records.Message],
+) -> OperatorSection | None:
     """Return a public ticket's operator messages for the overseer's state block, or None when it has no new ones.
 
-    They are the operator's replies (DESIGN §22) newer than the ticket's message cursor, and after any forget. The
-    overseer reads them as instructions, as it reads an authorized reply on the ticket (DESIGN §7). A private ticket's
-    are in its own section (`state_section`).
+    They are the operator's replies (DESIGN §22) newer than the ticket's message cursor, and after any forget, and of
+    `authorized`, the messages of the ticket's comments on artifacts that are authority (`artifact_authority`), those
+    newer than the cursor (§38). The overseer reads both as instructions, as it reads an authorized reply on the
+    ticket (DESIGN §7). A private ticket's are in its own section (`state_section`).
     """
     key = ticket.key
     if start_of(conn, key) is not None:
@@ -1021,12 +1039,18 @@ def operator_section(conn: sqlite3.Connection, ticket: records.Ticket) -> Operat
     cursor = ticket.last_message_id or 0
     forgotten = ticket.forgotten_message_id or 0
     messages = operator_messages_after(conn, key, max(cursor, forgotten))
-    if not messages:
+    comments = [m for m in authorized if m.id > max(cursor, forgotten)]
+    if not messages and not comments:
         return None
-    return {
+    found: OperatorSection = {
         "message_cursor": cursor or None,
         "new_operator_messages": [_operator_message(m) for m in messages],
     }
+    if comments:
+        found["artifact_comments"] = [
+            {"id": m.id, "at": m.at, "author": m.author, "comment": m.comment_id, "body": m.body} for m in comments
+        ]
+    return found
 
 
 def _operator_message(row: records.Message) -> OperatorMessage:
@@ -1042,29 +1066,39 @@ def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:
     return bool(operator_messages_after(conn, key, db.forgotten_message_id(conn, key)))
 
 
-def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str | None:
+def prompt_operator_messages(
+    conn: sqlite3.Connection,
+    key: str,
+    *,
+    authorized: Sequence[records.Message],
+) -> str | None:
     """Return a public worker's `{{OPERATOR_MESSAGES}}`: the operator's latest replies, oldest first, bounded.
 
-    A public ticket's worker hears the operator here rather than on the ticket (DESIGN §22, D089). The questions
-    workers reported come with them, so a reply to message N names something the worker can read (D093); the rest of
-    the conversation is on the tracker. Messages from before the operator forgot the ticket's work are left out.
+    A public ticket's worker hears the operator here rather than on the ticket (DESIGN §22, D089), and, of
+    `authorized`, the comments on the ticket's artifacts that are authority (`artifact_authority`, §38), each marked
+    so. The questions workers reported come with them, so a reply to message N names something the worker can read
+    (D093); the rest of the conversation is on the tracker. Messages from before the operator forgot the ticket's work
+    are left out.
 
     Returns:
         The messages; None, which leaves the prompt's section out, when there are none.
     """
-    if not has_operator_messages(conn, key):
+    forgotten = db.forgotten_message_id(conn, key)
+    comments = {m.id: m for m in authorized if m.id > forgotten}
+    if not has_operator_messages(conn, key) and not comments:
         return None
     rows = records.fetch_all(
         conn,
         records.Message,
         sql.select("*")
         .from_("messages")
-        .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, db.forgotten_message_id(conn, key))
+        .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, forgotten)
         .where("source = 'operator' OR kind = 'question'")
         .order_by("id DESC")
         .limit(PROMPT_MESSAGES),
     )
-    return _bounded([_prompt_message(m) for m in reversed(rows)])
+    latest = sorted({**{m.id: m for m in rows}, **comments}.values(), key=lambda m: m.id)[-PROMPT_MESSAGES:]
+    return _bounded([_prompt_message(m, authority=m.id in comments) for m in latest])
 
 
 def prompt_conversation(conn: sqlite3.Connection, key: str) -> str | None:
@@ -1108,7 +1142,7 @@ def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str | None:
         ended = f" at {run['ended_at']}" if run["ended_at"] else ""
         lines = [f"Run {run['id']}, `{run['kind']}`, ended `{run['status']}`{ended}."]
         for m in db.run_messages(conn, int(run["id"])):
-            lines += [f"Its {m.kind}:", _quoted(m.body)]
+            lines += [f"Its {m.kind}:", quoted(m.body)]
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks) or None
 
@@ -1166,22 +1200,20 @@ def _bounded(blocks: Sequence[str]) -> str | None:
     return "\n\n".join([*note, *kept])
 
 
-def _prompt_message(m: records.Message) -> str:
+def _prompt_message(m: records.Message, *, authority: bool = False) -> str:
     if m.source == "operator":
         what = "the operator's reply" + (f" to message {m.answers}" if m.answers else "")
     elif m.comment_id is not None:
-        # A tracker comment the overseer mirrored: data, whoever wrote it (DESIGN §22).
+        # A tracker or artifact comment a source observed, or the overseer mirrored before M37: data, whoever wrote it
+        # (§22, §38), but a comment on an artifact that `artifact_authority` found authority.
         whose = "an earlier worker's" if m.source == "worker" else f"account {m.author}'s"
-        what = f"{whose} tracker comment {m.comment_id}, data"
+        where = "artifact" if m.channel == ARTIFACTS else "tracker"
+        said = "an instruction, from an author the operator lists" if authority else "data"
+        what = f"{whose} {where} comment {m.comment_id}, {said}"
     else:
         run = m.run_id or m.task_run_id
         what = f"an earlier worker's {m.kind}" + (f", run {run}" if run else "")
-    return f"Message {m.id}, {what}, at {m.at}:\n{_quoted(m.body)}"
-
-
-def _quoted(text: str) -> str:
-    # A message's body as a quote, one `> ` line per line, without control characters.
-    return "\n".join(f"> {line}" for line in printable(text).splitlines() or [""])
+    return f"Message {m.id}, {what}, at {m.at}:\n{quoted(m.body)}"
 
 
 # A tick's note

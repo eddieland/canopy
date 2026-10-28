@@ -1,9 +1,21 @@
 // What a detail page's description says: its subject's state, never what every page of its kind shows, which is the
 // title's help (ui/DESIGN.md, the detail skeleton). Each is the facts known, joined as one line: `done · implement`.
 
-import type { ChoreRun, Limit, PullRequest, ReviewSummary, Run, Tick, TicketPlans, TicketSummary } from '@/api/types'
+import type {
+    ChoreRun,
+    Limit,
+    PullRequest,
+    ReviewDraft,
+    ReviewSummary,
+    Run,
+    TaskRun,
+    Tick,
+    TicketPlans,
+    TicketSummary,
+} from '@/api/types'
 import { stuck } from '@/lib/limits'
 import { planWaits } from '@/lib/plan-state'
+import { pullRequestLabel } from '@/lib/pull-request-label'
 import { reviewRef, runRef } from '@/lib/refs'
 import { verdictText } from '@/lib/reviews'
 import { NO_TICKET, readable, runKind } from '@/lib/words'
@@ -22,6 +34,33 @@ export function runDescription(run: Pick<Run, 'status' | 'kind' | 'reasons'>): s
  */
 export function reviewDescription(review: Pick<ReviewSummary, 'status'>): string {
     return readable(review.status)
+}
+
+/**
+ * A review's page with a draft: whose review it is, `Your review of acme/api#14 by carol`, or of the PR alone while
+ * canopy has not read who opened it. That page is the draft's record, so its title leads with the draft.
+ */
+export function reviewDraftTitle(prUrl: string, draft: Pick<ReviewDraft, 'pr_author'>): string {
+    const pr = pullRequestLabel(prUrl)
+    return draft.pr_author === null ? `Your review of ${pr}` : `Your review of ${pr} by ${draft.pr_author}`
+}
+
+// What each status of a draft means for the operator, after its chip in the page's description.
+const DRAFT_STATE: Record<ReviewDraft['status'], string> = {
+    waiting: 'posts nothing until you publish it',
+    publishing: 'posting on GitHub now',
+    unconfirmed: "may have posted: canopy's next read of the PR settles it",
+    staged: 'pending on GitHub, for you to submit there',
+    published: 'posted on GitHub',
+    discarded: 'you chose not to post it',
+}
+
+/**
+ * A review's page with a draft: the draft's version and what its status means, as `version 3 · posts nothing until
+ * you publish it`. The page puts the status's chip ahead of it; the review's own status heads the reviewer's fold.
+ */
+export function reviewDraftDescription(draft: Pick<ReviewDraft, 'status' | 'version'>): string {
+    return line(`version ${draft.version}`, DRAFT_STATE[draft.status])
 }
 
 /**
@@ -48,6 +87,11 @@ export function choreRunDescription(run: Pick<ChoreRun, 'status' | 'more_finding
     return line(readable(run.status), ok ? counted(findings, 'finding') : null, more)
 }
 
+/** A task run's page: how it ended, alone. Its task is the trail's, and what it filed its Run panel's fields. */
+export function taskRunDescription(run: Pick<TaskRun, 'status'>): string {
+    return readable(run.status)
+}
+
 /** A tick's page: how it ended, how many decisions it recorded, and what woke the loop for it. */
 export function tickDescription(tick: Pick<Tick, 'status' | 'woken_by'>, decisions: number): string {
     const woken = tick.woken_by === null ? null : `woken by ${tick.woken_by}`
@@ -61,12 +105,13 @@ export function tickDescription(tick: Pick<Tick, 'status' | 'woken_by'>, decisio
  * these; the page follows it with when the ticket was last active.
  */
 export function ticketDescription(
-    ticket: Pick<TicketSummary, 'running_run' | 'awaiting'>,
+    ticket: Pick<TicketSummary, 'running_run' | 'awaiting' | 'feedback_plan'>,
     plans: TicketPlans | undefined,
 ): string {
     const running = ticket.running_run === null ? null : `${runRef(ticket.running_run)} running`
     const waiting = ticket.awaiting === null ? null : 'waiting on you'
-    return line(running, waiting, plans === undefined ? null : planWords(plans))
+    const feedback = ticket.feedback_plan === null ? null : 'feedback plan waiting on you'
+    return line(running, waiting, plans === undefined ? null : planWords(plans), feedback)
 }
 
 /** How many of a noun, in words: `no reviews`, `1 review`, `3 reviews`. */

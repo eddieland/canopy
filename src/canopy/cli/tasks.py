@@ -8,23 +8,22 @@ starts a run, before the overseer, which never sees it; `canopy _task` (`cli/run
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import click
 
+from canopy.cli import attachments as attachments_cli
 from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.params import REPO
-from canopy.cli.render import result_of, spent
-from canopy.core import contract, conversation, plans, task_tickets, tasks
+from canopy.core import conversation, plans, task_tickets, tasks
 from canopy.core.items import age
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
 from canopy.infra.text import one_line, printable
+from canopy.loop.render import result_of, spent
 from canopy.runs import task_run
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from canopy.core import records
     from canopy.core.context import Context
 
@@ -33,8 +32,6 @@ CLI = "cli"
 LIST_TEXT = 80
 #: How much of a commit `canopy show task:N` shows.
 SHORT_SHA = 12
-#: The longest PR URL `canopy show task:N` prints.
-MAX_PR_URL = 500
 
 
 @click.group("task", cls=Group)
@@ -90,26 +87,11 @@ def cmd_task_list(click_ctx: click.Context) -> int:
     for task in found:
         text = one_line(task.text)
         cut = f"{text[:LIST_TEXT]}..." if len(text) > LIST_TEXT else text
-        said = standing(task, latest.get(task.id), queued=task.id in waiting)
+        said = tasks.standing(task, latest.get(task.id), queued=task.id in waiting)
         click.echo(f"task:{task.id}  {said}  {task.repo}  {age(task.submitted_at)}  {cut}")
     if not found:
         click.echo("No tasks yet: `canopy task submit TEXT` hands canopy one.")
     return 0
-
-
-def standing(task: records.Task, latest: records.TaskRun | None, *, queued: bool) -> str:
-    """Where a task stands, as a line shows it: `stopped`, `queued` for a run a tick will start, or its latest run's.
-
-    `queued` says whether a tick would start a run of it now: its first, or the one a reply asked for.
-
-    Returns:
-        The word.
-    """
-    if task.stopped_at is not None and (latest is None or latest.status is not RunStatus.RUNNING):
-        return "stopped"
-    if latest is None or queued:
-        return "queued"
-    return str(latest.status)
 
 
 def show(ctx: Context, task_id: int) -> None:
@@ -125,10 +107,8 @@ def show(ctx: Context, task_id: int) -> None:
         raise CliError(f"canopy has no task:{task_id}")
     runs = tasks.runs_of(ctx.conn, task_id)
     waiting = any(t.id == task_id for t in tasks.queued(ctx.conn))
-    click.echo(
-        f"task:{task.id}: {standing(task, runs[-1] if runs else None, queued=waiting)}, in {task.repo}, submitted "
-        f"{age(task.submitted_at)} ago via {task.channel}",
-    )
+    said = tasks.standing(task, runs[-1] if runs else None, queued=waiting)
+    click.echo(f"task:{task.id}: {said}, in {task.repo}, submitted {age(task.submitted_at)} ago via {task.channel}")
     if task.stopped_at is not None:
         click.echo(f"  stopped {age(task.stopped_at)} ago")
     click.echo(f"  project {task.project}" if task.project else "  no project: it files no tickets")
@@ -142,6 +122,7 @@ def show(ctx: Context, task_id: int) -> None:
     if not runs:
         click.echo("  none yet: the next tick starts it" if task.stopped_at is None else "  none")
     _show_tickets(ctx, task)
+    attachments_cli.listed(ctx, conversation.Ref(conversation.TASK, str(task_id)))
     messages = tasks.messages_of(ctx.conn, task_id)
     if messages:
         click.echo(f"\nConversation ({len(messages)}):")
@@ -206,7 +187,7 @@ def _show_run(ctx: Context, run: records.TaskRun) -> None:
     click.echo(f"  run {run.id}  {run.status}  {when}  {run.branch}{head}{spent(run)}")
     result = result_of(run)
     # Its summary and question are messages, in the conversation below.
-    for pr in _prs(result):
+    for pr in tasks.prs(result):
         click.echo(f"    PR {pr}")
     note = one_line(str(result.get("harness") or ""))
     if note:
@@ -257,14 +238,3 @@ def _show_message(message: records.Message) -> None:
     click.echo(f"  message {message.id}, {what}, {age(message.at)} ago:")
     for line in printable(message.body).splitlines() or [""]:
         click.echo(f"    {line}")
-
-
-def _prs(result: Mapping[str, object]) -> list[str]:
-    """The PRs a task's stored result names, each a plain printable https:// URL; anything else is not printed.
-
-    Returns:
-        The URLs, in the order the result lists them.
-    """
-    prs = result.get("prs")
-    listed = cast("list[object]", prs) if isinstance(prs, list) else list[object]()
-    return [u for u in listed if isinstance(u, str) and contract.plain_url(u, MAX_PR_URL) and u.isprintable()]

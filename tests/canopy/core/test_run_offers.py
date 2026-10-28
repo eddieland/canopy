@@ -14,6 +14,7 @@ from canopy.core import run_offers
 from canopy.core.run_models import RunTable
 from canopy.infra import logs, procs
 from canopy.runtime.agents import AgentOffer, ServerOffer
+from canopy.runtime.implementation import Version
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 
 
@@ -26,7 +27,11 @@ def offered(conn: sqlite3.Connection, table: RunTable, run_id: int) -> tuple[obj
     return found.asked.agent, found.asked.error, servers, tuple(s.skill for s in found.skills)
 
 
-def tools_and_rules(conn: sqlite3.Connection, table: RunTable, run_id: int) -> tuple[object, ...]:
+def tools_and_rules(
+    conn: sqlite3.Connection,
+    table: RunTable,
+    run_id: int,
+) -> tuple[tuple[str, ...], dict[str, list[str]]]:
     """The built-in tools a run was offered, and the rules that leave it some of a server's tools, as plain values."""
     found = run_offers.of_run(conn, table, run_id)
     assert found is not None
@@ -96,7 +101,17 @@ def test_a_journal_that_refuses_the_record_leaves_the_run_its_own_outcome(
 @contextlib.contextmanager
 def probing(conn: sqlite3.Connection, runner: procs.Runner, argv: Sequence[str]) -> Iterator[None]:
     """`run_offers.probing` for run 1 of `runs`, in no directory of its own."""
-    with run_offers.probing(conn, "runs", 1, runner, argv, cwd=Path(), env={}, log=logs.for_tick(None)):
+    with run_offers.probing(
+        conn,
+        "runs",
+        1,
+        runner,
+        argv,
+        cwd=Path(),
+        env={},
+        log=logs.for_tick(None),
+        version=Version.ONE,
+    ):
         yield
 
 
@@ -112,7 +127,14 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
             {
                 "config": {"mcp": {"github": {"type": "remote"}, "sentry": {"enabled": False}}},
                 "skills": ["pdf", "tracker-jira"],
-                "agents": {"canopy-overseer": [["skill", "pdf", "deny"], ["github_*", "*", "deny"]]},
+                "agents": {
+                    "canopy-overseer": [
+                        ["skill", "pdf", "deny"],
+                        ["github_*", "*", "deny"],
+                        ["canopy_*", "*", "deny"],
+                        ["canopy_dispatch", "*", "allow"],
+                    ],
+                },
                 "tools": {"canopy-worker": {"bash": True, "edit": True, "task": False}},
             },
         ),
@@ -120,8 +142,14 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
     scenario.configures(runtime={"overseer_cmd": command("canopy-overseer"), "worker_cmd": command("canopy-worker")})
     ticked = scenario.tick(dispatches(), worker=pushes())
     # The overseer's server denied whole, the one turned off for every agent, and the skill denied by name: none of
-    # them was offered to it. The worker's rules deny none.
-    assert offered(scenario.conn, "ticks", ticked.tick.id) == ("canopy-overseer", None, (), ("tracker-jira",))
+    # them was offered to it. canopy's own, which its run alone is given, it was offered in part, as its rules allow
+    # some of its tools. The worker's rules deny none, and its run is given no server of canopy's.
+    assert offered(scenario.conn, "ticks", ticked.tick.id) == (
+        "canopy-overseer",
+        None,
+        (("canopy", "some"),),
+        ("tracker-jira",),
+    )
     [run] = ticked.runs
     assert run.status == "done", Path(run.row["log_path"]).read_text()
     assert offered(scenario.conn, "runs", run.id) == (
@@ -139,6 +167,70 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
     assert len(asked) == 2
 
 
-def command(agent: str) -> str:
-    """A command that runs `agent` through OpenCode, which the fake hands to the fake agent."""
-    return f"env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent {agent} {{prompt}}"
+# A pool the worker can push from.
+@pytest.mark.usefixtures("git_pool")
+def test_each_run_records_what_opencode_2_offered_its_agent(
+    scenario: Scenario,
+    opencode_state: Path,
+    agent_log: Path,
+) -> None:
+    opencode_state.write_text(
+        json.dumps(
+            {
+                # GitHub's outside code mode, as a server an agent needs is set, since every agent is denied it.
+                "config": {"mcp": {"github": {"type": "remote", "codemode": False}, "sentry": {"enabled": False}}},
+                "skills": ["pdf", "tracker-jira"],
+                "agents": {
+                    "canopy-overseer": [
+                        ["skill", "pdf", "deny"],
+                        ["github_*", "*", "deny"],
+                        ["canopy_*", "*", "deny"],
+                        ["canopy_dispatch", "*", "allow"],
+                    ],
+                },
+            },
+        ),
+    )
+    scenario.configures(
+        runtime={
+            "version": 2,
+            "overseer_cmd": command("canopy-overseer", standalone=True),
+            "worker_cmd": command("canopy-worker", standalone=True),
+        },
+    )
+    ticked = scenario.tick(dispatches(), worker=pushes())
+    assert offered(scenario.conn, "ticks", ticked.tick.id) == (
+        "canopy-overseer",
+        None,
+        (("canopy", "some"),),
+        ("tracker-jira",),
+    )
+    [run] = ticked.runs
+    assert run.status == "done", Path(run.row["log_path"]).read_text()
+    assert offered(scenario.conn, "runs", run.id) == (
+        "canopy-worker",
+        None,
+        (("github", "all"),),
+        ("pdf", "tracker-jira"),
+    )
+    tools, rules = tools_and_rules(scenario.conn, "runs", run.id)
+    assert {"edit", "shell"} <= set(tools)
+    assert rules == {}
+    # Each asked where its agent ran, by a server started there: the overseer in the repository, the worker in its
+    # worktree.
+    log = [json.loads(line) for line in opencode_state.with_name("opencode.jsonl").read_text().splitlines()]
+    asked = {entry["cwd"] for entry in log if entry["argv"][:1] == ["serve"]}
+    ran = [json.loads(line) for line in agent_log.read_text().splitlines()]
+    assert asked == {entry["cwd"] for entry in ran}
+    assert len(asked) == 2
+    # Each started on a private server of its own.
+    assert all("--standalone" in entry["argv"] for entry in ran)
+
+
+def command(agent: str, *, standalone: bool = False) -> str:
+    """A command that runs `agent` through OpenCode, on a private server of its own under OpenCode 2 when `standalone`.
+
+    The fake hands it to the fake agent.
+    """
+    server = " --standalone" if standalone else ""
+    return f"env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run{server} --agent {agent} {{prompt}}"

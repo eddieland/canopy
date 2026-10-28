@@ -6,10 +6,14 @@ and last an `end` line naming the subjects it read whole: tickets, PRs, and repo
 bounded here before anything is written. A line of a kind its source does not own, or of no kind canopy reads, is
 skipped; one that does not validate is refused and counted, and its subject is not whole this run, whatever `end` says.
 A subject read whole has its rows replaced in one transaction; one not read whole keeps its old rows and their age, so
-a cut-off read never looks like a check, review, or branch gone. A run with no `end` line records nothing.
+a cut-off read never looks like a check, review, or branch gone. Each completed check run is also kept by its run id
+across reads, so a re-run at the same head is told from the run it repeats (§35). Each comment, review, review
+comment, and completed check run takes its journal number when first observed, and keeps it across reads
+(`item_numbers`): what a cursor passes. A run with no `end` line records nothing.
 
 An observation is a dated copy of what a connector saw, never authority (DESIGN §22): in M36 it decides which thread a
-draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do.
+draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do. Each comment is also
+recorded in its ticket's conversation when first observed, as data (§35).
 """
 
 from __future__ import annotations
@@ -21,17 +25,18 @@ from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Literal, assert_never, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from canopy.core import contract, conversation, db, sql
+from canopy.core import contract, conversation, db, item_numbers, sql
 from canopy.core.config import REPO_NAME_RE, notify_words
 from canopy.core.vocab import (
     CheckConclusion,
     CheckStatus,
     ConnectorRunStatus,
     MergeState,
+    NumberedItem,
     PrState,
     ReviewItem,
     ReviewState,
@@ -41,6 +46,9 @@ from canopy.core.vocab import (
 from canopy.infra import logs, procs
 
 if TYPE_CHECKING:
+    from collections.abc import Set as AbstractSet
+
+    from canopy.core import records
     from canopy.core.config import Config, Source
 
 #: How much of a connector's stderr a run keeps.
@@ -49,7 +57,7 @@ MAX_STDERR = 300
 MAX_OUTPUT = 16 * 1024 * 1024
 #: A line longer than this is refused unread.
 MAX_LINE = 1024 * 1024
-#: A title is cut to this, on one line; a body to `conversation.MAX_MIRRORED`, as a mirrored comment's is.
+#: A title is cut to this, on one line; a body, as a comment's is, to `conversation.MAX_COMMENT`.
 MAX_TITLE = 200
 #: More labels or blockers than this refuse the line: a list cut short would read as one removed.
 MAX_LIST = 100
@@ -58,10 +66,30 @@ MAX_NAME = 200
 MAX_PATH = 1000
 MAX_URL = 2000
 #: The kinds each kind of source owns: a line of another kind is skipped, so one source never writes another's facts.
+#: An `artifacts` source owns none of these: its feed is read past a cursor, in `artifact_feed`, never whole. Nor
+#: does a `slack` source: what it reads is the operator's messages, recorded in `slack_replies`.
 OWNS: Mapping[SourceKind, frozenset[str]] = {
     SourceKind.TRACKER: frozenset({"ticket", "comment"}),
     SourceKind.VCS: frozenset({"pr", "review", "check", "branch"}),
+    SourceKind.ARTIFACTS: frozenset(),
+    SourceKind.SLACK: frozenset(),
 }
+#: How a completed CI context ends red: what holds a unit at `ci_red`, and what makes a failed check a feedback plan's
+#: item (DESIGN §32).
+FAILED: AbstractSet[CheckConclusion] = frozenset(
+    {
+        CheckConclusion.FAILURE,
+        CheckConclusion.ERROR,
+        CheckConclusion.CANCELLED,
+        CheckConclusion.TIMED_OUT,
+        CheckConclusion.ACTION_REQUIRED,
+        CheckConclusion.STARTUP_FAILURE,
+    },
+)
+#: How a completed CI context passes. One `stale` neither passes nor fails: GitHub left it for a newer run.
+PASSED: AbstractSet[CheckConclusion] = frozenset(
+    {CheckConclusion.SUCCESS, CheckConclusion.NEUTRAL, CheckConclusion.SKIPPED},
+)
 
 
 @dataclass(frozen=True)
@@ -90,6 +118,12 @@ class Request:
     repositories: Sequence[Repository] | None = None
     branch_prefix: str | None = None
     review_query: str | None = None
+    #: For an `artifacts` source, the feed's cursor: the `through` its last run's `end` line named, 0 at first.
+    since: int | None = None
+    #: For a `slack` source, the workspace as canopy's messages to the sink name it, which files the sink's threads.
+    repo: str | None = None
+    #: For a `slack` source, its `operators`: the only Slack user ids whose replies the connector is asked to print.
+    operators: Sequence[str] | None = None
 
     def to_json(self) -> dict[str, object]:
         """The request as the connector reads it on stdin.
@@ -113,6 +147,12 @@ class Request:
             found["branch_prefix"] = self.branch_prefix
         if self.review_query is not None:
             found["review_query"] = self.review_query
+        if self.since is not None:
+            found["since"] = self.since
+        if self.repo is not None:
+            found["repo"] = self.repo
+        if self.operators is not None:
+            found["operators"] = list(self.operators)
         return found
 
 
@@ -162,36 +202,28 @@ def observe(
     Returns:
         How the run ended.
     """
-    started = db.now()
+    ran = run(runner, source, request, log=log)
+    if isinstance(ran, Observed):
+        return ran
+    started, stderr = ran.started_at, ran.stderr
     kind = SourceKind(source.kind)
-    printed = _Printed()
-    try:
-        result = runner.run(
-            notify_words(source.cmd),
-            stdin=json.dumps(request.to_json()),
-            timeout=source.timeout_minutes * 60,
-            on_line=printed.count,
-        )
-    except _TooMuchError:
-        return _failed(log, started, f"it printed more than {MAX_OUTPUT // (1024 * 1024)} MiB")
-    except procs.ProcError as e:
-        return _failed(log, started, f"it did not start: {e}")
-    stderr = result.stderr.strip()[-MAX_STDERR:]
-    if result.timed_out:
-        return _failed(log, started, f"it did not finish in {source.timeout_minutes} minutes", stderr)
-    if len(result.stdout) > MAX_OUTPUT:
-        return _failed(log, started, f"it printed more than {MAX_OUTPUT // (1024 * 1024)} MiB", stderr)
-    read = _read(result.stdout, kind, request.branch_prefix or config.trust.branch_prefix)
+    read = _read(ran.stdout, kind, request.branch_prefix or config.trust.branch_prefix)
     if read.end is None:
-        return _failed(log, started, "it ended without its end line", stderr, read.refused)
+        return failed(log, started, "it ended without its end line", stderr, read.refused)
     named = read.whole(read.end)
     # A source reads whole only the subjects of the kinds it owns.
-    whole = (
-        Whole(tickets=named.tickets)
-        if kind is SourceKind.TRACKER
-        else Whole(prs=named.prs, repositories=named.repositories)
-    )
-    recorded = _record(conn, config, kind, read, whole)
+    match kind:
+        case SourceKind.TRACKER:
+            whole = Whole(tickets=named.tickets)
+        case SourceKind.VCS:
+            whole = Whole(prs=named.prs, repositories=named.repositories)
+        case SourceKind.ARTIFACTS | SourceKind.SLACK:
+            # A feed is read past a cursor (`artifact_feed`), and replies are messages (`slack_replies`): neither has a
+            # subject read whole.
+            whole = Whole()
+        case _:
+            assert_never(kind)
+    recorded = _record(conn, config, kind, read, whole, operators=frozenset(source.operators))
     query = list(read.end.query) if request.query is not None and read.end.query is not None else None
     review = (
         list(read.end.review_query) if request.review_query is not None and read.end.review_query is not None else None
@@ -211,6 +243,68 @@ def observe(
         stderr=stderr,
         query_result=query,
         review_query_result=review,
+    )
+
+
+@dataclass(frozen=True)
+class Printed:
+    """What a connector printed, having run to its end within its timeout and `MAX_OUTPUT`."""
+
+    started_at: str
+    stdout: str
+    #: The last `MAX_STDERR` characters of its stderr.
+    stderr: str
+
+
+def run(runner: procs.Runner, source: Source, request: Request, *, log: logs.TickAdapter) -> Printed | Observed:
+    """Run `source`'s connector for `request`, the request on its stdin, under its timeout and `MAX_OUTPUT`.
+
+    Returns:
+        What it printed; or, when it did not start, timed out, or printed more than `MAX_OUTPUT`, the `failed` run,
+        which records nothing.
+    """
+    started = db.now()
+    printed = _Printed()
+    try:
+        result = runner.run(
+            notify_words(source.cmd),
+            stdin=json.dumps(request.to_json()),
+            timeout=source.timeout_minutes * 60,
+            on_line=printed.count,
+        )
+    except _TooMuchError:
+        return failed(log, started, f"it printed more than {MAX_OUTPUT // (1024 * 1024)} MiB")
+    except procs.ProcError as e:
+        return failed(log, started, f"it did not start: {e}")
+    stderr = result.stderr.strip()[-MAX_STDERR:]
+    if result.timed_out:
+        return failed(log, started, f"it did not finish in {source.timeout_minutes} minutes", stderr)
+    if len(result.stdout) > MAX_OUTPUT:
+        return failed(log, started, f"it printed more than {MAX_OUTPUT // (1024 * 1024)} MiB", stderr)
+    return Printed(started, result.stdout, stderr)
+
+
+def failed(
+    log: logs.TickAdapter,
+    started: str,
+    why: str,
+    stderr: str = "",
+    refused: Mapping[str, int] | None = None,
+) -> Observed:
+    """Log a run that records nothing.
+
+    Returns:
+        The `failed` run, its `missed` saying why, with the tail of its stderr.
+    """
+    log.warning("connector failed", extra={"reason": why})
+    missed = f"{why}: {stderr}" if stderr else why
+    return Observed(
+        ConnectorRunStatus.FAILED,
+        started,
+        db.now(),
+        refused=dict(refused or {}),
+        missed=missed,
+        stderr=stderr,
     )
 
 
@@ -263,29 +357,10 @@ class _Printed:
             raise _TooMuchError
 
 
-def _failed(
-    log: logs.TickAdapter,
-    started: str,
-    why: str,
-    stderr: str = "",
-    refused: Mapping[str, int] | None = None,
-) -> Observed:
-    log.warning("connector failed", extra={"reason": why})
-    missed = f"{why}: {stderr}" if stderr else why
-    return Observed(
-        ConnectorRunStatus.FAILED,
-        started,
-        db.now(),
-        refused=dict(refused or {}),
-        missed=missed,
-        stderr=stderr,
-    )
-
-
 # What a line carries
 
 
-def _text_of(limit: int, pattern: re.Pattern[str] | None = None) -> AfterValidator:
+def text_of(limit: int, pattern: re.Pattern[str] | None = None) -> AfterValidator:
     """Refuse a string longer than `limit`, not printable, or not matching `pattern`: a cut would change what it says.
 
     Returns:
@@ -322,6 +397,19 @@ def is_pr_url(value: str) -> bool:
     return contract.plain_url(value, conversation.MAX_PR_URL) and conversation.PR_URL_RE.fullmatch(value) is not None
 
 
+def conflicts(pr: records.ObservedPr) -> bool | None:
+    """Whether an observed PR conflicts with its base, as its host says: what holds a unit at `conflicted`.
+
+    Returns:
+        True when it conflicts, False when the host says it does not, and None while the host has not said.
+    """
+    if pr.mergeable == "conflicting" or pr.mergeable_state is MergeState.DIRTY:
+        return True
+    if pr.mergeable == "mergeable" or pr.mergeable_state not in (None, MergeState.UNKNOWN):
+        return False
+    return None
+
+
 def _pr_url(value: str) -> str:
     if not is_pr_url(value):
         raise ValueError("must be a PR's URL")
@@ -336,15 +424,16 @@ _NODE_RE = re.compile(r"[A-Za-z0-9_=-]+")
 # Plain ref components, as the branch prefix is: nothing git reads specially.
 _BRANCH_RE = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_.-]*/)*[A-Za-z0-9][A-Za-z0-9_.-]*")
 
-_Key = Annotated[str, _text_of(conversation.MAX_KEY, conversation.KEY_RE)]
-_Time = Annotated[str, AfterValidator(_time)]
+_Key = Annotated[str, text_of(conversation.MAX_KEY, conversation.KEY_RE)]
+#: An ISO 8601 time, as the journal writes one; a time with no offset is the source's UTC.
+Time = Annotated[str, AfterValidator(_time)]
 _PrUrl = Annotated[str, AfterValidator(_pr_url)]
 _Url = Annotated[str, contract.url(MAX_URL)]
-_Login = Annotated[str, _text_of(MAX_NAME, _LOGIN_RE)]
-_Sha = Annotated[str, _text_of(64, _SHA_RE)]
-_Name = Annotated[str, _text_of(MAX_NAME)]
+_Login = Annotated[str, text_of(MAX_NAME, _LOGIN_RE)]
+_Sha = Annotated[str, text_of(64, _SHA_RE)]
+_Name = Annotated[str, text_of(MAX_NAME)]
 _Title = Annotated[str, contract.one_line, contract.bounded(MAX_TITLE)]
-_Body = Annotated[str, contract.bounded(conversation.MAX_MIRRORED)]
+_Body = Annotated[str, contract.bounded(conversation.MAX_COMMENT)]
 
 
 class _Line(BaseModel):
@@ -353,7 +442,7 @@ class _Line(BaseModel):
 
 class _Label(_Line):
     name: _Name
-    added_at: _Time | None = None
+    added_at: Time | None = None
 
 
 class _Ticket(_Line):
@@ -363,7 +452,7 @@ class _Ticket(_Line):
     body: _Body = ""
     state: TicketState
     labels: Annotated[list[_Label], Field(max_length=MAX_LIST)] = []
-    updated_at: _Time | None = None
+    updated_at: Time | None = None
     blockers: Annotated[list[_Key], Field(max_length=MAX_LIST)] = []
 
     @property
@@ -374,10 +463,10 @@ class _Ticket(_Line):
 class _Comment(_Line):
     kind: Literal["comment"]
     ticket: _Key
-    id: Annotated[str, _text_of(200, conversation.COMMENT_ID_RE)]
-    author: Annotated[str, _text_of(conversation.MAX_AUTHOR, re.compile(r"\S+"))]
-    time: _Time
-    # Cut where it is recorded, and marked truncated there, as a mirrored comment is.
+    id: Annotated[str, text_of(200, conversation.COMMENT_ID_RE)]
+    author: Annotated[str, text_of(conversation.MAX_AUTHOR, re.compile(r"\S+"))]
+    time: Time
+    # Cut where it is recorded, and marked truncated there.
     body: str = ""
 
     @property
@@ -388,16 +477,17 @@ class _Comment(_Line):
 class _Pr(_Line):
     kind: Literal["pr"]
     url: _PrUrl
-    repository: Annotated[str, _text_of(MAX_NAME, _HOST_REPO_RE)]
+    repository: Annotated[str, text_of(MAX_NAME, _HOST_REPO_RE)]
     number: Annotated[int, Field(ge=1)]
     head_sha: _Sha | None = None
-    base_ref: Annotated[str, _text_of(255, _REF_RE)] | None = None
+    base_ref: Annotated[str, text_of(255, _REF_RE)] | None = None
     state: PrState | None = None
     draft: bool = False
     mergeable: Literal["mergeable", "conflicting", "unknown"] | None = None
     mergeable_state: MergeState | None = None
     author: _Login | None = None
     labels: Annotated[list[_Name], Field(max_length=MAX_LIST)] = []
+    title: _Title | None = None
 
     @property
     def of(self) -> str:
@@ -405,8 +495,8 @@ class _Pr(_Line):
 
 
 class _Thread(_Line):
-    id: Annotated[str, _text_of(MAX_NAME, _NODE_RE)]
-    path: Annotated[str, _text_of(MAX_PATH)] | None = None
+    id: Annotated[str, text_of(MAX_NAME, _NODE_RE)]
+    path: Annotated[str, text_of(MAX_PATH)] | None = None
     line: Annotated[int, Field(ge=0)] | None = None
     side: Literal["left", "right"] | None = None
     outdated: bool = False
@@ -421,7 +511,7 @@ class _Review(_Line):
     author: _Login | None = None
     bot: bool = False
     state: ReviewState | None = None
-    time: _Time | None = None
+    time: Time | None = None
     body: _Body = ""
     url: _Url | None = None
     review: Annotated[int, Field(ge=1)] | None = None
@@ -455,8 +545,8 @@ class _Check(_Line):
 
 class _Branch(_Line):
     kind: Literal["branch"]
-    repository: Annotated[str, _text_of(MAX_NAME, REPO_NAME_RE)]
-    name: Annotated[str, _text_of(255, _BRANCH_RE)]
+    repository: Annotated[str, text_of(MAX_NAME, REPO_NAME_RE)]
+    name: Annotated[str, text_of(255, _BRANCH_RE)]
     head_sha: _Sha
 
     @property
@@ -568,8 +658,18 @@ def _take(found: _Output, raw: Mapping[str, object], kind: SourceKind, prefix: s
         found.unread.add(what)
 
 
-def _record(conn: sqlite3.Connection, config: Config, kind: SourceKind, read: _Output, whole: Whole) -> dict[str, int]:
+def _record(
+    conn: sqlite3.Connection,
+    config: Config,
+    kind: SourceKind,
+    read: _Output,
+    whole: Whole,
+    *,
+    operators: AbstractSet[str],
+) -> dict[str, int]:
     """Replace what the journal holds of each subject read whole with what the run read of it, in one transaction.
+
+    `operators` are the source's: the tracker accounts whose comments on a private ticket are the operator's messages.
 
     Returns:
         The lines recorded of each kind.
@@ -592,12 +692,20 @@ def _record(conn: sqlite3.Connection, config: Config, kind: SourceKind, read: _O
         for line in read.lines:
             if line.of not in (whole.tickets | whole.prs | whole.repositories):
                 continue
-            if _insert(conn, config, line, now, known):
+            if _insert(conn, config, line, now, known, operators=operators):
                 recorded[line.kind] += 1
     return dict(recorded)
 
 
-def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: str, known: Collection[str]) -> bool:
+def _insert(
+    conn: sqlite3.Connection,
+    config: Config,
+    line: _Observation,
+    now: str,
+    known: Collection[str],
+    *,
+    operators: AbstractSet[str],
+) -> bool:
     """Record one line of a subject read whole.
 
     Returns:
@@ -623,7 +731,7 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
         case _Comment():
             if line.ticket not in known:
                 return False
-            return _record_comment(conn, config, line, now)
+            return _record_comment(conn, config, line, now, operators=operators)
         case _Pr():
             sql.execute(
                 conn,
@@ -641,11 +749,13 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
                     observed_at=now,
                     labels=json.dumps(line.labels),
                     mergeable_state=line.mergeable_state,
+                    title=line.title,
                 ).or_replace(),
             )
         case _Review():
             _insert_review(conn, line, now)
         case _Check():
+            number = _keep_check_run(conn, line, now)
             sql.execute(
                 conn,
                 sql.insert(
@@ -658,6 +768,7 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
                     run_id=line.run_id,
                     url=line.url,
                     observed_at=now,
+                    number=number,
                 ).or_replace(),
             )
         case _Branch():
@@ -674,16 +785,27 @@ def _insert(conn: sqlite3.Connection, config: Config, line: _Observation, now: s
     return True
 
 
-def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, now: str) -> bool:
+def _record_comment(
+    conn: sqlite3.Connection,
+    config: Config,
+    line: _Comment,
+    now: str,
+    *,
+    operators: AbstractSet[str],
+) -> bool:
     """Record a comment the tracker connector read in `observed_comments`, once per ticket and comment id.
 
-    Not in `messages`: in M36 the observations are in shadow, so no worker's prompt or overseer's state block carries
-    a comment the overseer did not mirror. It is cut and marked as `mirror` cuts one, and an edit after is not followed.
+    One new to the journal is recorded in its ticket's conversation too, in the same transaction and with the same text,
+    source `worker` when it carries the workers' marks, else `tracker` (DESIGN §35). Its body is cut and marked, and an
+    edit after is not followed, here or in the conversation. One by an account in `operators` on a private ticket, with
+    none of the workers' marks, is the operator's message instead, its text whole (§22,
+    `conversation.record_operator_comment`).
 
     Returns:
         True if the comment was new to the journal.
     """
     text = line.body.strip() or "(no text)"
+    body, truncated = text[: conversation.MAX_COMMENT], len(text) > conversation.MAX_COMMENT
     source = (
         "worker"
         if conversation.worker_marked(line.body, config.trust.comment_prefix, config.trust.comment_suffix)
@@ -697,17 +819,29 @@ def _record_comment(conn: sqlite3.Connection, config: Config, line: _Comment, no
             id=line.id,
             author=line.author,
             commented_at=line.time,
-            body=text[: conversation.MAX_MIRRORED],
-            truncated=len(text) > conversation.MAX_MIRRORED,
+            body=body,
+            truncated=truncated,
             source=source,
             observed_at=now,
         ).or_ignore(),
     )
-    return cursor.rowcount == 1
+    if cursor.rowcount != 1:
+        return False
+    number = item_numbers.take(conn, NumberedItem.COMMENT, line.ticket, line.id, at=now)
+    the_comment = sql.update("observed_comments").where("ticket = ? AND id = ?", line.ticket, line.id)
+    sql.execute(conn, the_comment.set(number=number))
+    comment = db.Comment(id=line.id, author=line.author, at=line.time, truncated=truncated)
+    if source == "tracker" and line.author in operators:
+        whole = db.Comment(id=line.id, author=line.author, at=line.time, truncated=False)
+        if conversation.record_operator_comment(conn, line.ticket, whole, line.body.strip()):
+            return True
+    conversation.record_comment(conn, line.ticket, comment, source=source, body=body, channel=conversation.TRACKER)
+    return True
 
 
 def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
     thread = line.thread if line.item is ReviewItem.COMMENT else None
+    kind = NumberedItem.REVIEW if line.item is ReviewItem.REVIEW else NumberedItem.REVIEW_COMMENT
     sql.execute(
         conn,
         sql.insert(
@@ -729,8 +863,39 @@ def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
             outdated=None if thread is None else thread.outdated,
             resolved=None if thread is None else thread.resolved,
             observed_at=now,
+            # Kept across reads, which replace the row: what is newer than the `review` cursor (DESIGN §35).
+            number=item_numbers.take(conn, kind, line.pr, line.id, at=now),
         ).or_replace(),
     )
+
+
+def _keep_check_run(conn: sqlite3.Connection, line: _Check, now: str) -> int | None:
+    """Keep a completed check run in `observed_check_runs`, once per run id, as it was first observed (DESIGN §35).
+
+    A later read replaces the PR's `observed_checks` with the newest run of each context, so this is what tells a
+    re-run at the same head from the run it repeats. A commit status has no run to keep. The run takes its journal
+    number when first observed completed, what a `ci` cursor passes: a run still going is no failure to hand a worker.
+
+    Returns:
+        The run's number; None for a run still going, or a commit status.
+    """
+    if line.status is not CheckStatus.COMPLETED or line.run_id is None or line.conclusion is None:
+        return None
+    number = item_numbers.take(conn, NumberedItem.CHECK_RUN, line.pr, line.run_id, at=now)
+    sql.execute(
+        conn,
+        sql.insert(
+            "observed_check_runs",
+            pr_url=line.pr,
+            run_id=line.run_id,
+            name=line.name,
+            head_sha=line.head_sha,
+            conclusion=line.conclusion,
+            observed_at=now,
+            number=number,
+        ).or_ignore(),
+    )
+    return number
 
 
 # How many subjects a run's `missed` names before it counts the rest.

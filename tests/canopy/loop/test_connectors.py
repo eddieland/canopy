@@ -19,8 +19,10 @@ from canopy.core.vocab import (
     SourceKind,
     TicketState,
 )
-from canopy.loop import connectors
-from tests.canopy.helpers import reads, waits
+from canopy.infra import logs
+from canopy.loop import connectors, poll
+from tests.canopy.helpers import context, reads, waits
+from tests.canopy.observation_helpers import artifact_change
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -36,6 +38,11 @@ SOURCES = {
         "github": {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1},
     },
 }
+#: An artifact store's comment feed, the fake connector playing it as `louvre`.
+ARTIFACTS = {"kind": "artifacts", "cmd": "connector louvre", "timeout_minutes": 1}
+#: The Slack sink's ticket threads, the fake connector playing their reader as `slack`, one operator listed.
+OPERATOR = "U0OPERATOR"
+SLACK = {"kind": "slack", "cmd": "connector slack", "timeout_minutes": 1, "operators": [OPERATOR]}
 
 
 def ticket(key: str, title: str = "Fix the build", **more: object) -> dict[str, object]:
@@ -142,11 +149,17 @@ def test_a_tick_asks_each_source_its_own_kind_and_records_what_it_read_whole(sce
     [comment] = records.fetch_all(scenario.conn, records.ObservedComment, sql.frag("SELECT * FROM observed_comments"))
     assert (comment.ticket, comment.id, comment.source, comment.body) == ("PROJ-1", "10001", "tracker", "(no text)")
     assert comment.commented_at == "2026-10-18T10:00:00.000Z"
-    # The comment is in no conversation, so no worker's prompt carries it, and it moves no cursor; the overseer's
-    # state block shows what the connector read (DESIGN §35).
-    assert scenario.conn.execute("SELECT count(*) FROM messages WHERE comment_id IS NOT NULL").fetchone()[0] == 0
-    assert scenario.state()["observations"]["query"]["result"] == ["PROJ-2", "PROJ-1"]
-    assert scenario.ticket_state("PROJ-1")["cursors"]["mirror"] is None
+    # The comment reaches its ticket's conversation, as data, and moves no cursor; the overseer's state block shows
+    # what the connector read (DESIGN §35).
+    assert scenario.conn.execute("SELECT count(*) FROM messages WHERE comment_id = '10001'").fetchone()[0] == 1
+    # Neither ticket is the overseer's to read: PROJ-2 was not read whole, nor PROJ-1's blocker, so each waits for a
+    # read that is (DESIGN §39).
+    waited = {d.ticket_key: d.rationale for d in ticked.decisions if d.action == "wait"}
+    assert waited == {
+        "PROJ-1": "stale: blocker PROJ-9 never observed; it waits for the tracker source to read it again",
+        "PROJ-2": "stale: PROJ-2 never observed; it waits for the tracker source to read it again",
+    }
+    assert scenario.conn.execute("SELECT comment_cursor FROM tickets WHERE key = 'PROJ-1'").fetchone()[0] is None
     assert scenario.attention() == []
 
     # The next run asks only for comments newer than the newest the journal holds.
@@ -315,7 +328,128 @@ def test_canopys_own_reader_is_asked_the_whole_request_each_tick_with_or_without
     scenario.tick(*waits("PROJ-1"))
     assert reads(github_state)[-1]["prs"] == [PR]
     assert [r.status for r in runs(scenario)] == ["ok", "ok"]
+    # No source failed. The PR it read is open with no checks and no approval, so it waits on a reviewer (DESIGN §14).
+    assert scenario.attention() == [("PROJ-1", "needs_reviewer")]
+
+
+def test_an_artifacts_source_reads_its_feed_past_its_cursor_last_and_in_shadow(
+    scenario: Scenario,
+    watched: Path,
+) -> None:
+    scenario.configures("private", connect={"sources": {"louvre": ARTIFACTS}})
+    plays(watched, louvre={"lines": [artifact_change(1, body="Why shard it?"), artifact_change(2)]})
+    ticked = scenario.tick(*waits(*KEYS))
+    assert ticked.tick.status == "ok"
+
+    assert [r["name"] for r in asked(watched)] == ["jira", "github", "louvre"]
+    assert asked(watched)[-1]["request"] == {"since": 0}
+    louvre = runs(scenario)[-1]
+    assert (louvre.source, louvre.kind, louvre.status, louvre.tick_id) == (
+        "louvre",
+        SourceKind.ARTIFACTS,
+        ConnectorRunStatus.OK,
+        ticked.tick.id,
+    )
+    assert json.loads(louvre.recorded) == {"comment_created": 2}
+    found = records.fetch_all(
+        scenario.conn,
+        records.ObservedArtifactComment,
+        sql.select("*").from_("observed_artifact_comments").order_by("seq"),
+    )
+    assert [c.body for c in found] == ["Why shard it?", "Comment 2."]
+    # Each reaches its ticket's conversation, quoting its passage. By an author the operator does not list, it is data
+    # the overseer is not shown, and waits on the operator as an attention item (DESIGN §38).
+    assert "Why shard it?" not in json.dumps(scenario.state())
+    said = scenario.conn.execute("SELECT subject_id, source, channel, body FROM messages WHERE body LIKE '%shard%'")
+    assert [tuple(r) for r in said] == [
+        (KEYS[0], "artifact", "artifacts", "> shard it\n\nWhy shard it?"),
+        (KEYS[0], "artifact", "artifacts", "> shard it\n\nComment 2."),
+    ]
+    assert scenario.attention() == [(KEYS[0], "untrusted_artifact_comment")]
+
+    scenario.tick(*waits(*KEYS))
+    assert asked(watched)[-1]["request"] == {"since": 2}
+    out = scenario.operator("status").out
+    assert "Connectors (3):" in out
+    assert "  louvre  artifacts  last ran" in out
+    assert "feed through change 2, read to its end" in out
+
+
+def test_an_artifacts_source_read_short_raises_connector_failed_and_reads_the_change_again(
+    scenario: Scenario,
+    watched: Path,
+) -> None:
+    # Comments by an author the operator lists, so the source's own item is the only one.
+    listed = {"authorized_authors": ["u_ana"]}
+    scenario.configures("private", connect={"sources": {"louvre": ARTIFACTS}}, artifacts=listed)
+    plays(watched, louvre={"lines": [artifact_change(1), {"kind": "comment_created", "seq": 2}, artifact_change(3)]})
+    ticked = scenario.tick(*waits(*KEYS))
+    assert ticked.tick.status == "ok", "a source read short does not fail the tick"
+    [failed] = connector_runs.failures(scenario.conn, ticked.tick.id)
+    assert failed.detail == (
+        "louvre (artifacts) partial: did not read the feed past change 1: the line after it was refused"
+    )
+    assert (None, connector_runs.FAILED_REASON) in scenario.attention()
+    assert "feed through change 1, never read to its end, stale" in scenario.operator("status").out
+
+    plays(watched, louvre={"lines": [artifact_change(2), artifact_change(3)]})
+    scenario.tick(*waits(*KEYS))
+    assert asked(watched)[-1]["request"] == {"since": 1}
     assert scenario.attention() == []
+
+
+def slack_reply(ts: str, body: str, *, user: str = OPERATOR) -> dict[str, object]:
+    """A `reply` line on PROJ-1, as `canopy-connect-slack` prints one."""
+    return {"kind": "reply", "ticket": "PROJ-1", "thread": "1790.000001", "ts": ts, "user": user, "body": body}
+
+
+def operator_replies(scenario: Scenario) -> list[tuple[str, str]]:
+    """Each operator message to PROJ-1, as its channel and body, oldest first."""
+    query = "SELECT channel, body FROM messages WHERE source = 'operator' AND subject_id = 'PROJ-1' ORDER BY id"
+    return [(str(r[0]), str(r[1])) for r in scenario.conn.execute(query)]
+
+
+def test_a_slack_source_records_a_listed_operators_reply_in_a_live_tick_and_a_poll(
+    scenario: Scenario,
+    watched: Path,
+) -> None:
+    scenario.configures("private", connect={"sources": {"slack": SLACK}})
+    first = {"lines": [slack_reply("1790.000005", "Use the staging config.")], "end": {"tickets": ["PROJ-1"]}}
+    plays(watched, slack=first)
+    # A dry tick runs the source, and records no message (D036).
+    assert scenario.tick(*waits(*KEYS), dry_run=True).tick.status == "ok"
+    assert operator_replies(scenario) == []
+    ticked = scenario.tick(*waits(*KEYS))
+    assert [r["name"] for r in asked(watched)][-1] == "slack"
+    # Asked for the operator's replies alone: nobody else's words reach canopy.
+    assert asked(watched)[-1]["request"] == {"repo": str(scenario.env.root), "operators": [OPERATOR]}
+    slack = runs(scenario)[-1]
+    assert (slack.source, slack.kind, slack.status, slack.tick_id) == (
+        "slack",
+        SourceKind.SLACK,
+        ConnectorRunStatus.OK,
+        ticked.tick.id,
+    )
+    assert json.loads(slack.recorded) == {"reply": 1}
+    assert operator_replies(scenario) == [("slack", "Use the staging config.")]
+    assert "  slack  slack  last ran" in scenario.operator("status").out
+
+    # Between ticks, the loop's poll reads it too: a reply it records is an operator message, which ends the wait (§6).
+    later = [slack_reply("1790.000005", "Use the staging config."), slack_reply("1790.000009", "And add a test.")]
+    plays(watched, slack={"lines": later, "end": {"tickets": ["PROJ-1"]}})
+    polled = poll.run(context(scenario.env), logs.for_tick(None))
+    assert polled is not None
+    assert polled["slack"].recorded == {"already": 1, "reply": 1}
+    assert operator_replies(scenario)[-1] == ("slack", "And add a test.")
+
+
+def test_a_slack_source_read_short_raises_connector_failed(scenario: Scenario, watched: Path) -> None:
+    scenario.configures("private", connect={"sources": {"slack": SLACK}})
+    plays(watched, slack={"end": {"tickets": ["PROJ-1"], "unread": ["PROJ-2"]}})
+    ticked = scenario.tick(*waits(*KEYS))
+    [failed] = connector_runs.failures(scenario.conn, ticked.tick.id)
+    assert failed.detail == "slack (slack) partial: did not read the Slack threads of PROJ-2"
+    assert (None, connector_runs.FAILED_REASON) in scenario.attention()
 
 
 def test_a_clone_url_reaches_a_connector_without_its_credentials() -> None:

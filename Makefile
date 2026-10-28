@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help all check fmt lint test coverage snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
-.PHONY: test-plugin pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
+.PHONY: hooks screenshots test-plugin pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
 
 ##@ General
 
@@ -23,7 +23,7 @@ fmt: ui-fmt ## Run autoformatters (ruff imports and trailing commas, ruff format
 
 # ruff owns Python and rumdl Markdown; editorconfig-checker holds every other file to .editorconfig.
 # zizmor runs offline, so the lint needs no GitHub token and gives the same answer on every machine.
-# tsc checks the JSDoc types of the plugin canopy ships for its agents against the pinned runtime's own (tests/plugins).
+# tsc checks the JSDoc types of the plugin canopy ships for its agents against each pinned OpenCode's (tests/plugins).
 lint: tests/plugins/node_modules ## Lint and type check: ruff, pyrefly, rumdl, ec, shellcheck, actionlint, zizmor, tsc
 	uv run ruff format --check .
 	uv run ruff check .
@@ -120,10 +120,17 @@ ui-build: ui/node_modules ## Build ui/dist, which canopy serves from a checkout 
 	npm --prefix ui run build
 
 # Not part of check: it needs a browser. CI runs it as its own job. PLAYWRIGHT_CHROMIUM_EXECUTABLE points it at a
-# preinstalled Chromium instead of the one `npx playwright install chromium` downloads. SHARD=i/n runs the i-th of n
-# slices, as CI's jobs do.
+# preinstalled Chromium instead of the one `npx playwright install chromium` downloads; unless it is that same build,
+# the screenshots fail on how it draws. SHARD=i/n runs the i-th of n slices, as CI's jobs do.
 ui-e2e: ui/node_modules ## Build ui/ and run Playwright against it served by FastAPI (SHARD=i/n: one slice of it)
 	npm --prefix ui run test:e2e$(if $(SHARD), -- --shard=$(SHARD))
+
+# Not part of check: it needs Docker. The Screenshots workflow stays CI's way to regenerate the baselines; this renders
+# the same images locally, in Playwright's Ubuntu image at the version ui/package.json pins, in under a minute once the
+# image and its cache volume are pulled. UPDATE is changed (rewrite the images that fail the comparison), all (rewrite
+# every one), or check (compare only).
+screenshots: ## Regenerate the Playwright screenshot baselines in Docker, as CI renders them (UPDATE=changed|all|check)
+	ui/scripts/screenshots.sh $(or $(UPDATE),changed)
 
 # Not part of check: it downloads canopy's dependencies into an empty cache. CI runs it as its own job.
 # INSTALL_SOURCE is what to install: this checkout by default, or anything `uv tool install` accepts.
@@ -142,6 +149,10 @@ pool-contract: ## Check that real treehouse keeps every guarantee canopy takes f
 	CANOPY_POOL_CONTRACT=1 uv run pytest -q -n auto tests/canopy/core/test_pool_contract.py
 
 ##@ Setup
+
+# Optional: CI's `make check` runs every check anyway. prek.toml says which hook runs what, and on which stage.
+hooks: ## Install git hooks (prek): the formatters and linters on each commit, ui/'s lint and types on each push
+	uv run prek install
 
 TREEHOUSE_REPO := https://github.com/kunchenguid/treehouse
 # A release tag, commit, or branch, e.g. `make treehouse TREEHOUSE_VERSION=v2.4.0`. The default is a pinned commit, not

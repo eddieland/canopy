@@ -18,11 +18,10 @@ permissions:
 env:
   UV_LOCKED: "1"
 
-# A pull request's runs and a manual run on its branch, such as the one the Screenshots workflow starts after pushing
-# baselines, share a group by branch name, so a newer one cancels the older and the branch holds runners for one run at
-# a time. A fork's pull request is grouped by its number instead, since two forks can both use `main`. Every other run
-# has a group of its own: GitHub cancels a run left pending in a shared group, so merges in quick succession left many
-# of main's commits untested, and without coverage on Codecov.
+# A pull request's runs and a manual run on its branch share a group by branch name, so a newer one cancels the older
+# and the branch holds runners for one run at a time. A fork's pull request is grouped by its number instead, since two
+# forks can both use `main`. Every other run has a group of its own: GitHub cancels a run left pending in a shared
+# group, so merges in quick succession left many of main's commits untested, and without coverage on Codecov.
 concurrency:
   group: >-
     ${{ github.workflow }}-${{
@@ -96,7 +95,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
-    timeout-minutes: 15
+    # The suite alone takes 10 to 15 minutes on a runner (2026-10-24), so 15 cancelled runs whose every test passed.
+    timeout-minutes: 25
     permissions:
       contents: read
       # For the OIDC token the Codecov upload authenticates with.
@@ -316,9 +316,9 @@ jobs:
           uv sync --locked
           npm --prefix ui ci --no-audit --no-fund
 
+      # `./`, not the `$/` zizmor asks for: actionlint does not parse `$/` yet.
       - name: Install Playwright's Chromium
-        working-directory: ui
-        run: npx playwright install --with-deps chromium
+        uses: ./.github/actions/playwright-chromium # zizmor: ignore[self-repository]
 
       - name: Playwright
         env:

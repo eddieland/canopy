@@ -1,12 +1,10 @@
-"""The overseer's journal commands: `decide`, `queried`, `attention`, `ticket set`, and `mirror`, each `canopy <it>`."""
+"""The overseer's journal commands: `decide`, `queried`, `attention`, and `ticket set`, each `canopy <it>`."""
 
 from __future__ import annotations
 
-import sys
-
 import click
 
-from canopy.cli.common import CliError, Group, OverseerCommand, open_context
+from canopy.cli.common import Group, OverseerCommand
 from canopy.cli.params import (
     KEY_RE,
     PR_URL,
@@ -17,37 +15,54 @@ from canopy.cli.params import (
     TextType,
     TitleType,
     valid_key,
-    validated,
     verb,
 )
-from canopy.core import conversation
 from canopy.loop import tools
 
 
 @click.command("decide", cls=OverseerCommand)
-# click has no optional positional before a required one, so `[KEY] ACTION` is parsed by hand.
+# click has no optional positional before a required one, nor groups of arguments, so `[KEY] ACTION`, once for each
+# --rationale, is parsed by hand: the Nth KEY ACTION pair is the Nth --rationale's.
 @click.argument("words", nargs=-1, required=True, metavar="[KEY] ACTION")
 @click.option(
     "--rationale",
+    "rationales",
     required=True,
+    multiple=True,
     type=TextType(),
-    help="Why, in your own words: `canopy decisions` shows it.",
+    help="Why, in your own words: `canopy decisions` shows it. One for each decision.",
 )
 @click.pass_context
-def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str) -> int:
-    """Record a decision (overseer only).
+def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationales: tuple[str, ...]) -> int:
+    """Record a decision, or several, all or none (overseer only).
 
     ACTION is wait, skip, or done. KEY may be omitted only for a tick-wide skip, whose rationale starts
-    `mcp_unavailable:` or `tracker_unsupported:`; a skip with KEY may not give either.
+    `mcp_unavailable:` or `tracker_unsupported:`; a skip with KEY may not give either. Decide several tickets at once
+    as `KEY ACTION --rationale WHY`, repeated.
     """
-    if len(words) > 2:  # noqa: PLR2004
-        raise click.UsageError(f"expected [KEY] ACTION, got {len(words)} arguments", click_ctx)
-    key, action = (None, words[0]) if len(words) == 1 else words
-    if action not in tools.DECIDE_ACTIONS:
-        raise click.UsageError(f"invalid action {action!r}: choose from {', '.join(tools.DECIDE_ACTIONS)}", click_ctx)
-    if key is not None and not valid_key(key):
-        raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
-    return verb(click_ctx, tools.decide, tools.Decide, key=key, action=action, rationale=rationale)
+    if len(rationales) == 1 and len(words) <= 2:  # noqa: PLR2004
+        pairs = [(None, words[0]) if len(words) == 1 else (words[0], words[1])]
+    elif len(words) == 2 * len(rationales):
+        pairs = list(zip(words[::2], words[1::2], strict=True))
+    else:
+        raise click.UsageError(
+            f"expected [KEY] ACTION, or KEY ACTION for each of {len(rationales)} --rationale; "
+            f"got {len(words)} arguments",
+            click_ctx,
+        )
+    for key, action in pairs:
+        if action not in tools.DECIDE_ACTIONS:
+            raise click.UsageError(
+                f"invalid action {action!r}: choose from {', '.join(tools.DECIDE_ACTIONS)}",
+                click_ctx,
+            )
+        if key is not None and not valid_key(key):
+            raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
+    decisions = [
+        {"key": key, "action": action, "rationale": rationale}
+        for (key, action), rationale in zip(pairs, rationales, strict=True)
+    ]
+    return verb(click_ctx, tools.decide, tools.Decisions, decisions=decisions)
 
 
 @click.command("queried", cls=OverseerCommand)
@@ -73,13 +88,20 @@ def cmd_queried(click_ctx: click.Context, keys: tuple[str, ...]) -> int:
 )
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit the item is about, in a workspace.")
 @click.option("--pr", "pr", type=PR_URL, help="A PR the loop reviews; in place of KEY for a PR with no ticket.")
+@click.option(
+    "--item",
+    type=click.IntRange(min=1),
+    help="needs_author and notice_rerun: the number of the comment, review item, or review run one waits on, or of "
+    "the check run one holds.",
+)
 @click.pass_context
-def cmd_attention(
+def cmd_attention(  # noqa: PLR0917  (click passes each option)
     click_ctx: click.Context,
     words: tuple[str, ...],
     detail: str,
     repo: str | None,
     pr: str | None,
+    item: int | None,
 ) -> int:
     """Record an attention item about a ticket, or about a PR with --pr (overseer only)."""
     # A REASON with neither KEY nor --pr is the request's to refuse, in the words its tool's refusal uses.
@@ -90,7 +112,17 @@ def cmd_attention(
         raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
     if not REASON_RE.fullmatch(reason):
         raise click.UsageError(f"invalid reason {reason!r}: must match {REASON_RE.pattern}", click_ctx)
-    return verb(click_ctx, tools.attend, tools.Attention, key=key, reason=reason, detail=detail, repo=repo, pr=pr)
+    return verb(
+        click_ctx,
+        tools.attend,
+        tools.Attention,
+        key=key,
+        reason=reason,
+        detail=detail,
+        repo=repo,
+        pr=pr,
+        item=item,
+    )
 
 
 @click.group("ticket", cls=Group)
@@ -99,7 +131,7 @@ def ticket_group() -> None:
 
 
 @ticket_group.command("set", cls=OverseerCommand)
-@click.argument("key", type=TICKET_KEY)
+@click.argument("keys", nargs=-1, required=True, type=TICKET_KEY, metavar="KEY...")
 @click.option(
     "--repo",
     type=REPO,
@@ -115,8 +147,8 @@ def ticket_group() -> None:
     "cursor_pairs",
     type=CursorType(),
     multiple=True,
-    help="Advance a cursor past what you handled. comment and message are the ticket's; review and ci a unit's, "
-    "with --repo. Repeat it for several. A dry run advances none.",
+    help="Advance a cursor to the newest handled item's number. comment and message are the ticket's; review and ci "
+    "a unit's, with --repo. Repeat it for several. A dry run advances none.",
 )
 @click.option("--done", is_flag=True, help="Mark the ticket done in the journal. A dry run does not.")
 @click.option(
@@ -128,80 +160,23 @@ def ticket_group() -> None:
 def cmd_ticket_set(
     click_ctx: click.Context,
     *,
-    key: str,
+    keys: tuple[str, ...],
     repo: str | None,
     phase: str | None,
     cursor_pairs: tuple[tuple[str, str], ...],
     done: bool,
     title: str | None,
 ) -> int:
-    """Record a ticket's phase, cursors, done flag, or title, or a unit's phase and cursors.
+    """Record tickets' phase, cursors, done flag, or title, or a unit's phase and cursors, all or none.
 
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
-    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in.
+    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in. Name several
+    KEYs to set each the same; a cursor and a title are one ticket's, so they take one KEY.
     """
-    return verb(
-        click_ctx,
-        tools.ticket_set,
-        tools.TicketSet,
-        key=key,
-        repo=repo,
-        phase=phase,
-        cursors=dict(cursor_pairs),
-        done=done,
-        title=title,
-    )
-
-
-@click.command("mirror", cls=OverseerCommand)
-@click.argument("ref", metavar="REF")
-@click.option("--comment", "comment_id", required=True, metavar="ID", help="The tracker's id of the comment.")
-@click.option("--author", required=True, metavar="ACCOUNT", help="Its author's account id on the tracker.")
-@click.option("--at", "at", required=True, metavar="TIME", help="When the tracker says it was written, ISO 8601.")
-@click.option(
-    "--body",
-    metavar="TEXT",
-    help=f"Its text; read from stdin without it. Cut to {conversation.MAX_MIRRORED} characters, and marked truncated.",
-)
-@click.pass_context
-def cmd_mirror(click_ctx: click.Context, *, ref: str, comment_id: str, author: str, at: str, body: str | None) -> int:
-    """Record a tracker comment in a ticket's conversation in the journal (overseer only).
-
-    Recording a comment again records nothing new. A mirrored comment is a copy for the operator to read, and
-    authorizes nothing.
-    """
-    ctx = open_context(click_ctx)
-    try:
-        # Refused outside a tick before stdin is read, which would wait on a terminal.
-        tools.running_tick(ctx)
-        said = tools.mirror(
-            ctx,
-            validated(
-                click_ctx,
-                tools.Mirror,
-                ref=ref,
-                comment=comment_id,
-                author=author,
-                at=at,
-                body=_body(ref, body),
-            ),
-        )
-    except tools.Refused as e:
-        raise CliError(str(e)) from None
-    click.echo(said)
-    return 0
-
-
-def _body(ref: str, body: str | None) -> str:
-    """Return a mirrored comment's body: `body`, or else stdin, read only once `ref` is a reference.
-
-    A bad ref is refused without reading stdin, which would wait on an open one: the verb refuses the ref, and records
-    it, before it looks at the body, so it is given none.
-    """
-    if body is not None:
-        return body
-    try:
-        conversation.parse_ref(ref)
-    except conversation.Refused:
-        return ""
-    return sys.stdin.read()
+    if len(keys) > 1 and (cursor_pairs or title is not None):
+        raise click.UsageError("--cursor and --title are one ticket's: name one KEY with them", click_ctx)
+    settings = [
+        {"key": key, "repo": repo, "phase": phase, "cursors": dict(cursor_pairs), "done": done, "title": title}
+        for key in keys
+    ]
+    return verb(click_ctx, tools.ticket_set, tools.TicketSets, tickets=settings)

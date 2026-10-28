@@ -62,10 +62,6 @@ This is a live tick.
     "available": 2
   },
   "running_workers": [],
-  "mirror": {
-    "max_per_tick": 100,
-    "body_delimiter": "CANOPY_BODY_0123456789abcdef"
-  },
   "query_due": true,
   "tick_id": 1,
   "now": "2026-10-16T10:00:00.000Z",

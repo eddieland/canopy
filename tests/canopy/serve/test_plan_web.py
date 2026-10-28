@@ -152,8 +152,10 @@ def test_an_edit_saved_from_the_web_is_the_file_approve_takes(ctx: Context) -> N
     path = plans.path_for(ctx.state_dir, KEY, 1)
     assert path.read_text() == edited
     assert path.stat().st_mode & 0o777 == 0o600
-    # Nothing but the plan is left in the ticket's directory.
-    assert [p.name for p in path.parent.iterdir()] == [path.name]
+    # Nothing but the plan and its original is left in the ticket's directory, and the original is as written.
+    original = path.with_name("1.original.md")
+    assert sorted(p.name for p in path.parent.iterdir()) == sorted([path.name, original.name])
+    assert original.read_text() == TEXT
 
     # One the file changed under is refused, and the file is left as it is.
     stale = c.put(

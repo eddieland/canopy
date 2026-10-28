@@ -2,6 +2,8 @@
 
 import json
 import os
+import re
+import sys
 import time
 from pathlib import Path
 from unittest import mock
@@ -17,6 +19,7 @@ from canopy.core import (
     personas,
     pr_list,
     records,
+    review_answers,
     review_diff,
     review_runs,
     run_models,
@@ -25,10 +28,10 @@ from canopy.core import (
 from canopy.core import review_result as result
 from canopy.core.config import load
 from canopy.core.context import Context
-from canopy.core.vocab import ResumeReason, RunKind, SeenKind
+from canopy.core.vocab import DismissalReason, FindingAnswer, ResumeReason, RunKind, SeenKind
 from canopy.infra import procs
 from canopy.loop import attention
-from canopy.reviews import grants
+from canopy.reviews import grants, waiting
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
@@ -40,10 +43,12 @@ from tests.canopy.helpers import (
     in_run,
     in_tick,
     lifelock_left,
+    logged,
     messages,
     personas_dir,
     pool_statuses,
     present,
+    tick_starts,
     tools_of,
     waits,
     with_events,
@@ -90,6 +95,7 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
     ):
         before = time.time()
         assert main(reviews(sha, ticket="PROJ-1", context="Start with src/retry.py")[1:]) == 0
+        tick_starts()
         deadline = time.monotonic() + 30
         row = review_runs.get_review_run(conn, 1)
         while row is not None and row.status == "running" and time.monotonic() < deadline:
@@ -254,17 +260,18 @@ def test_the_reviewer_prompt(
     """The reviewer's prompt, whole, so a change to its wording or to what fills it in is a diff in review.
 
     One with every value at its default, and one with each set: a ticket, the overseer's context, the operator's rule
-    for `low`, a notice, and standing instructions. `git_pool` gives the review a pool to lease from; the run starts
-    and never runs.
+    for `low`, a notice, standing instructions, and a limit of one review, which makes it the PR's last round.
+    `git_pool` gives the review a pool to lease from; the run starts and never runs.
     """
     command = reviews("b" * 40)
     if full:
-        scenario.configures(review={"low_impact": "A change to docs or tests only."})
+        scenario.configures(review={"low_impact": "A change to docs or tests only."}, policy={"max_reviews_per_pr": 1})
         scenario.operator("notice", "CI is down.")
         reviewer_instructions(scenario, "A migration without a test that applies it is a finding.\n")
         command = reviews("b" * 40, ticket="PROJ-1", context="Start with src/retry.py")
     with in_tick(scenario.conn):
         assert main(command[1:], runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
     prompt = (reviewing.state_dir / "reviews" / "1.prompt").read_text()
     assert prompt.replace(str(reviewing.state_dir), "/state") == markdown_snapshot
 
@@ -272,9 +279,9 @@ def test_the_reviewer_prompt(
 @pytest.mark.parametrize(
     ("pr", "sha", "reason"),
     [
-        ("http://x.test/pull/1", "a" * 40, "--pr must be the PR's plain https:// URL"),
-        (PR, "abc", "--sha must be the full head commit"),
-        (PR, "A" * 40, "--sha must be the full head commit"),
+        ("http://x.test/pull/1", "a" * 40, "pr (--pr) must be the PR's plain https:// URL"),
+        (PR, "abc", "sha (--sha) must be the full head commit"),
+        (PR, "A" * 40, "sha (--sha) must be the full head commit"),
     ],
 )
 def test_bad_pr(reviewing: CanopyEnv, scenario: Scenario, pr: str, sha: str, reason: str) -> None:
@@ -341,11 +348,12 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
     granted = scenario.operator("grant", PR, "review", "--runs", "2")
     assert "has had 2 review runs, and may now have 4." in granted.out
 
-    # The state block shows a granted PR's grants beside its review runs; a PR with none has no key.
+    # The state block shows a granted PR's grants beside its review runs. The other PR, of no ticket listed and found by
+    # no review query, is left out: no decision rests on its review (#1528).
     scenario.tick(*waits("PROJ-1"), dry_run=True)
     prs = {p["url"]: p for p in scenario.state()["reviews"]["prs"]}
     assert (prs[PR]["review_runs"], prs[PR]["granted"]) == (2, 3)
-    assert "granted" not in prs[f"{PR}0"]
+    assert f"{PR}0" not in prs
 
 
 def test_a_review_grant_reports_the_limit_of_its_own_transaction_whatever_grant_commits_beside_it(
@@ -591,34 +599,36 @@ def test_the_state_block_shows_reviewed_prs(reviewing: CanopyEnv, scenario: Scen
         "max_reviews": 1,
         "max_reviews_per_day": 20,
         "max_reviews_per_pr": 3,
+        "settle_minutes": 0,
         "started_last_24h": 1,
     }
     assert section["running"] == []
+    # With settling off, no head is recorded.
+    assert section["settling"] == []
     [reviewed] = section["prs"]
     assert (reviewed["url"], reviewed["ticket"], reviewed["review_runs"]) == (PR, "PROJ-1", 1)
     latest = reviewed["latest"]
     assert (latest["status"], latest["verdict"], latest["impact"]) == ("done", "findings", "normal")
     assert latest["findings"] == ["retry never stops"]
-    assert latest["reviewed_at"] == f"{latest['ended_at'][:19]}Z"
-    # The overseer passes it as the unit's review cursor, which takes whole seconds only.
-    scenario.overseer("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", f"review={latest['reviewed_at']}")
+    # The run took its journal number when it ended: the overseer passes it as the unit's review cursor.
+    assert latest["number"] is not None
+    scenario.overseer("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", f"review={latest['number']}")
     assert "comment" not in latest
 
 
 def test_attention_about_a_pr_without_a_ticket(reviewing: CanopyEnv, scenario: Scenario) -> None:
     scenario.tick(
-        canopy("attention", "--pr", PR, "review_failed", "--detail", "review run 3 ended crashed"),
-        canopy("attention", "PROJ-1", "review_limit", "--pr", f"{PR}0", "--detail", "3 of 3 reviews"),
+        canopy("attention", "--pr", PR, "flaky_rerun", "--detail", "build failed again on rerun"),
+        *waits("PROJ-1"),
     )
     conn = scenario.conn
     assert [(i.subject, i.reason, i.detail) for i in attention.current(conn)] == [
-        ("PROJ-1", "review_limit", f"3 of 3 reviews; allow it another review with `canopy grant {PR}0 review`"),
-        (f"pr:{PR}", "review_failed", "review run 3 ended crashed"),
+        (f"pr:{PR}", "flaky_rerun", "build failed again on rerun"),
     ]
-    assert f"pr:{PR}  attention:review_failed" in scenario.operator("decisions").out
+    assert f"pr:{PR}  attention:flaky_rerun" in scenario.operator("decisions").out
     with scenario.ticking() as tick_id:
-        scenario.overseer("attention", "review_failed", "--detail", "x", code=2)
-        scenario.overseer("attention", "--pr", "http://plain", "review_failed", "--detail", "x", code=2)
+        scenario.overseer("attention", "flaky_rerun", "--detail", "x", code=2)
+        scenario.overseer("attention", "--pr", "http://plain", "flaky_rerun", "--detail", "x", code=2)
     assert review_decisions(conn, tick_id) == []
 
 
@@ -683,12 +693,48 @@ def test_a_review_run_records_what_it_cost(
     assert row.session_id == "ses_review"
     usage = present(db.usage_of(row))
     assert usage.cost_usd == 0.25  # two model calls at 0.125
-    assert (usage.first_call, usage.first_cache_write) == (5500, 500)
+    assert (usage.first_call, usage.first_cache_write, usage.first_cache_read) == (5500, 500, 4000)
     assert (reviewing.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
     assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
     assert tools_of(conn, "review_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
     # Which models served it, read from its session as it ended (DESIGN §13).
     assert [(m.model, m.replies) for m in run_models.of_run(conn, "review_runs", run_id)] == [("anthropic/claude-x", 1)]
+
+
+def test_a_running_review_shows_its_session_and_spend_so_far(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """What the reviewer reports is on its row as it prints it, so its page shows it mid-review."""
+    with_events(reviewing, "canopy-reviewer")
+    journal = reviewing.state_dir / db.DB_FILE_NAME
+    # canopy records each event as it reads it, a moment after the reviewer printed it: wait for the cost to land.
+    read_row = (
+        "import sqlite3, sys, time\n"
+        "deadline = time.monotonic() + 10\n"
+        "while True:\n"
+        "    rows = sqlite3.connect(sys.argv[1]).execute(sys.argv[2]).fetchall()\n"
+        "    if (rows and rows[0][1] is not None) or time.monotonic() > deadline:\n"
+        "        break\n"
+        "    time.sleep(0.05)\n"
+        "print(rows)"
+    )
+    row_now = [sys.executable, "-c", read_row, str(journal), "SELECT session_id, cost_usd FROM review_runs"]
+    reviewer = reviewer_reports(FINDINGS, row_now, session="ses_review")
+    reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer)
+    assert reviewed.status == "done", reviewed.printed.out
+
+    [run] = agent_runs(scenario.agent_log)
+    commands = run["commands"]
+    assert isinstance(commands, list)
+    [shown] = commands
+    # The first of its two model calls has ended, before it ran its command.
+    assert shown["stdout"] == "[('ses_review', 0.125)]\n"
+    # Once it ends, its row has its whole report, and its log what it printed in the same shape as ever.
+    assert (reviewed.row.session_id, reviewed.row.cost_usd) == ("ses_review", 0.25)
+    out = reviewed.printed.out
+    assert re.search(r"--- reviewer stdout ---\n(\{.*\}\n)+\n--- reviewer stderr ---\n\n--- reviewer exit 0 ---\n", out)
 
 
 def test_a_timed_out_review_records_what_it_reported_before_the_kill(
@@ -903,8 +949,8 @@ def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
     assert [call["error"] for call in (fork, diff, log, root)] == [False] * 4, [fork, diff, log, root]
     assert fork["text"] == head(git_pool)
     assert "+while True:\n+    call()" in diff["text"]
-    assert f"commit {sha}\n" in log["text"]
-    assert "A\tretry.py" in log["text"]
+    [commit] = logged(log["text"]).commits
+    assert (commit.commit, [(f.status, f.path) for f in commit.files]) == (sha, [("A", "retry.py")])
     assert root["text"] == "Nothing at . in origin/main."
     assert (escape["error"], option["error"]) == (True, True)
     assert "no `..`" in escape["text"]
@@ -933,26 +979,30 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
 
     # Only the operator dismisses, and only a finding the review has.
     with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": "1"}):
-        assert main(["dismiss", ref, "2"]) == 1
+        assert main(["dismiss", ref, "2", "--reason", "wrong"]) == 1
         assert "dismiss refused (inside_run)" in capsys.readouterr().err
+    wrong = ("--reason", "wrong")
     for args, guard in [
-        ([ref, "3"], "unknown"),
-        ([ref, "0"], "bad_finding"),
-        ([ref, "two"], "bad_finding"),
-        (["review:99", "1"], "unknown"),
-        (["review:x", "1"], "bad_ref"),
+        ([ref, "3", *wrong], "unknown"),
+        ([ref, "0", *wrong], "bad_finding"),
+        ([ref, "two", *wrong], "bad_finding"),
+        (["review:99", "1", *wrong], "unknown"),
+        (["review:x", "1", *wrong], "bad_ref"),
         ([ref, "2", "--undo"], "unknown"),
-        ([ref, "2", "3"], "unknown"),
-        ([ref, "2", "two"], "bad_finding"),
+        ([ref, "2", "3", *wrong], "unknown"),
+        ([ref, "2", "two", *wrong], "bad_finding"),
+        # A review's dismissal says why, and taking one back says nothing.
+        ([ref, "2"], "bad_reason"),
+        ([ref, "2", "--undo", *wrong], "bad_reason"),
     ]:
         assert f"dismiss refused ({guard})" in scenario.operator("dismiss", *args, code=1).err
     # Several are dismissed together or not at all.
-    assert review_runs.review_dismissals(conn, review_id) == frozenset()
+    assert review_runs.review_dismissals(conn, review_id) == {}
 
-    dismissed = scenario.operator("dismiss", ref, "2")
-    assert f"{ref} finding 2 is dismissed: no worker or tick acts on it." in dismissed.out
+    dismissed = scenario.operator("dismiss", ref, "2", "--reason", "not_worth_it")
+    assert f"{ref} finding 2 is dismissed as not_worth_it: no worker or tick acts on it." in dismissed.out
     shown = scenario.operator("review", "show", str(review_id)).out
-    assert "2. **minor** `src/retry.py:7`: log line is noisy (dismissed)" in shown
+    assert "2. **minor** `src/retry.py:7`: log line is noisy (dismissed: not_worth_it)" in shown
     assert "findings, 2 findings (1 dismissed), impact normal" in scenario.operator("review", "show").out
 
     # The overseer reads only the findings the operator kept.
@@ -967,8 +1017,8 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     assert "log line is noisy" not in prompt
 
     # With every finding dismissed, there is nothing for a worker to address.
-    both = scenario.operator("dismiss", ref, "2", "1")
-    assert f"{ref} findings 2, 1 are dismissed: no worker or tick acts on them." in both.out
+    both = scenario.operator("dismiss", ref, "2", "1", "--reason", "intentional")
+    assert f"{ref} findings 2, 1 are dismissed as intentional: no worker or tick acts on them." in both.out
     assert scenario.refuses(resume(review_id)) == [
         (
             "refused:bad_review",
@@ -979,7 +1029,99 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     # Undo hands it back.
     undone = scenario.operator("dismiss", ref, "1", "--undo")
     assert "is no longer dismissed: a resume hands it to the worker again." in undone.out
-    assert review_runs.review_dismissals(conn, review_id) == frozenset({2})
+    # Dismissing one again records the reason anew.
+    assert review_runs.review_dismissals(conn, review_id) == {2: DismissalReason.INTENTIONAL}
+    # One that holds and is worth fixing, but in another PR.
+    later = scenario.operator("dismiss", ref, "1", "--reason", "out_of_scope")
+    assert f"{ref} finding 1 is dismissed as out_of_scope: no worker or tick acts on it." in later.out
+    assert review_runs.review_dismissals(conn, review_id) == {
+        1: DismissalReason.OUT_OF_SCOPE,
+        2: DismissalReason.INTENTIONAL,
+    }
+
+
+def test_review_noise_counts_findings_by_severity_persona_and_model_and_why_each_was_dismissed(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    opencode_state: Path,
+) -> None:
+    """`canopy review noise` reads the reviewer's noise from the operator's dismissals: `wrong` ones (DESIGN §21).
+
+    An `out_of_scope` one held, so it counts in its own column and not in the `wrong` rate.
+    """
+    nothing = scenario.operator("review", "noise").out
+    assert nothing.startswith("0 done reviews since ")
+    assert nothing.endswith(": no findings.\n")
+    opencode_state.write_text(json.dumps({"sessions": {"ses_review": [["anthropic", "claude-x", 0.25]]}}))
+    with_events(reviewing, "canopy-reviewer")
+    elsewhere = {**TWO_FINDINGS["findings"][1], "title": "rename the module"}
+    four = {
+        **TWO_FINDINGS,
+        "findings": [*TWO_FINDINGS["findings"], {**FINDINGS["findings"][0], "title": "again"}, elsewhere],
+    }
+    reviewed = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(four, session="ses_review"))
+    ref = f"review:{reviewed.id}"
+    scenario.operator("dismiss", ref, "1", "--reason", "wrong")
+    scenario.operator("dismiss", ref, "2", "--reason", "not_worth_it")
+    scenario.operator("dismiss", ref, "3", "--reason", "intentional")
+    scenario.operator("dismiss", ref, "4", "--reason", "out_of_scope")
+    # As a dismissal from before canopy asked why.
+    sql.execute(scenario.conn, sql.update("review_dismissals").set(reason=None).where("finding = ?", 3))
+
+    found = json.loads(scenario.operator("review", "noise", "--json").out)
+    assert found["reviews"] == 1
+    assert found["severity"] == [
+        {
+            "key": "blocking",
+            "findings": 2,
+            "dismissed": {"wrong": 1, "unrecorded": 1},
+            "answered": {},
+            "rebuttals": 0,
+            "rates": {
+                "wrong": 0.5,
+                "intentional": 0.0,
+                "not_worth_it": 0.0,
+                "out_of_scope": 0.0,
+                "fixed": 0.0,
+                "declined": 0.0,
+            },
+        },
+        {
+            "key": "minor",
+            "findings": 2,
+            "dismissed": {"not_worth_it": 1, "out_of_scope": 1},
+            "answered": {},
+            "rebuttals": 0,
+            "rates": {
+                "wrong": 0.0,
+                "intentional": 0.0,
+                "not_worth_it": 0.5,
+                "out_of_scope": 0.5,
+                "fixed": 0.0,
+                "declined": 0.0,
+            },
+        },
+    ]
+    assert [(g["key"], g["findings"], g["dismissed"]) for g in found["persona"]] == [
+        (reviewed.row.persona, 4, {"wrong": 1, "not_worth_it": 1, "out_of_scope": 1, "unrecorded": 1}),
+    ]
+    assert [g["key"] for g in found["model"]] == ["anthropic/claude-x"]
+    text = scenario.operator("review", "noise").out.splitlines()
+    assert text[2:5] == [
+        (
+            "severity  findings  wrong  intentional  not_worth_it  out_of_scope  unrecorded  fixed  declined  rebuttals"
+            "  wrong rate"
+        ),
+        (
+            "blocking         2      1            0             0             0           1      0         0          0"
+            "         50%"
+        ),
+        (
+            "minor            2      0            0             1             1           0      0         0          0"
+            "          0%"
+        ),
+    ]
 
 
 def previous_review(prompt: str) -> str:
@@ -996,7 +1138,7 @@ def test_a_later_review_reads_the_prs_last_done_review_less_what_the_operator_di
     first = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS))
     # A PR's first review has none, so its prompt has no section for one.
     assert "## The previous review" not in first.prompt
-    scenario.operator("dismiss", f"review:{first.id}", "2")
+    scenario.operator("dismiss", f"review:{first.id}", "2", "--reason", "wrong")
     # Another PR's review reaches none of this PR's.
     other = scenario.review(reviews(sha, f"{PR}0"), reviewer=reviewer_reports(CLEAN))
     assert "## The previous review" not in other.prompt
@@ -1018,7 +1160,7 @@ def test_a_later_review_reads_the_prs_last_done_review_less_what_the_operator_di
     )
     assert previous_review(second.prompt) == previous_review(third.prompt) == expected
 
-    scenario.operator("dismiss", f"review:{first.id}", "1")
+    scenario.operator("dismiss", f"review:{first.id}", "1", "--reason", "wrong")
     scenario.operator("grant", PR, "review")
     fourth = scenario.review(reviews("d" * 40, ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
     assert previous_review(fourth.prompt) == (
@@ -1067,7 +1209,7 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     with in_run(1):
         assert main(["send", ref, "1"]) == 1
         assert "send refused (inside_run)" in capsys.readouterr().err
-    scenario.operator("dismiss", ref, "2")
+    scenario.operator("dismiss", ref, "2", "--reason", "wrong")
     for args, guard in [
         ([ref, "3"], "unknown"),
         ([ref, "0"], "bad_finding"),
@@ -1102,6 +1244,198 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     assert "1. **blocking** `src/retry.py:42`: retry never stops" in prompt
 
 
+#: What a resumed worker answers of TWO_FINDINGS, with entries `_run` refuses after the two it keeps.
+DECLINED = "It logs once per attempt, which the runbook asks for."
+
+
+def answers_to(review_id: int) -> list[dict[str, object]]:
+    """A worker's `review_answers` for review run `review_id`: 1 fixed, 2 declined, and three it may not give."""
+    return [
+        {"review": review_id, "finding": 1, "answer": "fixed"},
+        {"review": review_id, "finding": 2, "answer": "declined", "reason": DECLINED},
+        {"review": review_id, "finding": 3, "answer": "fixed"},
+        {"review": 99, "finding": 1, "answer": "fixed"},
+        {"review": review_id, "finding": 1, "answer": "declined"},
+    ]
+
+
+def test_a_declined_finding_reaches_the_next_review_and_its_rebuttal_waits_on_the_operator(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """A worker answers each finding; a rebuttal of a decline is held for the operator, never resumed (DESIGN §21)."""
+    # canopy's reviewer is trusted, so its findings go to a worker on its own word, but a rebuttal's never does.
+    scenario.configures("private", trust={"trusted_reviewers": ["canopy:review"]})
+    conn = scenario.conn
+    first = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS)).id
+    scenario.run(worker=pushes())
+
+    # The resume is asked for an answer to each finding, and the answers `_run` can check are kept.
+    ran = scenario.run(resume(first), worker=pushes(review_answers=answers_to(first)))
+    assert '"review_answers":[{"review":<review run id>' in ran.prompt
+    answered = review_answers.latest(conn, first)
+    assert [(n, a.answer, a.reason) for n, a in answered.items()] == [
+        (1, FindingAnswer.FIXED, None),
+        (2, FindingAnswer.DECLINED, DECLINED),
+    ]
+    note = json.loads(ran.row["result_json"])["harness"]
+    assert note == (
+        f"review answers not recorded: entry 3: review run {first} has no finding 3; entry 4: review run 99 is not a "
+        "done review of PROJ-1; entry 5: a decline gives no reason"
+    )
+
+    # The next review reads them: it rebuts the decline, and repeats the fix's finding, which it may not rebut.
+    rebuttal = {
+        **FINDINGS,
+        "findings": [
+            {**TWO_FINDINGS["findings"][1], "detail": "The runbook asks for one line, not two.", "rebuts": 2},
+            {**TWO_FINDINGS["findings"][0], "rebuts": 1},
+        ],
+    }
+    sha = present(git_pool.remote_head("agent/PROJ-1-work"))
+    # The PR the reviews read is the one PROJ-1's unit opened.
+    db.set_unit(conn, "PROJ-1", str(reviewing.root), "repo", pr_url=PR)
+    second = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(rebuttal))
+    assert previous_review(second.prompt).endswith(
+        "1. **blocking** `src/retry.py:42`: retry never stops\n"
+        "   > The loop resets attempts on every error.\n"
+        "   > A failing call retries forever.\n"
+        "   The author's answer: fixed.\n"
+        "2. **minor** `src/retry.py:7`: log line is noisy\n"
+        "   > It logs twice.\n"
+        "   The author's answer: declined:\n"
+        f"   > {DECLINED}",
+    )
+    assert set(review_runs.held(conn, second.id)) == {1}
+    held = f"(held for the operator: it rebuts the author's decline of finding 2 of review run {first})"
+    assert (
+        f"1. **minor** `src/retry.py:7`: log line is noisy {held}"
+        in scenario.operator(
+            "review",
+            "show",
+            str(second.id),
+        ).out
+    )
+
+    # Neither the overseer nor a worker acts on the held one; the operator hears of it.
+    [item] = waiting.items(conn)
+    assert (item.ticket, item.reason) == ("PROJ-1", waiting.REBUTTAL_REASON)
+    assert item.detail.startswith(
+        f"review:{second.id} finding 1 rebuts the worker's decline of review:{first} finding 2",
+    )
+    scenario.tick(*waits("PROJ-1"), dry_run=True)
+    latest = scenario.state()["reviews"]["prs"][0]["latest"]
+    assert (latest["findings"], latest["held_findings"]) == (["retry never stops"], 1)
+    prompt = scenario.run(resume(second.id), worker=pushes()).prompt
+    assert "2. **blocking** `src/retry.py:42`: retry never stops" in prompt
+    assert "log line is noisy" not in prompt
+
+    # Sent, it is the operator's go-ahead, and a resume hands it on; the item is gone. The worker reported its own PR
+    # again, so the unit is put back on the reviewed one.
+    db.set_unit(conn, "PROJ-1", str(reviewing.root), "repo", pr_url=PR)
+    scenario.operator("send", f"review:{second.id}", "1")
+    assert review_runs.held(conn, second.id) == {}
+    assert waiting.items(conn) == []
+    assert "1. **minor** `src/retry.py:7`: log line is noisy" in scenario.run(resume(second.id), worker=pushes()).prompt
+
+
+@pytest.mark.usefixtures("reviewing")
+def test_a_later_resume_answering_one_finding_keeps_an_earlier_resumes_answer_to_another(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """Each finding keeps its own latest answer, so a later resume of one finding hides no earlier decline (§21)."""
+    conn = scenario.conn
+    first = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS)).id
+    scenario.run(worker=pushes())
+    scenario.run(resume(first), worker=pushes(review_answers=answers_to(first)))
+    # A second resume of the same review answers finding 1 alone, as when the operator sent it after the first.
+    later = [{"review": first, "finding": 1, "answer": "declined", "reason": "The loop is bounded upstream."}]
+    scenario.run(resume(first), worker=pushes(review_answers=later))
+
+    answered = review_answers.latest(conn, first)
+    assert [(n, a.answer, a.reason) for n, a in sorted(answered.items())] == [
+        (1, FindingAnswer.DECLINED, "The loop is bounded upstream."),
+        (2, FindingAnswer.DECLINED, DECLINED),
+    ]
+
+
+def test_review_noise_counts_what_workers_answered_of_the_findings_not_dismissed_and_the_rebuttals(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """`canopy review noise` counts a worker's latest answer to each finding, the operator's dismissal first (§21)."""
+    conn = scenario.conn
+    three = {**TWO_FINDINGS, "findings": [*TWO_FINDINGS["findings"], {**FINDINGS["findings"][0], "title": "again"}]}
+    first = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(three)).id
+    scenario.run(worker=pushes())
+    answers = [
+        {"review": first, "finding": 1, "answer": "fixed"},
+        {"review": first, "finding": 2, "answer": "declined", "reason": DECLINED},
+        {"review": first, "finding": 3, "answer": "fixed"},
+    ]
+    scenario.run(resume(first), worker=pushes(review_answers=answers))
+    # The operator's word on finding 3 wins over the worker's.
+    scenario.operator("dismiss", f"review:{first}", "3", "--reason", "wrong")
+    # The next review rebuts the decline, and the harness holds it; released, it still counts as a rebuttal.
+    rebuttal = {**FINDINGS, "findings": [{**TWO_FINDINGS["findings"][1], "rebuts": 2}]}
+    db.set_unit(conn, "PROJ-1", str(reviewing.root), "repo", pr_url=PR)
+    sha = present(git_pool.remote_head("agent/PROJ-1-work"))
+    second = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(rebuttal)).id
+    assert set(review_runs.held(conn, second)) == {1}
+    scenario.operator("send", f"review:{second}", "1")
+    assert review_runs.held(conn, second) == {}
+
+    found = json.loads(scenario.operator("review", "noise", "--json").out)
+    assert found["reviews"] == 2
+    assert [(g["key"], g["findings"], g["dismissed"], g["answered"], g["rebuttals"]) for g in found["severity"]] == [
+        ("blocking", 2, {"wrong": 1}, {"fixed": 1}, 0),
+        # The rebuttal itself is neither dismissed nor answered: it counts in the total and as a rebuttal.
+        ("minor", 2, {}, {"declined": 1}, 1),
+    ]
+    assert found["severity"][0]["rates"]["fixed"] == 0.5
+    text = scenario.operator("review", "noise").out.splitlines()
+    assert text[3:5] == [
+        (
+            "blocking         2      1            0             0             0           0      1         0          0"
+            "         50%"
+        ),
+        (
+            "minor            2      0            0             0             0           0      0         1          1"
+            "          0%"
+        ),
+    ]
+
+
+def test_a_rebuttal_the_operator_dismisses_waits_on_nobody(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    ctx: Context,
+) -> None:
+    """Dismissing a held rebuttal agrees with the worker: the review then moves on as a clean one (DESIGN §21)."""
+    conn = scenario.conn
+    first = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(TWO_FINDINGS)).id
+    scenario.run(worker=pushes())
+    scenario.run(resume(first), worker=pushes(review_answers=answers_to(first)))
+    rebuttal = {**FINDINGS, "findings": [{**TWO_FINDINGS["findings"][1], "rebuts": 2}]}
+    sha = present(git_pool.remote_head("agent/PROJ-1-work"))
+    db.set_unit(conn, "PROJ-1", str(reviewing.root), "repo", pr_url=PR)
+    scenario.tick(*waits("PROJ-1"), dry_run=True)
+    second = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(rebuttal)).id
+    assert scenario.refuses(resume(second))[0][1].startswith(f"every finding of review run {second}")
+    # The tick records the item about the ticket; the list checks it against the holds as they stand.
+    scenario.tick(*waits("PROJ-1"), dry_run=True)
+    assert [(i.subject, i.reason) for i in attention.listed(ctx) if i.reason == waiting.REBUTTAL_REASON] == [
+        ("PROJ-1", waiting.REBUTTAL_REASON),
+    ]
+    scenario.operator("dismiss", f"review:{second}", "1", "--reason", "wrong")
+    assert waiting.items(conn) == []
+    assert all(i.reason != waiting.REBUTTAL_REASON for i in attention.listed(ctx))
+
+
 def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
     reviewing: CanopyEnv,
     scenario: Scenario,
@@ -1111,10 +1445,16 @@ def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
     other = "https://github.com/acme/api/pull/8"
     sha = head(git_pool)
     assert scenario.refuses(reviews(sha, other, ticket="PROJ-1")) == [
-        ("refused:not_ours", f"PROJ-1's unit in repo did not open {other}; --ticket is only for the loop's own PR"),
+        (
+            "refused:not_ours",
+            f"PROJ-1's unit in repo did not open {other}; ticket (--ticket) is only for the loop's own PR",
+        ),
     ]
     assert scenario.refuses(reviews(sha, ticket="PROJ-2")) == [
-        ("refused:not_ours", f"PROJ-2's unit in repo did not open {PR}; --ticket is only for the loop's own PR"),
+        (
+            "refused:not_ours",
+            f"PROJ-2's unit in repo did not open {PR}; ticket (--ticket) is only for the loop's own PR",
+        ),
     ]
     own = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
     query = scenario.review(reviews(sha, other), reviewer=reviewer_reports(FINDINGS)).id
@@ -1218,7 +1558,8 @@ def test_a_commit_waits_on_each_reviewer_and_counts_each_review_against_the_limi
     # One review slot: explainer's waits, and the overseer sees the commit still owed it. Its overseer, played
     # whole, decides nothing, so the tick leaves PROJ-1's duty undone.
     actions = [d.action for d in db.decisions_for_tick(scenario.conn, first.row.tick_id)]
-    assert actions == ["dispatch:review", "refused:review_capacity"]
+    # The refusal is at the ask; the review's decision as the tick starts it, after the overseer (DESIGN §40).
+    assert actions == ["refused:review_capacity", "dispatch:review"]
     scenario.tick(dry_run=True, code=1)
     [pr] = scenario.state()["reviews"]["prs"]
     assert (pr["latest"]["run_id"], pr["owed"]) == (first.id, ["explainer"])
@@ -1253,7 +1594,7 @@ def test_a_resume_addresses_the_findings_of_each_reviewer_of_its_commit(
     assert f"canopy's review run {explainer.id} of {PR} at commit `{sha}`, in explainer, found these" in section
     assert f"canopy's review run {skeptic.id} of {PR} at commit `{sha}`, in skeptic, found these" in section
     # A persona's review whose findings the operator dismissed adds nothing.
-    scenario.operator("dismiss", f"review:{skeptic.id}", "1")
+    scenario.operator("dismiss", f"review:{skeptic.id}", "1", "--reason", "wrong")
     again = scenario.run(resume(explainer.id), worker=pushes())
     assert f"review run {skeptic.id} " not in again.prompt.split("## canopy's review\n\n", 1)[1]
 

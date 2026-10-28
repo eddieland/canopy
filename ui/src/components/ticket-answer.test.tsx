@@ -5,7 +5,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
-import { mockAttention, mockTickets } from '@/api/mocks'
+import { mockAttention, mockNoAttachments, mockTickets } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { AttentionItem, Limit, Message, TicketDetail, TicketSummary } from '@/api/types'
 import { renderRouted } from '@/test-utils'
@@ -24,6 +24,7 @@ const QUESTION: Message = {
     channel: 'run',
     answers: null,
     run_id: null,
+    task_run_id: null,
     comment: null,
 }
 
@@ -33,15 +34,17 @@ const AT_LIMIT: Limit = { kind: 'resume', repo: 'web', pr_url: null, runs: 2, li
 const DETAIL: TicketDetail = {
     ticket: TICKET,
     units: [],
+    attachments: mockNoAttachments,
     limits: [AT_LIMIT],
     runs: [],
     messages: [QUESTION],
     forgets: [],
     decisions: [],
-    cost: { runs: 0, reviews: 0, priced: 0, cost_usd: null },
+    cost: { runs: 0, reviews: 0, priced: 0, cost_usd: null, models: [] },
     drafts: [],
     personas: [],
     persona_names: [],
+    models: [],
 }
 
 // Every reply sent, each recorded as a new message answering the question.

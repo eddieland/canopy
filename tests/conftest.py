@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from unittest import mock
 
 import pytest
+from click.testing import CliRunner, Result
 
 from canopy.core import db
 from canopy.infra import resources
@@ -25,6 +26,8 @@ from canopy.infra.procs import SubprocessRunner
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Iterator, Sequence
+
+    import click
 
 FAKES_DIR = Path(__file__).parent / "fakes"
 # Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
@@ -52,8 +55,9 @@ HERMETIC_GIT = {
 
 @pytest.fixture(autouse=True)
 def hermetic_agent_env() -> Iterator[None]:
-    """Drop inherited CANOPY_* and OPENCODE_* variables, so a test's environment is only what it sets, and restore the
-    whole environment when the test ends.
+    """Drop inherited CANOPY_* and OPENCODE_* variables, so a test's environment is only what it sets.
+
+    The whole environment is restored when the test ends.
 
     Workers run this suite inside the agent runtime, which exports its own (OpenCode sets OPENCODE_PID). The fake
     agent records these prefixes and tests assert on them exactly, so an inherited one would fail them.
@@ -73,8 +77,10 @@ def hermetic_agent_env() -> Iterator[None]:
 
 @pytest.fixture
 def fakes_on_path() -> Iterator[Path]:
-    """Put tests/fakes first on PATH, so `treehouse`, `agent`, and `opencode` resolve to the fakes, and this
-    environment's `canopy` right after it."""
+    """Put tests/fakes first on PATH, so `treehouse`, `agent`, and `opencode` resolve to the fakes.
+
+    This environment's `canopy` comes right after it.
+    """
     path = os.pathsep.join([str(FAKES_DIR), str(SCRIPTS_DIR), os.environ.get("PATH", "")])
     with mock.patch.dict(os.environ, {"PATH": path}):
         yield FAKES_DIR
@@ -125,9 +131,11 @@ def connector_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
 def opencode_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
     """The fake `opencode` on PATH, knowing no session until the test writes the yielded state file.
 
-    Each run appends its argv and cwd to `opencode.jsonl` beside it. See tests/fakes/opencode for its keys.
+    Each run appends its argv, cwd, and OPENCODE_* variables' names to `opencode.jsonl` beside it. See
+    tests/fakes/opencode for its keys.
     """
-    state = tmp_path / "opencode.json"
+    # Not `opencode.json`, which OpenCode would read as config of a directory the workspace is in.
+    state = tmp_path / "opencode-state.json"
     with mock.patch.dict(
         os.environ,
         {"FAKE_OPENCODE_STATE": str(state), "FAKE_OPENCODE_LOG": str(tmp_path / "opencode.jsonl")},
@@ -232,8 +240,10 @@ class CanopyEnv:
         self.private_file.write_text(text)
 
     def configure(self, file: Path, tables: Mapping[str, object]) -> list[str]:
-        """Merge `tables` into `file`, one of this workspace's config files: a key `tables` sets takes the place of the
-        one there, a key it sets to None is dropped, and a table it names keeps the keys it does not set.
+        """Merge `tables` into `file`, one of this workspace's config files.
+
+        A key `tables` sets takes the place of the one there, a key it sets to None is dropped, and a table it names
+        keeps the keys it does not set.
 
         The file is written whole again, so what it held stays, but not its comments or its quoting.
 
@@ -339,10 +349,11 @@ plan_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-p
 
 @pytest.fixture
 def canopy_env(tmp_path: Path, journals: Journals) -> Iterator[CanopyEnv]:
-    """A workspace of one repository with its workspace file, and a user config whose runtime commands run the fake
-    agent. HOME, XDG_CONFIG_HOME, and XDG_DATA_HOME point into tmp_path too, so nothing reads or writes the real
-    operator's files.
-    CANOPY_TICK_ID is cleared."""
+    """A workspace of one repository with its workspace file, and a user config that runs the fake agent.
+
+    The user config's runtime commands run the fake agent. HOME, XDG_CONFIG_HOME, and XDG_DATA_HOME point into tmp_path
+    too, so nothing reads or writes the real operator's files. CANOPY_TICK_ID is cleared.
+    """
     home = tmp_path / "home"
     root = tmp_path / "ws"
     repo = root / "repos" / REPO_NAME
@@ -391,6 +402,18 @@ def executable(path: Path, text: str) -> Path:
     path.write_text(text)
     path.chmod(0o755)
     return path
+
+
+def invoke(command: click.Command, args: Sequence[str] = (), *, stdin: str = "", obj: object = None) -> Result:
+    """Run one of the programs canopy ships as its console script would, with `args` and `stdin`.
+
+    `obj` stands in for what the program would reach outside the process, such as a server's address. An exception
+    the program does not handle fails the test, rather than becoming the result's.
+
+    Returns:
+        What it printed, on stdout and on stderr apart, and its exit code.
+    """
+    return CliRunner().invoke(command, list(args), input=stdin, obj=obj, catch_exceptions=False)
 
 
 @dataclass(frozen=True)

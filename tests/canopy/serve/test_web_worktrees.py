@@ -10,6 +10,7 @@ from canopy.core import db, pools, review_runs, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import PoolKind, TickStatus
 from canopy.serve import mock
+from canopy.serve.mock import tasks as mock_tasks
 from tests.canopy.helpers import KEY, running_run
 from tests.canopy.web_helpers import client, signed_in_client
 from tests.conftest import pool_state
@@ -146,6 +147,12 @@ def test_the_mock_is_a_workspace_with_a_joint_run_and_a_pool_past_its_size(tmp_p
     assert [w["path"] for w in joint] == [".treehouse/mobile-8e41d0c7/1/mobile", ".treehouse/web-3f9c2a1b/2/web"]
     [running] = [r for r in c.get("/api/runs").json() if r["id"] == 43]
     assert running["worktrees"] == [".treehouse/mobile-8e41d0c7/1/mobile", ".treehouse/web-3f9c2a1b/2/web"]
+    # mobile's second slot is the running task's: the slot names the task and its run, and the run's branch.
+    task = mobile["worktrees"][1]
+    assert (task["state"], task["run"], task["review"]) == ("working", None, None)
+    assert (task["task"]["task_id"], task["task"]["run_id"]) == (mock_tasks.RUNNING_TASK, 6)
+    assert task["branch"] == f"agent/task/{mock_tasks.RUNNING_TASK}"
+    assert mobile["worktrees"][0]["task"] is None
 
 
 def test_a_workspace_s_pools_are_read_at_once(tmp_path: Path) -> None:

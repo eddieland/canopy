@@ -7,6 +7,7 @@ import type { Run, Transcript } from '@/api/types'
 import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { EndedOnField } from '@/components/ended-on'
+import { WroteFeedbackPlan } from '@/components/feedback-plan-card'
 import { Field, Fields } from '@/components/fields'
 import { PersonaField } from '@/components/persona-field'
 import { FoldPanel } from '@/components/fold-panel'
@@ -105,8 +106,9 @@ function NoRun({ title, children }: { title: string; children: string }) {
 
 /**
  * The run's facts, in the order every identity panel of a run, tick, or chore run keeps (ui/DESIGN.md, "A detail page
- * has one skeleton"): its answer, what came of it, when, what it spent, then where its files are. Its state, kind,
- * ticket, and title are the page's header, so none is said here again.
+ * has one skeleton"): its answer, what came of it (for a feedback plan run, the plan it wrote, pointing at the PR's
+ * page where it is approved), when, what it spent, then where its files are. Its state, kind, ticket, and title are
+ * the page's header, so none is said here again.
  */
 function RunPanel({
     run,
@@ -123,6 +125,11 @@ function RunPanel({
             <Fields>
                 <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
                 <EndedOnField status={run.status} transcript={transcript} onShow={onShow} />
+                {run.feedback_plan !== null && (
+                    <Field label="wrote" mono>
+                        <WroteFeedbackPlan plan={run.feedback_plan} />
+                    </Field>
+                )}
                 {run.activity && (
                     <Field label="last call">
                         <RunDoing activity={run.activity} />
@@ -143,7 +150,7 @@ function RunPanel({
                     <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
                 </Field>
                 <PersonaField persona={run.persona} digest={run.persona_digest} />
-                {run.models !== null && <ModelsField models={run.models} />}
+                {run.models !== null && <ModelsField models={run.models} asked={run.model} />}
                 <Field label="branch" mono>
                     {run.branch === null ? <None /> : <Copyable text={run.branch} label="branch" />}
                 </Field>

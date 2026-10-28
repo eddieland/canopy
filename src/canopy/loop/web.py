@@ -1,10 +1,10 @@
 """The web UI for `canopy loop` (DESIGN §22, D073): the listener secret checked, the server's backend wired, started.
 
 The server is a feature (`canopy.serve`) and cannot import the loop, `runs`, `reviews`, or `chores`, so this hands it
-the attention list as `canopy status` shows it, `runs.halt.end`, which `canopy stop --now` uses, for a stop with `now`,
-a way to ask the loop to read its config again, as SIGHUP does, and one to ask it for a tick now, as `t` does, the
-attempt and review limits with the grants that `canopy grant` records (`runs.policy`, `reviews.grants`), and a chore's
-try (`chores.trial`).
+the attention list as `canopy status` shows it, `runs.halt.end` and `runs.task_run.stop_now`, which `canopy stop --now`
+uses for a ticket and a task, for a stop with `now`, a way to ask the loop to read its config again, as SIGHUP does,
+and one to ask it for a tick now, as `t` does, the attempt and review limits with the grants that `canopy grant`
+records (`runs.policy`, `reviews.grants`), and a chore's try (`chores.trial`).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from canopy.core import conversation, review_runs
 from canopy.infra import logs, resources
 from canopy.loop import attention, reread, tick_now
 from canopy.reviews import grants
-from canopy.runs import halt, policy
+from canopy.runs import halt, policy, task_run
 from canopy.serve import secret
 from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
@@ -43,10 +43,17 @@ class Serving:
     links: str | None = None
 
 
-def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tick_now.TickNow) -> Serving:
+def start(
+    ctx: Context,
+    log: logs.TickAdapter,
+    reload: reread.Reload,
+    asked: tick_now.TickNow,
+    every: int | None = None,
+) -> Serving:
     """Start the web UI's server for the loop, or say why it serves nothing. Never raises: the loop goes on.
 
-    The UI's reload asks through `reload`, as SIGHUP does, and its Tick now through `asked`, as `t` does.
+    The UI's reload asks through `reload`, as SIGHUP does, and its Tick now through `asked`, as `t` does. `every` is
+    `--every`'s minutes, which the settings page names beside `loop.interval_minutes`.
 
     Returns:
         The note for the loop's header, with the URL, server, backend, and the address of notifications' links when
@@ -64,7 +71,7 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tic
         return Serving(f"not served: cannot read the listener secret: {e}")
 
     sessions = Sessions(key, port=options.port, base_path=options.base_path, hosts=options.hosts)
-    served = backend(ctx, reload, asked)
+    served = backend(ctx, reload, asked, every)
     server = WebServer(create_app(options, served, sessions), options, log)
     server.start()
     url = options.url()
@@ -74,15 +81,18 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tic
     return Serving(note, url, server, served, links=cfg.url or url)
 
 
-def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Backend:
+def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow, every: int | None = None) -> Backend:
     """The server's view of the loop's journal: the attention list, `halt.end`, reload, tick now, grants, and tries.
 
     Returns:
-        The backend the server calls into, bound to `ctx`, `reload`, and `asked`.
+        The backend the server calls into, bound to `ctx`, `reload`, and `asked`, with `--every`'s minutes.
     """
 
     def end_run(run_ctx: Context, run: records.Run) -> bool:
         return halt.end(run_ctx, run, logs.for_tick(None))
+
+    def end_task_run(run_ctx: Context, run: records.TaskRun) -> bool:
+        return task_run.stop_now(run_ctx, run, logs.for_tick(None))
 
     def reload_config(current: Context) -> Reloading:
         # Read here first, so a config that does not load is refused to the operator who asked, not only logged.
@@ -99,6 +109,7 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Bac
         workspace=ctx.ws,
         attention=attention.listed,
         end_run=end_run,
+        end_task_run=end_task_run,
         reload=reload_config,
         tick_now=ask_tick,
         limits=limits,
@@ -106,6 +117,7 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Bac
         grant=grant,
         try_chore=try_chore,
         write_attention=lambda current: attention.write(current, logs.for_tick(None)),
+        every=every,
     )
 
 

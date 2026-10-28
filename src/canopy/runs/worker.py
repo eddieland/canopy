@@ -24,13 +24,17 @@ import json
 import os
 import sqlite3
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, StrictStr
 
 from canopy.core import (
+    agent_models,
+    artifact_feed,
+    attachments,
+    commit_hooks,
     contract,
     conversation,
     db,
@@ -47,17 +51,19 @@ from canopy.core import (
     plans,
     pools,
     replies,
+    review_answers,
     review_diff,
     run_models,
     run_offers,
+    sandboxing,
 )
 from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
-from canopy.runs import checkpoint, desks, dispatch, drafted, policy, tidy
+from canopy.runs import checkpoint, desks, dispatch, drafted, flaky_kick, plan_guards, policy, tidy
 from canopy.runs.checkpoint import SetupError
-from canopy.runtime import project_config, stdout
+from canopy.runtime import agents, project_config, stdout
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
@@ -158,7 +164,7 @@ class PlanResult(BaseModel):
 
 
 class FeedbackItem(BaseModel):
-    """One item a feedback plan's result names: an observed id, what it proposes, and the reply it would draft."""
+    """One item a feedback plan's result names: its id, what it proposes, and the reply it would draft."""
 
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
@@ -187,17 +193,24 @@ class Outcome:
     drafts: drafts.Fields | None = None
     #: The follow-up tickets the worker reported, checked: those to record, and those refused (DESIGN §18).
     follow_ups: follow_ups.Checked | None = None
+    #: What a resume's worker answered of the review findings it was handed, checked (DESIGN §21).
+    answers: review_answers.Checked | None = None
+    #: Whether the worker left a failed check flaky, and the branches the harness kicked to rerun it (DESIGN §23).
+    kicks: flaky_kick.Kicks = field(default_factory=flaky_kick.Kicks)
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11).
 
-        A refused follow-up is kept with it, by key, for the attention item it raises (DESIGN §18).
+        A refused follow-up is kept with it, by key, for the attention item it raises (DESIGN §18), and the repositories
+        the harness kicked, for the overseer (DESIGN §23).
         """
         data: dict[str, object] = self.result.model_dump(mode="json") if self.result is not None else {}
         if self.note:
             data["harness"] = self.note
         if self.follow_ups is not None:
             data |= self.follow_ups.stored()
+        if self.kicks.kicked:
+            data["kicked"] = list(self.kicks.kicked)
         return json.dumps(data)
 
 
@@ -287,11 +300,15 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     """Write what the run reported beside its result, in the transaction that closes it.
 
     That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), with the event that tells the sinks of
-    them, so a run reconcile closed first writes none.
+    them, and the event that tells them it left a check flaky (§23), so a run reconcile closed first writes none. So
+    are its answers to review findings (§21), but only from a run that ended `done` or `blocked`: one that did not
+    finish its work cannot say what it fixed.
     """
     run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
     drafts.record_run(ctx.conn, run_id, outcome.drafts)
+    if outcome.status in (RunStatus.DONE, RunStatus.BLOCKED):
+        review_answers.record(ctx.conn, run_id, outcome.answers)
     if outcome.follow_ups is not None and outcome.follow_ups.recorded:
         key = str(run["ticket_key"])
         recorded = follow_ups.record(ctx.conn, outcome.follow_ups, parent=key, run_id=run_id)
@@ -301,6 +318,18 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
         event = outbox.follow_ups_filed(ctx.config, key=key, run_id=run_id, filed=filed)
         if event is not None:
             db.record_event(ctx.conn, event)
+    if outcome.kicks.flaky and isinstance(outcome.result, WorkerResult):
+        flaky = outbox.ci_flaky(
+            ctx.config,
+            key=str(run["ticket_key"]),
+            run_id=run_id,
+            prs=[pr for pr in (outcome.result.prs or {}).values() if pr],
+            kicked=outcome.kicks.kicked,
+            estimate=outcome.result.summary,
+            note="; ".join(outcome.kicks.notes),
+        )
+        if flaky is not None:
+            db.record_event(ctx.conn, flaky)
 
 
 type _Doer = Callable[[Context, sqlite3.Row, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]
@@ -413,12 +442,15 @@ def _run_agent(
     *,
     template: str,
     desk_files: Mapping[str, str] | None = None,
+    marks: commit_hooks.Marks = commit_hooks.NONE,
 ) -> tuple[procs.Result, str]:
     """Check the places the agent reads config from, make the run's desk if it has one, and run `template` in it.
 
-    `template` runs between `runtime.worker_cmd_prefix` and `worker_cmd_suffix` (DESIGN §12), for the worker's timeout.
+    `template` runs between `runtime.worker_cmd_prefix` and `worker_cmd_suffix` (DESIGN §12), for the worker's timeout,
+    behind the sandbox wrapper when a slot's repository is one `runtime.sandbox_repos` names (DESIGN §24).
     A private run's places and a plan's must also name none of the tracker server's tools (DESIGN §22, §25).
     `desk_files` are written into the desk, by name, readable only by the operator, before the agent starts.
+    `marks` are what canopy's git hooks put on every commit the agent makes (`commit_hooks`).
 
     The session and cost the runtime reported are recorded on the run at once, so a git step after the agent that
     fails does not lose them (DESIGN §13).
@@ -439,18 +471,26 @@ def _run_agent(
     places = [path for _, path in trees] + desk_parents
     tools = ctx.config.tracker.tools()
     read_only = run["private"] or run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN)
-    refused = project_config.refusal(places, tracker_server=tools.server if read_only and tools is not None else None)
+    refused = project_config.refusal(
+        places,
+        version=ctx.config.runtime.version,
+        tracker_server=tools.server if read_only and tools is not None else None,
+    )
     if refused is not None:
         raise SetupError(refused)
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
-    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
+    # The model the run recorded, which its ticket's override may have chosen in place of config's (DESIGN §13).
+    models = agent_models.of_run(ctx.config, template, run["model"])
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config, models)
     command = ctx.config.runtime.worker_template(template)
     rendered = render_command(command, prompt, snapshot, title)
-    argv = rendered.argv
+    argv = sandboxing.wrap(ctx.config.runtime, [s.repo for s in slots], "worker", rendered.argv, snapshot)
     if desked:
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), trees)
         for name, text in (desk_files or {}).items():
             try:
+                # The attachments' copies are in a directory of their own (`_place_attachments`).
+                (cwd / name).parent.mkdir(mode=0o700, exist_ok=True)
                 logs.write_private(cwd / name, text)
             except OSError as e:
                 raise SetupError(f"could not write {name} in the desk {cwd}: {e}") from e
@@ -468,9 +508,28 @@ def _run_agent(
     # directory; an unsandboxed worker ignores it (DESIGN §8). A planner, which has no shell, reads its worktrees'
     # history through canopy's read-only git tools, over those worktrees alone, each named for its repository (§27).
     env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
+    # A public worker that may publish names its ticket to the store through canopy, not its own word (DESIGN §38).
+    publishing = ctx.config.artifacts.publishing()
+    if not read_only and publishing is not None and agents.WORKER in publishing.agents:
+        env |= artifact_feed.origin_env(ctx.workspace.name, str(run["ticket_key"]), run_id)
     if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
-        env |= git_tools.run_env({s.repo: s.path for s in slots}, cwd=ctx.workspace.root.absolute())
-    with run_offers.probing(ctx.conn, "runs", run_id, ctx.runner, argv, cwd=cwd, env=env, log=log):
+        env |= git_tools.run_env(
+            {s.repo: s.path for s in slots},
+            version=ctx.config.runtime.version,
+            cwd=ctx.workspace.root.absolute(),
+        )
+    env |= commit_hooks.env(snapshot, marks, os.environ)
+    with run_offers.probing(
+        ctx.conn,
+        "runs",
+        run_id,
+        ctx.runner,
+        argv,
+        version=ctx.config.runtime.version,
+        cwd=cwd,
+        env=env,
+        log=log,
+    ):
         result = ctx.runner.run(
             argv,
             cwd=cwd,
@@ -484,7 +543,7 @@ def _run_agent(
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
-    output = stdout.read(result.stdout)
+    output = stdout.read(result.stdout, version=ctx.config.runtime.version)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn,
@@ -513,7 +572,7 @@ class _Progress:
         self.run_id = run_id
         self.out = out
         self.log = log
-        self.watch = Watch()
+        self.watch = Watch(version=ctx.config.runtime.version)
 
     def __call__(self, line: str) -> None:
         self.out.write(line)
@@ -548,6 +607,7 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     replaced = plans.current(ctx.conn, key)
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
     desk_files = {plans.REPLACED: copy} if copy is not None else {}
+    desk_files |= _place_attachments(run, slots, _attachment_copies(ctx, run))
     template = ctx.config.runtime.plan_cmd
     result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
@@ -586,7 +646,7 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
         run_id,
         written,
         event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id),
-        no_review=parsed.no_review() if ctx.config.policy.planner_may_approve else None,
+        no_review=parsed.no_review() if ctx.config.policy.planner_approves() else None,
         effort=parsed.effort,
     )
     log.info(
@@ -606,8 +666,9 @@ def _feedback_plan(
     """Run the planner on what came back to the run's PRs, and write and record the feedback plan (DESIGN §32).
 
     Each slot is checked out at the ticket's branch, as its PR's head was pushed. Each PR is read whole through the
-    `vcs` source first: the items the planner may cover are what that read observed, written to its desk with a copy
-    of the feedback plan this one replaces, if the ticket has one, and what changed on its PRs since that plan saw them.
+    `vcs` source first: the items the planner may cover are what that read observed, its reviews and threads, failed
+    checks, conflicts, and merged blockers, written to its desk with a copy of the feedback plan this one replaces, if
+    the ticket has one, and what changed on its PRs since that plan saw them.
     An item the result names that it was not given is refused, with a harness note; the rest are recorded with the
     plan, and with what the read saw, its snapshot (DESIGN §32, Planning again).
 
@@ -630,9 +691,11 @@ def _feedback_plan(
     read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
     if not prs or read.failure is not None:
         raise SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
-    offered = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
-    snapshot = feedback_items.take(ctx.conn, prs, offered)
-    desk_files = _feedback_desk(ctx, key, offered)
+    reviews = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
+    not_ci = feedback_items.not_ci(ctx.conn, ctx.workspace, prs)
+    snapshot = feedback_items.take(ctx.conn, prs, reviews, not_ci)
+    offered = [*reviews, *feedback_items.raised(ctx.conn, key, prs, not_ci)]
+    desk_files = _feedback_desk(ctx, key, offered) | _place_attachments(run, slots, _attachment_copies(ctx, run))
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.plan_cmd, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(FeedbackPlanResult, text)
@@ -650,7 +713,7 @@ def _feedback_plan(
     return _record_feedback_plan(ctx, run, parsed, written.text, matched=matched, snapshot=snapshot, log=log)
 
 
-def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Offered]) -> dict[str, str]:
+def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Item]) -> dict[str, str]:
     """Return the files a feedback planner's desk holds, each data to it (DESIGN §32).
 
     Returns:
@@ -664,7 +727,7 @@ def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Offe
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text
     if copy is not None:
         desk_files[plans.REPLACED] = copy
-    changed = feedback_items.changes(ctx.conn, ctx.config.trust, replaced)
+    changed = feedback_items.changes(ctx.conn, ctx.config.trust, replaced, ctx.workspace)
     if changed:
         desk_files[feedback_items.CHANGES] = feedback_items.changes_file(changed)
     return desk_files
@@ -700,7 +763,7 @@ def _record_feedback_plan(
         matched.kept,
         snapshot=snapshot,
         event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id, feedback=True),
-        no_review=parsed.no_review() if ctx.config.policy.planner_may_approve else None,
+        no_review=parsed.no_review() if ctx.config.policy.planner_approves() else None,
         effort=parsed.effort,
     )
     log.info(
@@ -726,10 +789,14 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     for slot in slots:
         _run_setup(ctx, run, slot, out, log)
     copy = _plan_copy(ctx, run)
-    desk_files = _place_copy(run, slots, copy)
+    attached = _attachment_copies(ctx, run)
+    desk_files = _place_copy(run, slots, copy) | _place_attachments(run, slots, attached)
     runtime = ctx.config.runtime
     template = runtime.private_worker_cmd if run["private"] else runtime.worker_cmd
-    result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files)
+    # As the prompt names them: the run's model, and its planner's when it follows a plan (DESIGN §25).
+    planner = plan_guards.planner_model(ctx, run["plan_id"], run["feedback_plan_id"])
+    marks = commit_hooks.marks(ctx.config, key=str(run["ticket_key"]), model=run["model"], planner_model=planner)
+    result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files, marks=marks)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
 
     parsed = parse_result(text)
@@ -740,6 +807,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     # a side output must not cost the run its PRs (DESIGN §18).
     filed = _check_follow_ups(ctx, run, follow_ups.parse(text)) if parsed is not None else None
     filed_note = filed.note() if filed is not None else ""
+    answered = _check_answers(ctx, run, text) if parsed is not None else None
+    answered_note = answered.note() if answered is not None else ""
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
@@ -772,10 +841,33 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     if unpushed:
         status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
     committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
+    committed += [found for slot in slots if attached and (found := _committed_attachments(slot, branch))]
+    for slot, start in zip(slots, starts, strict=True):
+        committed += checkpoint.unmarked(slot.git, branch, start, slot.base, marks)
+    # After the marks are read: a kick replaces the branch's commits with copies the run did not make (DESIGN §23).
+    kicks = flaky_kick.after_run(
+        ctx,
+        run,
+        status,
+        flaky=parsed is not None and parsed.flaky,
+        places=[(slot.git, slot.base, start) for slot, start in zip(slots, starts, strict=True)],
+        log=log,
+    )
+    committed += kicks.notes
     _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
-    notes = "; ".join(n for n in [note, *committed, filed_note] if n)
-    return Outcome(status, parsed, notes, memory=remembered, head=head, drafts=drafted, follow_ups=filed)
+    notes = "; ".join(n for n in [note, *committed, filed_note, answered_note] if n)
+    return Outcome(
+        status,
+        parsed,
+        notes,
+        memory=remembered,
+        head=head,
+        drafts=drafted,
+        follow_ups=filed,
+        answers=answered,
+        kicks=kicks,
+    )
 
 
 def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow_ups.Checked:
@@ -791,6 +883,17 @@ def _check_follow_ups(ctx: Context, run: sqlite3.Row, created: object) -> follow
         repos={r.name for r in ctx.workspace.repos},
         limit=ctx.config.policy.max_follow_ups,
     )
+
+
+def _check_answers(ctx: Context, run: sqlite3.Row, text: str) -> review_answers.Checked | None:
+    """Check the answers a worker gave to the review findings it was handed, which only a resume is (DESIGN §21).
+
+    Returns:
+        The answers to record when the run is closed, and those refused; None for a run of another kind.
+    """
+    if run["kind"] != RunKind.RESUME:
+        return None
+    return review_answers.check(ctx.conn, review_answers.parse(text), key=str(run["ticket_key"]))
 
 
 def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:
@@ -941,6 +1044,61 @@ def _committed_copy(slot: _Slot, branch: str) -> str:
     return f"{slot.git.where}the pushed {branch} holds {plans.COPY}, the plan's copy, committed by the worker"
 
 
+def _attachment_copies(ctx: Context, run: sqlite3.Row) -> list[attachments.Copy]:
+    """Return the ticket's attachments the run's prompt names and the ticket still holds, read again (DESIGN §22).
+
+    Returns:
+        Their copies, in the order they were attached.
+
+    Raises:
+        SetupError: an attachment's file is gone or changed since it was attached, so the worker gets none of them.
+    """
+    ref = conversation.Ref(conversation.TICKET, str(run["ticket_key"]))
+    try:
+        return attachments.copies(ctx.conn, ctx.state_dir, ref, str(run["started_at"]))
+    except attachments.AttachmentFileError as e:
+        raise SetupError(f"{e}; the worker did not start") from e
+
+
+def _place_attachments(run: sqlite3.Row, slots: Sequence[_Slot], found: Sequence[attachments.Copy]) -> dict[str, str]:
+    """Put the run's copies of its ticket's attachments where it starts: in its desk, or in its one worktree (§22).
+
+    In a worktree they are in a directory at its root that git ignores, made afresh.
+
+    Returns:
+        The files `_run_agent` writes into the desk: the copies, for a run in a desk, else none.
+
+    Raises:
+        SetupError: git could not name the repository's git directory, or the exclude file or a copy could not be
+            written.
+    """
+    if not found:
+        return {}
+    if dispatch.in_desk(str(run["kind"]), slots):
+        return {f"{attachments.RUN_DIR}/{c.name}": c.text for c in found}
+    slot = slots[0]
+    checkpoint.ignore(slot.git, attachments.RUN_DIR)
+    try:
+        attachments.place(slot.path / attachments.RUN_DIR, found)
+    except OSError as e:
+        raise SetupError(f"{slot.git.where}could not write the attachments' copies: {e}") from e
+    return {}
+
+
+def _committed_attachments(slot: _Slot, branch: str) -> str:
+    """Return a harness note when the branch pushed from `slot` holds the attachments' copies, else "" (§22).
+
+    As with the plan's copy, canopy reports it and does not rewrite the branch (`_committed_copy`).
+    """
+    remote = checkpoint.remote_head(slot.git, branch)
+    if not remote:
+        return ""
+    found = slot.git.result("ls-tree", "--name-only", remote, "--", attachments.RUN_DIR)
+    if not (found.ok and found.stdout.strip()):
+        return ""
+    return f"{slot.git.where}the pushed {branch} holds {attachments.RUN_DIR}, the attachments' copies"
+
+
 def _stopped(ctx: Context, run: sqlite3.Row) -> str:
     """Return why the run must not start its worker, read again from the ticket's start record, or "" (DESIGN §22).
 
@@ -967,6 +1125,7 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
     argv = setup_words(ctx.config.runtime.setup_cmd)
     if not argv:
         return
+    argv = sandboxing.wrap(ctx.config.runtime, [slot.repo], "setup", argv)
     run_id = int(run["id"])
     timeout_minutes = ctx.config.runtime.setup_timeout_minutes
     log.info("running setup", extra={"run_id": run_id, "cmd": argv[0], "cwd": str(slot.path), "repo": slot.repo})

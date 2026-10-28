@@ -11,8 +11,9 @@
  *
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
- * others set only the neutrals, over the default's: off-white, Solarized, Nord, and Gruvbox for light; grey (the one
- * the 2026-10-19 exploration drew for Mailroom), black, Solarized, and Gruvbox for dark.
+ * others set only the neutrals, over the default's: off-white, Solarized, Nord, Gruvbox, sage, and Rosé Pine Dawn for
+ * light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized, Gruvbox, forest, plum, and
+ * Monokai for dark.
  */
 
 :root {
@@ -39,13 +40,11 @@
     /* The nav's sections: identity, never state, each from what its page is about (ui/DESIGN.md, "Tokens"). */
     --section-attention: oklch(0.55 0.2 2);
     --section-runs: oklch(0.45 0.15 272);
-    --section-worktrees: oklch(0.515 0.09 182);
     --section-tickets: oklch(0.52 0.12 242);
+    --section-tasks: oklch(0.505 0.125 115);
     --section-pull-requests: oklch(0.54 0.21 302);
-    --section-reviews: oklch(0.55 0.2 330);
     --section-chores: oklch(0.535 0.14 50);
-    --section-ticks: oklch(0.51 0.145 135);
-    --section-spend: oklch(0.525 0.105 95);
+    --section-reports: oklch(0.525 0.105 95);
     --section-memory: oklch(0.49 0.11 225);
     --section-settings: oklch(0.5 0.03 250);
 
@@ -60,8 +59,15 @@
     --syntax-number: oklch(0.515 0.11 70);
     --syntax-literal: oklch(0.52 0.17 315);
 
-    /* The spend page's chart (src/lib/spend.ts): a series per kind of agent run, as fills, never text and never state.
-     * Idle overseer spend is the overseer's own hue, lighter, so it reads as a part of it. */
+    /* A feedback plan's proposals (src/components/status.tsx): what each would do to its item, quiet hues no status
+     * wears, so `change`, the one that edits code, stands out; `leave`, which does nothing, stays plain. */
+    --proposal-change: oklch(0.48 0.15 345);
+    --proposal-decline: oklch(0.46 0.06 115);
+    --proposal-ask: oklch(0.465 0.065 245);
+
+    /* The spend page's chart (src/lib/spend.ts): a series per kind of agent run, and the sessions outside canopy, as
+     * fills, never text and never state. Idle overseer spend is the overseer's own hue, lighter, so it reads as a part
+     * of it. */
     --spend-overseer: oklch(0.45 0.15 265);
     --spend-idle: oklch(0.62 0.12 265);
     --spend-workers: oklch(0.55 0.1 185);
@@ -70,6 +76,7 @@
     --spend-reviews: oklch(0.55 0.18 330);
     --spend-tasks: oklch(0.58 0.13 115);
     --spend-dry-run: oklch(0.6 0.02 275);
+    --spend-outside: oklch(0.52 0.09 25);
 
     /* A transcript's context chart (src/components/context-chart.tsx), as fills: what a model call carried from the
      * one before it, or the runtime's own overhead, in a neutral; what it added, canopy's prompt first, in a hue. */
@@ -97,6 +104,23 @@
     /* The keyboard Sprig vibe codes on: its case and its keys. A key it presses lights in the accent. */
     --buddy-keyboard: oklch(0.42 0.03 275);
     --buddy-key: oklch(0.97 0.006 275);
+    /* The Ghost that may sit in Sprig's place (src/lib/ghost.ts): its shell's lit and shaded facets, its eye's glow,
+     * and the eye's bright core. The shell is outlined in the shaded facet, to stand off a light canvas. */
+    --buddy-ghost-shell: oklch(0.93 0.008 250);
+    --buddy-ghost-facet: oklch(0.55 0.02 255);
+    --buddy-ghost-eye: oklch(0.7 0.13 205);
+    --buddy-ghost-core: oklch(0.98 0.03 205);
+    /* The Ghost's other shells (src/lib/shells.ts): the Sprig Shell's leaves in shade, a pumpkin's rind lit and in
+     * shade, a gilded shell's shaded gold beside the hats' lit one, and a Vex shell's bronze, its red eye and the eye's
+     * hot core. */
+    --buddy-leaf-shade: oklch(0.45 0.12 145);
+    --buddy-ghost-pumpkin: oklch(0.72 0.17 55);
+    --buddy-ghost-pumpkin-shade: oklch(0.55 0.15 45);
+    --buddy-ghost-gilt-shade: oklch(0.62 0.12 75);
+    --buddy-ghost-vex: oklch(0.62 0.07 70);
+    --buddy-ghost-vex-shade: oklch(0.42 0.05 60);
+    --buddy-ghost-vex-eye: oklch(0.6 0.22 27);
+    --buddy-ghost-vex-core: oklch(0.95 0.06 40);
 
     /* The lightswitch rave's dark, when The Cheat flips the lights off: a near black, a touch of the indigo. */
     --rave-dark: oklch(0.16 0.03 275);
@@ -127,13 +151,11 @@
 
     --section-attention: oklch(0.75 0.17 2);
     --section-runs: oklch(0.66 0.12 272);
-    --section-worktrees: oklch(0.8 0.12 182);
     --section-tickets: oklch(0.77 0.13 242);
+    --section-tasks: oklch(0.86 0.165 115);
     --section-pull-requests: oklch(0.75 0.16 302);
-    --section-reviews: oklch(0.76 0.17 330);
     --section-chores: oklch(0.8 0.14 55);
-    --section-ticks: oklch(0.84 0.16 130);
-    --section-spend: oklch(0.86 0.15 100);
+    --section-reports: oklch(0.86 0.15 100);
     --section-memory: oklch(0.83 0.09 218);
     --section-settings: oklch(0.74 0.03 250);
 
@@ -145,6 +167,10 @@
     --syntax-number: oklch(0.82 0.12 75);
     --syntax-literal: oklch(0.76 0.14 315);
 
+    --proposal-change: oklch(0.77 0.13 345);
+    --proposal-decline: oklch(0.76 0.06 115);
+    --proposal-ask: oklch(0.75 0.065 245);
+
     --spend-overseer: oklch(0.62 0.15 265);
     --spend-idle: oklch(0.82 0.08 265);
     --spend-workers: oklch(0.74 0.11 185);
@@ -153,6 +179,7 @@
     --spend-reviews: oklch(0.72 0.16 330);
     --spend-tasks: oklch(0.8 0.14 115);
     --spend-dry-run: oklch(0.6 0.02 270);
+    --spend-outside: oklch(0.7 0.09 25);
 
     --context-carried: oklch(0.58 0.035 270);
     --context-added: oklch(0.78 0.12 195);
@@ -174,6 +201,18 @@
     --buddy-hat-blue: oklch(0.6 0.15 265);
     --buddy-keyboard: oklch(0.36 0.04 270);
     --buddy-key: oklch(0.56 0.04 268);
+    --buddy-ghost-shell: oklch(0.85 0.01 250);
+    --buddy-ghost-facet: oklch(0.52 0.02 255);
+    --buddy-ghost-eye: oklch(0.82 0.13 205);
+    --buddy-ghost-core: oklch(0.99 0.02 205);
+    --buddy-leaf-shade: oklch(0.55 0.13 145);
+    --buddy-ghost-pumpkin: oklch(0.75 0.16 55);
+    --buddy-ghost-pumpkin-shade: oklch(0.58 0.15 45);
+    --buddy-ghost-gilt-shade: oklch(0.64 0.12 75);
+    --buddy-ghost-vex: oklch(0.66 0.07 70);
+    --buddy-ghost-vex-shade: oklch(0.46 0.05 60);
+    --buddy-ghost-vex-eye: oklch(0.68 0.22 27);
+    --buddy-ghost-vex-core: oklch(0.97 0.05 40);
 
     --rave-dark: oklch(0.08 0.02 275);
 }
@@ -236,6 +275,35 @@
     --status-stopped: oklch(0.47 0.023 63);
     --spend-dry-run: oklch(0.59 0.02 70);
     --context-carried: oklch(0.59 0.02 70);
+}
+
+/* Sage: a soft green canvas, the light side of Forest. */
+:root[data-light-palette='sage']:not(.dark) {
+    --background: oklch(0.952 0.016 150);
+    --surface: oklch(0.992 0.005 150);
+    --surface-raised: oklch(0.963 0.014 150);
+    --border: oklch(0.9 0.024 150);
+    --foreground: oklch(0.25 0.025 160);
+    --muted-foreground: oklch(0.48 0.03 160);
+    --scrollbar: oklch(0.48 0.03 160 / 0.4);
+    --status-stopped: oklch(0.46 0.03 160);
+    --spend-dry-run: oklch(0.6 0.02 155);
+    --context-carried: oklch(0.6 0.02 155);
+}
+
+/* Rosé Pine Dawn: base the canvas, surface a surface, highlight med the hairlines, text the text, and subtle muted.
+ * The canvas is a shade darker than Rosé Pine's own, and subtle a step darker, so every hue reads at 4.5:1. */
+:root[data-light-palette='rose-pine']:not(.dark) {
+    --background: oklch(0.952 0.013 72);
+    --surface: oklch(0.987 0.011 77);
+    --surface-raised: oklch(0.962 0.013 68);
+    --border: oklch(0.892 0.012 31);
+    --foreground: oklch(0.42 0.063 290);
+    --muted-foreground: oklch(0.49 0.046 291);
+    --scrollbar: oklch(0.49 0.046 291 / 0.4);
+    --status-stopped: oklch(0.47 0.046 291);
+    --spend-dry-run: oklch(0.6 0.025 291);
+    --context-carried: oklch(0.6 0.025 291);
 }
 
 /* The dark theme's grey palette, Mailroom's neutrals. Muted text is a step further from the canvas than Mailroom drew
@@ -301,6 +369,53 @@
     --context-carried: oklch(0.62 0.02 70);
 }
 
+/* Forest: a deep green canvas, the dark side of Sage. */
+.dark[data-dark-palette='forest'] {
+    --background: oklch(0.17 0.02 165);
+    --surface: oklch(0.205 0.024 165);
+    --surface-raised: oklch(0.25 0.028 165);
+    --border: oklch(0.3 0.03 165);
+    --foreground: oklch(0.94 0.015 150);
+    --muted-foreground: oklch(0.71 0.03 155);
+    --accent-foreground: oklch(0.17 0.02 165);
+    --scrollbar: oklch(0.71 0.03 155 / 0.4);
+    --status-stopped: oklch(0.74 0.03 155);
+    --spend-dry-run: oklch(0.6 0.02 160);
+    --context-carried: oklch(0.6 0.02 160);
+}
+
+/* Plum: a dark wine-purple canvas, warmer than indigo. */
+.dark[data-dark-palette='plum'] {
+    --background: oklch(0.17 0.025 340);
+    --surface: oklch(0.205 0.03 340);
+    --surface-raised: oklch(0.25 0.035 340);
+    --border: oklch(0.3 0.04 340);
+    --foreground: oklch(0.95 0.012 340);
+    --muted-foreground: oklch(0.72 0.035 340);
+    --accent-foreground: oklch(0.17 0.025 340);
+    --scrollbar: oklch(0.72 0.035 340 / 0.4);
+    --status-stopped: oklch(0.75 0.035 340);
+    --spend-dry-run: oklch(0.6 0.025 340);
+    --context-carried: oklch(0.6 0.025 340);
+}
+
+/* Monokai: its olive-grey background the canvas, the line highlight the hairlines, its off-white the text, and the
+ * comment color muted. The bases are a step darker than Monokai's own, and the comment color brighter, so the status
+ * and section hues still read at 4.5:1. */
+.dark[data-dark-palette='monokai'] {
+    --background: oklch(0.18 0.009 115);
+    --surface: oklch(0.212 0.01 115);
+    --surface-raised: oklch(0.255 0.012 110);
+    --border: oklch(0.31 0.016 103);
+    --foreground: oklch(0.977 0.008 107);
+    --muted-foreground: oklch(0.72 0.029 97);
+    --accent-foreground: oklch(0.18 0.009 115);
+    --scrollbar: oklch(0.72 0.029 97 / 0.4);
+    --status-stopped: oklch(0.76 0.029 97);
+    --spend-dry-run: oklch(0.62 0.02 100);
+    --context-carried: oklch(0.62 0.02 100);
+}
+
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */
 @theme inline {
     --color-background: var(--background);
@@ -322,13 +437,11 @@
 
     --color-section-attention: var(--section-attention);
     --color-section-runs: var(--section-runs);
-    --color-section-worktrees: var(--section-worktrees);
     --color-section-tickets: var(--section-tickets);
+    --color-section-tasks: var(--section-tasks);
     --color-section-pull-requests: var(--section-pull-requests);
-    --color-section-reviews: var(--section-reviews);
     --color-section-chores: var(--section-chores);
-    --color-section-ticks: var(--section-ticks);
-    --color-section-spend: var(--section-spend);
+    --color-section-reports: var(--section-reports);
     --color-section-memory: var(--section-memory);
     --color-section-settings: var(--section-settings);
 
@@ -340,6 +453,10 @@
     --color-syntax-number: var(--syntax-number);
     --color-syntax-literal: var(--syntax-literal);
 
+    --color-proposal-change: var(--proposal-change);
+    --color-proposal-decline: var(--proposal-decline);
+    --color-proposal-ask: var(--proposal-ask);
+
     --color-spend-overseer: var(--spend-overseer);
     --color-spend-idle: var(--spend-idle);
     --color-spend-workers: var(--spend-workers);
@@ -348,6 +465,7 @@
     --color-spend-reviews: var(--spend-reviews);
     --color-spend-tasks: var(--spend-tasks);
     --color-spend-dry-run: var(--spend-dry-run);
+    --color-spend-outside: var(--spend-outside);
     --color-context-carried: var(--context-carried);
     --color-context-added: var(--context-added);
 
@@ -368,6 +486,18 @@
     --color-buddy-hat-blue: var(--buddy-hat-blue);
     --color-buddy-keyboard: var(--buddy-keyboard);
     --color-buddy-key: var(--buddy-key);
+    --color-buddy-ghost-shell: var(--buddy-ghost-shell);
+    --color-buddy-ghost-facet: var(--buddy-ghost-facet);
+    --color-buddy-ghost-eye: var(--buddy-ghost-eye);
+    --color-buddy-ghost-core: var(--buddy-ghost-core);
+    --color-buddy-leaf-shade: var(--buddy-leaf-shade);
+    --color-buddy-ghost-pumpkin: var(--buddy-ghost-pumpkin);
+    --color-buddy-ghost-pumpkin-shade: var(--buddy-ghost-pumpkin-shade);
+    --color-buddy-ghost-gilt-shade: var(--buddy-ghost-gilt-shade);
+    --color-buddy-ghost-vex: var(--buddy-ghost-vex);
+    --color-buddy-ghost-vex-shade: var(--buddy-ghost-vex-shade);
+    --color-buddy-ghost-vex-eye: var(--buddy-ghost-vex-eye);
+    --color-buddy-ghost-vex-core: var(--buddy-ghost-vex-core);
 
     --color-rave-dark: var(--rave-dark);
 

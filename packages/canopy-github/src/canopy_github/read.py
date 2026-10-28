@@ -15,6 +15,7 @@ from canopy_github import (
     GitHubError,
     Ref,
     Reply,
+    ServerError,
     cut,
     error_types,
     items,
@@ -71,7 +72,7 @@ fragment Contexts on StatusCheckRollupContextConnection {
 _PULL = (
     """
 fragment Pull on PullRequest {
-  id url number state isDraft headRefOid baseRefName mergeable mergeStateStatus
+  id url number title state isDraft headRefOid baseRefName mergeable mergeStateStatus
   author { login }
   labels(first: 100) { pageInfo { hasNextPage endCursor } nodes { name } }
   reviews(first: 100) { pageInfo { hasNextPage endCursor } nodes { ...Review } }
@@ -160,7 +161,9 @@ def pull_requests(client: Client, refs: Sequence[Ref]) -> dict[str, Pulled]:
     """Read each of `refs`, all on `client`'s host, whole: `BATCH` to a query, then any page past each one's first.
 
     The lines are DESIGN §30's: ids, states, times, and bodies cut at `MAX_BODY`, never a diff or a log. A PR GitHub
-    does not return, or one a later page of fails, is not read whole, and the rest still are.
+    does not return, or one a later page of fails, is not read whole, and the rest still are. A query of many PRs
+    GitHub answers with a server error is read again in halves rather than sent again whole, as one too heavy to answer
+    in time would fail each time; a query of one PR is sent again.
 
     Returns:
         Each PR's read, by its URL.
@@ -168,17 +171,7 @@ def pull_requests(client: Client, refs: Sequence[Ref]) -> dict[str, Pulled]:
     found: dict[str, Pulled] = {}
     for start in range(0, len(refs), BATCH):
         chunk = refs[start : start + BATCH]
-        try:
-            reply = client.ask(_batch(len(chunk)), _variables(chunk))
-        except GitHubError as e:
-            found.update((ref.url, Pulled(error=e)) for ref in chunk)
-            continue
-        for alias, ref in zip(_aliases(len(chunk)), chunk, strict=True):
-            try:
-                pr = _aliased(reply, alias, ref)
-                found[ref.url] = Pulled(_pull(client, ref, pr))
-            except GitHubError as e:
-                found[ref.url] = Pulled(error=e)
+        found |= _read(client, chunk, _ask(client, chunk))
     return found
 
 
@@ -192,6 +185,53 @@ def threads(client: Client, ref: Ref) -> list[Thread]:
         GitHubError: GitHub refused a page, could not be reached, or has no such PR.
     """
     return list(_threads(client, ref, None))
+
+
+def _ask(client: Client, refs: Sequence[Ref]) -> Reply | GitHubError:
+    # A batch's halves are its new tries: sending it again whole would spend the connector's time on what may fail
+    # each time.
+    try:
+        return client.ask(_batch(len(refs)), _variables(refs), retry=len(refs) == 1)
+    except GitHubError as e:
+        return e
+
+
+def _read(client: Client, refs: Sequence[Ref], reply: Reply | GitHubError, *, split: bool = True) -> dict[str, Pulled]:
+    """Each of `refs` from the reply to the query that read them, or, for a server error, from its halves' replies.
+
+    Returns:
+        Each PR's read, by its URL.
+    """
+    if split and isinstance(reply, ServerError) and len(refs) > 1:
+        return _halves(client, refs)
+    if isinstance(reply, GitHubError):
+        return {ref.url: Pulled(error=reply) for ref in refs}
+    found: dict[str, Pulled] = {}
+    for alias, ref in zip(_aliases(len(refs)), refs, strict=True):
+        try:
+            found[ref.url] = Pulled(_pull(client, ref, _aliased(reply, alias, ref)))
+        except GitHubError as e:
+            found[ref.url] = Pulled(error=e)
+    return found
+
+
+def _halves(client: Client, refs: Sequence[Ref]) -> dict[str, Pulled]:
+    """Read `refs`, whose query GitHub answered with a server error, in two halves, a half that fails split again.
+
+    When both halves fail, GitHub is failing whatever it is asked rather than one PR too heavy for a query, and neither
+    is split again: a GitHub that is down is sent three queries a batch, or more for a batch of two or three.
+
+    Returns:
+        Each PR's read, by its URL.
+    """
+    middle = len(refs) // 2
+    halves = (refs[:middle], refs[middle:])
+    replies = [_ask(client, half) for half in halves]
+    split = not all(isinstance(reply, GitHubError) for reply in replies)
+    found: dict[str, Pulled] = {}
+    for half, reply in zip(halves, replies, strict=True):
+        found |= _read(client, half, reply, split=split)
+    return found
 
 
 def _batch(count: int) -> str:
@@ -303,6 +343,8 @@ def _pr_line(ref: Ref, pr: Mapping[str, object], labels: Sequence[Mapping[str, o
         "mergeable": mergeable.lower() if mergeable else None,
         "mergeable_state": merge_state.lower() if merge_state else None,
         "author": _login(pr.get("author")),
+        # The author's text, which canopy cuts and marks; for display only.
+        "title": text(pr.get("title")),
         "labels": [name for label in labels if (name := text(label.get("name"))) is not None],
     }
 

@@ -8,7 +8,8 @@ in, a missing piece fails the run instead of skipping it, so a CI job cannot pas
 Each attempt below is a plain shell command run through `canopy-sandbox worker`, in a linked worktree under the HOME the
 template denies, as a treehouse slot is. The attempts on HOME and the state directory run as `setup` there too, as
 `chore` in a chore's default directory under the state directory, and as `review` in a reviewer's directory there,
-which links to the slot as its checkout. Every attempt must fail, and a write is checked on
+which links to the slot as its checkout. The overseer's run as `overseer` in the root of a workspace under HOME, whose
+journal the test holds open, as a tick does. Every attempt must fail, and a write is checked on
 the host, never by the attempt's exit status: under a denied directory, `srt`'s tmpfs takes the write and drops it when
 the run ends. The positive controls must succeed, so a sandbox that refuses everything cannot pass.
 """
@@ -36,7 +37,7 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import InlineRunner, in_tick, pool, present, slot_of, worker_does
+from tests.canopy.helpers import InlineRunner, decisions, in_tick, pool, present, slot_of, tick_starts, worker_does
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, git, user_toml
 
 pytestmark = pytest.mark.skipif(
@@ -46,6 +47,8 @@ pytestmark = pytest.mark.skipif(
 
 WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
 ROLES = ("worker", "setup", "chore", "review")
+# The overseer reads its workspace's state, so it is checked apart from the roles above.
+OVERSEER = "overseer"
 # Where `canopy sandbox setup` put srt for the operator running the tests, found before a fixture moves HOME.
 PINNED_SRT = canopy_sandbox.runtime_dir() / "node_modules" / ".bin" / "srt"
 # Found before a fixture puts tests/fakes, and its fake srt, first on PATH.
@@ -58,6 +61,8 @@ SYSTEM_TMP = tempfile.gettempdir()
 PLANTED = "canary-planted-7f3a"
 # On the shipped template's allowlist, and not; and the cloud metadata address, which no policy should reach.
 ALLOWED_URL = "https://github.com"
+# On the overseer's allowlist, which leaves github.com off.
+GITHUB_API_URL = "https://api.github.com"
 DENIED_URL = "https://example.com"
 METADATA_URL = "http://169.254.169.254/latest/meta-data/"
 # The two ways out: through srt's proxy, even for the addresses srt's NO_PROXY names (loopback, link-local), and around
@@ -80,7 +85,10 @@ OAUTH = {"type": "oauth", "refresh": "refresh-1", "access": "access-1", "expires
 
 @dataclass(frozen=True)
 class Canary:
-    """A HOME the template denies, holding a fake SSH key, the user config, a primary clone, and two of its slots."""
+    """A HOME the template denies, holding a fake SSH key, the user config, a primary clone, and two of its slots.
+
+    And a workspace under it for the overseer, whose journal is open.
+    """
 
     home: Path
     state_dir: Path
@@ -89,6 +97,8 @@ class Canary:
     slot: Path
     other: Path
     runs_root: Path
+    workspace: Path
+    journal: sqlite3.Connection
 
     @property
     def common(self) -> Path:
@@ -108,9 +118,9 @@ class Canary:
     ) -> procs.Result:
         """Run `sh -c script` in the slot as `role`, through the wrapper and srt, and check that it started.
 
-        A chore runs in its default directory instead, and a review in its own directory, which links to the slot as
-        `checkout`, as canopy lays them out. `tmpdir`, when given, is the TMPDIR the wrapper runs with, in place of the
-        fixture's short one.
+        A chore runs in its default directory instead, a review in its own directory, which links to the slot as
+        `checkout`, as canopy lays them out, and the overseer in the root of its workspace. `tmpdir`, when given, is
+        the TMPDIR the wrapper runs with, in place of the fixture's short one.
         """
         argv = [str(WRAPPER), role, "--", "sh", "-c", f"echo {RAN}\n{script}", "sh", *args]
         cwd = self.slot
@@ -125,6 +135,9 @@ class Canary:
             if not cwd.exists():
                 cwd.mkdir(parents=True, mode=0o700)
                 (cwd / "checkout").symlink_to(self.slot, target_is_directory=True)
+        if role == OVERSEER:
+            cwd = self.workspace
+            env = {}
         if tmpdir is not None:
             env["TMPDIR"] = tmpdir
         done = SubprocessRunner().run(argv, cwd=cwd, env=env, timeout=timeout)
@@ -156,14 +169,18 @@ def sandbox_runtime(fakes_on_path: Path) -> Iterator[Path]:
 
 @pytest.fixture
 def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iterator[Canary]:
-    """The shipped templates, unchanged, and a primary clone with two linked worktrees, all under HOME, as are the
-    operator's cache directory, with OpenCode's in it, and OpenCode's data directory, with a login and a session."""
+    """The shipped templates, unchanged, and a primary clone with two linked worktrees, all under HOME.
+
+    The operator's cache directory is under HOME too, with OpenCode's in it, and OpenCode's data directory, with a
+    login and a session.
+    """
     home = canopy_env.home
     templates = home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
-    for role in ROLES:
+    for role in (*ROLES, OVERSEER):
         shutil.copy(canopy_sandbox.TEMPLATES / f"{role}.json", templates)
     (home / ".ssh").mkdir(mode=0o700)
+    (home / ".config" / "canopy" / "listener-secret").write_text(f"{PLANTED}\n")
     (home / ".ssh" / "id_ed25519").write_text(f"{PLANTED}\n")
     (home / ".bashrc").write_text("# the operator's\n")
     (home / ".cache" / "opencode").mkdir(parents=True)
@@ -187,6 +204,7 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iter
     slot, other = pool / "1", pool / "2"
     git("worktree", "add", "--quiet", "--detach", str(slot), cwd=primary)
     git("worktree", "add", "--quiet", str(other), "other-branch", cwd=primary)
+    workspace = overseers_workspace(canopy_env)
     with mock.patch.dict(os.environ, {"XDG_CACHE_HOME": str(home / ".cache")}):
         yield Canary(
             home=home,
@@ -196,7 +214,25 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iter
             slot=slot,
             other=other,
             runs_root=sandbox_runtime / f"canopy-sandbox-{os.getuid()}",
+            workspace=workspace,
+            journal=canopy_env.journals.open(workspace / ".canopy" / db.DB_FILE_NAME),
         )
+
+
+def overseers_workspace(canopy_env: CanopyEnv) -> Path:
+    """A workspace under HOME, as a tick leaves it for its overseer: canopy's log, the private config, the definitions.
+
+    Its journal is opened by the fixture and held open, as the tick holds it.
+    """
+    root = canopy_env.home / "ws"
+    (root / "repos" / "repo" / ".git").mkdir(parents=True)
+    shutil.copy(canopy_env.shared_file, root)
+    state = root / ".canopy"
+    state.mkdir(mode=0o700)
+    (state / "canopy.log").write_text("")
+    (state / "config.toml").write_text("# the operator's\n")
+    (state / "runtime" / "0123abcd").mkdir(parents=True)
+    return root
 
 
 @pytest.mark.parametrize(
@@ -245,10 +281,12 @@ def test_a_run_cannot_write_home_or_the_state_dir(canary: Canary, script: str, t
     assert (path.read_bytes() if path.exists() else None) == before
 
 
-@pytest.mark.parametrize("role", ROLES)
+@pytest.mark.parametrize("role", [*ROLES, OVERSEER])
 def test_a_run_keeps_its_cache_in_its_roles_own_directory(canary: Canary, role: str) -> None:
     """A positive control: what a run's tools cache lands in the role's cache directory, and the next run reads it.
-    Setup's is the worker's, which it warms."""
+
+    Setup's is the worker's, which it warms.
+    """
     kept = canary.home / ".cache" / "canopy" / "sandbox" / ("worker" if role == "setup" else role) / "tool" / "kept"
 
     canary.run('mkdir -p "$XDG_CACHE_HOME/tool" && echo "$1" > "$XDG_CACHE_HOME/tool/kept"', role, role=role)
@@ -259,7 +297,7 @@ def test_a_run_keeps_its_cache_in_its_roles_own_directory(canary: Canary, role: 
 
 
 @pytest.mark.parametrize("kind", [".cache", ".local/share"], ids=["cache", "data"])
-@pytest.mark.parametrize("role", ROLES)
+@pytest.mark.parametrize("role", [*ROLES, OVERSEER])
 def test_a_run_cannot_read_or_write_another_roles_cache_or_data(canary: Canary, role: str, kind: str) -> None:
     """A review reads the most hostile text the loop meets: what it leaves in its cache must not reach a worker."""
     other = canary.home / kind / "canopy" / "sandbox" / ("review" if role in {"worker", "setup"} else "worker")
@@ -273,8 +311,11 @@ def test_a_run_cannot_read_or_write_another_roles_cache_or_data(canary: Canary, 
 
 
 def test_a_template_from_before_data_cannot_write_the_operators_opencode_data(canary: Canary) -> None:
-    """The templates `canopy sandbox setup` copied before `@DATA@` allow writing `~/.local/share/opencode`, and setup
-    keeps a template it finds: the wrapper denies writing it whatever the template says."""
+    """The wrapper denies writing the operator's OpenCode data whatever the template says.
+
+    The templates `canopy sandbox setup` copied before `@DATA@` allow writing `~/.local/share/opencode`, and setup keeps
+    a template it finds.
+    """
     template = canary.home / ".config" / "canopy" / "sandbox" / "worker.json"
     old = json.loads(template.read_text())
     for key in ("allowRead", "allowWrite"):
@@ -291,8 +332,10 @@ def test_a_template_from_before_data_cannot_write_the_operators_opencode_data(ca
 
 @pytest.mark.parametrize("role", ["worker", "chore", "review"])
 def test_a_run_reads_the_operators_logins_and_hands_back_a_refresh(canary: Canary, role: str) -> None:
-    """A positive control: OpenCode's data directory is the role's, holding a copy of the operator's logins, and a
-    token the run refreshes there reaches the operator's. Setup runs no OpenCode, so its template leaves it out."""
+    """A positive control: a run reads a copy of the operator's logins, and a token it refreshes reaches theirs.
+
+    OpenCode's data directory is the role's. Setup runs no OpenCode, so its template leaves it out.
+    """
     operators = canary.home / ".local" / "share" / "opencode" / "auth.json"
     refreshed = {"anthropic": {**OAUTH, "refresh": "refresh-2", "access": "access-2", "expires": 2_000}}
     script = 'cat "$XDG_DATA_HOME/opencode/auth.json" && printf %s "$1" > "$XDG_DATA_HOME/opencode/auth.json"'
@@ -302,6 +345,96 @@ def test_a_run_reads_the_operators_logins_and_hands_back_a_refresh(canary: Canar
     assert done.ok, done.stderr
     assert json.loads(done.stdout.splitlines()[1]) == {"anthropic": OAUTH}
     assert json.loads(operators.read_text()) == refreshed
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        pytest.param('cat "$HOME/.ssh/id_ed25519"', id="ssh-key"),
+        pytest.param('cat "$HOME/.config/canopy/listener-secret"', id="listener-secret"),
+        pytest.param(f'grep -r {PLANTED.removeprefix("canary-")} "$HOME"', id="search"),
+    ],
+)
+def test_the_overseer_cannot_read_home(canary: Canary, script: str) -> None:
+    """It reads its workspace and the user config file, and nothing else of HOME: not the listener's secret there."""
+    done = canary.run(script, role=OVERSEER)
+
+    assert PLANTED not in done.stdout + done.stderr
+
+
+@pytest.mark.parametrize(
+    ("script", "target"),
+    [
+        pytest.param('echo pwned >> "$HOME/.config/canopy/config.toml"', "~/.config/canopy/config.toml", id="config"),
+        pytest.param('echo pwned >> "$HOME/.bashrc"', "~/.bashrc", id="bashrc"),
+        pytest.param("echo pwned >> .canopy/config.toml", "{ws}/.canopy/config.toml", id="private-config"),
+        pytest.param("echo pwned > .canopy/opencode.json", "{ws}/.canopy/opencode.json", id="state-dir"),
+        pytest.param(
+            "mkdir -p .canopy/.opencode/plugin && echo pwned > .canopy/.opencode/plugin/x.js",
+            "{ws}/.canopy/.opencode/plugin/x.js",
+            id="runtime-config",
+        ),
+        pytest.param("echo pwned > .canopy/runtime/0123abcd/x", "{ws}/.canopy/runtime/0123abcd/x", id="definitions"),
+        pytest.param("echo pwned >> canopy-workspace.toml", "{ws}/canopy-workspace.toml", id="workspace-file"),
+        pytest.param('echo pwned > "$HOME/.cache/opencode/planted"', "~/.cache/opencode/planted", id="runtime-cache"),
+    ],
+)
+def test_the_overseer_cannot_write_config_or_state_but_the_journal(canary: Canary, script: str, target: str) -> None:
+    """Of the workspace's state it writes only the journal's files: the rest is config or code canopy loads later."""
+    path = Path(target.replace("~", str(canary.home)).replace("{ws}", str(canary.workspace)))
+    before = path.read_bytes() if path.exists() else None
+
+    canary.run(script, role=OVERSEER)
+
+    assert (path.read_bytes() if path.exists() else None) == before
+
+
+def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(canary: Canary) -> None:
+    """A positive control: `canopy --version`, which the tick checks, and a decision that lands in the journal."""
+    canopy = Path(sys.executable).parent / "canopy"
+    skip = '--rationale "mcp_unavailable: the tracker is down"'
+
+    with in_tick(canary.journal) as tick_id:
+        version = canary.run(f'"{canopy}" --version', role=OVERSEER)
+        decided = canary.run(f'"{canopy}" decide skip {skip}', role=OVERSEER)
+
+    assert version.ok, version.stderr
+    assert version.stdout.splitlines()[1].startswith("canopy ")
+    assert decided.ok, decided.stderr
+    assert decisions(canary.journal, tick_id) == [("skip", "mcp_unavailable: the tracker is down")]
+
+
+def test_a_dispatch_the_overseer_asks_for_is_recorded_and_started_by_no_process_in_its_sandbox(canary: Canary) -> None:
+    """A positive control: the ask lands in the journal as a run the tick starts, outside the sandbox (DESIGN §40).
+
+    Nothing in the sandbox starts it, so no run, its setup, or the harness's git inherits the sandbox, or ends with it.
+    """
+    canopy = Path(sys.executable).parent / "canopy"
+    ask = "dispatch PROJ-1 --repo repo --label agent-ready-tester --kind implement --slug work"
+
+    with in_tick(canary.journal) as tick_id:
+        done = canary.run(f'"{canopy}" {ask}', role=OVERSEER)
+
+    assert done.ok, done.stderr
+    recorded = canary.journal.execute("SELECT tick_id, kind, ticket_key, status FROM recorded_runs").fetchall()
+    assert [tuple(row) for row in recorded] == [(tick_id, "dispatch", "PROJ-1", "recorded")]
+    assert canary.journal.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("route", ROUTES)
+@pytest.mark.parametrize("url", [ALLOWED_URL, DENIED_URL], ids=["github", "host-not-allowed"])
+def test_the_overseer_cannot_reach_a_host_off_its_allowlist(canary: Canary, route: str, url: str) -> None:
+    """Its allowlist is its own: GitHub's API, not github.com, which it neither pushes to nor fetches from."""
+    done = canary.run(f"curl -sS -m 10 -o /dev/null {route} {url}", role=OVERSEER)
+
+    assert refused(done, route), done.stderr
+
+
+def test_the_overseer_reaches_githubs_api(canary: Canary) -> None:
+    """A positive control: its MCP servers reach GitHub through its API host."""
+    done = canary.run(f"curl -sS -m 30 -o /dev/null {GITHUB_API_URL}", role=OVERSEER)
+
+    assert done.ok, done.stderr
 
 
 @pytest.mark.parametrize(
@@ -415,10 +548,12 @@ def test_a_worker_cannot_reach_the_hosts_loopback(canary: Canary, route: str) ->
 
 
 def test_a_worker_cannot_reach_a_unix_socket_on_the_host(canary: Canary) -> None:
-    """Such as the Docker daemon's or the SSH agent's: on Linux, srt refuses the run any Unix socket of its own, and on
-    macOS any not allowed by path. The socket here is in the slot, which the run may read and write, so only that
-    refusal stands in the way. A local MCP server started with `docker run` cannot work in the sandbox for the same
-    reason (DESIGN §24)."""
+    """A Unix socket on the host, such as the Docker daemon's or the SSH agent's, is out of the worker's reach.
+
+    On Linux, srt refuses the run any Unix socket of its own, and on macOS any not allowed by path. The socket here is
+    in the slot, which the run may read and write, so only that refusal stands in the way. A local MCP server started
+    with `docker run` cannot work in the sandbox for the same reason (DESIGN §24).
+    """
     # Bound by a relative name, in the slot: the slot's full path is longer than a Unix socket's.
     with contextlib.chdir(canary.slot), socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind("host.sock")
@@ -454,8 +589,11 @@ def test_a_worker_commits_in_its_slot(canary: Canary) -> None:
 
 
 def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None:
-    """A positive control for the run's git (DESIGN §24): a repository a tool keeps as a cache, here in the
-    run's temp directory, gets its objects in its own directory, while the worker's commit goes to the run's."""
+    """A positive control for the run's git (DESIGN §24): a repository a tool makes keeps its own objects.
+
+    A repository a tool keeps as a cache, here in the run's temp directory, gets its objects in its own directory, while
+    the worker's commit goes to the run's.
+    """
     cache = '"$TMPDIR/cache"'
     script = (
         "git commit --quiet --allow-empty -m work && "
@@ -473,9 +611,11 @@ def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None
 
 
 def test_a_worker_runs_under_the_system_temp_directory(canary: Canary) -> None:
-    """A positive control: the wrapper's run directory, under the TMPDIR canopy runs with, leaves srt room for its
-    sockets. The rest of the canary runs under a short one of its own, so that this is the only test that depends on it
-    (DESIGN §24, the temp directory on macOS)."""
+    """A positive control: the wrapper's run directory, under canopy's TMPDIR, leaves srt room for its sockets.
+
+    The TMPDIR is the one canopy runs with. The rest of the canary runs under a short one of its own, so that this is
+    the only test that depends on it (DESIGN §24, the temp directory on macOS).
+    """
     done = canary.run("true", tmpdir=SYSTEM_TMP)
 
     assert done.ok, done.stderr
@@ -502,7 +642,7 @@ def test_a_worker_receives_its_prompt_byte_for_byte(canary: Canary, prompt: str)
 
 
 def test_a_timed_out_run_leaves_no_process_behind(canary: Canary) -> None:
-    """canopy kills a timed-out run's process group; what the sandbox started, in a session of its own too, ends."""
+    """On a timeout canopy kills the run's process group; all the sandbox started, in a session of its own too, ends."""
     # Not holding the run's output, so a process the sandbox lets outlive it fails the test instead of hanging it.
     script = f"setsid sleep {LINGERER} >/dev/null 2>&1 & sleep {LINGERER} >/dev/null 2>&1 & sleep {LINGERER}"
 
@@ -535,6 +675,7 @@ def test_canopys_sandboxed_worker_is_pushed(
         with in_tick(conn, ends_ok=True):
             args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
             assert main([*args, "--slug", "work"], runner=runner) == 0
+            tick_starts(runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 

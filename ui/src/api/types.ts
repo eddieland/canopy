@@ -29,6 +29,8 @@ export type TicketDetail = Schemas['TicketDetail']
 export type TicketForget = Schemas['TicketForget']
 /** What a ticket's or a PR's agent runs cost in all (DESIGN §13), and how many runs and reviews that counts. */
 export type CostTotal = Schemas['CostTotal']
+/** What one model cost over a ticket's runs, as their sessions say (DESIGN §13). */
+export type ModelCost = Schemas['ModelCost']
 /** A ticket's plans: whether it needs one, its newest as the file stands, every plan, and the operator's comments. */
 export type TicketPlans = Schemas['TicketPlans']
 /** A plan as its file stands now, read bounded and never through a link (DESIGN §25). */
@@ -63,6 +65,16 @@ export type Limit = Schemas['Limit']
 export type Granted = Schemas['Granted']
 /** The persona one of a ticket's agents writes in at its next run, and where that comes from (DESIGN §31). */
 export type AgentPersona = Schemas['AgentPersona']
+/** The model one of a ticket's agents runs on at its next run, and where that comes from (DESIGN §13). */
+export type AgentModel = Schemas['AgentModel']
+/** The models the runtime lists, as `canopy models` prints them (DESIGN §13): what the operator may choose from. */
+export type ModelList = Schemas['ModelList']
+/** The model config chooses for each of canopy's agents and each chore, and the files that set them (DESIGN §13). */
+export type ConfigModels = Schemas['ConfigModels']
+/** The model `[runtime.models]` chooses for one of canopy's agents, or none: the runtime's default. */
+export type ConfiguredModel = Schemas['ConfiguredModel']
+/** The model one chore runs on as config chooses it, and where that choice comes from (DESIGN §13, §19). */
+export type ChoreModel = Schemas['ChoreModel']
 /** A persona a run could get, as `canopy personas` lists it (DESIGN §31): what the operator may choose from. */
 export type PersonaChoice = Schemas['PersonaChoice']
 /** Every persona a run could get, and the one a review request that chooses none is reviewed in (DESIGN §31). */
@@ -107,8 +119,24 @@ export type SpendPullRequest = Schemas['SpendPullRequest']
 export type SpendTool = Schemas['SpendTool']
 /** What one kind's runs in a spend window spent on one model, as their sessions say; a null model for the unnamed. */
 export type SpendModel = Schemas['SpendModel']
+/** The local month so far against the operator's monthly budget. */
+export type SpendMonth = Schemas['SpendMonth']
+/** What every session the runtime keeps that started in a spend window cost, canopy's apart from the rest. */
+export type SpendSessions = Schemas['SpendSessions']
 /** A kind of agent run, as the spend breakdown counts it: the overseer, workers, plans, chores, reviews, or tasks. */
 export type SpendKind = Schemas['SpendKind']
+/** The last months, oldest first, as the reports page shows them. */
+export type MonthlyReport = Schemas['MonthlyReport']
+/** One local calendar month: what each kind of run cost, by model, in dollars and tokens, and the tickets it landed. */
+export type ReportMonth = Schemas['ReportMonth']
+/** What one kind of run cost in a month, in dollars and tokens. */
+export type ReportKind = Schemas['ReportKind']
+/** What one model's replies cost in a month, over every kind of run; a null model for the unnamed. */
+export type ReportModel = Schemas['ReportModel']
+/** A ticket the loop marked done as merged in a month, and what getting there took. */
+export type ReportTicket = Schemas['ReportTicket']
+/** The tokens a month's runs reported, by kind, and the share of what was sent read from the cache. */
+export type ReportTokens = Schemas['ReportTokens']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */
@@ -153,6 +181,34 @@ export type ChoreFinding = Schemas['ChoreFinding']
 export type ChoreRunDetail = Schemas['ChoreRunDetail']
 /** A finding as one chore run reported it (DESIGN §19). */
 export type ChoreRunFinding = Schemas['ChoreRunFinding']
+/** A task as `canopy task list` lists it: its text, where it runs, and where it stands (DESIGN §36). */
+export type TaskSummary = Schemas['TaskSummary']
+/** Where a task stands: queued, awaiting the operator's reply, stopped, or its latest run's status. */
+export type TaskStanding = TaskSummary['standing']
+/** One run of a task's worker (DESIGN §36). */
+export type TaskRun = Schemas['TaskRun']
+/** One task, as `canopy show task:N` prints it: the task, every run, its conversation, and its tickets. */
+export type TaskDetail = Schemas['TaskDetail']
+/** One run of a task, with the whole of what it said, as its page shows it. */
+export type TaskRunDetail = Schemas['TaskRunDetail']
+/** A ticket a task's run reported filing, unlabeled, so worked only once the operator says so. */
+export type TaskTicket = Schemas['TaskTicket']
+/** The report a task run left, as its file stands now, or why it is no report any more (DESIGN §36). */
+export type TaskReport = Schemas['TaskReport']
+/** What a task's submission recorded: its id, where it runs, and whether any tick may start it (DESIGN §36). */
+export type TaskSubmitted = Schemas['TaskSubmitted']
+/** What a reply to a task recorded, and the run of it still working, which the next run waits on. */
+export type TaskReplied = Schemas['TaskReplied']
+/** What a stop of a task did: already stopped, or dropped while queued, and the run still working it. */
+export type TaskStopped = Schemas['TaskStopped']
+/** A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22). */
+export type Attachment = Schemas['Attachment']
+/** A ticket's or a task's attachments, and the limits `policy` holds them to. */
+export type Attachments = Schemas['Attachments']
+/** What an upload recorded: the attachment, as its subject's page lists it. */
+export type Attached = Schemas['Attached']
+/** What a removal of an attachment removed: its name. */
+export type Detached = Schemas['Detached']
 /** What a run's or chore run's log, or a tick's output, holds of its session, read from its events (DESIGN §22). */
 export type Transcript = Schemas['Transcript']
 /** One entry of a transcript, told apart by its `kind`: text, a tool call, a model call's end, or an error. */
@@ -197,8 +253,15 @@ export type ReviewDraftComment = Schemas['ReviewDraftComment']
 export type ReviewDraftVersion = Schemas['ReviewDraftVersion']
 /** What a publish of a review's draft did: the draft as it now stands, and why nothing posted, if nothing did. */
 export type ReviewDraftPublished = Schemas['ReviewDraftPublished']
+/** What a note on a review's draft recorded, as `canopy reply review:ID` reports it. */
+export type ReviewDraftNoted = Schemas['ReviewDraftNoted']
 /** How much a finding holds the merge: `blocking`, `major`, or `minor`. */
 export type FindingSeverity = Schemas['FindingSeverity']
+/**
+ * Why the operator dismissed a review's finding (DESIGN §21): `wrong`, `intentional`, `not_worth_it`, or
+ * `out_of_scope`.
+ */
+export type DismissalReason = Schemas['DismissalReasonName']
 /** The reviewed commit's diff: the PR's own text, untrusted and bounded. */
 export type ReviewDiff = Schemas['ReviewDiff']
 /** One file the reviewed commit changes, with its hunks. */
@@ -215,12 +278,26 @@ export type ReviewThread = Schemas['Thread']
 export type ThreadComment = Schemas['ThreadComment']
 /** A comment a run drafted in place of posting it: a worker's text until the operator sends it. */
 export type Draft = Schemas['Draft']
+/** The feedback plan item a thread's draft started from, and whether canopy found the run's text departs from it. */
+export type DraftFromPlan = Schemas['DraftFromPlan']
 /** Where a draft stands, as `canopy draft list` prints it. */
 export type DraftStatus = Schemas['DraftStatusName']
 /** A reaction a thread's draft stages on the comment it names, by GitHub's name for it. */
 export type Reaction = Schemas['ReactionName']
 /** What a send did: the drafts posted, sent before, not sent and why, and those it cannot say of. */
 export type DraftsSent = Schemas['DraftsSent']
+/** A ticket's current feedback plan, as its PR's page shows it beside the threads (DESIGN §32). */
+export type FeedbackPlan = Schemas['FeedbackPlan']
+/** Where a feedback plan stands: waiting, stale, approved, or spent by the resume that went ahead on it. */
+export type FeedbackPlanStatus = Schemas['FeedbackPlanStatusName']
+/** An item a feedback plan covers, and what it proposes for it. */
+export type FeedbackPlanItem = Schemas['FeedbackPlanItem']
+/** What an approval of a feedback plan did: the items it addresses, those it leaves out, and its message. */
+export type FeedbackPlanApproved = Schemas['FeedbackPlanApproved']
+/** A ticket's feedback plan while it waits on the operator, as its ticket's summary names it for the attention list. */
+export type WaitingFeedbackPlan = Schemas['WaitingFeedbackPlan']
+/** The feedback plan a `feedback-plan` run wrote, as the run's page names it: its PRs and where it stands. */
+export type FeedbackPlanWritten = Schemas['FeedbackPlanWritten']
 
 /** Every run state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss. */
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]
@@ -273,6 +350,10 @@ export type MemoryPromoted = Schemas['MemoryPromoted']
 export type MemoryRejected = Schemas['MemoryRejected']
 /** A lesson the operator renewed, and when it is next due for review. */
 export type MemoryRenewed = Schemas['MemoryRenewed']
+/** A lesson the operator pinned: never due for review, and served before the rest. */
+export type MemoryPinned = Schemas['MemoryPinned']
+/** A lesson the operator unpinned: due for review again later. */
+export type MemoryUnpinned = Schemas['MemoryUnpinned']
 /** A memory whose text a forget deleted, its row left. */
 export type MemoryForgotten = Schemas['MemoryForgotten']
 /** An edit, as `canopy memory edit ID [--text TEXT] [--repo NAME | --every-repo]` takes it. */
@@ -281,3 +362,11 @@ export type LessonEditRequest = Schemas['LessonEditRequest']
 export type MemoryEdited = Schemas['MemoryEdited']
 /** Every version of a lesson or a note, newest first. */
 export type MemoryHistory = Schemas['MemoryHistory']
+/** The keys the settings page edits in the operator's user config, each with its value, source, and bound (M41). */
+export type ConfigSettings = Schemas['ConfigSettings']
+/** One key the settings page edits: a limit within its bound, or a trust setting that may only get stricter. */
+export type ConfigKey = Schemas['ConfigKey']
+/** A config key's value: a count or minutes, a switch, a choice, a list's entries, or counts by repository. */
+export type ConfigValue = Schemas['ConfigValue']
+/** What a save from the settings page wrote, apart from what the reload it asked for found. */
+export type ConfigSaved = Schemas['ConfigSaved']

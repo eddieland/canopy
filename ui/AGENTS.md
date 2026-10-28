@@ -20,13 +20,14 @@ memory, and do not upgrade in passing.
   elsewhere. A control Radix has a primitive for uses its wrapper, never hand-written ARIA state (`DESIGN.md`).
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
 - Tiptap on ProseMirror for the plan editor alone (D120): only `src/lib/plan-*.ts` and
-  `src/components/plan-editor.tsx` import it, and only the pages that show a plan load it: a ticket's plan page and
-  the sample editor, never the ticket's page, whose plan card does not import it.
+  `src/components/plan-editor.tsx` import it, and only the pages that show a plan load it: a ticket's plan page, the
+  sample editor, and a task's page, whose report it lays out read only (`PlanDocument`); never the ticket's page,
+  whose plan card does not import it.
 - Shiki for a review's diff and the guide's code blocks alone (D121): only `src/lib/highlight.ts` and
   `src/lib/languages.ts`, its grammars, import it, and only on demand, each grammar its own chunk.
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
-- cmdk for the repository picker's searchable list, which Radix has no primitive for: only
-  `src/components/ui/command.tsx` imports it, and the lint refuses it elsewhere.
+- cmdk for the repository picker's, the model picker's, and the jump palette's searchable lists, which Radix has no
+  primitive for: only `src/components/ui/command.tsx` imports it, and the lint refuses it elsewhere.
 - oxlint (with the React Compiler's rules, eslint-plugin-jsdoc's, eslint-plugin-playwright's on `e2e/`, and
   type-aware rules through oxlint-tsgolint) and oxfmt, Vitest, Playwright.
 
@@ -47,7 +48,9 @@ From `ui/` (or `make ui-check`, `make ui-e2e`, `make ui-fmt` from the root):
 | `npm run gen:api` | regenerate `src/api/schema.gen.ts` from `canopy.serve`'s OpenAPI schema |
 | `npm run test:e2e -- <specs>` | build, then Playwright against it, served by FastAPI; every spec when none is named |
 
-With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a local Chromium.
+With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a local Chromium. It tests behavior,
+not looks: a build other than the one the pinned Playwright installs draws differently, so its screenshots fail by the
+dozen. When every screenshot differs, check the browser before the change.
 
 ## Rules
 
@@ -63,14 +66,15 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   `.oxlintrc.json`); a public member of an exported class needs one too, which the lint does not check.
 - **No hand-written memoization.** The compiler memoizes. `useMemo`, `useCallback`, and `memo` are banned by the lint.
   Follow the compiler's rules (no setState directly in an effect body, no reading refs during render, ...).
-- **Types come from the server.** API types are generated from the pydantic models in
-  `src/canopy/serve/schema.py`, the shared ones, and in each feature's `*_schema.py` beside it. To change a shape,
-  change the pydantic model, run `npm run gen:api`, and commit both. Import types from `src/api/types.ts`.
+- **Types come from the server.** API types are generated from the pydantic models in `src/canopy/serve/schema/`:
+  the shared ones in its `__init__.py`, and each feature's in a module of its own. To change a shape, change the
+  pydantic model, run `npm run gen:api`, and commit both. Import types from `src/api/types.ts`.
 - **One place per query.** Keys and fetchers live in `src/api/queries.ts`; components call `useQuery(xQuery)`.
 - **Live data comes from the stream, not polling.** No `refetchInterval`, but for the worktrees. Server pushes arrive
   through
   `useEventStream` (`src/api/live.ts`, `src/hooks/use-live-updates.ts`): a list arrives whole and is written with
-  `setQueryData`; `ticket.changed` marks that ticket's query stale, which refetches only if a page shows it, and
+  `setQueryData`; `ticket.changed` marks that ticket's query stale, which refetches only if a page shows it, as
+  `task.changed` does a task's and its reports, and
   `chores.updated` marks every chore's (a new note changes the list it carries); `tick.updated` marks the ticks, a
   tick's page, and the ticket shown. A new
   event type is a pydantic model in the `StreamEvent` union, a case in `applyStreamEvent`, and a check in
@@ -104,7 +108,7 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 - **Formatting:** oxfmt, 120 columns, 4-space indent (the repository's `.editorconfig`). A formatter does not split a
   long string: split class lists across `cn()` or `cva()` arguments. The lint fails on a line over 120.
 - **Mocks are flagged.** `python -m canopy.serve --mock` serves the real API over a journal seeded from
-  `canopy/serve/mock.py`, a workspace of three repositories; the header shows `mock`. Its times are fixed around
+  `canopy/serve/mock/`, a workspace of three repositories; the header shows `mock`. Its times are fixed around
   2026-10-08 12:00 UTC: a screenshot test freezes the browser's clock (`NOW` in `e2e/helpers.ts`). `src/api/mocks.ts`
   holds a few typed rows for unit tests.
 - **The guide says what the pages do.** The operator's documentation is Markdown in `src/guide/` (`DESIGN.md`, "The
@@ -140,22 +144,24 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   both themes draw from the same tokens, so more would double the images git keeps for every visual change without
   catching more. Add a page to either only for what the others cannot show. A visual change updates the baselines
   deliberately and the PR says why; look at each new image before it merges. The Screenshots workflow never deletes an
-  image: a PR that stops taking one deletes its baseline. Every screenshot applies `e2e/screenshot.css`, which
-  replaces what changes with the build rather than the page (the rail's version, which names the commit, shows a
-  placeholder as long as a dev build's). The guide's screenshot shows how a page is drawn, not what the guide says,
-  which most UI pull requests edit: `placeholderGuide` serves a guide of placeholder Latin in place of the real
-  one, its pages and their list included, with `e2e/guide-specimen.md` the page taken, so a guide edit rewrites no
-  image. `README.md` shows
-  `attention-dark`, `tickets-ABC-102-dark`, `runs-39-dark`, `reviews-4-dark`, and `ticks-2-dark`: rename them there too.
-  The baselines are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots
+  image: a PR that stops taking one deletes its baseline. Every screenshot applies `e2e/screenshot.css`, which replaces
+  what changes with the build rather than the page (the rail's version, which names the commit, shows a placeholder as
+  long as a dev build's, and the mock's private config path, in a temporary directory, is hidden). The guide's
+  screenshot shows how a page is drawn, not what the guide says, which most UI pull requests edit: `placeholderGuide`
+  serves a guide of placeholder Latin in place of the real one, its pages and their list included, with
+  `e2e/guide-specimen.md` the page taken, so a guide edit rewrites no image. `README.md` shows `attention-dark`,
+  `tickets-ABC-102-dark`, `runs-39-dark`, `pull-requests-reviews-4-dark`, and `runs-ticks-2-dark`: rename them there
+  too. The baselines are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots
   workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It
   runs only the spec files that call `toHaveScreenshot`, `screenshotMain`, or `screenshotWhole`, so a test that takes
   one through another helper is missed until its file calls one of those. It pushes a commit with the images that
   changed, recompressed losslessly with oxipng, and starts CI on it, which runs the whole suite; pull before going on.
   It rewrites only the images that fail the comparison, so a change subtle enough to pass within the threshold (a
   token's small shift) leaves the old images in place: run it with `update` set to `all` (`-f update=all`) to rewrite
-  every one.
-  `npx playwright test --update-snapshots=changed` does the same locally, on a machine whose rendering may not match.
+  every one. The workflow stays CI's way. `make screenshots` renders the same images locally in Docker (it needs
+  Docker), from Playwright's Ubuntu image at the pinned version, with the same spec files and oxipng, and writes only
+  the images that changed into the checkout; `UPDATE=all` rewrites every one and `UPDATE=check` only compares. `npx
+  playwright test --update-snapshots=changed` outside Docker runs on a machine whose rendering may not match.
 - On CI, Playwright runs a failed test once more, and one that passes then still fails the run, named flaky in the
   report: fix it, as a broken one is. The lint holds `e2e/` to eslint-plugin-playwright's recommended rules, which
   refuse most of what makes a browser test flaky.

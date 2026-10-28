@@ -56,9 +56,9 @@ jobs:
           uv sync --locked
           npm --prefix ui ci --no-audit --no-fund
 
+      # `./`, not the `$/` zizmor asks for: actionlint does not parse `$/` yet.
       - name: Install Playwright's Chromium
-        working-directory: ui
-        run: npx playwright install --with-deps chromium
+        uses: ./.github/actions/playwright-chromium # zizmor: ignore[self-repository]
 
       # `changed` rewrites only the images that fail the comparison, and writes missing ones, so antialiasing noise
       # within the threshold does not churn the rest; `all` rewrites every image. Only the spec files that take a
@@ -80,7 +80,7 @@ jobs:
 
       # Recompresses the images this run wrote with oxipng, losslessly: the same pixels, about a fifth smaller, so each
       # regeneration adds less to the history. Only those images, so the rest keep their bytes. A pinned release,
-      # checked against its digest; Ubuntu packages none.
+      # checked against its digest; Ubuntu packages none. `make screenshots` (ui/scripts/screenshots.sh) reads this pin.
       - name: Optimize the images written
         env:
           OXIPNG_VERSION: 10.0.0
@@ -122,13 +122,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: write
-      # To start CI on the new commit: a push made with the job's token starts no workflows, a dispatch does.
-      actions: write
+      contents: read
     steps:
-      # Keeps the job's token in the checkout, unlike every other one: this job pushes with it, and uploads nothing.
+      # Pushes as the repository's screenshots GitHub App, not with the job's own token: a push made with that token
+      # starts the pull request's CI only once someone approves it, and its run fails with no jobs when nobody does.
+      # The App's push starts it as anyone's does. The App needs read and write access to contents, on this repository;
+      # its client ID is the variable SCREENSHOTS_APP_CLIENT_ID and its private key the secret
+      # SCREENSHOTS_APP_PRIVATE_KEY.
+      - name: Create the App's token
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.SCREENSHOTS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SCREENSHOTS_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      # Keeps the App's token in the checkout, unlike every other one: this job pushes with it, and uploads nothing.
       - name: Check out repository # zizmor: ignore[artipacked]
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app.outputs.token }}
 
       - name: Fetch the baselines
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -151,7 +164,8 @@ jobs:
       - name: Commit and push
         env:
           BRANCH: ${{ github.ref_name }}
-          GH_TOKEN: ${{ github.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           git add -- 'ui/e2e/*-snapshots/*.png'
           if git diff --cached --quiet; then
@@ -159,8 +173,10 @@ jobs:
             exit 0
           fi
           git diff --cached --name-status | tee -a "$GITHUB_STEP_SUMMARY"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898283+github-actions[bot]@users.noreply.github.com'
+          # The App's bot account authors the commit, so the history names what pushed it.
+          bot_id=$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
           git commit --quiet -m 'test(ui): regenerate screenshot baselines on CI' \
             -m "From ${GITHUB_SHA} by the Screenshots workflow, run ${GITHUB_RUN_ID}."
           # No force: if the branch moved since the run started, the images may be stale, so fail and run it again.
@@ -168,4 +184,3 @@ jobs:
             echo "::error::${BRANCH} moved since this run started; run the workflow again on its new head."
             exit 1
           fi
-          gh workflow run ci.yml --ref "$BRANCH"

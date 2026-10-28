@@ -57,14 +57,14 @@ test.describe('in a narrow window', () => {
         expect(column).toBeLessThan(11 * 16)
         await expect(row.getByText('review pending')).toBeHidden()
         const title = await row.getByText(/debounce the search box/u).boundingBox()
-        // More than the free column's floor, 8rem: the room the PR column no longer takes.
-        expect(title?.width ?? 0).toBeGreaterThan(200)
+        // More than the free column's floor, 8rem: the room the PR column, as wide as acme/mobile#61, no longer takes.
+        expect(title?.width ?? 0).toBeGreaterThan(180)
     })
 
     test('the worktrees list lets what holds a slot go before its branch is cut, and keeps its age', async ({
         page,
     }) => {
-        await page.goto('worktrees')
+        await page.goto('runs/worktrees')
         await settled(page)
         const row = page.getByTestId('worktree-1').first()
         const branch = row.getByText('agent/ABC-104-retry-queue', { exact: true })
@@ -109,14 +109,15 @@ test.describe('in a narrow window', () => {
         await settled(page)
         const strip = page.getByTestId('rail-strip')
         await expect(strip.getByRole('link', { name: 'Runs' })).toBeVisible()
-        await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^6/u)
+        await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^10/u)
         await expect(page.getByTestId('rail-working')).toHaveCount(0)
 
         await strip.getByRole('button', { name: 'Open the rail' }).click()
         const sheet = page.getByRole('dialog', { name: 'Rail' })
         // The rail's first item is the search box, so the sheet opens in it.
         await expect(sheet.getByRole('searchbox', { name: 'Search the journal' })).toBeFocused()
-        await expect(sheet.getByTestId('rail-working').getByRole('link')).toHaveCount(4)
+        // Four rows, then `+1 more`.
+        await expect(sheet.getByTestId('rail-working').getByRole('link')).toHaveCount(5)
         await expect(sheet.getByTestId('rail-spend-24h')).toBeVisible()
 
         // A link followed leaves the page the sheet covered: it closes.
@@ -125,16 +126,16 @@ test.describe('in a narrow window', () => {
         await expect(sheet).toHaveCount(0)
     })
 
-    test('/spend?days=30 names its days whole, centered under their bars', async ({ page }) => {
-        await page.goto('spend?days=30')
+    test('/reports/spend?days=30 names its days whole, centered under their bars', async ({ page }) => {
+        await page.goto('reports/spend?days=30')
         await settled(page)
         await expectSpendAxisWhole(page, 6)
     })
 
-    test("/spend?days=30 keeps the dearest day's total inside the chart when today is the dearest", async ({
+    test("/reports/spend?days=30 keeps the dearest day's total inside the chart when today is the dearest", async ({
         page,
     }) => {
-        await page.goto('spend?days=30')
+        await page.goto('reports/spend?days=30')
         await settled(page)
         // The mock prices today alone, the last of 30 bars, each narrower than the total over it. Centered, a total of
         // $1,234.56 would overhang the bar by more than the chart's padding, so on the last bar it is flush with the
@@ -189,7 +190,7 @@ for (const width of [HALF.width, 1024]) {
 
         for (const days of [7, 30]) {
             test(`the By day table keeps 0.75rem between its columns over ${days} days`, async ({ page }) => {
-                await page.goto(`spend?days=${days}`)
+                await page.goto(`reports/spend?days=${days}`)
                 await settled(page)
                 const gaps = await page.getByTestId('spend-table').evaluate((table) =>
                     [...table.querySelectorAll('tr')].flatMap((row) => {
@@ -213,7 +214,7 @@ for (const width of [HALF.width, 1024]) {
 test("the worktrees counters stand four across or two by two, by the pane's width, never three and one", async ({
     page,
 }) => {
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     const counters = page.getByTestId('pool-counters').locator(':scope > *')
     await expect(counters).toHaveCount(4)
@@ -234,7 +235,7 @@ test("the worktrees counters stand four across or two by two, by the pane's widt
 })
 
 test("a slot's ticket and run stay whole beside a long run kind, which is cut instead", async ({ page }) => {
-    await page.goto('worktrees')
+    await page.goto('runs/worktrees')
     await settled(page)
     const row = page.getByTestId('pool-web').getByTestId('worktree-2')
     const ticket = row.getByRole('link', { name: 'ABC-104', exact: true })

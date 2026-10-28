@@ -25,7 +25,7 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_the_console_script_answers_version_without_loading_the_cli() -> None:
-    # Every tick runs `canopy --version` (DESIGN §6); click, the config, and pydantic are most of a start-up.
+    # A version check should cost little: click, the config, and pydantic are most of a start-up.
     code = (
         "import sys; sys.argv = ['canopy', '--version']; from canopy.cli import launcher; "
         "code = launcher.main(); print(code, *sys.modules, sep='\\n')"
@@ -182,18 +182,27 @@ def test_completion_completes_commands(capsys: pytest.CaptureFixture[str]) -> No
 def test_completion_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixture[str]) -> None:
     commands = complete(capsys, "canopy ")
     assert "plain,status" in commands
-    for overseers in ("attention", "decide", "dispatch", "mirror", "queried", "ticket", "_run", "_chore", "_review"):
+    for overseers in ("attention", "decide", "dispatch", "queried", "ticket", "_run", "_chore", "_review"):
         assert f"plain,{overseers}" not in commands
     assert complete(capsys, "canopy chore ") == ["plain,history", "plain,install", "plain,try"]
     assert complete(capsys, "canopy chore install memory-") == ["plain,memory-tickets"]
-    assert complete(capsys, "canopy review ") == ["plain,draft", "plain,edit", "plain,publish", "plain,show"]
+    assert complete(capsys, "canopy review ") == [
+        "plain,discard",
+        "plain,draft",
+        "plain,edit",
+        "plain,eval",
+        "plain,noise",
+        "plain,publish",
+        "plain,show",
+    ]
     assert complete(capsys, "canopy ticket ") == []
 
 
 def test_help_still_lists_the_overseers_commands(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["--help"]) == 0
     listed = {line.split()[0] for line in capsys.readouterr().out.splitlines() if line.startswith("  ")}
-    assert {"attention", "decide", "dispatch", "mirror", "queried", "ticket"} <= listed
+    assert {"attention", "decide", "dispatch", "queried", "ticket"} <= listed
+    assert "mirror" not in listed
 
 
 def test_completion_completes_repository_names_from_the_workspace(

@@ -13,22 +13,21 @@ gives an item or event, while the loop serves one, is linked after it under the 
 
 With `--channel` and `--threads`, what is about one ticket or review goes in its own thread, a new one each day,
 recorded in the sink's own state file, `$XDG_STATE_HOME/canopy/slack-threads.json`; the rest, a chore's results among
-it, goes in the channel.
+it, goes in the channel. The file keeps each thread for a week, so `canopy-connect-slack` can read the replies in it.
 Each thread starts with a post of the same shape, naming what it is about, and everything about it is a reply.
 A reply stays in its thread, unless `--broadcast` names what it holds, such as `--broadcast blocked` for a worker's
 question: then it is shown in the channel too.
 
-Exit codes: 0 posted (a 2xx reply, and `"ok": true` from the Web API); 1 the post failed, with Slack's reply on
-stderr; 2 the secret file, the channel, the threads file, or the message on stdin is not usable, saying which. canopy
-retries anything but 0 on its next tick.
+Exit codes: 0 posted (a 2xx reply, and `"ok": true` from the Web API); 1 the post failed, with Slack's reply on stderr;
+2 the command line, the secret file, the channel, the threads file, or the message on stdin is not usable, saying which.
+canopy retries anything but 0 on its next tick.
 
-Stdlib only, importing nothing from canopy: canopy runs it as a command, so the process that holds the journal and
-enforces the guards never opens a connection or reads this secret (D035).
+click for its command line (D025), and nothing from canopy: canopy runs it as a command, so the process that holds
+the journal and enforces the guards never opens a connection or reads this secret (D035).
 """
 
 from __future__ import annotations
 
-import argparse
 import fcntl
 import functools
 import hashlib
@@ -38,21 +37,25 @@ import re
 import stat
 import sys
 import tempfile
-import urllib.error
 import urllib.parse
-import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Protocol, TextIO
+from typing import Protocol
+
+import canopy_http
+import click
 
 SLACK_PREFIX = "https://hooks.slack.com/"
 SLACK_API_URL = "https://slack.com/api/chat.postMessage"
 # A bot token: a user token (`xoxp-`) acts as the operator, with every scope they granted it.
 TOKEN_PREFIX = "xoxb-"  # noqa: S105
-TIMEOUT_SECONDS = 30
+#: The pause before each new try of a request that never left, or that Slack's rate limit refused; and, for a read, of
+#: one Slack failed to answer: one try, then one more for each pause. A post Slack may have made is never sent again
+#: (canopy-http), and canopy's retry of the delivery skips the posts it knows were made.
+RETRY_PAUSES: Sequence[float] = (1.0, 3.0)
 # How much of Slack's reply a failure prints.
 _MAX_REPLY = 500
 _MAX_LINES = 45
@@ -61,6 +64,8 @@ _CHANNEL = re.compile(r"#?[A-Za-z0-9._-]{1,80}")
 # An emoji code (`:robot_face:`), with an optional skin tone (`:wave::skin-tone-3:`).
 _EMOJI = re.compile(r"(?::[a-z0-9_+'-]{1,100}:){1,2}")
 _MAX_USERNAME = 80
+# A name canopy gives a reason, such as `needs_reviewer`; a chore's finding names its own, which stays as written.
+_SNAKE = re.compile(r"[a-z]+(?:_[a-z]+)+")
 
 
 class SinkError(Exception):
@@ -215,7 +220,21 @@ def escape(text: object) -> str:
     Returns:
         `text` as a string on one line, its runs of whitespace made single spaces, and `&`, `<` and `>` escaped.
     """
-    return " ".join(str(text).split()).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return _escaped(" ".join(str(text).split()))
+
+
+def _escaped(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _reason(reason: object) -> str:
+    """An attention item's reason, escaped, a snake_case name such as `needs_reviewer` in words: `needs reviewer`.
+
+    Returns:
+        The escaped Slack text.
+    """
+    text = escape(reason)
+    return text.replace("_", " ") if _SNAKE.fullmatch(text) else text
 
 
 def _subject(ticket: object, repo: object) -> str:
@@ -253,7 +272,11 @@ def _lines(value: object) -> list[str]:
 
 
 def render(message: Mapping[str, object]) -> str:
-    """Return the Slack text for one canopy `json` message: a header with counts, a line per item or event, a digest.
+    """Return the Slack text for one canopy `json` message, what Slack shows in a notification.
+
+    A line naming the repository with counts, then a line per item or event in the order the blocks show them, each as
+    its block's first line shows it, and a digest. A message of one item or event leads with it, so the notification
+    says what happened.
 
     Returns:
         The escaped text, its lines joined by newlines, at most 45 lines, the last saying how many were left out.
@@ -268,21 +291,21 @@ def render(message: Mapping[str, object]) -> str:
         if added or resolved:
             counts.append(f"{len(added)} new, {len(resolved)} resolved, {attention.get('open', 0)} open")
         for a in added:
-            what = _named(_subject(a.get("ticket"), a.get("repo")), a.get("title"))
-            lines.append(f"+ {what} · {escape(a.get('reason'))}: {escape(a.get('detail'))}")
-        lines += [
-            f"- {_named(_subject(r.get('ticket'), r.get('repo')), r.get('title'))} · {escape(r.get('reason'))}"
-            + (" (dismissed)" if r.get("dismissed") is True else "")
-            for r in resolved
-        ]
+            what = _added_shown(a).lines[0]
+            lines.append(f"{what}: {escape(a.get('detail'))}" if a.get("detail") else what)
     events = _dicts(message.get("events"))
     if events:
         counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
-    lines += [escape(e.get("line") or e.get("kind")) for e in events]
+    lines += [_event_shown(e).lines[0] for e in events if _needs_you(e)]
+    if isinstance(attention, dict):
+        lines += [_resolved(r) for r in _dicts(attention.get("resolved"))]
+    lines += [_event_shown(e).lines[0] for e in events if not _needs_you(e)]
     omitted = message.get("omitted")
+    digest = message.get("digest")
+    if len(lines) == 1 and not omitted and not isinstance(digest, dict):
+        return "\n".join([lines[0], f"*canopy* · {escape(repo)}"])
     if isinstance(omitted, int) and omitted:
         lines.append(f"_... and {omitted} more: see `canopy status`_")
-    digest = message.get("digest")
     if isinstance(digest, dict):
         counts.append("digest")
         lines += ["", "*Digest*", *(escape(line) for line in _lines(digest.get("lines")))]
@@ -307,25 +330,57 @@ _SPENT = (
     ("plans", "plans"),
     ("chores", "chores"),
     ("reviews", "reviews"),
+    ("tasks", "tasks"),
     ("dry_run", "dry runs"),
 )
-_URL = re.compile(r"https?://[^\s|]+")
+# A URL in journal text: it runs to a space or an angle bracket, and starts a word or follows punctuation.
+_URL = re.compile(r"(?<![\w/])https?://[^\s<>]+")
+# What ends a sentence or wraps a URL, never the URL's own last character.
+_TRAILING = ".,:;!?'\"`*_~"
+_CLOSING = {")": "(", "]": "["}
 # A link canopy sends to a page of its web UI: a URL's own characters only, so it needs no escaping but `&`, and no `|`
 # can put a label of its own in it. The same class as `serve.url`'s check in canopy's config (`_UI_URL_RE`).
 _PAGE = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+")
 _MAX_PAGE = 2000
+#: Each status a run, a chore's run, or a review's run ends with, as the emoji that leads its line.
 _STATUS_EMOJI = {
     "done": ":white_check_mark:",
+    "ok": ":white_check_mark:",
     "blocked": ":raising_hand:",
     "failed": ":x:",
+    "unknown": ":grey_question:",
+    "unpushed": ":warning:",
     "crashed": ":boom:",
     "timeout": ":hourglass:",
     "abandoned": ":wastebasket:",
     "stopped": ":octagonal_sign:",
 }
 
+# A pull request on GitHub, which its link shows by the name its own URL spells, `acme/api#7`: an owner, a repository,
+# and a number, in characters that need no escaping, so the label cannot say anything the URL does not.
+_GITHUB_PR = re.compile(r"https://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/pull/([0-9]{1,10})/?")
+
+#: The events that need the operator, shown before the rest: the loop or a sink failing, and a plan waiting on them.
+#: The same as canopy sends a batching sink at once (DESIGN §20), with a new attention item and a blocked run.
+_NEEDS_YOU = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed"})
+#: The events whose `blocked` run asked the operator a question: a ticket's run's, and a task's.
+_ASKING = frozenset({"run.ended", "task.ended"})
+
 type Block = dict[str, object]
 _DIVIDER: Block = {"type": "divider"}
+
+
+@dataclass(frozen=True)
+class _Shown:
+    """One attention item or event as the message shows it."""
+
+    #: Its lines, the first naming what happened, each escaped; an empty one is left out.
+    lines: Sequence[str]
+    #: What only adds to it, such as how long it has been open or which branch a run is on: in smaller type under the
+    #: lines, each part escaped; an empty one is left out.
+    aside: Sequence[str] = ()
+    #: Whether it is routine, such as a run starting: one line in small type, so what needs the operator stands out.
+    quiet: bool = False
 
 
 def _mrkdwn(text: str) -> Block:
@@ -347,12 +402,37 @@ def _context(*parts: str) -> Block:
 def _linked(text: object) -> str:
     """`text`, escaped, each URL in it a link that shows the URL itself.
 
-    A URL holding `|` stays text: in a link, what follows `|` is a label shown in the URL's place.
+    The punctuation around a URL stays out of its link: a trailing `.`, `:` or quote, and a `)` or `]` the URL does
+    not open. A URL holding `|` stays text: in a link, what follows `|` is a label shown in the URL's place.
 
     Returns:
         The escaped Slack text.
     """
-    return " ".join(f"<{word}>" if _URL.fullmatch(word) else word for word in escape(text).split(" "))
+    flat = " ".join(str(text).split())
+    out: list[str] = []
+    at = 0
+    for match in _URL.finditer(flat):
+        url = _trimmed(match.group())
+        if "|" in match.group() or url.endswith("//"):
+            continue
+        out += [_escaped(flat[at : match.start()]), f"<{_escaped(url)}>"]
+        at = match.start() + len(url)
+    return "".join([*out, _escaped(flat[at:])])
+
+
+def _trimmed(url: str) -> str:
+    """`url` without the punctuation that ends it in prose: what `_TRAILING` names, and an unopened `)` or `]`.
+
+    Returns:
+        The URL as it was meant.
+    """
+    while url:
+        last = url[-1]
+        if last in _TRAILING or (last in _CLOSING and url.count(last) > url.count(_CLOSING[last])):
+            url = url[:-1]
+        else:
+            break
+    return url
 
 
 def _open(page: object) -> str:
@@ -377,6 +457,19 @@ def _with_open(first: str, page: object) -> str:
     """
     link = _open(page)
     return f"{first} · {link}" if link else first
+
+
+def _pr(url: object) -> str:
+    """A link to a pull request: one on GitHub shows the name its URL spells, `acme/api#7`; another shows its URL.
+
+    Returns:
+        The Slack link, or `url` as `_linked` shows text when it is no GitHub PR.
+    """
+    text = str(url)
+    if (match := _GITHUB_PR.fullmatch(text)) is None:
+        return _linked(text)
+    owner, repo, number = match.groups()
+    return f"<{text}|{owner}/{repo}#{number}>"
 
 
 def _when(at: object) -> str:
@@ -409,121 +502,297 @@ def _quote(label: str, text: object) -> str:
 
 
 def _counted(counts: object) -> str:
+    """Each name in `counts` after its count, the largest first: `23 ok, 1 error`.
+
+    Returns:
+        The escaped Slack text, or `none` when there are no counts.
+    """
     if not isinstance(counts, dict) or not counts:
         return "none"
-    return ", ".join(f"{escape(k)} {escape(v)}" for k, v in sorted(counts.items(), key=lambda kv: str(kv[0])))
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1] if isinstance(kv[1], int) else 0, str(kv[0])))
+    return ", ".join(f"{escape(v)} {_reason(k)}" for k, v in ordered)
 
 
-def _run_started(e: Mapping[str, object]) -> list[str]:
-    return [
-        (
-            f":arrow_forward: {_named(e.get('ticket'), e.get('title'))} · {escape(e.get('run_kind'))} run "
-            f"{escape(e.get('run'))} started"
-        ),
-        f"attempt {escape(e.get('attempt'))} of {escape(e.get('limit'))} on `{escape(e.get('branch') or '-')}`",
-    ]
+def _run_started(e: Mapping[str, object]) -> _Shown:
+    return _Shown(
+        [
+            (
+                f":arrow_forward: {_named(e.get('ticket'), e.get('title'))} · {escape(e.get('run_kind'))} run "
+                f"{escape(e.get('run'))} started"
+            ),
+        ],
+        [f"attempt {escape(e.get('attempt'))} of {escape(e.get('limit'))}", f"`{escape(e.get('branch') or '-')}`"],
+        quiet=True,
+    )
 
 
-def _run_ended(e: Mapping[str, object]) -> list[str]:
+def _run_ended(e: Mapping[str, object]) -> _Shown:
     prs = _lines(e.get("prs")) or ([str(e["pr"])] if e.get("pr") else [])
     run = f"{escape(e.get('run_kind'))} run {escape(e.get('run'))}"
-    return [
-        _ended(e, f"{_named(e.get('ticket'), e.get('title'))} · {run}"),
-        *(_linked(pr) for pr in prs),
-        _linked(e.get("summary")) if e.get("summary") else "",
-        _quote("Question", e.get("question")),
-    ]
+    return _Shown(
+        [
+            _ended(e, f"{_named(e.get('ticket'), e.get('title'))} · {run}"),
+            " · ".join(_pr(pr) for pr in prs),
+            _linked(e.get("summary")) if e.get("summary") else "",
+            _quote("Question", e.get("question")),
+        ],
+    )
 
 
-def _chore_ended(e: Mapping[str, object]) -> list[str]:
-    findings = e.get("findings") or 0
-    return [
-        _ended(e, f"*chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}")
-        + f" · {escape(findings)} finding{'s' if findings != 1 else ''}",
-        _linked(e.get("summary")) if e.get("summary") else "",
-    ]
+def _findings(count: object) -> str:
+    if not count:
+        return "no findings"
+    return f"{escape(count)} finding{'s' if count != 1 else ''}"
 
 
-def _review_ended(e: Mapping[str, object]) -> list[str]:
+def _plan_proposed(e: Mapping[str, object]) -> _Shown:
+    what = f"{_named(e.get('ticket'), e.get('title'))} · plan {escape(e.get('plan'))}"
+    return _Shown(
+        [f":clipboard: {what} waits on your approval"],
+        [f"read it with `canopy show {escape(e.get('ticket'))}`"],
+    )
+
+
+def _plan_approved(e: Mapping[str, object]) -> _Shown:
+    which = "feedback plan" if e.get("feedback") is True else "plan"
+    return _Shown(
+        [
+            (
+                f":ballot_box_with_check: {_named(e.get('ticket'), e.get('title'))} · {which} {escape(e.get('plan'))} "
+                "approved by its planner"
+            ),
+            _quote("Why", e.get("reason")),
+        ],
+    )
+
+
+def _follow_ups_filed(e: Mapping[str, object]) -> _Shown:
+    given = e.get("follow_ups")
+    filed: list[tuple[str, object]] = [(str(k), v) for k, v in given.items()] if isinstance(given, dict) else []
+    count = e.get("count")
+    total = count if isinstance(count, int) and count > len(filed) else len(filed)
+    named = [f"*{escape(k)}*" + (f" ({escape(v)})" if v else "") for k, v in filed]
+    if total > len(filed):
+        named.append(f"{total - len(filed)} more")
+    return _Shown(
+        [
+            (
+                f":seedling: {_named(e.get('ticket'), e.get('title'))} · run {escape(e.get('run'))} filed {total} "
+                f"follow-up{'s' if total != 1 else ''}"
+            ),
+            ", ".join(named),
+        ],
+        ["label or `canopy start` each one you want worked"],
+    )
+
+
+def _ci_flaky(e: Mapping[str, object]) -> _Shown:
+    kicked = _lines(e.get("kicked"))
+    what = f"{_named(e.get('ticket'), e.get('title'))} · run {escape(e.get('run'))} left a failed check as flaky"
+    if kicked:
+        first = f":repeat: {what}; canopy pushed {', '.join(f'`{escape(r)}`' for r in kicked)} again to rerun it"
+        aside = [_linked(e.get("note")) if e.get("note") else ""]
+    else:
+        first = f":grey_question: {what}"
+        aside = ["rerun it, or `canopy reply` that it is real", _linked(e.get("note")) if e.get("note") else ""]
+    return _Shown(
+        [first, " · ".join(_pr(pr) for pr in _lines(e.get("prs"))), _quote("Why", e.get("estimate"))],
+        aside,
+    )
+
+
+def _task_ended(e: Mapping[str, object]) -> _Shown:
+    head = str(e.get("head") or "")[:12]
+    tickets = _lines(e.get("tickets"))
+    return _Shown(
+        [
+            _ended(e, f"*task {escape(e.get('task'))}* · run {escape(e.get('run'))}"),
+            _pr(e.get("pr")) if e.get("pr") else "",
+            _linked(e.get("summary")) if e.get("summary") else "",
+            _quote("Question", e.get("question")),
+            f"filed {', '.join(f'*{escape(t)}*' for t in tickets)}" if tickets else "",
+        ],
+        [f"`{escape(e.get('branch'))}` at `{escape(head)}`" if e.get("branch") and head else ""],
+    )
+
+
+def _chore_ended(e: Mapping[str, object]) -> _Shown:
+    return _Shown(
+        [
+            _ended(e, f"*chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}")
+            + f" · {_findings(e.get('findings'))}",
+            _linked(e.get("summary")) if e.get("summary") else "",
+        ],
+    )
+
+
+def _review_ended(e: Mapping[str, object]) -> _Shown:
     ticket = f"{_named(e.get('ticket'), e.get('title'))} · " if e.get("ticket") else ""
     verdict = " ".join(escape(x) for x in (e.get("verdict"), e.get("impact")) if x)
-    findings = e.get("findings") or 0
-    counted = f" · {escape(findings)} finding{'s' if findings != 1 else ''}" if verdict else ""
-    return [
-        _ended(e, f"{ticket}review run {escape(e.get('run'))}") + (f": {verdict}{counted}" if verdict else ""),
-        _linked(e.get("pr")) if e.get("pr") else "",
-    ]
+    counted = f" · {_findings(e.get('findings'))}" if verdict else ""
+    return _Shown(
+        [
+            _ended(e, f"{ticket}review run {escape(e.get('run'))}") + (f": {verdict}{counted}" if verdict else ""),
+            _pr(e.get("pr")) if e.get("pr") else "",
+        ],
+    )
 
 
-def _loop_failing(e: Mapping[str, object]) -> list[str]:
-    return [
-        f":rotating_light: *The loop is failing:* {escape(e.get('count'))} ticks in a row ended other than ok",
-        f"latest tick {escape(e.get('tick'))} ended {escape(e.get('status'))}; log `{escape(e.get('log'))}`",
-    ]
+def _loop_failing(e: Mapping[str, object]) -> _Shown:
+    return _Shown(
+        [f":rotating_light: *The loop is failing:* {escape(e.get('count'))} ticks in a row ended other than ok"],
+        [f"latest tick {escape(e.get('tick'))} ended {escape(e.get('status'))}", f"log `{escape(e.get('log'))}`"],
+    )
 
 
-def _loop_recovered(e: Mapping[str, object]) -> list[str]:
-    return [f":white_check_mark: *The loop recovered* after {escape(e.get('failed'))} failed ticks"]
+def _loop_recovered(e: Mapping[str, object]) -> _Shown:
+    return _Shown([f":white_check_mark: *The loop recovered* after {escape(e.get('failed'))} failed ticks"])
 
 
-def _sink_failing(e: Mapping[str, object]) -> list[str]:
-    return [
-        f":warning: *Sink {escape(e.get('sink'))} is failing:* 3 deliveries in a row",
-        f"`{escape(e.get('error'))}`",
-    ]
+def _sink_failing(e: Mapping[str, object]) -> _Shown:
+    return _Shown(
+        [f":warning: *Sink {escape(e.get('sink'))} is failing:* 3 deliveries in a row"],
+        [f"`{escape(e.get('error'))}`"],
+    )
 
 
-def _test(e: Mapping[str, object]) -> list[str]:
-    return [f":test_tube: {_linked(e.get('text'))}"]
+def _budget_reached(e: Mapping[str, object]) -> _Shown:
+    spent, projected, percent = e.get("spent"), e.get("projected"), e.get("percent")
+    so_far = _usd(spent) if isinstance(spent, int | float) else "-"
+    pace = f"; on pace for {_usd(projected)}" if isinstance(projected, int | float) else ""
+    month, budget = escape(e.get("month")), escape(e.get("budget"))
+    what = "its budget" if percent == 100 else f"{escape(percent)}% of its budget"  # noqa: PLR2004  (the budget whole)
+    return _Shown([f":moneybag: *Spend for {month} reached {what}:* {so_far} of ${budget}{pace}"], _budget_parts(e))
 
 
-# Each event kind's lines, the first naming what happened: the event's page in the web UI is linked after it.
-_EVENTS: dict[str, Callable[[Mapping[str, object]], list[str]]] = {
+def _budget_parts(e: Mapping[str, object]) -> list[str]:
+    """What a `loop.budget_reached` event's spend is made of: canopy's runs, and the sessions outside canopy.
+
+    Returns:
+        Canopy's runs' part, then the part outside canopy with when canopy last read the runtime's sessions, or last
+        tried to when that read failed, or that it has not; none for an event from a canopy that did not send the parts.
+    """
+    runs, outside, read = e.get("runs"), e.get("outside"), e.get("sessions_read_at")
+    if not isinstance(runs, int | float):
+        return []
+    if read is None or not isinstance(outside, int | float):
+        return [f"canopy's runs {_usd(runs)}", "outside canopy not read yet"]
+    how = "the last read of sessions failed" if e.get("sessions_read") == "failed" else "sessions read"
+    return [f"canopy's runs {_usd(runs)}", f"outside canopy {_usd(outside)}", f"{how} {_when(read)}"]
+
+
+def _test(e: Mapping[str, object]) -> _Shown:
+    return _Shown([f":test_tube: {_linked(e.get('text'))}"])
+
+
+def _reply_recorded(e: Mapping[str, object]) -> _Shown:
+    return _Shown(
+        [
+            f":speech_balloon: Your reply from Slack is on {_named(e.get('ticket'), e.get('title'))}",
+            _quote("Reply", e.get("body")),
+        ],
+    )
+
+
+def _reply_refused(e: Mapping[str, object]) -> _Shown:
+    on = f" on *{escape(e.get('ticket'))}*" if e.get("ticket") else ""
+    return _Shown(
+        [f":no_entry_sign: canopy took nothing from this reply{on}: {_linked(e.get('reason'))}"],
+        [f"({escape(e.get('guard'))})"],
+    )
+
+
+# Each event kind as shown, its first line naming what happened: the event's page in the web UI is linked after it.
+_EVENTS: dict[str, Callable[[Mapping[str, object]], _Shown]] = {
     "run.started": _run_started,
     "run.ended": _run_ended,
+    "plan.proposed": _plan_proposed,
+    "plan.approved": _plan_approved,
+    "follow_ups.filed": _follow_ups_filed,
+    "ci.flaky": _ci_flaky,
+    "task.ended": _task_ended,
     "chore.ended": _chore_ended,
     "review.ended": _review_ended,
     "loop.failing": _loop_failing,
     "loop.recovered": _loop_recovered,
     "loop.sink_failing": _sink_failing,
+    "loop.budget_reached": _budget_reached,
+    "reply.recorded": _reply_recorded,
+    "reply.refused": _reply_refused,
     "test": _test,
 }
 
 
-def _event(e: Mapping[str, object]) -> Block:
-    """One event as a section built from its fields. A kind this sink does not know shows its text-format line.
+def _event(e: Mapping[str, object], *, fold: bool) -> list[Block]:
+    """One event as blocks built from its fields. A kind this sink does not know shows its text-format line.
 
     Returns:
-        The section block, its first line linking to the event's page in the web UI when canopy sent one.
+        The blocks, the first line linking to the event's page in the web UI when canopy sent one.
+    """
+    return _shown_blocks(_event_shown(e), e.get("ui"), fold=fold)
+
+
+def _event_shown(e: Mapping[str, object]) -> _Shown:
+    """One event as shown, its first line naming what happened. A kind this sink does not know shows its text line.
+
+    Returns:
+        The escaped Slack lines, at least one, and what is set aside under them.
     """
     build = _EVENTS.get(str(e.get("kind")))
-    first, *rest = build(e) if build is not None else [_linked(e.get("line") or e.get("kind"))]
-    return _section(_with_open(first, e.get("ui")), *rest)
+    return build(e) if build is not None else _Shown([_linked(e.get("line") or e.get("kind"))])
 
 
-def _attention(attention: Mapping[str, object]) -> list[Block]:
-    out = [_added(a) for a in _dicts(attention.get("added"))]
-    resolved = [
-        f":heavy_check_mark: ~{_titled(_subject(r.get('ticket'), r.get('repo')), r.get('title'))}~ "
-        f"{escape(r.get('reason'))}" + (" (dismissed)" if r.get("dismissed") is True else "")
-        for r in _dicts(attention.get("resolved"))
-    ]
-    if resolved:
-        out.append(_section("*Resolved*", *resolved))
-    return out
+def _shown_blocks(shown: _Shown, page: object, *, fold: bool) -> list[Block]:
+    """`shown` as a section, its aside as a context under it in smaller type, or, with `fold`, its section's last line.
+
+    A quiet one is a context alone, its aside on its first line.
+
+    Returns:
+        The section, and the context when there is an aside and it is not folded; or, quiet, the context.
+    """
+    first, *rest = shown.lines
+    aside = " · ".join(part for part in shown.aside if part)
+    if shown.quiet:
+        return [_context("\n".join([_with_open(" · ".join(x for x in (first, aside) if x), page), *rest]))]
+    section = _section(_with_open(first, page), *rest, *([aside] if aside and fold else []))
+    return [section, _context(aside)] if aside and not fold else [section]
 
 
-def _added(a: Mapping[str, object]) -> Block:
+def _needs_you(e: Mapping[str, object]) -> bool:
+    """Whether an event needs the operator: the loop or a sink failing, a plan to approve, or a run's question.
+
+    Returns:
+        True when it does.
+    """
+    kind = e.get("kind")
+    return kind in _NEEDS_YOU or (kind in _ASKING and e.get("status") == "blocked")
+
+
+def _resolved(r: Mapping[str, object]) -> str:
+    """A resolved attention item, struck through, `(dismissed)` when the operator dismissed it.
+
+    Returns:
+        The escaped Slack line.
+    """
+    subject = _titled(_subject(r.get("ticket"), r.get("repo")), r.get("title"))
+    dismissed = " (dismissed)" if r.get("dismissed") is True else ""
+    return f":heavy_check_mark: ~{subject}~ {_reason(r.get('reason'))}{dismissed}"
+
+
+def _added(a: Mapping[str, object], *, fold: bool) -> list[Block]:
     """A new attention item: what it is about and why, linking to its page in the web UI, then its detail and age.
 
     Returns:
-        The section block.
+        The blocks.
     """
-    what = f":bell: {_named(_subject(a.get('ticket'), a.get('repo')), a.get('title'))} · {escape(a.get('reason'))}"
-    return _section(
-        _with_open(what, a.get("ui")),
-        _linked(a.get("detail")) if a.get("detail") else "",
-        f"_open since {_when(a.get('since'))}_" if a.get("since") else "",
+    return _shown_blocks(_added_shown(a), a.get("ui"), fold=fold)
+
+
+def _added_shown(a: Mapping[str, object]) -> _Shown:
+    what = f":bell: {_named(_subject(a.get('ticket'), a.get('repo')), a.get('title'))} · {_reason(a.get('reason'))}"
+    return _Shown(
+        [what, _linked(a.get("detail")) if a.get("detail") else ""],
+        [f"open since {_when(a.get('since'))}" if a.get("since") else ""],
     )
 
 
@@ -534,8 +803,9 @@ def _digest(digest: Mapping[str, object]) -> list[Block]:
     attention: dict[str, object] = {str(k): v for k, v in given.items()} if isinstance(given, dict) else {}
     needs_you = "nothing"
     if attention.get("open"):
-        needs_you = f"{escape(attention.get('open'))} open ({_counted(attention.get('by_reason'))})"
+        needs_you = f"{escape(attention.get('open'))} open"
         needs_you += f", oldest {escape(attention.get('oldest'))}" if attention.get("oldest") else ""
+        needs_you += f"\n{_counted(attention.get('by_reason'))}"
     fields = [
         f"*Ticks*\n{total} ({_counted(ticks)})",
         f"*Workers running*\n{escape(digest.get('running', 0))}",
@@ -550,30 +820,38 @@ def _digest(digest: Mapping[str, object]) -> list[Block]:
     out: list[Block] = [
         {
             "type": "section",
-            "text": _mrkdwn(f"*Digest* since {_when(digest.get('since'))}"),
+            "text": _mrkdwn(f":bar_chart: *Digest* since {_when(digest.get('since'))}"),
             "fields": [_mrkdwn(f) for f in fields],
         },
     ]
     runs = [
-        f"{_STATUS_EMOJI['done']} {_named(d.get('ticket'), d.get('title'))} "
-        f"{_linked(d.get('pr')) if d.get('pr') else ''}".rstrip()
+        f"{_STATUS_EMOJI['done']} {_named(d.get('ticket'), d.get('title'))}"
+        + (f" · {_pr(d.get('pr'))}" if d.get("pr") else "")
         for d in _dicts(digest.get("done"))[:_DIGEST_LISTED]
     ]
     runs += [
-        f"{_STATUS_EMOJI['blocked']} {_named(b.get('ticket'), b.get('title'))}" for b in _dicts(digest.get("blocked"))
+        f"{_STATUS_EMOJI['blocked']} {_named(b.get('ticket'), b.get('title'))} · blocked"
+        for b in _dicts(digest.get("blocked"))[:_DIGEST_LISTED]
     ]
     if runs:
-        out.append(_section(*runs[: 2 * _DIGEST_LISTED]))
+        out.append(_section(*runs))
     return out
 
 
-# What the digest's span cost: the total, then each kind that reported a cost, in the order canopy's text lists them.
+# What the digest's span cost: the total, then each kind that reported a cost, in the order canopy's text lists them,
+# the idle ticks' part of the overseer's beside it.
 def _spent(spent: Mapping[str, object]) -> str:
     total = spent.get("total")
     if not isinstance(total, int | float):
         return "none reported"
-    parts = [f"{name} {_usd(usd)}" for kind, name in _SPENT if isinstance(usd := spent.get(kind), int | float)]
-    return f"{_usd(total)} ({', '.join(parts)})"
+    idle = spent.get("idle")
+    parts = [
+        f"{name} {_usd(usd)}"
+        + (f" (idle {_usd(idle)})" if kind == "overseer" and isinstance(idle, int | float) and idle else "")
+        for kind, name in _SPENT
+        if isinstance(usd := spent.get(kind), int | float)
+    ]
+    return f"*{_usd(total)}*" + (f"\n{', '.join(parts)}" if parts else "")
 
 
 def _usd(usd: float) -> str:
@@ -583,38 +861,21 @@ def _usd(usd: float) -> str:
 def blocks(message: Mapping[str, object], *, header: bool = True) -> list[Block]:
     """Return Block Kit blocks for one canopy `json` message, built from its fields rather than its text lines.
 
-    A header with the repository directory name and counts, a section per attention item and per event, the resolved
-    items together, and the digest as fields. At most Slack's 50 blocks, the last saying how many were left out.
-    Without `header`, as a post in a ticket's thread is, the message starts at its first item.
+    A line in small type naming the repository directory and counting what follows, a section per attention item and
+    per event with what only adds to it in small type under it, the resolved items together, and the digest as
+    fields. At most Slack's 50 blocks: what would be set under an item goes in its section instead when that keeps
+    every item, and the last block says how many were left out when nothing does. Without `header`, as a post in a
+    ticket's thread is, the message starts at its first item.
 
     Returns:
         The blocks, in the order Slack shows them.
     """
+    counts, body = _body(message, fold=False)
+    if len(body) + 1 > _MAX_BLOCKS:
+        counts, body = _body(message, fold=True)
     repo = Path(str(message.get("repo") or "")).name or "canopy"
-    title: Block = {"type": "plain_text", "text": f"canopy · {repo}"[:_MAX_HEADER]}
-    out: list[Block] = [{"type": "header", "text": title}] if header else []
-    counts: list[str] = []
-    given = message.get("attention")
-    body: list[Block] = []
-    if isinstance(given, dict):
-        attention: dict[str, object] = {str(k): v for k, v in given.items()}
-        added, resolved = _dicts(attention.get("added")), _dicts(attention.get("resolved"))
-        if added or resolved:
-            counts.append(f"{len(added)} new · {len(resolved)} resolved · {escape(attention.get('open', 0))} open")
-        body = _attention(attention)
-    events = _dicts(message.get("events"))
-    if events:
-        counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
-        body += [_DIVIDER] if body else []
-        body += [_event(e) for e in events]
-    digest = message.get("digest")
-    if isinstance(digest, dict):
-        counts.append("digest")
-        body += [_DIVIDER] if body else []
-        body += _digest({str(k): v for k, v in digest.items()})
-    if counts and header:
-        out.append(_context(_with_open(" · ".join(counts), message.get("ui"))))
-    out += body
+    byline = _with_open(" · ".join([f"*canopy* · {escape(repo)}", *counts]), message.get("ui"))
+    out = [_context(byline), *body] if header else body
     omitted = message.get("omitted")
     more = omitted if isinstance(omitted, int) else 0
     if len(out) + (1 if more else 0) > _MAX_BLOCKS:
@@ -623,6 +884,37 @@ def blocks(message: Mapping[str, object], *, header: bool = True) -> list[Block]
     if more:
         out.append(_context(f"_… and {more} more: see `canopy status`_"))
     return out
+
+
+def _body(message: Mapping[str, object], *, fold: bool) -> tuple[list[str], list[Block]]:
+    """The counts the byline shows, and the blocks after it: what needs the operator, the rest, then the digest.
+
+    What needs the operator is the new attention items, then the events `_needs_you` names, in the order canopy sent
+    them; the rest is the resolved items, then the other events.
+
+    Returns:
+        The counts, and the blocks, each item's aside folded into its section with `fold`.
+    """
+    counts: list[str] = []
+    given = message.get("attention")
+    attention: dict[str, object] = {str(k): v for k, v in given.items()} if isinstance(given, dict) else {}
+    added, resolved = _dicts(attention.get("added")), _dicts(attention.get("resolved"))
+    if added or resolved:
+        counts.append(f"{len(added)} new · {len(resolved)} resolved · {escape(attention.get('open', 0))} open")
+    events = _dicts(message.get("events"))
+    if events:
+        counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
+    first = [block for a in added for block in _added(a, fold=fold)]
+    first += [block for e in events if _needs_you(e) for block in _event(e, fold=fold)]
+    rest = [_section("*Resolved*", *(_resolved(r) for r in resolved))] if resolved else []
+    rest += [block for e in events if not _needs_you(e) for block in _event(e, fold=fold)]
+    body = [*first, *([_DIVIDER] if first and rest else []), *rest]
+    digest = message.get("digest")
+    if isinstance(digest, dict):
+        counts.append("digest")
+        body += [_DIVIDER] if body else []
+        body += _digest({str(k): v for k, v in digest.items()})
+    return counts, body
 
 
 def post(url: str, text: str, blocks: list[Block]) -> tuple[bool, str]:
@@ -677,15 +969,21 @@ def post_message(
 
 
 def _post(url: str, payload: dict[str, object], headers: dict[str, str]) -> tuple[bool, str]:
-    request = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers, method="POST")  # noqa: S310
+    client = slack_client(url, headers)
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
-            # The whole reply: `post_message` parses it, and a successful `chat.postMessage` reply runs long.
-            return 200 <= response.status < 300, response.read().decode(errors="replace")  # noqa: PLR2004
-    except urllib.error.HTTPError as e:
-        return False, f"HTTP {e.code}: {e.read().decode(errors='replace')[:_MAX_REPLY]}"
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        return False, f"cannot reach Slack: {e}"
+        # The whole reply: `post_message` parses it, and a successful `chat.postMessage` reply runs long.
+        return True, client.send("POST", url, body=payload).text
+    except canopy_http.HttpError as e:
+        return False, str(e)
+
+
+def slack_client(url: str, headers: Mapping[str, str]) -> canopy_http.Client:
+    """A client for Slack at `url`'s origin, a webhook's or the Web API's, sending `headers` there alone (canopy-http).
+
+    Returns:
+        The client.
+    """
+    return canopy_http.Client(url, name="Slack", headers=headers, retry=canopy_http.Retry(pauses=RETRY_PAUSES))
 
 
 # Threads, with `--threads`
@@ -699,6 +997,12 @@ BROADCASTS: Mapping[str, str] = {
 
 #: What a chore's findings' attention items name as their ticket, before the chore's name.
 _CHORE = "chore:"
+#: What `_thread` names a part answering the operator's own message by, before its `ts`: never a ticket's key.
+_ANSWER = "answer:"
+#: How many days, today's among them, the threads file keeps a thread: as far back as `canopy-connect-slack` reads.
+KEEP_DAYS = 7
+#: The threads file's format: 2 added each subject's earlier threads, which a sink that writes 1 drops.
+_VERSION = 2
 # A message's `ts`, which names it to reply in its thread.
 _TS = re.compile(r"\d{1,20}\.\d{1,20}")
 
@@ -734,23 +1038,29 @@ class Send(Protocol):
 
 @dataclass
 class Threads:
-    """For one channel and repository: each thread the sink posts in today, and what a failed delivery posted.
+    """For one channel and repository: each thread the sink posts in, its earlier ones, and what a delivery posted.
 
     The file holds a scope for each channel and repository, so sinks and workspaces sharing it keep their own, and a
-    save replaces only its own scope. Losing the file costs nothing worse than new threads.
+    save replaces only its own scope. Losing the file costs nothing worse than new threads, and replies in the old ones
+    no longer read.
     """
 
     path: Path
-    # The channel and repository, as a JSON list: the key of this record's part of the file.
+    #: The channel and repository, as a JSON list: the key of this record's part of the file.
     scope: str
-    # What a thread is about, such as a ticket key, to the day it was started and its first message's `ts`.
+    #: What a thread is about, such as a ticket key, to the day its latest thread was started and its first `ts`.
     threads: dict[str, tuple[str, str]]
-    # Fingerprints of the items posted by a delivery that has not yet posted whole, so canopy's retry skips them.
+    #: Fingerprints of the items posted by a delivery that has not yet posted whole, so canopy's retry skips them.
     posted: set[str]
+    #: What a thread is about to its threads before the latest, each its day and first `ts`, oldest first, for
+    #: `KEEP_DAYS`.
+    earlier: dict[str, list[tuple[str, str]]] = field(default_factory=dict[str, list[tuple[str, str]]])
 
     @classmethod
     def load(cls, path: Path, channel: str, repo: str) -> Threads:
         """Read the scope of `channel` and `repo` from `path`: empty if missing or not what this sink wrote.
+
+        A version 1 file, which has no earlier threads, reads as one whose earlier threads are none.
 
         Returns:
             The threads and fingerprints the scope holds.
@@ -761,15 +1071,42 @@ class Threads:
         scope = json.dumps([channel, repo])
         given = _scopes(path).get(scope)
         mine: dict[str, object] = {str(k): v for k, v in given.items()} if isinstance(given, dict) else {}
-        threads: dict[str, tuple[str, str]] = {}
         recorded = mine.get("threads")
-        for key, thread in recorded.items() if isinstance(recorded, dict) else ():
-            day, ts = (thread.get("day"), thread.get("ts")) if isinstance(thread, dict) else (None, None)
-            if isinstance(day, str) and isinstance(ts, str) and _TS.fullmatch(ts):
-                threads[str(key)] = (day, ts)
+        threads = {
+            str(key): started
+            for key, thread in (recorded.items() if isinstance(recorded, dict) else ())
+            if (started := _started(thread)) is not None
+        }
+        before = mine.get("earlier")
+        earlier = {
+            str(key): kept
+            for key, listed in (before.items() if isinstance(before, dict) else ())
+            if (kept := [s for t in (listed if isinstance(listed, list) else ()) if (s := _started(t)) is not None])
+        }
         fingerprints = mine.get("posted")
         posted = {f for f in fingerprints if isinstance(f, str)} if isinstance(fingerprints, list) else set()
-        return cls(path, scope, threads, posted)
+        return cls(path, scope, threads, posted, earlier)
+
+    def start(self, key: str, day: str, ts: str) -> None:
+        """Record the thread started for `key` on `day`, keeping the one it replaces among the earlier."""
+        replaced = self.threads.get(key)
+        if replaced is not None and replaced != (day, ts):
+            self.earlier.setdefault(key, []).append(replaced)
+        self.threads[key] = (day, ts)
+
+    def recent(self, today: str, days: int) -> dict[str, list[tuple[str, str]]]:
+        """Each subject's threads started in the `days` up to `today`, today's among them.
+
+        Returns:
+            Each subject's threads, each its day and first `ts`, oldest first; a subject with none is left out.
+        """
+        since = _days_before(today, days - 1)
+        found: dict[str, list[tuple[str, str]]] = {}
+        for key in sorted({*self.threads, *self.earlier}):
+            listed = [*self.earlier.get(key, ()), *([self.threads[key]] if key in self.threads else [])]
+            if kept := [thread for thread in listed if since <= thread[0] <= today]:
+                found[key] = kept
+        return found
 
     def save(self) -> None:
         """Replace this scope in the file, leaving the others as another sink last wrote them.
@@ -783,6 +1120,9 @@ class Threads:
         mine = {
             "threads": {key: {"day": day, "ts": ts} for key, (day, ts) in sorted(self.threads.items())},
             "posted": sorted(self.posted),
+            "earlier": {
+                key: [{"day": day, "ts": ts} for day, ts in listed] for key, listed in sorted(self.earlier.items())
+            },
         }
         tmp: Path | None = None
         try:
@@ -800,7 +1140,7 @@ class Threads:
                     delete=False,
                 ) as f:
                     tmp = Path(f.name)
-                    json.dump({"version": 1, "scopes": dict(sorted(scopes.items()))}, f)
+                    json.dump({"version": _VERSION, "scopes": dict(sorted(scopes.items()))}, f)
                     f.write("\n")
                 tmp.replace(self.path)
             finally:
@@ -811,15 +1151,45 @@ class Threads:
             raise SinkError(f"cannot write the threads file {self.path}: {e.strerror or e}") from e
 
     def finish(self, day: str) -> None:
-        """A delivery has posted whole: forget what it posted, and every thread started before `day`.
+        """A delivery has posted whole: forget what it posted, and keep each thread started before `day` as an earlier.
+
+        An earlier thread started before the `KEEP_DAYS` up to `day` is forgotten.
 
         Raises:
             SinkError: The file cannot be written.
         """
         self.posted.clear()
         # ISO dates order as strings. A later day's thread stays, should a delivery carry an earlier clock.
-        self.threads = {key: thread for key, thread in self.threads.items() if thread[0] >= day}
+        for key, thread in sorted(self.threads.items()):
+            if thread[0] < day:
+                del self.threads[key]
+                if thread not in self.earlier.get(key, ()):
+                    self.earlier.setdefault(key, []).append(thread)
+        since = _days_before(day, KEEP_DAYS - 1)
+        self.earlier = {
+            key: kept for key, listed in self.earlier.items() if (kept := [t for t in listed if t[0] >= since])
+        }
         self.save()
+
+
+def _started(thread: object) -> tuple[str, str] | None:
+    """A thread as the file records it, `{"day": ..., "ts": ...}`: its day and first `ts`, if both are what they seem.
+
+    Returns:
+        The day and `ts`, or None.
+    """
+    day, ts = (thread.get("day"), thread.get("ts")) if isinstance(thread, dict) else (None, None)
+    if not isinstance(day, str) or not isinstance(ts, str) or not _TS.fullmatch(ts):
+        return None
+    try:
+        date.fromisoformat(day)
+    except ValueError:
+        return None
+    return day, ts
+
+
+def _days_before(day: str, days: int) -> str:
+    return (date.fromisoformat(day) - timedelta(days=days)).isoformat()
 
 
 def _scopes(path: Path) -> dict[str, object]:
@@ -910,8 +1280,9 @@ def post_threaded(
 
     What is about a ticket or a review's PR goes in its thread for the day, which a post of its own starts in the
     channel, naming what the thread is about, before the first item. A reply stays in its thread, unless it holds one
-    of `broadcast` (`BROADCASTS` names them): then it is shown in the channel too. The rest, loop events, chores'
-    results, and the digest among it, is posted in the channel first, with the header.
+    of `broadcast` (`BROADCASTS` names them): then it is shown in the channel too. A reply canopy refused is answered
+    under the operator's own message, in no thread of the sink's. The rest, loop events, chores' results, and the
+    digest among it, is posted in the channel first, with the header.
 
     Returns:
         Whether Slack accepted every post, and its reply to the last one tried. The first refused post ends the
@@ -923,15 +1294,16 @@ def post_threaded(
     day = _day(message.get("sent_at"))
     ok, reply = True, ""
     for part in split(message, threads.posted):
-        started = threads.threads.get(part.thread) if part.thread is not None else None
-        ts = started[1] if started is not None and started[0] == day else None
+        answered = _answered(part.thread)
+        started = threads.threads.get(part.thread) if part.thread is not None and answered is None else None
+        ts = answered or (started[1] if started is not None and started[0] == day else None)
         if part.thread is not None and ts is None:
             ok, reply = send(*_starter(part, message, day))
             if not ok:
                 return ok, reply
             # Recorded at once, so a retry after a refused reply posts in this thread rather than starting another.
             if (ts := _ts(reply)) is not None:
-                threads.threads[part.thread] = (day, ts)
+                threads.start(part.thread, day, ts)
                 threads.save()
         cut = part.message(message)
         ok, reply = send(
@@ -966,9 +1338,23 @@ def _starter(part: Part, message: Mapping[str, object], day: str) -> tuple[str, 
     subject = (f"review of {ticket}" if ticket else "review") if pr else str(part.thread)
     named = " ".join((f"{subject} · {title}" if title else subject).split()) or "canopy"
     repo = Path(str(message.get("repo") or "")).name or "canopy"
-    about = [f"canopy · {escape(repo)} · updates from {escape(day)} in the thread", _linked(pr) if pr else ""]
+    about = [f"*canopy* · {escape(repo)} · updates from {_day_named(day)} in the thread", _pr(pr) if pr else ""]
     header: Block = {"type": "header", "text": {"type": "plain_text", "text": named[:_MAX_HEADER]}}
     return escape(named), [header, _context(*(a for a in about if a))]
+
+
+def _day_named(day: str) -> str:
+    """`day`, an ISO date, as a person names it: `Thu, Sep 24`.
+
+    Returns:
+        The day, or `day` escaped if it is not an ISO date.
+    """
+    try:
+        named = date.fromisoformat(day)
+    except ValueError:
+        return escape(day)
+    # The C locale's names, since the sink never sets one: the same words on every machine.
+    return f"{named:%a, %b} {named.day}"
 
 
 def split(message: Mapping[str, object], skip: AbstractSet[str] = frozenset()) -> list[Part]:
@@ -1010,6 +1396,9 @@ def split(message: Mapping[str, object], skip: AbstractSet[str] = frozenset()) -
 
 def _thread(item: Mapping[str, object]) -> str | None:
     kind = item.get("kind")
+    answered = item.get("ts")
+    if kind == "reply.refused" and isinstance(answered, str) and _TS.fullmatch(answered):
+        return _ANSWER + answered
     if kind == "review.ended":
         return f"review:{item['pr']}" if item.get("pr") else None
     ticket = item.get("ticket")
@@ -1017,6 +1406,17 @@ def _thread(item: Mapping[str, object]) -> str | None:
     if kind == "chore.ended" or not ticket or str(ticket).startswith(_CHORE):
         return None
     return str(ticket)
+
+
+def _answered(thread: str | None) -> str | None:
+    """The `ts` of the operator's message a part answers, when it is one `_thread` names so, else None.
+
+    Returns:
+        The `ts`.
+    """
+    if thread is None or not thread.startswith(_ANSWER):
+        return None
+    return thread.removeprefix(_ANSWER)
 
 
 def _fingerprint(item: object) -> str:
@@ -1066,94 +1466,112 @@ def read_message(stdin: str) -> dict[str, object]:
     return {str(k): v for k, v in parsed.items()}
 
 
-def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: str = SLACK_API_URL) -> int:
-    """Post the message on `stdin`.
+@dataclass(frozen=True)
+class Slack:
+    """Where the sink may post: Slack's own, unless a test gives its own."""
 
-    `prefix` is what the webhook URL must start with; `api_url` is where a token posts.
+    #: What the webhook URL must start with.
+    prefix: str = SLACK_PREFIX
+    #: Where a token posts.
+    api_url: str = SLACK_API_URL
 
-    Returns:
-        The exit code: 0 posted, 1 Slack refused the post, 2 the secret file, the channel, or the message is not
-        usable.
+
+@click.command("canopy-notify-slack", context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--webhook-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="The incoming webhook's URL. Default: $XDG_CONFIG_HOME/canopy/slack-webhook, or ~/.config/canopy/.",
+)
+@click.option("--channel", default=None, help="Post with a bot token to this channel id, not a webhook.")
+@click.option(
+    "--token-file",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="With --channel, the bot token. Default: $XDG_CONFIG_HOME/canopy/slack-token, or ~/.config/canopy/.",
+)
+@click.option("--username", default=None, help="With --channel, the name to post as.")
+@click.option("--icon-emoji", default=None, help="With --channel, the emoji to post with, such as :robot_face:.")
+@click.option(
+    "--threads",
+    is_flag=True,
+    help="With --channel, post each ticket's and review's messages in its own thread, a new one each day.",
+)
+@click.option(
+    "--broadcast",
+    "broadcasts",
+    multiple=True,
+    type=click.Choice(list(BROADCASTS)),
+    help="With --threads, also show in the channel a reply holding this; give it again for another: "
+    + "; ".join(f"{k}, {v}" for k, v in BROADCASTS.items())
+    + ".",
+)
+@click.pass_context
+def main(
+    ctx: click.Context,
+    *,
+    webhook_file: Path | None,
+    channel: str | None,
+    token_file: Path | None,
+    username: str | None,
+    icon_emoji: str | None,
+    threads: bool,
+    broadcasts: tuple[str, ...],
+) -> None:
+    """Post the canopy message on stdin to Slack: canopy's Slack sink (DESIGN §20).
+
+    It posts to an incoming webhook, or with --channel, with a bot token. Each secret is read from a file that is
+    yours alone.
     """
-    parser = argparse.ArgumentParser(
-        prog="canopy-notify-slack",
-        description=__doc__.split("\n", 1)[0],
-    )
-    parser.add_argument("--webhook-file", type=Path, default=None, help="default: " + str(default_webhook_file()))
-    parser.add_argument("--channel", default=None, help="post with a bot token to this channel id, not a webhook")
-    parser.add_argument("--token-file", type=Path, default=None, help="default: " + str(default_token_file()))
-    parser.add_argument("--username", default=None, help="with --channel, the name to post as")
-    parser.add_argument(
-        "--icon-emoji",
-        default=None,
-        help="with --channel, the emoji to post with, such as :robot_face:",
-    )
-    parser.add_argument(
-        "--threads",
-        action="store_true",
-        help="with --channel, post each ticket's and review's messages in its own thread, a new one each day",
-    )
-    parser.add_argument(
-        "--broadcast",
-        action="append",
-        choices=list(BROADCASTS),
-        default=[],
-        help="with --threads, also show in the channel a reply holding this; give it again for another: "
-        + "; ".join(f"{k}, {v}" for k, v in BROADCASTS.items()),
-    )
-    args = parser.parse_args(argv)
-    for given, flag in (
-        (args.token_file, "--token-file"),
-        (args.username, "--username"),
-        (args.icon_emoji, "--icon-emoji"),
-    ):
-        if args.channel is None and given is not None:
-            parser.error(f"{flag} needs --channel")
-    if args.channel is None and args.threads:
-        parser.error("--threads needs --channel")
-    if args.broadcast and not args.threads:
-        parser.error("--broadcast needs --threads")
-    if args.channel is not None and args.webhook_file is not None:
-        parser.error("--webhook-file and --channel are two ways to post; give one")
+    slack = ctx.find_object(Slack) or Slack()
+    _check_options(ctx.params)
     send: Callable[[str, list[Block]], tuple[bool, str]]
     threaded: tuple[Send, str] | None = None
     try:
-        if args.channel is None:
-            send = functools.partial(post, read_webhook(args.webhook_file or default_webhook_file(), prefix=prefix))
+        if channel is None:
+            send = functools.partial(post, read_webhook(webhook_file or default_webhook_file(), prefix=slack.prefix))
         else:
-            channel = check_channel(args.channel)
+            checked = check_channel(channel)
             to_channel = functools.partial(
                 post_message,
-                api_url,
-                read_token(args.token_file or default_token_file()),
-                channel,
-                username=None if args.username is None else check_username(args.username),
-                icon_emoji=None if args.icon_emoji is None else check_icon_emoji(args.icon_emoji),
+                slack.api_url,
+                read_token(token_file or default_token_file()),
+                checked,
+                username=None if username is None else check_username(username),
+                icon_emoji=None if icon_emoji is None else check_icon_emoji(icon_emoji),
             )
             send = to_channel
-            threaded = (to_channel, channel) if args.threads else None
-        parsed = read_message(stdin.read())
+            threaded = (to_channel, checked) if threads else None
+        parsed = read_message(sys.stdin.read())
         if threaded is None:
             ok, reply = send(render(parsed), blocks(parsed))
         else:
-            to_channel, channel = threaded
-            threads = Threads.load(default_threads_file(), channel, str(parsed.get("repo") or ""))
+            to_channel, checked = threaded
+            recorded = Threads.load(default_threads_file(), checked, str(parsed.get("repo") or ""))
             # Saved before anything is posted, so a file that cannot be written refuses the delivery whole.
-            threads.save()
-            ok, reply = post_threaded(parsed, to_channel, threads, frozenset(args.broadcast))
+            recorded.save()
+            ok, reply = post_threaded(parsed, to_channel, recorded, frozenset(broadcasts))
     except SinkError as e:
         print(f"canopy-notify-slack: {e}", file=sys.stderr)  # noqa: T201
-        return 2
+        ctx.exit(2)
     if not ok:
         print(f"canopy-notify-slack: Slack refused the post: {reply[:_MAX_REPLY]}", file=sys.stderr)  # noqa: T201
-        return 1
-    return 0
+        ctx.exit(1)
 
 
-def main() -> int:
-    """The `canopy-notify-slack` command.
+def _check_options(given: Mapping[str, object]) -> None:
+    """Refuse an option given without the one it needs, and a webhook given with a channel.
 
-    Returns:
-        The exit code.
+    Raises:
+        UsageError: One is.
     """
-    return run(sys.argv[1:], sys.stdin)
+    channel = given.get("channel")
+    for name, flag in (("token_file", "--token-file"), ("username", "--username"), ("icon_emoji", "--icon-emoji")):
+        if channel is None and given.get(name) is not None:
+            raise click.UsageError(f"{flag} needs --channel")
+    if channel is None and given.get("threads"):
+        raise click.UsageError("--threads needs --channel")
+    if given.get("broadcasts") and not given.get("threads"):
+        raise click.UsageError("--broadcast needs --threads")
+    if channel is not None and given.get("webhook_file") is not None:
+        raise click.UsageError("--webhook-file and --channel are two ways to post; give one")

@@ -22,9 +22,9 @@ Everything below is for an agent helping the operator in their own session.
 - Read, explain, and suggest. Do not start ticks or loops: `canopy loop` runs until Ctrl-C and would hang your session,
   and `canopy tick` runs the overseer, which spends money. Suggest the command and let the operator run it, unless
   they ask you to run a single `canopy tick --dry-run`.
-- `canopy dispatch`, `decide`, `queried`, `attention`, `ticket set`, and `mirror` are the overseer's tools and refuse
-  outside a tick, by design. Nothing dispatches a ticket by hand: a ticket is worked through its queue label or
-  `canopy start` (see Getting a ticket worked).
+- `canopy dispatch`, `decide`, `queried`, `attention`, and `ticket set` are the overseer's tools and refuse outside
+  a tick, by design. Nothing dispatches a ticket by hand: a ticket is worked through its queue label or `canopy start`
+  (see Getting a ticket worked).
 - Every command that acts is the operator's own, among them `start`, `stop`, `reply`, `forget`, `grant`, `plan`,
   `pause`, `resume`, `notice`, `dismiss`, `send`, and `draft`'s and `memory`'s changes: they authorize work, answer
   workers, hold the loop, and tell later runs about an outage. Suggest them; run one only when the operator asks, with
@@ -65,6 +65,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy memory list`, `proposals`, `lessons`, `search` | Read memory: see Reading memory. |
 | `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
 | `canopy memory renew ID` | Keeps a lesson due for review. |
+| `canopy memory pin ID` | Pins a lesson: never due for review, served first; `unpin` undoes it. |
 | `canopy memory edit ID --text T` | Rewrites a lesson (`--repo R`, `--every-repo`); the old version stays in its history. |
 | `canopy memory history ID` | Every version of a lesson or note, newest first, with how each was made. |
 | `canopy memory forget ID`, `purge` | Deletes one memory's text, or many (`--ticket`, `--run`, `--all`); the rows stay. |
@@ -77,6 +78,8 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy agents` | The MCP servers and skills each canopy agent is offered, after OpenCode merges the operator's config; `--json`. |
 | `canopy personas` | Each persona, canopy's and the operator's in `paths.personas`, and the agents `[personas]` gives it; exits 1 when an agent's would refuse. |
 | `canopy persona KEY [NAME]` | Sets the ticket's workers' persona until `--clear`; `--agent planner` or `reviewer` for its others. No NAME prints each agent's next persona and where it comes from. `--next`: its next run alone, as `canopy start KEY --persona` and `canopy plan KEY --persona` set it. A PR's URL sets its open review request's. |
+| `canopy models` | The models OpenCode lists, and the agents `[runtime.models]` gives each; exits 1 when the list cannot be read or an agent's is not on it. |
+| `canopy model KEY [MODEL]` | Sets the ticket's workers' model until `--clear`; `--agent planner` or `reviewer` for its others. MODEL must be one `canopy models` lists. No MODEL prints each agent's next model and where it comes from. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. Then `canopy decisions`. |
 | `canopy chore install [NAME]` | Sets up a shipped example chore, replacing its prompt and table; no NAME lists them. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run, so the operator sees its findings in `canopy status` and the web UI. Suggest `--no-record`, which records nothing, only while a new prompt is first being drafted. |
@@ -180,11 +183,15 @@ The overseer may record other reasons; the detail says what it wants.
 | `notice_rerun` | A check failed during an outage your notice named, and the notice has ended: rerun the check. |
 | `flaky_rerun` | A worker judged a failed check flaky and changed nothing for it: rerun the check, or `canopy reply` that it is real. |
 | `repo_missing` | A repository in the workspace map has no clone: `canopy workspace sync`. |
+| `check_stuck` | One check has held a PR at `ci_running` an hour past every other: if it is not CI (a merge queue, a sign-off), give it a role under `[repos.REPO.checks]` in the workspace map, as the detail says. |
 | `memory_proposal` | A done ticket's runs proposed lessons: `canopy memory proposals`, then `promote` or `reject` each. |
 | `lesson_review` | Lessons are due for review: `canopy memory renew ID`, graduate one into AGENTS.md, or `forget` it. |
 | `lesson_wrong` | A run reported a lesson wrong: read it with `canopy memory lessons`, then `renew` or `forget` it. |
 | `drafts_waiting` | A run drafted replies for you: `canopy draft list KEY`, then `edit`, `drop`, or `send` each. |
-| `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
+| `review_waiting` | A review you asked for is done: `canopy review draft ID`, then edit it and `canopy review publish`, or `canopy review discard ID`. |
+| `review_unsettled` | A review you staged waits for you to submit or delete it on GitHub, or a publish's outcome is unknown. |
+| `review_rebuttal`, `review_late` | canopy holds a review's finding for you: a rebuttal of a worker's decline, or one on code unchanged since the PR's first review. `canopy send review:ID N`, or `canopy dismiss review:ID N --reason R`. |
+| `canopy_unavailable` | The server of the overseer's tools, `canopy _mcp`, did not answer where the loop runs, so the overseer did not run: fix the install. |
 | `disk_low` | `.canopy/` or the workspace has under `loop.min_free_disk_mib` free, so the overseer did not run: free space. |
 | `multi_repo` | Independent pieces in several repositories: decide, or ask for a split (below). |
 
@@ -316,8 +323,9 @@ When the operator asks what workers remember, why a worker believed something, o
 3. To explain a run's behavior, start from `canopy memory list --run ID`: only what it lists under Read was in that
    run's prompt. A worker may also have run `canopy memory search`, which reaches its ticket's older notes and the
    lessons; `runs/<id>.log` shows whether it did.
-4. A proposal from a private ticket's run may hold what the operator kept off the tracker; `canopy memory proposals`
-   warns of one. Say so before suggesting it be promoted in its own words.
+4. A proposal from a private ticket's run comes from a conversation the operator kept off the tracker, and a lesson
+   would carry it into public tickets' runs; `canopy memory proposals` warns of one. Say so before suggesting it be
+   promoted in its own words.
 5. Then suggest the next step: `promote` (a note too, with `--repo R` for one repository) or `reject` a proposal;
    `renew`, `edit`, or graduate a lesson into a repository's AGENTS.md through a ticket and a PR; `forget` or `purge`
    text that is wrong or leaked. An edit keeps the old version's words, so a leaked secret also needs `forget` of each

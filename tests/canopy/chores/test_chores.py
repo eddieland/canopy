@@ -18,7 +18,7 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.chores import execute, history, start
 from canopy.cli.main import main
 from canopy.core import chore_result as result
-from canopy.core import chore_runs, db, definitions, prompts, run_models, workspace
+from canopy.core import chore_runs, db, definitions, prompts, reports, run_models, workspace
 from canopy.core import chore_view as view
 from canopy.core.config import Chore, load
 from canopy.core.context import Context
@@ -26,6 +26,7 @@ from canopy.core.vocab import ChoreRunStatus, TickStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runtime import servers
+from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
@@ -40,10 +41,12 @@ from tests.canopy.helpers import (
     in_tick,
     json_block,
     lifelock_left,
+    listed,
     messages,
     overseer_does,
     present,
     state_block,
+    tick_starts,
     tools_of,
     with_events,
 )
@@ -75,6 +78,7 @@ def run_inline(conn: sqlite3.Connection, report: object, *, close: bool = True) 
     """Start build-health in its own tick, then do its `_chore` in this process, as the detached one would."""
     with in_tick(conn) as tick_id, chore_reports(report):
         assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
         run_id = int(conn.execute("SELECT max(id) FROM chore_runs").fetchone()[0])
         assert main(["_chore", str(run_id)], runner=InlineRunner()) == 0
         if close:
@@ -130,6 +134,7 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
     with in_tick(conn) as tick_id, chore_reports(OK), mock.patch.dict(os.environ, inherited):
         before = time.time()
         assert main(["chore", "run", "build-health", "--context", "Look at build 90"]) == 0
+        tick_starts()
         deadline = time.monotonic() + 30
         row = chore_runs.get_chore_run(conn, 1)
         while row is not None and row.status == "running" and time.monotonic() < deadline:
@@ -151,8 +156,13 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         # Its own timeout's deadline, not the tick's it was started in (DESIGN §33).
         timeout = load(canopy_env.root, canopy_env.user_file).chores["build-health"].timeout_minutes
         assert has_deadline(agent, timeout, before=before, after=after)
-        # Its own history's server, and no other (DESIGN §27), with code mode off, which would hide it.
-        given = servers.env(history.SERVER, history.SERVER_COMMAND, cwd=canopy_env.root.absolute())
+        # Its own history's server and canopy's reports', and no other (DESIGN §27), with code mode off, which would
+        # hide them.
+        given = servers.env(
+            {history.SERVER: history.SERVER_COMMAND, reports.SERVER: reports.SERVER_COMMAND},
+            cwd=canopy_env.root.absolute(),
+            version=Version.ONE,
+        )
         assert {name: agent["env"].get(name) for name in given} == given
         prompt = agent["argv"][3]
         assert prompt.startswith("# Build health\n\nLook at the build queue.\n\n## Run\n")
@@ -223,7 +233,9 @@ def test_chore_instructions_that_cannot_be_used_refuse_the_run(
     path = chore_instructions(canopy_env, "x" * (prompts.MAX_STANDING_BYTES + 1))
     conn = canopy_env.journal()
     with in_tick(conn) as tick_id:
-        assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
+        # The prompt is read as the tick starts the run, after the overseer (DESIGN §40): it is refused then.
+        assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
         [(_, action, reason)] = chore_decisions(conn, tick_id)
     assert action == "refused:bad_prompt"
     assert reason == f"chore instructions {path} are {prompts.MAX_STANDING_BYTES + 1} bytes, over 4096"
@@ -238,11 +250,11 @@ def test_the_chore_prompt(
     agent_log: Path,
     markdown_snapshot: SnapshotAssertion,
 ) -> None:
-    """A chore's prompt, whole, at its first run and at one after it, so a change to the `## Run` section the harness
-    writes is a diff in review (DESIGN §19).
+    """A chore's prompt, whole, at its first run and at one after it (DESIGN §19).
 
-    The second run has a previous run, an open finding, a note from the operator, a notice, and standing instructions
-    to every chore. Each time the journal records shows as `TIME`.
+    So a change to the `## Run` section the harness writes is a diff in review. The second run has a previous run, an
+    open finding, a note from the operator, a notice, and standing instructions to every chore. Each time the journal
+    records shows as `TIME`.
     """
     conn = canopy_env.journal()
     runs = canopy_env.state_dir / "chore-runs" / "build-health"
@@ -258,19 +270,21 @@ def test_the_chore_prompt(
 
 
 def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
-    canopy_env.append_user(chore_toml("queue-age", every=30))
+    canopy_env.append_user(chore_toml("queue-age", every=30, extra='when = "Weekdays only."\n'))
     (canopy_env.home / "chores" / "queue-age.md").write_text("Queue age.\n")
     conn = canopy_env.journal()
     with in_tick(conn) as tick_id:
         runner = InlineRunner()
         # The run is started but its `_chore` never runs, so it stays running.
         assert main(["chore", "run", "build-health"], runner=runner) == 0
+        tick_starts(runner)
         assert main(["chore", "run", "build-health"], runner=runner) == 1
         assert main(["chore", "run", "queue-age"], runner=runner) == 1
         assert db.finish_run(conn, "chore_runs", 1, ChoreRunStatus.OK, json.dumps({"status": "ok"}))
         assert main(["chore", "run", "build-health"], runner=runner) == 1
         backdate(conn, 120)
         assert main(["chore", "run", "queue-age"], runner=runner) == 0
+        tick_starts(runner)
         assert main(["chore", "run", "nope"], runner=runner) == 1
 
         found = chore_decisions(conn, tick_id)
@@ -294,6 +308,7 @@ def test_a_dry_run_checks_the_guards_and_starts_nothing(canopy_env: CanopyEnv, c
     with in_tick(conn, dry_run=True) as tick_id:
         runner = InlineRunner()
         assert main(["chore", "run", "build-health"], runner=runner) == 0
+        tick_starts(runner)
         assert main(["chore", "run", "build-health"], runner=runner) == 1
         assert chore_decisions(conn, tick_id) == [
             ("build-health", "dispatch:chore", "dry run: not dispatched"),
@@ -453,9 +468,10 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
         "https://ci.example.test/job/checkout/90\n"
     ) in message
 
-    # The overseer sees the findings of the latest ok run.
+    # The overseer sees the chore, not due, with its latest run's id and status alone.
     chore = state_block(agent_log)["chores"][0]
-    assert chore["findings"] == [{"id": FINDING["id"], "title": FINDING["title"], "link": FINDING["link"]}]
+    assert chore["latest_run"] == {"run_id": 1, "status": "ok"}
+    assert "findings" not in chore
     assert chore["when"] == "Weekdays only."
     assert chore["running"] is False
     assert chore["due"] is False
@@ -478,6 +494,27 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
     assert "- chore:build-health flaky/checkout/test_retry\n" in third
     assert "- chore:build-health chore_failed\n" in third
     assert "Nothing needs you." in (canopy_env.state_dir / "attention.md").read_text()
+
+
+def test_a_chores_latest_summary_and_findings_reach_the_overseer_only_while_it_is_due(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    treehouse_state: Path,
+) -> None:
+    """A `when` decides by them only when the chore is due; the rest of the time they would fill every tick (#1528)."""
+    conn = canopy_env.journal()
+    run_inline(conn, OK)
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    ws = workspace.load(canopy_env.root)
+    [idle] = view.state_section(view.states(conn, cfg, ws), datetime.now(UTC))
+    assert (idle["due"], idle["latest_run"], "findings" in idle) == (False, {"run_id": 1, "status": "ok"}, False)
+
+    backdate(conn, 120)
+    [due] = view.state_section(view.states(conn, cfg, ws), datetime.now(UTC))
+    assert due["due"] is True
+    latest = present(due["latest_run"])
+    assert (latest.get("summary"), latest.get("ended_at") is not None) == ("one flaky test", True)
+    assert due["findings"] == [{"id": FINDING["id"], "title": FINDING["title"], "link": FINDING["link"]}]
 
 
 def test_a_finding_is_aged_from_the_first_ok_run_that_reported_it(
@@ -519,6 +556,115 @@ def test_a_shadowing_config_above_the_cwd_stops_the_chore(canopy_env: CanopyEnv,
     assert not agent_log.exists() or "canopy-chore" not in agent_log.read_text()
 
 
+def own_model(canopy_env: CanopyEnv, model: str) -> None:
+    """Add the chore triage, with `model` of its own, its command running canopy's chore agent from its definitions.
+
+    It has a `when`, so the overseer's `canopy chore run` may start it: one without is the harness's (DESIGN §19).
+    """
+    canopy_env.append_user(
+        chore_toml(
+            "triage",
+            extra=f'when = "Weekdays only."\nmodel = {json.dumps(model)}\n',
+        ).replace("cmd = 'agent run", "cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run"),
+    )
+    (canopy_env.home / "chores" / "triage.md").write_text("# Triage\n\nLook at the errors.\n")
+
+
+def test_a_chore_with_a_model_of_its_own_runs_on_it(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    opencode_state: Path,
+) -> None:
+    """One definition holds one model, so the chore runs a copy of the chore's agent made for it (DESIGN §19, §13)."""
+    listed(opencode_state, "acme/fake-model-1", "acme/fake-model-2", variants={"acme/fake-model-2": ["high"]})
+    canopy_env.append_user('\n[runtime.models]\nchore = "acme/fake-model-1"\n')
+    own_model(canopy_env, "acme/fake-model-2@high")
+    conn = canopy_env.journal()
+    for run_id, name in enumerate(("triage", "build-health"), start=1):
+        with in_tick(conn, ends_ok=True), chore_reports(OK):
+            assert main(["chore", "run", name], runner=InlineRunner()) == 0
+            tick_starts(InlineRunner())
+            assert main(["_chore", str(run_id)], runner=InlineRunner()) == 0
+        assert present(chore_runs.get_chore_run(conn, run_id)).status == "ok"
+    triage, build_health = agent_runs(agent_log)
+    assert triage["argv"][:3] == ["run", "--agent", "canopy-chore-triage"]
+    snapshot = Path(triage["env"]["OPENCODE_CONFIG_DIR"])
+    copy = (snapshot / "agents" / "canopy-chore-triage.md").read_text()
+    assert '\nmodel: "acme/fake-model-2"\nvariant: "high"\n' in copy
+    # Every other chore runs the chore's agent, on `runtime.models.chore`.
+    assert build_health["argv"][:3] == ["run", "--agent", "canopy-chore"]
+    assert '\nmodel: "acme/fake-model-1"\n' in (snapshot / "agents" / "canopy-chore.md").read_text()
+    # The digest covers the copy: another model makes another snapshot.
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert snapshot.name == definitions.digest(cfg)
+    other = cfg.model_copy(
+        update={
+            "chores": {**cfg.chores, "triage": cfg.chores["triage"].model_copy(update={"model": "acme/fake-model-2"})},
+        },
+    )
+    assert definitions.digest(other) != snapshot.name
+
+
+def test_a_project_agent_named_for_a_chores_copy_stops_the_chore(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    opencode_state: Path,
+) -> None:
+    listed(opencode_state, "acme/fake-model-2")
+    project = canopy_env.home / "project"
+    (project / ".opencode" / "agent").mkdir(parents=True)
+    (project / ".opencode" / "agent" / "canopy-chore-triage.md").write_text("---\npermission:\n  bash: allow\n---\n")
+    own_model(canopy_env, "acme/fake-model-2")
+    canopy_env.append_user(f"cwd = {json.dumps(str(project))}\n")
+    conn = canopy_env.journal()
+    with in_tick(conn, ends_ok=True), chore_reports(OK):
+        assert main(["chore", "run", "triage"], runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
+        assert main(["_chore", "1"], runner=InlineRunner()) == 0
+    run = present(chore_runs.get_chore_run(conn, 1))
+    assert run.status == "crashed"
+    assert "canopy-chore-triage.md" in json.loads(run.result_json)["harness"]
+    assert agent_runs(agent_log) == []
+
+
+def test_a_chores_model_the_runtime_does_not_list_refuses_its_run_with_an_attention_item(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    opencode_state: Path,
+) -> None:
+    """A chore's model is looked up before its run is recorded, as a worker's dispatch's is (DESIGN §13)."""
+    listed(opencode_state, "acme/fake-model-1")
+    own_model(canopy_env, "acme/fake-model-2")
+    reason = (
+        "OpenCode does not list the model acme/fake-model-2 chosen in chores.triage.model, so a run on it would fail "
+        "before its first call; nothing ran on another model. Choose a model it lists, or set up its provider"
+    )
+    conn = canopy_env.journal()
+    # A dry run refuses it as a live tick would.
+    for dry_run in (True, False):
+        with in_tick(conn, dry_run=dry_run, ends_ok=True) as tick_id:
+            assert main(["chore", "run", "triage"], runner=InlineRunner()) == 1
+        assert [(d.chore, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)] == [
+            ("triage", "refused:model_missing", reason),
+            ("triage", "attention:model_missing", reason),
+        ]
+    # Never the runtime's default instead: no run is recorded, and no agent ran.
+    assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
+    assert agent_runs(agent_log) == []
+    assert [(i.ticket_key, i.reason) for i in attention.current(conn)] == [("chore:triage", "model_missing")]
+    # Once the runtime lists it, the chore runs on it.
+    listed(opencode_state, "acme/fake-model-1", "acme/fake-model-2")
+    with in_tick(conn, ends_ok=True), chore_reports(OK):
+        assert main(["chore", "run", "triage"], runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
+        assert main(["_chore", "1"], runner=InlineRunner()) == 0
+    assert present(chore_runs.get_chore_run(conn, 1)).status == "ok"
+    assert attention.current(conn) == []
+
+
 def test_deleting_a_chore_clears_its_items(
     canopy_env: CanopyEnv,
     chores: Path,
@@ -537,7 +683,10 @@ def test_deleting_a_chore_clears_its_items(
 
 
 def test_a_chore_for_another_workspace_is_not_configured_here(canopy_env: CanopyEnv, chores: Path) -> None:
-    text = canopy_env.user_file.read_text().replace('when = "Weekdays only."', 'workspaces = ["elsewhere"]')
+    text = canopy_env.user_file.read_text().replace(
+        'when = "Weekdays only."',
+        'when = "Weekdays only."\nworkspaces = ["elsewhere"]',
+    )
     canopy_env.write_user(text)
     conn = canopy_env.journal()
     with in_tick(conn) as tick_id:
@@ -545,6 +694,7 @@ def test_a_chore_for_another_workspace_is_not_configured_here(canopy_env: Canopy
         assert chore_decisions(conn, tick_id)[0][1] == "refused:unknown_chore"
         canopy_env.write_user(text.replace('["elsewhere"]', '["acme"]'))  # the name in this workspace's map
         assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
 
 
 def test_a_chore_that_times_out(canopy_env: CanopyEnv, chores: Path) -> None:
@@ -554,6 +704,7 @@ def test_a_chore_that_times_out(canopy_env: CanopyEnv, chores: Path) -> None:
     conn = canopy_env.journal()
     with in_tick(conn):
         assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
+        tick_starts(InlineRunner())
         assert main(["_chore", "1"], runner=InlineRunner(timeout_agent=True)) == 0
         row = present(chore_runs.get_chore_run(conn, 1))
         assert row.status == "timeout"
@@ -569,6 +720,7 @@ def test_a_killed_chore_run_is_crashed_on_the_next_tick(
     conn = canopy_env.journal()
     with in_tick(conn, ends_ok=True), chore_reports(OK, sleep=60):
         assert main(["chore", "run", "build-health"]) == 0
+        tick_starts()
     deadline = time.monotonic() + 30
     row = chore_runs.get_chore_run(conn, 1)
     while (row is None or row.agent_pid is None) and time.monotonic() < deadline:
@@ -860,6 +1012,9 @@ def test_a_dismissed_finding_is_off_the_attention_list_until_the_chore_stops_rep
         assert f"dismiss refused ({guard})" in capsys.readouterr().err
     assert main(["dismiss", "chore:build-health", FINDING["id"], "--undo"]) == 1
     assert "has no dismissed finding" in capsys.readouterr().err
+    # A reason is a review's: a chore's finding takes none.
+    assert main(["dismiss", "chore:build-health", FINDING["id"], "--reason", "wrong"]) == 1
+    assert "dismiss refused (bad_reason)" in capsys.readouterr().err
     # Several are dismissed together or not at all.
     assert main(["dismiss", "chore:build-health", FINDING["id"], "stuck/pr-7"]) == 1
     assert "dismiss refused (unknown)" in capsys.readouterr().err
@@ -922,7 +1077,7 @@ def test_a_chore_run_records_what_it_cost(
         assert row.session_id == "ses_chore"
         usage = present(db.usage_of(row))
         assert usage.cost_usd == 0.25  # two model calls at 0.125
-        assert (usage.first_call, usage.first_cache_write) == (5500, 500)
+        assert (usage.first_call, usage.first_cache_write, usage.first_cache_read) == (5500, 500, 4000)
         assert (canopy_env.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
         assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
         assert tools_of(conn, "chore_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
@@ -954,8 +1109,11 @@ def test_a_chore_reads_its_earlier_runs_through_its_tool_from_a_cwd_outside_the_
     chores: Path,
     agent_log: Path,
 ) -> None:
-    """DESIGN §19, History: a run lists its chore's runs and reads one whole through `canopy_chore_history`, the
-    server its inline config names (§27), from wherever its `cwd` is, and is told the same as the command says."""
+    """DESIGN §19, History: a run reads its chore's runs through `canopy_chore_history`, from wherever its `cwd` is.
+
+    It lists them and reads one whole, through the server its inline config names (§27), and is told the same as the
+    command says.
+    """
     own = canopy_env.home / "build-tools"
     own.mkdir()
     canopy_env.user_file.write_text(
@@ -982,6 +1140,8 @@ def test_a_chore_reads_its_earlier_runs_through_its_tool_from_a_cwd_outside_the_
     assert agent["env"]["CANOPY_CHORE_WORKSPACE"] == str(root)
     entry = json.loads(agent["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]["canopy_chore"]
     assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--chore"], str(root))
+    entry = json.loads(agent["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"][reports.SERVER]
+    assert (entry["command"][-2:], entry["cwd"]) == (["_mcp", "--reports"], str(root))
     assert agent["env"]["OPENCODE_EXPERIMENTAL_CODE_MODE"] == "false"
     assert json_block(agent["argv"][3])["history"] == tool == history.tool_name()
     listed, whole, other, both = agent["tools"]

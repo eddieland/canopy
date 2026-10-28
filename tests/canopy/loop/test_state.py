@@ -14,11 +14,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
 
-from canopy.core import config, conversation, db, pools, workspace
+from canopy.core import config, conversation, db, item_numbers, pools, workspace
 from canopy.core.context import Context
-from canopy.core.vocab import Phase, RunStatus, StartStatus, TickStatus
+from canopy.core.vocab import NumberedItem, Phase, ResumeReason, RunStatus, StartStatus, TickStatus
 from canopy.infra import procs
-from canopy.loop import duties, tick
+from canopy.loop import duties, harness, harness_dispatches, phases, tick
 from canopy.runs import policy, reconcile
 from tests.canopy.helpers import chore_toml
 
@@ -32,10 +32,11 @@ if TYPE_CHECKING:
 
 DAY = "2026-10-16"
 NOW = datetime(2026, 10, 16, 10, 0, tzinfo=UTC)
-DELIMITER = "CANOPY_BODY_0123456789abcdef"
 # What a snapshot shows in place of the workspace root, which is in a temporary directory.
 WORKSPACE = "/workspace"
 PR = "https://example.test/acme/repo/pull/7"
+#: A row the harness dispatches for, enabled here as a measurement would enable it (DESIGN §37).
+CONFLICTED = harness_dispatches.Row(ResumeReason.CONFLICT, "The PR conflicts with its base: bring it in.")
 
 
 def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
@@ -46,13 +47,15 @@ def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, markdown_snap
 
 
 def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
-    # Every section the block can have: a chore, reviews, a notice, tickets in each state the block tells apart.
-    prompt = canopy_env.home / "chores" / "build-health.md"
-    prompt.parent.mkdir()
-    prompt.write_text("# Build health\n")
+    # Every section the block can have: a chore, reviews, a notice, tickets in each state the block tells apart, and
+    # the harness's dispatches to come.
+    prompts(canopy_env, "build-health", "deps")
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{template}'\n", 1)
-    canopy_env.write_user(user + "\n[review]\nagent_prs = true\n" + chore_toml(extra='when = "Weekdays only."\n'))
+    # build-health is the overseer's to decide; deps, with no `when`, is the harness's to run (DESIGN §37).
+    canopy_env.write_user(
+        user + "\n[review]\nagent_prs = true\n" + chore_toml(extra='when = "Weekdays only."\n') + chore_toml("deps"),
+    )
     ctx = context(canopy_env)
     conn = ctx.conn
     root = str(canopy_env.root)
@@ -69,6 +72,8 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             title="Retry flaky uploads",
             phase=Phase.CI_RUNNING,
             cursors={"comment": "10001"},
+            # No tracker source observes its tickets: its comment cursor is the tracker's id.
+            tracked=False,
         )
         implement = db.insert_run(
             conn,
@@ -95,16 +100,21 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         db.set_ticket(conn, "PROJ-5", root, title="Bump the SDK", phase=Phase.MERGED, done=True)
         decide(conn, earlier, "PROJ-5", "done", "merged")
         db.record_decision(conn, earlier, None, duties.QUERIED_ACTION, duties.queried_rationale(["PROJ-1", "PROJ-5"]))
-        # PROJ-3 was started privately and stopped; PROJ-4 is private and its worker asked a question.
+        # PROJ-3 was started privately and stopped; PROJ-4 is private and its worker asked a question; PROJ-7 is
+        # private, and its PR conflicts with its base.
         with db.transaction(conn):
-            for key in ("PROJ-3", "PROJ-4"):
+            for key in ("PROJ-3", "PROJ-4", "PROJ-7"):
                 db.touch_ticket(conn, key, root)
                 db.set_start(conn, conversation.TICKET, key, status=StartStatus.STARTED, channel="cli")
             db.set_start(conn, conversation.TICKET, "PROJ-3", status=StartStatus.STOPPED, channel="cli")
         db.set_ticket(conn, "PROJ-4", root, title="Tidy the CLI help")
-        conn.execute(
+        # The earlier notice lapsed, and is kept: PROJ-1's PR is not observed fresh, so it may show a check it holds.
+        conn.executemany(
             "INSERT INTO notices (body, set_at, channel, lapses_at) VALUES (?, ?, 'cli', ?)",
-            ("CI is down for maintenance until noon.", stamp("09:00"), stamp("12:00")),
+            [
+                ("The registry is down.", stamp("08:00"), stamp("08:30")),
+                ("CI is down for maintenance until noon.", stamp("09:00"), stamp("12:00")),
+            ],
         )
     with clock("09:20"):
         db.finish_run(conn, "runs", split, RunStatus.DONE, None)
@@ -132,8 +142,26 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         )
     with clock("09:40"):
         db.finish_run(conn, "runs", implement, RunStatus.DONE, None)
-        db.set_unit(conn, "PROJ-1", root, "repo", phase="ci_red", pr_url=PR, cursors={"ci": "5551"})
-        decide(conn, earlier, "PROJ-1", "attention:needs_reviewer", "no reviewer is assigned", repo="repo")
+        # Its ci cursor names the run a worker had, by its journal number: the block says which run that is.
+        db.set_unit(
+            conn,
+            "PROJ-1",
+            root,
+            "repo",
+            phase="ci_red",
+            pr_url=PR,
+            cursors={"ci": str(item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, 5551, at=db.now()))},
+        )
+        # The overseer keeps it, naming the check run the notice held (DESIGN §37): the block lists it so.
+        decide(
+            conn,
+            earlier,
+            "PROJ-1",
+            "attention:notice_rerun",
+            "build failed during the notice; rerun it",
+            repo="repo",
+            item=item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, 5551, at=db.now()),
+        )
         # The operator sent a run's reply to a review comment through canopy: the block names it by id (DESIGN §29).
         conn.execute(
             "INSERT INTO drafts (run_id, number, ticket_key, kind, repo, pr_url, comment_id, stance, status, basis, "
@@ -178,7 +206,11 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             runs_dir=runs_dir,
         )
     with clock("10:00"):
-        tick_id = db.start_tick(conn, dry_run=True)
+        # The harness decided PROJ-2 before the overseer: the block names it, and lists it no more (DESIGN §37). Its
+        # derivation found PROJ-7's unit conflicted, a row enabled here as a measurement would: the harness resumes it
+        # after the overseer.
+        tick_id = tick_deciding(conn, root, "PROJ-2")
+        derive_conflicted(conn, tick_id, "PROJ-7")
 
     leased = [
         pools.Slot(
@@ -190,9 +222,28 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             leased_at=stamp("09:55"),
         ),
     ]
-    assert (
-        rendered(canopy_env, ctx, tick_id, dry_run=True, query_due=False, running=1, leased=leased) == markdown_snapshot
-    )
+    with mock.patch.object(harness_dispatches, "ROWS", {Phase.CONFLICTED: CONFLICTED}):
+        assert (
+            rendered(canopy_env, ctx, tick_id, dry_run=True, query_due=False, running=1, leased=leased)
+            == markdown_snapshot
+        )
+
+
+def prompts(env: CanopyEnv, *names: str) -> None:
+    """Write a prompt for each chore of `names`, where `chore_toml` names it."""
+    for name in names:
+        prompt = env.home / "chores" / f"{name}.md"
+        prompt.parent.mkdir(exist_ok=True)
+        prompt.write_text(f"# {name}\n")
+
+
+def derive_conflicted(conn: sqlite3.Connection, tick_id: int, key: str) -> None:
+    """Record that tick `tick_id` derived `key` a fresh candidate holding no row, and its unit in `repo` conflicted."""
+    conflicted = [
+        phases.Derived(key, None, (), candidate=True, closed=False),
+        phases.Derived(key, "repo", (Phase.CONFLICTED,)),
+    ]
+    phases.record(conn, tick_id, conflicted)
 
 
 def context(env: CanopyEnv) -> Context:
@@ -212,13 +263,44 @@ def clock(hhmm: str) -> Iterator[None]:
         yield
 
 
+def tick_deciding(conn: sqlite3.Connection, root: str, key: str) -> int:
+    """Start a dry-run tick in which the harness decided `key`, a worker of which is running, and return its id."""
+    tick_id = db.start_tick(conn, dry_run=True)
+    why = f"{Phase.RUNNING}: {harness.ROWS[Phase.RUNNING].why}"
+    harness.record(conn, tick_id, root, [harness.Decision(key, Phase.RUNNING, "wait", why)])
+    return tick_id
+
+
 def stamp(hhmm: str) -> str:
     return f"{DAY}T{hhmm}:00.000Z"
 
 
-def decide(conn: sqlite3.Connection, tick_id: int, key: str, action: str, rationale: str, **about: str) -> None:
-    """Record a decision at the clock's time: the schema's default is the real one."""
-    decision = db.record_decision(conn, tick_id, key, action, rationale, **about)
+def decide(
+    conn: sqlite3.Connection,
+    tick_id: int,
+    key: str,
+    action: str,
+    rationale: str,
+    *,
+    repo: str | None = None,
+    chore: str | None = None,
+    pr: str | None = None,
+    item: int | None = None,
+) -> None:
+    """Record a decision at the clock's time: the schema's default is the real one; with `item`, a kept item's."""
+    kept = item is not None
+    decision = db.record_decision(
+        conn,
+        tick_id,
+        key,
+        action,
+        rationale,
+        repo=repo,
+        chore=chore,
+        pr=pr,
+        kept=kept,
+        item=item,
+    )
     conn.execute("UPDATE decisions SET created_at = ? WHERE id = ?", (db.now(), decision))
 
 
@@ -244,15 +326,14 @@ def rendered(
 ) -> str:
     """The tick's state block, with its JSON indented so a change to it is a readable diff, and the root replaced."""
     capacity = reconcile.Capacity(max_workers=ctx.config.capacity.max_workers, running=running)
-    with mock.patch.object(conversation, "body_delimiter", autospec=True, return_value=DELIMITER):
-        block = tick.state_block(
-            ctx,
-            tick_id=tick_id,
-            dry_run=dry_run,
-            now=NOW,
-            reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
-            query_due=query_due,
-        )
+    block = tick.state_block(
+        ctx,
+        tick_id=tick_id,
+        dry_run=dry_run,
+        now=NOW,
+        reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
+        query_due=query_due,
+    )
     head, rest = block.split("```json\n", 1)
     compact, tail = rest.split("\n```", 1)
     state = json.dumps(json.loads(compact), indent=2, ensure_ascii=False)

@@ -7,8 +7,13 @@ apart from the live ones', and idle ticks' (§6, Idle pacing) are a series of th
 Beside what the window
 cost, what it got done: the tickets marked done in it, and what each ticket and PR's own runs cost.
 And what each kind of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and
-how often it started cold. And what each kind's tool calls put into its context, by tool: the reads that each later
-model call reads again. And what each kind spent on each model, as the runs' own sessions say (§13).
+how often it started cold; and by week, each chore's and each model's apart, with how much of it was read from the cache
+and where the runtime's version or the snapshot changed. And what each kind's tool calls put into its context, by tool:
+the reads that each later model call reads again. And what each kind spent on each model, as the runs' own sessions
+say (§13). And the local calendar month so far against the operator's monthly budget, which nothing enforces. And what
+every session the runtime keeps cost, canopy's apart from the rest, as the runtime's record says (`runtime_sessions`). A
+figure of all spend, the month's against its budget and `spent_since`'s, is canopy's runs and the sessions outside
+canopy together: canopy's own sessions are its runs, so they are counted once.
 """
 
 from __future__ import annotations
@@ -20,16 +25,22 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Literal, LiteralString
 
-from canopy.core import contract, db, records, sql
-from canopy.core.vocab import RunKind
+from canopy.core import contract, db, records, runtime_sessions, sql
+from canopy.core.vocab import RunKind, SessionsRead
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+    from collections.abc import Set as AbstractSet
+    from pathlib import Path
+
+    from canopy.core import config
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
 type Kind = Literal["overseer", "workers", "plans", "chores", "reviews", "tasks"]
 type Done = Literal["merged", "closed"]
+#: What a weekly series of first calls follows within a kind: every run of it, those of one chore, or one model's.
+type By = Literal["kind", "chore", "model"]
 #: A table of agent runs, each with a `started_at` and a `cost_usd`: the overseer's ticks, and the others'.
 type _Table = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
 
@@ -38,6 +49,8 @@ type _Table = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
 # tick from before migration 0013 has no word from the loop either, so it reads as hand-run: nothing can tell.
 GROUPS: tuple[Group, ...] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
 KINDS: tuple[Kind, ...] = ("overseer", "workers", "plans", "chores", "reviews", "tasks")
+#: Each kind's weekly series of first calls, in the order `Breakdown.first_call_weeks` lists them.
+BY: tuple[By, ...] = ("kind", "chore", "model")
 # The longest window `canopy spend` and the web UI read, in days; a year keeps the per-day lines bounded.
 MAX_DAYS = 366
 DEFAULT_DAYS = 7
@@ -59,13 +72,26 @@ _TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
     "reviews": ("review_runs", _EVERY),
     "tasks": ("task_runs", _EVERY),
 }
-_ALL_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
+#: Every kind of agent run by its table and the condition on the table's rows, the overseer's ticks included.
+KIND_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
+#: The budget whole, as a percentage of it: the alert always sent.
+FULL = 100
 # About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
 CHARS_PER_TOKEN = 4
 # The overseer's series, each from the ticks.
 _SERIES = ("overseer", "idle", "dry_run")
-# What a run's row says of its first model call, and when it started.
-_FIRST_CALL: LiteralString = "definitions_digest, tokens_first_call, tokens_first_cache_write, started_at"
+# What a run's row, `r`, says of its first model call, and when it started; then, from the read of its session
+# (`canopy.core.run_models`), the runtime's version its record named and the one model it named, None for none or more
+# than one, each for a `?` the run's table fills; and the chore it ran, for the `{}`.
+_FIRST_CALL: LiteralString = (
+    "r.definitions_digest, r.tokens_first_call, r.tokens_first_cache_write, r.tokens_first_cache_read, r.started_at, "
+    "(SELECT m.runtime_version FROM run_model_reads m WHERE m.run_table = ? AND m.run_id = r.id), "
+    "(SELECT CASE WHEN count(*) = 1 THEN max(m.model) END FROM run_models m "
+    "WHERE m.run_table = ? AND m.run_id = r.id), {}"
+)
+# The chore a run ran: only a chore's run names one. Fixed, never input (D125).
+_CHORE = sql.frag("r.chore")
+_NO_CHORE = sql.frag("NULL")
 # The local day a row started on, as `YYYY-MM-DD`: SQLite reads the journal's UTC time in the local time Python does.
 _DAY = sql.frag("date(started_at, 'localtime')")
 # The local hour a row started on, as `YYYY-MM-DDTHH`, read the same way.
@@ -78,7 +104,7 @@ class Costs:
     """What each kind of agent run cost, in US dollars; None for a kind none of whose runs reported a cost.
 
     `overseer` is the live ticks' overseers, `idle` the part of it idle ticks spent, and `dry_run` the dry runs'
-    overseers, apart from it.
+    overseers, apart from it. `outside` is no run of canopy's but the runtime's sessions outside canopy.
     """
 
     overseer: float | None = None
@@ -90,11 +116,21 @@ class Costs:
     reviews: float | None = None
     #: The operator's one-off tasks' runs (DESIGN §36).
     tasks: float | None = None
+    #: The runtime's sessions outside canopy, as `runtime_sessions.spend` tells them from canopy's; None when none.
+    outside: float | None = None
+
+    @property
+    def runs(self) -> float | None:
+        """Every kind of canopy's runs, dry runs included; None when none reported a cost."""
+        return _sum([self.overseer, self.dry_run, self.workers, self.plans, self.chores, self.reviews, self.tasks])
 
     @property
     def total(self) -> float | None:
-        """Everything, dry runs included, as the web UI's 24 hour and 30 day counters count it; None when none did."""
-        return _sum([self.overseer, self.dry_run, self.workers, self.plans, self.chores, self.reviews, self.tasks])
+        """Everything, canopy's runs and the sessions outside canopy, as the budget and the web UI's counters count it.
+
+        None when nothing reported a cost.
+        """
+        return _sum([self.runs, self.outside])
 
 
 @dataclass(frozen=True)
@@ -118,6 +154,8 @@ class TickGroup:
     group: Group
     ticks: int
     cost_usd: float | None
+    #: How many of them ran no overseer, left nothing to judge or halted before it (§39): each counted at nothing.
+    without_overseer: int = 0
 
 
 @dataclass(frozen=True)
@@ -127,6 +165,8 @@ class Woken:
     by: str
     ticks: int
     cost_usd: float | None
+    #: How many of them ran no overseer, left nothing to judge or halted before it (§39): each counted at nothing.
+    without_overseer: int = 0
 
 
 @dataclass(frozen=True)
@@ -178,8 +218,9 @@ class FirstCalls:
 
     `runs` counts those that reported a first call; `first_call` is the median of what it was sent, from the cache or
     not, the lower middle one of an even count; `cold_share` the share of them that started cold, their first call
-    writing more than half of what it was sent to the cache. `first_started` and `last_started` are when the first and
-    the last of them started. `digest` is None for runs that reported a first call and no snapshot.
+    reading less than half of what it was sent from the cache, or, for a run recorded before canopy kept what it read,
+    writing more than half of it. `first_started` and `last_started` are when the first and the last of them started.
+    `digest` is None for runs that reported a first call and no snapshot.
     """
 
     kind: Kind
@@ -189,6 +230,43 @@ class FirstCalls:
     cold_share: float
     first_started: str
     last_started: str
+    #: What their first calls read from the cache over what they were sent, summed over the runs that recorded both;
+    #: None when none did.
+    hit_rate: float | None = None
+    #: The runtime's versions their sessions' records named, in the order their runs first ran on each: a second one
+    #: is a change of the runtime within the snapshot, which may change the prefix the runs share.
+    runtime_versions: Sequence[str] = ()
+
+
+@dataclass(frozen=True)
+class FirstCallWeek:
+    """The first model calls of one kind's runs that started in one local ISO week of the window (§13).
+
+    One week of a series: with `by` `kind`, every run of the kind; `chore`, those of the chore `name`; `model`, those
+    the model `name` alone served, `name` None for the runs no session was read for or more than one model served. A
+    fall in `hit_rate` from one week to the next is a prefix the runs share that their first calls no longer read from
+    the cache, as a change of the runtime or of canopy's definitions can make, which the week's `new_runtime_versions`
+    and `new_digests` name.
+    """
+
+    kind: Kind
+    by: By
+    name: str | None
+    #: The ISO week, `2026-W41`, of this machine's local time: Monday to Sunday.
+    week: str
+    #: How many of the runs reported a first call.
+    runs: int
+    #: The median of what their first calls were sent, the lower middle one of an even count.
+    first_call: int
+    #: What their first calls read from the cache over what they were sent, summed over the runs that recorded both;
+    #: None when none did.
+    hit_rate: float | None
+    #: The runtime's versions their sessions' records named that the runs of the series' week before did not, in the
+    #: order the runs first ran on each; the week before is the latest earlier one in the window with runs, and the
+    #: series' first week names none, having none before it.
+    new_runtime_versions: Sequence[str] = ()
+    #: The definitions snapshots their runs loaded that those of the series' week before did not, the same way.
+    new_digests: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -233,14 +311,14 @@ class Breakdown:
 
     The window is `[since, until)`, each a journal time: local midnight on its first day, and after its last. A window
     in `hours` has `days` None and lists each hour in `per_day`, from its first hour's start to the end of its last.
-    What it got done is `done`, the tickets marked done in it, and `per_done`, its whole spend over them: the overseer,
+    What it got done is `done`, the tickets marked done in it, and `per_done`, its runs' spend over them: the overseer,
     chores, and the runs of tickets still open are what it cost to get those done. `tickets` and `pull_requests` list
     what each one's own runs cost, the most first. `first_calls` is each kind's first model calls by snapshot, the
     kinds in `KINDS` order and each kind's snapshots by when their first run started; the overseer's include dry runs,
     whose first call is a live tick's. `tools` is what each kind's tool calls returned, by tool, the most characters
     first; the overseer's include dry runs too. `models` is what each kind spent on each model, the kinds in `KINDS`
     order and each kind's models the most costly first, its runs no session named a model for last; the overseer's
-    include dry runs too.
+    include dry runs too. `sessions` is what every session the runtime keeps cost, canopy's apart from the rest.
     """
 
     since: str
@@ -260,6 +338,147 @@ class Breakdown:
     tools: Sequence[ToolSpend] = ()
     hours: int | None = None
     models: Sequence[ModelSpend] = ()
+    sessions: runtime_sessions.SessionsSpend | None = None
+    #: Each kind's first model calls by local ISO week: the kinds in `KINDS` order, each kind's series in `BY` order,
+    #: its chores' and models' by name, the runs no single model served last, and each series' weeks oldest first. The
+    #: overseer's include dry runs, as its `first_calls` do.
+    first_call_weeks: Sequence[FirstCallWeek] = ()
+
+
+@dataclass(frozen=True)
+class Month:
+    """The local calendar month so far, against the operator's monthly budget (`spend.monthly_budget_usd`)."""
+
+    #: The month, `YYYY-MM`, in this machine's local time.
+    month: str
+    #: When it starts and ends, each a journal time: local midnight on its first day, and on the next month's.
+    since: str
+    until: str
+    #: The budget, in whole US dollars.
+    budget_usd: int
+    #: What it has cost so far: `runs_usd` and `outside_usd` together; None when neither reported a cost.
+    spent_usd: float | None
+    #: How much of the month has gone by, from 0 to 1.
+    elapsed: float
+    #: What the month will cost if the rest of it spends as it has so far; None in its first day, when a few runs would
+    #: read as a month's worth, or when nothing reported a cost.
+    projected_usd: float | None
+    #: The percentages of the budget a sink hears the month reach, lowest first: 100 and `spend.budget_alerts`.
+    alerts: Sequence[int] = (FULL,)
+    #: What every run that started in it so far cost, dry runs included, as `Costs.total` counts it; None when none
+    #: reported a cost.
+    runs_usd: float | None = None
+    #: What the runtime's sessions outside canopy that started in it cost, as `runtime_sessions.spend` counts them.
+    outside_usd: float = 0.0
+    #: When the runtime's sessions were last read, a journal time; None when they never were, and `outside_usd` is 0.
+    sessions_read_at: str | None = None
+    #: How that read ended: after a `failed` one, `outside_usd` is what an earlier read found; None when none ran.
+    sessions_read: SessionsRead | None = None
+
+    @property
+    def share(self) -> float:
+        """What the month has spent so far over its budget: 1 or more once it reached the budget."""
+        return (self.spent_usd or 0.0) / self.budget_usd
+
+    @property
+    def percent(self) -> int:
+        """What the month has spent of its budget, as a whole percentage, floored: 99 until it reaches the budget."""
+        # In whole cents, so a float a hair under a cent's worth, `0.29 * 100`, never floors a point away.
+        return self._cents // self.budget_usd
+
+    @property
+    def over(self) -> bool:
+        """Whether the month has spent its budget."""
+        return self.reached_percent(FULL)
+
+    @property
+    def reached(self) -> int | None:
+        """The highest of `alerts` the month's spend has reached; None before it reaches the lowest."""
+        return max((p for p in self.alerts if self.reached_percent(p)), default=None)
+
+    def reached_percent(self, percent: int) -> bool:
+        """Whether the month's spend has reached `percent` of its budget, to the cent.
+
+        Returns:
+            True once it spent that much or more.
+        """
+        return self._cents * 100 >= self.budget_usd * percent * 100
+
+    @property
+    def _cents(self) -> int:
+        return round((self.spent_usd or 0.0) * 100)
+
+
+def budget_month(conn: sqlite3.Connection, now: datetime, budget: config.Spend, *, state_dir: Path) -> Month | None:
+    """The local month holding `now` against the operator's budget and alerts, from their `[spend]` table.
+
+    `state_dir` is the workspace's, as `month` takes it.
+
+    Returns:
+        The month, or None when no budget is set.
+    """
+    if budget.monthly_budget_usd is None:
+        return None
+    return month(conn, now, budget.monthly_budget_usd, budget.budget_alerts, state_dir=state_dir)
+
+
+def month(
+    conn: sqlite3.Connection,
+    now: datetime,
+    budget_usd: int,
+    alerts: Iterable[int] = (),
+    *,
+    state_dir: Path,
+) -> Month:
+    """What the local calendar month holding `now` has cost so far, against `budget_usd`.
+
+    Its runs, and the runtime's sessions outside canopy: `state_dir` is the workspace's, whose sessions are canopy's.
+
+    Returns:
+        The month, its spend so far, where that spend is headed, and the percentages of the budget a sink hears of:
+        100, and each of `alerts`.
+    """
+    today = now.astimezone().date()
+    first = today.replace(day=1)
+    following = (first + timedelta(days=32)).replace(day=1)
+    start, end = _midnight(first), _midnight(following)
+    since, until = db.format_time(start), db.format_time(end)
+    with db.read_snapshot(conn):
+        found = costs(conn, since, until, state_dir=state_dir)
+        read = runtime_sessions.last_read(conn)
+    spent = found.total
+    gone = now - start
+    elapsed = min(1.0, max(0.0, gone / (end - start)))
+    projected = spent / elapsed if spent is not None and gone >= timedelta(days=1) else None
+    return Month(
+        month=first.strftime("%Y-%m"),
+        since=db.format_time(start),
+        until=db.format_time(end),
+        budget_usd=budget_usd,
+        spent_usd=spent,
+        elapsed=elapsed,
+        projected_usd=projected,
+        alerts=tuple(sorted({FULL, *alerts})),
+        runs_usd=found.runs,
+        outside_usd=found.outside or 0.0,
+        sessions_read_at=read.read_at if read is not None else None,
+        sessions_read=read.status if read is not None else None,
+    )
+
+
+def spent_since(conn: sqlite3.Connection, since: str, *, state_dir: Path) -> float | None:
+    """What every agent session that started at or after `since`, a journal time, cost: the web UI's counters.
+
+    canopy's runs, as `db.spent_since` sums them, and the runtime's sessions outside canopy, as `month` adds them;
+    `since` the empty string sums everything.
+
+    Returns:
+        The total in US dollars; None when nothing reported a cost.
+    """
+    with db.read_snapshot(conn):
+        runs = db.spent_since(conn, since)
+        outside = runtime_sessions.outside(conn, since, state_dir=state_dir)
+    return _sum([runs, outside.cost_usd if outside.sessions else None])
 
 
 def window(now: datetime, days: int) -> tuple[datetime, datetime]:
@@ -292,8 +511,10 @@ def hour_window(now: datetime, hours: int) -> tuple[datetime, datetime]:
     return this_hour - timedelta(hours=hours - 1), this_hour + timedelta(hours=1)
 
 
-def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
+def breakdown(conn: sqlite3.Connection, now: datetime, days: int, *, state_dir: Path) -> Breakdown:
     """What the last `days` local days cost, today's so far included, by day, by kind, and by what the ticks bought.
+
+    `state_dir` is the workspace's: a session of the runtime's that ran in it is canopy's (`runtime_sessions.spend`).
 
     Returns:
         The breakdown; a window with nothing in it lists each day with no costs.
@@ -302,10 +523,11 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
     first = start.astimezone().date()
     each = [first + timedelta(days=i) for i in range(days)]
     starts = {day.isoformat(): db.format_time(_midnight(day)) for day in each}
-    return _breakdown(conn, start, end, _Buckets(expression=_DAY, starts=starts, name_of=local_day), days=days)
+    buckets = _Buckets(expression=_DAY, starts=starts, name_of=local_day)
+    return _breakdown(conn, start, end, buckets, state_dir=state_dir, days=days)
 
 
-def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int) -> Breakdown:
+def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int, *, state_dir: Path) -> Breakdown:
     """What the last `hours` clock hours cost, the current one's so far included, by local hour, as `breakdown` does.
 
     An hour the clock goes back over is one local hour twice, so the window lists it once, with both in it.
@@ -318,13 +540,14 @@ def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int) -> Brea
     for at in (start + timedelta(hours=i) for i in range(hours)):
         starts.setdefault(_local_hour(at), db.format_time(at))
     buckets = _Buckets(expression=_HOUR, starts=starts, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
-    return _breakdown(conn, start, end, buckets, hours=hours)
+    return _breakdown(conn, start, end, buckets, state_dir=state_dir, hours=hours)
 
 
-def costs(conn: sqlite3.Connection, since: str, until: str) -> Costs:
+def costs(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) -> Costs:
     """What each kind of agent run that started in `[since, until)`, each a journal time, cost: a sink's digest (§20).
 
-    Summed as a breakdown's `totals` are, but over any span rather than whole local days or hours.
+    Summed as a breakdown's `totals` are, but over any span rather than whole local days or hours, the sessions outside
+    canopy among them: `state_dir` is the workspace's, whose sessions are canopy's.
 
     Returns:
         The costs; a kind none of whose runs in the span reported a cost is None.
@@ -340,6 +563,8 @@ def costs(conn: sqlite3.Connection, since: str, until: str) -> Costs:
                 .where("started_at >= ? AND started_at < ?", since, until)
             )
             found[kind] = sql.execute(conn, summed).fetchone()[0]
+        outside = runtime_sessions.outside(conn, since, until, state_dir=state_dir)
+    found["outside"] = outside.cost_usd if outside.sessions else None
     for name in _SERIES:
         found[name] = _sum([r.cost_usd for r in rows if _in_series(r, name)])
     return _costs(found)
@@ -367,6 +592,7 @@ def _breakdown(
     end: datetime,
     buckets: _Buckets,
     *,
+    state_dir: Path,
     days: int | None = None,
     hours: int | None = None,
 ) -> Breakdown:
@@ -387,13 +613,22 @@ def _breakdown(
             )
             for day, cost in sql.execute(conn, costs):
                 by_day.setdefault(str(day), {})[kind] = cost
+        outside = (
+            sql.select("{} AS day, SUM(cost_usd)", buckets.expression)
+            .from_("({}) AS s", runtime_sessions.sessions_in(since, until, state_dir))
+            .where("NOT ours")
+            .group_by("day")
+        )
+        for day, cost in sql.execute(conn, outside):
+            by_day.setdefault(str(day), {})["outside"] = cost
         unpriced = _unpriced(conn, since, until, rows)
-        done = _done(conn, since, until)
+        done = done_in(conn, since, until)
         tickets = _tickets(conn, since, until, done)
         pull_requests = _pull_requests(conn, since, until)
-        first_calls = _first_calls(conn, since, until)
+        calls = _first_call_rows(conn, since, until)
         tools = _tools(conn, since, until)
         models = _models(conn, since, until)
+        sessions = runtime_sessions.spend(conn, since, until, state_dir=state_dir)
     for row in rows:
         day = by_day.setdefault(row.day, {})
         for name in _SERIES:
@@ -402,9 +637,10 @@ def _breakdown(
     starts = buckets.starts
     done_on = Counter(buckets.name_of(at) for _, at in done.values())
     per_day = [Day(day=d, start=s, costs=_costs(by_day.get(d, {})), done=done_on[d]) for d, s in starts.items()]
-    totals = _costs({n: _sum([by_day.get(d, {}).get(n) for d in starts]) for n in (*_SERIES, *_TABLES)})
+    totals = _costs({n: _sum([by_day.get(d, {}).get(n) for d in starts]) for n in (*_SERIES, *_TABLES, "outside")})
     ticks = _groups(rows)
-    total = totals.total
+    # What canopy's runs cost to get them done: the sessions outside canopy did nothing canopy knows of.
+    runs = totals.runs
     return Breakdown(
         since=since,
         until=until,
@@ -416,13 +652,15 @@ def _breakdown(
         unpriced=unpriced,
         idle_share=_idle_share(ticks),
         done=len(done),
-        per_done=total / len(done) if done and total is not None else None,
+        per_done=runs / len(done) if done and runs is not None else None,
         tickets=tickets,
         pull_requests=pull_requests,
-        first_calls=first_calls,
+        first_calls=_first_calls(calls),
         tools=tools,
         hours=hours,
         models=models,
+        sessions=sessions,
+        first_call_weeks=_first_call_weeks(calls),
     )
 
 
@@ -466,6 +704,8 @@ class _TickRow:
     dry: bool
     group: Group | None
     woken_by: str | None
+    #: Whether they ran their overseer: False for ticks the harness left it nothing (§39), whose cost is nothing.
+    ran: bool
     ticks: int
     cost_usd: float | None
     unpriced: int
@@ -477,14 +717,17 @@ class _TickRow:
 
 
 def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: sql.Fragment) -> list[_TickRow]:
+    # A tick from before `overseer_ran` was recorded ran its overseer if it got that far. One that ran none spent
+    # nothing, so it counts at nothing, and never among the runs that reported no cost (§39).
     grouped = (
         sql.select(
-            "{} AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), count(*) - count(cost_usd)",
+            "{} AS day, dry_run, status, idle, woken_by, overseer_ran IS NOT 0 AS ran, count(*), SUM(cost_usd), "
+            "count(*) - count(cost_usd)",
             bucket,
         )
         .from_("ticks")
         .where("started_at >= ? AND started_at < ?", since, until)
-        .group_by("day, dry_run, status, idle, woken_by")
+        .group_by("day, dry_run, status, idle, woken_by, ran")
     )
     rows = sql.execute(conn, grouped).fetchall()
     return [
@@ -493,11 +736,12 @@ def _tick_rows(conn: sqlite3.Connection, since: str, until: str, bucket: sql.Fra
             dry=bool(dry),
             group=_group(str(status), idle, dry=bool(dry)),
             woken_by=None if woken is None else str(woken),
+            ran=bool(ran),
             ticks=int(count),
-            cost_usd=cost,
-            unpriced=int(unpriced),
+            cost_usd=cost if ran else (cost or 0.0),
+            unpriced=int(unpriced) if ran else 0,
         )
-        for day, dry, status, idle, woken, count, cost, unpriced in rows
+        for day, dry, status, idle, woken, ran, count, cost, unpriced in rows
     ]
 
 
@@ -530,6 +774,7 @@ def _groups(rows: Collection[_TickRow]) -> list[TickGroup]:
             group=g,
             ticks=sum(r.ticks for r in rows if r.group == g),
             cost_usd=_sum([r.cost_usd for r in rows if r.group == g]),
+            without_overseer=sum(r.ticks for r in rows if r.group == g and not r.ran),
         )
         for g in GROUPS
     ]
@@ -542,7 +787,12 @@ def _woken(rows: Iterable[_TickRow]) -> list[Woken]:
         if row.live_loop and row.woken_by is not None:
             by_cause.setdefault(row.woken_by, []).append(row)
     found = [
-        Woken(by=cause, ticks=sum(r.ticks for r in caused), cost_usd=_sum([r.cost_usd for r in caused]))
+        Woken(
+            by=cause,
+            ticks=sum(r.ticks for r in caused),
+            cost_usd=_sum([r.cost_usd for r in caused]),
+            without_overseer=sum(r.ticks for r in caused if not r.ran),
+        )
         for cause, caused in sorted(by_cause.items())
     ]
     return sorted(found, key=lambda w: -w.ticks)
@@ -571,10 +821,16 @@ def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: Iterable[_
     return found
 
 
-# The tickets marked done in the window, each with how and when: its newest `done` decision, as `recently_done` reads
-# it (§7), but `closed` ones too, since a tracker that closes a ticket when its PR merges closes most that landed. Not
-# one marked done before the operator last forgot it, nor one reopened since, which is no longer done.
-def _done(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple[Done, str]]:
+def done_in(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple[Done, str]]:
+    """The tickets marked done in `[since, until)`, each a journal time, with how and when.
+
+    A ticket's newest `done` decision, as `recently_done` reads it (§7), but `closed` ones too, since a tracker that
+    closes a ticket when its PR merges closes most that landed. Not one marked done before the operator last forgot
+    it, nor one reopened since, which is no longer done.
+
+    Returns:
+        Each ticket's key, with `merged` or `closed` and when the decision was made.
+    """
     marked = (
         sql.select("t.key, d.rationale, d.created_at")
         .from_("tickets t")
@@ -677,36 +933,140 @@ def _first_key(named: Iterable[tuple[str | None, float | None]]) -> str | None:
     return next((key for key, _ in named if key is not None), None)
 
 
-# Each kind's first model calls in the window, grouped by the snapshot their runs loaded. A run recorded before canopy
-# kept the first call, or that made none, is in no group.
-def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[FirstCalls]:
-    found: list[FirstCalls] = []
+@dataclass(frozen=True)
+class _FirstCall:
+    """One run's first model call, as its row and the read of its session recorded it."""
+
+    kind: Kind
+    #: The definitions snapshot the run loaded; None for a run that reported none.
+    digest: str | None
+    #: What the call was sent, from the cache or not.
+    sent: int
+    #: Whether it started cold (`_cold`).
+    cold: bool
+    started: str
+    #: What it read from the cache; None for a run recorded before canopy kept it.
+    read: int | None
+    #: The runtime's version its session's record named; None where no read found one.
+    runtime_version: str | None
+    #: The chore it ran; None for a run of any other kind.
+    chore: str | None
+    #: The one model its session named; None when no read found it, or more than one model served it.
+    model: str | None
+
+
+# Each kind's first model calls in the window, the kinds in `KINDS` order and each kind's by when its run started. A run
+# recorded before canopy kept the first call, or that made none, has none.
+def _first_call_rows(conn: sqlite3.Connection, since: str, until: str) -> list[_FirstCall]:
+    found: list[_FirstCall] = []
     for kind in KINDS:
-        table, which = _ALL_TABLES[kind]
-        by_digest: dict[str | None, list[tuple[int, bool, str]]] = {}
+        table, which = KIND_TABLES[kind]
         first = (
-            sql.select(_FIRST_CALL)
-            .from_(table)
+            sql.select(_FIRST_CALL, table, table, _CHORE if kind == "chores" else _NO_CHORE)
+            .from_("{} r", sql.name(table))
             .where("{}", which)
-            .where("started_at >= ? AND started_at < ? AND tokens_first_call IS NOT NULL", since, until)
-            .order_by("started_at, id")
+            .where("r.started_at >= ? AND r.started_at < ? AND r.tokens_first_call IS NOT NULL", since, until)
+            .order_by("r.started_at, r.id")
         )
-        for digest, sent, written, started in sql.execute(conn, first):
-            call = (int(sent), _cold(int(sent), int(written or 0)), str(started))
-            by_digest.setdefault(None if digest is None else str(digest), []).append(call)
-        found.extend(
-            FirstCalls(
-                kind=kind,
-                digest=digest,
-                runs=len(calls),
-                first_call=statistics.median_low(sent for sent, _, _ in calls),
-                cold_share=sum(cold for _, cold, _ in calls) / len(calls),
-                first_started=calls[0][2],
-                last_started=calls[-1][2],
+        for digest, sent, written, was_read, started, version, model, chore in sql.execute(conn, first):
+            read = None if was_read is None else int(was_read)
+            found.append(
+                _FirstCall(
+                    kind=kind,
+                    digest=None if digest is None else str(digest),
+                    sent=int(sent),
+                    cold=_cold(int(sent), int(written or 0), read),
+                    started=str(started),
+                    read=read,
+                    runtime_version=None if version is None else str(version),
+                    chore=None if chore is None else str(chore),
+                    model=None if model is None else str(model),
+                ),
             )
-            for digest, calls in by_digest.items()
-        )
     return found
+
+
+# Each kind's first calls grouped by the snapshot their runs loaded, in the order the calls come.
+def _first_calls(calls: Iterable[_FirstCall]) -> list[FirstCalls]:
+    by_snapshot: dict[tuple[Kind, str | None], list[_FirstCall]] = {}
+    for call in calls:
+        by_snapshot.setdefault((call.kind, call.digest), []).append(call)
+    return [
+        FirstCalls(
+            kind=kind,
+            digest=digest,
+            runs=len(group),
+            first_call=statistics.median_low(c.sent for c in group),
+            cold_share=sum(c.cold for c in group) / len(group),
+            first_started=group[0].started,
+            last_started=group[-1].started,
+            hit_rate=_hit_rate([(c.sent, c.read) for c in group if c.read is not None]),
+            runtime_versions=tuple(dict.fromkeys(c.runtime_version for c in group if c.runtime_version is not None)),
+        )
+        for (kind, digest), group in by_snapshot.items()
+    ]
+
+
+# Each kind's first calls by local ISO week, in each of its series: the kind's, each chore's, and each model's.
+def _first_call_weeks(calls: Iterable[_FirstCall]) -> list[FirstCallWeek]:
+    series: dict[tuple[Kind, By, str | None], dict[str, list[_FirstCall]]] = {}
+    for call in calls:
+        week = _iso_week(call.started)
+        for by, name in _series_of(call):
+            series.setdefault((call.kind, by, name), {}).setdefault(week, []).append(call)
+    found: list[FirstCallWeek] = []
+    for (kind, by, name), weeks in sorted(series.items(), key=lambda s: _series_order(*s[0])):
+        before: list[_FirstCall] | None = None
+        for week, group in sorted(weeks.items()):
+            found.append(
+                FirstCallWeek(
+                    kind=kind,
+                    by=by,
+                    name=name,
+                    week=week,
+                    runs=len(group),
+                    first_call=statistics.median_low(c.sent for c in group),
+                    hit_rate=_hit_rate([(c.sent, c.read) for c in group if c.read is not None]),
+                    new_runtime_versions=_new(
+                        [c.runtime_version for c in group],
+                        None if before is None else {c.runtime_version for c in before},
+                    ),
+                    new_digests=_new([c.digest for c in group], None if before is None else {c.digest for c in before}),
+                ),
+            )
+            before = group
+    return found
+
+
+# The local ISO week a journal time is in, as `2026-W41`.
+def _iso_week(stamp: str) -> str:
+    year, week, _ = db.parse_time(stamp).astimezone().isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+# The series a first call is in beside its kind's: its chore's, for a chore's run, and its model's.
+def _series_of(call: _FirstCall) -> list[tuple[By, str | None]]:
+    return [("kind", None), *([("chore", call.chore)] if call.chore is not None else []), ("model", call.model)]
+
+
+# Where a series goes among the others: by its kind, then by whether it is the kind's, a chore's, or a model's, then
+# by name.
+def _series_order(kind: Kind, by: By, name: str | None) -> tuple[int, int, bool, str]:
+    return KINDS.index(kind), BY.index(by), name is None, name or ""
+
+
+# The values runs used, in the order they first used them, that `before` does not hold; none with `before` None, for a
+# series' first week, which has no week before it to differ from.
+def _new(used: Iterable[str | None], before: AbstractSet[str | None] | None) -> tuple[str, ...]:
+    if before is None:
+        return ()
+    return tuple(v for v in dict.fromkeys(used) if v is not None and v not in before)
+
+
+# What first calls read from the cache over what they were sent, each `(sent, read)`; None for none, or none sent.
+def _hit_rate(calls: Sequence[tuple[int, int]]) -> float | None:
+    sent = sum(s for s, _ in calls)
+    return sum(r for _, r in calls) / sent if sent else None
 
 
 # Each kind's tool calls in the window, by tool, the most characters first. A run whose template printed no events, or
@@ -734,7 +1094,7 @@ def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
 # reordering them, which with no statistics it would, reading every `run_tools` row of the kind ever recorded. The
 # kind's condition names only the run table's columns, which `run_tools` shares none of.
 def _tools_of(kind: Kind, since: str, until: str) -> sql.Select:
-    table, which = _ALL_TABLES[kind]
+    table, which = KIND_TABLES[kind]
     return (
         sql.select("t.tool, count(*), SUM(t.calls), SUM(t.errors), SUM(t.result_chars)")
         .from_("{} r CROSS JOIN run_tools t ON t.run_table = ? AND t.run_id = r.id", sql.name(table), table)
@@ -762,7 +1122,7 @@ def _models(conn: sqlite3.Connection, since: str, until: str) -> list[ModelSpend
 # One kind's spend by model in a window, read as `_tools_of` reads `run_tools`: the run table leads, by its `_spent`
 # index, and `run_models` is read by its key's prefix.
 def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
-    table, which = _ALL_TABLES[kind]
+    table, which = KIND_TABLES[kind]
     return (
         sql.select("m.model, count(*), SUM(m.replies), SUM(m.cost_usd)")
         .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
@@ -775,7 +1135,7 @@ def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
 
 # One kind's runs in a window that no session named a model for, and what they reported they cost.
 def _unnamed_models(kind: Kind, since: str, until: str) -> sql.Select:
-    table, which = _ALL_TABLES[kind]
+    table, which = KIND_TABLES[kind]
     return (
         sql.select("count(*), SUM(r.cost_usd)")
         .from_("{} r", sql.name(table))
@@ -785,10 +1145,12 @@ def _unnamed_models(kind: Kind, since: str, until: str) -> sql.Select:
     )
 
 
-# Whether a first call started cold: it wrote most of what it was sent to the cache, where a warm one reads the fixed
-# prefix (the system prompt, the agent's body, the tools) from it and writes only what is new.
-def _cold(sent: int, written: int) -> bool:
-    return 2 * written > sent
+# Whether a first call started cold: it read less than half of what it was sent from the cache, where a warm one reads
+# the fixed prefix (the system prompt, the agent's body, the tools) from it. A provider that reports no cache writes,
+# as OpenAI's, still reports reads. A run recorded before canopy kept the read (`read` None) is cold when it wrote most
+# of what it was sent to the cache instead.
+def _cold(sent: int, written: int, read: int | None) -> bool:
+    return 2 * read < sent if read is not None else 2 * written > sent
 
 
 def _costs(found: Mapping[str, float | None]) -> Costs:
@@ -801,6 +1163,7 @@ def _costs(found: Mapping[str, float | None]) -> Costs:
         chores=found.get("chores"),
         reviews=found.get("reviews"),
         tasks=found.get("tasks"),
+        outside=found.get("outside"),
     )
 
 

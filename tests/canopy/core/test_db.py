@@ -25,8 +25,9 @@ from tests.conftest import Journals
 # the companion's name, which is the one conflict worth having.
 COMPANIONS = Path(__file__).parent / "migrations"
 HASH = re.compile(r"-- sha256 of (\S+): ([0-9a-f]{64})\n")
-#: The tables a migration means to delete rows of, by its version: 0069 deletes the found reads, to read them again.
-DELETES: Mapping[int, AbstractSet[str]] = {69: frozenset({"run_model_reads"})}
+#: The tables a migration means to delete rows of, by its version: 0069 deletes the found reads, to read them again,
+#: and 0088 those of the runs more than one model served.
+DELETES: Mapping[int, AbstractSet[str]] = {69: frozenset({"run_model_reads"}), 88: frozenset({"run_model_reads"})}
 
 
 def companion(number: int) -> str:
@@ -165,7 +166,7 @@ def test_migration_files_must_be_numbered_in_order(tmp_path: Path, names: list[s
 def test_journal_newer_than_code_is_an_error(tmp_path: Path, journals: Journals) -> None:
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
-    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (99, 'future')")
+    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (9999, 'future')")
     with pytest.raises(db.MigrationError, match="does not know"):
         db.migrate(conn, resources.migrations_dir())
 
@@ -191,6 +192,7 @@ LIFECYCLE_COLUMNS = frozenset(
         "tokens_peak_context",
         "tokens_first_call",
         "tokens_first_cache_write",
+        "tokens_first_cache_read",
         "definitions_digest",
     },
 )
@@ -212,7 +214,7 @@ def test_a_report_keeps_the_first_call_and_the_snapshot_only_with_what_the_runti
 ) -> None:
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
-    usage = Usage(0.25, 10, 2, 0, 400, 50, peak_context=900, first_call=460, first_cache_write=50)
+    usage = Usage(0.25, 10, 2, 0, 400, 50, peak_context=900, first_call=460, first_cache_write=50, first_cache_read=400)
     tick = db.start_tick(conn, dry_run=True)
     db.set_tick_report(conn, tick, "ses_o1", usage, digest="0123456789abcdef")
     row = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()
@@ -222,12 +224,13 @@ def test_a_report_keeps_the_first_call_and_the_snapshot_only_with_what_the_runti
     # A plain-text overseer reported nothing: no agent canopy can tell loaded the snapshot.
     db.set_tick_report(conn, tick, None, None, digest="0123456789abcdef")
     row = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()
-    assert (row["tokens_first_call"], row["tokens_first_cache_write"], row["definitions_digest"]) == (None,) * 3
+    first = ("tokens_first_call", "tokens_first_cache_write", "tokens_first_cache_read", "definitions_digest")
+    assert tuple(row[c] for c in first) == (None,) * 4
 
     # A cost recorded before the first call was kept reads it as unknown.
     db.set_tick_report(conn, tick, "ses_o1", Usage(0.25, 10, 2, 0, 400, 50, peak_context=900))
     usage = present(db.usage_of(conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()))
-    assert (usage.first_call, usage.first_cache_write) == (None, None)
+    assert (usage.first_call, usage.first_cache_write, usage.first_cache_read) == (None, None, None)
 
 
 def test_a_report_replaces_the_tools_a_run_recorded(tmp_path: Path, journals: Journals) -> None:
@@ -287,6 +290,25 @@ def test_a_closed_column_without_a_check_is_found(tmp_path: Path, journals: Jour
     assert unchecked(conn, {"checked", "unchecked"}) == ["unchecked.kind", "unchecked.phase"]
 
 
+def test_a_transaction_inside_another_commits_or_rolls_back_with_it(tmp_path: Path, journals: Journals) -> None:
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+
+    def fails_after_setting() -> None:
+        with db.transaction(conn):
+            db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.READY)
+            raise RuntimeError
+
+    with pytest.raises(RuntimeError):
+        fails_after_setting()
+    assert db.get_ticket(conn, "PROJ-1") is None
+    with db.transaction(conn):
+        db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.READY)
+        db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red")
+    assert not conn.in_transaction
+    assert present(db.get_ticket(conn, "PROJ-1")).phase == Phase.READY
+
+
 def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None:
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
@@ -294,8 +316,10 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     assert db.abandon_unfinished_ticks(conn) == [stale]
     tick = db.start_tick(conn, dry_run=True)
     db.touch_ticket(conn, "PROJ-1", "/repo")
-    db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, cursors={"comment": "c-7"})
-    db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red", cursors={"ci": "run-7"})
+    db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, cursors={"comment": "7"})
+    # With no tracker source, the comment cursor is the tracker's id, kept apart from the journal number.
+    db.set_ticket(conn, "PROJ-1", "/repo", cursors={"comment": "c-7"}, tracked=False)
+    db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red", cursors={"ci": "9"})
     db.set_ticket(conn, "PROJ-2", "/repo", done=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks pending")
     db.finish_tick(conn, tick, TickStatus.OK, "1 decision")
@@ -303,9 +327,9 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     row = present(db.get_tick(conn, stale))
     assert row.status == TickStatus.ABANDONED
     [ticket] = db.open_tickets(conn)
-    assert (ticket.key, ticket.phase, ticket.last_comment_id) == ("PROJ-1", "ci_red", "c-7")
+    assert (ticket.key, ticket.phase, ticket.comment_cursor, ticket.last_comment_id) == ("PROJ-1", "ci_red", 7, "c-7")
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit.repo, unit.phase, unit.last_ci_run_id, unit.branch) == ("api", "ci_red", "run-7", None)
+    assert (unit.repo, unit.phase, unit.ci_cursor, unit.branch) == ("api", "ci_red", 9, None)
     [decision] = db.decisions_for_tick(conn, tick)
     assert (decision.ticket_key, decision.action) == ("PROJ-1", "wait")
     last = present(db.last_tick(conn))
@@ -371,7 +395,7 @@ def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: P
     """D068: a journal this canopy cannot open names its live runs first, so it is not moved aside under one."""
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
-    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (99, 'from_before_the_squash')")
+    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (9999, 'from_before_the_squash')")
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     db.touch_ticket(conn, "OLD-1", "/r")
     conn.execute(
@@ -382,7 +406,7 @@ def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: P
     with pytest.raises(db.MigrationError, match="run 1 is still working for the canopy before it"):
         db.migrate(conn, resources.migrations_dir())
     conn.execute("UPDATE runs SET status = 'done' WHERE id = 1")
-    with pytest.raises(db.MigrationError, match=r"migrations this canopy does not know: \[99\]"):
+    with pytest.raises(db.MigrationError, match=r"migrations this canopy does not know: \[9999\]"):
         db.migrate(conn, resources.migrations_dir())
 
 
@@ -553,3 +577,43 @@ def test_runs_whose_models_were_found_are_read_again_and_keep_their_models(tmp_p
     reads = conn.execute("SELECT run_table, run_id, status FROM run_model_reads ORDER BY run_id").fetchall()
     assert [tuple(r) for r in reads] == [("runs", 2, "missing"), ("ticks", 3, "failed")]
     assert [tuple(r) for r in conn.execute("SELECT run_id, model FROM run_models")] == [(1, "a/x")]
+
+
+def test_review_drafts_rebuilt_to_be_discarded_keep_the_revisions_that_name_them(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """0080 rebuilds `review_drafts` under the review runs, versions, and notes that reference them, keeping each."""
+    conn = journal_at(journals, tmp_path, 79)
+    pr = "https://github.com/acme/api/pull/8"
+    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
+    conn.execute(
+        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path, purpose) "
+        "VALUES (1, ?, 'abc', 'x', 'done', 'l', 'request')",
+        (pr,),
+    )
+    conn.execute(
+        "INSERT INTO review_drafts (review_run_id, pr_url, sha, status, created_at) "
+        "VALUES (1, ?, 'abc', 'waiting', 'x')",
+        (pr,),
+    )
+    conn.execute(
+        "INSERT INTO review_draft_versions (draft_id, version, body, comments, author, change, created_at) "
+        "VALUES (1, 1, 'One defect.', '[]', 'reviewer', 'made', 'x')",
+    )
+    conn.execute(
+        "INSERT INTO review_draft_notes (draft_id, after_version, body, channel, created_at) "
+        "VALUES (1, 1, 'Gentler.', 'cli', 'x')",
+    )
+    conn.execute(
+        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path, purpose, revises, "
+        "revises_version) VALUES (1, ?, 'abc', 'x', 'done', 'l', 'request', 1, 1)",
+        (pr,),
+    )
+    assert db.migrate(conn, resources.migrations_dir()) == versions_after(79)
+    assert [tuple(r) for r in conn.execute("SELECT id, review_run_id, status FROM review_drafts")] == [
+        (1, 1, "waiting"),
+    ]
+    assert [tuple(r) for r in conn.execute("SELECT id, revises FROM review_runs ORDER BY id")] == [(1, None), (2, 1)]
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    conn.execute("UPDATE review_drafts SET status = 'discarded', why = 'discarded by you through cli'")

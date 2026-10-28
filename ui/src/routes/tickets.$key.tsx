@@ -6,10 +6,12 @@ import { ApiError } from '@/api/client'
 import { loopQuery, ticketMemoryQuery, ticketPlansQuery, ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Age } from '@/components/age'
+import { Attachments } from '@/components/attachments'
 import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
 import { Disclosure } from '@/components/disclosure'
+import { FeedbackPlanCard } from '@/components/feedback-plan-card'
 import { Field, Fields } from '@/components/fields'
 import { MemoryBand, MemoryDigestFold, MemoryRows } from '@/components/memory'
 import { MemorySaid, NoteActions } from '@/components/memory-actions'
@@ -24,12 +26,15 @@ import { Chip, Word } from '@/components/status'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
+import { TicketModels } from '@/components/ticket-models'
 import { TicketPersonas } from '@/components/ticket-personas'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { ticketDescription } from '@/lib/descriptions'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { phaseMeaning } from '@/lib/meanings'
+import { useViewedTicket } from '@/lib/recent-tickets'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 import { None } from '@/components/none'
@@ -37,7 +42,7 @@ import { None } from '@/components/none'
 /**
  * One ticket: its work, then its conversation, the reply, and the operator's actions, then its runs and decisions, each
  * its header alone while empty, and its memory, folded; and for a ticket plans touch, its plan's card below them, which
- * opens the plan's own page (DESIGN §25).
+ * opens the plan's own page (DESIGN §25). A plan waiting on the operator, a feedback plan's card too, leads the page.
  */
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
@@ -90,6 +95,7 @@ function TicketPage() {
 function Ticket({ detail }: { detail: TicketDetail }) {
     const { ticket, units, limits, runs, decisions, cost } = detail
     const tracker = useTicketUrl(ticket.key)
+    useViewedTicket(ticket.key, ticket.title)
     const branchUrl = useBranchUrls()
     const branch = ticket.branch
     const branches = units.flatMap((u) => {
@@ -106,6 +112,9 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     if (planLeads === undefined && plans !== undefined) {
         setPlanLeads(plans.newest?.plan.status === 'proposed' && plans.planning === null)
     }
+    // A feedback plan waiting on the operator leads the page too (DESIGN §32), its card pointing at the PR's page,
+    // where it is approved. Settled once as well: a plan approved meanwhile leaves its card where it was read.
+    const [led] = useState(ticket.feedback_plan)
     const state = ticketDescription(ticket, plans)
     // Ticket notes on, the Memory panel is the left column's last row, which takes what the conversation is taller by.
     const memoryTier = useQuery(loopQuery).data?.memory?.ticket_notes
@@ -130,6 +139,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 {state === '' ? '' : ' · '}
                 active <Age at={ticket.active_at} variant="ago" />
             </PageHeader>
+            {led !== null && <FeedbackPlanCard led={led} plan={ticket.feedback_plan} />}
             {planned && planLeads === true && <PlanCard ticketKey={ticket.key} plans={plans} />}
             {/* The detail skeleton (DESIGN.md): what it is, its conversation and its answer, then its lists. */}
             {/* Wide, the conversation moves beside the rest, as in the inbox; the source keeps the reading order. */}
@@ -146,7 +156,11 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     {/* place, so its total stays in reach. */}
                     <Fields className="pb-0">
                         <Field label="phase" mono>
-                            <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} />
+                            <Word
+                                word={phaseWord(ticket)}
+                                text={phaseLabel(ticket)}
+                                meaning={phaseMeaning(ticket.phase)}
+                            />
                             {ticket.done ? ', done' : ''}
                         </Field>
                         <Field label="branch" mono>
@@ -165,13 +179,21 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     <Fields className="pt-1.5">
                         <CostTotalRow cost={cost} />
                     </Fields>
-                    {/* Who its runs write as, from the next: yours to choose, here or with `canopy persona`. */}
-                    <TicketPersonas
-                        ticketKey={ticket.key}
-                        personas={detail.personas}
-                        names={detail.persona_names}
-                        className="border-t"
-                    />
+                    {/* Who its runs write as and what they run on, from the next: yours to choose, here or with */}
+                    {/* `canopy persona` and `canopy model`. Side by side once the panel has room, each agent's */}
+                    {/* model level with its persona, so the conversation under the panel stays in reach. */}
+                    <div className="grid border-t @3xl:grid-cols-2">
+                        <TicketPersonas
+                            ticketKey={ticket.key}
+                            personas={detail.personas}
+                            names={detail.persona_names}
+                        />
+                        <TicketModels
+                            ticketKey={ticket.key}
+                            models={detail.models}
+                            className="border-t @3xl:border-t-0 @3xl:border-l"
+                        />
+                    </div>
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}
@@ -181,7 +203,19 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 >
                     <TicketAnswer
                         detail={detail}
-                        after={<TicketVerbs ticket={ticket} limits={limits} place="after" testId="ticket-actions" />}
+                        after={
+                            <>
+                                <TicketVerbs ticket={ticket} limits={limits} place="after" testId="ticket-actions" />
+                                {/* What you attached for its runs to read, such as a design doc someone sent
+                                    you (DESIGN §22): beside the reply that says what to do with it, as on a task's
+                                    page. */}
+                                <Attachments
+                                    subject={{ kind: 'ticket', key: ticket.key }}
+                                    attachments={detail.attachments}
+                                    className="border-t"
+                                />
+                            </>
+                        }
                     />
                 </Panel>
                 {/* Each list is its header alone while it holds nothing (ListPanel): the count says so. */}
@@ -294,7 +328,7 @@ function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; pha
     return (
         <Field label={repo ? `PR in ${repo}` : 'PR'} mono className="flex items-baseline gap-3">
             {pr ? <PullRequestLink url={pr} className="text-sm" /> : <None />}
-            {phase && <Word word={phase} className="text-muted-foreground" />}
+            {phase && <Word word={phase} meaning={phaseMeaning(phase)} className="text-muted-foreground" />}
         </Field>
     )
 }

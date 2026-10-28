@@ -1,7 +1,9 @@
 """What canopy keeps of its own history and caches, measured for `canopy gc --dry-run` (DESIGN §26, ROADMAP M47).
 
 `measure` reports each kind of §26's table that M47 changes: how many there are, their bytes, and what a pass with
-the configured `[retention]` would remove of them. It removes nothing, and runs nothing but `git count-objects`.
+the configured `[retention]` would remove of them, then the remote branches canopy made that nothing names any more
+(`gc_branches.py`), which no pass removes. It removes nothing, and runs nothing but `git count-objects` and
+`git for-each-ref`.
 `file_kinds` finds the files a pass removes, and `row_kinds` the journal's rows, for the pass (`gc_pass.py`) and the
 dry run alike, so the two agree.
 """
@@ -16,12 +18,14 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+import canopy_sandbox
+
 from canopy.chores import start as chore_start
 from canopy.core import db, hostgit, review_diff, sql
 from canopy.core.context import db_path
-from canopy.core.vocab import MemoryScope, MemoryStatus, TickStatus
+from canopy.core.vocab import Decider, MemoryScope, MemoryStatus, PrState, TickStatus
 from canopy.infra import lock, logs, procs
-from canopy.loop import attention
+from canopy.loop import attention, gc_branches
 from canopy.reviews import start as review_start
 from canopy.runs import dispatch
 
@@ -40,7 +44,7 @@ KIB = 1024
 MIB = KIB * KIB
 _COUNT_OBJECTS_TIMEOUT_SECONDS = 60
 #: A table of the journal a pass removes rows of (DESIGN §26, The journal).
-type RowTable = Literal["decisions", "connector_runs", "derivations"]
+type RowTable = Literal["decisions", "connector_runs", "derivations", "observed_check_runs"]
 # The bytes of each row's text, in each table a pass removes rows of: what it holds, not the pages it fills.
 _DECISION_BYTES = sql.frag(
     "length(CAST(action AS BLOB)) + length(CAST(rationale AS BLOB)) + length(CAST(created_at AS BLOB)) + "
@@ -55,6 +59,10 @@ _RUN_BYTES = sql.frag(
 _DERIVED_BYTES = sql.frag(
     "length(CAST(ticket_key AS BLOB)) + coalesce(length(CAST(repo AS BLOB)), 0) + length(CAST(phases AS BLOB)) + "
     "coalesce(length(CAST(stale AS BLOB)), 0) + coalesce(length(CAST(overseer_phase AS BLOB)), 0)",
+)
+_CHECK_RUN_BYTES = sql.frag(
+    "length(CAST(pr_url AS BLOB)) + length(CAST(name AS BLOB)) + length(CAST(head_sha AS BLOB)) + "
+    "length(CAST(conclusion AS BLOB)) + length(CAST(observed_at AS BLOB))",
 )
 
 
@@ -158,6 +166,8 @@ class Report:
     kinds: Sequence[Kind]
     journal_size: int
     notes: Sequence[str]
+    #: The remote branches canopy made that nothing names any more, for the operator to delete: canopy deletes none.
+    branches: Sequence[gc_branches.Branch] = ()
 
 
 def measure(ctx: Context, now: datetime) -> Report:
@@ -179,7 +189,9 @@ def measure(ctx: Context, now: datetime) -> Report:
         _sandbox_caches(),
         _memory_text(ctx.conn, now, retention),
     ]
-    return Report(at=db.format_time(now), kinds=kinds, journal_size=_regular_size(journal) or 0, notes=notes)
+    branches = gc_branches.unnamed(ctx, notes)
+    size = _regular_size(journal) or 0
+    return Report(at=db.format_time(now), kinds=kinds, journal_size=size, notes=notes, branches=branches)
 
 
 def file_kinds(ctx: Context, now: datetime) -> list[FileKind]:
@@ -219,13 +231,15 @@ def retention_cutoff(now: datetime, days: int) -> str:
 
 
 def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> list[RowKind]:
-    """The rows a pass removes from the journal: the harness's attention items, connector runs, and derivations.
+    """The rows a pass removes from the journal: the harness's attention items, connector runs, derivations, check runs.
 
     A row goes once it is older than `journal_days` and outside the attention list's window, the newest
     `attention.HISTORY_TICKS` ticks that closed `ok`, so the list, each item's open-since, and what the sinks are told
     stay as they were; a journal with fewer `ok` ticks than the window has none outside it. A poll's connector run,
     made between ticks, is outside once it started before the window's oldest tick. Each source's newest run and its
-    newest that recorded the query's result stay whatever their age (DESIGN §26, §30).
+    newest that recorded the query's result stay whatever their age (DESIGN §26, §30). A kept check run is read only at
+    its PR's head (DESIGN §35), so one goes once older than `journal_days` and its PR is seen at another head, merged,
+    or closed; one of a PR no read recorded, or recorded with no head, stays, since nothing says its head moved.
 
     Returns:
         The kinds, in the order of §26's table.
@@ -237,7 +251,7 @@ def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> 
         RowKind(
             "harness attention",
             "decisions",
-            sql.in_("action", _harness()),
+            _harness(),
             _DECISION_BYTES,
             sql.frag("tick_id < ? AND created_at < ?", window.tick_id, cutoff),
             rule,
@@ -261,6 +275,22 @@ def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> 
             _DERIVED_BYTES,
             sql.frag("tick_id < ? AND tick_id IN (SELECT id FROM ticks WHERE started_at < ?)", window.tick_id, cutoff),
             rule,
+        ),
+        RowKind(
+            "check runs",
+            "observed_check_runs",
+            sql.frag("1"),
+            _CHECK_RUN_BYTES,
+            sql.all_of(
+                sql.frag("observed_at < ?", cutoff),
+                sql.frag(
+                    "EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = observed_check_runs.pr_url AND "
+                    "(p.state IN (?, ?) OR (p.head_sha IS NOT NULL AND p.head_sha != observed_check_runs.head_sha)))",
+                    PrState.MERGED,
+                    PrState.CLOSED,
+                ),
+            ),
+            f"journal_days = {retention.journal_days}, not at its PR's head",
         ),
     ]
 
@@ -443,7 +473,7 @@ def _overseer_attention(conn: sqlite3.Connection) -> Kind:
     Returns:
         The kind, nothing of it removable.
     """
-    recorded = sql.all_of(sql.frag("action LIKE ?", f"{attention.ACTION_PREFIX}%"), sql.not_in("action", _harness()))
+    recorded = sql.all_of(sql.frag("action LIKE ?", f"{attention.ACTION_PREFIX}%"), sql.frag("NOT ({})", _harness()))
     return RowKind(
         "overseer attention",
         "decisions",
@@ -454,13 +484,21 @@ def _overseer_attention(conn: sqlite3.Connection) -> Kind:
     ).kind(conn)
 
 
-def _harness() -> list[str]:
-    """The actions of the attention items the harness raises itself.
+def _harness() -> sql.Fragment:
+    """The attention rows the harness raised itself.
+
+    An item of a reason only it records, or of one it raises from its causes and marked as its own: the overseer
+    recorded those before the harness held them, and a guard records one as it refuses the overseer (DESIGN §37).
 
     Returns:
-        Each `attention:<reason>`, in order.
+        The condition.
     """
-    return [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.HARNESS_REASONS)]
+    actions = [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.ALWAYS_HARNESS)]
+    from_causes = [f"{attention.ACTION_PREFIX}{reason}" for reason in sorted(attention.FROM_CAUSES)]
+    return sql.any_of(
+        sql.in_("action", actions),
+        sql.all_of(sql.in_("action", from_causes), sql.frag("decider = ?", Decider.HARNESS)),
+    )
 
 
 @dataclass(frozen=True)
@@ -532,7 +570,7 @@ def _git_objects(ctx: Context, notes: list[str]) -> list[Kind]:
         if not _is_dir(repo.path):
             notes.append(f"{repo.name}: no primary clone at {repo.path}")
             continue
-        counts = _count_objects(ctx.runner, repo.path)
+        counts = count_objects(ctx.runner, repo.path)
         if counts is None:
             notes.append(f"{repo.name}: git count-objects failed in {repo.path}")
             continue
@@ -543,7 +581,7 @@ def _git_objects(ctx: Context, notes: list[str]) -> list[Kind]:
     return [loose.kind("git loose objects", "objects", "--git"), packs.kind("git packs", "packs", "--git")]
 
 
-def _count_objects(runner: procs.Runner, clone: Path) -> dict[str, int] | None:
+def count_objects(runner: procs.Runner, clone: Path) -> dict[str, int] | None:
     """`git count-objects -v` in `clone`, each line's number by its name; sizes are in KiB.
 
     Returns:
@@ -563,18 +601,29 @@ def _count_objects(runner: procs.Runner, clone: Path) -> dict[str, int] | None:
     return counts
 
 
+def tree_size(root: Path) -> int:
+    """The bytes of the regular files under `root`, following no link.
+
+    Returns:
+        Their sum; a file that cannot be read counts nothing.
+    """
+    total = 0
+    for parent, _dirs, names in os.walk(root):
+        for name in names:
+            total += _regular_size(Path(parent) / name) or 0
+    return total
+
+
 def _sandbox_caches() -> Kind:
     """Each role's cache under `$XDG_CACHE_HOME/canopy/sandbox/`, which only `--caches` empties (DESIGN §24).
 
     Returns:
         The kind, counting role directories and the bytes of the regular files in them.
     """
-    xdg = Path(os.environ.get("XDG_CACHE_HOME", ""))
-    root = (xdg if xdg.is_absolute() else Path.home() / ".cache") / "canopy" / "sandbox"
     tally = _Tally()
-    for role in _listing(root):
+    for role in _listing(canopy_sandbox.cache_root()):
         if _is_dir(role):
-            tally.add(_tree_size(role), removable=False)
+            tally.add(tree_size(role), removable=False)
     return tally.kind("sandbox caches", "directories", "--caches")
 
 
@@ -641,16 +690,3 @@ def _listing(directory: Path) -> list[Path]:
         return sorted(directory.iterdir())
     except OSError:
         return []
-
-
-def _tree_size(root: Path) -> int:
-    """The bytes of the regular files under `root`, following no link.
-
-    Returns:
-        Their sum; a file that cannot be read counts nothing.
-    """
-    total = 0
-    for parent, _dirs, names in os.walk(root):
-        for name in names:
-            total += _regular_size(Path(parent) / name) or 0
-    return total

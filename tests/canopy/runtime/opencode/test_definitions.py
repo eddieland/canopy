@@ -57,6 +57,10 @@ PLAIN = agents.Rules(
     tracker_provider="no-such-tracker",
     bash_allows={},
     artifacts=None,
+    models={},
+    chore_agents=(),
+    tracker_observed=False,
+    tracker_server=None,
 )
 
 
@@ -217,10 +221,9 @@ def test_bash_allows_are_the_last_of_the_overseers_bash_rules() -> None:
     text = rendered[f"agents/{agents.OVERSEER}.md"].decode()
     bash = text.split("\n  bash:\n", 1)[1].split("\n  todowrite:", 1)[0]
     rules = [line for line in bash.splitlines() if line.startswith('    "')]
+    # The overseer has no shell of its own (DESIGN §27): only the operator's allows follow the deny.
     assert rules == [
         '    "*": deny',
-        '    "canopy *": allow',
-        '    "treehouse status*": allow',
         '    "jira issue list *": allow',
         '    "jira issue view *": allow',
     ]
@@ -234,9 +237,28 @@ def test_no_bash_allows_render_the_overseer_as_none_did() -> None:
     assert f"{BASH_ALLOWS_MARKER}  #" in none[f"agents/{agents.OVERSEER}.md"].decode()
 
 
-@pytest.mark.parametrize("agent", [agents.WORKER, agents.PRIVATE_WORKER, agents.PLANNER, agents.REVIEWER, agents.CHORE])
-def test_no_other_shipped_agent_takes_bash_allows(agent: str) -> None:
-    # A worker's shell runs every command but those it denies, which an allow could only undo; the rest have none.
+@pytest.mark.parametrize("agent", [agents.WORKER, agents.PRIVATE_WORKER])
+def test_bash_allows_are_the_last_of_a_workers_bash_rules(agent: str) -> None:
+    # A worker's shell runs every command but those it denies; an allow comes after every deny, so it beats them.
+    rendered = definitions.render(definitions.bundled(), replace(PLAIN, bash_allows={agent: ("jira issue view *",)}))
+    text = rendered[f"agents/{agent}.md"].decode()
+    bash = text.split("\n  bash:\n", 1)[1].split("\n  #", 1)[0]
+    rules = [line for line in bash.splitlines() if line.startswith('    "')]
+    assert rules[-1] == '    "jira issue view *": allow'
+
+
+def test_bash_allows_are_the_planners_only_bash_rules_but_its_deny() -> None:
+    # The planner's shell denies every command, so an allow, after the catch-all, is all it runs.
+    allowing = replace(PLAIN, bash_allows={agents.PLANNER: ("jira issue view *",)})
+    rendered = definitions.render(definitions.bundled(), allowing)
+    text = rendered[f"agents/{agents.PLANNER}.md"].decode()
+    bash = text.split("\n  bash:\n", 1)[1].split("\n  #", 1)[0]
+    rules = [line for line in bash.splitlines() if line.startswith('    "')]
+    assert rules == ['    "*": deny', '    "jira issue view *": allow']
+
+
+@pytest.mark.parametrize("agent", [agents.REVIEWER, agents.CHORE])
+def test_no_agent_without_a_shell_takes_bash_allows(agent: str) -> None:
     rules = replace(PLAIN, bash_allows={agent: ("jira issue list *",)})
     with pytest.raises(agents.DefinitionsError, match=rf"{agent}\.md has no line '# canopy: bash allows'"):
         definitions.render(definitions.bundled(), rules)
@@ -310,3 +332,59 @@ def test_a_definition_without_its_artifact_lines_is_refused() -> None:
         definitions.render_artifacts(bundled.replace(ARTIFACT_TOOLS_MARKER, ""), agents.WORKER, None)
     with pytest.raises(agents.DefinitionsError, match="artifact skill"):
         definitions.render_artifacts(bundled.replace(ARTIFACT_SKILL_MARKER, ""), agents.WORKER, STORE)
+
+
+@pytest.mark.parametrize("agent", definitions.agent_names())
+def test_each_agent_is_rendered_with_its_model_in_its_frontmatter(agent: str) -> None:
+    rendered = definitions.render(
+        definitions.bundled(),
+        replace(PLAIN, models={agent: agents.Model("acme/fake-model-1")}),
+    )
+    text = rendered[f"agents/{agent}.md"].decode()
+    frontmatter = text.split("---")[1]
+    assert '\nmodel: "acme/fake-model-1"\n' in frontmatter
+    # No other agent's definition names one.
+    assert [rel for rel in rendered if b"\nmodel: " in rendered[rel]] == [f"agents/{agent}.md"]
+
+
+def test_a_definition_without_its_model_line_is_refused() -> None:
+    bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
+    with pytest.raises(agents.DefinitionsError, match="has no line '# canopy: model'"):
+        definitions.render_model(bundled.replace("# canopy: model\n", ""), "canopy-worker", agents.Model("acme/x"))
+
+
+@pytest.mark.parametrize("model", ['acme/x"\npermission: allow', "acme", "/x", "acme/x y", ""])
+def test_a_model_canopy_would_not_render_is_refused(model: str) -> None:
+    with pytest.raises(agents.DefinitionsError, match="is not a model canopy renders"):
+        definitions.render(definitions.bundled(), replace(PLAIN, models={agents.WORKER: agents.Model(model)}))
+
+
+def test_a_variant_is_rendered_beside_its_model() -> None:
+    model = agents.Model("acme/fake-model-1", "high")
+    rendered = definitions.render(definitions.bundled(), replace(PLAIN, models={agents.WORKER: model}))
+    frontmatter = rendered["agents/canopy-worker.md"].decode().split("---")[1]
+    assert '\nmodel: "acme/fake-model-1"\nvariant: "high"\n' in frontmatter
+
+
+@pytest.mark.parametrize("variant", ['high"\npermission: allow', "1high", "hi gh", ""])
+def test_a_variant_canopy_would_not_render_is_refused(variant: str) -> None:
+    model = agents.Model("acme/fake-model-1", variant)
+    with pytest.raises(agents.DefinitionsError, match="is not a variant canopy renders"):
+        definitions.render(definitions.bundled(), replace(PLAIN, models={agents.WORKER: model}))
+
+
+def test_a_chore_with_a_model_of_its_own_gets_a_copy_of_the_chores_definition_with_it() -> None:
+    """One definition holds one model, so a chore on its own runs a copy made for it (DESIGN §19)."""
+    own = agents.chore_agent("triage")
+    rules = replace(
+        PLAIN,
+        models={agents.CHORE: agents.Model("acme/fake-model-1"), own: agents.Model("acme/fake-model-2", "low")},
+        chore_agents=(own,),
+    )
+    rendered = definitions.render(definitions.bundled(), rules)
+    chore = rendered["agents/canopy-chore.md"].decode()
+    copy = rendered[f"agents/{own}.md"].decode()
+    assert '\nmodel: "acme/fake-model-1"\n' in chore
+    assert '\nmodel: "acme/fake-model-2"\nvariant: "low"\n' in copy
+    # Everything else is the chore's, as rendered.
+    assert copy.replace('model: "acme/fake-model-2"\nvariant: "low"', 'model: "acme/fake-model-1"') == chore

@@ -1,6 +1,8 @@
-"""Every query canopy runs is built with `core/sql.py` (D125), checked on every module in `src/canopy`: no SQL run
-but through `sql.execute` and `sql.execute_many`, no fragment made but by that module, and no `noqa: S608` left to
-vouch for SQL built some other way."""
+"""Every query canopy runs is built with `core/sql.py` (D125), checked on every module in `src/canopy`.
+
+No SQL run but through `sql.execute` and `sql.execute_many`, no fragment made but by that module, and no `noqa: S608`
+left to vouch for SQL built some other way.
+"""
 
 import ast
 from pathlib import Path
@@ -14,6 +16,9 @@ RUNS_SQL = frozenset({"execute", "executemany", "executescript"})
 EXEMPT = {
     # The migrations are files of SQL, run whole as they shipped.
     ("core/db.py", "migrate", "executescript"),
+    # The runtime's own database, not the journal, which the runtime's layer, below `core`, reads with its literal
+    # queries and bound values alone (`canopy.runtime.opencode.sessions`).
+    ("runtime/opencode/sessions.py", "read", "execute"),
 }
 
 

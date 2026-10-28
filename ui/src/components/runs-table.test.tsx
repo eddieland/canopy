@@ -2,9 +2,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { mockChores, mockReviews, mockRuns } from '@/api/mocks'
+import { mockChores, mockReviews, mockRuns, mockTasks } from '@/api/mocks'
 import { keys } from '@/api/queries'
-import type { ChoreSummary, ReviewSummary, Run } from '@/api/types'
+import type { ChoreSummary, ReviewSummary, Run, TaskSummary } from '@/api/types'
 import { subjectRuns } from '@/lib/run-state'
 import { renderRouted, tipOf } from '@/test-utils'
 
@@ -32,6 +32,11 @@ function renderRuns(runs: Run[], props: { ticket?: boolean; ownPr?: string } = {
 
 function run(fields: Partial<Run>): Run {
     return { ...BLOCKED, ...fields }
+}
+
+// A run one model served whole.
+function servedBy(id: number, model: string): Run {
+    return run({ id, models: { status: 'found', models: [{ model, replies: 3, cost_usd: 0.1 }], error: null } })
 }
 
 describe('RunsTable', () => {
@@ -80,6 +85,49 @@ describe('RunsTable', () => {
         const more = screen.getByText('+2 more worktrees')
         expect(tipOf(more)).toBe('the worktrees it holds:\nw/1\nw/2\nw/3\nw/4\nw/5')
     })
+
+    it('names each run’s model without its provider, +1 for a switch, each whole in its tip', async () => {
+        const OPUS = { model: 'anthropic/claude-opus-4-1', replies: 23, cost_usd: 1.65 }
+        const SONNET = { model: 'anthropic/claude-sonnet-4-5', replies: 1, cost_usd: 0.66 }
+        const split = run({ id: 43, models: { status: 'found', models: [OPUS, SONNET], error: null } })
+        await renderRuns([BLOCKED, split], { ticket: false })
+        const one = within(screen.getByTestId('run-42')).getByTestId('run-model')
+        expect(one.textContent).toBe('model claude-sonnet-4-5')
+        expect(one.className).toContain('text-muted-foreground')
+        const two = within(screen.getByTestId('run-43')).getByTestId('run-model')
+        expect(two.textContent).toBe('model claude-opus-4-1 +1')
+        expect(tipOf(two)).toBe(
+            'anthropic/claude-opus-4-1 $1.65, 23 replies\nanthropic/claude-sonnet-4-5 $0.66, 1 reply',
+        )
+    })
+
+    it('keeps the provider of a model another provider names alike', async () => {
+        await renderRuns([servedBy(43, 'openai/gpt-5'), servedBy(44, 'azure/gpt-5'), BLOCKED])
+        const named = screen.getAllByTestId('run-model').map((model) => model.textContent)
+        expect(named).toEqual(['model openai/gpt-5', 'model azure/gpt-5', 'model claude-sonnet-4-5'])
+    })
+
+    it('names the model canopy asked for until the session is read, else none, and why in its tip', async () => {
+        await renderRuns([RUNNING, run({ id: 43, model: 'anthropic/claude-opus-4-1', models: RUNNING.models })])
+        const none = within(screen.getByTestId('run-41')).getByTestId('run-model')
+        expect(none.textContent).toBe('model none')
+        expect(tipOf(none)).toBe('none: read from its session once it ends')
+        const asked = within(screen.getByTestId('run-43')).getByTestId('run-model')
+        expect(asked.textContent).toBe('asked claude-opus-4-1')
+        expect(tipOf(asked)).toBe('asked anthropic/claude-opus-4-1, none served: read from its session once it ends')
+    })
+
+    it('says what served and what canopy asked for, as needing a look, when they differ', async () => {
+        await renderRuns([run({ model: 'anthropic/claude-opus-4-1' })])
+        const model = screen.getByTestId('run-model')
+        expect(model.textContent).toBe('model claude-sonnet-4-5, asked claude-opus-4-1')
+        expect(model.className).toContain('text-status-blocked')
+    })
+
+    it('names no model where its page sends none and canopy asked for none', async () => {
+        await renderRuns([run({ models: null })])
+        expect(screen.queryByTestId('run-model')).toBeNull()
+    })
 })
 
 describe('SubjectRunsTable', () => {
@@ -106,6 +154,11 @@ describe('SubjectRunsTable', () => {
         // An earlier run says the first line of what it said; its page has the rest.
         expect(earlier.getByText('Asked about the color.')).toBeDefined()
         expect(screen.queryByText(/The rest of what it said/u)).toBeNull()
+        // Each names its model too, so a canary ticket's runs read down by model.
+        expect(earlier.getAllByTestId('run-model').map((model) => model.textContent)).toEqual([
+            'model claude-sonnet-4-5',
+            'model claude-sonnet-4-5',
+        ])
 
         fireEvent.click(hide)
         expect(screen.queryByRole('link', { name: 'run:46' })).toBeNull()
@@ -128,7 +181,7 @@ describe('SubjectRunsTable', () => {
         const groups = subjectRuns({ runs: [], reviews })
         await renderRouted(<SubjectRunsTable groups={groups} />, { client: client() })
         const row = within(screen.getByTestId('review-5'))
-        expect(row.getByRole('link', { name: 'review:5' }).getAttribute('href')).toBe('/reviews/5')
+        expect(row.getByRole('link', { name: 'review:5' }).getAttribute('href')).toBe('/pull-requests/reviews/5')
         expect(row.getByRole('link', { name: 'ABC-103' })).toBeDefined()
         expect(row.getByRole('link', { name: 'acme/web#91' })).toBeDefined()
         expect(row.getByText('review')).toBeDefined()
@@ -161,6 +214,26 @@ describe('SubjectRunsTable', () => {
         const earlier = within(screen.getByTestId('earlier-chore-runs-deps'))
         expect(earlier.getByRole('link', { name: '#2' })).toBeDefined()
         expect(earlier.getByText("One advisory touches web's lockfile.")).toBeDefined()
+    })
+
+    it('lists a task by its newest run, as task:N#M opening its page, its repository, and its text', async () => {
+        const [, running, waiting] = mockTasks as [unknown, TaskSummary, TaskSummary]
+        const groups = subjectRuns({ runs: [], tasks: [running, waiting] })
+        await renderRouted(<SubjectRunsTable groups={groups} />, { client: client() })
+        const row = within(screen.getByTestId('task-run-6-8'))
+        expect(row.getByRole('link', { name: 'task:6#8' }).getAttribute('href')).toBe('/tasks/6/runs/8')
+        expect(row.getByText('running')).toBeDefined()
+        expect(row.getByText('mobile')).toBeDefined()
+        expect(row.getByText('task')).toBeDefined()
+        expect(row.getByText("Add a dark launch screen to match the app's theme.")).toBeDefined()
+        // Its runs before this one are on the task's page, not folded under it.
+        expect(row.queryByRole('button', { name: /earlier/u })).toBeNull()
+
+        const asked = within(screen.getByTestId('task-run-4-5'))
+        expect(asked.getByText('blocked')).toBeDefined()
+        expect(
+            asked.getByText('The flag is also read by the billing worker in api; rename it there too?'),
+        ).toBeDefined()
     })
 
     it('says untitled for a review or a chore with no title, so its title cell is never blank', async () => {

@@ -20,6 +20,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import (
+    agent_models,
+    artifact_authority,
+    attachments,
     conversation,
     db,
     drafts,
@@ -33,15 +36,24 @@ from canopy.core import (
     plans,
     pools,
     prompts,
+    recorded_runs,
     replies,
+    review_answers,
+    sandboxing,
+    ticket_models,
 )
+from canopy.core.config import PlannerApproval
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import PoolKind, ResumeReason, RunKind, RunStatus, StartStatus
+from canopy.core.vocab import PoolKind, RecordedKind, ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
+from canopy.infra.text import quoted
 from canopy.runs import plan_guards, policy
 
 if TYPE_CHECKING:
+    import sqlite3
+
+    from canopy.core import records
     from canopy.core.context import Context
 
 #: A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17).
@@ -66,6 +78,8 @@ REASON_CURSORS: Mapping[str, ResumeReason] = {
     "comment": ResumeReason.REPLY,
     "message": ResumeReason.REPLY,
 }
+#: What names a recorded run among the runs `_guard` counts as running, beside a dry run's tickets (DESIGN §40).
+RECORDED_PREFIX = "recorded:"
 #: The attention item a dispatch refused for a retired `fix-ci` prompt override records (DESIGN §8, §14).
 FIX_CI_OVERRIDE = "fix_ci_override"
 
@@ -103,6 +117,16 @@ class Started:
     def repos(self) -> tuple[str, ...]:
         """The repositories the run works in."""
         return tuple(s.repo or "" for s in self.slots)
+
+
+@dataclass(frozen=True)
+class Recorded:
+    """A dispatch the overseer asked for, recorded for the tick to spawn after its run (DESIGN §40)."""
+
+    #: The recorded run's id, which the tool returns.
+    recorded_id: int
+    #: What the run would do, as its guards found it at the ask.
+    plan: Plan
 
 
 @dataclass(frozen=True)
@@ -152,6 +176,8 @@ def start(
     review: str | None = None,
     reasons: Collection[str] = (),
     cursors: AbstractSet[str] = frozenset(),
+    reserved: int = 0,
+    spawning: int | None = None,
 ) -> Started:
     """Check the guards, lease a slot in each repository, record the run, and spawn `canopy _run` for it.
 
@@ -162,7 +188,9 @@ def start(
     (DESIGN §25); a `feedback-plan` reads its units' PRs at their heads, and writes the plan their `resume` waits on
     under `policy.feedback_plan = "approve"` (DESIGN §32). A `resume` for a canopy review's findings carries them in
     `review`, read from the journal (DESIGN §21). A `resume` names why it runs in `reasons`, and `cursors` names the
-    cursors the dispatch moves, with `review_run` for `--review-run`: each needs its reason (DESIGN §8).
+    cursors the dispatch moves, with `review_run` for `--review-run`: each needs its reason (DESIGN §8). `reserved` is
+    the workers the harness's dispatches to come this tick hold ahead of this one, to leave free (DESIGN §37).
+    `spawning` is the recorded run this spawns, which the guards then do not count as running (DESIGN §40).
 
     Returns:
         The run that started: its id, branch, the slots it leased, the worker's pid, and its desk if it is joint.
@@ -174,22 +202,16 @@ def start(
     # One dispatch at a time, so two cannot both pass the capacity check. Held from the plan, which reads the ticket's
     # branch, across the leases and the spawn: two first implements must not each name a branch.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
-        check_kind(kind)
-        _check_notice(ctx, tick_id, kind, reasons)
-        plan = _plan(
+        guarded = _checked(
             ctx,
+            tick_id,
             key,
             kind,
-            label=label,
-            repos=repos,
-            slug=slug,
-            base=base,
-            reasons=reasons,
-            cursors=cursors,
+            _Asked(label=label, slug=slug, base=base, repos=repos, reasons=reasons, cursors=cursors),
+            reserved=reserved,
+            spawning=spawning,
         )
-        attempt, limit = _guard(ctx, key, kind, plan.repos, reasons=reasons)
-        # Fixed now, before a slot is leased: a persona that cannot be used refuses the run whole (DESIGN §31).
-        persona = _check_persona(ctx, key, kind)
+        plan = guarded.plan
         leases = _lease_all(ctx, key, plan.repos)
         try:
             return _spawn(
@@ -199,16 +221,57 @@ def start(
                 kind=kind,
                 plan=plan,
                 leases=leases,
-                attempt=attempt,
-                limit=limit,
+                attempt=guarded.attempt,
+                limit=guarded.limit,
                 context=context,
                 review=review,
                 reasons=reasons,
-                persona=persona,
+                persona=guarded.persona,
+                model=guarded.model,
             )
         except BaseException:
             _return_all(ctx, leases)
             raise
+
+
+def record(
+    ctx: Context,
+    *,
+    tick_id: int,
+    key: str,
+    kind: str,
+    label: str | None,
+    slug: str | None,
+    base: str | None,
+    request: Mapping[str, object],
+    repos: Sequence[str] = (),
+    reasons: Collection[str] = (),
+    cursors: AbstractSet[str] = frozenset(),
+    reserved: int = 0,
+) -> Recorded:
+    """Check the guards a live dispatch would, and record the run the overseer asked for, for the tick to spawn (§40).
+
+    Nothing is leased or spawned: the recorded run counts as running, the ticket's one run and a worker of capacity,
+    until the tick spawns it once the overseer's run has ended, under the guards again. `request` is the overseer's
+    request, which the spawn makes again. The guards are those `start` checks before it leases.
+
+    Returns:
+        The recorded run's id, and the plan of the run it would start.
+
+    Raises:
+        Refusal: a guard refused.
+    """
+    with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
+        asked = _Asked(label=label, slug=slug, base=base, repos=repos, reasons=reasons, cursors=cursors)
+        plan = _checked(ctx, tick_id, key, kind, asked, reserved=reserved).plan
+        recorded = recorded_runs.record(
+            ctx.conn,
+            tick_id=tick_id,
+            kind=RecordedKind.DISPATCH,
+            request=request,
+            ticket_key=key,
+        )
+    return Recorded(recorded, plan)
 
 
 def check(
@@ -223,6 +286,7 @@ def check(
     repos: Sequence[str] = (),
     reasons: Collection[str] = (),
     cursors: AbstractSet[str] = frozenset(),
+    reserved: int = 0,
 ) -> Plan:
     """Check the guards a live dispatch would, for a dry run, and return the plan of the run it would start (D036).
 
@@ -244,22 +308,80 @@ def check(
         if d.action.startswith("dispatch:") and (d.ticket_key is not None or d.pr is not None)
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
-        check_kind(kind)
-        _check_notice(ctx, tick_id, kind, reasons)
-        plan = _plan(
-            ctx,
-            key,
-            kind,
-            label=label,
-            repos=repos,
-            slug=slug,
-            base=base,
-            reasons=reasons,
-            cursors=cursors,
-        )
-        _guard(ctx, key, kind, plan.repos, planned=planned, reasons=reasons)
-        _check_persona(ctx, key, kind)
-    return plan
+        asked = _Asked(label=label, slug=slug, base=base, repos=repos, reasons=reasons, cursors=cursors)
+        return _checked(ctx, tick_id, key, kind, asked, reserved=reserved, planned=planned).plan
+
+
+@dataclass(frozen=True)
+class _Asked:
+    """What a dispatch asks of the guards, beside its ticket and kind: the label, branch, repositories, and reasons."""
+
+    label: str | None
+    slug: str | None
+    base: str | None
+    repos: Sequence[str]
+    reasons: Collection[str]
+    cursors: AbstractSet[str]
+
+
+@dataclass(frozen=True)
+class _Guarded:
+    """What the guards fixed of a run they let start: its plan, attempt and limit, persona, and model."""
+
+    plan: Plan
+    attempt: int
+    limit: int
+    persona: personas.Persona | None
+    model: str | None
+
+
+def _checked(
+    ctx: Context,
+    tick_id: int,
+    key: str,
+    kind: str,
+    asked: _Asked,
+    *,
+    reserved: int,
+    planned: Sequence[str] = (),
+    spawning: int | None = None,
+) -> _Guarded:
+    """Check every guard of a `kind` dispatch of `key` before its leases, under the dispatch lock its caller holds.
+
+    Returns:
+        What the guards fixed of the run.
+
+    Raises:
+        Refusal: a guard refused.
+    """
+    check_kind(kind)
+    _check_notice(ctx, tick_id, kind, asked.reasons)
+    plan = _plan(
+        ctx,
+        key,
+        kind,
+        label=asked.label,
+        repos=asked.repos,
+        slug=asked.slug,
+        base=asked.base,
+        reasons=asked.reasons,
+        cursors=asked.cursors,
+    )
+    attempt, limit = _guard(
+        ctx,
+        key,
+        kind,
+        plan.repos,
+        planned=planned,
+        reasons=asked.reasons,
+        reserved=reserved,
+        spawning=spawning,
+    )
+    # Fixed now, before a slot is leased: a persona that cannot be used refuses the run whole (DESIGN §31).
+    persona = _check_persona(ctx, key, kind)
+    # And its model, looked up in the runtime's list now: one it lacks refuses the run whole (DESIGN §13).
+    model = _check_model(ctx, key, kind, private=plan.private)
+    return _Guarded(plan, attempt, limit, persona, model)
 
 
 def check_kind(kind: str) -> None:
@@ -272,7 +394,10 @@ def check_kind(kind: str) -> None:
         Refusal: `bad_kind`, for `fix-ci`, `split`, or `needs-plan`.
     """
     if kind == policy.RETIRED:
-        raise Refusal("bad_kind", "fix-ci is retired: a resume fixes CI now; dispatch resume --reason ci")
+        raise Refusal(
+            "bad_kind",
+            "fix-ci is retired: a resume fixes CI now; dispatch kind resume, reasons ci (--kind resume --reason ci)",
+        )
     if kind == policy.SPLIT:
         raise Refusal(
             "bad_kind",
@@ -474,22 +599,26 @@ def _check_reasons(kind: str, reasons: Collection[str], cursors: AbstractSet[str
     """
     if kind != RunKind.RESUME:
         if reasons:
-            raise Refusal("bad_reason", "--reason says why a resume runs; it is for resume only")
+            raise Refusal("bad_reason", "reasons (--reason) say why a resume runs; they are for resume only")
         return
     if not reasons:
         raise Refusal(
             "bad_reason",
-            f"--reason is required for a resume: name why it runs, one or more of {', '.join(ResumeReason)}",
+            f"reasons is required for a resume (--reason): name why it runs, one or more of {', '.join(ResumeReason)}",
         )
     for cursor in sorted(cursors):
         needed = REASON_CURSORS.get(cursor)
         if needed is not None and needed not in reasons:
-            moved = "--review-run" if cursor == "review_run" else f"--cursor {cursor}"
-            raise Refusal("bad_reason", f"{moved} is handled by a resume for {needed}: add --reason {needed}")
+            moved = "review_run (--review-run)" if cursor == "review_run" else f"cursor {cursor} (--cursor {cursor})"
+            raise Refusal(
+                "bad_reason",
+                f"{moved} is handled by a resume for {needed}: add {needed} to reasons (--reason {needed})",
+            )
     if ResumeReason.RETARGET in reasons and base is not None:
         raise Refusal(
             "bad_reason",
-            "--reason retarget is for a PR whose blocker merged, and --base says it is still open",
+            "reasons retarget (--reason retarget) is for a PR whose blocker merged, and base (--base) says it is still "
+            "open",
         )
 
 
@@ -556,7 +685,7 @@ def _check_label(labels: Sequence[str], key: str, label: str | None) -> str:
         Refusal: `unauthorized`, when no label is named or it is not a configured queue label.
     """
     if label is None:
-        raise Refusal("unauthorized", f"--label is required: name the queue label you read on {key}")
+        raise Refusal("unauthorized", f"label is required (--label): name the queue label you read on {key}")
     for configured in labels:
         if configured.casefold() == label.casefold():
             return configured
@@ -573,12 +702,13 @@ def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...
         Each repository's name once, in the order first named.
 
     Raises:
-        Refusal: `unknown_repo`, when none is named, or one is not in the map or has no primary clone.
+        Refusal: `unknown_repo`, when none is named, or one is not in the map or has no primary clone;
+            `mixed_sandbox`, when some of them are sandboxed and some not (DESIGN §24).
     """
     ws = ctx.workspace
     names = ", ".join(r.name for r in ws.repos) or "none yet"
     if not repos:
-        raise Refusal("unknown_repo", f"--repo is required: name the repositories for {key} ({names})")
+        raise Refusal("unknown_repo", f"repos is required (--repo): name the repositories for {key} ({names})")
     chosen: list[str] = []
     for repo in repos:
         found = ws.repo(repo)
@@ -591,6 +721,9 @@ def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...
             )
         if found.name not in chosen:
             chosen.append(found.name)
+    mixed = sandboxing.mixed(ctx.config.runtime, chosen)
+    if mixed is not None:
+        raise Refusal("mixed_sandbox", mixed)
     return tuple(chosen)
 
 
@@ -611,10 +744,13 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
                 raise Refusal("bad_slug", f"slug must match {SLUG_RE.pattern}")
             return branch_name(ctx.config.trust.branch_prefix, key, slug)
         if slug is not None and branch_name(ctx.config.trust.branch_prefix, key, slug) != recorded:
-            raise Refusal("bad_slug", f"{key}'s branch is {recorded}, named by its first implement; leave out --slug")
+            raise Refusal(
+                "bad_slug",
+                f"{key}'s branch is {recorded}, named by its first implement; leave out slug (--slug)",
+            )
         return recorded
     if slug is not None:
-        raise Refusal("bad_slug", f"{kind} continues the ticket's recorded branch; --slug is for implement")
+        raise Refusal("bad_slug", f"{kind} continues the ticket's recorded branch; slug (--slug) is for implement")
     if recorded is None:
         raise Refusal("no_branch", f"{key} has no branch in the journal for {kind} to continue; dispatch implement")
     with_branch = {str(u.repo) for u in db.units(ctx.conn, key) if u.branch}
@@ -622,7 +758,8 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
         if repo not in with_branch:
             raise Refusal(
                 "no_branch",
-                f"{key} has no branch in {repo} for {kind} to continue; dispatch implement with --repo {repo}",
+                f"{key} has no branch in {repo} for {kind} to continue; dispatch implement with repos {repo} "
+                f"(--repo {repo})",
             )
     return recorded
 
@@ -635,7 +772,7 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
     """
     tail = base.removeprefix(prefix)
     if tail == base or BASE_TAIL_RE.fullmatch(tail) is None:
-        raise Refusal("bad_base", f"--base must be another ticket's branch, {prefix}<KEY>-<slug>")
+        raise Refusal("bad_base", f"base (--base) must be another ticket's branch, {prefix}<KEY>-<slug>")
     if base == branch:
         raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
 
@@ -660,6 +797,47 @@ def _check_persona(ctx: Context, key: str, kind: str) -> personas.Persona | None
         return personas.for_run(ctx.conn, ctx.config, agent, key)
     except personas.PersonaError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
+
+
+def _check_model(ctx: Context, key: str, kind: str, *, private: bool) -> str | None:
+    """Return the model a `kind` run asks for, looked up now in the list the runtime would look it up in (DESIGN §13).
+
+    The model is the one ticket `key`'s override chooses for the run's agent, else the one `runtime.models` chooses for
+    the agent the run's template runs, which canopy writes into that agent's definition. The list is read in the
+    workspace root, not a repository's clone or slot, whose own runtime config could change it. It is never fallen back
+    from: a canary's run on a model nobody chose would read as the canary's. A refusal spends no attempt and leases no
+    slot, and raises an attention item of its guard's name, since only the operator can fix it.
+
+    Returns:
+        The model as the run records it, `provider/model` or `provider/model@variant`, or None when neither the
+        ticket nor config chooses one for the agent, which runs on the runtime's default.
+
+    Raises:
+        Refusal: `model_missing`, when the runtime does not list the model or its variant, or `model_list_failed`, when
+            its list could not be read.
+    """
+    runtime = ctx.config.runtime
+    agent = ticket_models.agent_of(kind)
+    worker = runtime.private_worker_cmd if private else runtime.worker_cmd
+    template = runtime.plan_cmd if agent == "planner" else worker
+    model = agent_models.of_template(ticket_models.models_for(ctx.conn, ctx.config, key, agent), template)
+    if model is None:
+        return None
+    if ticket_models.override(ctx.conn, key, agent) == model.name:
+        # A code span, so the web UI sets the command as code, as any other item's command (ui/DESIGN.md).
+        chosen = f"for {key}'s {agent} runs (`canopy model {key}{_agent_flag(agent)}`)"
+    else:
+        chosen = "in runtime.models"
+    try:
+        agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version, chosen=chosen)
+    except agent_models.ModelError as e:
+        raise Refusal(e.guard, e.reason, attention=e.guard) from e
+    return model.name
+
+
+def _agent_flag(agent: ticket_models.Agent) -> str:
+    # The `--agent` `canopy model` names `agent` with: none for the workers, whose override `canopy model KEY` sets.
+    return "" if agent == "worker" else f" --agent {agent}"
 
 
 def _check_notice(ctx: Context, tick_id: int, kind: str, reasons: Collection[str]) -> None:
@@ -691,30 +869,31 @@ def _guard(
     *,
     planned: Sequence[str] = (),
     reasons: Collection[str] = (),
+    reserved: int = 0,
+    spawning: int | None = None,
 ) -> tuple[int, int]:
     """Refuse unless a `kind` run for `key` over `repos` may start now. Returns the run's attempt number and limit.
 
     Attempt limits and the CI cooldown are per unit: the run is refused if any unit it covers is at its limit or, for
     a `resume` whose only reason is `ci`, in its cooldown. A unit's limit is the policy's plus the runs the operator
     granted it (DESIGN §22). The run's attempt number and limit are those of the unit with the most runs of the kind.
-    `planned` holds the tickets a dry run has already dispatched this tick; each counts as a running run.
+    `planned` holds the tickets a dry run has already dispatched this tick; each counts as a running run, as each run
+    recorded for the tick to spawn does, but `spawning`, the one being spawned (DESIGN §40). `reserved` workers are
+    held for the harness's dispatches to come (DESIGN §37).
 
     Returns:
         The run's attempt number and attempt limit.
 
     Raises:
-        Refusal: a run is already working `key` or the dry run dispatched it (`running`), a unit, or the ticket for a
-            plan, is at its attempt limit (`attempt_limit`) or a unit in its CI cooldown (`cooldown`),
-            or the workers are at capacity (`capacity`). A refusal about one unit names its repository.
+        Refusal: a run is already working `key`, is recorded for it, or the dry run dispatched it (`running`), a unit,
+            or the ticket for a plan, is at its attempt limit (`attempt_limit`) or a unit in its CI cooldown
+            (`cooldown`), or the workers are at capacity (`capacity`), or the run would leave fewer free than
+            `reserved` (`reserved`). A refusal about one unit names its repository.
     """
     running = db.running_runs(ctx.conn, "runs")
-    for run in running:
-        if run["ticket_key"] == key:
-            raise Refusal("running", f"run {run['id']} is already working {key}")
-    if key in planned:
-        raise Refusal("running", f"this dry run already dispatched {key}")
+    planned = _check_running(ctx, key, running, planned, spawning=spawning)
     if kind == policy.FEEDBACK_PLAN:
-        return _guard_feedback_plan(ctx, key, repos, running, planned)
+        return _guard_feedback_plan(ctx, key, repos, running, planned, reserved=reserved)
     if kind in policy.TICKET_KINDS:
         # A plan is the ticket's, not a unit's: its count is per ticket.
         done = policy.ticket_attempts(ctx.conn, kind).get(key, 0)
@@ -722,7 +901,7 @@ def _guard(
         refused = policy.blocked(key, kind, counts={kind: done}, limit=ticket_limit, cooldown_until=None)
         if refused is not None:
             raise Refusal(*refused)
-        _check_capacity(ctx, running, planned)
+        _check_capacity(ctx, running, planned, reserved=reserved)
         return done + 1, ticket_limit
     counts = policy.attempts(ctx.conn)
     granted = policy.grants(ctx.conn)
@@ -744,9 +923,42 @@ def _guard(
         if refused is not None:
             raise Refusal(*refused, repo=repo)
         numbered.append((unit_counts[kind] + 1, -limit))
-    _check_capacity(ctx, running, planned)
+    _check_capacity(ctx, running, planned, reserved=reserved)
     attempt, negative_limit = max(numbered, default=(1, -policy.limits(ctx.config)[kind]))
     return attempt, -negative_limit
+
+
+def _check_running(
+    ctx: Context,
+    key: str,
+    running: Iterable[sqlite3.Row],
+    planned: Sequence[str],
+    *,
+    spawning: int | None,
+) -> list[str]:
+    """Refuse a second run of `key`: one running, one recorded for the tick to spawn, or one this dry run dispatched.
+
+    Returns:
+        `planned`, with each run recorded for the tick to spawn but `spawning`: each holds a worker as a running one
+        does (DESIGN §40).
+
+    Raises:
+        Refusal: (`running`) `key` has a run running, recorded, or dispatched by this dry run.
+    """
+    for run in running:
+        if run["ticket_key"] == key:
+            raise Refusal("running", f"run {run['id']} is already working {key}")
+    held = recorded_runs.holding(ctx.conn, but=spawning)
+    for recorded in held:
+        if recorded.kind is RecordedKind.DISPATCH and recorded.ticket_key == key:
+            raise Refusal(
+                "running",
+                f"recorded run {recorded.id} is already {key}'s one run, which the tick starts once the overseer's "
+                "run ends",
+            )
+    if key in planned:
+        raise Refusal("running", f"this dry run already dispatched {key}")
+    return [*planned, *(f"{RECORDED_PREFIX}{r.id}" for r in recorded_runs.workers(held))]
 
 
 def _guard_feedback_plan(
@@ -755,6 +967,8 @@ def _guard_feedback_plan(
     repos: Sequence[str],
     running: Sequence[object],
     planned: Sequence[str],
+    *,
+    reserved: int,
 ) -> tuple[int, int]:
     """Refuse a feedback plan run for a unit at its limit, or past capacity (DESIGN §32, TRUST_MODEL T3).
 
@@ -764,7 +978,7 @@ def _guard_feedback_plan(
         The run's attempt number and attempt limit: the unit with the most feedback plan runs sets both.
 
     Raises:
-        Refusal: a unit at its feedback plan limit (`attempt_limit`), naming its repository, or `capacity`.
+        Refusal: a unit at its feedback plan limit (`attempt_limit`), naming its repository, `capacity`, or `reserved`.
     """
     counts = policy.feedback_plan_attempts(ctx.conn)
     granted = policy.grants(ctx.conn)
@@ -783,24 +997,33 @@ def _guard_feedback_plan(
         if refused is not None:
             raise Refusal(*refused, repo=repo)
         numbered.append((done + 1, -limit))
-    _check_capacity(ctx, running, planned)
+    _check_capacity(ctx, running, planned, reserved=reserved)
     attempt, negative_limit = max(numbered, default=(1, -ctx.config.policy.max_feedback_plan_attempts))
     return attempt, -negative_limit
 
 
-def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[str]) -> None:
+def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[str], *, reserved: int) -> None:
     """Refuse when `max_workers` runs, review runs, and task runs are running: each holds a slot (DESIGN §21, §36).
 
     Raises:
-        Refusal: `capacity`, when running runs, review runs, task runs, and those in `planned` number `max_workers` or
-            more.
+        Refusal: `capacity`, when running runs, review runs, task runs, and those in `planned`, the dry run's and the
+            recorded ones, number `max_workers` or more; `reserved`, when the run would leave fewer free than the
+            `reserved` workers the harness's dispatches to come hold ahead of it (DESIGN §37).
     """
     max_workers = ctx.config.capacity.max_workers
     others = len(db.running_runs(ctx.conn, "review_runs")) + len(db.running_runs(ctx.conn, "task_runs"))
     busy = len(running) + others + len(planned)
     if busy >= max_workers:
-        planned_note = f", counting {len(planned)} this dry run dispatched" if planned else ""
+        held = sum(p.startswith(RECORDED_PREFIX) for p in planned)
+        planned_note = f", counting {len(planned) - held} this dry run dispatched" if len(planned) > held else ""
+        planned_note += f", counting {held} recorded for the tick to start after the overseer" if held else ""
         raise Refusal("capacity", f"{busy} of {max_workers} workers are running{planned_note}")
+    if busy + reserved >= max_workers:
+        raise Refusal(
+            "reserved",
+            f"{max_workers - busy} of {max_workers} workers are free, and the harness's dispatches to come this tick "
+            f"that rank above this one hold {reserved} (the state block's `dispatches_to_come`)",
+        )
 
 
 def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, Leased]]:
@@ -849,7 +1072,9 @@ def _spawn(
     review: str | None = None,
     reasons: Collection[str] = (),
     persona: personas.Persona | None = None,
+    model: str | None = None,
 ) -> Started:
+    # `model` is what the run's agent runs on, as `_check_model` found it listed; None for the runtime's default.
     cfg = ctx.config
     branch = plan.branch
     # A stacked run starts from, and opens its PRs against, the other ticket's branch; `_run` checks it is on origin.
@@ -886,8 +1111,11 @@ def _spawn(
         "ATTEMPT": str(attempt),
         "MAX_ATTEMPTS": str(limit),
         "PR_URL": JOINT_PR_NOTE if plan.joint else _pr_note(prs.get(first.repo or ""), branch),
-        "CONTEXT": context or None,
+        # The overseer's, which ticket and PR text can steer: quoted, so no line of it passes for the prompt's own.
+        "CONTEXT": quoted(context) if context else None,
         "REVIEW_FINDINGS": review or None,
+        # Follows the result line, as memory's contract does: the field a resume answers its review's findings in.
+        review_answers.REVIEW_ANSWERS: review_answers.contract_text() if review else "",
         "AUTHORIZED_REPLIERS": repliers or "none (no reply may instruct you)",
         "TRUSTED_REVIEWERS": prompts.trusted_reviewers(cfg.trust.trusted_reviewers),
         "LABELS": ", ".join(f"`{label}`" for label in cfg.tracker.labels),
@@ -902,7 +1130,9 @@ def _spawn(
         "REASONS": prompts.reasons_note(tuple(reasons), private=plan.private),
         "FOLLOW_UPS": _follow_ups_note(ctx, key, private=plan.private),
         "PLAN_REVIEW": prompts.plan_review(
-            on=planning and cfg.policy.planner_may_approve and plan_guards.planner_may_approve(ctx, key, kind),
+            cfg.policy.planner_may_approve
+            if planning and cfg.policy.planner_approves() and plan_guards.planner_may_approve(ctx, key, kind)
+            else PlannerApproval.OFF,
             feedback=kind == policy.FEEDBACK_PLAN,
         ),
     }
@@ -923,14 +1153,16 @@ def _spawn(
         values["OPERATOR_MESSAGES"] = (
             conversation.prompt_conversation(ctx.conn, key)
             if plan.private
-            else conversation.prompt_operator_messages(ctx.conn, key)
+            else conversation.prompt_operator_messages(ctx.conn, key, authorized=_authorized(ctx, key))
         )
     elif plan.private:
         values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
     else:
-        values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
+        operator = conversation.prompt_operator_messages(ctx.conn, key, authorized=_authorized(ctx, key))
+        values["OPERATOR_MESSAGES"] = operator
         values["PREVIOUS_RUNS"] = conversation.prompt_previous_runs(ctx.conn, key)
-        if conversation.has_operator_messages(ctx.conn, key):
+        # What the worker must hear: the operator's messages (D093), and the comments on artifacts that are authority.
+        if operator is not None:
             required = (*required, *prompts.REQUIRED_OPERATOR)
     if review is not None:
         required = (*required, *prompts.REQUIRED_REVIEW)
@@ -939,6 +1171,12 @@ def _spawn(
     if followed is not None:
         values["PLAN"] = followed.note
         required = (*required, *prompts.REQUIRED_PLAN_COPY)
+    # `_run` copies them where the worker starts, as it does the plan (DESIGN §22).
+    attached = attachments.of(ctx.conn, conversation.Ref(conversation.TICKET, key))
+    where = (desk or first.slot_path) / attachments.RUN_DIR
+    values["ATTACHMENTS"] = prompts.attachments_note(where, attachments.sizes(attached))
+    if attached:
+        required = (*required, *prompts.REQUIRED_ATTACHMENTS)
     if kind == RunKind.RESUME:
         _check_retired_overrides(ctx, plan.repos)
     prompt, remembered, replied = _render(
@@ -950,6 +1188,8 @@ def _spawn(
         repos=plan.repos,
         private=plan.private,
         persona=persona,
+        model=model,
+        planner_model=followed.planner_model if followed is not None else None,
     )
 
     run_id = db.insert_run(
@@ -979,9 +1219,19 @@ def _spawn(
         persona=persona.name if persona is not None else None,
         persona_digest=persona.digest if persona is not None else None,
         persona_text=persona.text if persona is not None else None,
+        model=model,
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _authorized(ctx: Context, key: str) -> list[records.Message]:
+    """The messages of a public ticket's comments on artifacts that are authority, which its worker hears (§38).
+
+    Returns:
+        The messages, oldest first.
+    """
+    return artifact_authority.authorized(ctx.conn, key, frozenset(ctx.config.artifacts.authorized_authors))
 
 
 def _follow_ups_note(ctx: Context, key: str, *, private: bool) -> str:
@@ -1067,8 +1317,14 @@ def _render(
     repos: Collection[str],
     private: bool,
     persona: personas.Persona | None,
+    model: str | None,
+    planner_model: str | None,
 ) -> tuple[str, memory.Rendered | None, replies.Rendered | None]:
     """Render the worker prompt, with agent memory's part (§28), how its comments reach GitHub (§29), and its persona.
+
+    `model` is the one the run's agent runs on, which the commit trailer names (`prompts.commit_trailer`), and
+    `planner_model` that of the planner whose approved plan it follows, which a second trailer names
+    (`prompts.planner_trailer`).
 
     Returns:
         The prompt; memory's part of it for the run to record, or None when no memory tier reaches the run; and the
@@ -1096,6 +1352,8 @@ def _render(
             private=private,
             notice=notice.for_prompt(ctx.conn),
             persona=persona,
+            model=model,
+            planner_model=planner_model,
         )
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e

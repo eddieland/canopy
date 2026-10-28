@@ -15,7 +15,7 @@ from canopy.core import contract, review_result
 from canopy.core.db import Event
 
 if TYPE_CHECKING:
-    from canopy.core import records
+    from canopy.core import records, spend
     from canopy.core.config import Config
     from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus
 
@@ -25,6 +25,10 @@ CHORES = "chores"
 REVIEWS = "reviews"
 #: A one-off task's runs (DESIGN §36): a group of its own, which no sink takes unless the operator lists it.
 TASKS = "tasks"
+#: What canopy did with a reply it read from Slack (DESIGN §20): a mention it recorded, and any reply it refused.
+REPLIES = "replies"
+#: The kind of the event that says the month's spend reached one of its budget's alerts.
+BUDGET_REACHED = "loop.budget_reached"
 SUMMARY_LIMIT = 300
 DETAIL_LIMIT = 500
 #: How many follow-ups a `follow_ups.filed` event names; the rest are counted.
@@ -92,6 +96,20 @@ class FollowUpsFiled(TypedDict):
     count: int
 
 
+class CiFlaky(TypedDict):
+    """A `ci.flaky` event's fields: a `resume` for `ci` left a failed check as not the change's (DESIGN §23)."""
+
+    ticket: str
+    run: int
+    prs: list[str]
+    #: The repositories whose branch canopy pushed again to rerun the check; empty when the operator reruns it.
+    kicked: list[str]
+    #: The worker's estimate of why the check is flaky, with its evidence: model text, cut to one line.
+    estimate: str
+    #: Why a repository was not kicked, in the harness's words, or None.
+    note: str | None
+
+
 class ChoreEnded(TypedDict):
     """A `chore.ended` event's fields."""
 
@@ -135,6 +153,29 @@ class TaskEnded(TypedDict):
     tickets: list[str]
 
 
+class ReplyRecorded(TypedDict):
+    """A `reply.recorded` event's fields: a Slack mention of canopy recorded as the operator's message on a ticket."""
+
+    ticket: str
+    #: The operator message it recorded.
+    message: int
+    #: The Slack message's `ts`.
+    ts: str
+    body: str
+
+
+class ReplyRefused(TypedDict):
+    """A `reply.refused` event's fields: a reply read from Slack that canopy took nothing from, and why."""
+
+    #: The ticket it named, or None for a mention that named none.
+    ticket: str | None
+    #: The Slack message's `ts`, which a sink answers under.
+    ts: str
+    #: The guard that refused it, as `canopy reply` names one, or `no_ticket`.
+    guard: str
+    reason: str
+
+
 class LoopFailing(TypedDict):
     """A `loop.failing` event's fields."""
 
@@ -155,6 +196,32 @@ class SinkFailing(TypedDict):
 
     sink: str
     error: str
+
+
+class BudgetReached(TypedDict):
+    """A `loop.budget_reached` event's fields: the local month's spend reached one of its alerts."""
+
+    #: The month, `YYYY-MM`, in local time.
+    month: str
+    #: The budget, in whole US dollars.
+    budget: int
+    #: The alert reached, as a percentage of the budget: 100 for the budget itself.
+    percent: int
+    #: What the month's agent spend cost so far, canopy's runs and the sessions outside canopy, in US dollars,
+    #: rounded to the cent.
+    spent: float
+    #: What the month will cost at this pace, in US dollars, rounded to the cent; None in its first day.
+    projected: float | None
+    #: Canopy's runs' part of `spent`, in US dollars, rounded to the cent.
+    runs: float
+    #: The sessions outside canopy's part of `spent`, in US dollars: `spent` less `runs`, so the parts add up to it; 0
+    #: before any read.
+    outside: float
+    #: When `canopy loop` last read the runtime's sessions, a journal time; None when it never has.
+    sessions_read_at: str | None
+    #: How that read ended, a `SessionsRead`: after `failed`, `outside` is what an earlier read found; None when none
+    #: ran.
+    sessions_read: str | None
 
 
 def cut(text: object, limit: int) -> str:
@@ -293,6 +360,37 @@ def follow_ups_filed(config: Config, *, key: str, run_id: int, filed: Mapping[st
     return Event(RUNS, "follow_ups.filed", fields)
 
 
+def ci_flaky(
+    config: Config,
+    *,
+    key: str,
+    run_id: int,
+    prs: Sequence[str],
+    kicked: Sequence[str],
+    estimate: str,
+    note: str,
+) -> Event | None:
+    """Return the `ci.flaky` event for run `run_id` of `key`, which left a failed check as flaky, for the run's close.
+
+    It is a point event, kicked or not: a kicked check reruns on its own, and one that is not raises `flaky_rerun`
+    once the overseer reads it (DESIGN §23), so the sink hears the worker's estimate of why either way.
+
+    Returns:
+        The event, or None if no sink takes runs.
+    """
+    if not config.notify.takes(RUNS):
+        return None
+    fields: CiFlaky = {
+        "ticket": key,
+        "run": run_id,
+        "prs": [cut(pr, DETAIL_LIMIT) for pr in prs],
+        "kicked": list(kicked),
+        "estimate": cut(estimate, DETAIL_LIMIT),
+        "note": cut(note, DETAIL_LIMIT) if note else None,
+    }
+    return Event(RUNS, "ci.flaky", fields)
+
+
 def chore_ended(
     config: Config,
     chore: str,
@@ -382,6 +480,30 @@ def task_ended(
     return Event(TASKS, "task.ended", fields)
 
 
+def reply_recorded(config: Config, *, key: str, ts: str, body: str) -> Callable[[int], Event | None]:
+    """Return what builds a `reply.recorded` event from the operator message's id, for `conversation.reply`."""
+
+    def build(message: int) -> Event | None:
+        if not config.notify.takes(REPLIES):
+            return None
+        fields: ReplyRecorded = {"ticket": key, "message": message, "ts": ts, "body": cut(body, SUMMARY_LIMIT)}
+        return Event(REPLIES, "reply.recorded", fields)
+
+    return build
+
+
+def reply_refused(config: Config, *, key: str | None, ts: str, guard: str, reason: str) -> Event | None:
+    """A `reply.refused` event, or None if no sink takes replies.
+
+    Returns:
+        The event.
+    """
+    if not config.notify.takes(REPLIES):
+        return None
+    fields: ReplyRefused = {"ticket": key, "ts": ts, "guard": guard, "reason": cut(reason, DETAIL_LIMIT)}
+    return Event(REPLIES, "reply.refused", fields)
+
+
 def loop_failing(count: int, status: str, tick_id: int, log: str) -> Event:
     """The latest ticks all ended other than `ok`.
 
@@ -410,3 +532,26 @@ def sink_failing(sink: str, error: str) -> Event:
     """
     fields: SinkFailing = {"sink": sink, "error": cut(error, DETAIL_LIMIT)}
     return Event(LOOP, "loop.sink_failing", fields)
+
+
+def budget_reached(month: spend.Month, percent: int) -> Event:
+    """The local month's spend reached `percent` of the operator's monthly budget.
+
+    Returns:
+        The `loop.budget_reached` event, naming the month, the budget, the alert, what it spent, canopy's part and the
+        part outside canopy, when the runtime's sessions were last read, and where it is headed.
+    """
+    # The parts are taken from the rounded whole, so a sink never shows them a cent apart from it.
+    spent, runs = round(month.spent_usd or 0.0, 2), round(month.runs_usd or 0.0, 2)
+    fields: BudgetReached = {
+        "month": month.month,
+        "budget": month.budget_usd,
+        "percent": percent,
+        "spent": spent,
+        "projected": round(month.projected_usd, 2) if month.projected_usd is not None else None,
+        "runs": runs,
+        "outside": round(spent - runs, 2),
+        "sessions_read_at": month.sessions_read_at,
+        "sessions_read": month.sessions_read.value if month.sessions_read is not None else None,
+    }
+    return Event(LOOP, BUDGET_REACHED, fields)

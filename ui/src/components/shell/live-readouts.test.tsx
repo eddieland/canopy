@@ -18,6 +18,7 @@ const META: Meta = {
     ticket_url: null,
     version: '0.4.0',
     workspace_root: '/w',
+    repos: ['repo'],
 }
 
 const TICK: Tick = {
@@ -214,7 +215,7 @@ describe('LiveReadouts', () => {
             fireEvent.click(screen.getByRole('link', { name: 'tick:12' }))
             await Promise.resolve()
         })
-        expect(router.state.location.pathname).toBe('/ticks/12')
+        expect(router.state.location.pathname).toBe('/runs/ticks/12')
     })
 
     it.each([

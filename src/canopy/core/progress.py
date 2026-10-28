@@ -1,7 +1,8 @@
-"""What a running tick's overseer or chore run's agent has printed so far, kept as it prints it (DESIGN §6, §19, §22).
+"""What a running tick's overseer or a run's agent has printed so far, kept as it prints it (DESIGN §6, §19, §22).
 
 Each line goes to the log as it comes, so the web UI reads a running session's transcript from it, and what its events
-report so far, its session and what it has spent, goes on the tick or chore run, whose change the UI's stream carries.
+report so far, its session and what it has spent, goes on the tick or the chore, task, or review run, whose change the
+UI's stream carries.
 A worker run's `_run` keeps its own, which also records the latest tool call on the run (§8).
 """
 
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from canopy.infra import logs
+    from canopy.runtime.implementation import Version
 
 
 class Progress:
@@ -36,8 +38,12 @@ class Progress:
         *,
         agent: str,
         fields: Mapping[str, object],
+        version: Version,
     ) -> None:
-        """Watch the agent of the row `row_id` in `table`; the log's lines name it `agent`, with `fields`."""
+        """Watch the agent of the row `row_id` in `table`; the log's lines name it `agent`, with `fields`.
+
+        Its lines are read as the runtime `version` runs prints them.
+        """
         self.conn = conn
         self.table: db.ProgressTable = table
         self.row_id = row_id
@@ -45,7 +51,7 @@ class Progress:
         self.log = log
         self.agent = agent
         self.fields = fields
-        self.watch = Watch()
+        self.watch = Watch(version=version)
 
     def __call__(self, line: str) -> None:
         """Write `line` to the log, and record the session at its first event and the spend at each model call's end."""

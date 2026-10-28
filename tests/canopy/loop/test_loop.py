@@ -114,7 +114,7 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
                 "--slug",
                 "login",
             ),
-            canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3"),
+            canopy("attention", "PROJ-3", "needs_author", "--detail", "https://example.test/pr/3"),
         ),
         contextlib.ExitStack() as later,
     ):
@@ -149,10 +149,10 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
         assert "dry run: the overseer plans, nothing is dispatched" in text
         tick1, tick2 = text.split("tick 1  ok")[1].split("tick 2  ok")
         assert "PROJ-2  dispatch:implement  dry run: not dispatched; would work on agent/PROJ-2-login" in tick1
-        assert "+   PROJ-3  needs_reviewer      https://example.test/pr/3" in tick1
+        assert "+   PROJ-3  needs_author        https://example.test/pr/3" in tick1
         assert "attention 1  ·  next tick in 5m at" in tick1
         assert "checks pending" not in text  # waits are counted in the summary, not listed
-        assert "-   PROJ-3  needs_reviewer  resolved" in tick2
+        assert "-   PROJ-3  needs_author  resolved" in tick2
         assert "attention 0" in tick2
         assert "next tick" not in tick2
         assert "stopped after 2 ticks: ok=2" in tick2
@@ -208,7 +208,7 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
                 "--slug",
                 slug,
             ),
-            canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3/" + "x" * 80),
+            canopy("attention", "PROJ-3", "needs_author", "--detail", "https://example.test/pr/3/" + "x" * 80),
         ),
         contextlib.ExitStack() as later,
     ):
@@ -238,8 +238,8 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
         assert "    PROJ-2  dispatch:implement  dry run: not dispatched; would work on" in tick1
         assert slug not in tick1  # the rationale is what gives way
         assert "…" in tick1
-        assert "+   PROJ-3  needs_reviewer      https://example.test/pr/3/" in tick1
-        assert "-   PROJ-3  needs_reviewer  resolved" in tick2
+        assert "+   PROJ-3  needs_author        https://example.test/pr/3/" in tick1
+        assert "-   PROJ-3  needs_author  resolved" in tick2
 
 
 def test_output_to_a_file_is_a_logfmt_line_for_each_event(
@@ -250,7 +250,7 @@ def test_output_to_a_file_is_a_logfmt_line_for_each_event(
     detail = "https://example.test/pr/3/" + "x" * 300
     with overseer_does(
         canopy("dispatch", "PROJ-2", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"),
-        canopy("attention", "PROJ-3", "needs_reviewer", "--detail", detail),
+        canopy("attention", "PROJ-3", "needs_author", "--detail", detail),
     ):
         term, out = log_file()
         repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())
@@ -264,7 +264,7 @@ def test_output_to_a_file_is_a_logfmt_line_for_each_event(
     assert re.fullmatch(r'msg="tick ended" tick=1 status=ok elapsed_seconds=\d+ summary="dry run; .*" .*', ended)
     assert ended.endswith(" workers=0 max_workers=2 attention=1")  # the last tick: no wait after it
     assert decision.startswith("msg=decision tick=1 subject=PROJ-2 action=dispatch:implement rationale=")
-    assert added == f'msg="attention added" tick=1 subject=PROJ-3 reason=needs_reviewer detail={detail}'  # whole
+    assert added == f'msg="attention added" tick=1 subject=PROJ-3 reason=needs_author detail={detail}'  # whole
     assert stopped == 'msg="loop stopped" ticks=1 statuses="ok=1"'
     assert "Ctrl-C" not in out.getvalue()  # no hints for a person at the terminal
 
@@ -290,7 +290,7 @@ def test_the_wait_runs_from_the_end_of_the_tick_not_the_end_of_its_report(
     treehouse_state: Path,
     agent_log: Path,
 ) -> None:
-    with overseer_does(canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/3")):
+    with overseer_does(canopy("attention", "PROJ-3", "needs_author", "--detail", "https://example.test/3")):
         time = FakeTime()
         out = SlowOutput(time=time)
         repeat.run(
@@ -340,7 +340,7 @@ def test_the_overseer_text_is_printed_as_text_not_rich_markup(
 ) -> None:
     with overseer_does(
         canopy("decide", "PROJ-1", "done", "--rationale", "merged [/oops] [red]not red[/red] :fire:"),
-        canopy("attention", "PROJ-2", "needs_reviewer", "--detail", "[link=https://evil.test]click[/link]"),
+        canopy("attention", "PROJ-2", "needs_author", "--detail", "[link=https://evil.test]click[/link]"),
     ):
         term, out = console()
         repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())
@@ -1011,8 +1011,9 @@ def paced(env: CanopyEnv, minutes: int) -> None:
 
 
 def polled(env: CanopyEnv, *, interval: int, every: int) -> None:
-    """Write the user config with ticks `interval` minutes apart, idle pacing off, and one `vcs` connector polled
-    every `every` minutes.
+    """Write the user config with ticks `interval` minutes apart and idle pacing off.
+
+    It has one `vcs` connector, polled every `every` minutes.
     """
     env.write_user(
         user_toml()

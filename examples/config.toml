@@ -37,12 +37,16 @@ max_chores = 1
 # api = 4
 
 [runtime]
+# The major version of OpenCode canopy runs: 1, the default, or 2 for OpenCode 2.1.4 or later, whose MCP servers each
+# need `"codemode": false` (D077). A template you leave out is the version's default; OpenCode 2's start a private
+# server of their own (`--standalone`).
+# version = 1
 # {definitions_dir} is the directory canopy's agent definitions and skills are in (D040). Every template that runs one
 # of canopy's agents must contain it. OpenCode reads it as OPENCODE_CONFIG_DIR, after the repository's own config.
 # {title}, optional, is the session's title: `<KEY> <kind>: <the ticket's title>` for a worker (DESIGN §13).
 overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
     --title={title} {prompt}'''
-# The overseer's temperature: -1 sends none, for when overseer_cmd names a model that refuses one, such as OpenAI's
+# The overseer's temperature: -1 sends none, for when the overseer runs on a model that refuses one, such as OpenAI's
 # reasoning models. review_temperature, below, does the same for the reviewer's.
 # overseer_temperature = 0.1
 worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
@@ -56,7 +60,7 @@ chore_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
 plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json
     --title={title} {prompt}'''
 # The reviewer's temperature (DESIGN §21): -1, the default, sends none, since the reviewer often runs on a model that
-# refuses one, such as OpenAI's reasoning models. Set a low one when review_cmd names a model that takes it: each new
+# refuses one, such as OpenAI's reasoning models. Set a low one when it runs on a model that takes it: each new
 # commit is reviewed again, and a cooler reviewer's findings wander less from one commit to the next.
 # review_temperature = 0.1
 overseer_timeout_minutes = 15
@@ -72,16 +76,36 @@ worker_timeout_minutes = 45
 # setup_timeout_minutes = 30
 # Optional: words before and after every command a worker run starts (worker_cmd, private_worker_cmd, and plan_cmd),
 # with {definitions_dir} and {title} but no {prompt}. One place for a sandbox wrapper (docs/SANDBOX.md), or an option
-# all three take.
+# all three take, but a model: [runtime.models] chooses that.
 # worker_cmd_prefix = "canopy-sandbox worker --read {definitions_dir} --"
-# worker_cmd_suffix = "--model provider/model"
-# Optional: commands the overseer may run beyond `canopy` and `treehouse status`, such as a tracker's CLI while its MCP
-# server is down. An allow in your runtime's own config cannot beat canopy's deny; these can (DESIGN §13). Only the
-# overseer takes any. canopy refuses a shell, an interpreter, a wrapper such as env or xargs, git, gh, curl, and its own
-# tools, and you answer for what an allowed command can do (TRUST_MODEL T1). Tell the overseer when to use them in
-# paths.overseer_instructions. `canopy agents` lists them.
+# worker_cmd_suffix = "--log-level INFO"
+# Optional: commands an agent may run beyond its own bash rules, such as a tracker's CLI for the overseer while its MCP
+# server is down. An allow in your runtime's own config cannot beat canopy's deny; these can (DESIGN §13). The
+# overseer, planner, worker, and worker-private take them; the overseer, which acts through canopy's tools and has no
+# shell otherwise, and the planner run only these, and a worker every command but those its rules deny, so for one an
+# allow undoes a deny, such as the private worker's of a tracker's CLI (TRUST_MODEL T6). canopy refuses a shell, an
+# interpreter, a wrapper such as env or xargs, git, gh, curl, and its own tools, and you answer for what an allowed
+# command can do (TRUST_MODEL T1). Tell the overseer when to use them in paths.overseer_instructions, and the planner
+# and workers in paths.worker_instructions. `canopy agents` lists them.
 # [runtime.allow_bash]
 # overseer = ["jira issue list *", "jira issue view *"]
+# planner = ["jira issue view *"]
+# worker-private = ["jira issue view *"]
+# Optional: each agent's model, `provider/model` as `opencode models` lists it, or `provider/model@variant` to run it at
+# one of the variants `opencode models --verbose` lists for it, such as a reasoning effort (DESIGN §13). canopy writes
+# it into the agent's definition and records it on each worker run; an agent not named runs on OpenCode's default. A
+# template, prefix, or suffix that passes --model, -m, or --variant is refused, since it would override this unseen.
+# Before a worker run starts, its model and variant are looked up in `opencode models`: one not listed, or a list that
+# cannot be read, refuses the run with an attention item, never running it on another model. Private, as every
+# runtime key is.
+# One ticket's worker, planner, or reviewer can take another model, to canary it: `canopy model KEY MODEL`, or the
+# ticket's page.
+# [runtime.models]
+# worker = "provider/model"     # both workers, and your tasks' runs
+# planner = "provider/model"
+# reviewer = "provider/other-model@high"
+# overseer = "provider/model"
+# chore = "provider/model"      # every chore without a model of its own
 
 [loop]
 # `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
@@ -94,6 +118,16 @@ interval_minutes = 15
 # No tick runs the overseer, so none starts work, while the disk holding .canopy/ or the workspace has less free than
 # this, in MiB; you are told through the attention list. 0 turns the check off.
 # min_free_disk_mib = 2048
+
+[spend]
+# What a calendar month of agent spend should cost, in whole US dollars: canopy's runs and every session of the runtime
+# outside canopy that `canopy loop` has read, canopy's share shown beside the whole. Nothing stops at it: `canopy spend`
+# and the web UI's spend page track the month against it, and a sink that takes `loop` events hears once when the
+# month reaches it.
+# monthly_budget_usd = 300
+# Percentages of it at which that sink also hears, each once a month: a warning at half and at four fifths, here. The
+# 100% alert is always sent. Empty by default.
+# budget_alerts = [50, 80]
 
 [trust]
 # Tracker account ids whose ticket comments may resume your blocked work. Use the
@@ -108,15 +142,25 @@ trusted_reviewers = ["replace-with-your-github-login"]
 # set is never feedback or an instruction.
 comment_prefix = "CANOPY:"
 comment_suffix = ""
-# The Co-authored-by trailer a worker adds to its commits when the agent runtime adds none of its own. Name an agent
-# here, such as your team's bot address, never a person: it is how a reader tells the work is an agent's. Set
-# commit_trailer = false to add none, keeping only the runtime's own attribution, if it adds any.
+# The Co-authored-by trailer git adds to every commit a worker makes, through canopy's hooks. Name an agent
+# here, such as your team's bot address, never a person: it is how a reader tells the work is an agent's. Left as the
+# default, the name credits the model [runtime.models] chooses for the worker, as "provider/model (canopy worker)",
+# and a worker following an approved plan adds a second trailer for its planner's, "provider/model (canopy planner)";
+# a name you set is used as you set it, alone. Set commit_trailer = false to add none, keeping only the runtime's own
+# attribution, if it adds any.
 # commit_trailer = true
 # commit_trailer_name = "canopy worker"
 # commit_trailer_email = "noreply@canopy.invalid"
+# Text git puts before the subject of every commit a worker makes, "{key}" filled with its ticket's key, as
+# "[PROJ-123] ", but a fixup!, squash!, or amend! commit's, which --autosquash matches by its subject. A task's run,
+# which has no ticket, gets none that names "{key}". Empty: none.
+# commit_prefix = ""
 # Set if your repositories refuse merge commits: workers then rebase onto a base branch instead of merging it in, and
 # push the result with --force-with-lease to their own branch, never any other force (TRUST_MODEL T1).
 # rebase = false
+# How many times canopy reruns a PR's checks a worker judged flaky, for each head pushed, by rebasing the branch onto
+# its base and pushing it with --force-with-lease (DESIGN §23, TRUST_MODEL T1). 0: you rerun them yourself.
+# max_flaky_kicks = 0
 # How replies to review comments, and every other comment a worker would post, reach GitHub (DESIGN §29): "post" has
 # workers post them, marked; "approve" has them draft each one for you to read, edit, and send as your own words.
 # review_replies = "post"
@@ -143,12 +187,19 @@ prompt_overrides = "~/.config/canopy/prompts"
 # <clone>/<workspace>/, with its status and approval, commits, and pushes to the clone's upstream (DESIGN §25). Plans
 # hold what planners read of your tickets: keep the repository private. `canopy archive DIR` does the copy by hand.
 # plan_archive = "~/src/plans"
+# Set false to archive into the clone's top level rather than <clone>/<workspace>/, for a repository that holds this
+# workspace's plans alone. Only what canopy wrote there is committed: each ticket's directory and its own README.md.
+# plan_archive_workspace_dir = true
 # Each plan goes with the prompt its planner was given, which carries your messages and standing instructions. Set
 # false to archive plans alone; `canopy archive DIR` copies prompts either way.
 # plan_archive_prompts = true
 # Set true to archive each planned ticket's conversation beside its plans too: workers' reports and questions, your
 # replies, and mirrored tracker comments, a private ticket's included. `canopy archive DIR --conversations` copies them.
 # plan_archive_conversations = false
+# Each ticket's plans go with your comments on them, as KEY/COMMENTS.md: every thread, the passage it is on, and its
+# replies. Set false to leave them out; `canopy archive DIR` copies them either way. A plan you edited always goes with
+# its original, as the planner wrote it, as RUN-ORIGINAL.md.
+# plan_archive_comments = true
 
 # Optional: the persona each agent writes in, by name: its voice and what it weighs most, never what it may do. A run
 # whose persona has no file is refused, never run in canopy's voice instead (DESIGN §31).
@@ -213,6 +264,7 @@ cmd = ""
 # when = "Skip it when the last run found nothing."
 # timeout_minutes = 20
 # workspaces = ["acme"]   # default: every workspace
+# model = "provider/model@low"   # default runtime.models.chore; only for a chore that runs canopy-chore
 
 # Optional: adversarial reviews of PRs (DESIGN §21). A fresh reviewer reads each new commit and reports to canopy only:
 # it posts nothing on the PR and never approves (D114). Read reviews with `canopy review show`. Point review_cmd at a
@@ -221,6 +273,20 @@ cmd = ""
 # agent_prs = true                                            # the loop's own PRs, before a human is asked
 # query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs, reviewed for you alone
 # low_impact = "Only docs, comments, or tests change."
+# settle_minutes = 30   # review a head once it has been the head this long; a push starts over. 0 to 10080
+#
+# Cases `canopy review eval` scores the reviewer on, after you change reviewer.md, a persona, or its model; best in the
+# workspace's .canopy/config.toml, since each names one of its repositories. A bug case is a change that was reverted or
+# fixed forward, with the lines you confirmed its bug on ("path:line" or "path:first-last"); a clean one, one you know
+# is sound, counts every finding as a false alarm. sha is the commit reviewed, base the commit its change starts from.
+# [[review.eval_cases]]
+# name = "retry-forever"
+# pr = "https://github.com/acme/api/pull/412"
+# repo = "api"
+# sha = "<the PR's head, 40 hex characters>"
+# base = "<its merge base with main>"
+# kind = "bug"
+# lines = ["src/retry.py:42"]
 
 # Optional: an artifact store workers publish pages to for people to comment on (DESIGN §38), Louvre or canopy's local
 # one, `canopy-artifacts serve`, each an MCP server your runtime config names. Every agent's definition denies the
@@ -228,12 +294,29 @@ cmd = ""
 # [artifacts]
 # mcp_server = "louvre"
 # namespace = "canopy/operator"
-# authorized_authors = ["u_ana", "u_raj"]     # whose comments steer a worker, once comments come back (M62)
+# authorized_authors = ["u_ana", "u_raj"]     # whose comments steer a worker; anyone else's waits on attention
 # publish_roles = ["worker"]
+#
+# And a source that reads the store's comments into canopy's journal each tick, the local store's feed here; each
+# comment reaches its ticket's conversation, counting as authorized_authors says (DESIGN §30, §38).
+# [connect.sources.artifacts]
+# kind = "artifacts"
+# cmd = "canopy-artifacts feed --store /path/to/your/store --namespace canopy/operator"
+#
+# And, with the Slack sink on a bot token and --threads, a source that reads the replies in its ticket threads (ROADMAP
+# M64). A reply from an id in `operators` is your message on the ticket, as `canopy reply` records one: list only your
+# own Slack member id. So is `@canopy PROJ-123 your reply` in the channel, for a ticket with no thread; add "replies"
+# to the sink's events to see what came of it. The bot also needs channels:history (groups:history for a private
+# channel). --channel is the sink's own, by id.
+# [connect.sources.slack]
+# kind = "slack"
+# cmd = "canopy-connect-slack --channel C0123ABCD"
+# operators = ["U0123ABCD"]
 
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
 # what each kind holds and what a pass would remove. A live tick removes the files and the journal's rows once a day,
-# and rotates canopy.log; `canopy gc --vacuum`, between ticks, gives the journal's free pages back to the disk.
+# and rotates canopy.log; `canopy gc --vacuum`, between ticks, gives the journal's free pages back to the disk, and
+# `canopy gc --git` packs the primary clones' loose objects.
 # [retention]
 # run_files_days = 30    # a run's, chore run's, or review's log, prompt, and diff, once it ended this long ago
 # tick_files_days = 7    # a tick's log and prompt; a tick not `ok` keeps them for run_files_days

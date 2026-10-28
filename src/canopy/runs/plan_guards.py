@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import db, feedback_plans, plans, prompts
-from canopy.core.vocab import PlanStatus, RunKind
+from canopy.core import db, feedback_plans, plans, prompts, sql
+from canopy.core.vocab import PlanStatus, ReplyMode, RunKind
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -30,9 +30,9 @@ def plan_refusal(ctx: Context, key: str, *, slug: str | None, base: str | None) 
         (`bad_plan`) already has a branch; or (`no_read_tools`) no tracker read tools are known for the planner.
     """
     if slug is not None:
-        return "bad_slug", "a plan writes down the work and names no branch; leave out --slug"
+        return "bad_slug", "a plan writes down the work and names no branch; leave out slug (--slug)"
     if base is not None:
-        return "bad_base", "a plan writes down the work and starts from no branch; leave out --base"
+        return "bad_base", "a plan writes down the work and starts from no branch; leave out base (--base)"
     ticket = db.get_ticket(ctx.conn, key)
     if ticket is not None and ticket.branch:
         # Its first implement recorded the branch: a plan now would describe work already started (DESIGN §25, Open).
@@ -51,8 +51,11 @@ def feedback_plan_refusal(ctx: Context, key: str, *, base: str | None) -> tuple[
         waits for its resume (`bad_plan`); or it is stale, but inside the quiet period on its PRs (`quiet`).
     """
     if base is not None:
-        return "bad_base", "a feedback plan reads the PR's head and starts from no other branch; leave out --base"
-    return feedback_plans.dispatch_refusal(ctx.conn, ctx.config, key, now=datetime.now(UTC))
+        return (
+            "bad_base",
+            "a feedback plan reads the PR's head and starts from no other branch; leave out base (--base)",
+        )
+    return feedback_plans.dispatch_refusal(ctx.conn, ctx.config, ctx.workspace, key, now=datetime.now(UTC))
 
 
 def feedback_prs_refusal(
@@ -133,6 +136,9 @@ class Followed:
     note: str
     plan_id: int | None = None
     feedback_plan_id: int | None = None
+    #: The model canopy chose for the run that wrote the plan, which the worker's commits credit beside its own
+    #: (`prompts.planner_trailer`); None when it chose none.
+    planner_model: str | None = None
 
 
 def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection[str]) -> Followed | None:
@@ -153,21 +159,45 @@ def plan_note(ctx: Context, key: str, kind: str, copy: Path, reasons: Collection
         text = feedback_plans.approved_text(ctx.state_dir, feedback) if feedback is not None else None
         if feedback is not None and text is not None:
             covered = feedback_plans.items(ctx.conn, feedback.id)
+            # Its drafts start from the plan's replies; a worker that posts its own (`post`) is given none (§32).
+            drafting = ctx.config.trust.review_replies is ReplyMode.APPROVE
             note = prompts.feedback_plan_note(
                 copy,
                 plans.outline(text),
-                [(i.number, i.pr_url, i.item_id, str(i.proposal)) for i in covered if not i.left_out],
+                [(i.number, i.pr_url, i.item, i.item_id, str(i.proposal)) for i in covered if not i.left_out],
                 left_out=[(i.number, i.item_id) for i in covered if i.left_out],
                 message_id=feedback.approved_message_id,
                 by_planner=feedback.approved_channel == plans.PLANNER,
+                proposed={i.number: i.reply for i in covered if drafting and not i.left_out and i.reply is not None},
             )
-            return Followed(note=note, feedback_plan_id=feedback.id)
+            return Followed(note=note, feedback_plan_id=feedback.id, planner_model=_model_of(ctx, feedback.run_id))
     approved = plans.approved_of(ctx.conn, key)
     text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None
     if approved is None or text is None:
         return None
     note = prompts.plan_note(copy, plans.outline(text), by_planner=approved.approved_channel == plans.PLANNER)
-    return Followed(note=note, plan_id=approved.id)
+    return Followed(note=note, plan_id=approved.id, planner_model=_model_of(ctx, approved.run_id))
+
+
+def planner_model(ctx: Context, plan_id: int | None, feedback_plan_id: int | None) -> str | None:
+    """Return the model of the planner whose plan a run follows, from the plan it recorded, as `plan_note` found it.
+
+    Returns:
+        The model canopy chose for the planner's run, or None when the run follows no plan or canopy chose none.
+    """
+    if feedback_plan_id is not None:
+        feedback = feedback_plans.get(ctx.conn, feedback_plan_id)
+        return _model_of(ctx, feedback.run_id) if feedback is not None else None
+    if plan_id is None:
+        return None
+    row = sql.execute(ctx.conn, sql.select("run_id").from_("plans").where("id = ?", plan_id)).fetchone()
+    return None if row is None else _model_of(ctx, int(row[0]))
+
+
+def _model_of(ctx: Context, run_id: int) -> str | None:
+    # The model a run asked for (`runs.model`), not the ones its session says served it, which canopy reads later.
+    row = sql.execute(ctx.conn, sql.select("model").from_("runs").where("id = ?", run_id)).fetchone()
+    return None if row is None or row[0] is None else str(row[0])
 
 
 def planner_may_approve(ctx: Context, key: str, kind: str) -> bool:

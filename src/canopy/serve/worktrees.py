@@ -17,10 +17,10 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, tasks
+from canopy.core import conversation, db, records, tasks
 from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, QUARANTINED, SYNC_HOLDER, PoolError, Slot
 from canopy.serve import views
-from canopy.serve.worktree_schema import Pool, Process, ReviewHold, Worktree, WorktreeState
+from canopy.serve.schema.worktree import Pool, Process, ReviewHold, TaskHold, Worktree, WorktreeState
 
 if TYPE_CHECKING:
     import sqlite3
@@ -70,8 +70,8 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
         row = next(r for r in running if int(r["id"]) == run_id)
         by_lease |= {str(s.lease_id): row for s in slots}
     reviews = {str(r["lease_id"]): r for r in db.running_runs(ctx.conn, "review_runs") if r["lease_id"]}
-    # A task's run holds a slot too (DESIGN §36); the page shows its holder, `canopy:task:N`, and no more of it yet.
-    for_tasks = {r.lease_id for r in tasks.running(ctx.conn)}
+    # A task's run holds a slot too (DESIGN §36), matched by lease id as a ticket's run is.
+    for_tasks = {r.lease_id: r for r in tasks.running(ctx.conn)}
     root = ctx.workspace.root
     sizes = {repo.name: ctx.config.capacity.slots_for(repo.name) for repo in ctx.workspace.repos}
     cloned = [repo for repo in ctx.workspace.repos if repo.cloned]
@@ -96,7 +96,7 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
                 reviews.get(s.lease_id),
                 root=root,
                 repo=repo.name,
-                task=s.lease_id in for_tasks,
+                task=for_tasks.get(s.lease_id),
             )
             for s in slots
         ]
@@ -111,11 +111,12 @@ def worktree(
     *,
     root: Path,
     repo: str,
-    task: bool = False,
+    task: records.TaskRun | None = None,
 ) -> Worktree:
     """One slot of `repo`'s pool, with the running run or review that holds its lease, if the journal has one.
 
-    Its path is shown from workspace `root` when under it. `task` says a running task's run holds it (DESIGN §36).
+    Its path is shown from workspace `root` when under it. `task` is the running task's run that holds it, if one does
+    (DESIGN §36).
 
     Returns:
         The worktree, `working` while a run, review, or task holds it, with a note when its lease is canopy's but no
@@ -124,7 +125,7 @@ def worktree(
     leased = slot.lease_id != ""
     state: WorktreeState = _STATES.get(slot.status, "broken")
     note = None
-    if run is not None or review is not None or task:
+    if run is not None or review is not None or task is not None:
         state = "working"
     elif slot.lease_holder == QUARANTINED:
         note = _QUARANTINED.format(repo=repo, name=slot.name)
@@ -140,7 +141,7 @@ def worktree(
         status=slot.status,
         state=state,
         # A run's slot is detached (D109): the branch it works on is the run's.
-        branch=_text(slot.branch) or (_text(str(run["branch"])) if run is not None and slot.detached else None),
+        branch=_text(slot.branch) or (_run_branch(run, task) if slot.detached else None),
         detached=slot.detached,
         branch_error=_text(slot.branch_error),
         holder=_text(slot.lease_holder),
@@ -155,9 +156,25 @@ def worktree(
             if review is not None
             else None
         ),
+        task=(
+            TaskHold(task_id=task.task_id, run_id=task.id, started_at=db.parse_time(task.started_at))
+            if task is not None
+            else None
+        ),
         note=note,
         processes=[Process(pid=p.pid, name=conversation.printable(p.name)) for p in slot.processes[:PROCESSES]],
     )
+
+
+def _run_branch(run: sqlite3.Row | None, task: records.TaskRun | None) -> str | None:
+    """The branch a run or task's run that holds a detached slot works on, or None when neither holds it.
+
+    Returns:
+        The branch on one line, or None.
+    """
+    if run is not None:
+        return _text(str(run["branch"]))
+    return _text(task.branch) if task is not None else None
 
 
 def _read(backend: Backend, repo: str) -> Sequence[Slot]:

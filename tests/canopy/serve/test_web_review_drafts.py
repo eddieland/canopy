@@ -1,8 +1,9 @@
-"""A review's draft in the web API (DESIGN §34): the review page's edits and publish, which are `canopy review`'s.
+"""A review's draft in the web API (DESIGN §34): the review page's edits, notes, and publish, which are the CLI's.
 
-The page edits a review's draft through the functions `canopy review edit` calls, and publishes the version it showed,
-named by its hash, through `canopy review publish`'s, so with the same refusals; what reaches GitHub is that version,
-word for word, as one comment review on the commit the review read.
+The page edits a review's draft through the functions `canopy review edit` calls, asks for a revision with a note
+through `canopy reply review:ID`'s, and publishes the version it showed, named by its hash, through
+`canopy review publish`'s, so with the same refusals; what reaches GitHub is that version, word for word, as one comment
+review on the commit the review read.
 """
 
 import json
@@ -13,12 +14,13 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from canopy.core import review_drafts, review_runs
+from canopy.core import review_drafts, review_revisions, review_runs
 from canopy.core.context import Context
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
-from tests.canopy.helpers import present, reads
+from tests.canopy.helpers import context, present, reads, waits
+from tests.canopy.observation_helpers import HEAD, observe_pr
 from tests.canopy.review_helpers import FINDINGS, OFF_DIFF, ON_LINE, THEIRS, feature_commit, reviewer_reports
-from tests.canopy.scenario_helpers import Scenario, reviews
+from tests.canopy.scenario_helpers import Scenario, reviews, revises
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import GitPool
 
@@ -38,7 +40,9 @@ def test_a_reviews_page_carries_its_draft_each_comment_on_its_line_of_the_diff(
     c, _ = signed_in_client(ctx)
     draft = draft_of(c, reviewed)
     assert (draft["status"], draft["version"], draft["author"], draft["channel"]) == ("waiting", 1, "reviewer", None)
-    assert draft["body"] == f"Two defects.\n\n{OFF_DIFF}"
+    assert draft["body"] == OFF_DIFF
+    # The finding off the diff is a point of the review all the same, held by the body rather than a comment.
+    assert draft["in_body"] == [2]
     [comment] = draft["comments"]
     assert (comment["number"], comment["path"], comment["line"], comment["text"], comment["finding"]) == (
         1,
@@ -52,6 +56,19 @@ def test_a_reviews_page_carries_its_draft_each_comment_on_its_line_of_the_diff(
     assert draft["hash"] == newest.hash
     assert [(v["number"], v["hash"]) for v in draft["versions"]] == [(1, newest.hash)]
     assert (draft["max_comments"], draft["moved_head"], draft["published_url"]) == (30, None, None)
+    assert draft["pr_author"] is None
+
+
+def test_a_draft_names_the_prs_author_and_its_head_as_canopy_last_read_the_pr(
+    scenario: Scenario,
+    reviewed: int,
+    ctx: Context,
+) -> None:
+    observe_pr(scenario.conn, url=THEIRS)
+    scenario.conn.commit()
+    c, _ = signed_in_client(ctx)
+    draft = draft_of(c, reviewed)
+    assert (draft["pr_author"], draft["moved_head"]) == ("operator", HEAD)
 
 
 def test_the_page_edits_a_draft_as_the_cli_does_each_change_a_version_through_the_web(
@@ -128,7 +145,7 @@ def test_the_page_publishes_the_version_it_showed_verbatim_once(
         "pr": THEIRS,
         "commit": sha,
         "delete_pending": None,
-        "body": f"Two defects.\n\n{OFF_DIFF}",
+        "body": OFF_DIFF,
         "comments": [
             {"path": "retry.py", "line": 1, "text": ON_LINE.text},
             {"path": "retry.py", "line": 2, "text": "Why?"},
@@ -162,6 +179,27 @@ def test_the_page_stages_by_default_and_names_why_a_post_posted_nothing(
     assert reads(github_state, "post")[-1]["submit"] is False
 
 
+def test_the_lists_say_where_a_reviews_draft_stands(reviewed: int, ctx: Context, github_state: Path) -> None:
+    c, write = signed_in_client(ctx)
+
+    def listed() -> tuple[str | None, dict[str, Any] | None]:
+        [review] = [r for r in c.get("/api/reviews").json() if r["id"] == reviewed]
+        [pr] = [p for p in c.get("/api/pull-requests").json() if p["url"] == THEIRS]
+        return review["draft"], pr["draft"]
+
+    assert listed() == ("waiting", {"review_id": reviewed, "status": "waiting"})
+    github_state.write_text(json.dumps({"prs": {THEIRS: {}}}))
+    staged = c.post(
+        f"/api/reviews/{reviewed}/draft/publish",
+        json={"hash": draft_of(c, reviewed)["hash"]},
+        headers=write,
+    )
+    assert staged.status_code == 200, staged.text
+    assert listed() == ("staged", {"review_id": reviewed, "status": "staged"})
+    pr = c.get("/api/pull-request", params={"url": THEIRS}).json()["pull_request"]
+    assert pr["draft"] == {"review_id": reviewed, "status": "staged"}
+
+
 def test_a_review_of_the_loops_own_pr_has_no_draft_to_edit_or_publish(
     scenario: Scenario,
     reviewing: object,
@@ -174,7 +212,148 @@ def test_a_review_of_the_loops_own_pr_has_no_draft_to_edit_or_publish(
     own = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
     c, write = signed_in_client(ctx)
     assert c.get(f"/api/reviews/{own}").json()["draft"] is None
+    assert c.get("/api/reviews").json()[0]["draft"] is None
     body = c.post(f"/api/reviews/{own}/draft/body", json={"text": "Mine."}, headers=write)
     assert refused(body).startswith("no_draft: ")
     publish = c.post(f"/api/reviews/{own}/draft/publish", json={"hash": "0" * 12}, headers=write)
     assert refused(publish).startswith("no_draft: ")
+
+
+def test_staging_from_the_page_takes_a_requested_review_off_the_attention_list(
+    scenario: Scenario,
+    requested: int,
+    ctx: Context,
+    github_state: Path,
+) -> None:
+    c, write = signed_in_client(ctx)
+    scenario.tick(*waits("PROJ-1", rationale="its PR is out for review"))
+    [item] = [i for i in c.get("/api/attention").json() if i["reason"] == "review_waiting"]
+    assert (item["pr"], item["ticket_key"]) == (THEIRS, None)
+    assert f"review:{requested}" in item["detail"]
+    github_state.write_text(json.dumps({"prs": {THEIRS: {}}}))
+    staged = c.post(
+        f"/api/reviews/{requested}/draft/publish",
+        json={"hash": draft_of(c, requested)["hash"]},
+        headers=write,
+    )
+    assert staged.status_code == 200, staged.text
+    assert "review_waiting" not in [i["reason"] for i in c.get("/api/attention").json()]
+    assert "review_waiting" not in (scenario.env.state_dir / "attention.md").read_text()
+
+
+def test_discarding_from_the_page_posts_nothing_and_takes_a_requested_review_off_the_attention_list(
+    scenario: Scenario,
+    requested: int,
+    ctx: Context,
+    github_state: Path,
+) -> None:
+    c, write = signed_in_client(ctx)
+    scenario.tick(*waits("PROJ-1", rationale="its PR is out for review"))
+    path = f"/api/reviews/{requested}/draft/discard"
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "review-9"}):
+        assert refused(c.post(path, headers=write)).startswith("inside_run: ")
+    discarded = c.post(path, headers=write)
+    assert discarded.status_code == 200, discarded.text
+    assert discarded.json()["status"] == ReviewDraftStatus.DISCARDED
+    assert present(review_drafts.of_review(scenario.conn, requested)).why == "discarded by you through web"
+    assert "review_waiting" not in [i["reason"] for i in c.get("/api/attention").json()]
+    assert "review_waiting" not in (scenario.env.state_dir / "attention.md").read_text()
+    assert refused(c.post(path, headers=write)).startswith("discarded: ")
+    assert reads(github_state, "post") == []
+
+
+#: What the operator's note asks of a revision, and what the reviser reports on it: the body alone, gentler.
+NOTE = "Say it more gently."
+GENTLER: dict[str, object] = {"status": "done", "body": "One defect, gently put.", "comments": []}
+
+
+def test_the_page_asks_for_a_revision_with_a_note_and_shows_it_asked_running_and_made(
+    scenario: Scenario,
+    reviewed: int,
+    ctx: Context,
+    github_state: Path,
+) -> None:
+    c, write = signed_in_client(ctx)
+    path = f"/api/reviews/{reviewed}/draft/notes"
+    before = draft_of(c, reviewed)
+    assert (before["notes"], before["revisions"], before["revision_limit"]) == ([], [], 3)
+    noted = c.post(path, json={"text": f"  {NOTE}\n"}, headers=write)
+    assert noted.status_code == 200, noted.text
+    found = noted.json()
+    assert found["after_version"] == 1
+    [note] = found["draft"]["notes"]
+    assert (note["id"], note["body"], note["channel"], note["after_version"]) == (found["note"], NOTE, "web", 1)
+    draft_id = present(review_drafts.of_review(scenario.conn, reviewed)).id
+    assert [(n.body, n.channel) for n in review_revisions.pending(scenario.conn, draft_id)] == [(NOTE, "web")]
+
+    # While the revision runs, the page says so, and a note or a publish is refused as the CLI refuses it.
+    revising = scenario.starts_review(revises(reviewed), reviewer=reviewer_reports(GENTLER))
+    [running] = draft_of(c, reviewed)["revisions"]
+    assert (running["id"], running["state"], running["revised"], running["ended_at"]) == (
+        revising.id,
+        "running",
+        1,
+        None,
+    )
+    assert refused(c.post(path, json={"text": "And shorter."}, headers=write)).startswith("revising: ")
+    publish = f"/api/reviews/{reviewed}/draft/publish"
+    held = c.post(publish, json={"hash": before["hash"], "submit": True}, headers=write)
+    assert refused(held).startswith("revising: ")
+
+    # Its result is the new version, which answers the note.
+    revising.finishes()
+    after = draft_of(c, reviewed)
+    assert (after["version"], after["author"], after["body"], after["notes"]) == (
+        2,
+        "reviser",
+        "One defect, gently put.",
+        [],
+    )
+    [made] = after["revisions"]
+    assert (made["id"], made["status"], made["state"]) == (revising.id, "done", "done")
+    assert reads(github_state, "post") == []
+
+
+def test_a_note_from_the_page_is_refused_as_the_clis_is(
+    scenario: Scenario,
+    reviewed: int,
+    ctx: Context,
+    github_state: Path,
+) -> None:
+    c, write = signed_in_client(ctx)
+    path = f"/api/reviews/{reviewed}/draft/notes"
+    assert refused(c.post(path, json={"text": "  "}, headers=write)).startswith("bad_body: ")
+    assert refused(c.post(path, json={"text": "x" * 4001}, headers=write)).startswith("bad_body: ")
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "review-9"}):
+        assert refused(c.post(path, json={"text": NOTE}, headers=write)).startswith("inside_run: ")
+    sha = present(review_runs.get_review_run(scenario.conn, reviewed)).sha
+    own = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id
+    assert refused(c.post(f"/api/reviews/{own}/draft/notes", json={"text": NOTE}, headers=write)).startswith(
+        "no_draft: ",
+    )
+    draft_id = present(review_drafts.of_review(scenario.conn, reviewed)).id
+    assert review_revisions.pending(scenario.conn, draft_id) == []
+
+    # At its limit, the page reads the limit the config sets, and the note is refused; it says how to grant more.
+    scenario.configures(policy={"max_revisions_per_draft": 1})
+    scenario.operator("reply", f"review:{reviewed}", NOTE)
+    scenario.review(revises(reviewed), reviewer=reviewer_reports(GENTLER))
+    c, write = signed_in_client(context(scenario.env))
+    spent = draft_of(c, reviewed)
+    assert (len(spent["revisions"]), spent["revision_limit"]) == (1, 1)
+    limit = refused(c.post(path, json={"text": "Once more."}, headers=write))
+    assert limit.startswith("revision_limit: ")
+    assert f"canopy grant review:{reviewed} revision" in limit
+
+    # A draft published takes no note.
+    scenario.operator("grant", f"review:{reviewed}", "revision")
+    current = draft_of(c, reviewed)
+    assert current["revision_limit"] == 2
+    published = c.post(
+        f"/api/reviews/{reviewed}/draft/publish",
+        json={"hash": current["hash"], "submit": True},
+        headers=write,
+    )
+    assert published.status_code == 200, published.text
+    assert len(reads(github_state, "post")) == 1
+    assert refused(c.post(path, json={"text": "Too late."}, headers=write)).startswith("published: ")

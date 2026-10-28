@@ -1,5 +1,8 @@
-"""The web UI's chores (DESIGN §19, §22, ROADMAP M23): what `canopy status` and `canopy show chore:NAME` print, and a
-note the operator writes there, which the chore's next prompt carries as `canopy reply chore:NAME`'s does."""
+"""The web UI's chores (DESIGN §19, §22, ROADMAP M23).
+
+What `canopy status` and `canopy show chore:NAME` print, and a note the operator writes there, which the chore's next
+prompt carries as `canopy reply chore:NAME`'s does.
+"""
 
 import dataclasses
 import json
@@ -179,7 +182,8 @@ def test_a_note_from_the_web_is_recorded_as_the_cli_records_one_and_the_next_pro
     assert c.post(url, json=body, headers={"origin": headers["origin"]}).status_code == 403
     first = c.post(url, json=body, headers=headers).json()
     again = c.post(url, json=body, headers=headers).json()
-    assert first == {"message_id": 9, "answers": None, "new": True}
+    # After the mock's 16 messages, the last two its feedback plans' approvals wrote.
+    assert first == {"message_id": 17, "answers": None, "new": True}
     assert again == {**first, "new": False}
     unknown = c.post("/api/chores/nope/replies", json=body, headers=headers)
     assert (unknown.status_code, unknown.json()["detail"]["guard"]) == (409, "unknown")
@@ -195,13 +199,13 @@ def test_a_note_from_the_web_is_recorded_as_the_cli_records_one_and_the_next_pro
     notes: list[dict[str, Any]] = json_block(prompt)["operator_notes"]
     assert [(n["id"], n["note"]) for n in notes] == [
         (8, "Leave out the docs site's lockfile: it is never deployed."),
-        (9, NOTE),
+        (17, NOTE),
     ]
 
     # The list the stream sends changes with the note, so a page showing the chore reads it again.
     [_, deps] = c.get("/api/chores").json()
-    assert deps["latest_note_id"] == 9
-    assert [n["id"] for n in c.get("/api/chores/deps").json()["notes"]] == [8, 9]
+    assert deps["latest_note_id"] == 17
+    assert [n["id"] for n in c.get("/api/chores/deps").json()["notes"]] == [8, 17]
 
 
 def test_a_finding_dismissed_from_the_web_leaves_the_attention_list_as_the_cli_dismisses_it(backend: Backend) -> None:

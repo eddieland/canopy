@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
     choreRef,
     choreRunRef,
+    feedbackPlanRef,
     memoryRef,
     messageRef,
+    parseTaskRef,
     planRef,
     reviewRef,
     runRef,
@@ -21,6 +23,7 @@ describe('refs', () => {
         expect(memoryRef(3)).toBe('memory:3')
         expect(choreRef('deps')).toBe('chore:deps')
         expect(planRef(2)).toBe('plan:2')
+        expect(feedbackPlanRef(7)).toBe('feedback-plan:7')
     })
 
     it("names a chore run by its chore's reference and its number", () => {
@@ -31,6 +34,16 @@ describe('refs', () => {
     it('numbers a message and a slot as their lists do', () => {
         expect(messageRef(5)).toBe('#5')
         expect(slotRef('3')).toBe('#3')
+    })
+})
+
+describe('parseTaskRef', () => {
+    it("reads a task's reference alone, as the CLI reads it", () => {
+        expect(parseTaskRef('task:4')).toBe(4)
+        expect(parseTaskRef('  task:004 ')).toBe(4)
+        for (const text of ['task:0', 'task:', 'task:4 csv', 'Task:4', 'run:4', 'task:-4', 'task:4.5', 'task:1e3']) {
+            expect(parseTaskRef(text)).toBeUndefined()
+        }
     })
 })
 

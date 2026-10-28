@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
-import { draft, pullRequestThreads, reviewThread } from '@/api/mocks'
+import { draft, feedbackPlan, pullRequestThreads, reviewThread } from '@/api/mocks'
 import { ToastContext } from '@/hooks/use-toast'
 import type { NewToast } from '@/lib/toasts'
 import { renderRouted } from '@/test-utils'
@@ -281,6 +281,33 @@ describe('DraftCard', () => {
         expect(screen.getByTestId('supersedes-edited')).toBeTruthy()
     })
 
+    it('marks a draft that departs from its plan item, with the proposed reply to read as text', async () => {
+        const fromPlan = { number: 2, item_id: 502, proposal: 'decline' as const, left_out: false, departs: true }
+        await renderRouted(
+            <DraftCard
+                draft={draft({ from_plan: { ...fromPlan, reply: 'Kept, **as** it was.' } })}
+                onChange={changed}
+            />,
+        )
+        expect(screen.getByText('changed from the plan')).toBeTruthy()
+        expect(screen.getByTestId('draft-from-plan').textContent).toContain(
+            'The run departs from plan item 2, which proposed decline.',
+        )
+        expect(screen.queryByText('Kept, **as** it was.')).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Show the proposed reply' }))
+        expect(screen.getByText('Kept, **as** it was.')).toBeTruthy()
+    })
+
+    it('marks a draft its plan item proposed as planned, and names no departure', async () => {
+        const fromPlan = { number: 1, item_id: 501, proposal: 'change' as const, reply: 'Done.', left_out: false }
+        await renderRouted(
+            <DraftCard draft={draft({ from_plan: { ...fromPlan, departs: false } })} onChange={changed} />,
+        )
+        expect(screen.getByText('as planned')).toBeTruthy()
+        expect(screen.queryByText('changed from the plan')).toBeNull()
+        expect(screen.queryByTestId('draft-from-plan')).toBeNull()
+    })
+
     it('says why a draft was refused, and offers no verb on it', async () => {
         await renderRouted(
             <DraftCard
@@ -410,6 +437,43 @@ describe('ReviewThreads', () => {
         const list = await screen.findByTestId('draft-list')
         const link = within(list).getByRole('link', { name: 'Thumbs up, alone' })
         expect(link.getAttribute('href')).toMatch(/#draft-46-1$/u)
+    })
+
+    // A plan waiting on the operator, stale or not, is what they came to answer; once approved or spent, it follows.
+    it.each([
+        ['waiting', true],
+        ['stale', true],
+        ['approved', false],
+        ['spent', false],
+    ] as const)('puts a %s plan ahead of the drafts: %s', async (status, leads) => {
+        answer = () => Response.json(pullRequestThreads({ feedback_plan: feedbackPlan({ status }) }))
+        await renderRouted(<ReviewThreads url={PR} />)
+        const plan = await screen.findByTestId('feedback-plan')
+        const after = plan.compareDocumentPosition(screen.getByTestId('review-replies'))
+        expect((after & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(leads)
+        // A spent plan's resume has gone ahead: its proposal no longer names the draft it would answer again.
+        expect(screen.queryByTestId('plan-proposal-ahead') !== null).toBe(status !== 'spent')
+    })
+
+    it('keeps a waiting plan where it was read once approved, rather than move it from under the button', async () => {
+        let plan = feedbackPlan()
+        const approved = {
+            plan: 1,
+            ticket_key: 'ABC-099',
+            addressed: [{ number: 2, item_id: 2468013579 }],
+            left: [{ number: 1, item_id: 4102337001 }],
+            message: 12,
+        }
+        answer = (path) =>
+            Response.json(path.endsWith('/feedback-plan') ? approved : pullRequestThreads({ feedback_plan: plan }))
+        await renderRouted(<ReviewThreads url={PR} />)
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'approve item 1' }))
+        plan = feedbackPlan({ status: 'approved' })
+        fireEvent.click(screen.getByRole('button', { name: 'Approve 1 of 2' }))
+        await screen.findByTestId('plan-approved')
+        await within(screen.getByTestId('feedback-plan')).findByText('approved')
+        const after = screen.getByTestId('feedback-plan').compareDocumentPosition(screen.getByTestId('review-replies'))
+        expect(after & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it("says when the PR's head is past the diff the page shows", async () => {

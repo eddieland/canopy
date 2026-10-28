@@ -1,9 +1,13 @@
-"""The operator's notice to workers (DESIGN §8, §22, ROADMAP M35): set and cleared by the operator alone, bounded when
-it is set, and heard while it is in force by every run that builds or reads CI, by the overseer, and by the loop."""
+"""The operator's notice to workers (DESIGN §8, §22, ROADMAP M35): set and cleared by the operator alone.
+
+It is bounded when it is set, and heard while it is in force by every run that builds or reads CI, by the overseer, and
+by the loop.
+"""
 
 import os
 import sqlite3
 from datetime import UTC, datetime, timedelta, tzinfo
+from pathlib import Path
 from typing import override
 from unittest import mock
 
@@ -15,14 +19,16 @@ from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.loop import pacing, reread, tick_now, web
 from canopy.serve import live
-from canopy.serve.event_schema import LoopUpdated
+from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
+    KEY,
     PROMPT_VALUES,
     InlineRunner,
     in_tick,
     present,
+    waits,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches
+from tests.canopy.scenario_helpers import FEEDBACK_RED, Scenario, dispatches, github_shows, with_a_pr
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
@@ -92,6 +98,7 @@ def test_the_shipped_reviewer_prompt_carries_the_notice(canopy_env: CanopyEnv) -
         "LOW_IMPACT": "Only docs change.",
         "ATTEMPT": "1",
         "MAX_ATTEMPTS": "3",
+        "LAST_ROUND": None,
         "CONTEXT": None,
         "TIMEOUT_MINUTES": "20",
         "CONTRACT": "{}",
@@ -187,7 +194,7 @@ def test_setting_a_notice_replaces_the_one_in_force_and_status_shows_it(scenario
     assert "Notice to workers" not in scenario.operator("status").out
 
 
-def test_the_state_block_carries_the_notices_in_force_and_lately_ended(scenario: Scenario) -> None:
+def test_the_state_block_carries_the_notice_in_force_and_drops_one_ended_with_no_unit(scenario: Scenario) -> None:
     scenario.tick(dry_run=True)
     # With none set, nothing about notices reaches the overseer.
     assert "notices" not in scenario.state()
@@ -198,14 +205,33 @@ def test_the_state_block_carries_the_notices_in_force_and_lately_ended(scenario:
     [now, before] = scenario.conn.execute("SELECT * FROM notices ORDER BY id DESC").fetchall()
     assert scenario.state()["notices"] == [
         {"text": OUTAGE, "set_at": now["set_at"], "until": now["lapses_at"], "in_force": True},
-        # Replaced, so it ended when the next was set: a check that ran before then may be the first one's.
-        {
-            "text": "The staging cluster is being rebuilt.",
-            "set_at": before["set_at"],
-            "until": before["ended_at"],
-            "in_force": False,
-        },
     ]
+    # Replaced, so it ended when the next was set: a check that ran before then may be the first one's. No ticket has
+    # a unit, so no check can be held, and the block leaves it out.
+    assert before["ended_at"] is not None
+
+
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize(
+    ("conclusion", "kept"),
+    [pytest.param("failure", True, id="a failed check"), pytest.param("success", False, id="none failed")],
+)
+def test_an_ended_notice_stays_in_the_state_block_while_a_fresh_pr_shows_a_failed_check(
+    scenario: Scenario,
+    github_state: Path,
+    conclusion: str,
+    kept: bool,  # noqa: FBT001  (a parametrized fixture)
+) -> None:
+    with_a_pr(scenario, approve=False)
+    scenario.operator("notice", OUTAGE)
+    scenario.operator("notice", "--clear")
+    github_shows(github_state, checks=[{**FEEDBACK_RED, "conclusion": conclusion}])
+    scenario.tick(*waits(KEY), dry_run=True)
+    [unit] = scenario.state()["observations"]["tickets"][0]["units"]
+    assert unit["observed"] == "fresh"
+    # Only a failed check can be held, until a newer run of it exists (DESIGN §8). A PR not observed fresh may show
+    # one, so it keeps the notice too: the busy workspace's snapshot shows it (tests/canopy/loop/test_state.py).
+    assert [n["text"] for n in scenario.state().get("notices", [])] == ([OUTAGE] if kept else [])
 
 
 def test_notices_ended_more_than_a_week_ago_leave_the_state_block(conn: sqlite3.Connection) -> None:

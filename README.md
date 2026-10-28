@@ -66,7 +66,8 @@ Ask canopy to review a coworker's PR, with `canopy start PR_URL --review` or the
 canopy, posting nothing. The review is a draft you iterate on: dismiss findings, edit the text, or reply with what to
 change, `canopy reply review:ID`, and an agent revises it into a new version. When it says what you mean,
 `canopy review publish RUN_ID HASH` posts that one version, word for word, as your comment review: pending on GitHub for
-you to submit there, or submitted with `--submit`. Ask again after the author pushes, and the new head gets a review of
+you to submit there, or submitted with `--submit`; `canopy review discard RUN_ID` posts nothing and stops it waiting on
+you. Ask again after the author pushes, and the new head gets a review of
 its own. Publishing and revising are built from the CLI; asking for a revision from the review's page is still to come
 (§21, §34).
 
@@ -135,7 +136,8 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
 
 3. **Connect your MCP servers.** In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP
    server (Jira, Linear, anything with one; for GitHub Issues the GitHub server is both). Your runtime holds the
-   tokens; canopy never sees them.
+   tokens; canopy never sees them. To run OpenCode 2 (2.1.4 or later), set `version = 2` under `[runtime]` in your
+   user config, and give each of those servers `"codemode": false`, since canopy's agents are denied code mode (D077).
 
    Grant only what the agents need. Workers need write tools to comment on a ticket, edit its labels, and open PRs;
    the reviewer needs only read tools. canopy's agent definitions deny the dangerous tools by name, but names differ by
@@ -175,7 +177,7 @@ Leave `canopy loop` running (tmux works, or `canopy daemon start`) and work from
 with their findings on the diff, and your chores, with a search box (`/`) over the whole journal. Its guide, opened
 from the foot of the rail, says what each page holds and how to act on it. To look at it without a loop, run
 `uv run python -m canopy.serve --mock --port 8766` in a checkout, after `make ui-build`: it serves the same pages over
-the sample journal in `src/canopy/serve/mock.py`, with no sign-in and `mock` shown in the header.
+the sample journal in `src/canopy/serve/mock/`, with no sign-in and `mock` shown in the header.
 
 Your part is the one in [The loop](#the-loop): start or label tickets, shape and approve their plans, answer the
 agents' questions, and review their PRs. Humans approve and merge; the agent never does. Only reviewers in
@@ -186,13 +188,14 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | --- | --- |
 | ![A private ticket's page: its work, runs, decisions, and the worker's question waiting on your answer](ui/e2e/screenshots.spec.ts-snapshots/tickets-ABC-102-dark-root-linux.png) | ![A run's page: its summary and PR, then the transcript of the worker's tool and model calls](ui/e2e/screenshots.spec.ts-snapshots/runs-39-dark-root-linux.png) |
 | **canopy's review of a PR, its findings on the diff** | **What the overseer decided in a tick, and why** |
-| ![A review's page: its summary and verdict, then each finding at the diff lines it names](ui/e2e/screenshots.spec.ts-snapshots/reviews-4-dark-root-linux.png) | ![A tick's page: the overseer's decisions per ticket, a refusal among them, and its session's transcript](ui/e2e/screenshots.spec.ts-snapshots/ticks-2-dark-root-linux.png) |
+| ![A review's page: its summary and verdict, then each finding at the diff lines it names](ui/e2e/screenshots.spec.ts-snapshots/pull-requests-reviews-4-dark-root-linux.png) | ![A tick's page: the overseer's decisions per ticket, a refusal among them, and its session's transcript](ui/e2e/screenshots.spec.ts-snapshots/runs-ticks-2-dark-root-linux.png) |
 
 | To | Run |
 | --- | --- |
 | Tick now, or pause and resume the loop | `t` or `p` in its terminal, or the web UI's header; `canopy pause`, `canopy resume` |
 | Tell every run about a CI outage until it is over | `canopy notice 'TEXT' --for 4h`, or the web UI's settings |
 | Read your config again after editing it | Reload in the web UI's settings, or `kill -HUP` the loop |
+| Change a limit, or tighten a trust setting, without opening the file | Settings, then Limits and trust, in the web UI |
 | Read the attention list | `canopy status`, or `.canopy/attention.md` |
 | Read a ticket's conversation, or answer canopy there | `canopy show KEY`, `canopy reply KEY 'text'` |
 | Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` |
@@ -201,8 +204,10 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`), or the ticket's page |
 | Allow one more review past a `review_limit` | `canopy grant PR_URL review`, or the PR's page |
 | Have canopy review a coworker's PR | `canopy start PR_URL --review`, or the reviews page |
+| Score the reviewer on PRs whose bugs you know, after changing its prompt, persona, or model | `canopy review eval [--persona NAME] [--model MODEL]`, cases under `[[review.eval_cases]]` |
 | See what a tick decided and what it cost | `canopy decisions [TICK] [--ticket KEY]` |
-| See what the last days cost, how much of it idle ticks spent, and what each ticket done cost | `canopy spend [--days N]`, or the web UI's spend page |
+| See what the last days cost, how much of it idle ticks spent, and what each ticket done cost | `canopy spend [--days N]`, or the web UI's spend page, under Reports |
+| Compare months: cost and tokens by kind and model, cache hits, and what each landed ticket took | The web UI's reports page |
 | See which ticks and runs failed lately, and what the guards refused | `canopy health [--days N]` |
 | See each number, switch, and choice in your config, its default, and the file that set it | `canopy config show` |
 | See each agent's command as a run starts it, rendered from your templates, to check their quoting | `canopy config commands` |
@@ -210,8 +215,10 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | See each persona, yours and canopy's, and the one each agent writes in; choose under `[personas]` | `canopy personas` |
 | Give one ticket's workers, planner, or reviewer a persona of its own, until you clear it | `canopy persona KEY NAME [--agent planner\|reviewer]`, or the ticket's page |
 | See what canopy keeps of its own history, and what your retention would remove | `canopy gc --dry-run` |
-| Keep every plan, with its status, approval, and prompt, in a private repository of yours | `canopy archive DIR` |
-| Read a run's transcript | its page in the web UI, or `opencode export <session id>` |
+| Pack the primary clones' loose objects, between runs, since git's own maintenance is off in them | `canopy gc --git` |
+| Empty the sandbox's per-role caches, each while no run of its role is live | `canopy gc --caches` |
+| Keep every plan, with its status, approval, prompt, original, your comments, and the work that followed, in a private repository of yours | `canopy archive DIR` |
+| Read a run's transcript | its page in the web UI, or `opencode export <session id>` (OpenCode 2: `opencode session export`) |
 | Teach your own agent session canopy | `canopy skill --install`, which saves it in `~/.agents/skills/canopy/` |
 | Complete canopy's commands, repositories, and chores with Tab | `canopy completion bash` (or `zsh`, `fish`); its help says how to load it |
 
@@ -238,6 +245,9 @@ there, one stage at a time:
 
 To run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config, run
 `canopy sandbox setup` and follow [docs/SANDBOX.md](docs/SANDBOX.md). It is opt-in, and not yet proven.
+
+To have your own agent judge how canopy is working for you, from where the spend goes to whether the planner is on the
+right model, paste one of the prompts in [docs/INSIGHTS.md](docs/INSIGHTS.md) into a session with canopy's skill.
 
 ## Troubleshooting
 

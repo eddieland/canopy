@@ -74,13 +74,34 @@ for (const theme of THEMES) {
         await page.clock.setFixedTime(NOW)
         await storeTheme(page, theme)
         await signIn(page)
-        await page.goto('ticks/2')
+        await page.goto('runs/ticks/2')
         await settled(page)
         const output = page.getByTestId('tick-output')
         await output.getByRole('button', { name: 'Show output' }).click()
         await output.getByRole('button', { name: 'Pretty' }).click()
         await expect(output.getByRole('button', { name: 'Pretty' })).toHaveAttribute('aria-pressed', 'true')
         await expect(output).toHaveScreenshot(`ticks-2-output-pretty-${theme}.png`)
+    })
+
+    // The jump palette over a ticket's page, two others viewed a while before: the box alone, so the page under it
+    // changes none of these.
+    test(`the jump palette in ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        const viewed = [
+            { key: 'ABC-099', title: null, viewedAt: minutesBefore(3) },
+            { key: 'ABC-105', title: null, viewedAt: minutesBefore(48) },
+        ]
+        await page.addInitScript((list) => {
+            localStorage.setItem('canopy-recent-tickets', list)
+        }, JSON.stringify(viewed))
+        await signIn(page)
+        await page.goto('tickets/ABC-102')
+        await settled(page)
+        await page.keyboard.press('Control+k')
+        const palette = page.getByTestId('jump-palette')
+        await expect(palette.getByRole('option')).toHaveCount(2)
+        await expect(palette).toHaveScreenshot(`jump-palette-${theme}.png`)
     })
 
     test(`sign-in in ${theme}`, async ({ page }) => {
@@ -111,12 +132,40 @@ for (const theme of THEMES) {
     }
 }
 
+// A PR's feedback plan in each state it has, each on a PR of its own (canopy/serve/mock/feedback_plans.py): the panel
+// alone, so a change to it rewrites these small images rather than a PR's whole page.
+const FEEDBACK_PLANS = [
+    { name: 'stale', status: 'stale', pr: 'https://github.com/acme/web/pull/88' },
+    { name: 'waiting', status: 'waiting', pr: 'https://github.com/acme/mobile/pull/67' },
+    { name: 'approved', status: 'approved', pr: 'https://github.com/acme/mobile/pull/63' },
+    { name: 'approved-by-planner', status: 'approved', pr: 'https://github.com/acme/mobile/pull/62' },
+    { name: 'spent', status: 'spent', pr: 'https://github.com/acme/mobile/pull/61' },
+    { name: 'no-items', status: 'waiting', pr: 'https://github.com/acme/mobile/pull/65' },
+    { name: 'missing', status: 'waiting', pr: 'https://github.com/acme/mobile/pull/64' },
+    { name: 'many-items', status: 'waiting', pr: 'https://github.com/acme/mobile/pull/66' },
+] as const
+
+for (const theme of THEMES) {
+    for (const { name, status, pr } of FEEDBACK_PLANS) {
+        test(`the ${name} feedback plan in ${theme}`, async ({ page }) => {
+            await page.clock.setFixedTime(NOW)
+            await storeTheme(page, theme)
+            await signIn(page)
+            await page.goto(`pull-requests/pr?url=${encodeURIComponent(pr)}`)
+            await settled(page)
+            const plan = page.getByTestId('feedback-plan')
+            await expect(plan).toHaveAttribute('data-status', status)
+            await expect(plan).toHaveScreenshot(`feedback-plan-${name}-${theme}.png`)
+        })
+    }
+}
+
 // A tick's output as plain text: no color of its own, so dark alone.
 test("a tick's output shown in dark", async ({ page }) => {
     await page.clock.setFixedTime(NOW)
     await storeTheme(page, 'dark')
     await signIn(page)
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     const output = page.getByTestId('tick-output')
     await output.getByRole('button', { name: 'Show output' }).click()
@@ -146,7 +195,7 @@ test('a long review diff folded in dark', async ({ page }) => {
         dismissed: false,
     }
     await serveReview(page, files, [finding])
-    await page.goto('reviews/4')
+    await page.goto('pull-requests/reviews/4')
     await settled(page)
     const panel = page.getByTestId('diff-file').nth(1)
     await expect(panel.getByTestId('diff-fold')).toHaveCount(2)
@@ -174,13 +223,18 @@ test.describe('in a narrow window', () => {
         await screenshotWhole(page, 'tickets-ABC-102-narrow-dark.png')
     })
 
-    for (const route of ['tickets', 'pull-requests', 'reviews', 'worktrees']) {
+    for (const route of ['tickets', 'pull-requests', 'pull-requests/reviews', 'runs/worktrees']) {
         test(`${route} narrow`, async ({ page }) => {
             await openInDark(page, route)
-            await screenshotMain(page, `${route}-narrow-dark.png`)
+            await screenshotMain(page, `${route.replaceAll('/', '-')}-narrow-dark.png`)
         })
     }
 })
+
+// The moment `minutes` before NOW, ISO.
+function minutesBefore(minutes: number): string {
+    return new Date(NOW.getTime() - minutes * 60_000).toISOString()
+}
 
 // Opens `route` in dark, its clock frozen, as every screenshot here is taken.
 async function openInDark(page: Page, route: string): Promise<void> {

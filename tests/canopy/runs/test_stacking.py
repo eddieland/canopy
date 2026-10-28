@@ -145,7 +145,7 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
-BAD_BASE = "--base must be another ticket's branch, agent/<KEY>-<slug>"
+BAD_BASE = "base (--base) must be another ticket's branch, agent/<KEY>-<slug>"
 
 
 @pytest.mark.parametrize(
@@ -191,8 +191,11 @@ def test_dry_run_names_the_base(scenario: Scenario, treehouse_state: Path) -> No
 
 
 def test_two_linked_tickets_are_worked_in_order(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
-    """M4 acceptance, the harness's half, against the fakes. The overseer's reading of blockers and PR state is prompt
-    behavior: here a scripted overseer waits on the blocked ticket, then stacks it once the blocker's PR exists."""
+    """M4 acceptance, the harness's half, against the fakes.
+
+    The overseer's reading of blockers and PR state is prompt behavior: here a scripted overseer waits on the blocked
+    ticket, then stacks it once the blocker's PR exists.
+    """
     # Both tickets' workers run this, so neither pushes: `_run`'s own push puts each branch on origin (DESIGN §8).
     commits = worker_does(["git", "commit", "--quiet", "--allow-empty", "-m", "the change"])
     first = scenario.tick(
@@ -213,7 +216,8 @@ def test_two_linked_tickets_are_worked_in_order(scenario: Scenario, git_pool: Gi
 
     ticks = [int(r["id"]) for r in scenario.conn.execute("SELECT id FROM ticks ORDER BY id")]
     assert [[a for a, _ in decisions(scenario.conn, t)] for t in ticks] == [
-        ["queried", "dispatch:implement", "wait"],
+        # A dispatch's decision is recorded as the tick starts it, after the overseer's run (DESIGN §40).
+        ["queried", "wait", "dispatch:implement"],
         ["queried", "wait", "dispatch:implement"],
     ]
     assert git("merge-base", "--is-ancestor", FIRST, "agent/PROJ-2-second", cwd=git_pool.origin) == ""

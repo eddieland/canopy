@@ -9,11 +9,11 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import agent_commands, config, conversation, definitions
+from canopy.core import agent_commands, config, conversation, definitions, sandboxing
 from tests.conftest import CanopyEnv
 
 PLAN_CMD = (
-    "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --model 'some model' "
+    "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --log-level 'some level' "
     "--title={title} {prompt}"
 )
 
@@ -53,7 +53,7 @@ def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
         {"key": "runtime.plan_cmd", "set_in": "private"},
         {"key": "runtime.worker_cmd_suffix", "set_in": "private"},
     ]
-    # The quoted model stays one word, and the title, the definitions, and the prompt land where the template put them.
+    # A quoted word stays one word, and the title, the definitions, and the prompt land where the template put them.
     assert planner["argv"] == [
         "wrap",
         "--net",
@@ -64,8 +64,8 @@ def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
         "run",
         "--agent",
         "canopy-planner",
-        "--model",
-        "some model",
+        "--log-level",
+        "some level",
         "--title=PROJ-1 plan: Example ticket",
         "<prompt>",
         "--log-level",
@@ -88,6 +88,33 @@ def test_each_agents_command_is_rendered_with_its_keys_and_their_files(
     assert found["setup"]["argv"] == ["make", "setup"]
 
 
+def test_the_commands_a_sandboxed_repositorys_runs_start_follow_wrapped(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    canopy_env.configure(canopy_env.private_file, {"runtime": {"sandbox_repos": ["api", "web"], "setup_cmd": "make"}})
+    assert main(["config", "commands", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    found = {c["role"]: c for c in data["commands"]}
+    wrapper = str(sandboxing.WRAPPER)
+    read = ["--read", data["definitions_dir"], "--"]
+
+    # Neither the overseer nor a chore is wrapped.
+    assert [role.removesuffix(" in api, web") for role in found if role.endswith(" in api, web")] == [
+        "worker",
+        "private worker",
+        "planner",
+        "reviewer",
+        "setup",
+    ]
+    for role, as_role in (("worker", "worker"), ("planner", "worker"), ("reviewer", "review")):
+        sandboxed = found[f"{role} in api, web"]
+        assert sandboxed["argv"] == [wrapper, as_role, *read, *found[role]["argv"]], role
+        assert sandboxed["keys"] == [{"key": "runtime.sandbox_repos", "set_in": "private"}, *found[role]["keys"]]
+    # Setup runs no agent, so the wrapper is given no definitions to read.
+    assert found["setup in api, web"]["argv"] == [wrapper, "setup", "--", "make"]
+
+
 def test_the_text_quotes_each_command_for_a_shell(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     canopy_env.configure(canopy_env.private_file, {"runtime": {"plan_cmd": PLAN_CMD}})
     assert main(["config", "commands"]) == 0
@@ -101,8 +128,8 @@ def test_the_text_quotes_each_command_for_a_shell(canopy_env: CanopyEnv, capsys:
         [
             "env",
             f"OPENCODE_CONFIG_DIR={definitions_dir}",
-            *shlex.split("opencode run --agent canopy-planner --model"),
-            "some model",
+            *shlex.split("opencode run --agent canopy-planner --log-level"),
+            "some level",
             "--title=PROJ-1 plan: Example ticket",
             "<prompt>",
         ],

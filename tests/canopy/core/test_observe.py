@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 PR = "https://github.com/acme/api/pull/7"
 VCS = Source(kind="vcs", cmd="connector github")
 ASKED = observe.Request(prs=[PR], repositories=[observe.Repository("repo")], branch_prefix="agent/")
+#: Every observed review item.
+REVIEWS = "SELECT * FROM observed_reviews"
 
 
 def prints(state: Path, *lines: dict[str, Any] | str, **more: object) -> None:
@@ -111,6 +113,46 @@ def test_a_time_without_an_offset_is_the_sources_utc(ctx: Context, connector_sta
     assert seen.created_at == "2026-10-18T09:00:00.000Z"
 
 
+def test_a_held_checks_re_run_is_observed_at_the_same_head_and_the_run_it_repeats_kept(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    pr = {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7}
+    build = {"kind": "check", "pr": PR, "head_sha": "abc1234", "name": "build", "status": "completed"}
+    prints(connector_state, pr, {**build, "conclusion": "failure", "run_id": 11})
+    run(ctx)
+    status = {**build, "name": "deploy", "conclusion": "failure", "run_id": None}
+    rerun = {**build, "status": "in_progress", "run_id": 12}
+    prints(connector_state, pr, rerun, status)
+    run(ctx)
+    prints(connector_state, pr, {**rerun, "status": "completed", "conclusion": "failure"}, status)
+    run(ctx)
+    checks = records.fetch_all(ctx.conn, records.ObservedCheck, sql.frag("SELECT * FROM observed_checks ORDER BY name"))
+    assert [(c.name, c.head_sha, c.run_id) for c in checks] == [("build", "abc1234", 12), ("deploy", "abc1234", None)]
+    kept = records.fetch_all(ctx.conn, records.ObservedCheckRun, sql.frag("SELECT * FROM observed_check_runs"))
+    assert sorted((r.run_id, r.name, r.head_sha, r.conclusion) for r in kept) == [
+        (11, "build", "abc1234", "failure"),
+        (12, "build", "abc1234", "failure"),
+    ], "a commit status has no run to keep"
+
+
+def test_a_prs_title_is_kept_to_one_line_cut_and_marked_and_none_when_not_printed(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    pr = {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7}
+    prints(connector_state, {**pr, "title": "Retry the upstream\non a 503 " + "x" * 300})
+    assert run(ctx).refused == {}
+    [seen] = records.fetch_all(ctx.conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs"))
+    assert (seen.title or "").startswith("Retry the upstream on a 503 x")
+    assert (len(seen.title or ""), (seen.title or "").endswith("...")) == (observe.MAX_TITLE, True)
+
+    prints(connector_state, pr)
+    run(ctx)
+    [seen] = records.fetch_all(ctx.conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs"))
+    assert seen.title is None, "a reader that prints no title leaves none, rather than the last one read"
+
+
 def test_the_request_holds_only_what_is_asked() -> None:
     assert observe.Request(prs=[]).to_json() == {"prs": []}
     tickets = [observe.AskedTicket("PROJ-1", "2026-10-18T09:00:00.000Z"), observe.AskedTicket("PROJ-2")]
@@ -118,3 +160,30 @@ def test_the_request_holds_only_what_is_asked() -> None:
         "query": "q",
         "tickets": [{"key": "PROJ-1", "comments_since": "2026-10-18T09:00:00.000Z"}, {"key": "PROJ-2"}],
     }
+
+
+def test_each_item_keeps_its_journal_number_across_reads_and_a_later_one_takes_a_later_number(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    pr = {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7}
+    first = {"kind": "review", "pr": PR, "item": "review", "id": 9, "time": "2026-10-18T09:00:00Z"}
+    build = {"kind": "check", "pr": PR, "head_sha": "abc1234", "name": "build", "status": "in_progress", "run_id": 12}
+    prints(connector_state, pr, first, build)
+    run(ctx)
+    [going] = records.fetch_all(ctx.conn, records.ObservedCheck, sql.frag("SELECT * FROM observed_checks"))
+    assert going.number is None, "a run still going is numbered once it completes"
+    # Read again, the PR's rows replaced: the first review keeps its number. One submitted since, though dated before
+    # it, takes a later number, as does the run that completed.
+    late = {**first, "id": 8, "time": "2026-10-18T08:00:00Z"}
+    completed = {**build, "status": "completed", "conclusion": "failure"}
+    prints(connector_state, pr, first, late, completed)
+    run(ctx)
+    numbers = {r.id: r.number for r in records.fetch_all(ctx.conn, records.ObservedReview, sql.frag(REVIEWS))}
+    [done] = records.fetch_all(ctx.conn, records.ObservedCheck, sql.frag("SELECT * FROM observed_checks"))
+    [kept] = records.fetch_all(ctx.conn, records.ObservedCheckRun, sql.frag("SELECT * FROM observed_check_runs"))
+    assert None not in (numbers[9], numbers[8], done.number)
+    assert (numbers[9] or 0) < (numbers[8] or 0) < (done.number or 0) == kept.number
+    run(ctx)
+    again = {r.id: r.number for r in records.fetch_all(ctx.conn, records.ObservedReview, sql.frag(REVIEWS))}
+    assert again == numbers

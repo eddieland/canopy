@@ -28,7 +28,7 @@ import stat
 import tomllib
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, get_args
 from urllib.parse import urlsplit
@@ -37,6 +37,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import (
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     StrictBool,
@@ -47,12 +48,13 @@ from pydantic import (
     model_validator,
 )
 
-from canopy.core import bash_allows, chore_result, contract, hostgit
+from canopy.core import agent_models, bash_allows, chore_result, contract, hostgit
 from canopy.core.vocab import MemoryMode, PoolKind, ReplyMode
 from canopy.infra import procs
 from canopy.runtime import agents, invocation
 from canopy.runtime.agents import McpTools
 from canopy.runtime.definitions import MAX_SKILL_NAME, SKILL_NAME_RE, TOOL_PART_RE
+from canopy.runtime.implementation import Version
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
@@ -90,6 +92,8 @@ DEFINITIONS_DIR = "{definitions_dir}"
 # `review <PR URL>` (DESIGN §13). Optional in every template.
 TITLE = "{title}"
 _PLACEHOLDER_RE = re.compile(r"\{prompt\}|\{definitions_dir\}|\{title\}")
+#: The sandbox wrapper canopy installs beside itself (DESIGN §24), by the name its command is installed as.
+SANDBOX_WRAPPER = "canopy-sandbox"
 # A repository name is a directory name, a treehouse leaf, and a `--repo` argument (DESIGN §18).
 REPO_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 # A chore's name appears in file paths and on the command line (DESIGN §19).
@@ -177,7 +181,7 @@ def _comment_mark(value: str) -> str:
 
 MAX_TRAILER_NAME = 80
 MAX_TRAILER_EMAIL = 254
-# The `Co-authored-by` trailer a worker adds to its commits when the runtime adds none of its own (TRUST_MODEL T5).
+# The `Co-authored-by` trailer canopy's git hooks add to a worker's commits (TRUST_MODEL T5).
 DEFAULT_TRAILER_NAME = "canopy worker"
 DEFAULT_TRAILER_EMAIL = "noreply@canopy.invalid"
 # An address git and VCS hosts read as one: no whitespace, angle brackets, or backtick, and one "@" inside it.
@@ -206,6 +210,26 @@ def _trailer_email(value: str) -> str:
         raise ValueError(
             f"must be an address of at most {MAX_TRAILER_EMAIL} characters with one '@', and no whitespace, backtick, "
             "or angle bracket",
+        )
+    return value
+
+
+MAX_COMMIT_PREFIX = 60
+#: The placeholder `trust.commit_prefix` names the run's ticket key with.
+KEY_PLACEHOLDER = "{key}"
+#: How git's `--autosquash` finds the commit a fixup is for: by its subject, which a prefix must leave as it is.
+AUTOSQUASH = ("fixup!", "squash!", "amend!")
+
+
+def _commit_prefix(value: str) -> str:
+    # Prompts quote it in backticks, and git reads a subject that starts with `#` as a comment and drops it.
+    rest = value.replace(KEY_PLACEHOLDER, "")
+    one_line = len(value) <= MAX_COMMIT_PREFIX and value.isprintable() and value == value.lstrip()
+    quotable = not any(c in rest for c in "`{}")
+    if value and not (one_line and quotable and not value.startswith(("#", *AUTOSQUASH))):
+        raise ValueError(
+            f"must be one line of at most {MAX_COMMIT_PREFIX} characters with no backtick, no brace but in "
+            f"{KEY_PLACEHOLDER}, and no leading space, '#', or {', '.join(AUTOSQUASH)}",
         )
     return value
 
@@ -308,6 +332,39 @@ def _setup_command(value: str) -> str:
     return value
 
 
+def _no_model(*roles: str, run_args: bool = False) -> AfterValidator:
+    """Refuse a template, prefix, or suffix that passes the runtime a model or a variant of one (DESIGN §13).
+
+    canopy writes each agent's model, and its variant, into its definition, from `runtime.models`, and either on the
+    command line would beat it unseen, so a run would record one model and run on another. `roles` are the keys of
+    `runtime.models` to set instead. With `run_args`, every word is an argument of the agent's run, as a suffix's are.
+
+    Returns:
+        The validator.
+    """
+    keys = " or ".join(f"runtime.models.{role}" for role in roles)
+
+    def check(value: str) -> str:
+        _refuse_model_option(value, f"Set {keys} instead", run_args=run_args)
+        return value
+
+    return AfterValidator(check)
+
+
+def _refuse_model_option(template: str, instead: str, *, run_args: bool = False) -> None:
+    """Refuse `template` if it passes the runtime a model or a variant, saying what to set `instead`.
+
+    Raises:
+        ValueError: it passes one.
+    """
+    found = invocation.model_option(shlex.split(template), run_args=run_args)
+    if found is not None:
+        raise ValueError(
+            f"must not pass a model or a variant ({found!r}): canopy writes the model into the agent's definition, "
+            f"and one passed here would override it unseen. {instead}",
+        )
+
+
 def _wrapper(value: str) -> str:
     # `runtime.worker_cmd_prefix` or `worker_cmd_suffix`. It may name `{definitions_dir}` and `{title}`, replaced as in
     # the template it wraps, but the prompt is that template's to place, exactly once (D023).
@@ -340,10 +397,18 @@ def _distinct_personas(value: tuple[str, ...]) -> tuple[str, ...]:
     return value
 
 
+#: The highest the `policy.max_attachment*` keys go, whatever a file says: attachments are copied into every run of
+#: their subject, and the web UI uploads one in a single request, which its server bounds (DESIGN §22).
+ATTACHMENTS_CEILING = 20
+ATTACHMENT_KIB_CEILING = 1024
+ATTACHMENTS_TOTAL_KIB_CEILING = 4096
+
 # bool is an int subclass; Strict* types reject `max_workers = true` and quoted numbers.
 NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
 Minutes = Annotated[StrictInt, Field(ge=1)]
+#: The longest `review.settle_minutes`: a week (DESIGN §21).
+MAX_SETTLE_MINUTES = 7 * 24 * 60
 #: An agent's sampling temperature, or `NO_TEMPERATURE`. TOML has no null, so a sentinel says "set none".
 Temperature = Annotated[StrictFloat, AfterValidator(_temperature)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
@@ -355,6 +420,9 @@ UserPath = Annotated[Path, AfterValidator(_user_path)]
 PersonaName = Annotated[StrictStr, AfterValidator(_persona_name)]
 #: One of canopy's agents `runtime.allow_bash` names, and the commands it allows that agent (`canopy.core.bash_allows`).
 BashRole = Annotated[str, AfterValidator(bash_allows.check_role)]
+#: One of canopy's agents `runtime.models` names, and the model it chooses for that agent (`canopy.core.agent_models`).
+ModelRole = Annotated[str, AfterValidator(agent_models.check_role)]
+ModelId = Annotated[StrictStr, AfterValidator(agent_models.check_model)]
 BashAllows = Annotated[
     tuple[Annotated[StrictStr, AfterValidator(bash_allows.check_pattern)], ...],
     AfterValidator(bash_allows.check_patterns),
@@ -484,6 +552,15 @@ class Tracker(Section):
     # must not.
     private: Annotated[StrictBool, Scope.PRIVATE] = False
 
+    def server(self) -> str | None:
+        """The tracker's MCP server, as config names it or else the provider's default, even with no read tools known.
+
+        Returns:
+            The server's name, or None when neither names one.
+        """
+        default = DEFAULT_TRACKER_TOOLS.get(self.provider)
+        return self.mcp_server or (default.server if default is not None else None)
+
     def tools(self) -> McpTools | None:
         """The server and tools a private worker gets, or None if neither config nor a default names any.
 
@@ -500,6 +577,31 @@ class Tracker(Section):
         if default is None:
             return McpTools(server, tuple(allowed))
         return McpTools(server, tuple(allowed), default.create, default.pr_writes)
+
+
+class PlannerApproval(StrEnum):
+    """`policy.planner_may_approve`: how readily a planner may say its plan needs no review (DESIGN §25).
+
+    Each level but `off` renders its own bar in the planner's prompt; none relaxes the exclusions every level holds.
+    """
+
+    #: The planner is never asked: every plan waits on the operator.
+    OFF = "off"
+    #: Only a plan that leaves the operator nothing to judge.
+    STRICT = "strict"
+    #: A plan that follows the code's own patterns, within the scope the ticket settles.
+    NORMAL = "normal"
+    #: The planner's confident best reading, unless it leaves a real question open.
+    LENIENT = "lenient"
+
+
+def _approval_level(value: object) -> object:
+    # The key was a switch first: `true` keeps the bar it rendered then, and `false` keeps it off.
+    if value is True:
+        return PlannerApproval.STRICT
+    if value is False:
+        return PlannerApproval.OFF
+    return value
 
 
 class Policy(Section):
@@ -529,15 +631,37 @@ class Policy(Section):
     #: guard in code. Private, unlike `plan`: it holds a trusted reviewer's feedback for the operator, and lets anyone
     #: else's start a plan run that reads only, so a shared file must choose neither (TRUST_MODEL T7).
     feedback_plan: Annotated[Literal["off", "approve"], Scope.PRIVATE] = "off"
-    #: Whether the harness approves a plan, or a feedback plan, whose planner says it needs no review, as the
-    #: planner's approval and not the operator's (DESIGN §25). Private: it loosens the operator's gate on plans, so only
-    #: the operator's own files turn it on (TRUST_MODEL T7).
-    planner_may_approve: Annotated[StrictBool, Scope.PRIVATE] = False
+    #: How readily the harness approves a plan, or a feedback plan, whose planner says it needs no review, as the
+    #: planner's approval and not the operator's (DESIGN §25): `off`, or the bar the planner's prompt sets, `strict`,
+    #: `normal`, or `lenient`. `true` reads as `strict` and `false` as `off`. Private: it loosens the operator's gate
+    #: on plans, so only the operator's own files turn it on (TRUST_MODEL T7).
+    planner_may_approve: Annotated[PlannerApproval, Scope.PRIVATE, BeforeValidator(_approval_level)] = (
+        PlannerApproval.OFF
+    )
     #: How long a stale feedback plan waits after the newest item or reply on its PRs before it is planned again
     #: (DESIGN §32): a burst of comments makes one plan, and a bot's stream of them a bounded number (TRUST_MODEL T3).
     feedback_quiet_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 10
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
+    #: The most files the operator may have attached to one ticket or task at once (DESIGN §22); 0 turns attaching off.
+    max_attachments: Annotated[StrictInt, Scope.SHARED, Tighten.LOWER, Field(ge=0, le=ATTACHMENTS_CEILING)] = 5
+    #: The most KiB one attachment's text may hold.
+    max_attachment_kib: Annotated[StrictInt, Scope.SHARED, Tighten.LOWER, Field(ge=1, le=ATTACHMENT_KIB_CEILING)] = 512
+    #: The most KiB the attachments of one ticket or task may hold together.
+    max_attachments_total_kib: Annotated[
+        StrictInt,
+        Scope.SHARED,
+        Tighten.LOWER,
+        Field(ge=1, le=ATTACHMENTS_TOTAL_KIB_CEILING),
+    ] = 1024
+
+    def planner_approves(self) -> bool:
+        """Return whether a planner may say its plan needs no review, at any level (DESIGN §25).
+
+        Returns:
+            True unless `planner_may_approve` is `off`.
+        """
+        return self.planner_may_approve is not PlannerApproval.OFF
 
 
 class Trust(Section):
@@ -553,16 +677,24 @@ class Trust(Section):
     # the comments that carry them; private, so a shared file cannot pick marks that silence people's comments.
     comment_prefix: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_comment_mark)] = "CANOPY:"
     comment_suffix: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_comment_mark)] = ""
-    # Whether a worker adds canopy's trailer to its commits when the agent runtime adds no attribution trailer, and whom
-    # it names as co-author (TRUST_MODEL T5). Private: the commits are the operator's, and a shared file must neither
-    # credit agent work to a person nor strip the mark that tells it is an agent's.
+    # Whether canopy's git hooks add its trailer to a worker's commits, and whom it names as co-author (TRUST_MODEL T5).
+    # Private: the commits are the operator's, and a shared file must neither credit agent work to a person nor strip
+    # the mark that tells it is an agent's.
     commit_trailer: Annotated[StrictBool, Scope.PRIVATE] = True
     commit_trailer_name: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trailer_name)] = DEFAULT_TRAILER_NAME
     commit_trailer_email: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trailer_email)] = DEFAULT_TRAILER_EMAIL
+    # What canopy's git hooks put before the subject of each commit a worker makes, `{key}` filled with its ticket's
+    # key, but a `fixup!`, `squash!`, or `amend!` one's (TRUST_MODEL T5); empty for none. Private, as the trailer is:
+    # the commits are the operator's, and a shared file must not write into their messages.
+    commit_prefix: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_commit_prefix)] = ""
     # Whether workers bring a base branch in by rebasing, and push the result with a lease, instead of merging it
     # (TRUST_MODEL T1, D056), for repositories that refuse merge commits. Private: a shared file must not let
     # workers replace a branch's history.
     rebase: Annotated[StrictBool, Scope.PRIVATE] = False
+    #: How many times canopy reruns a PR's checks a `resume` for `ci` judged flaky, for each head a worker pushed, by
+    #: rebasing the branch onto its base and pushing it with a lease (DESIGN §23, TRUST_MODEL T1); 0 leaves every
+    #: rerun to the operator. Private: a shared file must not let canopy replace a branch's history.
+    max_flaky_kicks: Annotated[Count, Scope.PRIVATE] = 0
     # Whether workers draft the comments they would post, for the operator to send, or post them, marked (DESIGN
     # §29). Private: a shared file must not decide what is said in the operator's name.
     review_replies: Annotated[ReplyMode, Scope.PRIVATE] = ReplyMode.APPROVE
@@ -630,36 +762,59 @@ class Pools(Section):
     backend: Annotated[PoolKind, Scope.PRIVATE] = PoolKind.TREEHOUSE
 
 
-def _default_cmd(agent: str) -> str:
-    return invocation.default_template(agent, definitions_dir=DEFINITIONS_DIR, title=TITLE)
+def _default_cmd(agent: str, version: Version = Version.ONE) -> str:
+    return invocation.default_template(agent, version=version, definitions_dir=DEFINITIONS_DIR, title=TITLE)
+
+
+def _plain_version(value: object) -> object:
+    # A plain integer, as every number config reads is: not "2", true, or 2.0, which the enum would take as one.
+    if not isinstance(value, Version) and type(value) is not int:
+        raise ValueError(f"must be {' or '.join(str(v.value) for v in Version)}, a number")
+    return value
+
+
+#: Each agent's command template, by its key, and the agent the key's default runs.
+_AGENT_CMDS = {
+    "overseer_cmd": agents.OVERSEER,
+    "worker_cmd": agents.WORKER,
+    "private_worker_cmd": agents.PRIVATE_WORKER,
+    "plan_cmd": agents.PLANNER,
+    "chore_cmd": agents.CHORE,
+    "review_cmd": agents.REVIEWER,
+}
 
 
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
-    overseer_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.OVERSEER)
-    #: The overseer's temperature, or -1 to set none and leave the model's own: set -1 when `overseer_cmd` names a
+    #: The major version of the runtime canopy runs: 1, or 2 to run OpenCode 2, 2.1.4 or later (DESIGN §13). The
+    #: default templates are the version's. Private: it decides what runs on the operator's machine.
+    version: Annotated[Version, Scope.PRIVATE, BeforeValidator(_plain_version)] = Version.ONE
+    overseer_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("overseer")] = _default_cmd(agents.OVERSEER)
+    #: The overseer's temperature, or -1 to set none and leave the model's own: set -1 when the overseer runs on a
     #: model that refuses one, such as OpenAI's reasoning models.
     overseer_temperature: Annotated[Temperature, Scope.PRIVATE] = 0.1
-    worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.WORKER)
+    worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("worker")] = _default_cmd(agents.WORKER)
     # A private ticket's worker: its own agent, which cannot write to the tracker (DESIGN §22). Shares the worker's
     # timeout.
-    private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PRIVATE_WORKER)
+    private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("worker")] = _default_cmd(
+        agents.PRIVATE_WORKER,
+    )
     # The planner is its own agent, with no edit or shell tools and only the tracker's read tools (DESIGN §25); it
     # shares the worker's timeout.
-    plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PLANNER)
+    plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("planner")] = _default_cmd(agents.PLANNER)
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
-    chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.CHORE)
-    # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
-    review_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.REVIEWER)
+    chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("chore")] = _default_cmd(agents.CHORE)
+    # The reviewer; running it on a different model from the worker's, `models.reviewer`, is recommended (DESIGN §21).
+    review_cmd: Annotated[AgentTemplate, Scope.PRIVATE, _no_model("reviewer")] = _default_cmd(agents.REVIEWER)
     #: The reviewer's temperature, or -1, the default, to set none and leave the model's own. The reviewer is meant to
     #: run on another model than the worker's (DESIGN §21), and some, such as OpenAI's reasoning models, refuse a
-    #: request that sets one; set a low one when `review_cmd` names a model that takes it.
+    #: request that sets one; set a low one when the reviewer runs on a model that takes it.
     review_temperature: Annotated[Temperature, Scope.PRIVATE] = NO_TEMPERATURE
     # Words before and after each command a worker run starts (`worker_cmd`, `private_worker_cmd`, `plan_cmd`), such as
-    # a sandbox wrapper or a model option, so one key covers all three (DESIGN §12).
-    worker_cmd_prefix: Annotated[Wrapper, Scope.PRIVATE] = ""
-    worker_cmd_suffix: Annotated[Wrapper, Scope.PRIVATE] = ""
+    # a sandbox wrapper, so one key covers all three (DESIGN §12). Neither may pass a model: `models` chooses it.
+    worker_cmd_prefix: Annotated[Wrapper, Scope.PRIVATE, _no_model("worker", "planner")] = ""
+    worker_cmd_suffix: Annotated[Wrapper, Scope.PRIVATE, _no_model("worker", "planner", run_args=True)] = ""
     review_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 45
@@ -670,9 +825,48 @@ class Runtime(Section):
     # ends the run `crashed` (DESIGN §8). Empty means none. It runs the branch's code on this machine.
     setup_cmd: Annotated[SetupCommand, Scope.PRIVATE] = ""
     setup_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 30
-    #: Commands an agent may run beyond its own bash rules, by its role: only the overseer's take any (DESIGN §13).
-    #: Private: it widens what an agent's shell reaches (TRUST_MODEL T1, T7).
+    #: Commands an agent may run beyond its own bash rules, by its role: the overseer's, the planner's, and the workers'
+    #: (DESIGN §13). Private: it widens what an agent's shell reaches (TRUST_MODEL T1, T7).
     allow_bash: Annotated[dict[BashRole, BashAllows], Scope.PRIVATE] = {}
+    #: Each agent's model, `provider/model`, or `provider/model@variant` at one of its variants, by its role: `worker`
+    #: (both workers, and a task's runs), `planner`, `reviewer`, `overseer`, and `chore` (every chore without a `model`
+    #: of its own). canopy writes it into the agent's definition; an agent not named runs on the runtime's default.
+    #: Private: it chooses what the operator's spend buys, and which provider is sent the ticket and the code (DESIGN
+    #: §13, TRUST_MODEL T7).
+    models: Annotated[dict[ModelRole, ModelId], Scope.PRIVATE] = {}
+    #: The repositories, by name, whose runs canopy starts in the sandbox wrapper itself: each worker run's commands,
+    #: `setup_cmd`, and a review's, with the role each takes (DESIGN §24). Names need not be in this workspace's map,
+    #: as the user file serves every workspace. Private: it decides what a run may reach (TRUST_MODEL T4, T7).
+    sandbox_repos: Annotated[tuple[RepoName, ...], Scope.PRIVATE] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _version_defaults(cls, data: object) -> object:
+        # A template the operator did not set is the default of the version they did; a version that is not one is
+        # left for the field to refuse.
+        if not isinstance(data, Mapping):
+            return data
+        try:
+            version = Version(data.get("version", Version.ONE))
+        except (TypeError, ValueError):
+            return data
+        defaults = {key: _default_cmd(agent, version) for key, agent in _AGENT_CMDS.items() if key not in data}
+        return {**data, **defaults}
+
+    @model_validator(mode="after")
+    def _sandboxed_once(self) -> Runtime:
+        # A command already wrapped would be wrapped again, a sandbox inside a sandbox, which the wrapper cannot run.
+        if not self.sandbox_repos:
+            return self
+        keys = ("worker_cmd_prefix", "worker_cmd", "private_worker_cmd", "plan_cmd", "setup_cmd", "review_cmd")
+        for key in keys:
+            words = shlex.split(getattr(self, key))
+            if words and Path(words[0]).name == SANDBOX_WRAPPER:
+                raise ValueError(
+                    f"runtime.{key} starts with {SANDBOX_WRAPPER}, and runtime.sandbox_repos has canopy add it: "
+                    f"remove one, or the runs of {', '.join(self.sandbox_repos)} would be sandboxed twice",
+                )
+        return self
 
     def worker_template(self, template: str) -> str:
         """Return `template`, one of a worker run's commands, between `worker_cmd_prefix` and `worker_cmd_suffix`.
@@ -681,6 +875,79 @@ class Runtime(Section):
         template's, then the suffix's.
         """
         return " ".join(part for part in (self.worker_cmd_prefix, template, self.worker_cmd_suffix) if part)
+
+
+#: An eval case's name, which names its files and `canopy review eval --case`.
+EVAL_CASE_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+#: A line a bug case's operator confirmed the bug on: `path:line`, or `path:first-last` for a range of lines.
+EVAL_LINE_RE = re.compile(r"(?P<path>[^\s:][^:]*):(?P<first>[1-9][0-9]{0,6})(?:-(?P<last>[1-9][0-9]{0,6}))?")
+#: A full commit, as git names one: sha-1 or sha-256.
+COMMIT_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+_MAX_EVAL_URL = 300
+
+
+def _eval_case_name(value: str) -> str:
+    if not EVAL_CASE_RE.fullmatch(value):
+        raise ValueError(f"{value!r} must match {EVAL_CASE_RE.pattern}")
+    return value
+
+
+def _commit(value: str) -> str:
+    if not COMMIT_RE.fullmatch(value):
+        raise ValueError(f"{value!r} must be a full commit: 40 or 64 lowercase hex characters")
+    return value
+
+
+def _eval_url(value: str) -> str:
+    if not contract.plain_url(value, _MAX_EVAL_URL):
+        raise ValueError(f"{value!r} must be the PR's plain https:// URL, at most {_MAX_EVAL_URL} characters")
+    return value
+
+
+def _eval_line(value: str) -> str:
+    found = EVAL_LINE_RE.fullmatch(value)
+    if found is None:
+        raise ValueError(f"{value!r} must be path:line or path:first-last")
+    if found["last"] is not None and int(found["last"]) < int(found["first"]):
+        raise ValueError(f"{value!r} ends before it starts")
+    return value
+
+
+class EvalCase(Section):
+    """One `[[review.eval_cases]]` table: a PR at a commit the reviewer is scored on (DESIGN §21, Scoring the reviewer).
+
+    A `bug` case is a change that was reverted or fixed forward, with the lines its bug is on as the operator confirmed
+    them; a `clean` case is one the operator knows is sound, so every finding on it is a false alarm.
+    """
+
+    name: Annotated[StrictStr, AfterValidator(_eval_case_name)]
+    pr: Annotated[StrictStr, AfterValidator(_eval_url)]
+    #: The repository the PR is in, by its name in the workspace's map.
+    repo: RepoName
+    #: The commit reviewed: the PR's head as it merged, or as it stood when the bug was in it.
+    sha: Annotated[StrictStr, AfterValidator(_commit)]
+    #: The commit the PR's change starts from, its merge base with its base branch: so a PR that has since merged is
+    #: reviewed as the change it was, and every eval of the case reads the same diff.
+    base: Annotated[StrictStr, AfterValidator(_commit)]
+    kind: Literal["bug", "clean"]
+    #: A bug case's confirmed lines, at least one; a clean case has none.
+    lines: tuple[Annotated[StrictStr, AfterValidator(_eval_line)], ...] = ()
+
+    @model_validator(mode="after")
+    def _lines_match_kind(self) -> EvalCase:
+        if self.kind == "bug" and not self.lines:
+            raise ValueError(f"bug case {self.name} needs lines, the path:line its bug is on")
+        if self.kind == "clean" and self.lines:
+            raise ValueError(f"clean case {self.name} has no bug, so no lines")
+        return self
+
+
+def _distinct_cases(value: tuple[EvalCase, ...]) -> tuple[EvalCase, ...]:
+    names = [case.name for case in value]
+    twice = sorted({name for name in names if names.count(name) > 1})
+    if twice:
+        raise ValueError(f"names {', '.join(twice)} more than once")
+    return value
 
 
 class Review(Section):
@@ -692,6 +959,12 @@ class Review(Section):
     query: Annotated[StrictStr, Scope.PRIVATE] = ""
     # Plain language for the reviewer: which changes it may call low impact. Without it, none.
     low_impact: Annotated[StrictStr, Scope.PRIVATE] = ""
+    #: The PRs `canopy review eval` scores the reviewer on. Private: a case may name a private repository's PR, and it
+    #: authorizes a review of it, as `query` does.
+    eval_cases: Annotated[tuple[EvalCase, ...], Scope.PRIVATE, AfterValidator(_distinct_cases)] = ()
+    # How long a PR's head commit must have been seen before it is reviewed; a new push starts over. 0 reviews at once.
+    # At most a week: a longer wait is a reason to turn the review off, and the clock's arithmetic stays in range.
+    settle_minutes: Annotated[StrictInt, Field(ge=0, le=MAX_SETTLE_MINUTES), Scope.PRIVATE] = 0
 
 
 class Memory(Section):
@@ -759,6 +1032,35 @@ class Loop(Section):
                 f"({self.interval_minutes}); set them equal to turn idle pacing off",
             )
         return self
+
+
+#: The most budget alerts, and the highest percentage one may name: ten times the budget.
+MAX_ALERTS = 10
+MAX_ALERT_PERCENT = 1000
+
+
+def _distinct_alerts(value: tuple[int, ...]) -> tuple[int, ...]:
+    twice = sorted({p for p in value if value.count(p) > 1})
+    if twice:
+        raise ValueError(f"names {', '.join(map(str, twice))} more than once")
+    return value
+
+
+class Spend(Section):
+    """The `[spend]` table: what the operator means to spend on agent runs (DESIGN §11). Read, never enforced."""
+
+    #: In whole US dollars: what the local calendar month's agent spend may cost, canopy's runs and the runtime's
+    #: sessions outside canopy, as `canopy spend` and the spend page track it, canopy's share beside it. A sink that
+    #: takes `loop` hears once when the month's spend reaches it. None tracks no budget.
+    monthly_budget_usd: Annotated[Annotated[StrictInt, Field(ge=1)] | None, Scope.PRIVATE] = None
+    #: Percentages of the budget, besides the 100 always sent, at which that sink also hears the month reached it:
+    #: `[50, 80]` warns at half and at four fifths, `[150]` when the month runs well past it.
+    budget_alerts: Annotated[
+        tuple[Annotated[StrictInt, Field(ge=1, le=MAX_ALERT_PERCENT)], ...],
+        Scope.PRIVATE,
+        Field(max_length=MAX_ALERTS),
+        AfterValidator(_distinct_alerts),
+    ] = ()
 
 
 # Host names that mean loopback. The web UI's Host and Origin checks accept these and the bind address (DESIGN §22).
@@ -875,6 +1177,9 @@ class Paths(Section):
     #: into `<it>/<workspace>/`, commits, and pushes to its upstream (DESIGN §25). Private, since it sends every plan's
     #: text where it points (TRUST_MODEL T6).
     plan_archive: Annotated[UserPath | None, Scope.PRIVATE] = None
+    #: Whether `plan_archive` takes the plans into `<it>/<workspace>/`; off, into its top level, for a clone that
+    #: archives this workspace alone. Private, as `plan_archive` is: it chooses what canopy commits in that clone.
+    plan_archive_workspace_dir: Annotated[StrictBool, Scope.PRIVATE] = True
     #: Whether `plan_archive` also takes the prompt each plan's planner was given, beside its plan. Private, as
     #: `plan_archive` is: a prompt carries the operator's messages and standing instructions.
     plan_archive_prompts: Annotated[StrictBool, Scope.PRIVATE] = True
@@ -882,6 +1187,9 @@ class Paths(Section):
     #: operator's replies, and mirrored tracker comments, a private ticket's too. Off by default, and private, so only
     #: the operator sends a conversation to a remote chosen for plans.
     plan_archive_conversations: Annotated[StrictBool, Scope.PRIVATE] = False
+    #: Whether `plan_archive` also takes the operator's comments on each ticket's plans, with the passages they quote
+    #: and their replies. Private, as `plan_archive` is: comments are the operator's own words.
+    plan_archive_comments: Annotated[StrictBool, Scope.PRIVATE] = True
 
 
 class Personas(Section):
@@ -906,7 +1214,7 @@ class Personas(Section):
 SINK_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 MAX_SINKS = 5
 # The event groups a sink may take. `attention` is the attention list's diff; the others are point events.
-EventGroup = Literal["attention", "loop", "runs", "chores", "reviews", "tasks"]
+EventGroup = Literal["attention", "loop", "runs", "chores", "reviews", "tasks", "replies"]
 # The sink `notify.cmd` stands for.
 DEFAULT_SINK = "default"
 MIN_DIGEST_MINUTES = 60
@@ -992,6 +1300,16 @@ GITHUB_READER = "canopy-connect-github"
 GITHUB_POSTER = "canopy-post-github"
 # The name canopy's own `vcs` source goes by when none is configured, in `connector_runs` and `canopy status`.
 DEFAULT_SOURCE = "github"
+#: The order a tick runs the sources in, by kind: the `vcs` run is also the reconcile read of the drafts (DESIGN §29).
+_SOURCE_ORDER = ("tracker", "vcs", "artifacts", "slack")
+#: A person's Slack user id, as a `slack` source's `operators` names one: `U...`, or `W...` on an Enterprise Grid.
+SLACK_USER_RE = re.compile(r"[UW][A-Z0-9]{2,30}")
+
+
+def _slack_user(value: str) -> str:
+    if not SLACK_USER_RE.fullmatch(value):
+        raise ValueError(f"{value!r} is not a Slack user id, such as U0123ABCD: copy it from the person's profile")
+    return value
 
 
 def _source_name(value: str) -> str:
@@ -1007,12 +1325,17 @@ class Source(Section):
     on stdin, so neither takes a placeholder.
     """
 
-    kind: Literal["vcs", "tracker"]
-    # Reads the source: for `vcs`, a PR's reviews and threads. Empty for a source canopy only posts to.
+    kind: Literal["vcs", "tracker", "artifacts", "slack"]
+    # Reads the source: for `vcs`, a PR's reviews and threads; for `artifacts`, a store's comment feed; for `slack`,
+    # the replies in the Slack sink's ticket threads. Empty for a source canopy only posts to.
     cmd: NotifyCommand = ""
     # Posts what the operator approved: for `vcs`, a PR's drafts; for `tracker`, a ticket's.
     post_cmd: NotifyCommand = ""
     timeout_minutes: Minutes = 2
+    #: The ids whose words are the operator's own messages, as `canopy reply` records one (DESIGN §22, TRUST_MODEL
+    #: T1): for a `slack` source, the Slack user ids whose replies in the sink's ticket threads are; for a `tracker`
+    #: source, the tracker account ids whose comments on a private ticket are. Empty for none.
+    operators: tuple[NonBlank, ...] = ()
 
     @model_validator(mode="after")
     def _a_command(self) -> Source:
@@ -1020,6 +1343,18 @@ class Source(Section):
             raise ValueError("set cmd, post_cmd, or both")
         if self.kind == "vcs" and not notify_words(self.cmd):
             raise ValueError("a vcs source needs cmd: drafts are checked against what it reads")
+        if self.kind == "artifacts" and (not notify_words(self.cmd) or notify_words(self.post_cmd)):
+            raise ValueError("an artifacts source needs cmd, and takes no post_cmd: workers reply through the store")
+        if self.kind == "slack" and (not notify_words(self.cmd) or notify_words(self.post_cmd) or not self.operators):
+            raise ValueError("a slack source needs cmd and operators, and takes no post_cmd: the sink posts")
+        if self.kind not in ("slack", "tracker") and self.operators:
+            raise ValueError(
+                "operators is a slack or tracker source's: whose replies in the sink's threads, or comments on a "
+                "private ticket, are the operator's",
+            )
+        if self.kind == "slack":
+            for user in self.operators:
+                _slack_user(user)
         return self
 
 
@@ -1042,13 +1377,13 @@ class Connect(Section):
     def _one_per_kind(self) -> Connect:
         kinds = [source.kind for source in self.sources.values()]
         if len(kinds) != len(set(kinds)):
-            raise ValueError("at most one source of each kind, vcs and tracker")
+            raise ValueError("at most one source of each kind, tracker, vcs, artifacts, and slack")
         if self.max_age_minutes < self.every_minutes:
             raise ValueError("max_age_minutes must be at least every_minutes")
         return self
 
     def named(self) -> dict[str, Source]:
-        """Each source that reads, by name, the `tracker` source first: the order a tick runs them in (DESIGN §30).
+        """Each source that reads, by name, in the order a tick runs them: `tracker`, `vcs`, `artifacts`, `slack`.
 
         Returns:
             The sources with a `cmd`, canopy's own GitHub reader named `github` when no `vcs` source is configured.
@@ -1056,7 +1391,7 @@ class Connect(Section):
         found = {name: s for name, s in self.sources.items() if notify_words(s.cmd)}
         if self._of("vcs") is None:
             found[DEFAULT_SOURCE if DEFAULT_SOURCE not in found else f"{DEFAULT_SOURCE}-vcs"] = self.vcs()
-        return dict(sorted(found.items(), key=lambda item: (item[1].kind != "tracker", item[0])))
+        return dict(sorted(found.items(), key=lambda item: (_SOURCE_ORDER.index(item[1].kind), item[0])))
 
     def vcs(self) -> Source:
         """The `vcs` source: the operator's, or canopy's own GitHub reader and poster.
@@ -1066,6 +1401,14 @@ class Connect(Section):
         """
         found = self._of("vcs")
         return found or Source(kind="vcs", cmd=GITHUB_READER, post_cmd=GITHUB_POSTER)
+
+    def observes_tickets(self) -> bool:
+        """Whether a `tracker` source reads tickets: without one, a ticket's comments have no journal numbers (§35).
+
+        Returns:
+            True if one does.
+        """
+        return any(s.kind == "tracker" for s in self.named().values())
 
     def tracker(self) -> Source | None:
         """The `tracker` source, if the operator configured one; canopy configures none of its own.
@@ -1194,6 +1537,11 @@ class Chore(Section):
     prompt: UserPath
     # Its own template need not name canopy's definitions: a chore that runs the operator's tools has its own agent.
     cmd: CommandTemplate | None = None
+    #: Its own model, spelled as a `runtime.models` value, in place of `runtime.models.chore`: canopy runs it on a copy
+    #: of the chore's agent made for it, `canopy-chore-<name>`, with this model (DESIGN §13, §19). Its command, its
+    #: `cmd` or `runtime.chore_cmd`, must run the chore's agent; one of the operator's own takes its model in its own
+    #: definition.
+    model: ModelId | None = None
     every_minutes: Annotated[StrictInt, Field(ge=MIN_CHORE_EVERY_MINUTES)]
     when: StrictStr = ""
     # When a run may start, checked in code: the days of the week, empty for every day; the hours of each, as
@@ -1207,6 +1555,31 @@ class Chore(Section):
     cwd: UserPath | None = None
     # The workspaces it runs in, by name; empty means every workspace whose loop reads this file.
     workspaces: tuple[NonBlank, ...] = ()
+
+    @model_validator(mode="after")
+    def _model_and_cmd(self) -> Chore:
+        # A model on the command line would beat the one canopy writes, so it is refused wherever canopy chooses one:
+        # with `model`, or on the chore's agent, whose model is `runtime.models.chore`. An agent of the operator's own
+        # is the operator's to run on any model, as before.
+        if self.cmd is None:
+            return self
+        runs_chore = invocation.agent_of(self.cmd) == agents.CHORE
+        if self.model is not None and not runs_chore:
+            raise ValueError(
+                f"model needs cmd to run canopy's chore agent, {agents.CHORE}, which canopy copies for this chore "
+                "with its model; an agent of your own takes its model in its own definition. Drop model, or run "
+                f"--agent {agents.CHORE}",
+            )
+        if self.model is not None and DEFINITIONS_DIR not in self.cmd:
+            raise ValueError(
+                f"with model, cmd must contain {DEFINITIONS_DIR}, where the chore's copy of {agents.CHORE} is (D040)",
+            )
+        if self.model is not None or runs_chore:
+            try:
+                _refuse_model_option(self.cmd, "Set model in this table instead")
+            except ValueError as e:
+                raise ValueError(f"cmd {e}") from None
+        return self
 
 
 ChoreName = Annotated[str, AfterValidator(_chore_name)]
@@ -1231,8 +1604,22 @@ class Config(Section):
     connect: Connect
     personas: Personas
     artifacts: Artifacts
+    spend: Spend
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
+
+    @model_validator(mode="after")
+    def _chore_models_run_the_chore_agent(self) -> Config:
+        # A chore with a model and no `cmd` runs `runtime.chore_cmd` on its own copy of the chore's agent.
+        if invocation.agent_of(self.runtime.chore_cmd) == agents.CHORE:
+            return self
+        for name, chore in self.chores.items():
+            if chore.model is not None and chore.cmd is None:
+                raise ValueError(
+                    f"chores.{name}.model needs runtime.chore_cmd to run canopy's chore agent, {agents.CHORE}, which "
+                    "canopy copies for the chore with its model, or a cmd of the chore's own that does",
+                )
+        return self
 
     @property
     def reviews_on(self) -> bool:
@@ -1257,6 +1644,7 @@ SECTIONS: dict[str, type[Section]] = {
     "connect": Connect,
     "personas": Personas,
     "artifacts": Artifacts,
+    "spend": Spend,
 }
 
 
@@ -1308,11 +1696,19 @@ def private_config_path(root: Path) -> Path:
     return root.absolute() / WORKSPACE_STATE_DIR / CONFIG_FILE_NAME
 
 
-def load(root: Path, user_file: Path | None = None, runner: procs.Runner | None = None) -> Config:
+def load(
+    root: Path,
+    user_file: Path | None = None,
+    runner: procs.Runner | None = None,
+    *,
+    private_file: Path | None = None,
+) -> Config:
     """Read and validate the layered config for the workspace at `root`: workspace file, user file, private file.
 
     No code repository's file is read (D016). The workspace file's map tables are `canopy.core.workspace`'s to read.
     `runner` runs the git that checks the state directory came from no checkout; None means the real one.
+    `private_file` stands in for the private file, as the settings page's edited copy beside it does; None means the
+    workspace's own.
 
     Returns:
         The validated config, each key from the last file that sets it.
@@ -1325,6 +1721,8 @@ def load(root: Path, user_file: Path | None = None, runner: procs.Runner | None 
     """
     files = config_files(root, user_file)
     shared_file, user_file, _ = files
+    if private_file is not None:
+        files = (shared_file, user_file, private_file)
     layers = _layers(root, files, runner)
     merged, origin = _merge(layers, shared_file)
     # Unset or empty: `prompts/` in the user config directory.
@@ -1557,6 +1955,10 @@ def _describe(error: ValidationError, origin: Mapping[str, Path], files: tuple[P
     lines: list[str] = []
     for e in error.errors():
         loc = [str(p) for p in e["loc"] if p != "[key]"]
+        if not loc:
+            # A check across sections, whose message names its keys.
+            lines.append(e["msg"])
+            continue
         if loc[0] in TABLE_SECTIONS:
             # A named table's errors are about one of its keys: `chores.build-health.every_minutes`.
             source = origin.get(loc[0])

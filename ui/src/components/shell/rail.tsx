@@ -3,18 +3,23 @@ import { Link } from '@tanstack/react-router'
 import { BookOpen, SlidersHorizontal } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-import { choresQuery, metaQuery, reviewsQuery, runsQuery, spendQuery } from '@/api/queries'
-import type { RunState, SpendWindow } from '@/api/types'
+import { choresQuery, metaQuery, reviewsQuery, runsQuery, spendQuery, tasksQuery } from '@/api/queries'
+import type { Run, RunState, Spend, SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
 import { RunDot } from '@/components/status'
 import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLoopDown } from '@/hooks/use-loop-down'
+import { useClock } from '@/lib/clock'
+import type { Clock } from '@/lib/clock'
 import { pullRequestLabel } from '@/lib/pull-request-label'
-import { choreRunRef, reviewRef, runRef } from '@/lib/refs'
+import { choreRunRef, reviewRef, runRef, taskRunRef } from '@/lib/refs'
+import { runPhase, useQuips } from '@/lib/run-phase'
 import { railWork } from '@/lib/run-state'
 import type { RailItem } from '@/lib/run-state'
+import { taskTitle } from '@/lib/tasks'
+import { stamp } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 // Where the version links: every release's notes, newest first.
@@ -26,20 +31,22 @@ const RAIL_ROWS = 4
 // What `+N more` says on hover, by the page it opens.
 const MORE_TITLE = {
     '/runs': 'Every run, on the runs page',
-    '/reviews': 'Every review, on the reviews page',
+    '/pull-requests/reviews': 'Every review, on the reviews page',
     '/chores': 'Every chore, on the chores page',
+    '/tasks': 'Every task, on the tasks page',
 } as const
 
 /**
  * Under the nav, on every page: what is working now, each row opening its page. The worker runs, the reviews of PRs,
- * and the chore runs running come first, then the worker runs waiting on the operator's answer. All three come whole
- * from the stream, so a row appears when its run starts and leaves when it ends.
+ * the chore runs, and the task runs running come first, then the worker runs waiting on the operator's answer. All
+ * four come whole from the stream, so a row appears when its run starts and leaves when it ends.
  */
 export function RailWorking() {
     const runs = useQuery(runsQuery).data
     const reviews = useQuery(reviewsQuery).data
     const chores = useQuery(choresQuery).data
-    const { shown, more, moreAt } = railWork({ runs: runs ?? [], reviews, chores }, RAIL_ROWS)
+    const tasks = useQuery(tasksQuery).data
+    const { shown, more, moreAt } = railWork({ runs: runs ?? [], reviews, chores, tasks }, RAIL_ROWS)
     // While the loop isn't answering, these are only what it last said: dimmed, as stale search hits are.
     const stale = useLoopDown().offline
     return (
@@ -77,7 +84,7 @@ export function RailWorking() {
     )
 }
 
-// Unique across the three kinds, whose ids are each their own table's.
+// Unique across the four kinds, whose ids are each their own table's.
 function itemKey(item: RailItem): string {
     switch (item.kind) {
         case 'run': {
@@ -89,12 +96,17 @@ function itemKey(item: RailItem): string {
         case 'chore': {
             return `chore-${item.chore}-${item.run.id}`
         }
+        case 'task': {
+            return `task-${item.task.id}-${item.run.id}`
+        }
     }
 }
 
 /**
  * One row of what is working, opening its page: a dot in its state's color, what it works on (a ticket's key, a PR, a
- * chore), how long it has run or `waiting on you`, and under it what it is: the ticket's title, the review, the run.
+ * chore, a task's run), how long it has run or `waiting on you`, and under it what it is: the ticket's title, the
+ * review, the run, the task's first line. A worker run adds what it is doing, `planning`, on a line of its own; a
+ * task's run has no kind or reasons to name a phase by, and its first line is the operator's own words.
  */
 function WorkingRow({ item }: { item: RailItem }) {
     switch (item.kind) {
@@ -110,6 +122,7 @@ function WorkingRow({ item }: { item: RailItem }) {
                 >
                     <RowHead state={run.state} subject={run.ticket_key} started={run.started_at} />
                     <TicketTitle title={run.ticket_title} className="pl-4 text-xs font-normal text-muted-foreground" />
+                    <PhaseLine run={run} />
                 </Link>
             )
         }
@@ -118,7 +131,7 @@ function WorkingRow({ item }: { item: RailItem }) {
             const pr = pullRequestLabel(review.pr_url)
             return (
                 <Link
-                    to="/reviews/$id"
+                    to="/pull-requests/reviews/$id"
                     params={{ id: String(review.id) }}
                     title={`${reviewRef(review.id)} of ${pr}`}
                     className={ROW}
@@ -148,6 +161,24 @@ function WorkingRow({ item }: { item: RailItem }) {
                 </Link>
             )
         }
+        case 'task': {
+            const { task, run } = item
+            return (
+                <Link
+                    to="/tasks/$id/runs/$run"
+                    params={{ id: String(task.id), run: String(run.id) }}
+                    title={taskRunRef(task.id, run.id)}
+                    className={ROW}
+                    data-testid={`rail-task-${task.id}`}
+                >
+                    <RowHead state={run.state} subject={taskRunRef(task.id, run.id)} started={run.started_at} />
+                    <TicketTitle
+                        title={taskTitle(task.text)}
+                        className="pl-4 text-xs font-normal text-muted-foreground"
+                    />
+                </Link>
+            )
+        }
     }
 }
 
@@ -171,7 +202,28 @@ function RowHead({ state, subject, started }: { state: RunState; subject: string
     )
 }
 
-/** The line under a review's or a chore run's head line, where a worker run's ticket title goes. */
+/**
+ * Under a worker run's ticket title: what it is doing in plain words, `planning`, or while it works and Settings leaves
+ * them on, its quip for this ticket and phase, `planning in pencil`, with the plain words on hover.
+ */
+function PhaseLine({ run }: { run: Run }) {
+    const { word, quip } = runPhase(run)
+    const quipped = useQuips() === 'on' && run.state === 'running' && quip !== null
+    return (
+        <span
+            title={quipped ? word : undefined}
+            className={cn(
+                'min-w-0 truncate pl-4 text-xs text-muted-foreground',
+                quipped ? 'font-sans italic' : 'font-mono',
+            )}
+            data-testid={`rail-phase-${run.id}`}
+        >
+            {quipped ? quip : word}
+        </span>
+    )
+}
+
+/** The line under a review's or a chore run's head line, where a worker run's ticket title and a task's text go. */
 function Under({ children }: { children: string }) {
     return <span className="min-w-0 truncate pl-4 font-mono text-xs text-muted-foreground">{children}</span>
 }
@@ -183,11 +235,23 @@ function Under({ children }: { children: string }) {
  */
 export function RailSpend() {
     const spend = useQuery(spendQuery).data
+    const clock = useClock()
+    const outside = outsideHint(spend, clock)
     return (
         <section aria-label="Spent" className={SECTION} data-testid="rail-spend">
             <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 px-2.5">
-                <Spent window={spend?.day} label="24h" hint="Spent in the last 24 hours: the day by hour" hours={24} />
-                <Spent window={spend?.month} label="30d" hint="Spent in the last 30 days: the month by day" days={30} />
+                <Spent
+                    window={spend?.day}
+                    label="24h"
+                    hint={`Spent in the last 24 hours${outside}: the day by hour`}
+                    hours={24}
+                />
+                <Spent
+                    window={spend?.month}
+                    label="30d"
+                    hint={`Spent in the last 30 days${outside}: the month by day`}
+                    days={30}
+                />
             </div>
         </section>
     )
@@ -297,6 +361,19 @@ function RailSection({
 }
 
 /**
+ * What the counters count besides canopy's runs, for their hover: the runtime's sessions outside canopy, as of when
+ * `canopy loop` last read them, or that it has not yet. Empty before the spend arrives.
+ */
+function outsideHint(spend: Spend | undefined, clock: Clock): string {
+    if (spend === undefined) {
+        return ''
+    }
+    return spend.sessions_read_at === null
+        ? ", canopy's runs alone until canopy loop reads the sessions outside canopy"
+        : `, canopy's runs and the sessions outside canopy as of ${stamp(spend.sessions_read_at, clock)}`
+}
+
+/**
  * One window's name and its cost, a dash when nothing in it reported one, opening the spend page over `hours` or
  * `days`.
  */
@@ -316,7 +393,7 @@ function Spent({
     const cost = window?.cost_usd ?? null
     return (
         <Link
-            to="/spend"
+            to="/reports/spend"
             search={{ days, hours }}
             className="-mx-1 flex items-baseline gap-1.5 rounded-sm px-1 hover:bg-surface-raised"
             title={hint}

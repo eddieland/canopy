@@ -1,6 +1,9 @@
-"""The package layers of DESIGN §5 (D041), checked on every import in `src/canopy`, `TYPE_CHECKING` ones included;
-the runtime confined to its implementation, behind the runtime package's surface (D009); and the tests' two rules of
-the same kind: a test module imports from no other, and sits parallel to what it tests."""
+"""The package layers of DESIGN §5 (D041), and rules of the same kind for the runtime and the tests.
+
+The layers are checked on every import in `src/canopy`, `TYPE_CHECKING` ones included; the runtime is confined to its
+implementation, behind the runtime package's surface (D009); and the tests have two rules of the same kind: a test
+module imports from no other, and sits parallel to what it tests.
+"""
 
 import ast
 import re
@@ -24,11 +27,27 @@ LAYERS: tuple[frozenset[str], ...] = (
     frozenset({"infra"}),
 )
 # Third-party packages only one canopy package may import.
-CONFINED = {"anyio": "serve", "click": "cli", "fastapi": "serve", "starlette": "serve", "uvicorn": "serve"}
+CONFINED = {
+    "anyio": "serve",
+    "click": "cli",
+    "fastapi": "serve",
+    "starlette": "serve",
+    "tomlkit": "serve",
+    "uvicorn": "serve",
+}
+# The programs canopy ships besides `canopy`, each a command line of its own and so free to import click: the desktop
+# sink and the development server.
+PROGRAMS = frozenset({"notify/desktop.py", "serve/__main__.py"})
 # Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink, the GitHub
 # programs, and the Jira connector hold secrets and open connections, which the harness never does (DESIGN §20, §29,
-# §30), and the local artifact store holds what workers publish, which stays out of the journal (§38).
-SEPARATE = frozenset({"canopy_artifacts", "canopy_github", "canopy_jira", "canopy_notify_slack"})
+# §30), and the local artifact store holds what workers publish, which stays out of the journal (§38). The review bench
+# is a dev tool canopy never runs, which scores another reviewer through git and gh.
+SEPARATE = frozenset(
+    {"canopy_artifacts", "canopy_github", "canopy_jira", "canopy_notify_slack", "canopy_review_bench"},
+)
+# The HTTP stack those programs share (D130), and its transport: the harness opens no connection (TRUST_MODEL T2), as
+# ruff's ban on the stdlib's network modules keeps it from doing with those.
+NETWORK = frozenset({"canopy_http", "httpx2"})
 # The package that alone knows the agent runtime (D009), and the name that must appear in no string outside it.
 RUNTIME = "runtime"
 RUNTIME_NAME = re.compile(r"opencode", re.IGNORECASE)
@@ -38,15 +57,18 @@ RUNTIME_NAME = re.compile(r"opencode", re.IGNORECASE)
 IMPLEMENTATIONS = (PACKAGE / RUNTIME / "opencode", PACKAGE / RUNTIME / "opencode2")
 BINDING = PACKAGE / RUNTIME / "implementation.py"
 NEUTRAL = frozenset({"canopy.runtime.report", "canopy.runtime.entries", "canopy.runtime.agents"})
-# The one module an implementation may take from another: OpenCode 2 reads OpenCode 1's agent format through its
-# compatibility layer, so canopy's definitions, and how config is rendered into them, are one for both.
-SHARED = {"canopy.runtime.opencode2": frozenset({"canopy.runtime.opencode.definitions"})}
+# The modules an implementation may take from another: OpenCode 2 reads OpenCode 1's agent format through its
+# compatibility layer, so canopy's definitions, and how config is rendered into them, are one for both; and it keeps its
+# sessions in the same database, read by the same reader with queries of its own.
+SHARED = {
+    "canopy.runtime.opencode2": frozenset({"canopy.runtime.opencode.definitions", "canopy.runtime.opencode.sessions"}),
+}
 # Modules outside it allowed to name the runtime, with why: none knows how it behaves.
 NAMES_RUNTIME = {
     # The web UI's demo: its made-up pools' slots run the runtime's process, and its made-up runs' transcripts print
     # what the runtime prints, which the runtime package reads.
-    "serve/mock.py",
-    "serve/mock_transcripts.py",
+    "serve/mock/__init__.py",
+    "serve/mock/transcripts.py",
 }
 
 
@@ -78,6 +100,11 @@ def modules() -> list[Path]:
     return sorted(p for p in PACKAGE.rglob("*.py") if p != PACKAGE / "__init__.py")
 
 
+def under_tests(pattern: str) -> list[Path]:
+    """Each file under `tests/` that matches `pattern`, but for the npm packages `tests/plugins` installs."""
+    return sorted(p for p in TESTS.rglob(pattern) if "node_modules" not in p.relative_to(TESTS).parts)
+
+
 def test_every_module_is_in_a_layered_package() -> None:
     assert modules()
     for path in modules():
@@ -93,7 +120,10 @@ def violations(path: Path, source: str) -> list[str]:
         top, _, rest = name.partition(".")
         if top in SEPARATE:
             found.append(f"{where}:{line}: imports {name}, a separate program canopy runs only as a command")
-        if top in CONFINED and CONFINED[top] != own:
+        if top in NETWORK:
+            found.append(f"{where}:{line}: imports {name}, which opens connections the harness never opens")
+        program = top == "click" and path.relative_to(PACKAGE).as_posix() in PROGRAMS
+        if top in CONFINED and CONFINED[top] != own and not program:
             found.append(f"{where}:{line}: imports {name}, which only canopy.{CONFINED[top]} may import")
         if top != "canopy" or not rest:
             continue
@@ -118,6 +148,7 @@ from canopy import cli
 from canopy.core import db
 from canopy.setup.init import run
 import canopy_notify_slack
+import httpx2
 
 if TYPE_CHECKING:
     from canopy.loop.tick import Outcome
@@ -128,16 +159,17 @@ if TYPE_CHECKING:
         "canopy.runs imports canopy.cli, which is not in a lower layer",
         "canopy.runs imports canopy.setup.init, which is not in a lower layer",
         "imports canopy_notify_slack, a separate program canopy runs only as a command",
+        "imports httpx2, which opens connections the harness never opens",
         "canopy.runs imports canopy.loop.tick, which is not in a lower layer",
     ]
 
 
 def test_only_an_implementation_names_the_runtime() -> None:
-    """No string outside an implementation, `canopy.runtime.opencode` or `opencode2`, names OpenCode: not its commands,
-    variables, files, or events (D009).
+    """No string outside an implementation, `canopy.runtime.opencode` or `opencode2`, names OpenCode (D009).
 
-    Not even the rest of `canopy.runtime`, whose surface is what a new runtime implements. A docstring or comment may
-    still say why code is so; what the code acts on comes from the implementation.
+    Not its commands, variables, files, or events. Not even the rest of `canopy.runtime`, whose surface is what a new
+    runtime implements. A docstring or comment may still say why code is so; what the code acts on comes from the
+    implementation.
     """
     found = [
         v
@@ -188,8 +220,11 @@ def _within(name: str, implementation: Path) -> bool:
 
 
 def imported_modules(tree: ast.Module) -> list[tuple[int, str]]:
-    """Every canopy module an import statement names, with its line: `from canopy.runtime import report` names
-    `canopy.runtime.report`, where `imported` names the package it is imported from."""
+    """Every canopy module an import statement names, with its line.
+
+    `from canopy.runtime import report` names `canopy.runtime.report`, where `imported` names the package it is
+    imported from.
+    """
     names: list[tuple[int, str]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -266,7 +301,7 @@ def run(command: str) -> str:
 
 def test_no_test_module_imports_another() -> None:
     """What two test modules share lives in a helpers module (`tests/canopy/helpers.py`) or a conftest, not in one."""
-    found = [v for path in sorted(TESTS.rglob("*.py")) for v in imported_tests(path, path.read_text())]
+    found = [v for path in under_tests("*.py") for v in imported_tests(path, path.read_text())]
     assert not found, "\n".join(found)
 
 
@@ -303,15 +338,17 @@ from tests.canopy import test_web
 
 
 def test_the_tests_mirror_the_packages() -> None:
-    """A test module sits in the directory parallel to the package it tests: `tests/canopy/runs/` for `canopy.runs`,
-    and `tests/canopy_sandbox/` for the workspace member `canopy_sandbox`. Tests of canopy as a whole, such as this
-    one, sit in `tests/canopy/`, and tests of the fakes in `tests/`."""
+    """A test module sits in the directory parallel to the package it tests.
+
+    `tests/canopy/runs/` for `canopy.runs`, and `tests/canopy_sandbox/` for the workspace member `canopy_sandbox`.
+    Tests of canopy as a whole, such as this one, sit in `tests/canopy/`, and tests of the fakes in `tests/`.
+    """
     packages = [PACKAGE, *(p.parent for p in PACKAGE.rglob("*/__init__.py"))]
     allowed = {TESTS, *(TESTS / "canopy" / p.relative_to(PACKAGE) for p in packages)}
     allowed |= {TESTS / p.parent.name for p in MEMBERS.glob("*/src/*/__init__.py")}
     found = [
         f"{path.relative_to(TESTS.parent)}: in no directory parallel to a package"
-        for path in sorted(TESTS.rglob("test_*.py"))
+        for path in under_tests("test_*.py")
         if path.parent not in allowed
     ]
     assert not found, "\n".join(found)

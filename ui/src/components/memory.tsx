@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Pin } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -255,6 +256,16 @@ function MemoryRow({
                     from="key"
                     className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
                 >
+                    {/* First, and in the foreground, so a pin is seen wherever the row is listed. */}
+                    {entry.pinned_at !== null && entry.status === 'active' && (
+                        <span
+                            className="flex items-center gap-1 text-foreground"
+                            title={`pinned at ${localTime(entry.pinned_at, clock)}: never due, and served first`}
+                        >
+                            <Pin aria-hidden className="size-3 fill-current" />
+                            pinned
+                        </span>
+                    )}
                     {/* The commit it was written against, on the run's hover, so the line stays one line. */}
                     {byRun && entry.run_id !== null && (
                         <span title={entry.head === null ? undefined : `written at ${entry.head}`}>

@@ -1,31 +1,43 @@
 import { ApiError } from '@/api/client'
 import type {
+    AgentModel,
+    Attached,
+    Detached,
     AgentPersona,
     ChoreTried,
     ConfigReload,
     Dismissed,
     Draft,
     DraftsSent,
+    FeedbackPlanApproved,
     Forgot,
     Granted,
     MemoryEdited,
+    MemoryEntry,
     MemoryForgotten,
+    MemoryPinned,
     MemoryPromoted,
     MemoryRenewed,
+    MemoryUnpinned,
     NoticeChanged,
     PlanChanged,
     Replied,
     ReviewDismissed,
     ReviewDraft,
+    ReviewDraftNoted,
     ReviewDraftPublished,
     ReviewRequested,
     ReviewRequestStopped,
     ReviewSent,
     Started,
     Stopped,
+    TaskSubmitted,
+    TaskReplied,
+    TaskStopped,
 } from '@/api/types'
 import { currentClock } from '@/lib/clock'
 import { REACTION_LOOKS } from '@/lib/drafts'
+import { taskRef } from '@/lib/refs'
 import { localTime } from '@/lib/time'
 import type { NewToast } from '@/lib/toasts'
 
@@ -86,6 +98,31 @@ export function stoppedText(key: string, stopped: Stopped, now: boolean): string
         : `${head} Run ${stopped.running_run} had already ended.`
 }
 
+/**
+ * What a stop of a task did, as `canopy stop task:N` says it (canopy/cli/tasks.py): already stopped, dropped before
+ * its first run, or stopped; then the run still working it, which finishes unless `now` ended it. Stop now is the
+ * page's `--now`.
+ */
+export function taskStoppedText(id: number, stopped: TaskStopped, now: boolean): string {
+    const ref = taskRef(id)
+    let head = `${ref} is stopped; nothing starts it again.`
+    if (stopped.already) {
+        head = `${ref} was already stopped.`
+    } else if (stopped.dropped) {
+        head = `${ref} is stopped; it had not started, and nothing starts it now.`
+    }
+    const run = stopped.running_run
+    if (run === null) {
+        return head
+    }
+    if (!now) {
+        return `${head} Its run ${run} is still working and will finish; Stop now ends it.`
+    }
+    return stopped.ended
+        ? `${head} Its run ${run} was ended and its slot returned.`
+        : `${head} Its run ${run} had already ended.`
+}
+
 /** What a forget cleared, and what is left for the operator: closing its PRs and deleting its branch on origin. */
 export function forgotText(key: string, forgot: Forgot): string {
     const head = `${key} is forgotten: its next implement starts over on a new branch.`
@@ -111,6 +148,33 @@ export const PERSONA_SOURCES: Record<AgentPersona['source'], string> = {
 export function personaText(ticketKey: string, now: AgentPersona): string {
     const source = PERSONA_SOURCES[now.source]
     return `${ticketKey}'s ${now.agent} runs write in ${now.persona} from their next run: ${source}.`
+}
+
+/**
+ * Where an agent's model comes from, as its row on a ticket's page says it: `canopy model KEY`'s words, but for the
+ * runtime's default, which the row names as the model does.
+ */
+export const MODEL_SOURCES: Record<AgentModel['source'], string> = {
+    ticket: "this ticket's override",
+    config: '[runtime.models]',
+    default: 'runtime default',
+}
+
+/** An agent's model as a ticket's page names it: its id, or the runtime's default when nothing sets one. */
+export function modelName(model: string | null): string {
+    return model ?? MODEL_SOURCES.default
+}
+
+/**
+ * What choosing or clearing a ticket's model did, as `canopy model` says it, naming config's variant when the override
+ * sets it aside.
+ */
+export function modelText(ticketKey: string, now: AgentModel): string {
+    const source = now.source === 'default' ? 'nothing sets one' : MODEL_SOURCES[now.source]
+    const model = now.model ?? "the runtime's default"
+    const dropped =
+        now.dropped_variant === null ? '' : ` (config's variant \`${now.dropped_variant}\` no longer applies)`
+    return `${ticketKey}'s ${now.agent} runs use ${model} from their next run: ${source}${dropped}.`
 }
 
 /**
@@ -155,13 +219,30 @@ export function dismissedText(dismissed: Dismissed): string {
     return `${head} is listed again while the chore reports it.`
 }
 
-/** What a dismissal of a review's finding did, as `canopy dismiss review:ID N` says it. */
+/** What a dismissal of a review's finding did, as `canopy dismiss review:ID N --reason REASON` says it. */
 export function reviewDismissedText(dismissed: ReviewDismissed): string {
     const head = `review:${dismissed.run} finding ${dismissed.finding}`
     if (dismissed.dismissed) {
-        return `${head} is dismissed: no worker or tick acts on it.`
+        return `${head} is dismissed${dismissedAs(dismissed)}: no worker or tick acts on it.`
     }
     return `${head} is no longer dismissed: a resume hands it to the worker again.`
+}
+
+/**
+ * What dismissing a finding of a review with a draft did, in the draft's terms (DESIGN §34): left out of the operator's
+ * review, or back in it, in the reviewer's words.
+ */
+export function reviewPointText(dismissed: ReviewDismissed): string {
+    const head = `review:${dismissed.run} finding ${dismissed.finding}`
+    if (dismissed.dismissed) {
+        return `${head} is dismissed${dismissedAs(dismissed)}: left out of your review.`
+    }
+    return `${head} is no longer dismissed: back in your review, in the reviewer's words.`
+}
+
+// ` as wrong`, as the CLI names the reason a finding was dismissed for; nothing for an answer without one.
+function dismissedAs(dismissed: ReviewDismissed): string {
+    return dismissed.reason === null ? '' : ` as ${dismissed.reason}`
 }
 
 /** What sending a review's findings did, as `canopy send review:ID N...` says it. */
@@ -179,31 +260,70 @@ export function reviewDraftEditedText(run: number, draft: ReviewDraft): string {
     return `Review run ${run}'s draft is version ${draft.version} now, hash ${draft.hash}: ${draft.change}.`
 }
 
+/** What a note on review run `run`'s draft recorded, as `canopy reply review:ID` says it. */
+export function reviewDraftNotedText(run: number, noted: ReviewDraftNoted): string {
+    return (
+        `Recorded note ${noted.note} on review run ${run}'s draft, at version ${noted.after_version}. The next tick ` +
+        'revises it, unless you change the draft first.'
+    )
+}
+
 /**
- * What a publish of review run `run`'s draft did, as `canopy review publish` says it: published, with where; staged,
- * with where to submit it; perhaps posted, which a read of the PR settles; or not published, and why.
+ * What a publish of review run `run`'s draft did, as `canopy review publish` says it, where the draft's own linked
+ * line does not say it: perhaps posted, which a read of the PR settles; or not published, and why. Null for a publish
+ * that posted or staged it, which that line says.
  */
-export function reviewDraftPublishedText(run: number, prUrl: string, published: ReviewDraftPublished): string {
+export function reviewDraftPublishedText(run: number, published: ReviewDraftPublished): string | null {
+    const { draft } = published
+    const version = `Version ${published.published} of review run ${run}'s draft`
+    switch (draft.status) {
+        case 'published':
+        case 'staged': {
+            return null
+        }
+        case 'unconfirmed': {
+            return (
+                `${version} may have been posted: the post ended without saying. A read of the PR settles it; canopy ` +
+                'posts it no other time.'
+            )
+        }
+        case 'waiting':
+        case 'publishing':
+        case 'discarded': {
+            return `${version} was not published: ${published.failed ?? draft.why ?? 'nothing was posted'}`
+        }
+    }
+}
+
+/**
+ * The toast a publish shows, in the words `canopy review publish` starts with: published, with where it is; staged,
+ * with the PR's files page, where GitHub's own submit is; perhaps posted; or not published. A check only for the
+ * first two.
+ */
+export function reviewDraftPublishedToast(run: number, prUrl: string, published: ReviewDraftPublished): NewToast {
     const { draft } = published
     const version = `version ${published.published} of review run ${run}'s draft`
     switch (draft.status) {
         case 'published': {
-            return `Published ${version}: ${draft.published_url ?? prUrl}`
+            return { title: `Published ${version}`, detail: draft.published_url ?? prUrl, tone: 'done' }
         }
         case 'staged': {
-            return `Staged ${version} in a pending review on ${prUrl}; submit or delete it at ${prUrl}/files`
+            return { title: `Staged ${version} in a review on GitHub`, detail: `${prUrl}/files`, tone: 'done' }
         }
         case 'unconfirmed': {
-            return (
-                `${capitalized(version)} may have been posted: the post ended without saying. A read of the PR ` +
-                'settles it; canopy posts it no other time.'
-            )
+            return { title: `${capitalized(version)} may have been posted`, tone: 'failed' }
         }
         case 'waiting':
-        case 'publishing': {
-            return `${capitalized(version)} was not published: ${published.failed ?? draft.why ?? 'nothing was posted'}`
+        case 'publishing':
+        case 'discarded': {
+            return { title: `${capitalized(version)} was not published`, tone: 'failed' }
         }
     }
+}
+
+/** The toast a discard shows, in the words `canopy review discard` says it with, and the PR it was of. */
+export function reviewDraftDiscardedToast(run: number, prUrl: string): NewToast {
+    return { title: `Discarded review run ${run}'s draft; nothing was posted`, detail: prUrl, tone: 'done' }
 }
 
 function capitalized(text: string): string {
@@ -346,6 +466,40 @@ export function repliedText(key: string, replied: Replied): string {
     return `Message ${replied.message_id} on ${key} already says this${answered}; nothing new recorded.`
 }
 
+// What `canopy task submit` adds while `capacity.max_tasks` is 0.
+const NO_TASK_CAPACITY = 'capacity.max_tasks is 0, so no tick starts a task until you raise it.'
+
+/**
+ * The toast a submission shows as its form opens the task's page, in the words `canopy task submit` says it: the task,
+ * which the next tick starts, and, while `capacity.max_tasks` is 0, that no tick will until the operator raises it, as
+ * its title; where it runs, its repository and branch, under it.
+ */
+export function taskSubmittedToast(submitted: TaskSubmitted): NewToast {
+    const head = `Submitted task:${submitted.id}; the next tick starts it.`
+    return {
+        title: submitted.no_capacity ? `${head} ${NO_TASK_CAPACITY}` : head,
+        detail: `${submitted.repo} on ${submitted.branch}`,
+        tone: 'done',
+    }
+}
+
+/**
+ * What a reply to a task did, as `canopy reply task:N` says it: the message it recorded, or the one that already said
+ * it, then what starts the task's next run: the first tick after its running run ends, or the next tick.
+ */
+export function taskRepliedText(id: number, replied: TaskReplied): string {
+    const next =
+        replied.running_run === null
+            ? 'The next tick starts its next run, on its branch.'
+            : `Its run ${replied.running_run} is still working; the first tick after it ends starts the next run.`
+    const ref = taskRef(id)
+    const answered = replied.answers === null ? '' : `, answering message ${replied.answers}`
+    const head = replied.new
+        ? `Recorded message ${replied.message_id} on ${ref}${answered}.`
+        : `Message ${replied.message_id} on ${ref} already says this${answered}; nothing new recorded.`
+    return `${head} ${next}`
+}
+
 /** What setting a notice did, as `canopy notice` says it: the runs that hear it. The banner says until when. */
 export function noticeSetText(changed: NoticeChanged): string {
     if (changed.loop.notice === null) {
@@ -423,6 +577,41 @@ export function planText(key: string, changed: PlanChanged): string {
 }
 
 /**
+ * What an approval of a feedback plan did, as `canopy plan KEY --approve` says it (canopy/cli/plans.py): whole, or
+ * for some of its items, each named by its number and observed id, and the message on the ticket naming them.
+ */
+export function feedbackPlanApprovedText(approved: FeedbackPlanApproved): string {
+    const { plan, ticket_key: key, addressed, left } = approved
+    const total = addressed.length + left.length
+    const once = `The next tick can resume ${key} on it, once.`
+    let head =
+        `Feedback plan ${plan} of ${key}, covering ${total} item${total === 1 ? '' : 's'}, is approved whole as its ` +
+        `file stands now. ${once}`
+    if (left.length > 0) {
+        head =
+            `Feedback plan ${plan} of ${key} is approved as its file stands now, for ${addressed.length} of its ` +
+            `${total} items: ${itemNames(addressed)}. ${once} Left out, for the next plan: ${itemNames(left)}.`
+    }
+    return approved.message === null ? head : `${head} Message ${approved.message} on ${key} names the items.`
+}
+
+/**
+ * A feedback plan's items as canopy names them wherever it mentions them (canopy/core/prompts.py `item_names`): by
+ * number and observed id, never by their text.
+ */
+export function itemNames(items: readonly { number: number; item_id: number }[]): string {
+    const words = items.map((i) => `${i.number} (id ${i.item_id})`)
+    const [first, second] = words
+    if (words.length === 1 && first !== undefined) {
+        return `item ${first}`
+    }
+    if (words.length === 2 && first !== undefined && second !== undefined) {
+        return `items ${first} and ${second}`
+    }
+    return `items ${words.slice(0, -1).join(', ')}, and ${words.at(-1) ?? ''}`
+}
+
+/**
  * What a promote made, as `canopy memory promote` says it (canopy/cli/memory.py): the lesson and its review date, the
  * lesson it replaces, and whether runs read it now or it is recorded and served to none.
  */
@@ -430,7 +619,7 @@ export function promotedText(promoted: MemoryPromoted): string {
     const { lesson, source } = promoted
     const kind = source.scope === 'proposal' ? 'Proposal' : 'Note'
     const where = lesson.repo === null ? '' : ` for ${lesson.repo}`
-    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
+    const due = dueText(lesson)
     const head = `${kind} ${source.id} is lesson ${lesson.id} (\`${lesson.key}\`)${where}${due}.`
     const replaces =
         promoted.superseded === null ? '' : ` It replaces lesson ${promoted.superseded}, under the same key.`
@@ -456,7 +645,7 @@ export const PRIVATE_WORDS =
 export function editedText(edited: MemoryEdited): string {
     const { lesson, replaced } = edited
     const where = lesson.repo === null ? '' : ` for ${lesson.repo}`
-    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
+    const due = dueText(lesson)
     const head =
         `Lesson ${replaced.id} is edited into lesson ${lesson.id} (\`${lesson.key}\`)${where}, version ` +
         `${lesson.version}${due}. Lesson ${replaced.id} stays in its history.`
@@ -466,14 +655,39 @@ export function editedText(edited: MemoryEdited): string {
     return `${head}${served}`
 }
 
+// When a lesson a promote or an edit made is due for review, as `canopy memory` says it after the lesson's name; a
+// pinned one never is.
+function dueText(lesson: MemoryEntry): string {
+    if (lesson.pinned_at !== null) {
+        return ', pinned, never due for review'
+    }
+    return lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at, currentClock())}`
+}
+
 /** What a reject did, as `canopy memory reject` says it. */
 export function rejectedText(id: number): string {
     return `Proposal ${id} is rejected.`
 }
 
-/** What a renew did, as `canopy memory renew` says it: when the lesson is next due for review. */
+/**
+ * What a renew did, as `canopy memory renew` says it: when the lesson is next due for review, or for a pinned one,
+ * which never is, that a run's report it is wrong is cleared.
+ */
 export function renewedText(renewed: MemoryRenewed): string {
+    if (renewed.review_at === null) {
+        return `Lesson ${renewed.id} is renewed: any report that it is wrong is cleared. Pinned, it is never due.`
+    }
     return `Lesson ${renewed.id} is renewed: due for review at ${localTime(renewed.review_at, currentClock())}.`
+}
+
+/** What a pin did, as `canopy memory pin` says it. */
+export function pinnedText(pinned: MemoryPinned): string {
+    return `Lesson ${pinned.id} is pinned: never due for review, and served before every lesson not pinned.`
+}
+
+/** What an unpin did, as `canopy memory unpin` says it: when the lesson is next due for review. */
+export function unpinnedText(unpinned: MemoryUnpinned): string {
+    return `Lesson ${unpinned.id} is unpinned: due for review at ${localTime(unpinned.review_at, currentClock())}.`
 }
 
 /**
@@ -489,4 +703,15 @@ export function memoryForgottenText(forgot: MemoryForgotten): string {
         `${head} A reader held the journal's write-ahead log open, so the deleted text may stay in the log until ` +
         "SQLite's next checkpoint."
     )
+}
+
+/** What an upload did, as `canopy attach` says it (canopy/cli/attachments.py): the name, its size, and the subject. */
+export function attachedText(ref: string, attached: Attached): string {
+    const { name, size } = attached.attachment
+    return `Attached ${name} (${size} bytes) to ${ref}; its next run reads it.`
+}
+
+/** What a removal did, as `canopy detach` says it. */
+export function detachedText(ref: string, detached: Detached): string {
+    return `Removed ${detached.name} from ${ref}.`
 }

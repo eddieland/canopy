@@ -10,35 +10,49 @@ control characters dropped, as every page's does, and the diff within `review_di
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, cast
 
-from canopy.core import contract, conversation, db, review_diff, review_requests, review_runs
+from canopy.core import (
+    contract,
+    conversation,
+    db,
+    review_answers,
+    review_diff,
+    review_drafts,
+    review_requests,
+    review_runs,
+    run_models,
+)
 from canopy.core import review_result as result
-from canopy.core.vocab import ReviewRunStatus, SeenKind
+from canopy.core.vocab import DismissalReason, ReviewRunStatus, SeenKind
 from canopy.serve import review_draft_views
-from canopy.serve.review_schema import (
+from canopy.serve.schema.review import (
     DiffFile,
     DiffHunk,
     DiffLine,
+    DismissalReasonName,
+    FindingAnswerName,
     FindingSeverity,
     RequestedReview,
     ReviewDetail,
     ReviewDiff,
+    ReviewDraftStatusName,
     ReviewFinding,
     ReviewSummary,
 )
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
-from canopy.serve.views import lines, models_served, new_tokens, shown_path, ticket_title
+from canopy.serve.views import lines, models_served, new_tokens, review_state, shown_path, ticket_title
 
 if TYPE_CHECKING:
     import sqlite3
 
     from canopy.core import records
     from canopy.core.context import Context
-    from canopy.serve.schema import RunState
-    from canopy.serve.transcript_schema import RawOutput, Transcript
+    from canopy.serve.schema.transcript import RawOutput, Transcript
 
 # How many review runs the reviews list carries, newest first.
 RECENT_REVIEWS = 100
@@ -61,9 +75,16 @@ def requested(ctx: Context) -> list[RequestedReview]:
     Returns:
         Each open request no review of its PR is running for: one that started shows in `reviews` instead.
     """
+    waiting = review_requests.waiting_requests(ctx.conn)
+    prs = review_draft_views.observed_prs(ctx.conn, {r.pr_url for r in waiting})
     return [
-        RequestedReview(pr_url=r.pr_url, created_at=db.parse_time(r.created_at), channel=r.channel)
-        for r in review_requests.waiting_requests(ctx.conn)
+        RequestedReview(
+            pr_url=r.pr_url,
+            created_at=db.parse_time(r.created_at),
+            channel=r.channel,
+            author=prs[r.pr_url].author if r.pr_url in prs else None,
+        )
+        for r in waiting
     ]
 
 
@@ -78,7 +99,11 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
     if row is None:
         return None
     stored = result.stored(row.result_json)
-    dismissed = review_runs.review_dismissals(ctx.conn, run_id)
+    marks = _Marks(
+        dismissed=review_runs.review_dismissals(ctx.conn, run_id),
+        held=frozenset(review_runs.held(ctx.conn, run_id)),
+        answers=review_answers.latest(ctx.conn, run_id),
+    )
     note = contract.stored_object(row.result_json).get("harness")
     kept = review_diff.path_for(row.log_path)
     found = review_diff.read(kept)
@@ -90,14 +115,12 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         summary=lines(stored.summary) or None if stored is not None else None,
         note=lines(note) or None if isinstance(note, str) else None,
         base_branch=row.base_branch or None,
-        findings=[_finding(f, found, i in dismissed) for i, f in enumerate(stored.findings, 1)]
-        if stored is not None
-        else [],
+        findings=[_finding(f, found, i, marks) for i, f in enumerate(stored.findings, 1)] if stored is not None else [],
         diff=diff,
         diff_removed_after_days=removed_after(ctx.conn, kept, row.ended_at, "run_files_days"),
         runs=summaries(ctx.conn, review_runs.review_runs_of(ctx.conn, row.pr_url)),
         sendable=row.status is ReviewRunStatus.DONE and conversation.own_pr(ctx.conn, row),
-        draft=review_draft_views.of_review(ctx.conn, row, found),
+        draft=review_draft_views.of_review(ctx.conn, ctx.config, row, found),
         new_tokens=new_tokens(row),
         peak_context=row.tokens_peak_context,
         log_path=shown_path(row.log_path, ctx.workspace.root),
@@ -116,7 +139,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
 def review_transcript(ctx: Context, run_id: int) -> Transcript | None:
     """A review run's session in its log, or None if there is no such run.
 
-    The reviewer's output reaches the log when it ends, so a running review's transcript has no session yet.
+    The reviewer's events reach the log as it prints them, so a running review's transcript is what it did so far.
 
     Returns:
         The transcript, its status saying whether the run recorded a session and whether its log could be read.
@@ -125,7 +148,14 @@ def review_transcript(ctx: Context, run_id: int) -> Transcript | None:
     if row is None:
         return None
     log = Path(row.log_path)
-    return session_transcript(log, row.session_id, removed_after(ctx.conn, log, row.ended_at, "run_files_days"))
+    removed = removed_after(ctx.conn, log, row.ended_at, "run_files_days")
+    return session_transcript(
+        log,
+        row.session_id,
+        removed,
+        run_models.replies_of(ctx.conn, "review_runs", run_id),
+        version=ctx.config.runtime.version,
+    )
 
 
 def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
@@ -143,27 +173,44 @@ def review_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
 
 
 def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> list[ReviewSummary]:
-    """Review runs' rows, as the reviews list shows them, each saying whether the operator has seen it.
+    """Review runs' rows, as the reviews list shows them, each with whether it is seen, its draft, and its request.
 
     Returns:
         A summary of each, in their order.
     """
     seen = db.seen_among(conn, SeenKind.REVIEW, [str(row.id) for row in rows])
-    # A PR's title as its pages give it: its own, else its ticket's.
+    # A PR's title as its pages give it: its own, as a worker or a review reported it, else as canopy's reader last
+    # read it, which is all a coworker's PR may have, else its ticket's.
     own = db.pr_titles(conn, {row.pr_url for row in rows})
+    read = {url: pr.title for url, pr in review_draft_views.observed_prs(conn, {row.pr_url for row in rows}).items()}
     tickets = db.ticket_titles(conn, {row.ticket_key for row in rows if row.ticket_key})
+    drafts = review_drafts.of_reviews(conn, [row.id for row in rows])
+    asked = review_requests.answered_by(conn, rows)
     return [
         summary(
             row,
             seen=str(row.id) in seen,
-            title=ticket_title(own.get(row.pr_url)) or ticket_title(tickets.get(row.ticket_key or "")),
+            title=ticket_title(own.get(row.pr_url))
+            or ticket_title(read.get(row.pr_url))
+            or ticket_title(tickets.get(row.ticket_key or "")),
+            draft=drafts.get(row.id),
+            request=asked.get(row.id),
         )
         for row in rows
     ]
 
 
-def summary(row: records.ReviewRun, *, seen: bool, title: str | None) -> ReviewSummary:
+def summary(
+    row: records.ReviewRun,
+    *,
+    seen: bool,
+    title: str | None,
+    draft: records.ReviewDraft | None,
+    request: int | None,
+) -> ReviewSummary:
     """One review run's row, as the reviews list shows it, `seen` when the operator has seen it, its PR's `title`.
+
+    `request` is the id of the operator's request it answers, which groups it with its reviews in other personas.
 
     Returns:
         The run's summary. Its verdict and impact are None, and its findings 0, when it has no valid result.
@@ -178,7 +225,7 @@ def summary(row: records.ReviewRun, *, seen: bool, title: str | None) -> ReviewS
         title=title,
         repo=row.repo or None,
         status=row.status,
-        state=_review_state(row.status),
+        state=review_state(row.status),
         verdict=stored.verdict if stored is not None else None,
         impact=stored.impact if stored is not None else None,
         findings=len(stored.findings) if stored is not None else 0,
@@ -188,26 +235,11 @@ def summary(row: records.ReviewRun, *, seen: bool, title: str | None) -> ReviewS
         ended_at=db.parse_time(row.ended_at) if row.ended_at else None,
         cost_usd=row.cost_usd,
         persona=row.persona,
+        request_id=request,
         news=review_requests.has_news(row, stored),
         seen=seen,
+        draft=cast("ReviewDraftStatusName", draft.status.value) if draft is not None else None,
     )
-
-
-def _review_state(status: ReviewRunStatus) -> RunState:
-    """What the web UI colors a review run that has `status` as.
-
-    Returns:
-        The run's state: every ending but `done` is failed.
-    """
-    match status:
-        case ReviewRunStatus.RUNNING:
-            return "running"
-        case ReviewRunStatus.DONE:
-            return "done"
-        case ReviewRunStatus.FAILED | ReviewRunStatus.UNKNOWN | ReviewRunStatus.TIMEOUT | ReviewRunStatus.CRASHED:
-            return "failed"
-        case _:
-            assert_never(status)
 
 
 def _worst(findings: Iterable[result.Finding]) -> FindingSeverity | None:
@@ -215,8 +247,19 @@ def _worst(findings: Iterable[result.Finding]) -> FindingSeverity | None:
     return next((s for s in _SEVERITIES if s in found), None)
 
 
-def _finding(f: result.Finding, diff: review_diff.Diff | None, dismissed: bool) -> ReviewFinding:  # noqa: FBT001
+@dataclass(frozen=True)
+class _Marks:
+    """What the journal holds beside a review's findings, by their numbers: dismissals, holds, and workers' answers."""
+
+    dismissed: Mapping[int, DismissalReason | None]
+    held: AbstractSet[int]
+    answers: Mapping[int, records.ReviewAnswer]
+
+
+def _finding(f: result.Finding, diff: review_diff.Diff | None, number: int, marks: _Marks) -> ReviewFinding:
     file, line = review_diff.anchor(diff, f.location) if diff is not None else (None, None)
+    reason = marks.dismissed.get(number)
+    answer = marks.answers.get(number)
     return ReviewFinding(
         severity=f.severity,
         title=lines(f.title),
@@ -224,7 +267,11 @@ def _finding(f: result.Finding, diff: review_diff.Diff | None, dismissed: bool) 
         detail=lines(f.detail),
         file=file,
         line=line,
-        dismissed=dismissed,
+        dismissed=number in marks.dismissed,
+        dismissed_reason=cast("DismissalReasonName", reason.value) if reason is not None else None,
+        held=number in marks.held,
+        answer=cast("FindingAnswerName", answer.answer.value) if answer is not None else None,
+        answer_reason=lines(answer.reason) if answer is not None and answer.reason else None,
     )
 
 

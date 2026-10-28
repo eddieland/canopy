@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import dataclasses
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import click
 
 from canopy.cli.common import open_context
-from canopy.cli.render import report_json
-from canopy.core import db, spend
+from canopy.core import db, reports, spend
 from canopy.runtime.report import count_text
 
 if TYPE_CHECKING:
-    from canopy.core.spend import Breakdown, Costs
+    from canopy.core.spend import Breakdown, Costs, Month
 
 GROUP_LABELS: dict[spend.Group, str] = {
     "idle": "idle",
@@ -41,10 +39,13 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
     ("reviews", "reviews"),
     ("tasks", "tasks"),
     ("dry run", "dry_run"),
+    ("outside", "outside"),
     ("total", "total"),
 )
 _DAY_WIDTH = 10
 _COST_WIDTH = 9
+#: The ticks' tables' last column: how many ran no overseer, left nothing to judge or halted before it (DESIGN §39).
+_NO_OVERSEER = "no overseer"
 _KEY_WIDTH = 16
 # The costliest tickets the text lists; `--json` lists every one.
 _TICKETS = 10
@@ -72,33 +73,23 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     The overseer, workers, plan runs, chores, and reviews, as the agent runtime reported each; dry runs apart from the
     live ticks, and idle ticks' share of the overseer's spend. Then the tickets marked done, the spend for each, and
     the costliest tickets, the tools whose calls put the most into context, and each kind's spend by the models its
-    sessions name; --json adds every ticket, PR, and tool, and each kind's first model calls by definitions snapshot.
+    sessions name, each kind's first model calls by week, and every session the runtime keeps, canopy's apart from the
+    rest; --json adds every ticket, PR, and tool, each kind's first model calls by definitions snapshot, and their weeks
+    by chore and by model.
     """
     ctx = open_context(click_ctx)
-    found = spend.breakdown(ctx.conn, datetime.now(UTC), days)
     if as_json:
-        click.echo(report_json(as_dict(found)))
+        click.echo(reports.read_spend(ctx, reports.Spend(days=days)))
         return 0
-    for line in render(found):
+    now = datetime.now(UTC)
+    month = spend.budget_month(ctx.conn, now, ctx.config.spend, state_dir=ctx.state_dir)
+    for line in render(spend.breakdown(ctx.conn, now, days, state_dir=ctx.state_dir), month):
         click.echo(line)
     return 0
 
 
-def as_dict(found: Breakdown) -> dict[str, Any]:
-    """The breakdown as JSON-ready values, each set of costs with its total.
-
-    Returns:
-        A dict `json.dumps` takes as it is.
-    """
-    data = dataclasses.asdict(found)
-    for day, row in zip(data["per_day"], found.per_day, strict=True):
-        day["costs"]["total"] = row.costs.total
-    data["totals"]["total"] = found.totals.total
-    return data
-
-
-def render(found: Breakdown) -> list[str]:
-    """The breakdown as `canopy spend` prints it.
+def render(found: Breakdown, month: Month | None = None) -> list[str]:
+    """The breakdown as `canopy spend` prints it, led by the month against its budget when one is set.
 
     Returns:
         Its lines, without line ends.
@@ -106,6 +97,7 @@ def render(found: Breakdown) -> list[str]:
     since = since_text(found.since)
     lines = [
         f"Spend over {found.days} day{'s' if found.days != 1 else ''}, since {since}, as the runtime reported it.",
+        *([budget_text(month)] if month is not None else []),
         "",
         f"{'day':<{_DAY_WIDTH}}" + "".join(f"{title:>{_COST_WIDTH}}" for title, _ in _COLUMNS),
     ]
@@ -114,22 +106,51 @@ def render(found: Breakdown) -> list[str]:
     lines.extend(["", *_tickets(found)])
     lines.extend(["", *_tools(found)])
     lines.extend(["", *_models(found)])
-    lines.extend(["", f"{'ticks':<{_DAY_WIDTH}}{'count':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}"])
+    lines.extend(["", *_first_call_weeks(found)])
+    lines.extend(["", *_sessions(found)])
+    lines.extend(["", _tick_line("ticks", "count", "spent", _NO_OVERSEER)])
     lines.extend(
-        f"{GROUP_LABELS[g.group]:<{_DAY_WIDTH}}{g.ticks:>{_COST_WIDTH}}{cost_text(g.cost_usd):>{_COST_WIDTH}}"
-        for g in found.ticks
+        _tick_line(GROUP_LABELS[g.group], g.ticks, cost_text(g.cost_usd), g.without_overseer) for g in found.ticks
     )
     if found.idle_share is not None:
         lines.append(f"Idle ticks were {found.idle_share:.0%} of the live overseer's spend.")
-    lines.extend(["", f"{'woken by':<{_DAY_WIDTH}}{'count':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}"])
-    lines.extend(
-        f"{w.by:<{_DAY_WIDTH}}{w.ticks:>{_COST_WIDTH}}{cost_text(w.cost_usd):>{_COST_WIDTH}}" for w in found.woken
-    )
+    lines.extend(["", _tick_line("woken by", "count", "spent", _NO_OVERSEER)])
+    lines.extend(_tick_line(w.by, w.ticks, cost_text(w.cost_usd), w.without_overseer) for w in found.woken)
     if not found.woken:
         lines.append("no tick canopy loop ran")
     unpriced = ", ".join(f"{u.unpriced} of {u.runs} {KIND_LABELS[u.kind]}" for u in found.unpriced if u.unpriced)
     lines.extend(["", f"No cost reported: {unpriced}." if unpriced else "Every run that ended reported a cost."])
     return lines
+
+
+def budget_text(month: Month) -> str:
+    """The month so far against its budget, as `canopy spend` says it.
+
+    Returns:
+        The month's spend, then its parts: `This month, 2026-10: $123.45 of a $300 budget (41%), on pace for $280.00.
+        Canopy's runs $100.00, outside canopy $23.45.`
+    """
+    pace = f", on pace for {cost_text(month.projected_usd)}" if month.projected_usd is not None else ""
+    over = " Over budget." if month.over else ""
+    runs = f"Canopy's runs {cost_text(month.runs_usd or 0.0)}"
+    outside = (
+        f", outside canopy {cost_text(month.outside_usd)}"
+        if month.sessions_read_at is not None
+        else "; outside canopy is not counted until canopy loop reads the runtime's sessions"
+    )
+    return (
+        f"This month, {month.month}: {cost_text(month.spent_usd or 0.0)} of a ${month.budget_usd} budget "
+        f"({month.percent}%){pace}. {runs}{outside}.{over}"
+    )
+
+
+def _tick_line(label: str, ticks: int | str, spent: str, without: int | str) -> str:
+    """A line of the ticks' tables: a group or a cause, how many, what their overseers cost, and how many ran none.
+
+    Returns:
+        The line, in the tables' columns.
+    """
+    return f"{label:<{_DAY_WIDTH}}{ticks:>{_COST_WIDTH}}{spent:>{_COST_WIDTH}}{without:>{len(_NO_OVERSEER) + 2}}"
 
 
 def since_text(stamp: str) -> str:
@@ -215,6 +236,68 @@ def _models(found: Breakdown) -> list[str]:
     )
     lines.append("A run on two models counts under each.")
     return lines
+
+
+# Each kind's first model calls by local ISO week: the median one's size, and what they all read from the cache of what
+# they were sent, with the runtime's versions and the definitions snapshots the week's runs used and the week before's
+# did not, where the prefix the runs share may have changed.
+def _first_call_weeks(found: Breakdown) -> list[str]:
+    weeks = [w for w in found.first_call_weeks if w.by == "kind"]
+    if not weeks:
+        return ["No first model call recorded."]
+    lines = [_week_line("week", "kind", "runs", "sent", "hit") + "  new"]
+    lines.extend(
+        _week_line(
+            w.week,
+            w.kind,
+            str(w.runs),
+            count_text(w.first_call),
+            "-" if w.hit_rate is None else f"{w.hit_rate:.0%}",
+        )
+        + "".join(f"  {part}" for part in _week_changes(w))
+        for w in weeks
+    )
+    lines.extend(
+        [
+            "Sent is the week's median first call, in tokens; hit is what first calls read from the cache.",
+            "--json breaks each kind's weeks down by chore and by model.",
+        ],
+    )
+    return lines
+
+
+def _week_line(week: str, kind: str, *counts: str) -> str:
+    return f"{week:<{_DAY_WIDTH}}{kind:<{_DAY_WIDTH}}" + "".join(f"{c:>{_COST_WIDTH}}" for c in counts)
+
+
+# What a week's runs used first: a runtime's version or a definitions snapshot the series' week before did not.
+def _week_changes(week: spend.FirstCallWeek) -> list[str]:
+    return [f"runtime {v}" for v in week.new_runtime_versions] + [f"snapshot {d}" for d in week.new_digests]
+
+
+# Every session the runtime keeps that started in the window, canopy's apart from the rest, and where the rest ran, as
+# `canopy loop` recorded them between ticks.
+def _sessions(found: Breakdown) -> list[str]:
+    spent = found.sessions
+    if spent is None or spent.read_at is None:
+        return ["The runtime's sessions were never read: canopy loop reads them, canopy's and not, between ticks."]
+    read = f"read {spend.local_day(spent.read_at)}" + (f", last {spent.status}" if spent.status != "found" else "")
+    lines = [
+        f"Every runtime session, as its record says ({read}):",
+        _session_line("sessions", "count", "spent"),
+        _session_line("canopy's runs", str(spent.canopy.sessions), cost_text(spent.canopy.cost_usd)),
+        _session_line("outside canopy", str(spent.outside.sessions), cost_text(spent.outside.cost_usd)),
+    ]
+    # Where the rest ran, the directory last, since a path is as long as it is.
+    lines.extend(
+        f"{_session_line('', str(d.sessions), cost_text(d.cost_usd))}  {d.directory}" for d in spent.directories
+    )
+    lines.append("A subagent's session counts with the session it ran for; another workspace's runs are outside.")
+    return lines
+
+
+def _session_line(label: str, *counts: str) -> str:
+    return f"{label:<{_KEY_WIDTH}}" + "".join(f"{c:>{_COST_WIDTH}}" for c in counts)
 
 
 def _tool_line(tool: str, kind: str, *counts: str) -> str:

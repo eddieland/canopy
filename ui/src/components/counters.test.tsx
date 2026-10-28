@@ -2,9 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { mockAttention, mockRuns, mockTickets } from '@/api/mocks'
+import { mockAttention, mockRuns, mockTasks, mockTickets } from '@/api/mocks'
 import { keys } from '@/api/queries'
-import type { AttentionItem, Run, TicketSummary } from '@/api/types'
+import type { AttentionItem, Run, TaskSummary, TicketSummary } from '@/api/types'
 import { DEFAULT_CLOCK } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { tipOf } from '@/test-utils'
@@ -19,15 +19,18 @@ afterEach(() => {
 function renderCounters({
     runs,
     tickets,
+    tasks,
     attention,
 }: {
     runs?: Run[]
     tickets?: TicketSummary[]
+    tasks?: TaskSummary[]
     attention?: AttentionItem[]
 }) {
     const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
     client.setQueryData(keys.runs, runs)
     client.setQueryData(keys.tickets, tickets)
+    client.setQueryData(keys.tasks, tasks)
     client.setQueryData(keys.attention, attention)
     return render(
         <QueryClientProvider client={client}>
@@ -75,6 +78,46 @@ describe('Counters', () => {
         expect(waiting.getByText('2')).toBeDefined()
         expect(waiting.getByText(/^oldest/u)).toBeDefined()
         expect(tipOf(waiting.getByRole('time'))).toBe(localTime('2026-10-08T10:00:00Z', DEFAULT_CLOCK))
+    })
+
+    it('counts a ticket whose feedback plan waits on your approval, once though a question waits too', () => {
+        const plan = { id: 3, pr_urls: ['https://github.com/acme/web/pull/88'], items: 2, stale: false }
+        renderCounters({
+            tickets: [
+                { ...ticket('ABC-099', null), feedback_plan: plan },
+                { ...ticket('ABC-102', 5), feedback_plan: plan },
+                ticket('ABC-104', null),
+            ],
+            attention: [],
+        })
+        expect(within(counter('waiting')).getByText('2')).toBeDefined()
+    })
+
+    it("counts a task's run running among the runs", () => {
+        renderCounters({ runs: mockRuns, tasks: mockTasks })
+        // Run 41, and task 6's run.
+        expect(counter('running').textContent).toBe('Running2')
+    })
+
+    it('counts a task waiting on your reply, and dates its question with the tickets', () => {
+        const asks = { ...question('task:4', '2026-10-08T08:00:00Z'), ticket_key: null, task: 4 }
+        renderCounters({
+            tickets: [ticket('ABC-102', 5)],
+            tasks: mockTasks,
+            attention: [question('ABC-102', '2026-10-08T11:56:00Z'), asks],
+        })
+        const waiting = within(counter('waiting'))
+        expect(waiting.getByText('2')).toBeDefined()
+        expect(tipOf(waiting.getByRole('time'))).toBe(localTime('2026-10-08T08:00:00Z', DEFAULT_CLOCK))
+    })
+
+    it("drops a task's question from the count and the age once it is replied to", () => {
+        const asks = { ...question('task:4', '2026-10-08T08:00:00Z'), ticket_key: null, task: 4 }
+        const replied: TaskSummary[] = [{ ...(mockTasks[2] as TaskSummary), standing: 'queued', question_id: null }]
+        renderCounters({ tickets: [ticket('ABC-104', null)], tasks: replied, attention: [asks] })
+        const waiting = within(counter('waiting'))
+        expect(waiting.getByText('0')).toBeDefined()
+        expect(waiting.getByText('no question open')).toBeDefined()
     })
 
     it('says no question is open when every question has been answered', () => {

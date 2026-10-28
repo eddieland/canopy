@@ -42,7 +42,7 @@ are the ones you run.
 - **Never start the loop.** `canopy loop` without `--ticks` runs until Ctrl-C and would hang this session;
   `canopy daemon start` leaves it running. The one tick you may run is the dry one in stage 9, with the operator's
   go-ahead, because it spends a model call.
-- **Never run canopy's overseer tools**: `canopy dispatch`, `decide`, `queried`, `attention`, `ticket set`, `mirror`.
+- **Never run canopy's overseer tools**: `canopy dispatch`, `decide`, `queried`, `attention`, `ticket set`.
   They refuse outside a tick by design.
 - **Keep agent config out of the workspace.** Do not write an `opencode.json`, `.opencode/`, or any other agent
   runtime's config into the workspace or the clones under `repos/`: the overseer runs there, and canopy refuses to start
@@ -82,7 +82,7 @@ Check each, and show one table of what is there, with its version, and what is m
 | uv | installs canopy | `uv --version` |
 | Go | builds treehouse at its pinned commit | `go version` |
 | Node 22.12+ and npm | the install builds the web UI; the sandbox installs `srt` with npm | `node --version`, `npm --version` |
-| OpenCode | canopy's agent runtime | `opencode --version` |
+| OpenCode | canopy's agent runtime: 1, or 2.1.4 or later for `runtime.version = 2` | `opencode --version` |
 | gh (optional) | an HTTPS credential helper for git, `gh auth setup-git` | `gh --version` |
 
 For each missing one, propose how to install it on this OS (the upstream installer, the system package manager, or
@@ -107,6 +107,9 @@ need a model provider OpenCode is signed in to.
   GitHub Issues, the GitHub server is both.
 - For a missing server, show the operator the entry for `~/.config/opencode/opencode.json`, from that server's own
   documentation, and ask before you write it. They complete any sign-in themselves.
+- With OpenCode 2, set `version = 2` under `[runtime]` in the user config, and set each server canopy's agents need
+  to `"codemode": false`: canopy denies its agents code mode, so a server left in it is out of their reach (D077).
+  `canopy agents` shows such a server as `none` for every agent.
 - Check that OpenCode is signed in to a model provider (OpenCode's `--help` names the command); if not, the operator
   signs in.
 - Explain the grants README step 3 describes: workers need the write tools to comment on a ticket, edit its labels,

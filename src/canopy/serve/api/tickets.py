@@ -1,17 +1,28 @@
-"""The tickets canopy has a record of, and the operator's verbs on one: start, stop, reply, forget, grant, persona."""
+"""The tickets canopy has a record of, and the operator's verbs on one: start, stop, reply, forget, grant, and choose.
+
+Choosing is of the persona or the model one of the ticket's agents runs in or on.
+"""
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, HTTPException
 
-from canopy.core import conversation, personas
+from canopy.core import conversation, personas, ticket_models
 from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TicketKey, not_found, ticket_ref
-from canopy.serve.persona_schema import AgentPersona, PersonaRequest
 from canopy.serve.schema import Granted, Replied, ReplyRequest, TicketSummary
-from canopy.serve.ticket_schema import ForgetRequest, Forgot, GrantRequest, Started, Stopped, StopRequest, TicketDetail
+from canopy.serve.schema.model import AgentModel, ModelRequest
+from canopy.serve.schema.persona import AgentPersona, PersonaRequest
+from canopy.serve.schema.ticket import ForgetRequest, Forgot, GrantRequest, Started, Stopped, StopRequest, TicketDetail
+
+if TYPE_CHECKING:
+    from canopy.core.context import Context
+    from canopy.runtime.report import ModelList
+    from canopy.serve.backend import Backend
 
 TAG = "tickets"
 router = APIRouter(tags=[TAG])
@@ -162,3 +173,58 @@ def persona(key: TicketKey, body: PersonaRequest, backend: BackendDep) -> AgentP
         extra={"ticket": ref.id, "agent": body.agent, "persona": body.persona, "channel": WEB},
     )
     return views.agent_persona(now)
+
+
+@router.post(
+    "/tickets/{key}/models",
+    operation_id="chooseTicketModel",
+    summary="Choose a model for one of a ticket's agents",
+    responses=REFUSED,
+)
+def model(key: TicketKey, body: ModelRequest, backend: BackendDep) -> AgentModel:
+    """`canopy model KEY MODEL --agent AGENT`, or with no `model` `--clear` (DESIGN §13).
+
+    It covers every run of that agent for the ticket, from its next, until cleared. A model the runtime does not list,
+    or a variant the model does not, is refused `unknown_model`, and a list that cannot be read `model_list_failed`.
+    """
+    ref = ticket_ref(key, "model")
+    with backend.open() as ctx:
+        try:
+            now = ticket_models.choose(
+                ctx.conn,
+                ctx.config,
+                ref.id,
+                body.agent,
+                body.model,
+                # The backend's list carries the variants whether or not the model names one. It may be minutes old: a
+                # run checks its model against a list read as it starts.
+                listing=lambda _variants: _listing(backend, ctx, body.model),
+                channel=WEB,
+            )
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        served = ticket_models.last_served(ctx.conn, ref.id)
+    _log.info(
+        "model chosen" if body.model is not None else "model cleared",
+        extra={"ticket": ref.id, "agent": body.agent, "model": body.model, "channel": WEB},
+    )
+    return views.agent_model(now, served)
+
+
+def _listing(backend: Backend, ctx: Context, model: str | None) -> ModelList:
+    """The model list a choice of `model` is checked against: the one the backend keeps, read again if it lacks `model`.
+
+    A model, or a variant of one, set up since the list was kept is then not refused for minutes; a list that could
+    not be read is not read twice, and a model the runtime does not list costs one more read to refuse.
+
+    Returns:
+        The list.
+    """
+    kept = backend.model_list(ctx)
+    if kept.error is not None or model is None:
+        return kept
+    try:
+        ticket_models.check(model, kept)
+    except conversation.Refused:
+        return backend.model_list(ctx, refresh=True)
+    return kept

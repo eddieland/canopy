@@ -1,21 +1,23 @@
 """A ticket's plans (DESIGN §25): read them, approve, ask for, or skip one, save an edit, and comment on passages.
 
-The plan verbs are `canopy plan`'s, through `canopy.core.plans`, so with its refusals; asking for changes is a reply,
-through the tickets' reply route. Saving an edit writes the plan's file as the operator's own editor would, and refuses
-one the file changed under. Comments are the web channel's alone: there is no CLI verb to comment, since a passage is
-chosen by selecting it.
+Also approving its feedback plan (§32), whole or by item, which the PR's page shows beside its threads. The plan verbs
+are `canopy plan`'s, through `canopy.core.plans` and `canopy.core.feedback_plans`, so with their refusals; asking for
+changes is a reply, through the tickets' reply route. Saving an edit writes the plan's file as the operator's own editor
+would, and refuses one the file changed under. Comments are the web channel's alone: there is no CLI verb to comment,
+since a passage is chosen by selecting it.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from canopy.core import conversation, plan_threads, plans
+from canopy.core import conversation, feedback_plans, plan_threads, plans
 from canopy.infra import logs
-from canopy.serve import plan_views
+from canopy.serve import feedback_plan_views, plan_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, PlanId, RefusedError, ThreadId, TicketKey, not_found, ticket_ref
-from canopy.serve.plan_schema import (
+from canopy.serve.schema.feedback_plan import FeedbackPlanApproval, FeedbackPlanApproved
+from canopy.serve.schema.plan import (
     PlanAction,
     PlanChanged,
     PlanCommentRequest,
@@ -94,6 +96,47 @@ def change(key: TicketKey, body: PlanAction, backend: BackendDep) -> PlanChanged
     what = "plan skipped" if body.action == "skip" else "plan asked for"
     _log.info(what, extra={"ticket": ref.id, "superseded": asked.superseded, "channel": WEB})
     return PlanChanged(action=body.action, superseded=asked.superseded, already=asked.already)
+
+
+@router.post(
+    "/tickets/{key}/feedback-plan",
+    operation_id="approveFeedbackPlan",
+    summary="Approve a ticket's feedback plan",
+    responses=REFUSED,
+)
+def approve_feedback(key: TicketKey, body: FeedbackPlanApproval, backend: BackendDep) -> FeedbackPlanApproved:
+    """`canopy plan KEY --approve [--item N ... | --leave N ...] [--message TEXT]`: approve its feedback plan.
+
+    Whole, or only the items `items` names by number, or all but those `leave` names, as its file stands now (DESIGN
+    §32). The approval writes an operator message on the ticket naming the items to address and to leave, with
+    `message` after it, and the next tick may resume the ticket on it, once. Refused as the CLI refuses it:
+    `inside_run`, `bad_body`, `bad_plan`, `bad_item`, and `stale` the first time a stale plan is approved, naming what
+    changed.
+    """
+    ref = ticket_ref(key, "plan")
+    with backend.open() as ctx:
+        try:
+            plan = feedback_plans.approve(
+                ctx.conn,
+                ctx.state_dir,
+                ref.id,
+                trust=ctx.config.trust,
+                ws=ctx.workspace,
+                channel=WEB,
+                dispatch_lock=ctx.dispatch_lock_path,
+                chosen=body.items,
+                leave=body.leave,
+                words=body.message,
+            )
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        done = feedback_plan_views.approved(ctx.conn, plan)
+    left = [i.item_id for i in done.left]
+    _log.info(
+        "feedback plan approved",
+        extra={"ticket": ref.id, "feedback_plan": plan.id, "left_out": left, "channel": WEB},
+    )
+    return done
 
 
 @router.put(

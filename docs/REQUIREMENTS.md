@@ -171,9 +171,9 @@ label brings it in, and the label stays visible on the ticket.
 
 Built in M19, live acceptance pending. Every ticket's conversation, public or private, in one place canopy owns, so the
 web UI (N1) can show it as one inbox and later channels such as Slack join it rather than keeping their own (§22, D072).
-For a public ticket the tracker stays the authority and the journal holds the overseer's copy: each tick the overseer
-mirrors new tracker comments with `canopy mirror` (D081), and `canopy show` lists them with workers' reports and the
-operator's replies. Gap: PR review comments, which would join with PR subjects (M14, closed unbuilt).
+For a public ticket the tracker stays the authority and the journal holds a copy: each comment the tracker source
+observes is recorded in the ticket's conversation in code (§22), and `canopy show` lists them with workers' reports and
+the operator's replies. Gap: PR review comments, which would join with PR subjects (M14, closed unbuilt).
 
 ### R13. Trusted and untrusted reviewers
 
@@ -185,8 +185,8 @@ Shape (§7, D089): `trust.trusted_reviewers` lists the trusted, empty by default
 reviewer. Untrusted feedback is `untrusted_review` on the attention list. The operator answers with `canopy reply` or
 the web UI, on a public ticket too; the reply is the worker's instruction and never reaches the ticket. Every public
 worker hears it, an `implement` as well as a `resume` (D093); keeping it off the ticket is the worker
-prompt's, not a guard (TRUST_MODEL T6). The gate is the
-overseer's judgment, checked again by the worker; the harness cannot see who wrote a review comment (D003).
+prompt's, not a guard (TRUST_MODEL T6). Where the `vcs` source observes the PR, the harness checks the gate in code
+(§7); elsewhere it is the overseer's judgment, checked again by the worker.
 
 ### R14. Flaky CI is rerun, not fixed
 
@@ -197,7 +197,9 @@ a worker to "fix" code that is not broken, again and again.
 Shape (§23), reshaped by the operator 2026-10-22: the `resume` worker sent for the failure judges it, with evidence,
 and reports it `flaky` rather than changing anything; the overseer then asks the operator to rerun the check
 (`flaky_rerun`) instead of waiting for a newer run. No agent reruns CI. Rejected: a `triage-ci` run before each `resume`
-that reran what it judged flaky, the first design, deferred 2026-10-15.
+that reran what it judged flaky, the first design, deferred 2026-10-15. Extended by the operator 2026-10-28: with
+`trust.max_flaky_kicks`, the harness first reruns the checks itself by rebasing the branch and pushing it with a lease,
+that many times per pushed head, and asks the operator once those are spent.
 
 ### R15. Tell every run that builds or reads CI about a passing condition, for as long as it lasts
 
@@ -211,26 +213,26 @@ the web UI's settings page, §8) lapses, reaches all of them, and shows on every
 
 ### R16. Change limits and tighten trust settings from the web UI
 
-Gap (M41). Written down 2026-10-14. The operator changes some settings often enough that opening a config file is
+Built (M41). Written down 2026-10-14. The operator changes some settings often enough that opening a config file is
 friction: a pool's slots, how many workers run at once, an attempt limit, how often the loop ticks. They should be
-able to change those from the web UI's settings page and have the loop take them up, as a reload does today. Trust
+able to change those from the web UI's settings page and have the loop take them up, as a reload does. Trust
 settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
 turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
-chooses a prompt, or moves the listener, stays an edit to the file. Today the web channel writes no config at all
-(TRUST_MODEL T8).
+chooses a prompt, or moves the listener, stays an edit to the file. The Limits and trust page under Settings does
+this, writing the workspace's private file within ceilings in code (§12, TRUST_MODEL T8, D128).
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open
 
 Built in part (M42): `canopy start URL --review`, or the web UI's reviews page, has canopy review a
-PR once, at its head (§21, Review requests); the live check is SCENARIOS S39. Watching one, reviewed again at each new
+PR once, at its head (§21, Review requests). Watching one, reviewed again at each new
 commit until it merges, is deferred (ROADMAP's deferred list): the operator judged it more than MVP needs. Written down
 2026-10-14. The operator should be able to hand canopy someone else's PR to review: once, at its current commit, or
 watched, reviewed again at each new commit until it merges or closes. Before M42 canopy reviewed a PR only as the
 loop's own (`review.agent_prs`) or as a match of `review.query`, a standing search in the user file, so one PR meant
 editing config and editing it back. The review is what any canopy review is: findings in the journal for the
 operator, posted nowhere unless the operator publishes it (D114), with no worker and no ticket. Publishing one on the
-PR, word for word as the operator approved it after editing it in canopy, is built from the CLI; iterating on it with
-an agent, and doing it from the web UI, are planned (M43, §34).
+PR, word for word as the operator approved it after editing it by hand or with an agent, is built, from the CLI and
+the web UI (M43, §34).
 
 ### R18. Plan a ticket before implementing it, and keep the plan
 
@@ -290,8 +292,9 @@ judges high impact is called out to the operator; its size alone is not, since s
 
 ### R23. Canary a model on one ticket
 
-Partial: planned (M58, §13, Each agent's model). A run records the model canopy asked for, not the one that served it;
-with a template's `--model` refused, a session runs the model asked for or fails before its first call.
+Partial (M58, §13, Each agent's model): each agent's default model is set in `[runtime.models]`, a worker run records
+it and the models that served it, and a template's `--model` is refused, so a session runs the model asked for or
+fails before its first call. The per-ticket override, the canary itself, is still to come.
 Written down 2026-10-19, from issue #418. The operator wants to try a model change on one ticket before
 every worker takes it, by running that ticket's workers on another model and comparing the result. Today a worker's
 model is OpenCode's default unless the operator's command template names one, which then applies to every worker run,

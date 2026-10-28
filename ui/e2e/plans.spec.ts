@@ -267,8 +267,8 @@ test('writing a note on the whole plan never scrolls the page under it', async (
     expect(await scroller.evaluate((element) => element.scrollTop)).toBe(top)
 })
 
-// The stream would send the list as the journal has it, which has no plan review: the list here is the test's,
-// ABC-105's.
+// The stream would send the list as the journal has it, which has no review of a ticket's plan: the list here is the
+// test's, ABC-105's.
 async function listPlanReview(page: Page) {
     await page.route('**/api/events', (route) => route.abort())
     await page.route('**/api/attention', (route) =>
@@ -283,6 +283,7 @@ async function listPlanReview(page: Page) {
                     since: '2026-10-08T11:52:00Z',
                     chore: null,
                     pr: null,
+                    task: null,
                     repo: null,
                     finding: false,
                     subject: 'ABC-105',

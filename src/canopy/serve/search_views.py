@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from canopy.core import db, search
-from canopy.serve.search_schema import SearchHit, SearchResults
+from canopy.serve.schema.search import SearchHit, SearchResults
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -30,6 +30,8 @@ def found(ctx: Context, query: str) -> SearchResults:
                 snippet=h.snippet,
                 ticket_key=h.ticket_key,
                 chore=h.chore,
+                task_id=h.task_id,
+                task_title=h.task_title,
                 run_id=h.run_id,
                 tick_id=h.tick_id,
                 label=h.label,

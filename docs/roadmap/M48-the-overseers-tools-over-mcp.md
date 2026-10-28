@@ -89,6 +89,15 @@ Stage 2's check, which is held to it. Stage 1 is built (2026-10-20): the verbs a
 `loop/tools.py`, which the commands and `canopy _mcp` both call; `procs` removes named variables from a child's
 environment and spawns through an intermediate. Its check: `make check`, and in a dry tick OpenCode 1.19.3's own client,
 given the server in its inline config and a stand-in model, listed the eleven tools as `canopy_<tool>` and called
-`canopy_decide`, which recorded its decision; with no running tick it was offered none. Stage 2 is built in #1090 and
-held for Stage 1b, at the operator's word (2026-10-21): the server is tried first on an agent with fewer
-responsibilities. Stage 1b is built against the fakes; its check, a week of the operator's chores, is the operator's.
+`canopy_decide`, which recorded its decision; with no running tick it was offered none. Stage 1b is built against the
+fakes (#1119, 2026-10-21); its check, a week of the operator's chores, is the operator's. Since then a chore's run is
+also given the reports' server (`canopy_reports`), and the example chores read canopy through tools alone, with no
+shell (2026-10-23). Stage 2 was built in #1090, closed unmerged once main moved past it, and is rebuilt on main
+(2026-10-23), held as before for Stage 1b's check and Stage 0's baseline: the overseer's process alone gets the
+overseer's server in `OPENCODE_CONFIG_CONTENT`, its definition allows its twelve tools by name and has no shell but the
+commands `runtime.allow_bash` names (#1166), every other definition denies `canopy_*`, a chore's allowing its own
+tools after and the reviewer's and the planner's their git tools (#1171), and the tick checks the server answers
+`initialize`. A read of OpenCode 1.19.3's build changed one thing: a tool call to a local server times out after a
+minute unless its entry sets `timeout`, so the overseer's entry sets its own; OpenCode 2's entry sets
+`timeout.execution` (2026-10-24). Stage 2's check, a day of the operator's loop held to Stage 0's baseline, which is
+still to be measured, is the operator's.

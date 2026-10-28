@@ -48,14 +48,14 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Kept: worktrees are ephemeral and the pushed branch is the checkpoint; reuse and return keep ignored files.
 - Rejected: changing treehouse upstream (still a second toolchain and a second store of leases).
 
-## D003. Connectivity through the agent runtime's MCP, not harness code
+## D003. Connectivity through the agent runtime's MCP and separate programs, not harness code
 
 - The harness imports no tracker or VCS client and holds no token. Agents reach trackers and GitHub through MCP.
-- Consequence: the harness cannot verify anything the tracker says, such as who wrote a comment.
-- Settled by the operator (2026-10-17, REQUIREMENTS C7): canopy ships separate programs, run as commands with `gh`'s
-  token, that read GitHub and post what the operator approved word for word: `canopy-connect-github` and
-  `canopy-post-github` (DESIGN §29), whose reader ROADMAP M36 grows into the whole connector.
-- Revisit: if the overseer's token cost for reading state dominates; then move polling into Python.
+- Settled by the operator (2026-10-17, REQUIREMENTS C7): canopy ships separate programs, run as commands with their own
+  credentials, that read the tracker and GitHub into the journal (DESIGN §30) and post what the operator approved word
+  for word (§29); the harness itself polls nothing.
+- Consequence: the harness can check what a connector observed, such as who wrote a comment (DESIGN §7), never more;
+  a subject no source observes stays the agents' word.
 
 ## D004. SQLite journal plus flock, not a stateless overseer
 
@@ -81,16 +81,20 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - What to do about a ticket lives in the overseer prompt; what the loop may never do lives in dispatch guards and agent
   permissions. A prompt cannot relax a guard.
-- Revisit: if prompt behavior proves unstable; then move one rule at a time into code.
+- Revisited (M38, DESIGN §37): the harness decides a ticket in code when every row of §7 holding for it is one it
+  decides, and the overseer is refused `decided` on it. A row moves into code one at a time, by a PR citing a
+  measurement that shows the derivation right on it; one the harness reads from its journal alone needs none.
 
 ## D009. The runtime is a command template, and only its implementation in `canopy.runtime` knows it
 
 - `runtime.*_cmd` are templates, rendered per D023: how a run starts is config, not code.
-- What canopy reads and writes of OpenCode, its events, definitions' format, config files, and variables, is in
-  `runtime/opencode/` alone, which only `runtime/implementation.py` imports; the rest of canopy calls the `runtime`
-  package's surface. `test_layers.py` fails on a string naming OpenCode, or an import of it, anywhere else. A new
-  runtime, or a new major version such as OpenCode 2, is a sibling implementation bound in its place, with its own
-  definitions and default templates.
+- What canopy reads and writes of OpenCode, its events, definitions' format, config files, and variables, is in its
+  implementations alone, `runtime/opencode/` (OpenCode 1's) and `runtime/opencode2/`, which only
+  `runtime/implementation.py` imports; the rest of canopy calls the `runtime` package's surface. `test_layers.py` fails
+  on a string naming OpenCode, or an import of it, anywhere else.
+- Config's `runtime.version` chooses the implementation every surface call goes to, 1 by default, and the default
+  templates are its. A new runtime, or a new major version, is a sibling implementation with its own definitions and
+  default templates; still no adapter interface, one runtime at a time.
 - Rejected: an adapter interface over several runtimes at once (AGENTS.md, Do not build).
 - Revisit: when two runtimes must run side by side.
 
@@ -142,10 +146,16 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Without the root `tests/__init__.py`, pytest names `tests/canopy/` `canopy` and shadows `src/canopy`.
 - Rejected: `--import-mode=importlib` (changes how `conftest.py` imports, for no gain).
 
-## D020. The overseer reaches the journal through the CLI, keyed by `CANOPY_TICK_ID`
+## D020. The overseer reaches the journal through canopy's tools, keyed by `CANOPY_TICK_ID`
 
-- `dispatch`, `decide`, and `attention` refuse without a running tick, so the journal holds only what the loop did.
-- Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's. No own table.
+- Its verbs are MCP tools canopy serves its run alone (D124, DESIGN §27); it has no shell but the commands the
+  operator names in `runtime.allow_bash`, never canopy's own. They, and the commands that share their functions until
+  those go, refuse without a running tick, so the journal holds only what the loop did.
+- Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's, with the
+  overseer's items held through a tick that did not give it their subject, and the three it keeps held from the one
+  that recorded them until what they name ends them (`decisions.kept`, DESIGN §14, §37). No own table.
+- The harness raises the items that need no judgment from their causes, keeping one while an observation it rests on
+  is stale, and the overseer's tools refuse it those reasons (`raised`, DESIGN §37).
 
 ## D021. How OpenCode enforces permissions under `opencode run`
 
@@ -203,6 +213,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 - The harness makes no network call; Slack is a separate process with its own secret file. The desktop sink, holding
   no secret and needing no network, ships inside canopy.
 - Rejected: HTTP in the harness (T2); the overseer posting via Slack MCP; interactive Slack (needs a listener).
+  Replies read back by a connector, polled outbound, need none (M64).
 
 ## D036. A dry run runs every guard and changes nothing the next live tick reads
 
@@ -250,7 +261,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D051. A dispatch names the queue label it relies on, and the worker checks it again
 
 - Where a `tracker` source observes the ticket, the label must be one it observed, checked in code (`unauthorized`,
-  DESIGN §35); without one, `--label` stays a claim. Either way the worker re-reads the labels and fails without changes.
+  DESIGN §7); without one, `--label` stays a claim. Either way the worker re-reads the labels and fails without changes.
 
 ## D053. State directories and snapshots must be private to the operator
 
@@ -266,6 +277,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - Agents check author and label (D003). Never forced, unless the operator sets `trust.rebase` (private): then a
   rebased branch is pushed with `--force-with-lease`, the only force a worker's definition allows.
+- The harness's one force of its own: with `trust.max_flaky_kicks` (private), a lease of the rebased branch to rerun
+  checks a worker judged flaky, a limited number of times per pushed head (DESIGN §23).
 - Rejected: any labeled PR (a label would put commits on a coworker's branch); rebasing by default (merging needs no
   force, and most repositories accept merge commits).
 
@@ -292,7 +305,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D072. The journal holds every ticket's conversation; authority stays with its source
 
 - Private tickets (`canopy start`) never touch the tracker; only operator messages authorize them.
-- On public tickets the mirror authorizes nothing; replies are read live.
+- On public tickets a tracker comment in the journal authorizes nothing; replies are read live.
 - Rejected: a shadow ticket in a private tracker; the journal as source for public tickets (forgeable).
 
 ## D073. `canopy loop` serves the web UI from a thread, behind an off switch
@@ -322,6 +335,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - Every definition denies `webfetch`, `websearch`, `codesearch`. Web content is untrusted text; bash still reaches the
   network (a T1 residual).
+- And `execute`, OpenCode 2's code mode, whose code can make HTTP requests; an MCP server an agent needs is set to
+  `codemode: false` rather than reached through it (the operator, 2026-10-23).
 - Revisit: when workers are sandboxed with egress controls, or if missing lookups measurably hurt runs.
 
 ## D079. The web UI is a single-page app in `ui/`
@@ -332,11 +347,6 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: Jinja2 with htmx (per-page script drifts); committing the build; building at install; server rendering;
   a wheel without the UI.
 - Revisit: if the UI shrinks to pages a template would serve.
-
-## D081. The overseer mirrors comments through a quoted heredoc with a per-tick random delimiter
-
-- No comment can end the heredoc. Workers' marks are read in code; at most 100 mirrors per tick.
-- Rejected: the body as a quoted argument (one missed escape runs it); a fixed delimiter.
 
 ## D084. Workers set labels through the tracker's MCP edit tool and deny dangerous MCP tools by name
 
@@ -362,7 +372,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - `trust.trusted_reviewers` (private, empty by default; `canopy:review` for canopy's reviewer). Anyone else's
   feedback is `untrusted_review` attention until the operator answers with `canopy reply` or the web UI.
-- Checked in code where the `vcs` source observes the PR fresh (DESIGN §35): a `resume` for `review` must cover a
+- Checked in code where the `vcs` source observes the PR fresh (DESIGN §7): a `resume` for `review` must cover a
   trusted reviewer's item or a trusted canopy review, and anyone else's only with an operator message after it among
   those it carries; else `unauthorized`. Unobserved, it is the prompt's. With `policy.feedback_plan = "approve"`
   (DESIGN §32) the go-ahead is the approval of a feedback plan instead, in code, and trust only informs the operator.
@@ -434,8 +444,10 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D118. The sandbox is an opt-in prefix on the command templates, and the boundary for the runs it wraps
 
-- The harness never learns whether a run is sandboxed; it passes only `CANOPY_GIT_OBJECTS`, which an unsandboxed run
-  ignores. Every agent command but the overseer's can be wrapped: the overseer needs the journal and config it denies.
+- The harness never learns whether a run is sandboxed, beyond adding the prefix itself for a repository the private
+  `runtime.sandbox_repos` names (the operator's ask, 2026-10-23); it passes only `CANOPY_GIT_OBJECTS`, which an
+  unsandboxed run ignores. Every agent command can be wrapped, the overseer's too, since the tick starts every run it
+  asks for (DESIGN §40); its role writes, of the state, the journal's files alone.
 - What the harness runs on the host after a run (git, treehouse) reads nothing a sandboxed run can write (TRUST_MODEL
   T4): a new step in a slot keeps D107's flags and runs after `_run`'s link and `commondir` check.
 - Revisit: making it the default, once the canary passes on the operator's machines and a day of sandboxed runs.
@@ -473,7 +485,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D122. The web UI's public demo serves mock data only
 
-- `canopy.serve.demo` serves the fixtures (`serve/mock.py`) under public host names with no listener secret, on a host
+- `canopy.serve.demo` serves the fixtures (`serve/mock/`) under public host names with no listener secret, on a host
   that runs the app itself (Vercel, `vercel_app.py`). `ServeOptions` refuses `public_hosts` without `mock`, so the
   loop's server never takes one (TRUST_MODEL T8).
 - Why: anyone can try the latest UI, at no cost on Vercel's free plan; the fixtures hold nothing of the operator's.
@@ -496,6 +508,7 @@ such as a shipped migration, may still cite one, and git history has its text.
   no tool and refuses every call under `CANOPY_RUN_ID` or outside a running tick (D020). A tool and its command share
   one request and one function (`loop/tools.py` and its siblings, `loop/*_tools.py`), so they cannot drift apart.
 - With `--chore` it serves a chore's run one tool, its own chore's history, and nothing of the overseer's (DESIGN §27).
+- With `--reports` it serves a chore's run canopy's read-only reports, and nothing of the overseer's (DESIGN §27).
 - With `--git NAME=PATH` it serves a review's or a plan's run read-only git in the checkouts the harness names, alone.
 - Rejected: the `mcp` SDK (a runtime dependency with its own async stack and HTTP transports, for five methods); any
   transport but stdio; tools for workers, whose results are read after they exit (DESIGN §27).
@@ -527,3 +540,26 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Why: the operator (2026-10-20) found a verb nobody would type, `canopy seen`, to be surface kept for a rule's sake.
 - Rejected: a CLI verb for every web write (`canopy seen`, built and removed).
 - Revisit: before a page-only write that authorizes work, which T8 would then have to guard as the CLI's verbs are.
+
+## D128. The web channel writes only named config keys: limits within ceilings, trust only stricter
+
+- An allowlist by key name in `serve/config_edit.py`, never a section; a new key is not writable until named. Only the
+  workspace's private file (M49), never the workspace file or the user file. Settled by the operator (ROADMAP M41).
+- Why: a config write outlives the listener secret. A raised limit is spend, bounded by a ceiling; an added replier or
+  reviewer would steer workers after a new secret, so trust settings only tighten.
+- Nothing that runs a command, picks a prompt, is read as words, or moves the listener. No CLI verb: it would be in
+  reach of the overseer's `canopy *` rule.
+
+## D129. tomlkit edits the private config in place
+
+- `tomllib` only reads. tomlkit keeps the operator's comments and layout through a write; only `canopy.serve` imports
+  it (`tests/canopy/test_layers.py`).
+- Rejected: writing the file anew with the stdlib (comments lost); a file of canopy's own layered after the private
+  file (a hand edit to the private file would be silently overridden).
+
+## D130. Every program canopy ships makes its HTTP requests through `canopy-http`
+
+- One client, on httpx2: bound to one origin, following no redirect, trusting the system's certificates, and telling
+  a request that never left from one that may have been carried out, so only what cannot happen twice is sent again.
+- The harness imports neither it nor httpx2 (`tests/canopy/test_layers.py`), as it imports no stdlib network module.
+- Rejected: urllib in each program (its errors escape `OSError`, so a reply cut off crashed a run; each copy drifted).

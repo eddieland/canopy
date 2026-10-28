@@ -6,7 +6,7 @@ import type { DiffFile, DiffLine, ReviewDiff, ReviewFinding } from '@/api/types'
 import { DIFF_BUDGET } from '@/lib/review-folds'
 import { placeFindings } from '@/lib/reviews'
 
-import { ReviewDiffPanels } from './review-diff'
+import { FindingCard, ReviewDiffPanels } from './review-diff'
 import type { Wanted } from './review-diff'
 
 afterEach(() => {
@@ -38,7 +38,19 @@ const DIFF: ReviewDiff = {
 }
 
 function finding(title: string, line: number): ReviewFinding {
-    return { severity: 'minor', title, location: `notes.txt:${line}`, detail: '', file: 0, line, dismissed: false }
+    return {
+        severity: 'minor',
+        title,
+        location: `notes.txt:${line}`,
+        detail: '',
+        file: 0,
+        line,
+        dismissed: false,
+        dismissed_reason: null,
+        held: false,
+        answer: null,
+        answer_reason: null,
+    }
 }
 
 function diff(
@@ -212,4 +224,28 @@ describe('ReviewDiffPanels file types and folds', () => {
             expect(screen.queryByRole('button', { name: 'Show 100 hidden lines' })).toBeNull()
         },
     )
+})
+
+describe('FindingCard', () => {
+    it('marks a finding canopy holds for the operator, and shows what the worker answered of one', () => {
+        const held = { ...finding('log line is noisy', 2), held: true }
+        const answered = {
+            ...finding('retry never stops', 1),
+            answer: 'declined' as const,
+            answer_reason: 'By design.',
+        }
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <FindingCard run={5} numbered={{ n: 1, finding: held }} />
+                <FindingCard run={4} numbered={{ n: 2, finding: answered }} />
+            </QueryClientProvider>,
+        )
+        const [first, second] = screen.getAllByTestId('finding')
+        expect(within(first as HTMLElement).getByText('held for you')).toBeTruthy()
+        expect(within(first as HTMLElement).queryByTestId('finding-answer')).toBeNull()
+        expect(within(second as HTMLElement).queryByText('held for you')).toBeNull()
+        expect(within(second as HTMLElement).getByTestId('finding-answer').textContent).toBe(
+            'The worker answered: declinedBy design.',
+        )
+    })
 })

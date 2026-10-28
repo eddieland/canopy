@@ -4,28 +4,24 @@
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
 # The agent of the memory-tickets example chore. `canopy chore install` copies it into the workspace beside the
 # chore's prompt, and the chore's `cmd` loads that copy, which stays as installed until the chore is installed again.
-# It is `canopy-chore` with a shell for the three listings of agent memory. A chore reads and reports (DESIGN §19,
-# TRUST_MODEL T6): its only output is its result line. It needs the tracker's and GitHub's MCP read tools, which this
-# keeps; the deny patterns below keep it from filing the tickets it recommends. Everything but bash is
-# `canopy-chore`'s; keep the two in step.
+# It is `canopy-chore` with three more of canopy's tools, the listings of agent memory. A chore reads and reports
+# (DESIGN §19, TRUST_MODEL T6): its only output is its result line. It needs the tracker's and GitHub's MCP read tools,
+# which this keeps; the deny patterns below keep it from filing the tickets it recommends. Everything but canopy's tools
+# it allows is `canopy-chore`'s; keep the two in step.
 description: canopy chore that reads agent memory for what should become a ticket. Reports findings, changes nothing.
 mode: primary
 permission:
   edit: deny
-  # Its own chore's earlier runs (DESIGN §19, History), and the three listings its prompt names. The commands that
-  # change memory (`promote`, `reject`, `renew`, `forget`, `purge`) match none of them, and refuse inside any run
-  # anyway. Everything else in bash is denied.
-  bash:
-    "*": deny
-    "canopy chore history *": allow
-    "canopy memory lessons --json": allow
-    "canopy memory proposals --json": allow
-    "canopy memory list --json": allow
+  # It reads its history and agent memory through canopy's tools, below, not a shell.
+  bash: deny
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077).
   webfetch: deny
   websearch: deny
   codesearch: deny
+  # OpenCode 2's code mode runs the model's JavaScript, which can make HTTP requests of its own, so it is a web
+  # tool too (D077). An MCP server reached only through it is then out of reach: give it `codemode: false`.
+  execute: deny
   external_directory: deny
   # Subagents run with their own, wider permissions; a chore must not reach them.
   task: deny
@@ -56,12 +52,16 @@ permission:
   "*branch*": deny
   "*fork*": deny
   "*copilot*": deny
-  # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
-  # above reopens one.
-  "canopy_git_*": deny
-  # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
-  # chore's, allowed by exact name: last, so no pattern above closes it.
+  # canopy's own tools, the overseer's, the reviewer's and planner's git tools, and the reports this agent does not
+  # read, are not its (DESIGN §27): denied by pattern, before its exceptions below.
+  "canopy_*": deny
+  # Its tools of canopy's, each allowed by exact name: last, so no pattern above closes one. Its own chore's earlier
+  # runs (DESIGN §19, History), which refuses any other chore's, and the three listings of agent memory its prompt names
+  # (DESIGN §27), which write nothing.
   "canopy_chore_history": allow
+  "canopy_reports_memory-lessons": allow
+  "canopy_reports_memory-proposals": allow
+  "canopy_reports_memory-list": allow
 ---
 
 The system prompt is supplied by the harness at invocation time via the

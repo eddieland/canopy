@@ -17,20 +17,19 @@ from __future__ import annotations
 import json
 import sys
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 import click
 
+from canopy.cli import attachments as attachments_cli
 from canopy.cli import tasks as tasks_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
-from canopy.cli.render import chore_line, named, phase_of, prs_of, result_of, spent
 from canopy.core import (
-    chore_result,
     chore_view,
-    contract,
     conversation,
     db,
+    feedback_items,
     feedback_plans,
     notice,
     pause,
@@ -38,19 +37,23 @@ from canopy.core import (
     plan_threads,
     plans,
     prompts,
+    reports,
     review_drafts_manage,
     review_requests,
     review_revisions,
     review_runs,
 )
-from canopy.core.vocab import PlanStatus, RunKind
+from canopy.core.vocab import DismissalReason, PlanItem, PlanStatus, RunKind
 from canopy.infra import logs
 from canopy.infra.text import one_line
-from canopy.loop import attention
+from canopy.loop import attention, readback
+from canopy.loop.render import phase_of
 from canopy.reviews import grants
 from canopy.runs import halt, policy
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from canopy.core import records
     from canopy.core.context import Context
     from canopy.core.conversation import Ref
@@ -398,8 +401,8 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
     """Forget a ticket's branch and PRs, so its next implement starts over on a new branch.
 
     Its runs and conversation stay in the journal for `canopy show`, and its runs still count toward the attempt limits.
-    A persona override from `canopy persona` stays too; `canopy persona KEY --clear` removes it. Close its PRs and
-    delete its branch yourself: canopy never does.
+    A persona override from `canopy persona` stays too, as does a model override from `canopy model`; `--clear` on
+    either removes it. Close its PRs and delete its branch yourself: canopy never does.
     """
     _operator("forget")
     subject = _ref(ref, "forget")
@@ -546,16 +549,31 @@ def _grant_reviews(ctx: Context, subject: Ref, *, repo: str | None, runs: int) -
 @click.argument("ref", metavar="REF")
 @click.argument("findings", metavar="FINDING...", nargs=-1, required=True)
 @click.option("--undo", is_flag=True, help="Take the dismissals back.")
+@click.option(
+    "--reason",
+    type=click.Choice([str(r) for r in DismissalReason]),
+    help="Why a review's findings are dismissed: required for a review, refused for a chore and with --undo.",
+)
 @click.pass_context
-def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *, undo: bool) -> int:
+def cmd_dismiss(
+    click_ctx: click.Context,
+    ref: str,
+    findings: tuple[str, ...],
+    *,
+    undo: bool,
+    reason: str | None,
+) -> int:
     """Dismiss a chore's open FINDINGs (`chore:NAME`, by their ids) or a review's (`review:ID`, by their numbers).
 
     A chore's finding is off the attention list until the chore stops reporting it: `canopy show chore:NAME` still
     lists it, marked dismissed, and if it comes back after a run leaves it out, it is listed again. To have the chore
     stop reporting it, write the chore a note with `canopy reply chore:NAME`.
 
-    A review's finding stays in `canopy review show ID`, marked, and is left out of what a resume hands a worker and of
-    what the overseer reads. It is one run's finding: a new commit's review starts fresh.
+    A review's finding stays in `canopy review show ID`, marked with its reason, and is left out of what a resume hands
+    a worker and of what the overseer reads. It is one run's finding: a new commit's review starts fresh. Say why with
+    --reason: `wrong`, it does not hold; `intentional`, it holds but the change means it; `not_worth_it`, it holds and
+    is not worth the fix; `out_of_scope`, it holds and is worth fixing, but in another PR. `canopy review noise` counts
+    them.
 
     The findings are dismissed together or not at all: one refused leaves every other as it was.
     """
@@ -570,6 +588,7 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *
             channel=CLI,
             chores=chore_view.defined(ctx.config, ctx.workspace),
             undo=undo,
+            reason=DismissalReason(reason) if reason is not None else None,
         )
     except conversation.Refused as r:
         raise CliError(f"dismiss refused ({r.guard}): {r.reason}") from None
@@ -578,7 +597,7 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *
     for finding in named:
         log.info(
             "finding dismissal taken back" if undo else "finding dismissed",
-            extra={"subject": str(subject), "finding": finding, "channel": CLI},
+            extra={"subject": str(subject), "finding": finding, "channel": CLI, "reason": reason},
         )
     listed = ", ".join(named)
     # One finding reads as before; several take the plural.
@@ -588,7 +607,7 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, findings: tuple[str, ...], *
         if undo:
             click.echo(f"{noun} {is_} no longer dismissed: a resume hands {it} to the worker again.")
         else:
-            click.echo(f"{noun} {is_} dismissed: no worker or tick acts on {it}.")
+            click.echo(f"{noun} {is_} dismissed as {reason}: no worker or tick acts on {it}.")
         return 0
     attention.write(ctx, log)
     if undo:
@@ -734,6 +753,7 @@ def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
         _show_plans(ctx, ticket, every=every_plan)
         _show_feedback_plan(ctx, key)
     _show_runs(ctx, key)
+    attachments_cli.listed(ctx, conversation.Ref(conversation.TICKET, key))
     _show_conversation(ctx, key, record)
 
 
@@ -817,19 +837,47 @@ def _show_feedback_plan(ctx: Context, key: str) -> None:
     click.echo(f"  {plans.path_for(ctx.state_dir, key, plan.run_id)}")
     covered = feedback_plans.items(ctx.conn, plan.id)
     who = feedback_plans.authors(ctx.conn, plan.id)
+    checks = feedback_items.check_names(ctx.conn, plan.id)
+    blockers = feedback_items.blockers(ctx.conn, plan.id)
     several = len({i.pr_url for i in covered}) > 1
     for i in covered:
-        author = who.get((i.pr_url, i.item, i.item_id))
-        line = f"  {i.number}. id {i.item_id}, {one_line(author) if author else 'no author recorded'}, {i.proposal}"
+        line = f"  {i.number}. id {i.item_id}, {_item_what(i, who, checks, blockers)}, {i.proposal}"
         line += f", on {i.pr_url}" if several else ""
         click.echo(line + (", left out" if i.left_out else ""))
     if not covered:
-        click.echo("  it covers no review item")
+        click.echo("  it covers no item")
     if plan.spent_run_id is None:
         click.echo(
             f"\nApprove it with `canopy plan {key} --approve`, by item with `--item N` or all but some with "
             f"`--leave N`; ask for changes with `canopy reply {key}`.",
         )
+
+
+def _item_what(
+    item: records.FeedbackPlanItem,
+    who: Mapping[feedback_items.Key, str | None],
+    checks: Mapping[tuple[str, int], str],
+    blockers: Mapping[tuple[str, int], str],
+) -> str:
+    """What a feedback plan's item is, for `canopy show`: an author, a check's name, a conflict, or a merged blocker.
+
+    Returns:
+        The words, the author's and the check's name each on one line.
+    """
+    match item.item:
+        case PlanItem.REVIEW | PlanItem.COMMENT:
+            author = who.get((item.pr_url, item.item, item.item_id))
+            return one_line(author) if author else "no author recorded"
+        case PlanItem.CHECK:
+            name = checks.get((item.pr_url, item.item_id))
+            return f"failed check {one_line(name)}" if name else "a failed check"
+        case PlanItem.CONFLICT:
+            return "conflict with its base"
+        case PlanItem.BLOCKER:
+            merged = blockers.get((item.pr_url, item.item_id))
+            return f"merged blocker {merged}" if merged else "a merged blocker"
+        case _:
+            assert_never(item.item)
 
 
 def _show_plan_threads(ctx: Context, key: str) -> None:
@@ -872,86 +920,19 @@ def _show_conversation(ctx: Context, key: str, record: records.Start | None) -> 
 
 
 def _echo_message(m: records.Message) -> None:
-    click.echo(_message_head(m))
-    for line in conversation.printable(m.body).splitlines():
-        click.echo(f"    {line}")
-
-
-def _message_head(m: records.Message) -> str:
-    who = {"worker": "worker", "operator": "you", "tracker": "tracker"}.get(m.source, m.source)
-    if m.comment_id is not None:
-        # A tracker comment the overseer mirrored: a copy, which authorizes nothing (DESIGN §22).
-        cut = ", truncated" if m.truncated else ""
-        return (
-            f"  #{m.id}  {attention.age(m.at)} ago  {who} comment {m.comment_id} by {m.author}, "
-            f"written {m.commented_at}{cut}"
-        )
-    about = f" (run:{m.run_id})" if m.run_id else ""
-    if m.answers:
-        about += f" answering {m.answers}"
-    via = f" via {m.channel}" if m.source == "operator" else ""
-    return f"  #{m.id}  {attention.age(m.at)} ago  {who} {m.kind}{about}{via}"
+    for line in readback.message_lines(m):
+        click.echo(line)
 
 
 def _show_run(ctx: Context, run_id: int) -> None:
-    run = db.get_run(ctx.conn, run_id)
-    if run is None:
-        raise CliError(f"no run {run_id}")
-    private = ", private" if run["private"] else ""
-    click.echo(
-        f"run:{run_id}: {run['kind']} of {named(run['ticket_key'], run['ticket_title'])}{private}, {run['status']}",
-    )
-    click.echo(f"  started {run['started_at']}" + (f", ended {run['ended_at']}" if run["ended_at"] else ""))
-    if run["branch"]:
-        click.echo(f"  branch {run['branch']}")
-    for s in db.run_slots(ctx.conn, run_id):
-        click.echo(f"  {s.repo}  slot {s.slot_path}, from {s.base_branch}")
-    result = result_of(run)
-    for pr in prs_of(result):
-        click.echo(f"  PR {pr}")
-    said = one_line(str(result.get("harness") or ""))
-    if said:
-        click.echo(f"  harness: {said}")
-    session = f"session {run['session_id']}" if run["session_id"] else "no session reported"
-    click.echo(f"  {session}{spent(run)}")
-    click.echo(f"  log {run['log_path']}")
-    messages = db.run_messages(ctx.conn, run_id)
-    if messages:
-        click.echo("\nMessages:")
-    for m in messages:
-        _echo_message(m)
+    try:
+        click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id)))
+    except reports.Refused as e:
+        raise CliError(str(e)) from None
 
 
 def _show_chore(ctx: Context, name: str) -> None:
-    found = [s for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace) if s.name == name]
-    if not found:
-        raise CliError(f"no chore {name!r} is configured for this workspace")
-    [state] = found
-    click.echo(f"chore:{name}: {chore_line(state, datetime.now(UTC))}")
-    latest = state.latest_ended
-    if latest is not None:
-        said = one_line(contract.stored_note(result_of(latest)))
-        click.echo(f"  latest run {latest.id} {latest.status}" + (f": {said}" if said else ""))
-        session = f"session {latest.session_id}" if latest.session_id else "no session reported"
-        click.echo(f"  {session}{spent(latest)}")
-        click.echo(f"  log {latest.log_path}")
-    findings = state.findings()
-    more = state.more_findings()
-    click.echo(f"\nOpen findings ({len(findings)}):")
-    for f in findings:
-        title = one_line(f.finding.title)
-        mark = "  (dismissed)" if f.dismissed else ""
-        click.echo(
-            f"  {f.finding.id}  {attention.age(f.since)}  {title}"
-            + (f"  {f.finding.link}" if f.finding.link else "")
-            + mark,
-        )
-    if more:
-        click.echo(f"  {chore_result.more_text(more)}")
-    elif not findings:
-        click.echo("  none")
-    notes = db.messages_of(ctx.conn, conversation.CHORE, name, conversation.CHORE_NOTES)
-    if notes:
-        click.echo(f"\nYour notes its next run reads ({len(notes)}):")
-    for m in notes:
-        _echo_message(m)
+    try:
+        click.echo(readback.read_chore(ctx, readback.ShowChore(name=name)))
+    except reports.Refused as e:
+        raise CliError(str(e)) from None

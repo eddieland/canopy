@@ -1,11 +1,14 @@
 """What the server reads and writes through, handed to it by whoever runs it (DESIGN §22).
 
 `serve` is a feature: it cannot import `loop`, `runs`, `reviews`, or `chores`. The attention list
-(`loop.attention.listed`), ending a stopped ticket's run (`runs.halt.end`, as `canopy stop --now` does), asking the loop
-to read its config again (`loop.reread`, as SIGHUP does) or for a tick now (`loop.tick_now`, as `t` does), the attempt
+(`loop.attention.listed`), ending a stopped ticket's or task's run (`runs.halt.end`, `runs.task_run.stop_now`, as
+`canopy stop --now` does), asking the loop to read its config again (`loop.reread`, as SIGHUP does) or for a tick now
+(`loop.tick_now`, as `t` does), the attempt
 and review limits `canopy grant` raises (`runs.policy`, `reviews.grants`), and trying a chore (`chores.trial`) are
 theirs, so `canopy loop` passes them in, and `python -m canopy.serve --mock` passes stand-ins over its seeded journal.
-Reading a pool is the pool's own `status` unless told otherwise: the mock has no pool to ask.
+Reading a pool is the pool's own `status` unless told otherwise, and the models the runtime lists its own list: the mock
+has no pool or runtime to ask. The server keeps the model list it read for a few minutes (`Backend.model_list`), since
+each read starts the runtime; a run's dispatch reads its own.
 
 The loop's config and workspace map are read by each request as it opens, and replaced when the loop reads them again
 (`use`), so a request runs on one config throughout, the one the loop runs on.
@@ -13,16 +16,21 @@ The loop's config and workspace map are read by each request as it opens, and re
 
 from __future__ import annotations
 
+import json
 import threading
+import time
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, db, pools
+from canopy.core import chore_view, config, db, pools, tasks
 from canopy.core.context import Context, db_path
+from canopy.core.vocab import RunStatus
 from canopy.infra import procs
+from canopy.runtime import models as runtime_models
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -30,10 +38,26 @@ if TYPE_CHECKING:
     from canopy.core.conversation import Ref
     from canopy.core.items import Item
     from canopy.core.workspace import Workspace
+    from canopy.runtime.report import ModelList
+
+#: Seconds the server serves a model list the runtime gave before it asks the runtime again: long enough that opening
+#: the ticket page's menus one after another starts it once, short enough to see a provider set up meanwhile.
+MODEL_LIST_SECONDS = 300.0
 
 
 def _status(ctx: Context, repo: str) -> Sequence[pools.Slot]:
     return ctx.pool(repo).status()
+
+
+def _models(ctx: Context) -> ModelList:
+    # Read in the workspace root, as a run's model is looked up (DESIGN §13), with the variants a choice may name.
+    return runtime_models.listed(ctx.runner, version=ctx.config.runtime.version, cwd=ctx.workspace.root, variants=True)
+
+
+def _close_task_run(ctx: Context, run: records.TaskRun) -> bool:
+    # The mock's, which has no process to kill and no pool to return a slot to: it closes the run's row alone.
+    note = json.dumps({"harness": "the operator stopped the task (mock: no process was killed)"})
+    return tasks.close_run(ctx.conn, ctx.config, run.id, RunStatus.STOPPED, note, head=None)
 
 
 @dataclass(frozen=True)
@@ -105,6 +129,9 @@ class Backend:
     # A repository's pool's slots, for the worktrees page: its `status`. Called on a thread per pool, each with a
     # Context of its own from `open`.
     slots: Callable[[Context, str], Sequence[pools.Slot]] = field(default=_status)
+    # The models the runtime lists to run an agent on, and each one's variants, for the ticket page's Model panel to
+    # choose from and for a choice of one to be looked up in: what `canopy models` prints.
+    models: Callable[[Context], ModelList] = field(default=_models)
     # Now, for windows such as the spend figure's: the mock's is fixed, as its journal's times are.
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
     # Rewrite `attention.md` after a write that changes the list without a tick, such as a dismissal. The mock's
@@ -113,8 +140,21 @@ class Backend:
     # The process runner each Context gets. The mock's answers for canopy's GitHub programs from its own journal, so a
     # draft sent from the mock posts nowhere.
     runner: Callable[[], procs.Runner] = field(default=procs.SubprocessRunner)
+    #: End a stopped task's running run as `canopy stop task:N --now` does; False if it had already ended. The loop
+    #: passes `runs.task_run.stop_now`; the default, the mock's, closes the run's row and kills nothing.
+    end_task_run: Callable[[Context, records.TaskRun], bool] = field(default=_close_task_run)
+    # The user config the loop read, under the private file the settings page edits (config_edit.py).
+    user_file: Path = field(default_factory=config.user_config_path)
+    # `canopy loop --every`'s minutes, which set the pace whatever `loop.interval_minutes` says, or None.
+    every: int | None = None
+    #: Seconds on a clock that only moves forward, for how long a model list read from the runtime is served.
+    monotonic: Callable[[], float] = field(default=time.monotonic)
     # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
+    #: Held while the model list is looked up or read, so requests that find none kept start one runtime, not one each.
+    _models_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
+    #: The model list last read, with what it was read on and when; None before the first and after one that failed.
+    _listed: _Listed | None = field(default=None, init=False, repr=False, compare=False)
     # When chores' findings started, as the last read found them, handed to every Context opened, so a request or a
     # stream reads back only to there rather than through the whole history of a finding open for months.
     _finding_starts: chore_view.FindingStarts = field(
@@ -162,3 +202,42 @@ class Backend:
         """Serve `config` and `workspace` from the next request on: the loop read its config again."""
         with self._lock:
             self.config, self.workspace = config, workspace
+
+    def model_list(self, ctx: Context, *, refresh: bool = False) -> ModelList:
+        """The models `models` lists on `ctx`'s config and workspace, read at most MODEL_LIST_SECONDS ago.
+
+        The list is read again on a config or workspace other than the one it was read on, as after the loop reads its
+        config again, which may name another runtime version; when `refresh` asks; and after a read that failed, which
+        is never kept, so a runtime that failed once is asked again by the next request rather than minutes later.
+
+        Returns:
+            The list kept, or the one just read.
+        """
+        with self._models_lock:
+            kept = self._listed
+            now = self.monotonic()
+            if (
+                not refresh
+                and kept is not None
+                and kept.config is ctx.config
+                and kept.workspace is ctx.ws
+                and now - kept.at < MODEL_LIST_SECONDS
+            ):
+                return kept.found
+            found = self.models(ctx)
+            self._listed = None if found.error is not None else _Listed(ctx.config, ctx.ws, now, found)
+            return found
+
+
+@dataclass(frozen=True)
+class _Listed:
+    """A model list the runtime gave, kept by `Backend.model_list`."""
+
+    #: The config it was read on: the one served, until the loop reads its config again.
+    config: Config
+    #: The workspace it was read in.
+    workspace: Workspace
+    #: When it was read, by `Backend.monotonic`.
+    at: float
+    #: What the runtime listed.
+    found: ModelList

@@ -2,10 +2,10 @@
 
 A tick is idle when it dispatched nothing and nothing reached the journal after the tick before read it (`idle`).
 After the n-th idle tick in a row the wait is `base * 2^n`, up to the cap and never below `base`; the CI cooldown's end
-or a chore's `due_at` still ahead, or the lapse of the operator's notice to workers, ends it sooner (`gate`). While the
-loop waits, a run that ends after the tick read the journal (`read_at`) wakes it, as the operator's own acts do. With
-the cap not above `base`, idle pacing is off: the wait is `base`, no gate shortens it, and only the operator's acts
-wake it: a message, a start or stop, a grant, or a notice set or cleared.
+or a chore's `due_at` still ahead, a PR head's settle time, or the lapse of the operator's notice to workers, ends it
+sooner (`gate`). While the loop waits, a run that ends after the tick read the journal (`read_at`) wakes it, as the
+operator's own acts do. With the cap not above `base`, idle pacing is off: the wait is `base`, no gate shortens it,
+and only the operator's acts wake it: a message, a start or stop, a grant, or a notice set or cleared.
 
 The count lives in the loop, not the journal, so a restarted loop starts at `base`.
 """
@@ -19,6 +19,7 @@ from canopy.core import chore_view, db, notice, tasks
 from canopy.core.items import subject
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention
+from canopy.reviews import settle
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -78,7 +79,7 @@ def idle(ctx: Context, outcome: tick.Outcome) -> bool:
 
     It closed `ok`, dispatched no run, and no run started or ended, and the operator recorded no message, started or
     stopped no ticket, granted nothing, and set or cleared no notice, after the previous tick read the journal. What it
-    recorded besides (waits, refusals, `done`, mirrors, attention items, phases) does not count: none of it starts work.
+    recorded besides (waits, refusals, `done`, attention items, phases) does not count: none of it starts work.
     Without a previous tick that read it, not idle.
 
     Returns:
@@ -92,6 +93,23 @@ def idle(ctx: Context, outcome: tick.Outcome) -> bool:
     return not any(
         d.action.startswith(DISPATCH_PREFIX) for d in db.decisions_for_tick(ctx.conn, outcome.tick_id)
     ) and _nothing_since(ctx, previous.read_at, previous.message_id)
+
+
+def count(ctx: Context, outcome: tick.Outcome, idle_count: int, *, idle: bool, on: bool) -> int:
+    """The idle ticks in a row after the tick that ended with `outcome`, `idle` or not, from `idle_count` before it.
+
+    Idle pacing paces only the overseer's runs (DESIGN §39): an `ok` tick that ran none cost nothing and leaves the
+    count as it was. Any other tick adds one when it was idle with pacing `on`, and starts the count again otherwise, a
+    tick halted before its overseer among them, as one that failed does.
+
+    Returns:
+        The count.
+    """
+    if outcome.status == TickStatus.OK and outcome.tick_id is not None:
+        row = db.get_tick(ctx.conn, outcome.tick_id)
+        if row is not None and row.overseer_ran is False:
+            return idle_count
+    return idle_count + 1 if on and idle else 0
 
 
 def churn(ctx: Context, outcome: tick.Outcome, seen: Before) -> list[str]:
@@ -152,11 +170,11 @@ def _nothing_since(ctx: Context, read_at: str, message_id: int) -> bool:
 
 
 def gate(ctx: Context, now: datetime) -> datetime | None:
-    """The earliest harness gate still ahead of `now`: a cooldown's end, a chore's `due_at`, or a notice's lapse.
+    """The earliest harness gate still ahead of `now`: a cooldown, a chore due, a head settling, or a notice lapsing.
 
-    A CI cooldown's end, a configured chore's `due_at`, and the lapse of the notice in force, so work held for the
-    notice resumes when it lapses. One already open sets none, so a chore the overseer passed over cannot make the loop
-    spin.
+    A CI cooldown's end, a configured chore's `due_at`, a PR head's settle time (DESIGN §21), and the lapse of the
+    notice in force, so work held for the notice resumes when it lapses. One already open sets none, so a chore the
+    overseer passed over cannot make the loop spin.
 
     Returns:
         The time the earliest gate opens, or None if none is still ahead.
@@ -164,7 +182,9 @@ def gate(ctx: Context, now: datetime) -> datetime | None:
     cooldowns = policy.ci_cooldowns(ctx.conn, ctx.config, now).values()
     dues = [d for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace) if (d := s.due_at(now)) is not None]
     lapse = notice.lapses(ctx.conn, now)
-    return min((t for t in (*cooldowns, *dues, *([lapse] if lapse else [])) if t > now), default=None)
+    settles = settle.next_settle(ctx.conn, ctx.config, now)
+    later = [t for t in (lapse, settles) if t is not None]
+    return min((t for t in (*cooldowns, *dues, *later) if t > now), default=None)
 
 
 def wait(ctx: Context, pace: Pace, idle_count: int, now: datetime) -> float:

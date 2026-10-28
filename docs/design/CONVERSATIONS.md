@@ -6,12 +6,14 @@ notifications, and reviews](CHORES_NOTIFICATIONS_REVIEWS.md). Next: [Flaky CI](F
 
 ## 22. Conversations
 
-The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied,
-and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
-Slack later. Each proves the operator its own way: the tracker by `trust.authorized_repliers`, read by agents; the
-CLI by the operator's shell (T1); the web UI by the listener secret (TRUST_MODEL T8); Slack by user ids the operator
-lists. Outbound, every channel uses §20's events. The overseer and workers never see which channel a message came
-from, so adding one changes no prompt.
+The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied, and
+where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and Slack.
+Each proves the operator its own way: the tracker by `trust.authorized_repliers`, matched in code on what a tracker
+source observed (§7), else by agents, and on a private ticket by the accounts a `tracker` source's `operators` lists
+(§30); the CLI by the operator's shell (T1); the web UI by the listener secret
+(TRUST_MODEL T8); Slack by the user ids a `slack` source lists, checked in code, for replies in the sink's ticket
+threads and mentions of canopy's bot in its channel (§20). Outbound, every channel uses §20's events. The overseer and
+workers never see which channel a message came from, so adding one changes no prompt.
 
 A ticket is **public** when one of `tracker.labels` authorizes it, and **private** when the operator starts it in
 canopy, or, with `tracker.private` set, when its label brings it in (below). A started ticket is private whatever labels
@@ -21,7 +23,7 @@ filed without the agent's reports, its questions, or the operator's answers appe
 ### Messages
 
 Each message is recorded against its subject, with its source (a worker's run, the operator through a channel that
-authenticated them, or a mirrored tracker comment), its kind, and its channel. The harness records a run's report and
+authenticated them, or a tracker comment), its kind, and its channel. The harness records a run's report and
 a `blocked` run's question from the result line (§8), in the transaction that closes the run. Operator input goes
 through one function every channel calls, which refuses an empty or overlong body rather than cut it and records a
 retried submission once. Agents never write a message directly. An operator message, or a task submitted (§36), or a
@@ -32,12 +34,15 @@ has one.
 
 ### Authority stays with the source
 
-- **Public ticket.** Authorization and replies are the overseer's live read of the tracker (§7, §17); a mirrored
-  comment is only its claim. The operator may also reply in canopy (D089), which is how they answer an untrusted
-  reviewer (§7); the message is canopy's own fact and stays in the journal.
+- **Public ticket.** Authorization and replies are the tracker's, as its source observed them, checked in code, or as
+  the overseer read them live (§7, §17); a comment's message is a copy. The operator may also reply in canopy (D089),
+  which is how they answer an untrusted reviewer (§7); the message is canopy's own fact and stays in the journal.
 - **Private ticket.** The journal is the source. Its start record and the operator's messages are canopy's own facts,
   written after a channel authenticated the operator, so the harness checks them in code without reading the tracker
-  (D003). Tracker comments on a private ticket are data, whoever wrote them.
+  (D003). Tracker comments on a private ticket are data, whoever wrote them, but for one a `tracker` source's
+  `operators` lists wrote without the workers' marks (D069): that one is the operator's message, so the operator can
+  answer a worker there though the worker posts nothing there. One written before the ticket's latest start, or past
+  an operator message's bound, stays data.
 
 ### Private tickets
 
@@ -61,7 +66,7 @@ so no agent can lift a limit that bounds it (TRUST_MODEL T1).
   private run filed is a public ticket like any other, worked only once the operator labels or starts it.
 - Its phases (§7) come from the journal: `needs_human` after a `blocked` run with no operator message since,
   `human_replied` after one. The harness raises `awaiting_reply` for an unanswered question (§14).
-- Workers' prompts carry the operator's messages as instructions, and reports and mirrored comments as data; the
+- Workers' prompts carry the operator's messages as instructions, and reports and tracker comments as data; the
   overseer points at a message by id and never quotes it. On a public ticket (D093), keeping those messages off the
   tracker is the worker's prompt's rule, not a guard (T6).
 
@@ -86,10 +91,25 @@ hide a result by marking it seen.
 
 ### Tracker comments in the journal
 
-The overseer copies each ticket's new tracker comments into the journal every tick, so the operator reads every
-conversation in one place (D081), through a command only a tick may run (D020) and in a form no comment can break out
-of (TRUST_MODEL T1). A comment bearing a worker's marks (D069) is recorded as a worker's. Either way it authorizes
-nothing: phases, `awaiting_reply`, and the loop's wake read operator messages only.
+Each comment the tracker source observes (§30) is recorded once in its ticket's conversation, in code and as the
+connector read it, so the operator reads every conversation in one place; no agent writes one. A comment bearing a
+worker's marks (D069) is recorded as a worker's. Either way it authorizes nothing: phases, `awaiting_reply`, and the
+loop's wake read operator messages only. An edit after its first read is not followed, and without a tracker source no
+comment reaches the conversation.
+
+### Attachments
+
+The operator may attach text files to a ticket, public or private, or to a task (§36): what someone sent them, such as
+a design doc, for its runs to check against the code. Only the operator's channels attach or remove one, refused inside
+a tick or any run (TRUST_MODEL T1), on a ticket canopy knows or a task not stopped. Its text is data, never an
+instruction: what to do with it is the operator's reply, or the task's text. Guards in code take only UTF-8 text and
+hold each subject to `policy`'s limits on how many files it holds, how large each is, and how large all are together,
+each under a ceiling no file raises, since every later run carries all of them. Rejected: canopy reading PDFs or
+documents, which would put a parser of untrusted files in the harness; the operator exports one as Markdown.
+
+An attachment is kept as a plan is (§25), an operator-only file in the state directory, and each run of its subject
+gets a copy in its worktree, excluded from git, which its prompt names as data. Removing one deletes its file and keeps
+its record, so the journal still says what the subject held.
 
 ### The web UI
 
@@ -100,9 +120,10 @@ and its controls TRUST_MODEL T8's.
   secret it serves nothing; a server failure never ends the loop. Only its development mode, on loopback with a journal
   of its own, may skip signing in.
 - It writes only through core's functions, with their guards: the ones the CLI's verbs use, and, for what no command
-  would do, one of its own that TRUST_MODEL T8 names, such as the operator's own words on a plan (§25) and what they
-  have seen. It never takes the tick lock. A page needs no CLI verb for what nobody would type. The server, not the
-  page, refuses a forget not typed out.
+  would do, one of its own that TRUST_MODEL T8 names, such as the operator's own words on a plan (§25), what they have
+  seen, and the limits and trust settings §12 lists, which Settings' Limits and trust page writes to the workspace's
+  private file and then reloads (`serve.config_edit`, D128). It never takes the tick lock. A page needs no CLI verb for
+  what nobody would type. The server, not the page, refuses a forget not typed out.
 - It records each write it lets through, and each sign-in, in the journal, so the operator can see what a holder of
   the secret did; never a request's body or credentials (T8).
 - Every value from the journal or a run's log is untrusted and rendered as text (D113). `canopy.serve` alone imports
@@ -111,19 +132,20 @@ and its controls TRUST_MODEL T8's.
 
 ### Search
 
-One box finds a ticket, or the run or tick that said something, by substring over the journal's text. It serves only
-what the other pages serve, so T8 is unchanged. Rejected for now: SQLite's FTS5, whose index is three times the text.
+One box finds a ticket or a task, or the run or tick that said something, by substring over the journal's text. It
+serves only what the other pages serve, so T8 is unchanged. Rejected for now: SQLite's FTS5, whose index is three
+times the text.
 
 ### Trust model changes
 
-Private tickets and mirrored comments changed TRUST_MODEL T1 and T6, and the web UI added T8. Operator messages on
+Private tickets and tracker comments changed TRUST_MODEL T1 and T6, and the web UI added T8. Operator messages on
 public tickets (D089) changed T1: one authorizes a `resume` as an authorized reply does. Seen marks changed T8: the web
-writes what no CLI verb does (D127).
+writes what no CLI verb does (D127). Limits and trust (M41) changed T8 too: the web writes a few config keys, limits
+within bounds and trust only stricter (D128).
 
 ### Open
 
 - Whether a private worker should have no tracker MCP server at all, and where it would read the ticket's text.
 - Deleting a ticket's conversation, for client data the operator must not keep. `forget` keeps it.
-- Slack replies, through a bridge or the overseer's MCP (§20). Either needs a T1 change naming Slack user ids.
 - Seen marks beyond reviews: a plan waiting on the operator (§25), each new plan its own subject, then a chore's
   findings and a run's drafts, each counted where the operator reads it.

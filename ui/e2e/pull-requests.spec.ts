@@ -24,7 +24,9 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(page).toHaveURL(/\/pull-requests$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pull requests')
     const rows = page.getByTestId('pull-requests').getByTestId('pull-request')
-    await expect(rows).toHaveCount(5)
+    // Five, the seven mobile PRs whose pages show the feedback plan's states (canopy/serve/mock/feedback_plans.py), and
+    // the nineteen its months before merged (history.py).
+    await expect(rows).toHaveCount(31)
     const ours = rows.filter({ hasText: 'acme/web#88' })
     // The PR's own title, as its worker reported it, rather than its ticket's.
     await expect(ours).toContainText('ABC-099: debounce the search box by 250 ms')
@@ -34,6 +36,11 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('Bump the retry budget for flaky upstreams')
     // One the operator asked canopy to review is listed before its first review.
     await expect(rows.filter({ hasText: 'acme/web#95' })).toContainText('requested')
+    // Where the operator's review of each PR the loop does not own stands, after its verdict; the loop's own have none.
+    const state = (pr: string) => rows.filter({ hasText: pr }).getByTestId('pull-request-review')
+    await expect(state('acme/api#14')).toHaveText(/review:6.*draft$/u)
+    await expect(state('acme/api#12')).toHaveText(/review:2.*published$/u)
+    await expect(state('acme/web#88')).not.toContainText('draft')
 
     await ours.getByRole('link', { name: 'acme/web#88', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
@@ -56,9 +63,11 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
 
     // A review opens its findings on its diff, and leads back to its PR's page.
     await page.getByTestId('pull-request-review-4').getByRole('link', { name: 'review:4' }).click()
-    await expect(page).toHaveURL(/\/reviews\/4$/u)
+    await expect(page).toHaveURL(/\/pull-requests\/reviews\/4$/u)
     // The URL changes before the new page replaces the old, which links to its PR too: wait for the review's title.
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4 acme/web#88 Debounce search input')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+        'review:4 acme/web#88 ABC-099: debounce the search box by 250 ms',
+    )
     await page.getByRole('link', { name: 'acme/web#88', exact: true }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
         'acme/web#88 ABC-099: debounce the search box by 250 ms',
@@ -75,6 +84,8 @@ test("a PR's page leads with where it stands, and a list it cannot fill takes on
     // The latest review's verdict is in the header, where the page starts, not first in the Reviews panel.
     await open('acme/web#88')
     await expect(description).toHaveText('review:4 3 findings, 1 major · at its review limit')
+    // The loop's own PR is reviewed by `review.agent_prs`, so its page has no review to ask for.
+    await expect(page.getByTestId('review-request')).toHaveCount(0)
     const said = await box(description)
     expect(said.y + said.height).toBeLessThan(150)
     // Its title names its repository, so its fields do not.
@@ -85,6 +96,16 @@ test("a PR's page leads with where it stands, and a list it cannot fill takes on
     await expect(description).toContainText('canopy only reviews it')
     await expect(page.locator('main').getByText('canopy only reviews it')).toHaveCount(1)
     await expect(page.getByTestId('pull-request-runs')).toHaveCount(0)
+    // Its Pull request panel says where the operator's review of it stands, and links to it. Not followed: opening
+    // review 2 marks it seen, a write this journal never takes.
+    const yours = page.getByRole('definition').filter({ has: page.getByRole('link', { name: 'review:2' }) })
+    await expect(yours).toHaveText('publishedreview:2')
+    await expect(yours.getByRole('link', { name: 'review:2' })).toHaveAttribute('href', /\/pull-requests\/reviews\/2$/u)
+    // Its request ended with that review: its foot asks for another, as `canopy start URL --review` does.
+    await expect(page.getByTestId('review-request').getByRole('button', { name: 'Review again' })).toHaveAttribute(
+        'title',
+        'canopy start https://github.com/acme/api/pull/12 --review',
+    )
 
     // One canopy has yet to review: its empty lists are their headers alone, each counting 0.
     await open('acme/web#95')
@@ -98,11 +119,33 @@ test("a PR's page leads with where it stands, and a list it cannot fill takes on
     expect(last.y + last.height - first.y).toBeLessThan(120)
 })
 
+test("a feedback plan waiting on you leads the PR's drafts, its Approve in the first screen", async ({ page }) => {
+    // The operator's window: half a 3440×1440 ultrawide, or a 16" MacBook Pro's whole screen (PRODUCT.md).
+    await page.setViewportSize({ width: 1720, height: 1440 })
+    for (const pr of ['https://github.com/acme/web/pull/88', 'https://github.com/acme/mobile/pull/67']) {
+        await page.goto(`pull-requests/pr?url=${encodeURIComponent(pr)}`)
+        await settled(page)
+        const plan = page.getByTestId('feedback-plan')
+        await expect(plan).toHaveAttribute('data-status', /^(?:waiting|stale)$/u)
+        // The button, stale or not, whole in view before any scroll.
+        await expect(plan.getByRole('button', { name: /^Approve/u })).toBeInViewport({ ratio: 1 })
+        const [ahead, drafts] = [await box(plan), await box(page.getByTestId('review-replies'))]
+        expect(ahead.y + ahead.height).toBeLessThanOrEqual(drafts.y)
+    }
+    // On bob's thread the plan proposes a change while run 45's draft waits: the proposal says which answers first.
+    const bob = page.getByTestId('review-thread').filter({ hasText: 'Why 250?' })
+    await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+    await expect(bob.getByTestId('plan-proposal-ahead')).toHaveText(
+        "The plan's resume writes a new reply here; sending this draft first answers ahead of it.",
+    )
+    await expect(bob.getByTestId('draft').getByRole('button', { name: 'Send', exact: true })).toBeVisible()
+})
+
 test('a PR the journal does not know says so, and a decision about a PR opens its page', async ({ page }) => {
     await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/404')}`)
     await expect(page.getByText('canopy has no record of https://github.com/acme/web/pull/404')).toBeVisible()
 
-    await page.goto('ticks/2')
+    await page.goto('runs/ticks/2')
     await settled(page)
     await page.getByTestId('decisions').getByRole('link', { name: 'acme/api#12', exact: true }).first().click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
@@ -116,8 +159,8 @@ test('a PR named on a run, a review, a decision, or a ticket opens its page in o
 }) => {
     const where: [string, string, string][] = [
         ['runs/39', 'main', 'acme/web#88'],
-        ['reviews', 'review-4', 'acme/web#88'],
-        ['ticks/2', 'decisions', 'acme/api#12'],
+        ['pull-requests/reviews', 'review-4', 'acme/web#88'],
+        ['runs/ticks/2', 'decisions', 'acme/api#12'],
         ['tickets/ABC-103', 'main', 'acme/web#91'],
     ]
     for (const [path, within, name] of where) {

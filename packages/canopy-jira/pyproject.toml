@@ -3,6 +3,7 @@ name = "canopy-jira"
 # From the latest v* tag, as canopy's is (D085), so every package canopy ships carries its version.
 dynamic = ["version"]
 description = "canopy's Jira connector: read Jira Cloud's tickets and comments into canopy's journal."
+readme = "README.md"
 license = "MIT"
 authors = [{ name = "eddieland" }]
 keywords = ["canopy", "jira", "connector", "tracker"]
@@ -20,9 +21,9 @@ classifiers = [
     "Topic :: Software Development :: Bug Tracking",
 ]
 requires-python = ">=3.12"
-# click for its command line (D025), and nothing from canopy: canopy runs it as a command, so the harness never holds
-# a token or opens a connection (D041, DESIGN §30).
-dependencies = ["click>=8.5.0"]
+# click for its command line (D025), canopy-http for every request it makes (D130), and nothing from canopy: canopy
+# runs it as a command, so the harness never holds a token or opens a connection (D041, DESIGN §30).
+dependencies = ["canopy-http", "click>=8.5.0"]
 
 [project.scripts]
 canopy-connect-jira = "canopy_jira.connect:main"

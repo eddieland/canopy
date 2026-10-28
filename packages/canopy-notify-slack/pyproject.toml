@@ -2,7 +2,8 @@
 name = "canopy-notify-slack"
 # From the latest v* tag, as canopy's is (D085), so every package canopy ships carries its version.
 dynamic = ["version"]
-description = "canopy's Slack notification sink: posts each message it reads on stdin to a Slack incoming webhook."
+description = "canopy's Slack sink, which posts what canopy sends it, and the reader of the replies in its threads."
+readme = "README.md"
 license = "MIT"
 authors = [{ name = "eddieland" }]
 keywords = ["canopy", "notifications", "slack", "webhook"]
@@ -20,11 +21,13 @@ classifiers = [
     "Topic :: Communications :: Chat",
 ]
 requires-python = ">=3.12"
-# Stdlib only, and nothing from canopy: it runs as its own process, as a sink command (DESIGN §20, D041).
-dependencies = []
+# click for its command line (D025), canopy-http for every request it makes (D130), and nothing from canopy: it runs
+# as its own process, as a sink command (DESIGN §20, D041).
+dependencies = ["canopy-http", "click>=8.5.0"]
 
 [project.scripts]
 canopy-notify-slack = "canopy_notify_slack:main"
+canopy-connect-slack = "canopy_notify_slack.connect:main"
 
 [project.urls]
 Homepage = "https://github.com/eddieland/canopy"

@@ -9,7 +9,8 @@ it. This is revision 1 of at most 3 of this draft.
   not whatever the PR's head is by the time you read it.
 - Checkout: `/state/reviews/2/checkout` is the repository at that commit. Read what you need; change nothing (you have no tools
   to, and anything left there is discarded). Your git tools, `canopy_git_merge-base`, `canopy_git_diff`,
-  `canopy_git_log`, `canopy_git_show`, and `canopy_git_blame`, read its history, as the review's did.
+  `canopy_git_log`, `canopy_git_show`, `canopy_git_blame`, `canopy_git_grep`, and `canopy_git_files`, read its
+  history, as the review's did.
 
 ## The operator's notes
 
@@ -24,14 +25,14 @@ differently. They are your instructions. Do what they ask and keep the rest of t
 Version 1.
 
 The body:
-> Two defects.
+> `tests/test_retry.py:3`
 > 
-> **minor** at `tests/test_retry.py:3`: no tests
+> no tests
 > 
 > Add one.
 
 Comment 1, on `retry.py:1`:
-> **blocking**: loops forever
+> loops forever
 > 
 > Nothing ends it.
 

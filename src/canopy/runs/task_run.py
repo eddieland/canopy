@@ -23,6 +23,9 @@ from typing import TYPE_CHECKING, Annotated, Literal, TextIO
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import (
+    agent_models,
+    attachments,
+    commit_hooks,
     contract,
     conversation,
     db,
@@ -33,6 +36,7 @@ from canopy.core import (
     pools,
     progress,
     run_models,
+    sandboxing,
     task_tickets,
     tasks,
 )
@@ -283,7 +287,9 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     git = checkpoint.Git(ctx.runner, slot, run.repo)
     start = checkpoint.check_out(git, run.base_branch, run.branch)
     _place_report(ctx, git, run, log)
-    done, text = _run_agent(ctx, run, task, out, log)
+    _place_attachments(ctx, git, run, log)
+    marks = _marks(ctx)
+    done, text = _run_agent(ctx, run, task, out, log, marks=marks)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(TaskResult, text)
     if done.timed_out:
@@ -321,7 +327,15 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
         # Under `trust.rebase` the private worker's definition allows a push with a lease; a task's prompt forbids it.
         log.warning("task's branch rewritten on origin", extra={"task_run_id": run.id, "before": start.pushed})
         note = "; ".join(n for n in (note, forced) if n)
+    note = "; ".join(n for n in (note, *checkpoint.unmarked(git, run.branch, start, run.base_branch, marks)) if n)
     return Outcome(status, parsed, note, head=head, tickets=tickets)
+
+
+def _marks(ctx: Context) -> commit_hooks.Marks:
+    # As the prompt names them: the private worker's chosen model, which canopy writes into its definition, and no
+    # ticket's key, since a task has none (§36).
+    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.private_worker_cmd)
+    return commit_hooks.marks(ctx.config, key=None, model=model.name if model is not None else None)
 
 
 def _place_report(ctx: Context, git: checkpoint.Git, run: records.TaskRun, log: logs.TickAdapter) -> None:
@@ -340,6 +354,28 @@ def _place_report(ctx: Context, git: checkpoint.Git, run: records.TaskRun, log: 
     except OSError as e:
         raise SetupError(f"{git.where}could not write the copy of the task's report: {e}") from e
     log.info("task's latest report copied in", extra={"task_run_id": run.id, "from_run": earlier.id})
+
+
+def _place_attachments(ctx: Context, git: checkpoint.Git, run: records.TaskRun, log: logs.TickAdapter) -> None:
+    """Copy the attachments the run's prompt names, and the task still holds, into the slot, which git ignores (§22).
+
+    Raises:
+        SetupError: an attachment's file is gone or changed since it was attached, so the worker gets none of them; or
+            the exclude file or a copy could not be written.
+    """
+    ref = conversation.Ref(conversation.TASK, str(run.task_id))
+    try:
+        found = attachments.copies(ctx.conn, ctx.state_dir, ref, run.started_at)
+    except attachments.AttachmentFileError as e:
+        raise SetupError(f"{e}; the worker did not start") from e
+    if not found:
+        return
+    checkpoint.ignore(git, attachments.RUN_DIR)
+    try:
+        attachments.place(Path(run.slot_path) / attachments.RUN_DIR, found)
+    except OSError as e:
+        raise SetupError(f"{git.where}could not write the attachments' copies: {e}") from e
+    log.info("task's attachments copied in", extra={"task_run_id": run.id, "attachments": len(found)})
 
 
 def _forced(git: checkpoint.Git, branch: str, start: checkpoint.Start, head: str | None) -> str:
@@ -364,12 +400,14 @@ def _run_agent(
     task: records.Task,
     out: TextIO,
     log: logs.TickAdapter,
+    *,
+    marks: commit_hooks.Marks,
 ) -> tuple[procs.Result, str]:
     """Run the private worker's command in the slot with the task's prompt, for the worker's timeout.
 
     The private worker's definition is the one that writes nothing to a ticket (DESIGN §22), so the slot's config must
     name none of the tracker server's tools either. The session, cost, and tool calls the runtime reported are recorded
-    at once.
+    at once. canopy's git hooks put `marks` on every commit the worker makes (`commit_hooks`).
 
     Returns:
         The agent's process and the text its result line is read from.
@@ -379,14 +417,18 @@ def _run_agent(
     """
     slot = Path(run.slot_path)
     tools = ctx.config.tracker.tools()
-    refused = project_config.refusal([slot], tracker_server=tools.server if tools is not None else None)
+    refused = project_config.refusal(
+        [slot],
+        version=ctx.config.runtime.version,
+        tracker_server=tools.server if tools is not None else None,
+    )
     if refused is not None:
         raise SetupError(refused)
     prompt = starts.prompt_file(Path(run.log_path)).read_text(encoding="utf-8")
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     runtime = ctx.config.runtime
     command = render_command(runtime.worker_template(runtime.private_worker_cmd), prompt, snapshot, f"task:{task.id}")
-    argv = command.argv
+    argv = sandboxing.wrap(runtime, [run.repo], "worker", command.argv, snapshot)
     timeout_minutes = runtime.worker_timeout_minutes
     log.info(
         "running the task's worker",
@@ -396,6 +438,7 @@ def _run_agent(
     out.flush()
     objects = starts.objects_dir(Path(run.log_path))
     env = {conversation.RUN_ID_ENV: f"{RUN_ID_PREFIX}{run.id}", tidy.OBJECTS_ENV: str(objects)}
+    env |= commit_hooks.env(snapshot, marks, os.environ)
     done = ctx.runner.run(
         argv,
         cwd=slot,
@@ -411,13 +454,14 @@ def _run_agent(
             log,
             agent="task",
             fields={"task_run_id": run.id},
+            version=ctx.config.runtime.version,
         ),
     )
     out.write(f"\n--- worker stderr ---\n{done.stderr}\n")
     out.write(f"--- worker exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
-    output = stdout.read(done.stdout)
+    output = stdout.read(done.stdout, version=ctx.config.runtime.version)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn,

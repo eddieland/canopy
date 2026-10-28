@@ -6,6 +6,7 @@
 # land (TRUST_MODEL T1), and `canopy _run` verifies what was pushed.
 description: canopy worker. Works one ticket in a leased worktree; pushes a branch, opens a PR, comments.
 mode: primary
+# canopy: model
 permission:
   # Edits inside the worktree, which is the working directory `canopy _run` starts the worker in. Files outside it
   # are refused. A joint run's working directory is its desk, whose links lead to the worktrees it leased (DESIGN
@@ -27,6 +28,9 @@ permission:
   webfetch: deny
   websearch: deny
   codesearch: deny
+  # OpenCode 2's code mode runs the model's JavaScript, which can make HTTP requests of its own, so it is a web
+  # tool too (D077). An MCP server reached only through it is then out of reach: give it `codemode: false`.
+  execute: deny
   bash:
     "*": allow
     # Pushes are plain ones: no force, no deletes, no mirrors or bulk ref updates. Patterns anchor on a space before
@@ -60,6 +64,9 @@ permission:
     "canopy memory search *": allow
     "treehouse *": deny
     "sudo *": deny
+    # The commands `runtime.allow_bash` names for the worker are rendered at the marked line, last, so that each beats
+    # a deny above (DESIGN §13). canopy refuses git, gh, a shell, a wrapper such as sudo, or its own tools there.
+    # canopy: bash allows
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
   # in depth, whatever write tools the operator's runtime config grants (D084). The worker comments on its ticket,
   # edits the ticket's labels, opens and updates its PRs, and creates follow-up tickets linked to its ticket (DESIGN
@@ -112,11 +119,9 @@ permission:
   # marked line, then, with the worker among `artifacts.publish_roles`, the tools it publishes with allowed by
   # name, after every pattern above.
   # canopy: artifact tools
-  # canopy's read-only git tools are the reviewer's and the planner's alone (DESIGN §27): after every pattern, so none
-  # above reopens one.
-  "canopy_git_*": deny
-  # A chore's own tool, which reads its history (DESIGN §19), is the chore's alone: last, so no rule above reopens it.
-  "canopy_chore_history": deny
+  # canopy's own tools, the overseer's, the reviewer's and planner's git tools, a chore's history, and the reports, are
+  # not this agent's (DESIGN §19, §27): last, so no rule above reopens one.
+  "canopy_*": deny
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy worker" prompt, print

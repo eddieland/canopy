@@ -54,9 +54,33 @@ export function choreRunRef(name: string, id: number | string): string {
     return `${choreRef(name)}#${id}`
 }
 
+/** A one-off task, as `canopy show` reads it: `task:4`. */
+export function taskRef(id: number | string): string {
+    return `task:${id}`
+}
+
+// A task's reference alone, as `canopy show` reads it, with the id's leading zeros dropped as it drops them.
+const TASK_REF = /^task:0*([1-9]\d{0,15})$/u
+
+/** The task `text` names when it is a task's reference and nothing else (`task:4`, spaces around it aside). */
+export function parseTaskRef(text: string): number | undefined {
+    const id = TASK_REF.exec(text.trim())?.[1]
+    return id === undefined ? undefined : Number(id)
+}
+
+/** One run of a task, which has no reference of its own: its task, then its number, as a chore run is: `task:4#5`. */
+export function taskRunRef(task: number | string, id: number | string): string {
+    return `${taskRef(task)}#${id}`
+}
+
 /** A message in a ticket's conversation, as its head line numbers it: `#5`. */
 export function messageRef(id: number | string): string {
     return `#${id}`
+}
+
+/** The anchor of a message's bubble in its ticket's conversation, `message-5`: what a link to it hashes to. */
+export function messageAnchor(id: number | string): string {
+    return `message-${id}`
 }
 
 /** A worktree slot, as its pool numbers it: `#3`. */
@@ -67,4 +91,9 @@ export function slotRef(name: string): string {
 /** A ticket's plan, as `canopy show --plans` reads it: `plan:2`. */
 export function planRef(id: number | string): string {
     return `plan:${id}`
+}
+
+/** A ticket's feedback plan, as `canopy show` names it: `feedback-plan:7`. */
+export function feedbackPlanRef(id: number | string): string {
+    return `feedback-plan:${id}`
 }

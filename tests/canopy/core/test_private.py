@@ -1,5 +1,8 @@
-"""Private tickets (DESIGN §22, ROADMAP M18): `canopy start`, `stop`, `reply`, and `show`, the private worker, and the
-journal's conversation, against the fake treehouse, a fake overseer, and a fake worker."""
+"""Private tickets (DESIGN §22, ROADMAP M18): `canopy start`, `stop`, `reply`, and `show`.
+
+The commands, the private worker, and the journal's conversation are tested against the fake treehouse, a fake overseer,
+and a fake worker.
+"""
 
 import contextlib
 import io
@@ -473,18 +476,20 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(s
     tickets = {t["key"]: t for t in scenario.state()["tickets"]}
     assert "private" not in tickets["PROJ-2"]
     private = tickets[KEY]["private"]
-    assert private["message_cursor"] is None
+    # Null, the cursor and the question waiting are left out of the block.
+    assert "message_cursor" not in private
     assert [(m["id"], m["body"], m["answers"]) for m in private["new_operator_messages"]] == [
         (question + 1, "B", question),
     ]
-    assert private["awaiting_reply"] is None
+    assert "awaiting_reply" not in private
     # A handled message moves the cursor past it.
     scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={question + 1}")
     ticket = present(db.get_ticket(conn, KEY))
     assert conversation.state_section(conn, ticket) == {
-        **private,
+        "started_at": private["started_at"],
         "message_cursor": question + 1,
         "new_operator_messages": [],
+        "awaiting_reply": None,
     }
 
 
@@ -511,8 +516,6 @@ def test_a_message_cursor_is_a_message_id(scenario: Scenario) -> None:
 
 
 def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(scenario: Scenario) -> None:
-    conn = scenario.conn
-
     # The overseer records a decision for every ticket it looks at, but not always the ticket's own phase.
     def phase_line() -> str:
         out = scenario.operator("status").out
@@ -520,7 +523,8 @@ def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(scenari
         return line.split("  phase ", 1)[1]
 
     def summary() -> tuple[str | None, str | None]:
-        found = views.summary(conn, db.recent_tickets(conn, 1, key=KEY)[0])
+        ctx = context(scenario.env)
+        found = views.summary(ctx, db.recent_tickets(ctx.conn, 1, key=KEY)[0])
         return found.phase, found.last_decision
 
     scenario.operator("start", KEY)

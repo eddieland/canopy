@@ -3,12 +3,19 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
+    AgentModel,
     AgentPersona,
+    Attached,
+    Detached,
     ChoreTried,
     ConfigReload,
+    ConfigSaved,
+    ConfigValue,
+    DismissalReason,
     Dismissed,
     Draft,
     DraftsSent,
+    FeedbackPlanApproved,
     Forgot,
     Granted,
     Limit,
@@ -16,9 +23,11 @@ import type {
     LessonEditRequest,
     MemoryEdited,
     MemoryForgotten,
+    MemoryPinned,
     MemoryPromoted,
     MemoryRejected,
     MemoryRenewed,
+    MemoryUnpinned,
     NoticeChanged,
     PauseChanged,
     PlanChanged,
@@ -29,6 +38,7 @@ import type {
     ReviewDetail,
     ReviewDismissed,
     ReviewDraft,
+    ReviewDraftNoted,
     ReviewDraftPublished,
     ReviewRequested,
     ReviewRequestStopped,
@@ -39,17 +49,21 @@ import type {
     PromoteRequest,
     Started,
     Stopped,
+    TaskSubmitted,
+    TaskReplied,
+    TaskStopped,
     TickAsked,
 } from './types'
 
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, trying a chore, dismissing
  * a finding, sending a review's findings to a worker, granting a run past a limit, asking for a PR to be reviewed,
- * pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and those on a run's
- * drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`,
- * `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, `notice`,
- * `memory promote`, `reject`, `renew`, `edit`, and `forget`, `draft edit`, `drop`, and `send`, and `review edit` and
- * `publish`, or as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming its guard.
+ * submitting a task, pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and
+ * those on a run's drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`,
+ * `forget`, `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `task submit`, `pause`,
+ * `resume`, `notice`, `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`, `draft edit`, `drop`,
+ * and `send`, `review edit` and `publish`, and `reply review:ID`, or as `t` at the loop's terminal, with the same
+ * guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -92,6 +106,18 @@ export async function chooseTicketPersona(
 }
 
 /**
+ * `canopy model KEY MODEL --agent AGENT`, or with `model` null `--clear`: the model the agent's runs for the ticket run
+ * on, from its next run until cleared (DESIGN §13).
+ */
+export async function chooseTicketModel(
+    key: string,
+    agent: AgentModel['agent'],
+    model: string | null,
+): Promise<AgentModel> {
+    return unwrap(await api.POST('/api/tickets/{key}/models', { params: { path: { key } }, body: { agent, model } }))
+}
+
+/**
  * `canopy grant` for one more run past `limit`: `canopy grant KEY KIND --repo NAME` for a ticket's unit, or
  * `canopy grant URL review` for a PR's reviews. Every run still counts; the next tick decides whether to use it.
  */
@@ -115,8 +141,8 @@ export async function grantLimit(ticketKey: string | null, limit: Limit): Promis
 
 /**
  * `canopy start URL --review --notes TEXT --persona NAME`: canopy reviews a PR it does not own, once, at its head, its
- * reviewer given the notes, once in each of `personas`, or in `[personas] reviewer`'s when none. Nothing is posted on
- * the PR; the next tick reviews it.
+ * reviewer given the notes, once in each of `personas`, or in `[personas] reviewer`'s when none. Nothing posts on the
+ * PR until the operator publishes its draft; the next tick reviews it.
  */
 export async function requestReview(
     url: string,
@@ -129,6 +155,14 @@ export async function requestReview(
             body: { notes, personas: [...personas] },
         }),
     )
+}
+
+/**
+ * `canopy task submit TEXT --repo NAME --project KEY`: the text is queued as a task, run in `repo` (which may be left
+ * out in a workspace of one) and filing tickets only in `project`, or none without one; the next tick starts it.
+ */
+export async function submitTask(text: string, repo: string | null, project: string | null): Promise<TaskSubmitted> {
+    return unwrap(await api.POST('/api/tasks', { body: { text, repo, project } }))
 }
 
 /** `canopy stop URL`: the PR's review request ends, and a review of it already running finishes. */
@@ -144,11 +178,41 @@ export async function replyTicket(key: string, body: string, submission: string)
 }
 
 /**
+ * `canopy reply task:N`: the operator's next instruction to the task, answering its run's question if one asked. Its
+ * next run starts at the next tick, or once its running run ends. `submission` makes a resend a no-op.
+ */
+export async function replyTask(id: number, body: string, submission: string): Promise<TaskReplied> {
+    return unwrap(
+        await api.POST('/api/tasks/{task_id}/replies', {
+            params: { path: { task_id: id } },
+            body: { body, submission },
+        }),
+    )
+}
+
+/** `canopy stop task:N`, or `canopy stop task:N --now` with `now`, which also ends the run working it. */
+export async function stopTask(id: number, now: boolean): Promise<TaskStopped> {
+    return unwrap(await api.POST('/api/tasks/{task_id}/stop', { params: { path: { task_id: id } }, body: { now } }))
+}
+
+/**
  * `canopy plan KEY --approve`, `canopy plan KEY`, or `canopy plan KEY --skip`: approve the newest plan as its file
  * stands, ask for a new one, or skip the plan (DESIGN §25).
  */
 export async function decidePlan(key: string, action: PlanChanged['action']): Promise<PlanChanged> {
     return unwrap(await api.POST('/api/tickets/{key}/plan', { params: { path: { key } }, body: { action } }))
+}
+
+/**
+ * `canopy plan KEY --approve`, on its feedback plan (DESIGN §32): whole when `items` and `leave` are both empty, else
+ * only the items `items` names by number, as `--item N`, or all but those `leave` names, as `--leave N`, with the
+ * operator's own `message` after the one the approval writes on the ticket, as `--message`.
+ */
+export async function approveFeedbackPlan(
+    key: string,
+    choice: { items: number[]; leave: number[]; message: string | null },
+): Promise<FeedbackPlanApproved> {
+    return unwrap(await api.POST('/api/tickets/{key}/feedback-plan', { params: { path: { key } }, body: choice }))
 }
 
 /**
@@ -239,14 +303,19 @@ export async function dismissFinding(name: string, finding: string, undo: boolea
 }
 
 /**
- * `canopy dismiss review:ID N`: no worker or tick acts on the review's finding number `finding`. With `undo`,
- * `--undo`.
+ * `canopy dismiss review:ID N --reason REASON`: no worker or tick acts on the review's finding number `finding`, and
+ * `reason` says why. With `undo`, `--undo`, which takes no reason.
  */
-export async function dismissReviewFinding(run: number, finding: number, undo: boolean): Promise<ReviewDismissed> {
+export async function dismissReviewFinding(
+    run: number,
+    finding: number,
+    undo: boolean,
+    reason?: DismissalReason,
+): Promise<ReviewDismissed> {
     return unwrap(
         await api.POST('/api/reviews/{run_id}/dismissals', {
             params: { path: { run_id: run } },
-            body: { finding, undo },
+            body: reason === undefined ? { finding, undo } : { finding, undo, reason },
         }),
     )
 }
@@ -359,6 +428,16 @@ export async function addReviewDraftComment(
 }
 
 /**
+ * `canopy reply review:RUN TEXT`: what a revision of the review's draft should change. The next tick revises it with an
+ * agent, unless the operator changes the draft first; refused while a revision runs and at the draft's limit.
+ */
+export async function noteReviewDraft(run: number, text: string): Promise<ReviewDraftNoted> {
+    return unwrap(
+        await api.POST('/api/reviews/{run_id}/draft/notes', { params: { path: { run_id: run } }, body: { text } }),
+    )
+}
+
+/**
  * `canopy review publish RUN HASH`, with `--submit` when `submit`: the version the page showed, named by its hash, as
  * the operator's own comment review on the PR, word for word. Left pending on GitHub for them to submit, unless
  * `submit`.
@@ -370,6 +449,11 @@ export async function publishReviewDraft(run: number, hash: string, submit: bool
             body: { hash, submit },
         }),
     )
+}
+
+/** `canopy review discard RUN`: the operator has seen the draft and will not post it. It takes no edit after. */
+export async function discardReviewDraft(run: number): Promise<ReviewDraft> {
+    return unwrap(await api.POST('/api/reviews/{run_id}/draft/discard', { params: { path: { run_id: run } } }))
 }
 
 /** `canopy pause`: the loop starts no tick until it is resumed. A tick already running finishes. */
@@ -431,6 +515,16 @@ export async function renewMemory(id: number): Promise<MemoryRenewed> {
     return unwrap(await api.POST('/api/memory/{memory_id}/renew', { params: { path: { memory_id: id } } }))
 }
 
+/** `canopy memory pin ID`: the lesson is never due for review, and runs are served it before the rest. */
+export async function pinMemory(id: number): Promise<MemoryPinned> {
+    return unwrap(await api.POST('/api/memory/{memory_id}/pin', { params: { path: { memory_id: id } } }))
+}
+
+/** `canopy memory unpin ID`: the lesson comes up for review again later, and is served as any other. */
+export async function unpinMemory(id: number): Promise<MemoryUnpinned> {
+    return unwrap(await api.POST('/api/memory/{memory_id}/unpin', { params: { path: { memory_id: id } } }))
+}
+
 /**
  * `canopy memory edit ID [--text TEXT] [--repo NAME | --every-repo]`: a new version of a lesson in force, the old one
  * kept as its history. A `text` of null keeps the lesson's words, and a `repo` of null its repository, unless
@@ -459,6 +553,15 @@ export function refreshMemory(client: QueryClient): Promise<void> {
         predicate: ({ queryKey }) =>
             queryKey[0] === keys.memory[0] || (queryKey[0] === ticket[0] && queryKey[2] === ticket[2]),
     })
+}
+
+/**
+ * Writes the changed limits and trust settings to the user config, then asks the loop to read it again. Refused,
+ * writing nothing, past a limit's bound (`past_bound`), for a trust setting loosened (`not_stricter`), or when the
+ * file changed since `hash` was read (`stale`).
+ */
+export async function saveConfig(hash: string, changes: Record<string, ConfigValue>): Promise<ConfigSaved> {
+    return unwrap(await api.PATCH('/api/config', { body: { hash, changes } }))
 }
 
 /** After a pause, a resume, or a notice set or cleared: show the state it left now, rather than wait for the stream. */
@@ -550,6 +653,59 @@ export async function refreshTicketDrafts(client: QueryClient, key: string): Pro
 /** After an action on a ticket: read it again now, rather than wait for the stream to say it changed. */
 export function refreshTicket(client: QueryClient, key: string): Promise<void> {
     return client.invalidateQueries({ queryKey: keys.ticket(key) })
+}
+
+/** After an action on a task: read it, the tasks list, and the attention list again now, which its items are on. */
+export async function refreshTask(client: QueryClient, id: number): Promise<void> {
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.task(id) }),
+        client.invalidateQueries({ queryKey: keys.tasks }),
+        client.invalidateQueries({ queryKey: keys.attention }),
+    ])
+}
+
+/** What an attachment is on: a ticket, by its key, or a task, by its id (DESIGN §22). */
+export type AttachmentSubject = { kind: 'ticket'; key: string } | { kind: 'task'; id: number }
+
+/**
+ * `canopy attach REF FILE --name NAME`: keep `text`, a file read as UTF-8, as NAME, for the subject's later runs to
+ * read. It is sent as the file's own bytes, not JSON, so the server's bound on a body holds the largest file it takes.
+ */
+export async function attachFile(subject: AttachmentSubject, name: string, text: string): Promise<Attached> {
+    const sent = { body: text, bodySerializer: (body: string) => body, headers: { 'Content-Type': 'text/plain' } }
+    if (subject.kind === 'ticket') {
+        return unwrap(
+            await api.PUT('/api/tickets/{key}/attachments/{name}', {
+                params: { path: { key: subject.key, name } },
+                ...sent,
+            }),
+        )
+    }
+    return unwrap(
+        await api.PUT('/api/tasks/{task_id}/attachments/{name}', {
+            params: { path: { task_id: subject.id, name } },
+            ...sent,
+        }),
+    )
+}
+
+/** `canopy detach REF NAME`: its file is deleted, and the subject's later runs no longer get it. */
+export async function detachFile(subject: AttachmentSubject, name: string): Promise<Detached> {
+    if (subject.kind === 'ticket') {
+        return unwrap(
+            await api.DELETE('/api/tickets/{key}/attachments/{name}', { params: { path: { key: subject.key, name } } }),
+        )
+    }
+    return unwrap(
+        await api.DELETE('/api/tasks/{task_id}/attachments/{name}', {
+            params: { path: { task_id: subject.id, name } },
+        }),
+    )
+}
+
+/** After an attachment changed: read its ticket or task again now. */
+export function refreshSubject(client: QueryClient, subject: AttachmentSubject): Promise<void> {
+    return subject.kind === 'ticket' ? refreshTicket(client, subject.key) : refreshTask(client, subject.id)
 }
 
 /** A submission id for a reply form, drawn when the form is rendered and kept until the reply is recorded. */

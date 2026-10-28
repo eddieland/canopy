@@ -22,16 +22,19 @@ never outweighs the daily operator.
 ## Product Purpose
 
 canopy is an unattended agent loop that runs locally and is driven by the issue tracker. The operator labels a
-ticket. When there is capacity, an overseer agent leases a worktree from a treehouse pool and dispatches a worker,
-which pushes a branch and opens a PR. Later ticks pick up CI failures and review comments. The web UI, served by
+ticket, or hands canopy a one-off task in their own words. When there is capacity, an overseer agent leases a worktree
+from a pool and dispatches a worker, which pushes a branch and opens a PR; where the policy plans first, a plan the
+operator approves comes before it. Later ticks pick up CI failures and review comments. canopy also reviews coworkers'
+PRs as drafts the operator publishes, and runs chores that report without changing anything. The web UI, served by
 `canopy loop`, is the operator's daily surface (DESIGN §22). It shows the attention list (what actually needs a
-human), the runs, the worktrees, every ticket's conversation, canopy's reviews with findings on the diff, the chores,
-and a search over the whole journal.
+human), every ticket's conversation and plan, the tasks, the PRs with canopy's reviews and findings on the diff, the
+runs with the overseer's ticks and the worktrees, the chores, what canopy cost, what workers remember, and a search
+over the whole journal.
 
 Success means the operator sees at a glance whether anything needs them, and acts on it without a terminal: answer,
-grant, stop, reply. Everything that doesn't need them stays quiet. It also means the work is a little fun. Shepherding
-thousands of tickets through agents is drudgery by default, and canopy should make it more enjoyable to do, not just
-faster.
+approve a plan, grant, start, stop. Everything that doesn't need them stays quiet. It also means the work is a little
+fun. Shepherding thousands of tickets through agents is drudgery by default, and canopy should make it more enjoyable
+to do, not just faster.
 
 ## Positioning
 
@@ -43,26 +46,31 @@ faster.
 
 ## Operating Context
 
-- `canopy loop` runs in the foreground, often in tmux. It ticks on an interval and serves the UI on loopback
-  (`127.0.0.1:8765`), behind a listener secret (TRUST_MODEL T8).
+- `canopy loop` runs in the foreground, often in tmux, or detached by `canopy daemon start`. It ticks on an interval
+  and serves the UI on loopback (`127.0.0.1:8765`), behind a listener secret (TRUST_MODEL T8).
 - The UI sits beside the operator's editor, GitHub, and tracker (Jira or GitHub Issues). Links out to those are
   routine.
-- Notifications (desktop, Slack) bring the operator back to the UI when the attention list changes.
-- Every UI write is the same server function as a CLI verb (`reply`, `grant`, `start`, `stop`, `forget`, `pause`). A
-  refusal names its guard as the CLI does.
+- Notifications (desktop, Slack) bring the operator back to the UI when the attention list changes. A reply in a
+  ticket's Slack thread reaches the ticket as one from the UI would.
+- Every UI write goes through the same core function and guards as a CLI verb (`reply`, `grant`, `start`, `stop`,
+  `forget`, `pause`). The few no one would type (seen marks, the operator's words on a plan, limits and trust
+  settings) are TRUST_MODEL T8's own. A refusal names its guard as the CLI does.
 
 ## Capabilities and Constraints
 
-- Routes today: attention, runs, ticks, tickets, pull requests, reviews, worktrees, chores, search, settings.
-- Terminology is fixed by the docs and code. Ticket, run, tick, worktree/slot, overseer, worker, attention item, chore,
-  review, finding, grant, guard, journal. Run kinds are implement, resume, and plan; older runs may be fix-ci or split.
-  Attention reasons include `needs_human`, `green_unreviewed`, `untrusted_review`, and `attempt_limit`. Use these words;
-  don't invent synonyms.
+- Sections today: attention, tickets (each with its plan), tasks, pull requests (with reviews), runs (with ticks and
+  worktrees), chores, reports (spend), and memory; then search, settings (with limits and trust), and the guide. Old
+  paths such as `/ticks` and `/worktrees` redirect.
+- Terminology is fixed by the docs and code, and the guide's glossary (`ui/src/guide/glossary.md`). Ticket, task, run,
+  tick, worktree/slot, overseer, worker, plan, attention item, chore, review, finding, draft, grant, guard, journal,
+  lesson, ticket note. Run kinds are implement, resume, plan, and feedback-plan; older runs may be fix-ci, split, or
+  needs-plan. Attention reasons include `needs_human`, `needs_reviewer`, `ready_to_merge`, `untrusted_review`,
+  `attempt_limit`, and `plan_review`. Use these words; don't invent synonyms.
 - Local only. No requests to another origin at run time: no CDN fonts, analytics, or remote images.
 - Journal content (tracker comments, agent output) is untrusted and is rendered as text, never as HTML.
 - A running worker's events are known only once it ends; live data arrives over the server's event stream.
-- No pages or features beyond what a ROADMAP milestone lists or the operator asks for. Prompting a running session
-  waits on M15.
+- No pages or features beyond what a ROADMAP milestone lists or the operator asks for. Prompting a running worker
+  is parked on the roadmap; the operator reads its transcript and answers once it asks.
 - The stack and engineering rules are in `ui/AGENTS.md`. The visual system is `ui/DESIGN.md`, which is normative.
 
 ## Brand Commitments
@@ -71,18 +79,19 @@ faster.
 - Voice: plain, direct, factual. Say what an action did in the CLI's words (`src/lib/outcomes.ts`). No marketing
   tone in the product.
 - canopy should be a little fun to use. This is a goal, not a garnish: the operator manages a huge volume of tasks,
-  and the product should lighten that. Play shows up in the details: the section colors, the header ticker's flair,
-  the words, moments of small reward when work clears. Today's instances are in `ui/DESIGN.md`. The limit is that
-  fun never hides or fakes state, never slows an action, and never gets in the way of reading what needs the
-  operator.
+  and the product should lighten that. Play shows up in the details: the section colors, the header's ticker, Sprig
+  at the foot of the rail, the words, moments of small reward when work clears. Today's instances are in
+  `ui/DESIGN.md`. The limit is that fun never hides or fakes state, never slows an action, and never gets in the way of
+  reading what needs the operator.
 
 ## Evidence on Hand
 
-- A mock journal of a three-repository workspace (`src/canopy/serve/mock.py`, run with
+- A mock journal of a three-repository workspace (`src/canopy/serve/mock/`, run with
   `python -m canopy.serve --mock`), with times fixed around 2026-10-08.
 - Playwright screenshot baselines for every route in both themes (`ui/e2e/screenshots.spec.ts-snapshots/`). The README
   shows the dark Attention, ticket, run, review, and tick pages.
-- Style directions weighed earlier: `docs/ui-explorations/2026-10-08-style/`.
+- Directions weighed earlier: the look in `docs/ui-explorations/2026-10-08-style/`, and the amount and structure in
+  `docs/ui-explorations/2026-10-19-structure/`.
 - Absences not to fabricate: no users beyond the operator yet, no testimonials, no metrics, no hosted offering, no
   pricing. canopy is pre-alpha, MIT-licensed, and unsupported.
 

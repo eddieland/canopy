@@ -17,8 +17,18 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, LiteralString, assert_never
 
-from canopy.core import records, sql
-from canopy.core.vocab import Phase, PlanStatus, PoolKind, ResumeReason, SeenKind, StartStatus, TickStatus
+from canopy.core import item_numbers, records, sql
+from canopy.core.vocab import (
+    Decider,
+    NumberedItem,
+    Phase,
+    PlanStatus,
+    PoolKind,
+    ResumeReason,
+    SeenKind,
+    StartStatus,
+    TickStatus,
+)
 from canopy.infra import procs
 from canopy.runtime.report import ToolUse, Usage
 
@@ -37,11 +47,13 @@ CLOSED_RATIONALE = "closed"
 CANOPY_VERSION = version("canopy")
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
-# review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a private
-# ticket's, over journal message ids (DESIGN §22).
-TICKET_CURSORS: Mapping[str, LiteralString] = {"comment": "last_comment_id", "message": "last_message_id"}
-UNIT_CURSORS: Mapping[str, LiteralString] = {"review": "last_review_id", "ci": "last_ci_run_id"}
+# review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a ticket's,
+# over journal message ids (DESIGN §22); the rest are journal numbers (§35), but for the comment cursor of a ticket no
+# tracker source observes, which has none to name: it is the tracker's comment id, in `UNTRACKED_COMMENT`.
+TICKET_CURSORS: Mapping[str, LiteralString] = {"comment": "comment_cursor", "message": "last_message_id"}
+UNIT_CURSORS: Mapping[str, LiteralString] = {"review": "review_cursor", "ci": "ci_cursor"}
 CURSOR_COLUMNS: Mapping[str, LiteralString] = {**TICKET_CURSORS, **UNIT_CURSORS}
+UNTRACKED_COMMENT: LiteralString = "last_comment_id"
 #: The columns of a ticket whose change is activity, as `change_ticket` sets them. A column name in SQL comes from
 #: here, never from input.
 type TicketChange = Literal["phase", "title", "done", "plan_setting"]
@@ -50,7 +62,7 @@ type TicketChange = Literal["phase", "title", "done", "plan_setting"]
 # report, and its close. A table name in SQL comes from here, never from input.
 type RunTable = Literal["runs", "chore_runs", "review_runs", "task_runs"]
 # The rows whose agent's progress `set_progress` records as it prints; a worker run's is `set_run_progress`.
-type ProgressTable = Literal["ticks", "chore_runs", "task_runs"]
+type ProgressTable = Literal["ticks", "chore_runs", "task_runs", "review_runs"]
 RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs", "task_runs")
 # What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
 # process group the run's own process starts, which outlives that process if it dies.
@@ -100,7 +112,7 @@ class Event:
 
 @dataclass(frozen=True)
 class Comment:
-    """A tracker comment as a mirrored message records it (DESIGN §22): its id, author's account id, and time."""
+    """A tracker comment as its message records it (DESIGN §22, §35): its id, author's account id, and time."""
 
     id: str
     author: str
@@ -179,7 +191,14 @@ def discover(migrations_dir: Path) -> list[Migration]:
 
 @contextmanager
 def transaction(conn: sqlite3.Connection) -> Generator[None]:
-    """Run the block in a `BEGIN IMMEDIATE` transaction; roll back if it raises."""
+    """Run the block in a `BEGIN IMMEDIATE` transaction; roll back if it raises.
+
+    Inside a transaction already, the block runs in that one, which commits or rolls back with it: so a call that
+    writes several records together, as a `ticket set` of several tickets does, can wrap writes that open their own.
+    """
+    if conn.in_transaction:
+        yield
+        return
     sql.execute(conn, sql.frag("BEGIN IMMEDIATE"))
     try:
         yield
@@ -335,6 +354,11 @@ def set_tick_loop(conn: sqlite3.Connection, tick_id: int, *, idle: bool, woken_b
 def set_tick_query(conn: sqlite3.Connection, tick_id: int, *, due: bool) -> None:
     """Record whether a tick's state block told the overseer to run the tracker query (§7, Spacing the query)."""
     sql.execute(conn, sql.update("ticks").set(query_due=int(due)).where("id = ?", tick_id))
+
+
+def set_tick_overseer(conn: sqlite3.Connection, tick_id: int, *, ran: bool) -> None:
+    """Record whether a tick runs its overseer: not when it is halted, nor when nothing is left to it (DESIGN §39)."""
+    sql.execute(conn, sql.update("ticks").set(overseer_ran=int(ran)).where("id = ?", tick_id))
 
 
 def last_query_at(conn: sqlite3.Connection) -> str | None:
@@ -514,8 +538,12 @@ def set_ticket(
     cursors: Mapping[str, str] | None = None,
     done: bool = False,
     title: str | None = None,
+    tracked: bool = True,
 ) -> None:
-    """Record a ticket's own phase, its comment cursor, its done flag, or its title in one transaction."""
+    """Record a ticket's own phase, its cursors, its done flag, or its title in one transaction.
+
+    With `tracked` False, no tracker source observes the ticket, so its comment cursor is the tracker's id.
+    """
     with transaction(conn):
         touch_ticket(conn, key, repo)
         if phase is not None:
@@ -523,10 +551,19 @@ def set_ticket(
         if title is not None:
             change_ticket(conn, key, "title", title)
         for name, value in (cursors or {}).items():
-            cursor = sql.name(TICKET_CURSORS[name])
+            cursor = sql.name(ticket_cursor(name, tracked=tracked))
             sql.execute(conn, sql.update("tickets").set_to("{} = ?", cursor, value).where("key = ?", key))
         if done:
             change_ticket(conn, key, "done", 1)
+
+
+def ticket_cursor(name: str, *, tracked: bool) -> LiteralString:
+    """The column a ticket's cursor `name` is in: the comment cursor's is the tracker's id where `tracked` is False.
+
+    Returns:
+        The column's name.
+    """
+    return UNTRACKED_COMMENT if name == "comment" and not tracked else TICKET_CURSORS[name]
 
 
 def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str) -> None:
@@ -720,9 +757,11 @@ def finish_run(
     result_json: str | None,
     *,
     event: Event | None = None,
+    then: Callable[[], None] | None = None,
 ) -> bool:
     """Close a running run in `table`, recording `event` with it. Returns False if it was already closed.
 
+    `then`, when this call closes the run, writes what the run reported beside its result in the same transaction.
     A worker run that reports messages closes with `finish_ticket_run` instead. A review run that ends `done`
     also ends its PR's open review request, as `reviewed`, in the same transaction (DESIGN §21): the request asked for
     one review, and this is it. A request the operator chose personas for asked for one in each (§31): it ends once
@@ -733,6 +772,8 @@ def finish_run(
     """
     with transaction(conn):
         closed = _close_run(conn, table, run_id, status, result_json)
+        if closed and table == "review_runs":
+            _number_review_run(conn, run_id)
         if closed and table == "review_runs" and status == "done":
             # A revision of a review's draft is no review: it answers no request (DESIGN §34).
             its_pr = sql.select("pr_url").from_("review_runs").where("id = ? AND revises IS NULL", run_id)
@@ -751,7 +792,16 @@ def finish_run(
             )
         if closed and event is not None:
             record_event(conn, event)
+        if closed and then is not None:
+            then()
     return closed
+
+
+def _number_review_run(conn: sqlite3.Connection, run_id: int) -> None:
+    """Give a review run that just ended its journal number, what a `review` cursor names of it (DESIGN §35)."""
+    run = sql.execute(conn, sql.select("pr_url, ended_at").from_("review_runs").where("id = ?", run_id)).fetchone()
+    number = item_numbers.take(conn, NumberedItem.REVIEW_RUN, str(run[0]), run_id, at=str(run[1]))
+    sql.execute(conn, sql.update("review_runs").set(number=number).where("id = ?", run_id))
 
 
 def _close_run(
@@ -797,6 +847,7 @@ def insert_run(
     persona: str | None = None,
     persona_digest: str | None = None,
     persona_text: str | None = None,
+    model: str | None = None,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
@@ -811,6 +862,7 @@ def insert_run(
     `feedback_plan_id` is the approved feedback plan a `resume` follows in place of a ticket's plan (DESIGN §32).
     `persona` and `persona_digest` are the name and text digest of the persona its prompt carries, or None for a kind
     no persona reaches (DESIGN §31); `persona_text` is that text, kept once per digest (`record_persona_text`).
+    `model` is the model canopy chose for the run's agent, or None for the runtime's default (DESIGN §13).
 
     Returns:
         The new run's id.
@@ -831,6 +883,7 @@ def insert_run(
             feedback_plan_id=feedback_plan_id,
             persona=persona,
             persona_digest=persona_digest,
+            model=model,
         )
         run_id = rowid(sql.execute(conn, run))
         record_persona_text(conn, persona_digest, persona_text)
@@ -989,7 +1042,8 @@ def run_tools(conn: sqlite3.Connection, table: RunTable | Literal["ticks"], run_
 #: The assignments of a row's cost and token columns, a `?` for each of what `_spent` returns, in its order.
 _SPENT: LiteralString = (
     "cost_usd = ?, tokens_input = ?, tokens_output = ?, tokens_reasoning = ?, tokens_cache_read = ?, "
-    "tokens_cache_write = ?, tokens_peak_context = ?, tokens_first_call = ?, tokens_first_cache_write = ?"
+    "tokens_cache_write = ?, tokens_peak_context = ?, tokens_first_call = ?, tokens_first_cache_write = ?, "
+    "tokens_first_cache_read = ?"
 )
 
 
@@ -1024,7 +1078,7 @@ def set_progress(
     *,
     usage: Usage | None = None,
 ) -> None:
-    """Record what a running tick's overseer or chore run's agent has reported so far (§6, §19).
+    """Record what a running tick's overseer, or a chore, task, or review run's agent, has reported so far (§6, §19).
 
     Its session always, and what it has spent so far when `usage` is given. Nothing changes for one not running.
     """
@@ -1057,6 +1111,9 @@ def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:
         first_cache_write=int(values["tokens_first_cache_write"])
         if values["tokens_first_cache_write"] is not None
         else None,
+        first_cache_read=int(values["tokens_first_cache_read"])
+        if values["tokens_first_cache_read"] is not None
+        else None,
     )
 
 
@@ -1070,7 +1127,7 @@ def _set_report(
     digest: str | None,
     tools: Sequence[ToolUse],
 ) -> None:
-    spent = _spent(usage) if usage is not None else (None,) * 9
+    spent = _spent(usage) if usage is not None else (None,) * 10
     # Only with a report: a template of the operator's that prints plain text may not load the snapshot at all.
     loaded = digest if session_id is not None or usage is not None else None
     report = (
@@ -1090,11 +1147,11 @@ def _set_report(
         )
 
 
-def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, int | None, int | None]:
+def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, int | None, int | None, int | None]:
     """`usage` as the cost and token columns hold it, in the order `_SPENT` sets them.
 
     Returns:
-        The cost, each kind of token, the peak context, and the first call's tokens and cache write.
+        The cost, each kind of token, the peak context, and the first call's tokens, cache write, and cache read.
     """
     return (
         usage.cost_usd,
@@ -1106,6 +1163,7 @@ def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, in
         usage.peak_context,
         usage.first_call,
         usage.first_cache_write,
+        usage.first_cache_read,
     )
 
 
@@ -1184,11 +1242,17 @@ def record_decision(
     repo: str | None = None,
     chore: str | None = None,
     pr: str | None = None,
+    decider: Decider = Decider.OVERSEER,
+    kept: bool = False,
+    item: int | None = None,
 ) -> int:
     """Insert a decision for `tick_id` and return its id.
 
     `repo` is set for an item about a repository, `chore` for a decision about a chore, which has no ticket key, and
     `pr` for a decision about a PR the loop reviews, which has a ticket key only for one of the loop's own PRs.
+    `decider` says who made it: the overseer, through one of its verbs, or the harness on its own (DESIGN §37). `kept`
+    marks an attention item the overseer keeps, held until what it names ends it, and `item` is the journal number of
+    what it names, if it names one (`core.kept_items`).
 
     Returns:
         The new decision's id.
@@ -1202,6 +1266,9 @@ def record_decision(
         repo=repo,
         chore=chore,
         pr=pr,
+        decider=decider,
+        kept=kept,
+        item=item,
     )
     return rowid(sql.execute(conn, decision))
 
@@ -1352,7 +1419,7 @@ def insert_message(
     """Record a message and return its id. A worker's names its run: a ticket's in `run_id`, a task's in `task_run_id`.
 
     A submission already recorded for the subject records nothing new: its message's id is returned instead. So does a
-    tracker comment already mirrored for the subject.
+    tracker comment already recorded for the subject.
 
     Returns:
         The id of the new message, or of the one already recorded for the submission or comment.
@@ -1367,9 +1434,9 @@ def insert_message(
         if found is not None:
             return int(found[0])
     if comment is not None:
-        mirrored = mirrored_comment(conn, subject_kind, subject_id, comment.id)
-        if mirrored is not None:
-            return mirrored.id
+        recorded = comment_message(conn, subject_kind, subject_id, comment.id)
+        if recorded is not None:
+            return recorded.id
     message = sql.insert(
         "messages",
         subject_kind=subject_kind,
@@ -1391,13 +1458,13 @@ def insert_message(
     return rowid(sql.execute(conn, message))
 
 
-def mirrored_comment(
+def comment_message(
     conn: sqlite3.Connection,
     subject_kind: str,
     subject_id: str,
     comment_id: str,
 ) -> records.Message | None:
-    """Return the message a tracker comment was mirrored as, or None if it was not (DESIGN §22)."""
+    """Return the message a tracker comment was recorded as, or None if it was not (DESIGN §22, §35)."""
     return records.fetch_one(
         conn,
         records.Message,
@@ -1405,17 +1472,6 @@ def mirrored_comment(
         .from_("messages")
         .where("subject_kind = ? AND subject_id = ? AND comment_id = ?", subject_kind, subject_id, comment_id),
     )
-
-
-def set_mirror_cursor(conn: sqlite3.Connection, key: str, comment_id: str) -> None:
-    """Move a ticket's mirror cursor to a tracker comment, the newest mirrored. Call inside a transaction."""
-    sql.execute(conn, sql.update("tickets").set(last_mirrored_id=comment_id).where("key = ?", key))
-
-
-def count_decisions(conn: sqlite3.Connection, tick_id: int, action: str) -> int:
-    """Return how many decisions with `action` a tick recorded."""
-    query = sql.select("count(*)").from_("decisions").where("tick_id = ? AND action = ?", tick_id, action)
-    return int(sql.execute(conn, query).fetchone()[0])
 
 
 def get_message(conn: sqlite3.Connection, message_id: int) -> records.Message | None:

@@ -54,6 +54,45 @@ export function shortSha(sha: string): string {
     return sha.slice(0, 7)
 }
 
+/**
+ * Reviews in groups, each a request's reviews of one commit in its personas, side by side as the request form
+ * promised: a group sits where its first review is in `reviews`, its others after it in their own order. Every other
+ * review is a group of one, so the list keeps its order but for pulling a request's reviews together.
+ */
+export function requestGroups<T extends Pick<ReviewSummary, 'request_id' | 'sha'>>(reviews: readonly T[]): T[][] {
+    const groups: T[][] = []
+    const byRequest = new Map<string, T[]>()
+    for (const review of reviews) {
+        const key = requestOf(review)
+        const found = key === null ? undefined : byRequest.get(key)
+        if (found === undefined) {
+            const group = [review]
+            groups.push(group)
+            if (key !== null) {
+                byRequest.set(key, group)
+            }
+        } else {
+            found.push(review)
+        }
+    }
+    return groups
+}
+
+/** The reviews among `runs` that `review`'s request made of its commit in its other personas, `review` left out. */
+export function siblingsOf<T extends Pick<ReviewSummary, 'id' | 'request_id' | 'sha'>>(
+    review: T,
+    runs: readonly T[],
+): T[] {
+    const key = requestOf(review)
+    return key === null ? [] : runs.filter((r) => r.id !== review.id && requestOf(r) === key)
+}
+
+// A key the reviews one request made of one commit share, one in each persona the operator chose for it (DESIGN §31);
+// null for a review the loop started on its own, which answers no request.
+function requestOf(review: Pick<ReviewSummary, 'request_id' | 'sha'>): string | null {
+    return review.request_id === null ? null : `${review.request_id} ${review.sha}`
+}
+
 /** Where cards sit on a diff: by file and line, on a file's header, or nowhere in the diff. */
 export interface Placed<T> {
     /** File index, then line, to the cards anchored on that line, in their order. */
@@ -109,4 +148,9 @@ export function placeFindings(findings: ReviewFinding[], hasDiff: boolean): Plac
 /** The element id a finding's card has on the page, which the findings list links to. */
 export function findingAnchor(n: number): string {
     return `finding-${n}`
+}
+
+/** The id of a review thread's card on the PR's page, which a feedback plan's item links to, by the thread's id. */
+export function threadAnchor(id: string): string {
+    return `thread-${id}`
 }

@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 
 import { applyStreamEvent, parseStreamEvent } from './live'
-import { mockAttention, mockCapacity, mockChores, mockReviews, mockRuns, mockTickets } from './mocks'
+import { mockAttention, mockCapacity, mockChores, mockReviews, mockRuns, mockTasks, mockTickets } from './mocks'
 import { keys } from './queries'
 import type { ChoreDetail, ChoreRunDetail, ReviewDetail, ReviewSummary, Run, TicketDetail } from './types'
 
@@ -22,6 +22,7 @@ describe('applyStreamEvent', () => {
             day: { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 },
             month: { since: '2026-09-08T12:00:00Z', hours: 720, cost_usd: 31.4 },
             total_usd: 120.75,
+            sessions_read_at: null,
         }
         applyStreamEvent(client, { type: 'spend.updated', spend })
         applyStreamEvent(client, { type: 'tick.updated', tick: null, acknowledged: null })
@@ -43,6 +44,7 @@ describe('applyStreamEvent', () => {
             day: { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 },
             month: { since: '2026-09-08T12:00:00Z', hours: 720, cost_usd: 31.4 },
             total_usd: 120.75,
+            sessions_read_at: null,
         }
         applyStreamEvent(client, { type: 'spend.updated', spend })
         expect(client.getQueryState(keys.spendBreakdown({ days: 7 }))?.isInvalidated).toBe(true)
@@ -81,6 +83,25 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.ticket('ABC-999'))?.isInvalidated).toBe(false)
     })
 
+    it("marks a changed task's page, reports, and runs' pages and transcripts stale, and no other task's", () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.task(4), { task: mockTasks[0] })
+        client.setQueryData(keys.taskReport(4, 5), { text: 'old' })
+        client.setQueryData(keys.taskRun(4, 5), { task_id: 4 })
+        client.setQueryData(keys.taskRunTranscript(4, 5), { status: 'read' })
+        client.setQueryData(keys.taskRun(1, 1), { task_id: 1 })
+        client.setQueryData(keys.task(1), { task: mockTasks[0] })
+
+        applyStreamEvent(client, { type: 'task.changed', id: 4 })
+
+        expect(client.getQueryState(keys.task(4))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.taskReport(4, 5))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.taskRun(4, 5))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.taskRunTranscript(4, 5))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.taskRun(1, 1))?.isInvalidated).toBe(false)
+        expect(client.getQueryState(keys.task(1))?.isInvalidated).toBe(false)
+    })
+
     it('replaces the chores and marks every chore page stale, for a page to read again', () => {
         const client = new QueryClient()
         const detail = { chore: mockChores[0], runs: [], notes: [] } as unknown as ChoreDetail
@@ -90,6 +111,15 @@ describe('applyStreamEvent', () => {
 
         expect(client.getQueryData(keys.chores)).toEqual(mockChores)
         expect(client.getQueryState(keys.chore('deps'))?.isInvalidated).toBe(true)
+    })
+
+    it('replaces the tasks whole, as a task is submitted or its run starts or ends', () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.tasks, mockTasks.slice(1))
+
+        applyStreamEvent(client, { type: 'tasks.updated', tasks: mockTasks })
+
+        expect(client.getQueryData(keys.tasks)).toEqual(mockTasks)
     })
 
     it("reads a chore run's page and transcript again only when its status or cost moves", () => {
@@ -158,7 +188,12 @@ describe('applyStreamEvent', () => {
     it('writes the reviews waiting on a tick whole', () => {
         const client = new QueryClient()
         const requests = [
-            { pr_url: 'https://github.com/acme/web/pull/95', created_at: '2026-10-08T11:40:00Z', channel: 'web' },
+            {
+                pr_url: 'https://github.com/acme/web/pull/95',
+                created_at: '2026-10-08T11:40:00Z',
+                channel: 'web',
+                author: 'dana',
+            },
         ]
         applyStreamEvent(client, { type: 'review_requests.updated', requests })
         expect(client.getQueryData(keys.reviewRequests)).toEqual(requests)
@@ -324,6 +359,9 @@ describe('parseStreamEvent', () => {
         const chores = { type: 'chores.updated', chores: mockChores }
         expect(parseStreamEvent(JSON.stringify(chores))).toEqual(chores)
         expect(parseStreamEvent('{"type":"chores.updated","chores":null}')).toBeNull()
+        const tasks = { type: 'tasks.updated', tasks: mockTasks }
+        expect(parseStreamEvent(JSON.stringify(tasks))).toEqual(tasks)
+        expect(parseStreamEvent('{"type":"tasks.updated","tasks":null}')).toBeNull()
         const reviews = { type: 'reviews.updated', reviews: mockReviews }
         expect(parseStreamEvent(JSON.stringify(reviews))).toEqual(reviews)
         expect(parseStreamEvent('{"type":"reviews.updated"}')).toBeNull()
@@ -331,6 +369,8 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent(JSON.stringify(requested))).toEqual(requested)
         expect(parseStreamEvent('{"type":"review_requests.updated","requests":null}')).toBeNull()
         expect(parseStreamEvent('{"type":"ticket.changed","key":7}')).toBeNull()
+        expect(parseStreamEvent('{"type":"task.changed","id":4}')).toEqual({ type: 'task.changed', id: 4 })
+        expect(parseStreamEvent('{"type":"task.changed","id":"4"}')).toBeNull()
         const day = { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 }
         const spend = { type: 'spend.updated', spend: { day, month: { ...day, hours: 720 } } }
         expect(parseStreamEvent(JSON.stringify(spend))).toEqual(spend)

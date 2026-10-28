@@ -7,7 +7,10 @@ import {
     counted,
     pullRequestDescription,
     reviewDescription,
+    reviewDraftDescription,
+    reviewDraftTitle,
     runDescription,
+    taskRunDescription,
     tickDescription,
     ticketDescription,
 } from './descriptions'
@@ -30,8 +33,10 @@ const REVIEW: ReviewSummary = {
     ended_at: '2026-10-08T11:04:00Z',
     cost_usd: 0.24,
     persona: 'canopy',
+    request_id: null,
     news: true,
     seen: true,
+    draft: null,
 }
 
 describe('runDescription', () => {
@@ -50,6 +55,25 @@ describe('reviewDescription', () => {
     it('says how it ended, and leaves its verdict and commit to its panel', () => {
         expect(reviewDescription(REVIEW)).toBe('done')
         expect(reviewDescription({ status: 'running' })).toBe('running')
+    })
+})
+
+describe('reviewDraftTitle', () => {
+    it("names the review as the operator's, of the PR and its author when canopy has read who opened it", () => {
+        const url = 'https://github.com/acme/api/pull/14'
+        expect(reviewDraftTitle(url, { pr_author: 'carol' })).toBe('Your review of acme/api#14 by carol')
+        expect(reviewDraftTitle(url, { pr_author: null })).toBe('Your review of acme/api#14')
+    })
+})
+
+describe('reviewDraftDescription', () => {
+    it('says the version and what its status means for the operator', () => {
+        expect(reviewDraftDescription({ status: 'waiting', version: 3 })).toBe(
+            'version 3 · posts nothing until you publish it',
+        )
+        expect(reviewDraftDescription({ status: 'staged', version: 1 })).toBe(
+            'version 1 · pending on GitHub, for you to submit there',
+        )
     })
 })
 
@@ -115,6 +139,13 @@ describe('choreRunDescription', () => {
     })
 })
 
+describe('taskRunDescription', () => {
+    it('says how the run ended, alone, in words', () => {
+        expect(taskRunDescription({ status: 'blocked' })).toBe('blocked')
+        expect(taskRunDescription({ status: 'done' })).toBe('done')
+    })
+})
+
 describe('tickDescription', () => {
     it('says how it ended, its decisions, and what woke it', () => {
         expect(tickDescription({ status: 'ok', woken_by: 'timer' }, 4)).toBe('ok · 4 decisions · woken by timer')
@@ -123,7 +154,7 @@ describe('tickDescription', () => {
 })
 
 describe('ticketDescription', () => {
-    const IDLE = { running_run: null, awaiting: null }
+    const IDLE = { running_run: null, awaiting: null, feedback_plan: null }
     const NO_PLAN: TicketPlans = {
         changes_asked: null,
         needed: false,
@@ -136,9 +167,19 @@ describe('ticketDescription', () => {
     }
 
     it('says the run working it and the question waiting on you, and nothing for a ticket at rest', () => {
-        expect(ticketDescription({ running_run: 41, awaiting: 3 }, NO_PLAN)).toBe('run:41 running · waiting on you')
+        expect(ticketDescription({ ...IDLE, running_run: 41, awaiting: 3 }, NO_PLAN)).toBe(
+            'run:41 running · waiting on you',
+        )
         expect(ticketDescription(IDLE, NO_PLAN)).toBe('')
         expect(ticketDescription(IDLE, undefined)).toBe('')
+    })
+
+    it('says its feedback plan waits on you, after its own plan', () => {
+        const plan = { id: 7, pr_urls: ['https://github.com/acme/web/pull/88'], items: 3, stale: false }
+        expect(ticketDescription({ ...IDLE, feedback_plan: plan }, NO_PLAN)).toBe('feedback plan waiting on you')
+        expect(ticketDescription({ ...IDLE, feedback_plan: plan }, { ...NO_PLAN, needed: true })).toBe(
+            'plan needed · feedback plan waiting on you',
+        )
     })
 
     it('says a plan is needed only while it has none and needs one', () => {

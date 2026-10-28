@@ -5,10 +5,10 @@ import type { ReactNode } from 'react'
 import type { DiffFile, DiffLine, ReviewDiff, ReviewDraft } from '@/api/types'
 import { CodeTokens } from '@/components/code-tokens'
 import { Disclosure } from '@/components/disclosure'
-import { useDismissReviewFinding } from '@/components/dismiss-finding'
+import { dismissedLabel, useDismissReviewFinding } from '@/components/dismiss-finding'
 import { FoldButton } from '@/components/fold-button'
 import { Panel, PanelHeader } from '@/components/panel'
-import { DraftCommentCard, NewCommentCard } from '@/components/review-draft'
+import { DraftCommentCard, NewCommentCard, ReviewPointCard } from '@/components/review-draft'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
@@ -56,8 +56,10 @@ export interface Wanted {
 /**
  * The reviewed commit's diff, a panel per file, with each finding's card under the line it names, or under the file's
  * header when the diff does not show its line (`DiffPanels`). `wanted` is the file of the finding or comment whose link
- * the operator last followed. A review with a draft (DESIGN §34) has each of its comments' cards on its line too, after
- * the findings there; while the draft waits, the + beside a line's number opens a new comment's form under it.
+ * the operator last followed. On a review with a draft (DESIGN §34), each finding's card is the point of the
+ * operator's review it makes (`ReviewPointCard`), its comment included, and each comment the operator added has a card
+ * on its line too, after the findings there; while the draft waits, the + beside a line's number opens a new comment's
+ * form under it.
  */
 export function ReviewDiffPanels({
     run,
@@ -84,7 +86,12 @@ export function ReviewDiffPanels({
     const renderCard = (card: ReviewCard) => {
         switch (card.kind) {
             case 'finding': {
-                return <FindingCard key={`finding-${card.numbered.n}`} run={run} numbered={card.numbered} />
+                const key = `finding-${card.numbered.n}`
+                return draft === null ? (
+                    <FindingCard key={key} run={run} numbered={card.numbered} />
+                ) : (
+                    <ReviewPointCard key={key} run={run} numbered={card.numbered} draft={draft} />
+                )
             }
             case 'comment': {
                 return (
@@ -503,11 +510,35 @@ export function FindingCard({
                 {finding.location && (
                     <span className="font-mono text-xs break-all text-muted-foreground">{finding.location}</span>
                 )}
-                {finding.dismissed && <Chip>dismissed</Chip>}
+                {finding.dismissed && <Chip>{dismissedLabel(finding)}</Chip>}
+                {finding.held && <Chip tone="blocked">{HELD}</Chip>}
                 <span className="ml-auto">{button}</span>
             </header>
             {finding.detail && <RichText text={finding.detail} className="mt-1.5 text-muted-foreground" />}
+            <FindingAnswer finding={finding} />
             {notice}
         </article>
+    )
+}
+
+/**
+ * A held finding's chip: canopy holds a rebuttal of a worker's decline, or a late finding, for the operator (DESIGN
+ * §21).
+ */
+export const HELD = 'held for you'
+
+/**
+ * What the latest worker handed a finding answered of it, `fixed` or `declined`, and its reason, in its words: what the
+ * next review read beside the finding. Nothing when no worker answered it.
+ */
+function FindingAnswer({ finding }: { finding: Numbered['finding'] }) {
+    if (finding.answer === null) {
+        return null
+    }
+    return (
+        <div className="mt-1.5 border-l-2 pl-2 text-xs text-muted-foreground" data-testid="finding-answer">
+            <p>The worker answered: {finding.answer}</p>
+            {finding.answer_reason !== null && <RichText text={finding.answer_reason} className="mt-1" />}
+        </div>
     )
 }

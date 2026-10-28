@@ -16,8 +16,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, Group, open_context
-from canopy.cli.render import report_json
-from canopy.core import agent_commands, config, conversation, definitions, settings
+from canopy.core import agent_commands, config, conversation, definitions, reports, settings
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -42,12 +41,11 @@ def cmd_show(click_ctx: click.Context, *, as_json: bool) -> int:
     an agent may read what this prints. Bounds and choices are the schema's.
     """
     ctx = open_context(click_ctx)
+    if as_json:
+        click.echo(reports.read_config(ctx, reports.ConfigShow()))
+        return 0
     files = config.config_files(ctx.ws.root)
     found = settings.settings(ctx.config, config.origins(ctx.ws.root, runner=ctx.runner), files)
-    if as_json:
-        layers = {str(layer): str(path) for layer, path in zip(settings.Layer, files, strict=True)}
-        click.echo(report_json({"files": layers, "settings": [dataclasses.asdict(s) for s in found]}))
-        return 0
     for line in render(found, files):
         click.echo(line)
     return 0
@@ -84,7 +82,9 @@ def cmd_commands(click_ctx: click.Context, *, as_json: bool) -> int:
     origin = config.origins(ctx.ws.root, runner=ctx.runner)
     found = agent_commands.commands(ctx.config, {key: layers[path] for key, path in origin.items()}, snapshot)
     if as_json:
-        click.echo(report_json({"definitions_dir": str(snapshot), "commands": [dataclasses.asdict(c) for c in found]}))
+        click.echo(
+            reports.report_json({"definitions_dir": str(snapshot), "commands": [dataclasses.asdict(c) for c in found]}),
+        )
         return 0
     for line in render_commands(found):
         click.echo(line)

@@ -91,8 +91,11 @@
 /*
  * What the page scrolls in, everything under the header (AppShell), so a scrollbar never sits beside the header. Its
  * gutter is kept whether or not the page is long enough to need it: no layout shift when a page grows a scrollbar.
+ * Positioned, so it is the containing block of what is absolute inside it, such as an `sr-only` file input, and clips
+ * it: else that box sits where the page's scrolled content puts it and stretches the window past its height.
  */
 @utility page-scroll {
+    position: relative;
     overflow-y: auto;
     scrollbar-gutter: stable;
     @media print {
@@ -116,8 +119,13 @@
     scroll-padding-bottom: 8rem;
 }
 
-/* A panel body that scrolls past its height (PanelScroll): thin, not to crowd the rows; its color is the root's. */
+/*
+ * A panel body that scrolls past its height (PanelScroll): thin, not to crowd the rows; its color is the root's.
+ * Positioned, as the page's scroller is, so it holds and clips what is absolute inside it, such as each message's
+ * `sr-only` time: else that box sits where the unscrolled list would end and stretches the page past its content.
+ */
 @utility panel-scroll {
+    position: relative;
     overflow-y: auto;
     scrollbar-width: thin;
 }
@@ -403,7 +411,7 @@
         90deg,
         var(--accent),
         var(--section-pull-requests) 25%,
-        var(--section-worktrees) 50%,
+        var(--section-tickets) 50%,
         var(--section-pull-requests) 75%,
         var(--accent)
     );
@@ -594,6 +602,202 @@
 @utility animate-buddy-key {
     @media (prefers-reduced-motion: no-preference) {
         animation: buddy-key 5s linear calc(var(--key, 0) * 0.17s);
+    }
+}
+
+/*
+ * The Ghost that may sit in Sprig's place floats around its corner of the rail: it wanders right of where it rests,
+ * never past the width of the bubble above it, and back, over its shadow, leaning into each way it goes, and bobs as
+ * it goes, on a beat of its own so the two never fall into step; its shadow shrinks as it rises. Its light swells and
+ * dims, and flares with each new tip. Its shell's plates spread a little with each tip too, as a Ghost's do when it
+ * talks, each along its own point (`translateY` in the plate's own frame). At the lightswitch rave its shell turns a
+ * quarter on each of the lights' 0.6-second beats, and its light swells on every other one. Each starts and ends where
+ * a still page shows it: at rest, at its usual glow.
+ */
+@keyframes ghost-wander {
+    20% {
+        transform: translateX(18px);
+    }
+    40% {
+        transform: translateX(30px);
+    }
+    55% {
+        transform: translateX(12px);
+    }
+    75% {
+        transform: translateX(38px);
+    }
+}
+
+@keyframes ghost-lean {
+    0%,
+    40%,
+    55%,
+    75%,
+    100% {
+        transform: none;
+    }
+    10% {
+        transform: rotate(7deg);
+    }
+    20% {
+        transform: rotate(3deg);
+    }
+    30% {
+        transform: rotate(6deg);
+    }
+    47% {
+        transform: rotate(-6deg);
+    }
+    65% {
+        transform: rotate(8deg);
+    }
+    87% {
+        transform: rotate(-8deg);
+    }
+}
+
+@keyframes ghost-glow {
+    25% {
+        transform: scale(0.85);
+        fill-opacity: 0.12;
+    }
+    55% {
+        transform: scale(1.35);
+        fill-opacity: 0.8;
+    }
+    75% {
+        transform: scale(1.05);
+        fill-opacity: 0.4;
+    }
+}
+
+@keyframes ghost-light {
+    25% {
+        opacity: 0.55;
+    }
+    55%,
+    60% {
+        opacity: 1;
+    }
+}
+
+@keyframes ghost-flare {
+    from {
+        transform: scale(0.7);
+        opacity: 0.9;
+    }
+    to {
+        transform: scale(2);
+        opacity: 0;
+    }
+}
+
+@keyframes ghost-float {
+    50% {
+        transform: translateY(-5px);
+    }
+}
+
+@keyframes ghost-shadow {
+    50% {
+        transform: scale(0.8);
+        opacity: 0.6;
+    }
+}
+
+@keyframes ghost-talk {
+    30%,
+    70% {
+        transform: translateY(-1.6px);
+    }
+}
+
+@keyframes ghost-spin {
+    25% {
+        transform: rotate(90deg);
+    }
+    50% {
+        transform: rotate(180deg);
+    }
+    75% {
+        transform: rotate(270deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@utility animate-ghost-wander {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-wander 14s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-lean {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-lean 14s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-glow {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-glow 4.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-glow-rave {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-glow 1.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-light {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-light 4.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-flare {
+    transform-box: fill-box;
+    transform-origin: center;
+    opacity: 0;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-flare 900ms cubic-bezier(0.2, 0, 0, 1) 600ms backwards;
+    }
+}
+
+@utility animate-ghost-float {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-float 3.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-shadow {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-shadow 3.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-talk {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-talk 700ms cubic-bezier(0.2, 0, 0, 1) 600ms backwards;
+    }
+}
+
+@utility animate-ghost-spin {
+    transform-box: view-box;
+    transform-origin: 24px 40px;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-spin 2.4s cubic-bezier(0.6, 0, 0.2, 1) infinite;
     }
 }
 

@@ -60,12 +60,17 @@ class Call(TypedDict):
 
 @dataclass(frozen=True)
 class Machine:
-    """The stubs' directory, which is all of PATH, the log of what they were run with, the user's id, and uname."""
+    """The machine the stubs play.
+
+    The stubs' directory, which is all of PATH, the log of what they were run with, the user's id, uname, and whether
+    its kernel lacks IPv6.
+    """
 
     bin: Path
     log: Path
     geteuid: mock.NonCallableMock
     uname: mock.NonCallableMock
+    ipv6_missing: mock.NonCallableMock
 
     def install(self, *names: str) -> None:
         for name in names:
@@ -81,15 +86,16 @@ class Machine:
 
 @pytest.fixture
 def machine(canopy_env: CanopyEnv, tmp_path: Path) -> Iterator[Machine]:
-    """An x86_64 machine with nothing installed, run by a user who is not root, with HOME in `canopy_env`."""
+    """An x86_64 machine with IPv6 and nothing installed, run by a user who is not root, with HOME in `canopy_env`."""
     assert canopy_env.home.is_dir()
     (tmp_path / "bin").mkdir()
     with (
         mock.patch.dict(os.environ, {"PATH": str(tmp_path / "bin")}),
         mock.patch.object(os, "geteuid", autospec=True, return_value=1000) as geteuid,
         mock.patch.object(os, "uname", autospec=True, return_value=uname("x86_64")) as host,
+        mock.patch.object(canopy_sandbox, "ipv6_missing", autospec=True, return_value=False) as ipv6_missing,
     ):
-        yield Machine(tmp_path / "bin", tmp_path / "calls.jsonl", geteuid, host)
+        yield Machine(tmp_path / "bin", tmp_path / "calls.jsonl", geteuid, host, ipv6_missing)
 
 
 def uname(machine: str) -> os.uname_result:
@@ -174,8 +180,10 @@ def test_a_template_kept_that_names_the_operators_opencode_data_is_to_be_changed
     canopy_env: CanopyEnv,
     role: str,
 ) -> None:
-    """Templates from before `@DATA@` let a run read and write `~/.local/share/opencode`, whose logins and config the
-    overseer's OpenCode acts on, and gave a run's OpenCode no data directory of its own."""
+    """Templates from before `@DATA@` let a run write the operator's OpenCode data, and gave it none of its own.
+
+    That is `~/.local/share/opencode`, whose logins and config the operator's OpenCode acts on.
+    """
     machine.install(*LINUX_COMMANDS)
     templates = canopy_env.home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
@@ -323,13 +331,25 @@ def test_a_machine_srt_has_no_seccomp_filter_for_is_said(machine: Machine) -> No
     assert "SSH agent" in todo
 
 
+def test_a_kernel_without_ipv6_is_noted_and_left_to_the_wrapper(machine: Machine) -> None:
+    machine.install(*LINUX_COMMANDS)
+    machine.ipv6_missing.return_value = True
+
+    report = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    assert report.notes == [sandbox.NO_IPV6]
+    assert report.todo == []
+
+
 def test_macos_needs_ripgrep_and_no_bubblewrap(machine: Machine) -> None:
     machine.install("npm", "canopy-sandbox")
     machine.uname.return_value = uname("arm64")  # macOS's name for it, which needs no seccomp filter
+    machine.ipv6_missing.return_value = True  # srt runs no socat bridge there
 
     report = sandbox.run_setup(SubprocessRunner(), "darwin")
 
     assert report.todo == ["srt needs ripgrep: brew install ripgrep"]
+    assert report.notes == []
     assert machine.calls("bwrap") == []
 
 
@@ -355,7 +375,12 @@ def test_the_command_prints_what_it_did_and_the_line_for_the_prefix(
     assert "wrote   " in out
     assert "installed srt" in out
     assert "To do" not in out
+    assert "Note" not in out
     assert "worker_cmd_prefix = 'canopy-sandbox worker --read {definitions_dir} --'" in out
+
+    machine.ipv6_missing.return_value = True
+    assert main(["sandbox", "setup"]) == 0
+    assert f"\nNote: {sandbox.NO_IPV6}\n" in capsys.readouterr().out
 
     (machine.bin / "rg").unlink()
     assert main(["sandbox", "setup"]) == 1

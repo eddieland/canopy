@@ -74,12 +74,12 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M35. Temporary notices to workers](M35-temporary-notices-to-workers.md): done 2026-10-15.
 - [M36. Connectors: the world observed into the journal, in shadow](M36-connectors-in-shadow.md): in progress.
 - [M37. The overseer reads the journal](M37-the-overseer-reads-the-journal.md): in progress.
-- [M38. The harness decides what needs no judgment](M38-the-harness-decides.md): not started.
-- [M39. A tick without the overseer](M39-a-tick-without-the-overseer.md): not started.
-- [M40. The overseer per decision](M40-the-overseer-per-decision.md): not started.
-- [M41. Limits and trust settings from the web UI](M41-limits-and-trust-settings-from-the-web-ui.md): not started.
+- [M38. The harness decides what needs no judgment](M38-the-harness-decides.md): in progress.
+- [M39. A tick without the overseer](M39-a-tick-without-the-overseer.md): in progress.
+- [M40. The overseer per decision](M40-the-overseer-per-decision.md): in progress.
+- [M41. Limits and trust settings from the web UI](M41-limits-and-trust-settings-from-the-web-ui.md): done 2026-10-16.
 - [M42. Other people's PRs, reviewed on request](M42-other-peoples-prs-reviewed.md): done 2026-10-16.
-- [M43. Publishing a review on someone else's PR](M43-publishing-a-review.md): in progress.
+- [M43. Publishing a review on someone else's PR](M43-publishing-a-review.md): done 2026-10-22.
 - [M44. Plans before implementing](M44-plans-before-implementing.md): done 2026-10-17.
 - [M45. canopy's own worktree pools, replacing treehouse in stages](M45-canopys-own-worktree-pools.md): in progress.
 - [M46. Workers file follow-up tickets](M46-workers-file-follow-up-tickets.md): in progress.
@@ -99,11 +99,14 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M60. Personas](M60-personas.md): in progress.
 - [M61. One-off tasks](M61-one-off-tasks.md): in progress.
 - [M62. Artifacts, and comments on them back to the ticket](M62-artifacts.md): in progress.
+- [M63. Attachments on tickets and tasks](M63-attachments.md): in progress.
+- [M64. Slack replies](M64-slack-replies.md): in progress.
 
 ## Deferred, with the trigger that would unblock each
 
 - Spend-paced loop (left out of M13): when, with M39 built, overseer spend per day still runs past what the operator
-  will pay (`canopy spend` shows it). M13's cost recording is in; a spend budget and a pacing rule are what remain.
+  will pay (`canopy spend` shows it). M13's cost recording is in, and a monthly budget the spend page tracks and a
+  sink hears of (`spend.monthly_budget_usd`); a pacing rule that acts on it is what remains.
 - PR-scoped work (M14): when the operator keeps fixing CI or answering review on their own hand-written PRs by hand,
   often enough to want canopy to do it.
 - Webhooks: when tick latency is measured as a real cost.
@@ -111,9 +114,6 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
   their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4), all of
   it in `canopy.runtime` (D009).
-- Slack replies: when the operator wants to answer from Slack. A channel into the journal's conversation (DESIGN
-  §22): a Socket Mode bridge running `canopy reply`, or the overseer reading Slack through MCP. Needs a T1
-  change.
 - Watching a PR (M42's watch mode): when the operator asks canopy to review the same coworker's PR again after each
   push often enough to want it to follow the PR until it merges. DESIGN §21 (Review requests) says what it needs.
 - Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather than

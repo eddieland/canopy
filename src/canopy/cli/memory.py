@@ -10,15 +10,13 @@ run's prompt could be served.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, assert_never
+from typing import TYPE_CHECKING, assert_never
 
 import click
 
 from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.params import REPO, TICKET_KEY
-from canopy.cli.render import report_json
-from canopy.core import conversation, db, memory, memory_manage, records
+from canopy.core import conversation, db, memory, memory_manage, records, reports
 from canopy.core import memory_search as search
 from canopy.core.memory_text import quoted
 from canopy.core.vocab import MemoryMode, MemoryScope, MemoryStatus
@@ -63,9 +61,7 @@ def cmd_list(
         raise click.UsageError("--json lists notes: give it without --run or --digest")
     ctx = open_context(click_ctx)
     if as_json:
-        found = memory.notes(ctx.conn, key, every=every)
-        seen = memory.reads(ctx.conn, [n.id for n in found])
-        click.echo(report_json({"modes": _modes(ctx), "notes": [_note_json(n, _read(seen, n)) for n in found]}))
+        click.echo(reports.read_notes(ctx, reports.MemoryList(key=key, all=every)))
         return 0
     _print_modes(ctx)
     if run_id is not None:
@@ -83,7 +79,7 @@ def cmd_list(
         if note.ticket_key != shown:
             shown = note.ticket_key
             click.echo(f"\n{shown}:")
-        click.echo(_line(note, _read(seen, note)))
+        click.echo(_line(note, reports.read_of(seen, note)))
     return 0
 
 
@@ -184,10 +180,10 @@ def cmd_purge(click_ctx: click.Context, key: str | None, run_id: int | None, *, 
 def cmd_proposals(click_ctx: click.Context, *, as_json: bool) -> int:
     """List the lessons workers proposed that wait on you, each with where it came from."""
     ctx = open_context(click_ctx)
-    waiting = memory.pending_proposals(ctx.conn)
     if as_json:
-        click.echo(report_json({"modes": _modes(ctx), "proposals": [_proposal_json(ctx, p) for p in waiting]}))
+        click.echo(reports.read_proposals(ctx, reports.MemoryProposals()))
         return 0
+    waiting = memory.pending_proposals(ctx.conn)
     _print_modes(ctx)
     if not waiting:
         click.echo("\nNo proposals wait on you.")
@@ -212,16 +208,12 @@ def cmd_proposals(click_ctx: click.Context, *, as_json: bool) -> int:
 @click.option("--json", "as_json", is_flag=True, help="Print the modes and the lessons as one JSON object instead.")
 @click.pass_context
 def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool, as_json: bool) -> int:
-    """List the lessons you promoted, each with its review date, its reads and citations, and any report it is wrong."""
+    """List the lessons you promoted, each with its review date or pin, reads, citations, and any wrong report."""
     if as_json and digest:
         raise click.UsageError("--json lists lessons: give it without --digest")
     ctx = open_context(click_ctx)
     if as_json:
-        lessons = [m for m in memory.active_lessons(ctx.conn) if repo is None or m.repo in (None, repo)]
-        seen = memory.reads(ctx.conn, [m.id for m in lessons])
-        click.echo(
-            report_json({"modes": _modes(ctx), "lessons": [_lesson_json(ctx, m, _read(seen, m)) for m in lessons]}),
-        )
+        click.echo(reports.read_lessons(ctx, reports.MemoryLessons(repo=repo)))
         return 0
     _print_modes(ctx)
     if digest:
@@ -237,8 +229,8 @@ def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool, as_
         where = f" for {m.repo}" if m.repo else ""
         wrong = f"; run {m.wrong_run_id} reported it wrong at {m.wrong_at}" if m.wrong_at is not None else ""
         click.echo(
-            f"\n  {m.id}  `{m.key}`{where}; {_made(ctx, m)}; review at {m.review_at}; "
-            f"{_use(m, _read(seen, m))}{wrong}\n{quoted(m.body or '', _INDENT)}",
+            f"\n  {m.id}  `{m.key}`{where}; {_made(ctx, m)}; {_review(m)}; "
+            f"{_use(m, reports.read_of(seen, m))}{wrong}\n{quoted(m.body or '', _INDENT)}",
         )
     return 0
 
@@ -264,8 +256,7 @@ def cmd_promote(click_ctx: click.Context, memory_id: int, text: str | None, repo
     logs.for_tick(None).info("lesson promoted", extra={"memory": memory_id, "scope": source.scope, "lesson": lesson.id})
     where = f" for {lesson.repo}" if lesson.repo else ""
     click.echo(
-        f"{_kind(source.scope)} {memory_id} is lesson {lesson.id} (`{lesson.key}`){where}, due for review at "
-        f"{lesson.review_at}.",
+        f"{_kind(source.scope)} {memory_id} is lesson {lesson.id} (`{lesson.key}`){where}, {_due(lesson)}.",
     )
     if promoted.superseded is not None:
         click.echo(f"It replaces lesson {promoted.superseded}, which was under the same key.")
@@ -310,7 +301,45 @@ def cmd_renew(click_ctx: click.Context, lesson_id: int) -> int:
     except conversation.Refused as r:
         raise CliError(f"renew refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info("lesson renewed", extra={"lesson": lesson_id})
-    click.echo(f"Lesson {lesson_id} is renewed: due for review at {due}.")
+    if due is None:
+        click.echo(f"Lesson {lesson_id} is renewed: any report that it is wrong is cleared. Pinned, it is never due.")
+    else:
+        click.echo(f"Lesson {lesson_id} is renewed: due for review at {due}.")
+    return 0
+
+
+@memory_group.command("pin")
+@click.argument("lesson_id", metavar="ID", type=int)
+@click.pass_context
+def cmd_pin(click_ctx: click.Context, lesson_id: int) -> int:
+    """Pin a lesson: it never comes up for review, and runs read it before every lesson not pinned.
+
+    The pin stays through the lesson's edits, and through a promote under its key, until you unpin it.
+    """
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        memory_manage.pin(ctx.conn, ctx.config, lesson_id)
+    except conversation.Refused as r:
+        raise CliError(f"pin refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("lesson pinned", extra={"lesson": lesson_id})
+    click.echo(f"Lesson {lesson_id} is pinned: never due for review, and served before every lesson not pinned.")
+    return 0
+
+
+@memory_group.command("unpin")
+@click.argument("lesson_id", metavar="ID", type=int)
+@click.pass_context
+def cmd_unpin(click_ctx: click.Context, lesson_id: int) -> int:
+    """Unpin a lesson: it comes up for review again later, and is served as any other."""
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        due = memory_manage.unpin(ctx.conn, ctx.config, lesson_id)
+    except conversation.Refused as r:
+        raise CliError(f"unpin refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("lesson unpinned", extra={"lesson": lesson_id})
+    click.echo(f"Lesson {lesson_id} is unpinned: due for review at {due}.")
     return 0
 
 
@@ -349,8 +378,8 @@ def cmd_edit(click_ctx: click.Context, lesson_id: int, text: str | None, repo: s
     logs.for_tick(None).info("lesson edited", extra={"lesson": lesson_id, "into": lesson.id})
     where = f" for {lesson.repo}" if lesson.repo else ""
     click.echo(
-        f"Lesson {lesson_id} is edited into lesson {lesson.id} (`{lesson.key}`){where}, version {edited.version}, due "
-        f"for review at {lesson.review_at}. Lesson {lesson_id} stays in its history.",
+        f"Lesson {lesson_id} is edited into lesson {lesson.id} (`{lesson.key}`){where}, version {edited.version}, "
+        f"{_due(lesson)}. Lesson {lesson_id} stays in its history.",
     )
     if edited.served:
         click.echo("Every run dispatched from now on reads the new version.")
@@ -379,7 +408,7 @@ def cmd_history(click_ctx: click.Context, memory_id: int) -> int:
         made = _made(ctx, m) if m.scope is MemoryScope.LESSON else f"by run {m.run_id} at {m.created_at}"
         text = quoted(m.body if m.body is not None else "(text deleted)", _INDENT)
         mark = "  <-" if m.id == memory_id and len(versions) > 1 else ""
-        click.echo(f"\n  v{number}  {m.id}{where}  {status}; {made}; {_use(m, _read(seen, m))}{mark}\n{text}")
+        click.echo(f"\n  v{number}  {m.id}{where}  {status}; {made}; {_use(m, reports.read_of(seen, m))}{mark}\n{text}")
     return 0
 
 
@@ -487,81 +516,14 @@ def _print_modes(ctx: Context) -> None:
     click.echo(f"{memory.LESSONS_TIER}: {memory.lessons_band(settings.proposals)}")
 
 
-def _modes(ctx: Context) -> dict[str, str]:
-    """Each tier's mode, by its key under `[memory]`, as `--json` prints it."""
-    settings = ctx.config.memory
-    return {"ticket_notes": settings.ticket_notes, "proposals": settings.proposals}
+def _review(lesson: records.Memory) -> str:
+    """When a lesson comes up for review, as `memory lessons` lists it, or since when it is pinned and never does."""
+    return f"pinned at {lesson.pinned_at}" if lesson.pinned_at is not None else f"review at {lesson.review_at}"
 
 
-def _note_json(note: records.Memory, read: memory.Reads) -> dict[str, Any]:
-    """A ticket note as `memory list --json` prints it: `run_id` null for one the operator wrote.
-
-    `read_count` counts the runs whose prompts carried it; `use_count` only the runs that cited it in `memory_used`.
-    """
-    return {
-        "id": note.id,
-        "ticket": note.ticket_key,
-        "key": note.key,
-        "status": note.status,
-        "why": note.why,
-        "run_id": note.run_id,
-        "created_at": note.created_at,
-        "read_count": read.count,
-        "last_read_at": read.last_at,
-        "use_count": note.use_count,
-        "last_used_at": note.last_used_at,
-        "text": _text(note),
-    }
-
-
-def _proposal_json(ctx: Context, p: records.Memory) -> dict[str, Any]:
-    """A proposal as `memory proposals --json` prints it, with what `_provenance` says of its run and ticket."""
-    run = db.get_run(ctx.conn, p.run_id) if p.run_id is not None else None
-    ticket = db.get_ticket(ctx.conn, p.ticket_key) if p.ticket_key is not None else None
-    return {
-        "id": p.id,
-        "key": p.key,
-        "repo": p.repo,
-        "ticket": p.ticket_key,
-        "run_id": p.run_id,
-        "run_kind": run["kind"] if run is not None else None,
-        "run_status": run["status"] if run is not None else None,
-        "private": memory_manage.from_private_run(ctx.conn, p),
-        "ticket_done": ticket is not None and ticket.done,
-        "created_at": p.created_at,
-        "text": _text(p),
-    }
-
-
-def _lesson_json(ctx: Context, lesson: records.Memory, read: memory.Reads) -> dict[str, Any]:
-    """A lesson as `memory lessons --json` prints it, with what it was made from, as `_made` says it.
-
-    Its reads and citations are counted as a note's are (`_note_json`).
-    """
-    source = memory.origin(ctx.conn, lesson)
-    return {
-        "id": lesson.id,
-        "key": lesson.key,
-        "repo": lesson.repo,
-        "made": "edited" if memory.edited(lesson) else "promoted",
-        "approved_at": lesson.approved_at,
-        "from": None
-        if source is None
-        else {"scope": source.scope, "id": source.id, "ticket": source.ticket_key, "run_id": source.run_id},
-        "review_at": lesson.review_at,
-        "read_count": read.count,
-        "last_read_at": read.last_at,
-        "use_count": lesson.use_count,
-        "last_used_at": lesson.last_used_at,
-        "wrong_at": lesson.wrong_at,
-        "wrong_run_id": lesson.wrong_run_id,
-        "text": _text(lesson),
-    }
-
-
-def _text(entry: records.Memory) -> str | None:
-    """A memory's text with every character that hides text named, or None once it is forgotten."""
-    return quoted(entry.body, "") if entry.body is not None else None
+def _due(lesson: records.Memory) -> str:
+    """When a lesson just made is due for review, as `promote` and `edit` say it, or that it is pinned and never is."""
+    return "pinned, never due for review" if lesson.pinned_at is not None else f"due for review at {lesson.review_at}"
 
 
 def _line(note: records.Memory, read: memory.Reads) -> str:
@@ -569,11 +531,6 @@ def _line(note: records.Memory, read: memory.Reads) -> str:
     status = note.status if note.why is None else f"{note.status}, {note.why}"
     text = quoted(note.body if note.body is not None else "(text deleted)", _INDENT)
     return f"  {note.id}  `{note.key}`  {status}; by {by} at {note.created_at}; {_use(note, read)}\n{text}"
-
-
-def _read(seen: Mapping[int, memory.Reads], entry: records.Memory) -> memory.Reads:
-    """What `memory.reads` found of `entry`, or no reads if it found none."""
-    return seen.get(entry.id, memory.Reads())
 
 
 def _use(entry: records.Memory, read: memory.Reads) -> str:
@@ -612,11 +569,11 @@ def _print_run(ctx: Context, run_id: int) -> None:
     seen = memory.reads(ctx.conn, [m.id for m in (*wrote, *read)])
     click.echo("Wrote:" if wrote else "Wrote: none")
     for entry in wrote:
-        click.echo(_line(entry, _read(seen, entry)))
+        click.echo(_line(entry, reports.read_of(seen, entry)))
     if read:
         click.echo("Read:")
         for entry in read:
-            click.echo(_line(entry, _read(seen, entry)))
+            click.echo(_line(entry, reports.read_of(seen, entry)))
     else:
         # A run rendered with no tier at use read nothing because nothing was served, not because nothing was there.
         served = MemoryMode.USE in (rendered.ticket_notes, rendered.proposals)

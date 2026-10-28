@@ -1,3 +1,4 @@
+import { GHOST_ANYWHERE, GHOST_RAVE, GHOST_TIPS } from '@/lib/ghost'
 import { nextIndex } from '@/lib/headlines'
 import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
@@ -9,7 +10,8 @@ import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
  * voice follows itself: the paperclip's "It looks like you're...", an "Unhelpful tip:", a "Did you know?" or "Fun
  * fact:" that is not one, a "Hot take:", a "Dear diary," entry, a haiku, a riddle. While the lightswitch rave is on
  * (src/lib/rave.ts), Sprig has only the rave on its mind. It is off until Settings turns it on, which is kept in
- * localStorage like the theme, and synced across tabs.
+ * localStorage like the theme, and synced across tabs. Settings can also put a Destiny Ghost in its place, with lines
+ * of its own (src/lib/ghost.ts): the same setting turns either on and off.
  */
 
 /** Whether Sprig shows. */
@@ -23,6 +25,22 @@ export const DEFAULT: BuddySetting = 'off'
 /** The setting as stored, or the default for anything it does not recognize. */
 export function parseBuddy(raw: string | null): BuddySetting {
     return raw === 'on' || raw === 'off' ? raw : DEFAULT
+}
+
+/** Who sits at the foot of the rail while it is on: Sprig, or a Ghost in its place. */
+export type Companion = 'sprig' | 'ghost'
+
+/** Where localStorage keeps who sits there. */
+export const COMPANION_KEY = 'canopy-companion'
+/** Who sits there until the operator picks: Sprig. */
+export const DEFAULT_COMPANION: Companion = 'sprig'
+
+/** What each companion is called, on the rail and in Settings. */
+export const NAMES: Record<Companion, string> = { sprig: 'Sprig', ghost: 'Ghost' }
+
+/** Who sits there as stored, or the default for anything it does not recognize. */
+export function parseCompanion(raw: string | null): Companion {
+    return raw === 'sprig' || raw === 'ghost' ? raw : DEFAULT_COMPANION
 }
 
 /**
@@ -50,6 +68,28 @@ export const TIPS = {
         'Dear diary, filtered the tickets to the ones waiting on you. It was all of them. Again.',
         'Riddle: what is open, blocked, and done all at once? Nothing. Please. Not a ticket.',
     ],
+    '/tasks/': [
+        "It looks like you're handing out tasks. Would you like one about watering me?",
+        'Fun fact: a task is a ticket that skipped the meeting.',
+        'Unhelpful tip: "find out why it\'s slow" is a task. "Make it fast" is a lifestyle.',
+        'Dear diary, a task asked a question. Nobody has answered. I know the feeling.',
+        'Hot take: every big feature starts as a task. Every sprout starts as me.',
+        'Did you know? A task that pushes nothing has not failed. Sometimes I also do nothing, successfully.',
+    ],
+    '/tasks/$id': [
+        "It looks like you're reading a report. Would you like me to skim it and nod?",
+        'Unhelpful tip: copy the commit, not the branch. Branches move. I would know, I am mostly branch.',
+        'Dear diary, it called its own work throwaway. Very humble. I have never thrown anything away.',
+        'Hot take: a draft PR is a PR that has not met a reviewer yet.',
+        'Haiku: you asked one question / it came back with three tickets / such is delegation',
+    ],
+    '/tasks/$id_/runs/$run': [
+        "It looks like you're reading what a task's worker did. Every keystroke. Very trusting of you.",
+        'Unhelpful tip: if a run took too many tool calls, count them again slower.',
+        'Dear diary, watched a worker measure something twice. I measure nothing, once.',
+        'Hot take: a transcript is a diary someone else wrote about your codebase.',
+        'Haiku: it read, then it cut / then it measured once again / the bundle got small',
+    ],
     '/tickets/$key': [
         "It looks like you're reading a ticket. Would you like me to read it louder?",
         'Unhelpful tip: Forget makes canopy forget a ticket. I forget tickets for free, all day.',
@@ -74,7 +114,7 @@ export const TIPS = {
         'Did you know? A PR merged on a Friday is technically a weekend plan.',
         'Hot take: canopy never merges, and neither do I. We share a fear of commitment.',
     ],
-    '/reviews/': [
+    '/pull-requests/reviews/': [
         "It looks like you're reading a review nobody posted. Your secret's safe with me.",
         'Hot take: a review nobody posted is the kindest kind of review.',
         'Unhelpful tip: the newest review is at the top. The oldest is at the bottom, being wise.',
@@ -82,7 +122,7 @@ export const TIPS = {
         'Dear diary, canopy reviewed a PR and told nobody. Finally, someone who gets me.',
         'Riddle: when is a finding not a finding? When nobody posts it. Deep, I know.',
     ],
-    '/reviews/$id': [
+    '/pull-requests/reviews/$id': [
         "It looks like you're ticking findings. Would you like me to tick them louder?",
         'Unhelpful tip: every finding is a compliment, if you squint.',
         'Fun fact: "nit" is short for "nit". There is no longer word. I looked.',
@@ -90,7 +130,7 @@ export const TIPS = {
         'Haiku: red line, then green line / a finding sits on the seam / I sit on the rail',
         'Dear diary, a finding said "severity: high". I said "same". We have so much in common.',
     ],
-    '/reviews/$id_/run': [
+    '/pull-requests/reviews/$id_/run': [
         "It looks like you're checking the reviewer's work. Would you like me to check yours?",
         'Unhelpful tip: to speed up a review, scroll its transcript faster.',
         'Fun fact: a reviewer reads every file it reviews. I read the first line and form an opinion.',
@@ -138,7 +178,14 @@ export const TIPS = {
         'Hot take: a chore run is a worker with a routine. Very healthy. I should get one.',
         "Dear diary, read a chore's whole report. It mentioned dependencies. I mentioned my leaf.",
     ],
-    '/spend': [
+    '/reports/': [
+        "It looks like you're comparing months. I compare them too. October has more leaves.",
+        'Fun fact: a cache hit is a token you already paid for, wearing a disguise.',
+        'Hot take: the median iterations is the number of times a worker said "one more thing".',
+        'Haiku: twelve months in a row / each one cost a little more / so did my hat shelf',
+        'Unhelpful tip: to cut the review wait, review it yourself. I have reviewed this sentence.',
+    ],
+    '/reports/spend': [
         "It looks like you're counting money. I'm counting too. I got to three.",
         'Unhelpful tip: an idle tick costs money to decide nothing. I decide nothing for free.',
         'Dear diary, saw the bars go up. Asked if the hats were in there. They were not.',
@@ -146,7 +193,7 @@ export const TIPS = {
         'Haiku: a bar for each day / stacked by who spent what on what / none of it was me',
         'Fun fact: tokens are like leaves. You never notice them until they are on the bill.',
     ],
-    '/ticks/': [
+    '/runs/ticks/': [
         "It looks like you're counting ticks. I counted one, then lost my place.",
         'Unhelpful tip: every tick has an id. I have an id too. It is Sprig.',
         'Did you know? Between two ticks there is a tock. Nobody has ever seen one.',
@@ -154,7 +201,7 @@ export const TIPS = {
         'Haiku: the wise overseer / weighs each ticket, then decides / I just lean and stare',
         'Hot take: peak context is the overseer\'s way of saying "I have a lot on my mind".',
     ],
-    '/ticks/$id': [
+    '/runs/ticks/$id': [
         "It looks like you're reading the overseer's reasons. Don't tell it I showed you.",
         "Hot take: the overseer thinks out loud so I don't have to.",
         'Dear diary, read every reason in a tick. Felt seen. Was not mentioned.',
@@ -162,7 +209,7 @@ export const TIPS = {
         'Fun fact: the overseer has never once decided to dispatch me. I keep checking.',
         'Riddle: what decides everything and remembers nothing? A tick. I am the other way round.',
     ],
-    '/worktrees': [
+    '/runs/worktrees': [
         "It looks like you're counting worktrees. I can count to three. Please keep it to three.",
         'Unhelpful tip: a held worktree is not a free worktree. I came up with that myself.',
         'Fun fact: a worktree is a tree that works. I am a sprig that does not.',
@@ -193,6 +240,14 @@ export const TIPS = {
         'Unhelpful tip: every dollar canopy spends buys me hats. I would like the crown.',
         'Fun fact: dark mode makes me 40% more mysterious.',
         'Hot take: the best setting is whichever one keeps me on.',
+    ],
+    '/settings_/limits': [
+        "It looks like you're setting limits. I have none. Ask anyone.",
+        'Unhelpful tip: the ceiling is 32 workers. I asked for 33 hats. Denied.',
+        'Dear diary, they dropped a trusted reviewer today. I checked. I am still trusted.',
+        'Fun fact: trust only gets stricter here. So does my bedtime.',
+        'Hot take: comments in a config file are love letters. This page keeps every one.',
+        'Did you know? A change here is for this workspace only. I am for every workspace.',
     ],
     '/search': [
         "It looks like you're searching. I lost a leaf in 2024. Let me know if it turns up.",
@@ -251,15 +306,32 @@ export const RAVE: readonly string[] = [
     'Riddle: what goes off and on all night and never makes up its mind? The lights. And me.',
 ]
 
+/** A companion's lines: its own for each view, its ones for anywhere, and its rave's. */
+export interface Voice {
+    /** Its tips for each view: every view Sprig has tips for, so a new route needs the Ghost's too. */
+    tips: Record<View, readonly string[]>
+    /** Its tips for any view, after the view's own. */
+    anywhere: readonly string[]
+    /** Its tips while the lightswitch rave is on. */
+    rave: readonly string[]
+}
+
+/** Each companion's lines. */
+export const VOICES: Record<Companion, Voice> = {
+    sprig: { tips: TIPS, anywhere: ANYWHERE, rave: RAVE },
+    ghost: { tips: GHOST_TIPS, anywhere: GHOST_ANYWHERE, rave: GHOST_RAVE },
+}
+
 /**
- * The tips Sprig picks from on a view: the view's own, then the ones for anywhere. While the lightswitch rave is on,
- * the rave's alone, on any view.
+ * The tips a companion, Sprig unless named, picks from on a view: the view's own, then the ones for anywhere. While
+ * the lightswitch rave is on, the rave's alone, on any view.
  */
-export function tipsFor(view: View | undefined, rave: boolean): readonly string[] {
+export function tipsFor(view: View | undefined, rave: boolean, companion: Companion = 'sprig'): readonly string[] {
+    const voice = VOICES[companion]
     if (rave) {
-        return RAVE
+        return voice.rave
     }
-    return [...(view === undefined ? [] : TIPS[view]), ...ANYWHERE]
+    return [...(view === undefined ? [] : voice.tips[view]), ...voice.anywhere]
 }
 
 /**
@@ -297,4 +369,20 @@ export function useBuddy(): BuddySetting {
 /** Stores the setting and applies it now. */
 export function setBuddy(next: BuddySetting): void {
     setting.set(next)
+}
+
+const companionSetting = storedSetting({
+    key: COMPANION_KEY,
+    parse: parseCompanion,
+    serialize: (value: Companion) => value,
+})
+
+/** Who sits at the foot of the rail. Re-renders on a change from this tab or another. */
+export function useCompanion(): Companion {
+    return useStoredSetting(companionSetting)
+}
+
+/** Stores who sits there and applies it now. */
+export function setCompanion(next: Companion): void {
+    companionSetting.set(next)
 }
