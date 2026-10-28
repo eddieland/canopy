@@ -108,7 +108,10 @@ def test_the_map_is_validated(ws: Ws, canopy_env: CanopyEnv, table: str, error: 
         load_both(ws.root, canopy_env.user_file)
 
 
-@pytest.mark.parametrize("entry", ["", "/etc/", "a/../b", "./a", "a//b", "a\nb"])
+@pytest.mark.parametrize(
+    "entry",
+    ["", "/etc/", "a/../b", "../x", "./a", "a//b", "a\nb", "a**/b", "**x", "a/***", "[ab]/x", "a\\*"],
+)
 def test_a_high_impact_path_is_a_path_from_the_repositorys_root(ws: Ws, entry: str) -> None:
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(
         map_text()
@@ -126,6 +129,16 @@ def test_a_repositorys_high_impact_paths_are_read_from_its_table(ws: Ws) -> None
     )
     found = {r.name: r.high_impact_paths for r in workspace.load(ws.root).repos}
     assert found == {"api": (".agents/", "docs/TRUST_MODEL.md"), "web": ()}
+
+
+def test_a_high_impact_path_may_be_a_pattern(ws: Ws) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text()
+        + '\n[repos.api]\nurl = "https://x.test/a.git"\n'
+        + 'high_impact_paths = ["**/OWNERS", "services/*/migrations/", "v?/**"]\n',
+    )
+    (repo,) = workspace.load(ws.root).repos
+    assert repo.high_impact_paths == ("**/OWNERS", "services/*/migrations/", "v?/**")
 
 
 def test_a_repositorys_checks_have_the_roles_its_table_gives_them(ws: Ws) -> None:

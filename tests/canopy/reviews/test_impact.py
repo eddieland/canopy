@@ -29,12 +29,28 @@ RAISED = (
         (("docs/TRUST_MODEL.md",), ["docs/TRUST_MODEL.md"], ("docs/TRUST_MODEL.md", "docs/TRUST_MODEL.md")),
         # By whole components, never as text: a sibling with a longer name is not under the entry.
         ((".agents/", "docs/TRUST_MODEL.md"), [".agentsrc", "docs/TRUST_MODEL.md.bak", "x/.agents/a.md"], None),
-        # No globs: an entry is a path.
-        (("*.yml",), ["ci.yml"], None),
         ((".github/workflows/",), [], None),
+        # `**` matches any number of components, none included.
+        (("**/OWNERS",), ["OWNERS"], ("OWNERS", "**/OWNERS")),
+        (("**/OWNERS",), ["src/OWNERS.md", "services/billing/OWNERS"], ("services/billing/OWNERS", "**/OWNERS")),
+        (("docs/**/x.md",), ["docs/x.md"], ("docs/x.md", "docs/**/x.md")),
+        (("docs/**/x.md",), ["docs/a/b/x.md"], ("docs/a/b/x.md", "docs/**/x.md")),
+        # `*` matches within one component, and `?` one character.
+        (("services/*/migrations/",), ["services/billing/sub/migrations/x.py"], None),
+        (
+            ("services/*/migrations/",),
+            ["services/billing/migrations/0001.py"],
+            ("services/billing/migrations/0001.py", "services/*/migrations/"),
+        ),
+        (("*.yml",), ["ci.yml", "a/ci.yml"], ("ci.yml", "*.yml")),
+        (("*.yml",), ["a/ci.yml"], None),
+        (("v?/",), ["v10/a", "v1/a"], ("v1/a", "v?/")),
+        # A pattern covers everything under what it matches, as a path does.
+        (("**/migrations",), ["db/migrations/0001.sql"], ("db/migrations/0001.sql", "**/migrations")),
+        (("skills/",), ["skills-old/x"], None),
     ],
 )
-def test_an_entry_covers_the_path_it_names_and_everything_under_it(
+def test_an_entry_covers_the_paths_it_matches_and_everything_under_them(
     entries: tuple[str, ...],
     changed: list[str],
     found: tuple[str, str] | None,
