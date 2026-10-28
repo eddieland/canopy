@@ -11,7 +11,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, plans
+from canopy.core import conversation, db, git_tools, plans
 from canopy.core.vocab import PlanEffort, PlanStatus, RunKind, RunStatus
 from canopy.notify import message
 from canopy.runs import policy
@@ -24,9 +24,9 @@ from tests.canopy.helpers import (
     calls,
     commands_run,
     decisions,
+    git_records,
     has_deadline,
     in_tick,
-    logged,
     plan_file,
     planner_does,
     pool,
@@ -110,9 +110,9 @@ def test_a_planner_reads_its_worktrees_history_through_canopys_git_tools(
     assert entry["command"][-1] in {f"repo={s}" for s in git_pool.slots}
     log, fork, other = planner["tools"]
     assert not log["error"], log["text"]
-    assert [c.message for c in logged(log["text"]).commits] == ["initial"]
+    assert [c.message for c in git_records(log["text"], git_tools.Commits).commits] == ["initial"]
     assert not fork["error"], fork["text"]
-    assert fork["text"] == git_pool.remote_head("main")
+    assert git_records(fork["text"], git_tools.Base).commit == git_pool.remote_head("main")
     assert (other["error"], other["text"]) == (True, "no repository named 'web' here: this run reads repo")
     assert "Your git tools, `canopy_git_log`" in run.prompt
 

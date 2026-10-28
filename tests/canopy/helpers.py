@@ -909,9 +909,9 @@ MCP_OPENING: tuple[Mapping[str, object], ...] = (
 LIST_TOOLS: Mapping[str, object] = {"method": "tools/list"}
 
 
-def logged(text: str) -> git_tools.Commits:
-    """The commits the text of a call to the git tool `log` holds: its JSON, after the note before it."""
-    return git_tools.Commits.model_validate_json(text.removeprefix(f"{git_tools.DATA_NOTE}\n\n"))
+def git_records[R: git_tools.Result](text: str, result: type[R]) -> R:
+    """The records a git tool's text holds, such as `log`'s commits: its JSON, after the note before it."""
+    return result.model_validate_json(text.removeprefix(f"{git_tools.DATA_NOTE}\n\n"))
 
 
 def tool_call(name: str, /, **arguments: object) -> dict[str, object]:

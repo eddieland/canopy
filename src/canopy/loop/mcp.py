@@ -417,9 +417,10 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
     found = (
         _git_tool(
             git_tools.MERGE_BASE,
-            "Find the commit where two commits' histories meet, such as where a branch left its base.",
+            "Find the commit where two commits' histories meet, such as where a branch left its base, as JSON.",
             git_tools.MergeBase,
             git_tools.merge_base,
+            result=git_tools.Base,
             runner=runner,
             checkouts=checkouts,
         ),
