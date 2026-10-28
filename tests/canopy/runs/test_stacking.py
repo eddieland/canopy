@@ -89,6 +89,10 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
     resume = scenario.run(review, worker=pushes(SECOND, "PROJ-2: review fix"))
     assert (resume.status, slot_of(scenario.conn, resume.id).base_branch) == ("done", FIRST)
     assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in read(resume)
+    # The overseer sees the base a stacked ticket's latest run started from; an unstacked one's shows none.
+    scenario.tick(*waits("PROJ-1", "PROJ-2", rationale="PR open"))
+    assert "repos" not in scenario.ticket_state("PROJ-1")["last_run"]
+    assert scenario.ticket_state("PROJ-2")["last_run"]["repos"] == [{"repo": "repo", "base": FIRST}]
 
     # Once it merged, the overseer omits it: the run's base is the repository's, and the worker retargets the PR.
     merged = dispatches("PROJ-2", RunKind.RESUME, reasons=[ResumeReason.RETARGET], context="blocker merged")
@@ -104,10 +108,9 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
     assert "change this ticket's PR to target its repository's base branch listed above" in text
     assert subjects(git_pool, "agent/PROJ-2-second")[:2] == ["PROJ-2: review fix", "PROJ-2: stacked"]
 
-    # The overseer sees which base each ticket's latest run started from.
+    # Retargeted, it is stacked no more, and its latest run shows no base.
     scenario.tick(*waits("PROJ-1", "PROJ-2", rationale="PR open"))
-    bases = {t["key"]: t["last_run"]["repos"] for t in scenario.state()["tickets"]}
-    assert bases == {"PROJ-1": [{"repo": "repo", "base": "main"}], "PROJ-2": [{"repo": "repo", "base": "main"}]}
+    assert ["repos" in t["last_run"] for t in scenario.state()["tickets"]] == [False, False]
 
 
 def test_a_base_gone_from_origin_is_crashed_and_returns_the_slot(

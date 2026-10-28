@@ -273,6 +273,22 @@ def section(
     return found
 
 
+def rendered(found: ObservationsState) -> dict[str, object]:
+    """`found` as the state block renders it: each observed PR without its URL, which the block says already.
+
+    A unit's PR is the `pr_url` of its unit in `tickets`, and a PR a review asks about has its `url` beside its `pr`.
+    The claims and the harness read `found` itself, with the URLs.
+
+    Returns:
+        A copy of `found` without those URLs.
+    """
+    tickets = [{**t, "units": [_without_url(u) for u in t["units"]]} if "units" in t else t for t in found["tickets"]]
+    shown: dict[str, object] = {**found, "tickets": tickets}
+    if "review_prs" in found:
+        shown["review_prs"] = [_without_url(p) for p in found["review_prs"]]
+    return shown
+
+
 def fresh_query(ctx: Context, now: datetime) -> list[str] | None:
     """The tracker query's result when the block shows it `fresh` at `now`: a source read it whole within its age.
 
@@ -628,6 +644,13 @@ def _pr(url: str, pr: records.ObservedPr) -> PrObservation:
         "mergeable_state": pr.mergeable_state,
         "author": pr.author,
     }
+
+
+def _without_url(entry: UnitObservation | ReviewPrObservation) -> dict[str, object]:
+    pr = entry.get("pr")
+    if pr is None:
+        return dict(entry)
+    return {**entry, "pr": {k: v for k, v in pr.items() if k != "url"}}
 
 
 def _cutoff(ctx: Context, now: datetime) -> datetime:

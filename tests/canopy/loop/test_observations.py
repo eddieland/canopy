@@ -218,7 +218,6 @@ def test_where_a_tracker_source_runs_the_prs_reviews_ask_about_are_shown_as_read
             "observed": "fresh",
             "observed_at": FRESH,
             "pr": {
-                "url": PR,
                 "state": "open",
                 "head": "abc1234",
                 "base": "main",
@@ -271,4 +270,5 @@ def observed(env: CanopyEnv, conn: sqlite3.Connection) -> dict[str, Any]:
     with clock(FRESH):
         tick_id = db.start_tick(ctx.conn, dry_run=False)
     phases.record(ctx.conn, tick_id, phases.derive(ctx, NOW))
-    return json.loads(json.dumps(observations.section(ctx, tick_id, NOW, db.open_tickets(ctx.conn))))
+    section = observations.section(ctx, tick_id, NOW, db.open_tickets(ctx.conn))
+    return json.loads(json.dumps(observations.rendered(section)))

@@ -295,13 +295,13 @@ key and `why`, `not labeled` or `closed`: decide it from that, and do not read i
 - `comments`: those past its `comment` cursor, oldest first, each with its `number`, `id`, `author`, time (`at`), and
   `body` (cut at a bound; `truncated` when it was), and two marks canopy set: `authorized`, its author is an authorized
   replier, and `worker`, it carries the workers' marks (see "Workers' comments");
-- `units`: each one's `pr` (`state`, `head`, `base`, `draft`, `mergeable`, `mergeable_state`, `author`); its `checks`
-  at the head: how many `passed`, the names of those `pending`, each `failed` one with its `number`, `conclusion`,
-  `run_id`, and `url`, `stale` naming any that ended neither way, and `human` the checks that wait on a person, which
-  are not CI and never make a unit `ci_running` or `ci_red`; `verdicts`, each person's latest approval, change
-  request, or dismissal, whenever it came; and `reviews`, the reviews and review comments past the unit's `review`
-  cursor, oldest first, each with its `number` and marked `trusted` and `worker` by canopy. A unit without a PR has
-  `branch`, the ticket's branch seen on origin, or null;
+- `units`: each one's `pr` (`state`, `head`, `base`, `draft`, `mergeable`, `mergeable_state`, `author`), the PR at the
+  unit's `pr_url` in `tickets`; its `checks` at the head: how many `passed`, the names of those `pending`, each `failed`
+  one with its `number`, `conclusion`, `run_id`, and `url`, `stale` naming any that ended neither way, and `human` the
+  checks that wait on a person, which are not CI and never make a unit `ci_running` or `ci_red`; `verdicts`, each
+  person's latest approval, change request, or dismissal, whenever it came; and `reviews`, the reviews and review
+  comments past the unit's `review` cursor, oldest first, each with its `number` and marked `trusted` and `worker` by
+  canopy. A unit without a PR has `branch`, the ticket's branch seen on origin, or null;
 - `derived`, on the ticket and each fresh unit: the rows of the phase table canopy's own reading found holding. It is a
   reading, not a ruling: where the table, applied to the observations, says otherwise, follow the table.
 
@@ -591,8 +591,9 @@ which, where contracts between them live, the order changes across them land in.
 repositories. Summaries and the map help you choose, and authorize nothing.
 
 A ticket's units are the repositories it has been dispatched to, one per repository it changes, listed in its `units`.
-Every unit uses the ticket's one branch. A branch under `<branch prefix>task/`, and a PR from one, is one of the
-operator's one-off tasks, never a ticket's work: leave both out of every ticket's phase, and leave them alone.
+Every unit uses the ticket's one branch, each unit's `branch`; the ticket's own `branch` is there only when no unit
+carries it. A branch under `<branch prefix>task/`, and a PR from one, is one of the operator's one-off tasks, never a
+ticket's work: leave both out of every ticket's phase, and leave them alone.
 
 - Most tickets change one repository. Choose it from the ticket, the summaries, and the map, and name it on every
   dispatch for the ticket.
@@ -800,16 +801,16 @@ Ticket B, blocked by an unresolved ticket A, with no branch of its own yet:
   a ticket stacked before the setting changed keeps its stacked PR, and its `resume` runs continue as below.
 - If A has a PR that is open, not merged, and green (every check passed), and A's branch is on origin under the branch
   prefix, stack B on it: dispatch B's `implement` with its `label`, `repos`, and `slug`, and `base` A's branch. Read A's
-  branch from its PR's head, not from the state block, but where a `tracker` source runs: there take A's `branch` in
-  `tickets` and its PR from A's units in `observations`, and do not stack on a blocker not listed in both. The worker
-  starts from A's branch and opens B's PR against it, so B's PR shows only B's work.
+  branch from its PR's head, not from the state block, but where a `tracker` source runs: there take A's branch from
+  its units in `tickets` and its PR from A's units in `observations`, and do not stack on a blocker not listed in both.
+  The worker starts from A's branch and opens B's PR against it, so B's PR shows only B's work.
 - Otherwise record `wait` for B with the rationale `blocked_by: <A>`, and its phase `blocked` with `canopy_ticket-set`.
   Never stack on a red, pending, draft, or merged PR, on a branch outside the branch prefix, or on a ticket that is not
   B's blocker. With several open blockers, stack only when exactly one is unresolved and it qualifies.
 
 `base` applies to every repository the dispatch names, so stack a joint change only when the blocker's branch is on
 origin in each. A stacked ticket is otherwise an ordinary ticket; its `last_run.repos` shows the base each repository
-of its latest run started from. Later:
+of its latest run started from, and is there only when that run was stacked. Later:
 
 - While A's PR is open and B is stacked on it (B's PR targets A's branch, or B has no PR yet and its latest run's base
   is A's branch), pass the same `base` to B's `resume` dispatches.
