@@ -321,7 +321,7 @@ class Result(BaseModel):
 
 
 @dataclass(frozen=True)
-class Outcome[R: Result]:
+class Outcome[R: BaseModel]:
     """What a verb did, as its command prints it and as its tool returns it."""
 
     #: What the command prints, and the tool's text.
@@ -931,6 +931,29 @@ class TicketSet(Request):
     ] = None
 
 
+class TicketSets(Request):
+    """One or more tickets' or units' settings, recorded together or not at all."""
+
+    #: Each ticket's, or unit's, settings, in the order they are recorded.
+    tickets: Annotated[
+        tuple[TicketSet, ...],
+        # Its one item is checked below, not by `min_length`, which would also refuse a call whose only item is wrong.
+        Field(
+            json_schema_extra={"minItems": 1},
+            description="Each ticket's settings, or a unit's with repo, recorded together or not at all.",
+        ),
+    ]
+
+    @model_validator(mode="after")
+    def _batch(self) -> Self:
+        if not self.tickets:
+            raise ValueError("name at least one ticket")
+        named = [(t.key, t.repo) for t in self.tickets]
+        if twice := sorted({attention.subject(*n) for n in named if named.count(n) > 1}):
+            raise ValueError(f"set each ticket, or unit, once in a call: {', '.join(twice)} set twice")
+        return self
+
+
 class TicketUpdated(Result):
     """What was recorded of a ticket, or of one of its units."""
 
@@ -948,38 +971,104 @@ class TicketUpdated(Result):
     dry_run: Annotated[bool, Field(description="Whether this was in a dry run.")]
 
 
-def ticket_set(ctx: Context, request: TicketSet) -> Outcome[TicketUpdated]:
-    """Record a ticket's phase, cursors, done flag, or title, or a unit's phase and cursors.
+class TicketsUpdated(Result):
+    """What a call recorded of each ticket, or unit, it named."""
+
+    #: Each ticket or unit updated, in the order given.
+    tickets: Annotated[
+        tuple[TicketUpdated, ...],
+        Field(description="Each ticket or unit updated, in the order given."),
+    ]
+
+
+def ticket_set(ctx: Context, request: TicketSets) -> Outcome[TicketsUpdated]:
+    """Record tickets' phases, cursors, done flags, or titles, or units' phases and cursors, all of them or none.
 
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
-    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in; a call
+    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in; a setting
     that sets one and names no `repo` is about the ticket's one unit. It runs outside a tick too, where the operator
-    runs it and its cursors are not checked.
+    runs it and its cursors are not checked. Every setting is checked before any is recorded.
 
     Returns:
-        What the command prints, naming what a dry run did not do, and the same as fields.
+        What the command prints, a line for each setting, naming what a dry run did not do, and the same as fields.
 
     Raises:
-        Refused: CANOPY_TICK_ID names no running tick, `repo` is not a repository in this workspace, a unit's phase or
-            cursor names no `repo` and the ticket has no one unit, or inside a tick the harness decided the ticket in,
-            or a cursor names no item observed or passes one the state block left out, each of which is recorded.
+        Refused: CANOPY_TICK_ID names no running tick, or a setting is refused: its `repo` is not a repository in this
+            workspace, it sets a unit's phase or cursor with no `repo` and the ticket has no one unit, it is inside a
+            tick the harness decided the ticket in, or a cursor names no item observed or passes one the state block
+            left out, each of which is recorded. Nothing else in the call is then recorded.
     """
-    key, phase, done = request.key, request.phase, request.done
-    cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
-    unit_pairs = [(name, value) for name, value in cursor_pairs if name in db.UNIT_CURSORS]
-    unit_phase = phase if phase in vocab.UNIT_PHASES else None
-    unit = _unit(ctx, request.repo)
-    if unit is None and (unit_pairs or unit_phase is not None):
-        unit = _only_unit(ctx, key, f"a {unit_pairs[0][0]} cursor" if unit_pairs else f"the {unit_phase} phase")
-    tracked = _comment_cursor(ctx, request.cursors)
     current = current_tick(ctx)
-    if current is not None:
-        _refuse_decided(ctx, current.id, key, "ticket set")
-        if cursor_pairs:
-            _check_cursors(ctx, current.id, key, unit, dict(cursor_pairs))
+    several = len(request.tickets) > 1
+    checked: list[_Checked] = []
+    refusals: list[str] = []
+    # Every setting is checked, so one call names every refusal, and each refusal names its ticket among several.
+    for setting in request.tickets:
+        try:
+            checked.append(_check_setting(ctx, current, setting))
+        except Refused as e:
+            refusals.append(f"{attention.subject(setting.key, setting.repo)}: {e}" if several else str(e))
+    if refusals:
+        rest = "\nnothing else in the call was recorded: set the rest again" if several else ""
+        raise Refused("\n".join(refusals) + rest)
     # A dry run must not advance cursors or mark a ticket done: the first live tick would then miss everything the dry
     # runs saw, or never see the ticket at all.
     dry_run = current is not None and current.dry_run
+    with db.transaction(ctx.conn):
+        outcomes = [_record_setting(ctx, c, dry_run=dry_run) for c in checked]
+    return Outcome(
+        "\n".join(o.text for o in outcomes),
+        TicketsUpdated(tickets=tuple(o.result for o in outcomes)),
+    )
+
+
+@dataclass(frozen=True)
+class _Checked:
+    """A ticket's or unit's setting that passed its checks, with what they resolved, to record with the rest."""
+
+    #: The setting as the call gave it.
+    setting: TicketSet
+    #: The unit its unit's phase and cursors are for, if it names or sets one.
+    unit: str | None
+    #: The phase, when it is a unit's.
+    unit_phase: str | None
+    #: Whether a tracker source observes tickets, which says where the comment cursor is kept.
+    tracked: bool
+
+
+def _check_setting(ctx: Context, current: records.Tick | None, setting: TicketSet) -> _Checked:
+    """Check one ticket's or unit's setting, recording nothing but a refusal.
+
+    Returns:
+        The setting, with the unit and phase its checks resolved.
+
+    Raises:
+        Refused: As `ticket_set` says, for this setting.
+    """
+    key, phase = setting.key, setting.phase
+    cursors: dict[str, str] = dict(setting.cursors.items())
+    unit_cursor = next((name for name in cursors if name in db.UNIT_CURSORS), None)
+    unit_phase = phase if phase in vocab.UNIT_PHASES else None
+    unit = _unit(ctx, setting.repo)
+    if unit is None and (unit_cursor is not None or unit_phase is not None):
+        unit = _only_unit(ctx, key, f"a {unit_cursor} cursor" if unit_cursor else f"the {unit_phase} phase")
+    tracked = _comment_cursor(ctx, setting.cursors)
+    if current is not None:
+        _refuse_decided(ctx, current.id, key, "ticket set")
+        if cursors:
+            _check_cursors(ctx, current.id, key, unit, cursors)
+    return _Checked(setting, unit, unit_phase, tracked)
+
+
+def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcome[TicketUpdated]:
+    """Record one checked setting, inside the call's transaction.
+
+    Returns:
+        What the command prints of it, and the same as fields.
+    """
+    setting, unit, unit_phase = checked.setting, checked.unit, checked.unit_phase
+    key, phase, done = setting.key, setting.phase, setting.done
+    cursor_pairs: list[tuple[str, str]] = list(setting.cursors.items())
     ignored = [
         *(["cursors not advanced"] if dry_run and cursor_pairs else []),
         *(["not marked done"] if dry_run and done else []),
@@ -992,13 +1081,13 @@ def ticket_set(ctx: Context, request: TicketSet) -> Outcome[TicketUpdated]:
         phase=None if phase is None or unit_phase is not None else vocab.Phase(phase),
         cursors=ticket_cursors,
         done=done and not dry_run,
-        title=request.title,
-        tracked=tracked,
+        title=setting.title,
+        tracked=checked.tracked,
     )
     if done and not dry_run:
         # A done ticket's notes are invalidated: its work merged or was closed (DESIGN §28, Retention).
         memory.end_ticket_notes(ctx.conn, key, "ticket done")
-    unit_cursors: dict[str, str] = {} if dry_run else dict(unit_pairs)
+    unit_cursors: dict[str, str] = {} if dry_run else {n: v for n, v in cursor_pairs if n in db.UNIT_CURSORS}
     if unit is not None and (unit_phase is not None or unit_cursors):
         db.set_unit(ctx.conn, key, ctx.repo, unit, phase=unit_phase, cursors=unit_cursors)
     note = f"; dry run, {' and '.join(ignored)}" if ignored else ""
@@ -1008,7 +1097,7 @@ def ticket_set(ctx: Context, request: TicketSet) -> Outcome[TicketUpdated]:
             key=key,
             repo=unit,
             phase=phase,
-            cursors=() if dry_run else tuple(request.cursors),
+            cursors=() if dry_run else tuple(setting.cursors),
             done=done and not dry_run,
             dry_run=dry_run,
         ),
@@ -1133,7 +1222,7 @@ def _refuse_raised(
     Raises:
         Refused: `reason` is one the harness raises.
     """
-    if reason not in attention.FROM_CAUSES:
+    if reason not in attention.FROM_CAUSES and reason != attention.CHECK_STUCK:
         return
     why = f"the harness raises {reason} itself while its cause holds, and ends it when the cause is gone"
     db.record_decision(ctx.conn, tick_id, key, f"refused:{RAISED}", why, repo=repo, pr=pr)
