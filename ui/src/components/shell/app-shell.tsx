@@ -23,6 +23,7 @@ import { useTheme } from '@/theme/use-theme'
 
 import { Buddy } from './buddy'
 import { Favicon } from './favicon'
+import { Game2048 } from './game-2048'
 import { JumpPalette } from './jump-palette'
 import { LiveReadouts, StreamReadout } from './live-readouts'
 import { LoopDownBand } from './loop-down-band'
@@ -48,7 +49,7 @@ export const PAGE_SCROLLER = 'page'
  * The frame every page renders in: header (with its ticker), side rail (search, navigation, what is working now, the
  * spend, Sprig once Settings turns it on and the rail has room for it, and a footer), the routed page, and over it
  * all the jump palette while ⌘K has it open (`JumpPalette`) and the lightswitch rave while Settings' light switch is
- * on, and the tab's icon (`Favicon`). Coming back to the tab
+ * on, 2048 once it is typed away from a field (`Game2048`), and the tab's icon (`Favicon`). Coming back to the tab
  * after a while away, a note of what changed (`useAwayNote`). Signed out, the sign-in page instead, whatever the
  * route: every API route but the session's needs a session (DESIGN §22).
  *
@@ -212,6 +213,7 @@ export function AppShell() {
                 )}
                 <JumpPalette open={jumpOpen} onOpenChange={jump} />
                 <Rave />
+                <Game2048 />
             </Sheet>
         </StreamContext>
     )
