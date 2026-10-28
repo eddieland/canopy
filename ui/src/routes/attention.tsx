@@ -62,6 +62,7 @@ import type { Ask, Severity } from '@/lib/attention'
 import { settled, withLeaving } from '@/lib/leaving'
 import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
+import { reasonMeaning } from '@/lib/meanings'
 import { reviewRef, taskRef } from '@/lib/refs'
 import { taskTitle } from '@/lib/tasks'
 import { cn } from '@/lib/utils'
@@ -384,7 +385,11 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
  * chip says `finding` and the head line names the id beside its chore.
  */
 function ReasonChip({ item }: { item: AttentionItem }) {
-    return item.finding ? <Chip>finding</Chip> : <Chip tone={TONE[severity(item)]} word={item.reason} />
+    return item.finding ? (
+        <Chip>finding</Chip>
+    ) : (
+        <Chip tone={TONE[severity(item)]} word={item.reason} meaning={reasonMeaning(item.reason)} />
+    )
 }
 
 /** On an `awaiting_reply` or `plan_review` item the operator has answered: it stays until a tick reads the answer. */

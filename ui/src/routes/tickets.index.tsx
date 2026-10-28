@@ -18,6 +18,7 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Tip } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { phaseMeaning } from '@/lib/meanings'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 import {
     TICKET_QUERY_MAX,
@@ -193,7 +194,7 @@ function Row({ ticket }: { ticket: TicketSummary }) {
             <TicketState ticket={ticket} />
             <TicketLink ticketKey={ticket.key} className="truncate" />
             {/* Cut to fit, the whole in its tip in the CLI's spelling. */}
-            <Tip fact={phaseWord(ticket)} mono>
+            <Tip fact={phaseWord(ticket)} mono detail={phaseMeaning(ticket.phase)}>
                 <span className="truncate font-mono text-xs text-muted-foreground">{phaseLabel(ticket)}</span>
             </Tip>
             <span className="flex">

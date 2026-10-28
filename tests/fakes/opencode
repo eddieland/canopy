@@ -6,7 +6,8 @@ The two versions' commands share no name, so one fake plays whichever `runtime.v
 any real one, so no test reaches the operator's OpenCode or its sessions. Configured through the environment:
 
     FAKE_OPENCODE_STATE     the state file, JSON, {"sessions": {ID: [[provider, model, cost], ...]}}. Missing, or no
-                            entry for ID: OpenCode's `Session not found: ID` on stderr, and exit 1.
+                            entry for ID: OpenCode's `Session not found: ID` on stderr, and exit 1. With `version`,
+                            each export names it as the OpenCode that made the session.
     FAKE_OPENCODE_LOG       if set, one JSON line {"argv": [...], "cwd": ..., "env": [...]} is appended per run, `env`
                             the names of the OPENCODE_* variables it was started with.
 
@@ -148,7 +149,7 @@ def export(session_id: str) -> int:
     for i, (provider, model, cost) in enumerate(calls, start=1):
         info = {"id": f"msg_{i}", "role": "assistant", "providerID": provider, "modelID": model, "cost": cost}
         messages.append({"info": info, "parts": [{"type": "text", "text": f"[redacted:text:prt_{i}]"}]})
-    write(json.dumps({"info": {"id": session_id}, "messages": messages}, indent=2) + "\n")
+    write(json.dumps({"info": session_info(state, session_id), "messages": messages}, indent=2) + "\n")
     return 0
 
 
@@ -241,8 +242,13 @@ def session_export(session_id: str) -> int:
     for i, (provider, model, cost) in enumerate(calls, start=1):
         ref = {"id": model, "providerID": provider}
         messages.append({"id": f"msg_{i}", "type": "assistant", "model": ref, "content": [], "cost": cost})
-    write(json.dumps({"info": {"id": session_id}, "messages": messages}, indent=2) + "\n")
+    write(json.dumps({"info": session_info(state, session_id), "messages": messages}, indent=2) + "\n")
     return 0
+
+
+def session_info(state: dict[str, Any], session_id: str) -> dict[str, Any]:
+    """The session as an export names it: its id, and the OpenCode that made it when the state says."""
+    return {"id": session_id, **({"version": state["version"]} if "version" in state else {})}
 
 
 def write(printed: str) -> None:
