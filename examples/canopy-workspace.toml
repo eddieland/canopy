@@ -20,8 +20,10 @@ summary = "Public REST API. Owns the order schema and the generated OpenAPI spec
 # GitHub url gives one by default (.../tree/{branch}); set this for another host, or to "" for no links.
 # branch_url = "https://gitlab.com/acme/api/-/tree/{branch}"
 # Optional: paths from the repository's root whose change makes a review high impact whatever the reviewer says, its
-# items first on the attention list. Each covers itself and everything under it; no globs. They add to
-# .github/workflows/, which is high impact in every repository and cannot be removed. canopy's own lists its agents:
+# items first on the attention list. Each covers itself and everything under it. An entry may be a pattern: * and ?
+# match within one part of a path, and ** any number of parts, as "**/OWNERS" covers an OWNERS file at any depth. They
+# add to .github/workflows/, which is high impact in every repository and cannot be removed. canopy's own lists its
+# agents:
 # high_impact_paths = [".agents/", "docs/TRUST_MODEL.md"]
 
 # Optional: the checks that are not CI, each by its exact name. canopy does not wait on one, count it red, or need it to

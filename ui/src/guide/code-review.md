@@ -218,8 +218,10 @@ Some changes are `high` whatever the reviewer thinks. A PR that touches `.github
 recorded `high`, and the review's `harness` line names the path that did it. The reviewer reads the PR's description,
 and a description is exactly where someone would write "trivial CI tweak, nothing to see". Each repository can add its
 own paths in the workspace file, as `high_impact_paths` in its `[repos.NAME]` table: canopy's own lists `.agents/` and
-`docs/TRUST_MODEL.md`. An entry covers the path it names and everything under it; there are no globs. A repository's
-list only adds, so nobody can take CI's workflows off it. `high` puts the PR's items first in `canopy status`,
+`docs/TRUST_MODEL.md`. An entry covers the path it names and everything under it. It can also be a pattern, read as
+in a `.gitignore`: `**/OWNERS` covers an `OWNERS` file in any directory, and `services/*/migrations/` each service's
+migrations, so a new project's files are covered without a new entry. A repository's list only adds, so nobody can
+take CI's workflows off it. `high` puts the PR's items first in `canopy status`,
 `attention.md`, and your notifications. It doesn't buy a longer review.
 
 Spend review where a missed bug is expensive. For a PR that worries you, ask for a review in two or three personas
