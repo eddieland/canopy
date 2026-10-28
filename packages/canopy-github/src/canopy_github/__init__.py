@@ -10,6 +10,7 @@ click for the command lines (D025), and nothing from canopy.
 
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import subprocess
@@ -23,13 +24,15 @@ from typing import IO, TYPE_CHECKING, TextIO, override
 if TYPE_CHECKING:
     from email.message import Message
 
+#: How long one try waits on GitHub, to connect and then for each read of its reply.
 TIMEOUT_SECONDS = 30
 #: The media type that names the preview a PR's `mergeStateStatus` was introduced under.
 MERGE_INFO_PREVIEW = "application/vnd.github.merge-info-preview+json"
 # How much of a comment's or review's body is printed. canopy bounds what it records again.
 MAX_BODY = 8000
-#: How long a query GitHub answered with a server error, such as its unicorn page, waits before each new try: one
-#: try, then one more for each pause. A mutation is sent once, as one GitHub failed to answer may have been carried out.
+#: How long a query GitHub answered with a server error, such as its unicorn page, or whose reply was cut off, waits
+#: before each new try: one try, then one more for each pause. A mutation is sent once, as one GitHub failed to answer
+#: may have been carried out.
 RETRY_PAUSES: Sequence[float] = (1.0, 3.0)
 # How much of GitHub's reply an error quotes.
 _MAX_REPLY = 500
@@ -72,9 +75,10 @@ class GitHubError(Exception):
 
 
 class ServerError(GitHubError):
-    """GitHub answered with a server error, as when it shows its unicorn, or with what is not JSON.
+    """GitHub answered with a server error, as when it shows its unicorn, or with what is not JSON, or broke off.
 
-    It may have carried the request out, so it is never `certain`. A query too heavy to answer in time gets one.
+    It may have carried the request out, so it is never `certain`. A query too heavy to answer in time gets one, and so
+    does one whose connection was reset, closed, or cut off before its reply came whole.
     """
 
 
@@ -290,17 +294,22 @@ class Client:
                 reply = response.read().decode(errors="replace")
                 page = _page(response.headers)
         except urllib.error.HTTPError as e:
-            text = e.read().decode(errors="replace")[:_MAX_REPLY]
+            text = _quote(e)
             if _page(e.headers):
                 text = "GitHub's error page"
             if e.code >= 500:  # noqa: PLR2004
                 # A server error may come after the request was carried out; a refusal comes before.
                 raise ServerError(f"HTTP {e.code}: {text}", certain=False) from e
             raise GitHubError(f"HTTP {e.code}: {text}", certain=True) from e
-        except (urllib.error.URLError, TimeoutError, OSError) as e:
-            # Not tried again: a try that timed out has waited `TIMEOUT_SECONDS`, which a connector's run cannot spend
-            # many times over.
-            raise GitHubError(f"cannot reach {self._url}: {e}", certain=False) from e
+        except (urllib.error.URLError, http.client.HTTPException, OSError) as e:
+            # `http.client.HTTPException`, a reply cut off (`IncompleteRead`) or garbled among them, is no `OSError`,
+            # and urllib wraps it in no `URLError`.
+            if _timed_out(e):
+                # Not tried again: a try that timed out has waited `TIMEOUT_SECONDS`, which a connector's run cannot
+                # spend many times over.
+                raise GitHubError(f"cannot reach {self._url}: {e!r}", certain=False) from e
+            # A connection that broke fails fast, and is as likely to hold the next time as a server error.
+            raise ServerError(f"the connection to {self._url} broke: {e!r}", certain=False) from e
         try:
             return json.loads(reply)
         except json.JSONDecodeError as e:
@@ -311,6 +320,26 @@ class Client:
 def _page(headers: Message) -> bool:
     # GitHub's error page is HTML, its unicorn's image among it: naming the page says more than quoting it.
     return "html" in (headers.get("Content-Type") or "")
+
+
+def _quote(error: urllib.error.HTTPError) -> str:
+    """As much of the reply to a request GitHub refused as an error quotes: none, if the reply broke off.
+
+    Returns:
+        The reply's text.
+    """
+    try:
+        return error.read().decode(errors="replace")[:_MAX_REPLY]
+    except (http.client.HTTPException, OSError):
+        return "its reply broke off"
+    finally:
+        # A reply read whole closes its connection; one that broke off would leave it open.
+        error.close()
+
+
+def _timed_out(error: BaseException) -> bool:
+    # urllib wraps a timeout while connecting in a `URLError`; one while reading the reply comes bare.
+    return isinstance(error, TimeoutError) or isinstance(getattr(error, "reason", None), TimeoutError)
 
 
 @dataclass(frozen=True)
