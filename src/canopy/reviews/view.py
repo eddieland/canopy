@@ -203,18 +203,21 @@ def scoped(
 ) -> ReviewsSection:
     """Cut the state block's `reviews.prs` to the PRs the overseer may act on: no decision rests on another's review.
 
-    Those are the PRs of the `tickets` it is listed, and their units' `prs`, and those the review query `found`, or
-    every PR of no ticket when `found` is None, as it is while the overseer runs the query itself (DESIGN §21). A PR a
-    ticket done, stopped, or decided by the harness holds, or one the query no longer finds, is left out.
+    Those are the PRs of the `tickets` it is listed, and their units' `prs`, those with the operator's open request,
+    and those the review query `found`, or every PR of no ticket when `found` is None, as it is while the overseer runs
+    the query itself (DESIGN §21). A PR a ticket done, stopped, or decided by the harness holds, an old request's, or
+    one the query no longer finds, is left out.
 
     Returns:
         `section` with those PRs alone, in its order.
     """
+    requested = {r["url"] for r in section["requests"]}
     kept = [
         pr
         for pr in section["prs"]
         if pr["ticket"] in tickets
         or pr["url"] in prs
+        or pr["url"] in requested
         or (pr["url"] in found if found is not None else pr["ticket"] is None)
     ]
     return {**section, "prs": kept}

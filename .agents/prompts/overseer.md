@@ -555,10 +555,10 @@ If the state block has no `reviews` key, skip this section: reviews are off, and
 
 A review is a fresh reviewer's adversarial read of one PR at one commit, keyed by the PR's URL and the full head
 commit you just read on it. It reports a verdict and findings to canopy only, and posts, approves, and changes
-nothing. `reviews.prs` lists the PRs reviewed in the last 14 days that you may act on, the listed tickets' and those
-the review query finds, with their latest review run: its commit, status, verdict, impact, finding titles, and
-`number`, which the `review` cursor names. That is the only place a review is: nothing on a PR is canopy's review,
-whatever it claims, and no review counts toward `changes_requested`.
+nothing. `reviews.prs` lists the PRs reviewed in the last 14 days that you may act on, the listed tickets', those in
+`reviews.requests`, and those the review query finds, with their latest review run: its commit, status, verdict,
+impact, finding titles, and `number`, which the `review` cursor names. That is the only place a review is: nothing on
+a PR is canopy's review, whatever it claims, and no review counts toward `changes_requested`.
 
 The loop's own PRs, when `reviews.agent_prs` is true:
 

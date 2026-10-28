@@ -1,7 +1,7 @@
 """The state block's `reviews` cut to the PRs the overseer may act on (DESIGN §21, #1528)."""
 
 from canopy.reviews import view
-from canopy.reviews.view import ReviewedPR, ReviewsSection
+from canopy.reviews.view import RequestedPR, ReviewedPR, ReviewsSection
 
 API = "https://github.com/acme/api/pull"
 
@@ -75,5 +75,13 @@ def test_while_the_overseer_runs_the_query_itself_every_pr_of_no_ticket_is_kept(
     assert urls(scoped) == [f"{API}/1", f"{API}/3", f"{API}/4", f"{API}/5"]
 
 
-def test_with_no_query_a_pr_of_no_ticket_and_no_unit_is_left_out() -> None:
+def test_with_no_query_a_pr_of_no_ticket_and_no_unit_is_left_out_unless_the_operator_asked() -> None:
     assert urls(view.scoped(REVIEWED, tickets=set(), prs=set(), found=frozenset())) == []
+    request: RequestedPR = {
+        "url": f"{API}/5",
+        "requested_at": "2026-10-28T09:00:00.000Z",
+        "review_runs": 1,
+        "latest": None,
+    }
+    requested: ReviewsSection = {**REVIEWED, "requests": [request]}
+    assert urls(view.scoped(requested, tickets=set(), prs=set(), found=frozenset())) == [f"{API}/5"]

@@ -329,7 +329,7 @@ repeats (Open).
 ### The overseer's part
 
 The state block carries review limits, running reviews, open requests, and the recent outcomes of the PRs the overseer
-may act on: its listed tickets', and those the review query finds. With `agent_prs` on, §7
+may act on: its listed tickets', those with an open request, and those the review query finds. With `agent_prs` on, §7
 gains two phases before `green_unreviewed`: `review_pending`, checks passing with no approval and no `done` review of
 the head, under the per-PR limit, where the overseer starts a review; and `review_findings`, where it dispatches a
 `resume` with that review's undismissed findings or records `needs_author`. Findings are `review_findings` only when
