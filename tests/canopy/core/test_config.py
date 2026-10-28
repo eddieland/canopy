@@ -10,7 +10,7 @@ from canopy_artifacts import tools as store_tools
 
 from canopy.cli.main import main
 from canopy.core import config, workspace
-from canopy.core.config import ConfigError, load, render_command
+from canopy.core.config import ConfigError, PlannerApproval, load, render_command
 from canopy.core.context import Context
 from canopy.loop import reread
 from canopy.runtime.implementation import Version
@@ -691,6 +691,37 @@ def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: C
     assert cfg.connect.tracker() == config.Source(kind="tracker", post_cmd="canopy-post-github")
     # A tick runs only a source that reads: `issues` only posts.
     assert list(cfg.connect.named()) == ["ghe"]
+
+
+@pytest.mark.parametrize(
+    ("value", "level"),
+    [
+        # The key was a switch first: an operator's file that set it reads as it did.
+        (True, PlannerApproval.STRICT),
+        (False, PlannerApproval.OFF),
+        ("strict", PlannerApproval.STRICT),
+        ("normal", PlannerApproval.NORMAL),
+        ("lenient", PlannerApproval.LENIENT),
+        ("off", PlannerApproval.OFF),
+    ],
+)
+def test_planner_may_approve_is_a_level_and_reads_its_old_switch(
+    canopy_env: CanopyEnv,
+    value: object,
+    level: PlannerApproval,
+) -> None:
+    assert load(canopy_env.root, canopy_env.user_file).policy.planner_may_approve is PlannerApproval.OFF
+    canopy_env.configure(canopy_env.private_file, {"policy": {"planner_may_approve": value}})
+    policy = load(canopy_env.root, canopy_env.user_file).policy
+    assert policy.planner_may_approve is level
+    assert policy.planner_approves() is (level is not PlannerApproval.OFF)
+
+
+@pytest.mark.parametrize("value", ["sometimes", "true", 1, ""])
+def test_a_level_planner_may_approve_does_not_have_is_refused(canopy_env: CanopyEnv, value: object) -> None:
+    canopy_env.configure(canopy_env.private_file, {"policy": {"planner_may_approve": value}})
+    with pytest.raises(ConfigError, match=r"policy\.planner_may_approve"):
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_then_the_slack_source(canopy_env: CanopyEnv) -> None:

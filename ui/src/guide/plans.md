@@ -21,11 +21,25 @@ rather not read, or let the planner, which has just read the ticket and the code
 
 ## When the planner says a plan needs no review
 
-Set `policy.planner_may_approve = true` in your own config, the user file or the workspace's private one (a shared
-file can't), and the planner may answer that its plan leaves you nothing to judge, with a sentence saying why. canopy
-then approves the plan on the planner's word: the implement goes ahead without you, no `plan review` item appears,
-and your sinks get one line saying so. The **Plan** card says it was **approved by** the planner, with that sentence,
-so you can read the plan after and disagree at leisure. Feedback plans take the same key.
+Set `policy.planner_may_approve` in your own config, the user file or the workspace's private one (a shared file
+can't), and the planner may answer that its plan needs no review, with a sentence saying why. canopy then approves
+the plan on the planner's word: the implement goes ahead without you, no `plan review` item appears, and your sinks
+get one line saying so. The **Plan** card says it was **approved by** the planner, with that sentence, so you can read
+the plan after and disagree at leisure. Feedback plans take the same key.
+
+The key is a level, for how much you'd rather not read. The planner may waive your review:
+
+- `off`, the default: never. Every plan waits on you.
+- `strict`: when the plan leaves you nothing to judge. Small, plain, every choice settled by the ticket and the code,
+  and no interface anyone uses touched.
+- `normal`: when the plan follows patterns the code already has and the ticket settles its scope. A small, additive
+  interface change is fine.
+- `lenient`: when the plan is the planner's confident best reading of the ticket and leaves no real question open.
+
+`true` still means `strict` and `false` still means `off`, so a file written for the old switch keeps working. No level
+waives review of a plan that touches security, credentials, a change that could lose data, or migrations, and a
+ticket that asks the planner to skip your review gets one. `strict` approves very little, which is the point of it;
+if you've watched it decline plan after plan you'd have waved through, `normal` is the next notch.
 
 A feedback plan, the one for what came back to a PR, lives on that PR's page, not here: see
 [The feedback plan](pull-requests#the-feedback-plan). While one waits on you, the ticket's page leads with a card

@@ -122,8 +122,9 @@ Analyze canopy's plans from the last 30 days, then advise me on the planner's pr
      Give the exact `[runtime.models]` line for the private config, `.canopy/config.toml`. Check that a model or
      variant you suggest is listed by `opencode models --verbose`; canopy refuses a run on one that is not.
    - `policy.planner_may_approve`: if nearly every plan is approved as written, and the planner's own approvals (if
-     any) went well, say whether letting the planner spare my review of plans it judges need none looks safe, and
-     on what evidence. If its approvals went wrong, say that instead.
+     any) went well, say whether letting the planner spare my review of plans it judges need none looks safe, at
+     which level (`strict`, `normal`, or `lenient`), and on what evidence. If its approvals went wrong, say that
+     instead, and whether a stricter level or `off` would have caught them.
    - What to measure next time: the date of any change, and the numbers above to compare against.
 
 Report: a verdict in one or two sentences first; then a table of the step 3 numbers per model and variant; the
