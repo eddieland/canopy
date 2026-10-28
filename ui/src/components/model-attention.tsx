@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { modelsQuery } from '@/api/queries'
+import { freshModelsQuery } from '@/api/queries'
 import type { AgentModel } from '@/api/types'
 import { TicketModels } from '@/components/ticket-models'
 
@@ -11,9 +11,10 @@ import { TicketModels } from '@/components/ticket-models'
  * is marked before the operator goes looking for it; a list that cannot be read says why in the menu.
  */
 export function ModelAttention({ ticketKey, models }: { ticketKey: string; models: readonly AgentModel[] }) {
-    // Each read starts the runtime, which is why the ticket's page waits for a menu to open; here the read is the
-    // point, and the menus find it in the cache.
-    useQuery(modelsQuery)
+    // A read can start the runtime, which is why the ticket's page waits for a menu to open; here the read is the
+    // point, and the menus find it in the cache. Read fresh, not the server's kept list: a run has just found a model
+    // gone, which a list read minutes ago may still name.
+    useQuery(freshModelsQuery)
     return (
         <section aria-label="Models" className="border-b" data-testid="attention-models">
             <TicketModels ticketKey={ticketKey} models={models} />
