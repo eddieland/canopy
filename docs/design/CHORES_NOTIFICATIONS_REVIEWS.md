@@ -48,12 +48,12 @@ its prompt runs.
 
 ### Delegation
 
-The state block lists each chore with a `when`, when it is next due, whether it is running, its latest run, and its
-open findings. Each tick the overseer runs each due chore or records why it waits. A chore with no `when` needs no
-judgment, so the harness runs it when due, after the overseer, with no context (§37), and the overseer's `chore run`
-or `chore wait` about one is refused `decided`. Findings inform only decisions about
-the chore: chores never cause or prevent a dispatch (Open). With no chores, or `capacity.max_chores = 0`, nothing about
-chores reaches the overseer.
+The state block lists each chore with a `when`, when it is next due, whether it is running, and its latest run; a due
+one's with its summary, and its open findings, which a `when` may decide by. Each tick the overseer runs each due
+chore or records why it waits. A chore with no `when` needs no judgment, so the harness runs it when due, after the
+overseer, with no context (§37), and the overseer's `chore run` or `chore wait` about one is refused `decided`.
+Findings inform only decisions about the chore: chores never cause or prevent a dispatch (Open). With no chores, or
+`capacity.max_chores = 0`, nothing about chores reaches the overseer.
 
 Only a tick starts a chore (D020). The harness refuses, and records the refusal, a chore not configured for this
 workspace, one already running, one whose latest run started less than `every_minutes` ago however it ended, one outside
@@ -328,7 +328,8 @@ repeats (Open).
 
 ### The overseer's part
 
-The state block carries review limits, running reviews, recent outcomes, and open requests. With `agent_prs` on, §7
+The state block carries review limits, running reviews, open requests, and the recent outcomes of the PRs the overseer
+may act on: its listed tickets', and those the review query finds. With `agent_prs` on, §7
 gains two phases before `green_unreviewed`: `review_pending`, checks passing with no approval and no `done` review of
 the head, under the per-PR limit, where the overseer starts a review; and `review_findings`, where it dispatches a
 `resume` with that review's undismissed findings or records `needs_author`. Findings are `review_findings` only when

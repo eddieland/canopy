@@ -468,9 +468,10 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
         "https://ci.example.test/job/checkout/90\n"
     ) in message
 
-    # The overseer sees the findings of the latest ok run.
+    # The overseer sees the chore, not due, with its latest run's id and status alone.
     chore = state_block(agent_log)["chores"][0]
-    assert chore["findings"] == [{"id": FINDING["id"], "title": FINDING["title"], "link": FINDING["link"]}]
+    assert chore["latest_run"] == {"run_id": 1, "status": "ok"}
+    assert "findings" not in chore
     assert chore["when"] == "Weekdays only."
     assert chore["running"] is False
     assert chore["due"] is False
@@ -493,6 +494,27 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
     assert "- chore:build-health flaky/checkout/test_retry\n" in third
     assert "- chore:build-health chore_failed\n" in third
     assert "Nothing needs you." in (canopy_env.state_dir / "attention.md").read_text()
+
+
+def test_a_chores_latest_summary_and_findings_reach_the_overseer_only_while_it_is_due(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    treehouse_state: Path,
+) -> None:
+    """A `when` decides by them only when the chore is due; the rest of the time they would fill every tick (#1528)."""
+    conn = canopy_env.journal()
+    run_inline(conn, OK)
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    ws = workspace.load(canopy_env.root)
+    [idle] = view.state_section(view.states(conn, cfg, ws), datetime.now(UTC))
+    assert (idle["due"], idle["latest_run"], "findings" in idle) == (False, {"run_id": 1, "status": "ok"}, False)
+
+    backdate(conn, 120)
+    [due] = view.state_section(view.states(conn, cfg, ws), datetime.now(UTC))
+    assert due["due"] is True
+    latest = present(due["latest_run"])
+    assert (latest.get("summary"), latest.get("ended_at") is not None) == ("one flaky test", True)
+    assert due["findings"] == [{"id": FINDING["id"], "title": FINDING["title"], "link": FINDING["link"]}]
 
 
 def test_a_finding_is_aged_from_the_first_ok_run_that_reported_it(
