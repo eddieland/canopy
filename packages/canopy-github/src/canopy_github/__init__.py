@@ -5,7 +5,7 @@ T2, D003). Each reads the token `gh` holds for the host its PR's URL or reposito
 and talks to that host's GraphQL API, so GitHub Enterprise works as github.com does. This module holds what both
 share: reading a PR's or an issue's URL and a clone URL, the token, the GraphQL client, and the JSON lines they print.
 
-click for the command lines (D025), and nothing from canopy.
+click for the command lines (D025), canopy-http for every request (D130), and nothing from canopy.
 """
 
 from __future__ import annotations
@@ -13,23 +13,21 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-import time
-import urllib.error
-import urllib.request
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import IO, TYPE_CHECKING, TextIO, override
+from typing import TextIO
 
-if TYPE_CHECKING:
-    from email.message import Message
+import canopy_http
 
+#: How long `gh` may take to name the hosts it is logged in to, or a token.
 TIMEOUT_SECONDS = 30
 #: The media type that names the preview a PR's `mergeStateStatus` was introduced under.
 MERGE_INFO_PREVIEW = "application/vnd.github.merge-info-preview+json"
 # How much of a comment's or review's body is printed. canopy bounds what it records again.
 MAX_BODY = 8000
-#: How long a query GitHub answered with a server error, such as its unicorn page, waits before each new try: one
-#: try, then one more for each pause. A mutation is sent once, as one GitHub failed to answer may have been carried out.
+#: How long a query GitHub answered with a server error, such as its unicorn page, or whose reply was cut off, waits
+#: before each new try: one try, then one more for each pause. A mutation is sent again only when it never left or
+#: GitHub refused it for its rate limit, as one GitHub failed to answer may have been carried out (canopy-http).
 RETRY_PAUSES: Sequence[float] = (1.0, 3.0)
 # How much of GitHub's reply an error quotes.
 _MAX_REPLY = 500
@@ -60,8 +58,8 @@ class InputError(Exception):
 class GitHubError(Exception):
     """GitHub refused a request, or could not be reached.
 
-    `certain` is whether GitHub is known not to have carried out the request: a reply that refused it. A request that
-    timed out or got a server error may have been carried out.
+    `certain` is whether GitHub is known not to have carried out the request: a reply that refused it, or a request that
+    never left. A request that timed out, broke off, or got a server error may have been carried out.
     """
 
     def __init__(self, message: str, *, certain: bool, types: tuple[str, ...] = ()) -> None:
@@ -72,9 +70,10 @@ class GitHubError(Exception):
 
 
 class ServerError(GitHubError):
-    """GitHub answered with a server error, as when it shows its unicorn, or with what is not JSON.
+    """GitHub answered with a server error, as when it shows its unicorn, or with what is not JSON, or broke off.
 
-    It may have carried the request out, so it is never `certain`. A query too heavy to answer in time gets one.
+    It may have carried the request out, so it is never `certain`. A query too heavy to answer in time gets one, and so
+    does one whose connection was reset, closed, or cut off before its reply came whole.
     """
 
 
@@ -191,30 +190,20 @@ def _gh(args: list[str], host: str) -> subprocess.CompletedProcess[str]:
         raise InputError(f"cannot run gh to read the token for {host}: {e}") from e
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Follows no redirect: urllib would carry the request's headers, the token among them, to wherever it pointed."""
-
-    @override
-    def redirect_request(
-        self,
-        req: urllib.request.Request,
-        fp: IO[bytes],
-        code: int,
-        msg: str,
-        headers: Message,
-        newurl: str,
-    ) -> None:
-        return None
-
-
 class Client:
-    """GitHub's GraphQL API at one endpoint, with one token, sent to that endpoint alone: a redirect is refused."""
+    """GitHub's GraphQL API at one endpoint, with one token, sent to that endpoint's host alone (canopy-http)."""
 
     def __init__(self, url: str, token: str) -> None:
         """Talk to the endpoint at `url` with `token`."""
         self._url = url
-        self._token = token
-        self._opener = urllib.request.build_opener(_NoRedirect())
+        headers = {
+            "Authorization": f"bearer {token}",
+            # A PR's `mergeStateStatus` was a preview; asking for it names the preview, which GitHub otherwise ignores.
+            "Accept": f"{MERGE_INFO_PREVIEW}, application/json",
+            "User-Agent": "canopy-github",
+        }
+        retry = canopy_http.Retry(pauses=RETRY_PAUSES)
+        self._http = canopy_http.Client(url, name="GitHub", headers=headers, retry=retry)
 
     def query(self, document: str, variables: Mapping[str, object]) -> Mapping[str, object]:
         """Send one query or mutation, which GitHub must answer whole.
@@ -233,84 +222,31 @@ class Client:
     def ask(self, document: str, variables: Mapping[str, object], *, retry: bool = True) -> Reply:
         """Send one query, which GitHub may answer in part: an error about one field leaves the rest of `data`.
 
-        A query GitHub answers with a server error is sent again, after each of `RETRY_PAUSES`, unless `retry` is false.
+        A query GitHub answers with a server error, or whose reply breaks off, is sent again, after each of
+        `RETRY_PAUSES`, unless `retry` is false.
 
         Returns:
             The reply's `data`, and its errors.
 
         Raises:
-            GitHubError: GitHub refused it whole, could not be reached, or answered with a server error, a query each
-                time it was sent.
+            ServerError: GitHub answered with a server error, or its reply broke off or is not JSON, a query each time
+                it was sent.
+            GitHubError: GitHub refused it whole, or could not be reached.
         """
-        payload = json.dumps({"query": document, "variables": dict(variables)}).encode()
-        headers = {
-            "Authorization": f"bearer {self._token}",
-            "Content-Type": "application/json",
-            # A PR's `mergeStateStatus` was a preview; asking for it names the preview, which GitHub otherwise ignores.
-            "Accept": f"{MERGE_INFO_PREVIEW}, application/json",
-            "User-Agent": "canopy-github",
-        }
-        request = urllib.request.Request(self._url, data=payload, headers=headers, method="POST")  # noqa: S310
-        parsed = self._send(request, RETRY_PAUSES if retry and _QUERY.match(document) else ())
+        again = retry and _QUERY.match(document) is not None
+        request = {"query": document, "variables": dict(variables)}
+        try:
+            parsed = self._http.json("POST", self._url, body=request, again=again)
+        except canopy_http.FailedError as e:
+            raise ServerError(str(e), certain=False) from e
+        except canopy_http.HttpError as e:
+            raise GitHubError(str(e), certain=e.certain) from e
         body = obj(parsed, "reply")
         errors = items(body.get("errors"))
         data = body.get("data")
         if errors and not isinstance(data, dict):
             raise GitHubError(refusal(errors), certain=True, types=error_types(errors))
         return Reply(obj(data, "data"), tuple(errors))
-
-    def _send(self, request: urllib.request.Request, pauses: Iterable[float]) -> object:
-        """Send `request`, and again after each of `pauses` while GitHub answers with a server error.
-
-        Returns:
-            GitHub's reply, parsed.
-
-        Raises:
-            GitHubError: GitHub refused it, could not be reached, or answered its last try with a server error.
-        """
-        for pause in pauses:
-            try:
-                return self._post(request)
-            except ServerError:
-                time.sleep(pause)
-        return self._post(request)
-
-    def _post(self, request: urllib.request.Request) -> object:
-        """Send `request` once.
-
-        Returns:
-            GitHub's reply, parsed.
-
-        Raises:
-            GitHubError: GitHub refused it, or could not be reached.
-            ServerError: GitHub answered with a server error, or with what is not JSON, as its error pages are.
-        """
-        try:
-            with self._opener.open(request, timeout=TIMEOUT_SECONDS) as response:
-                reply = response.read().decode(errors="replace")
-                page = _page(response.headers)
-        except urllib.error.HTTPError as e:
-            text = e.read().decode(errors="replace")[:_MAX_REPLY]
-            if _page(e.headers):
-                text = "GitHub's error page"
-            if e.code >= 500:  # noqa: PLR2004
-                # A server error may come after the request was carried out; a refusal comes before.
-                raise ServerError(f"HTTP {e.code}: {text}", certain=False) from e
-            raise GitHubError(f"HTTP {e.code}: {text}", certain=True) from e
-        except (urllib.error.URLError, TimeoutError, OSError) as e:
-            # Not tried again: a try that timed out has waited `TIMEOUT_SECONDS`, which a connector's run cannot spend
-            # many times over.
-            raise GitHubError(f"cannot reach {self._url}: {e}", certain=False) from e
-        try:
-            return json.loads(reply)
-        except json.JSONDecodeError as e:
-            text = "GitHub's error page" if page else reply[:_MAX_REPLY]
-            raise ServerError(f"GitHub's reply is not JSON: {text}", certain=False) from e
-
-
-def _page(headers: Message) -> bool:
-    # GitHub's error page is HTML, its unicorn's image among it: naming the page says more than quoting it.
-    return "html" in (headers.get("Content-Type") or "")
 
 
 @dataclass(frozen=True)

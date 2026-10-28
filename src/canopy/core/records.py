@@ -793,6 +793,22 @@ class RunReason(Row):
 
 
 @dataclass(frozen=True)
+class FlakyKick(Row):
+    """A push canopy made to rerun a PR's checks a worker judged flaky: its branch rebased and leased (DESIGN §23)."""
+
+    TABLE: ClassVar[str] = "flaky_kicks"
+
+    run_id: int
+    repo: str
+    branch: str
+    #: The commit origin's branch held before the kick.
+    from_head: str
+    #: The rebased commit the kick pushed in its place.
+    to_head: str
+    kicked_at: str
+
+
+@dataclass(frozen=True)
 class RunRead(Row):
     """A repository an old triage run read without a slot, by name (M55). Kept as history; nothing reads it now."""
 
@@ -862,6 +878,8 @@ class RunModelRead(Row):
     #: How many times canopy has read it.
     attempts: int
     read_at: str
+    #: The runtime's version the session's record names, kept from the last read that found it; None where none did.
+    runtime_version: str | None
 
 
 @dataclass(frozen=True)

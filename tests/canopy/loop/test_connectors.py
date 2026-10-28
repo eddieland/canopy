@@ -152,8 +152,14 @@ def test_a_tick_asks_each_source_its_own_kind_and_records_what_it_read_whole(sce
     # The comment reaches its ticket's conversation, as data, and moves no cursor; the overseer's state block shows
     # what the connector read (DESIGN §35).
     assert scenario.conn.execute("SELECT count(*) FROM messages WHERE comment_id = '10001'").fetchone()[0] == 1
-    assert scenario.state()["observations"]["query"]["result"] == ["PROJ-2", "PROJ-1"]
-    assert "cursors" not in scenario.ticket_state("PROJ-1")  # neither is set, so the block leaves them out
+    # Neither ticket is the overseer's to read: PROJ-2 was not read whole, nor PROJ-1's blocker, so each waits for a
+    # read that is (DESIGN §39).
+    waited = {d.ticket_key: d.rationale for d in ticked.decisions if d.action == "wait"}
+    assert waited == {
+        "PROJ-1": "stale: blocker PROJ-9 never observed; it waits for the tracker source to read it again",
+        "PROJ-2": "stale: PROJ-2 never observed; it waits for the tracker source to read it again",
+    }
+    assert scenario.conn.execute("SELECT comment_cursor FROM tickets WHERE key = 'PROJ-1'").fetchone()[0] is None
     assert scenario.attention() == []
 
     # The next run asks only for comments newer than the newest the journal holds.

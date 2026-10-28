@@ -149,7 +149,9 @@ run, or a private ticket's `new_operator_messages` with none new.
   keys, closed state, identities, and blockers. When canopy ships it, it follows this prompt: follow it, and do not
   load it again. Otherwise load it before your first tracker call if it exists, or else map the server's tools onto
   what you need: find tickets, and read a ticket (body, labels, open or closed), its comments with author account ids
-  and times, and its blockers. On GitHub Issues, the tracker and the GitHub MCP are one server.
+  and times, and its blockers. On GitHub Issues, the tracker and the GitHub MCP are one server. Where a `tracker`
+  source reads the tracker for canopy, you have neither the server nor a skill: you read no ticket and run no query,
+  and a ticket the source left stale is the harness's `wait` (see "Observations").
 - GitHub MCP: find a branch's PR, and read its checks (see "Phase table"), reviews, review comments, and merge state.
 - Call either server only for what the observations leave to a live read (see "Observations").
 - OpenCode's `read` and `grep`. A tool output too long to return whole is cut and saved to a file it names: read that
@@ -212,8 +214,8 @@ You can do nothing else. If you want to, record a `skip` for the ticket with a `
    lists tickets: it is the only way a newly labeled ticket becomes a candidate. Record the result at once with
    `canopy_queried`, naming in `keys` every open ticket it returned, labeled or not, in the state block or not (in
    several calls if long), or none for none. When `query_due` is false, the operator is spacing the query out to save
-   its cost: neither run nor record it. A key is the tracker's short id (the skill says which form), matching
-   `[A-Za-z0-9][A-Za-z0-9_-]*`.
+   its cost, or a `tracker` source reads it and canopy had no fresh read to record: neither run nor record it. A key
+   is the tracker's short id (the skill says which form), matching `[A-Za-z0-9][A-Za-z0-9_-]*`.
 2. **Sort them.** Work the tickets in `tickets` that are not `done`, and those the query returned, as "Which tickets
    are candidates" says.
 3. **Derive.** For each candidate, derive its phase with the phase table, from its fresh observations or else a live
@@ -262,8 +264,9 @@ leaves the attention list as it was:
 - with the tracker readable, each closed ticket in the state block marked done (see "Which tickets are candidates").
 
 Then record a `skip` with no `key` and the rationale `mcp_unavailable: <which>`, and finish as step 8 says. If the
-tracker works but cannot do something you need (find tickets, read labels, read comment authors), record only that
-skip, with the rationale `tracker_unsupported: <what>`. These are the only skips without a key.
+tracker works but cannot do something you need (find tickets, read labels, read comment authors), and no `tracker`
+source reads it, record only that skip, with the rationale `tracker_unsupported: <what>`. These are the only skips
+without a key.
 
 ## Observations
 
@@ -272,7 +275,8 @@ returned. Each subject, a ticket or one of its `units`, says in `observed` how f
 
 - `fresh`: read within `observations.max_age_minutes`. Decide from it as from a live read, and do not read it again:
   its labels, comments, PR, checks, and reviews are all here.
-- `stale`: past that age, or never read; `why` names what. Read the subject live before you decide about it.
+- `stale`: past that age, or never read; `why` names what. Read the subject live before you decide about it. A
+  ticket a `tracker` source left stale never reaches you: the harness waits on it, in `harness`, until a read is whole.
 - `unobserved`: no source reads it, such as every ticket when the tracker has no connector (`why` says). Read it live,
   as this prompt says throughout.
 
@@ -418,11 +422,12 @@ item the harness raises, as `wait (needs_reviewer)` does, record `wait`.
 - Dispatch a `resume` only for a phase whose action is one (`changes_requested` and `review_findings` once classified
   for a worker), its `context` naming what that phase found: a `ci_running` unit has nothing new to address.
 - A `ci_red` failure not newer than the `ci` cursor was already handed to a worker. If that run ended `done` with
-  `flaky` true and the same check run still fails, the worker judged it a failure a rerun would pass and changed nothing
-  for it, so no newer run will come: record attention `flaky_rerun` with `repo` the unit and a detail naming the check,
-  its run link, and the run's id, and dispatch no `resume` for it. Otherwise, if it ended `done` and the same check run
-  still fails, its fix has not reached CI or did not help: `wait` until a newer check run exists. If it ended
-  `blocked`, the ticket is `needs_human`.
+  `flaky` true and `kicked` naming the unit's repository, canopy pushed its branch again to rerun its checks: `wait` for
+  the new head's. With `flaky` true, the unit not in `kicked`, and the same check run still failing, the worker judged
+  it a failure a rerun would pass and changed nothing for it, so no newer run will come: record attention `flaky_rerun`
+  with `repo` the unit and a detail naming the check, its run link, and the run's id, and dispatch no `resume` for it.
+  Otherwise, if it ended `done` and the same check run still fails, its fix has not reached CI or did not help: `wait`
+  until a newer check run exists. If it ended `blocked`, the ticket is `needs_human`.
 - A `resume` for `ci` alone refused `handled` had no failure a worker had not: each failed at that head at or behind
   the `ci` cursor, so a rerun went red again and another worker would see what the last one saw. Record `canopy
   attention <KEY> flaky_rerun --repo <the unit> --detail '<the check, its run link, and that its rerun failed again>'`,

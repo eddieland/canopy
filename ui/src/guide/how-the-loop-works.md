@@ -71,7 +71,7 @@ Every ticket has a phase, and so does each of its PRs: where it stands, as the o
 is `ready`, `running`, `needs human`, `human replied`, `blocked` (on another ticket), or `plan proposed`. A PR
 goes through phases such as `ci running`, `ci red`, `review pending`, `review findings`, `changes requested`,
 `green unreviewed`, `approved`, and `merged`. The UI writes them with spaces; hover over one, or Tab to it, for the
-CLI's spelling.
+CLI's spelling and what the phase means.
 
 The overseer derives a phase from live state every tick and never takes the journal's word for it. If a PR merged at
 lunch, the next tick knows, whatever canopy last wrote down.
@@ -116,7 +116,7 @@ it as the CLI does. The ones you'll meet most:
   and **Allow one more** on its page grants it another run.
 - `cooldown`: a resume for failed checks alone waits `policy.ci_cooldown_minutes` after the last run that worked on
   CI. A resume with review comments or your reply goes at once, and fixes the build on the way.
-- `running`: one worker per ticket. A second one would only argue with the first.
+- `running`: one run per ticket, a worker's or a planner's. A second one would only argue with the first.
 
 And the guard that never lifts: canopy never approves or merges a PR, and never moves a ticket to Done. Those stay
 yours.

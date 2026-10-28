@@ -142,7 +142,8 @@ operator's programs. This generalizes `notify.cmd` (§14), which stays and behav
 ### Events
 
 A closed set, written by the harness from the journal, in groups: `attention` (an item opened or resolved), `runs` (a
-worker started or ended, a plan proposed or approved by its planner, §25, follow-ups filed, §18), `chores` (§19),
+worker started or ended, a plan proposed or approved by its planner, §25, follow-ups filed, §18, a check left as
+flaky, §23), `chores` (§19),
 `reviews` (§21), `tasks` (a task's run ended, §36), `replies` (a reply read from Slack recorded or refused, below),
 and `loop` (ticks failing and recovering, a sink failing, the month's spend reaching its budget or one of its alerts). Each
 carries only bounded fields, its text on one line. No plan event carries the plan's text. `run.ended` carries a
@@ -207,7 +208,7 @@ text runs nothing.
   a GitHub PR's link shows only the `owner/repo#N` its own URL spells.
 
 Lint keeps the network out of the harness, as D015 keeps processes in one module: `urllib.request`, `http.client`, and
-`socket` are banned everywhere in `src/canopy`, and so is any import of the Slack sink.
+`socket` are banned everywhere in `src/canopy`, and so is any import of the Slack sink, of `canopy-http`, or of httpx2.
 
 ### Replies from Slack
 

@@ -30,6 +30,7 @@ import type { AxisRoom } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
+import { phaseMeaning } from '@/lib/meanings'
 import {
     alertMarks,
     alertsText,
@@ -818,7 +819,11 @@ function PullRequests({ pullRequests, span }: { pullRequests: SpendPullRequest[]
                                 <span className="flex min-w-0 items-center gap-2">
                                     <PullRequestLink url={pr.url} className="min-w-0" />
                                     {pr.phase !== null && (
-                                        <Word word={pr.phase} className="truncate text-muted-foreground" />
+                                        <Word
+                                            word={pr.phase}
+                                            meaning={phaseMeaning(pr.phase)}
+                                            className="truncate text-muted-foreground"
+                                        />
                                     )}
                                 </span>
                             </th>

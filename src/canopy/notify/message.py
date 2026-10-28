@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 from canopy.core import contract, db, records, spend, sql
 from canopy.core.items import Item, age
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, SessionsRead
 
 if TYPE_CHECKING:
     from canopy.notify.journal import Diff
@@ -75,6 +75,8 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
             f"? {f.get('ticket')} run {f.get('run')} filed follow-ups {', '.join(named) or '-'}: "
             "label or `canopy start` each one you want worked",
         )
+    if kind == "ci.flaky":
+        return _flaky_line(f)
     if kind == "task.ended":
         text = f"< task:{f.get('task')} run {f.get('run')} ended {f.get('status')}"
         extras = [str(x) for x in (f.get("pr"), f.get("summary")) if x]
@@ -112,14 +114,29 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
     if kind == "loop.sink_failing":
         return _line(f"! sink {f.get('sink')} has failed 3 deliveries in a row: {f.get('error')}")
     if kind == "loop.budget_reached":
-        spent, projected, percent = f.get("spent"), f.get("projected"), f.get("percent")
-        so_far = _usd(spent) if isinstance(spent, int | float) else "-"
-        pace = f", on pace for {_usd(projected)}" if isinstance(projected, int | float) else ""
-        what = "its budget" if percent == spend.FULL else f"{percent}% of its budget"
-        return _line(f"! spend for {f.get('month')} reached {what}: {so_far} of ${f.get('budget')}{pace}")
+        return _line(_budget_line(f))
     if kind == "test":
         return _line(f"* {f.get('text')}")
     return _line(f"{kind} {json.dumps(f)}")
+
+
+def _flaky_line(f: Mapping[str, object]) -> str:
+    """The line of a `ci.flaky` event.
+
+    Returns:
+        The line, led by `+` when canopy kicked the check, or `?` when it waits on the operator's rerun.
+    """
+    given = f.get("kicked")
+    kicked = [str(r) for r in cast("list[object]", given)] if isinstance(given, list) else []
+    given = f.get("prs")
+    prs = [str(u) for u in cast("list[object]", given)] if isinstance(given, list) else []
+    head = f"{f.get('ticket')} run {f.get('run')} left a failed check as flaky"
+    if kicked:
+        text = f"+ {head}; canopy pushed {', '.join(kicked)} again to rerun it"
+    else:
+        text = f"? {head}; rerun it, or `canopy reply` that it is real"
+    extras = [*prs, f"why: {f.get('estimate')}" if f.get("estimate") else "", str(f.get("note") or "")]
+    return _line(f"{text}: {' '.join(x for x in extras if x)}")
 
 
 def item_page(ui: str | None, ticket_key: str | None) -> str | None:
@@ -145,7 +162,7 @@ def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str |
     """
     f = fields
     match kind:
-        case "run.started" | "run.ended" | "follow_ups.filed" if f.get("run"):
+        case "run.started" | "run.ended" | "follow_ups.filed" | "ci.flaky" if f.get("run"):
             return page(ui, "runs", f["run"])
         case "plan.proposed" | "plan.approved" if f.get("ticket"):
             # A feedback plan has no page of its own yet: its ticket's page is where its PRs are.
@@ -364,6 +381,25 @@ class Digest:
             },
             "lines": self.lines(),
         }
+
+
+# A `loop.budget_reached` event's line: the month's spend against its budget, then canopy's runs' part and the part
+# outside canopy, as of when `canopy loop` last read the runtime's sessions, or last tried to, when that read failed.
+# An event recorded before it carried the parts names none.
+def _budget_line(f: Mapping[str, object]) -> str:
+    spent, projected, percent = f.get("spent"), f.get("projected"), f.get("percent")
+    so_far = _usd(spent) if isinstance(spent, int | float) else "-"
+    pace = f", on pace for {_usd(projected)}" if isinstance(projected, int | float) else ""
+    what = "its budget" if percent == spend.FULL else f"{percent}% of its budget"
+    text = f"! spend for {f.get('month')} reached {what}: {so_far} of ${f.get('budget')}{pace}"
+    runs, outside, read = f.get("runs"), f.get("outside"), f.get("sessions_read_at")
+    if not isinstance(runs, int | float):
+        return text
+    if not isinstance(read, str) or not isinstance(outside, int | float):
+        return f"{text}; canopy's runs {_usd(runs)}, outside canopy not read yet"
+    at = db.parse_time(read).astimezone().strftime("%Y-%m-%d %H:%M")
+    how = "the last read of sessions failed" if f.get("sessions_read") == SessionsRead.FAILED else "sessions read"
+    return f"{text}; canopy's runs {_usd(runs)}, outside canopy {_usd(outside)} ({how} {at})"
 
 
 # The digest's line for what its span cost: the total, then each kind that reported a cost, the idle ticks' part of

@@ -1101,6 +1101,58 @@ def test_the_overseer_keeps_a_trackers_read_that_a_github_pattern_matches(tool: 
     assert _opencode_disabled(_opencode_ruleset(rendered), tool) is not allowed
 
 
+def test_where_a_tracker_source_reads_the_overseer_may_call_no_tracker_tool_and_has_no_skill(
+    canopy_env: CanopyEnv,
+) -> None:
+    """It reads the journal for the tracker (DESIGN §39): no tool of the tracker's, no skill in its body or to load."""
+    canopy_env.write_private('[connect.sources.jira]\nkind = "tracker"\ncmd = "connector jira"\n')
+    ruleset = _ruleset(canopy_env, agents.OVERSEER)
+    jira = config.DEFAULT_TRACKER_TOOLS["jira"]
+    tools = (*jira.allowed, *jira.create, *jira.pr_writes, "someToolNoPatternNames")
+    for tool in (*(f"{jira.server}_{tool}" for tool in tools), *GITHUB_ISSUE_READS):
+        assert _opencode_disabled(ruleset, tool), tool
+    # GitHub's PRs are still read live, until the `vcs` source's observations are all it reads.
+    assert not _opencode_disabled(ruleset, "github_pull_request_read")
+    snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
+    text = (snapshot / "agents" / "canopy-overseer.md").read_text()
+    assert "The skill `tracker-jira` follows" not in text
+    assert f'{SKILL_MARKER}    "*": deny\n' in text
+
+
+@pytest.mark.parametrize("observed", [False, True])
+def test_on_a_github_tracker_a_tracker_source_leaves_the_overseer_its_reads_of_prs_alone(*, observed: bool) -> None:
+    bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
+    tools = agents.McpTools("github", ("issue_read", "list_issues", "pull_request_read", "create_pull_request"))
+    ruleset = _opencode_ruleset(opencode_definitions.render_overseer_reads(bundled, tools, "github", observed=observed))
+    assert not _opencode_disabled(ruleset, "github_pull_request_read")
+    assert not _opencode_disabled(ruleset, "github_list_branches")
+    for tool in ("github_issue_read", "github_list_issues", "github_search_issues"):
+        assert _opencode_disabled(ruleset, tool) is observed, tool
+    assert _opencode_disabled(ruleset, "github_create_pull_request")
+
+
+def test_where_a_tracker_source_reads_and_no_tracker_tools_are_known_githubs_issue_reads_are_denied() -> None:
+    bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
+    ruleset = _opencode_ruleset(opencode_definitions.render_overseer_reads(bundled, None, "linear", observed=True))
+    for tool in GITHUB_ISSUE_READS:
+        assert _opencode_disabled(ruleset, tool), tool
+    # With the server named, by config or a provider's defaults, it is denied whole, though no read tool is known.
+    named = opencode_definitions.render_overseer_reads(bundled, None, "linear", observed=True, server="linear")
+    ruleset = _opencode_ruleset(named)
+    for tool in ("linear_list_issues", "linear_create_issue", *GITHUB_ISSUE_READS):
+        assert _opencode_disabled(ruleset, tool), tool
+    assert not _opencode_disabled(ruleset, "github_pull_request_read")
+
+
+def test_a_tracker_source_denies_the_overseer_a_configured_server_with_no_read_tools(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private(
+        '[tracker]\nmcp_server = "linear"\nread_tools = []\n\n'
+        '[connect.sources.linear]\nkind = "tracker"\ncmd = "connector linear"\n',
+    )
+    ruleset = _ruleset(canopy_env, agents.OVERSEER)
+    assert _opencode_disabled(ruleset, "linear_list_issues")
+
+
 @pytest.mark.parametrize("provider", ["github", "jira"])
 def test_no_tracker_read_tool_reopens_a_github_write(provider: str) -> None:
     # The tracker's rules sit above the denials by name (D021): GitHub's read tools hold the PR writes a private worker

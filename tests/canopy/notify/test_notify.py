@@ -14,7 +14,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, runtime_sessions
+from canopy.core import db, outbox, runtime_sessions, spend
 from canopy.core.config import ConfigError, load
 from canopy.core.items import Item, fingerprint
 from canopy.notify import journal as notify_journal
@@ -265,6 +265,8 @@ def test_the_month_reaching_its_budget_is_sent_once_per_budget(
     month = f"{datetime.now().astimezone():%Y-%m}"
     [over] = messages(out)
     assert over.startswith(f"canopy: 1 event\n! spend for {month} reached its budget: $4.00 of $3")
+    # canopy loop never read the runtime's sessions, so the part outside canopy is not known.
+    assert "; canopy's runs $4.00, outside canopy not read yet\n" in over
     # Told once, even after pruning would have taken the event that says so.
     conn.execute("UPDATE notify_events SET at = ?", (db.format_time(datetime.now(UTC) - timedelta(days=8)),))
     scenario.tick()
@@ -337,11 +339,45 @@ def test_the_sessions_outside_canopy_count_toward_the_budget(
     # The operator's own session, outside canopy, as canopy loop reads it between ticks.
     ms = int(datetime.now(UTC).timestamp() * 1000)
     mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
-    runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
+    read = datetime(2026, 10, 28, 13, 5, tzinfo=UTC)
+    page = SessionPage("found", (mine,), cursor=(ms, "ses_mine"))
+    runtime_sessions.record(scenario.conn, page, now=db.format_time(read))
     scenario.tick()
     month = f"{datetime.now().astimezone():%Y-%m}"
     [over] = messages(out)
     assert over.startswith(f"canopy: 1 event\n! spend for {month} reached its budget: $3.50 of $3")
+    # The message names both parts, and when canopy loop last read the runtime's sessions, in local time.
+    at = f"{read.astimezone():%Y-%m-%d %H:%M}"
+    assert f"; canopy's runs $2.00, outside canopy $1.50 (sessions read {at})\n" in over
+
+
+def test_a_budget_alert_after_a_failed_read_of_the_sessions_says_it_failed(
+    scenario: Scenario,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "phone.txt"
+    add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
+    scenario.configures(spend={"monthly_budget_usd": 3})
+    chore_cost(scenario.conn, 2.0)
+    scenario.tick()
+    ms = int(datetime.now(UTC).timestamp() * 1000)
+    mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
+    runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
+    failed = datetime(2026, 10, 28, 14, 10, tzinfo=UTC)
+    runtime_sessions.record(scenario.conn, SessionPage("failed", error="locked"), now=db.format_time(failed))
+    scenario.tick()
+    [over] = messages(out)
+    # The part outside canopy is what the earlier read found, and the message says the latest read failed.
+    at = f"{failed.astimezone():%Y-%m-%d %H:%M}"
+    assert f"; canopy's runs $2.00, outside canopy $1.50 (the last read of sessions failed {at})\n" in over
+
+
+def test_a_budget_alerts_parts_add_up_to_its_total() -> None:
+    month = spend.Month("2026-10", "", "", 3, 2.01, 0.5, None, runs_usd=1.005, outside_usd=1.005)
+    fields = outbox.budget_reached(month, 100).fields
+    # Each part rounded on its own would read $1.00 and $1.00 of a $2.01 total.
+    assert (fields["spent"], fields["runs"], fields["outside"]) == (2.01, 1.0, 1.01)
 
 
 def chore_cost(conn: sqlite3.Connection, usd: float) -> None:

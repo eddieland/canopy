@@ -276,6 +276,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - Agents check author and label (D003). Never forced, unless the operator sets `trust.rebase` (private): then a
   rebased branch is pushed with `--force-with-lease`, the only force a worker's definition allows.
+- The harness's one force of its own: with `trust.max_flaky_kicks` (private), a lease of the rebased branch to rerun
+  checks a worker judged flaky, a limited number of times per pushed head (DESIGN §23).
 - Rejected: any labeled PR (a label would put commits on a coworker's branch); rebasing by default (merging needs no
   force, and most repositories accept merge commits).
 
@@ -553,3 +555,10 @@ such as a shipped migration, may still cite one, and git history has its text.
   it (`tests/canopy/test_layers.py`).
 - Rejected: writing the file anew with the stdlib (comments lost); a file of canopy's own layered after the private
   file (a hand edit to the private file would be silently overridden).
+
+## D130. Every program canopy ships makes its HTTP requests through `canopy-http`
+
+- One client, on httpx2: bound to one origin, following no redirect, trusting the system's certificates, and telling
+  a request that never left from one that may have been carried out, so only what cannot happen twice is sent again.
+- The harness imports neither it nor httpx2 (`tests/canopy/test_layers.py`), as it imports no stdlib network module.
+- Rejected: urllib in each program (its errors escape `OSError`, so a reply cut off crashed a run; each copy drifted).

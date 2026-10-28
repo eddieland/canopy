@@ -11,8 +11,10 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, runtime_sessions, spend, sql
-from canopy.runtime.report import SessionPage, SessionSpend, ToolUse, Usage
+from canopy.core import db, run_models, runtime_sessions, spend, sql
+from canopy.core.run_models import Due, RunTable
+from canopy.core.vocab import ModelsRead
+from canopy.runtime.report import ModelUse, SessionPage, SessionSpend, ToolUse, Usage
 from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
 
@@ -653,6 +655,17 @@ def test_first_calls_are_by_kind_and_snapshot_with_their_median_and_cold_share(
     assert [f.hit_rate for f in found.first_calls] == [pytest.approx(old), pytest.approx(1 - 67_000 / 183_000), 29 / 30]
 
 
+def test_first_calls_name_the_runtime_versions_their_runs_ran_on_in_order(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    for hours, version in ((4, "1.19.3"), (3, None), (2, "1.20.0"), (1, "1.19.3")):
+        t = tick(conn, earlier(NOW, 0, hours), 0.1)
+        db.set_tick_report(conn, t, "s", first_call(50_000, 1_000), digest="d")
+        if version is not None:
+            run_models.record(conn, Due("ticks", t, "s", 0), ModelsRead.FOUND, runtime_version=version)
+    [overseer] = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR).first_calls
+    assert (overseer.runs, overseer.runtime_versions) == (4, ("1.19.3", "1.20.0"))
+
+
 def test_a_first_call_that_read_little_from_the_cache_is_cold_though_it_wrote_nothing(
     tmp_path: Path,
     journals: Journals,
@@ -682,7 +695,8 @@ def test_canopy_spend_json_has_the_first_calls(canopy_env: CanopyEnv, capsys: py
     now = noon_today()
     db.set_tick_report(conn, tick(conn, earlier(now, 0), 0.1), "s", first_call(50_000, 49_000), digest="abc")
     assert main(["spend", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out)["first_calls"] == [
+    out = capsys.readouterr().out
+    assert json.loads(out)["first_calls"] == [
         {
             "kind": "overseer",
             "digest": "abc",
@@ -692,8 +706,138 @@ def test_canopy_spend_json_has_the_first_calls(canopy_env: CanopyEnv, capsys: py
             "first_started": earlier(now, 0),
             "last_started": earlier(now, 0),
             "hit_rate": 1_000 / 50_000,
+            "runtime_versions": [],
         },
     ]
+    assert json.loads(out)["first_call_weeks"] == [
+        {
+            "kind": "overseer",
+            "by": by,
+            "name": None,
+            "week": iso_week(now),
+            "runs": 1,
+            "first_call": 50_000,
+            "hit_rate": 1_000 / 50_000,
+            "new_runtime_versions": [],
+            "new_digests": [],
+        }
+        for by in ("kind", "model")
+    ]
+
+
+def iso_week(at: datetime) -> str:
+    """The ISO week `at` is in, as `canopy spend` names it: local time is UTC."""
+    year, week, _ = at.date().isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+def read_session(conn: sqlite3.Connection, table: RunTable, run_id: int, version: str, *models: str) -> None:
+    """Record that run `run_id` of `table` was read, on runtime `version`, and that `models` wrote its replies."""
+    used = [ModelUse(model, 1, 0.01) for model in models]
+    run_models.record(conn, Due(table, run_id, "s", 0), ModelsRead.FOUND, used, runtime_version=version)
+
+
+def chore_call(conn: sqlite3.Connection, chore: str, started: str, read: int, digest: str) -> int:
+    """A run of `chore` whose first call was sent 40,000 tokens and read `read` of them from the cache."""
+    cursor = conn.execute(
+        "INSERT INTO chore_runs (chore, started_at, status, log_path) VALUES (?, ?, 'ok', 'l')",
+        (chore, started),
+    )
+    assert cursor.lastrowid is not None
+    db.set_run_report(conn, "chore_runs", cursor.lastrowid, "s", first_call(40_000, 0, read), digest=digest)
+    return cursor.lastrowid
+
+
+def journal_of_first_call_weeks(conn: sqlite3.Connection, now: datetime) -> None:
+    """Two weeks of the overseer's and chores' first calls, the second's overseer on a new runtime and snapshot."""
+    for days, sent, written, version, digest, models in (
+        (7, 50_000, 5_000, "1.19.3", "d1", ("openai/gpt-x",)),
+        (7.5, 50_000, 5_000, "1.19.3", "d1", ("openai/gpt-x",)),
+        (0, 50_000, 40_000, "1.20.0", "d1", ("openai/gpt-x",)),
+        (0.5, 60_000, 50_000, "1.20.0", "d2", ("openai/gpt-x", "provider/model-b")),
+    ):
+        t = tick(conn, earlier(now, days), 0.1)
+        db.set_tick_report(conn, t, "s", first_call(sent, written), digest=digest)
+        read_session(conn, "ticks", t, version, *models)
+    for chore, days, read in (("deps", 7, 36_000), ("deps", 0, 38_000), ("docs", 0, 2_000)):
+        read_session(conn, "chore_runs", chore_call(conn, chore, earlier(now, days), read, "c1"), "1.19.3")
+
+
+def test_first_calls_by_week_are_by_kind_chore_and_model_and_name_what_changed(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """A week's runs on a runtime or a snapshot its series' week before did not use name it (#1526)."""
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_first_call_weeks(conn, NOW)
+    found = spend.breakdown(conn, NOW, 14, state_dir=STATE_DIR).first_call_weeks
+    assert [(w.kind, w.by, w.name, w.week, w.runs, w.first_call) for w in found] == [
+        ("overseer", "kind", None, "2026-W40", 2, 50_000),
+        ("overseer", "kind", None, "2026-W41", 2, 50_000),
+        ("overseer", "model", "openai/gpt-x", "2026-W40", 2, 50_000),
+        ("overseer", "model", "openai/gpt-x", "2026-W41", 1, 50_000),
+        # The tick two models served is no one model's.
+        ("overseer", "model", None, "2026-W41", 1, 60_000),
+        ("chores", "kind", None, "2026-W40", 1, 40_000),
+        ("chores", "kind", None, "2026-W41", 2, 40_000),
+        ("chores", "chore", "deps", "2026-W40", 1, 40_000),
+        ("chores", "chore", "deps", "2026-W41", 1, 40_000),
+        ("chores", "chore", "docs", "2026-W41", 1, 40_000),
+        # No session named a model for the chores.
+        ("chores", "model", None, "2026-W40", 1, 40_000),
+        ("chores", "model", None, "2026-W41", 2, 40_000),
+    ]
+    by_week = {(w.kind, w.by, w.name, w.week): w for w in found}
+    first, second = by_week["overseer", "kind", None, "2026-W40"], by_week["overseer", "kind", None, "2026-W41"]
+    # Sent-weighted: what they all read over what they all were sent.
+    assert (first.hit_rate, second.hit_rate) == (pytest.approx(0.9), pytest.approx(20_000 / 110_000))
+    # A series' first week has none before it to differ from.
+    assert (first.new_runtime_versions, first.new_digests) == ((), ())
+    assert (second.new_runtime_versions, second.new_digests) == (("1.20.0",), ("d2",))
+    assert by_week["overseer", "model", "openai/gpt-x", "2026-W41"].new_digests == ()
+    # One chore's fall is its own, where the kind's is averaged with the other chores'.
+    assert by_week["chores", "chore", "deps", "2026-W41"].hit_rate == pytest.approx(0.95)
+    assert by_week["chores", "chore", "docs", "2026-W41"].hit_rate == pytest.approx(0.05)
+    assert by_week["chores", "kind", None, "2026-W41"].hit_rate == pytest.approx(0.5)
+
+
+def test_a_first_calls_week_is_a_local_iso_week(tmp_path: Path, journals: Journals) -> None:
+    """A Monday's first hour in local time is in that Monday's week, though UTC still has it on Sunday."""
+    conn = journals.open(tmp_path / "canopy.db")
+    monday = datetime(2026, 10, 5, 0, 30, tzinfo=ZoneInfo("Europe/Berlin"))
+    db.set_tick_report(conn, tick(conn, db.format_time(monday), 0.1), "s", first_call(50_000, 1_000), digest="d")
+    with in_zone("Europe/Berlin"):
+        found = spend.breakdown(conn, monday, 1, state_dir=STATE_DIR).first_call_weeks
+    assert {w.week for w in found} == {"2026-W41"}
+
+
+def test_canopy_spend_prints_each_kind_s_first_calls_by_week(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    now = noon_today()
+    journal_of_first_call_weeks(canopy_env.journal(), now)
+    assert main(["spend", "--days", "14"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    start = out.index(next(line for line in out if line.startswith("week ")))
+    before, this = iso_week(now - timedelta(days=7)), iso_week(now)
+    assert [line.split() for line in out[start : start + 5]] == [
+        ["week", "kind", "runs", "sent", "hit", "new"],
+        [before, "overseer", "2", "50.0k", "90%"],
+        [this, "overseer", "2", "50.0k", "18%", "runtime", "1.20.0", "snapshot", "d2"],
+        [before, "chores", "1", "40.0k", "90%"],
+        [this, "chores", "2", "40.0k", "50%"],
+    ]
+    assert out[start + 6] == "--json breaks each kind's weeks down by chore and by model."
+
+
+def test_canopy_spend_says_when_no_first_call_was_recorded(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    canopy_env.journal()
+    assert main(["spend"]) == 0
+    assert "No first model call recorded." in capsys.readouterr().out.splitlines()
 
 
 def tools_journal(conn: sqlite3.Connection, now: datetime) -> None:

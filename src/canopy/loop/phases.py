@@ -118,6 +118,9 @@ class Derived:
     phases: Sequence[Phase] = ()
     #: The stale or missing observation the subject depends on; None when it was derived.
     stale: str | None = None
+    #: Whether `stale` is the `tracker` source's: a ticket's own observation, or a blocker's, old or never made. False
+    #: for what no source observes, and for what the `vcs` source left stale.
+    stale_tracker: bool = False
     #: On the ticket's own, unless stale: whether it is a candidate (§17), and whether the tracker said it is closed.
     candidate: bool | None = None
     closed: bool | None = None
@@ -505,7 +508,7 @@ class _World:
         else:
             stale = self._ticket_stale(key)
             if stale is not None:
-                return Derived(key, None, stale=stale)
+                return Derived(key, None, stale=stale, stale_tracker=self.tracked)
             seen = self.observed[key]
             closed = seen.state is TicketState.CLOSED
             labels = {label["name"] for label in labels_of(seen)}

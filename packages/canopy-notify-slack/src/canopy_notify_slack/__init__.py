@@ -584,6 +584,21 @@ def _follow_ups_filed(e: Mapping[str, object]) -> _Shown:
     )
 
 
+def _ci_flaky(e: Mapping[str, object]) -> _Shown:
+    kicked = _lines(e.get("kicked"))
+    what = f"{_named(e.get('ticket'), e.get('title'))} · run {escape(e.get('run'))} left a failed check as flaky"
+    if kicked:
+        first = f":repeat: {what}; canopy pushed {', '.join(f'`{escape(r)}`' for r in kicked)} again to rerun it"
+        aside = [_linked(e.get("note")) if e.get("note") else ""]
+    else:
+        first = f":grey_question: {what}"
+        aside = ["rerun it, or `canopy reply` that it is real", _linked(e.get("note")) if e.get("note") else ""]
+    return _Shown(
+        [first, " · ".join(_pr(pr) for pr in _lines(e.get("prs"))), _quote("Why", e.get("estimate"))],
+        aside,
+    )
+
+
 def _task_ended(e: Mapping[str, object]) -> _Shown:
     head = str(e.get("head") or "")[:12]
     tickets = _lines(e.get("tickets"))
@@ -645,7 +660,23 @@ def _budget_reached(e: Mapping[str, object]) -> _Shown:
     pace = f"; on pace for {_usd(projected)}" if isinstance(projected, int | float) else ""
     month, budget = escape(e.get("month")), escape(e.get("budget"))
     what = "its budget" if percent == 100 else f"{escape(percent)}% of its budget"  # noqa: PLR2004  (the budget whole)
-    return _Shown([f":moneybag: *Spend for {month} reached {what}:* {so_far} of ${budget}{pace}"])
+    return _Shown([f":moneybag: *Spend for {month} reached {what}:* {so_far} of ${budget}{pace}"], _budget_parts(e))
+
+
+def _budget_parts(e: Mapping[str, object]) -> list[str]:
+    """What a `loop.budget_reached` event's spend is made of: canopy's runs, and the sessions outside canopy.
+
+    Returns:
+        Canopy's runs' part, then the part outside canopy with when canopy last read the runtime's sessions, or last
+        tried to when that read failed, or that it has not; none for an event from a canopy that did not send the parts.
+    """
+    runs, outside, read = e.get("runs"), e.get("outside"), e.get("sessions_read_at")
+    if not isinstance(runs, int | float):
+        return []
+    if read is None or not isinstance(outside, int | float):
+        return [f"canopy's runs {_usd(runs)}", "outside canopy not read yet"]
+    how = "the last read of sessions failed" if e.get("sessions_read") == "failed" else "sessions read"
+    return [f"canopy's runs {_usd(runs)}", f"outside canopy {_usd(outside)}", f"{how} {_when(read)}"]
 
 
 def _test(e: Mapping[str, object]) -> _Shown:
@@ -676,6 +707,7 @@ _EVENTS: dict[str, Callable[[Mapping[str, object]], _Shown]] = {
     "plan.proposed": _plan_proposed,
     "plan.approved": _plan_approved,
     "follow_ups.filed": _follow_ups_filed,
+    "ci.flaky": _ci_flaky,
     "task.ended": _task_ended,
     "chore.ended": _chore_ended,
     "review.ended": _review_ended,

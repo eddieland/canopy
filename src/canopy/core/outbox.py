@@ -96,6 +96,20 @@ class FollowUpsFiled(TypedDict):
     count: int
 
 
+class CiFlaky(TypedDict):
+    """A `ci.flaky` event's fields: a `resume` for `ci` left a failed check as not the change's (DESIGN §23)."""
+
+    ticket: str
+    run: int
+    prs: list[str]
+    #: The repositories whose branch canopy pushed again to rerun the check; empty when the operator reruns it.
+    kicked: list[str]
+    #: The worker's estimate of why the check is flaky, with its evidence: model text, cut to one line.
+    estimate: str
+    #: Why a repository was not kicked, in the harness's words, or None.
+    note: str | None
+
+
 class ChoreEnded(TypedDict):
     """A `chore.ended` event's fields."""
 
@@ -198,6 +212,16 @@ class BudgetReached(TypedDict):
     spent: float
     #: What the month will cost at this pace, in US dollars, rounded to the cent; None in its first day.
     projected: float | None
+    #: Canopy's runs' part of `spent`, in US dollars, rounded to the cent.
+    runs: float
+    #: The sessions outside canopy's part of `spent`, in US dollars: `spent` less `runs`, so the parts add up to it; 0
+    #: before any read.
+    outside: float
+    #: When `canopy loop` last read the runtime's sessions, a journal time; None when it never has.
+    sessions_read_at: str | None
+    #: How that read ended, a `SessionsRead`: after `failed`, `outside` is what an earlier read found; None when none
+    #: ran.
+    sessions_read: str | None
 
 
 def cut(text: object, limit: int) -> str:
@@ -334,6 +358,37 @@ def follow_ups_filed(config: Config, *, key: str, run_id: int, filed: Mapping[st
         "count": len(filed),
     }
     return Event(RUNS, "follow_ups.filed", fields)
+
+
+def ci_flaky(
+    config: Config,
+    *,
+    key: str,
+    run_id: int,
+    prs: Sequence[str],
+    kicked: Sequence[str],
+    estimate: str,
+    note: str,
+) -> Event | None:
+    """Return the `ci.flaky` event for run `run_id` of `key`, which left a failed check as flaky, for the run's close.
+
+    It is a point event, kicked or not: a kicked check reruns on its own, and one that is not raises `flaky_rerun`
+    once the overseer reads it (DESIGN §23), so the sink hears the worker's estimate of why either way.
+
+    Returns:
+        The event, or None if no sink takes runs.
+    """
+    if not config.notify.takes(RUNS):
+        return None
+    fields: CiFlaky = {
+        "ticket": key,
+        "run": run_id,
+        "prs": [cut(pr, DETAIL_LIMIT) for pr in prs],
+        "kicked": list(kicked),
+        "estimate": cut(estimate, DETAIL_LIMIT),
+        "note": cut(note, DETAIL_LIMIT) if note else None,
+    }
+    return Event(RUNS, "ci.flaky", fields)
 
 
 def chore_ended(
@@ -483,14 +538,20 @@ def budget_reached(month: spend.Month, percent: int) -> Event:
     """The local month's spend reached `percent` of the operator's monthly budget.
 
     Returns:
-        The `loop.budget_reached` event, naming the month, the budget, the alert, what it spent, and where it is
-        headed.
+        The `loop.budget_reached` event, naming the month, the budget, the alert, what it spent, canopy's part and the
+        part outside canopy, when the runtime's sessions were last read, and where it is headed.
     """
+    # The parts are taken from the rounded whole, so a sink never shows them a cent apart from it.
+    spent, runs = round(month.spent_usd or 0.0, 2), round(month.runs_usd or 0.0, 2)
     fields: BudgetReached = {
         "month": month.month,
         "budget": month.budget_usd,
         "percent": percent,
-        "spent": round(month.spent_usd or 0.0, 2),
+        "spent": spent,
         "projected": round(month.projected_usd, 2) if month.projected_usd is not None else None,
+        "runs": runs,
+        "outside": round(spent - runs, 2),
+        "sessions_read_at": month.sessions_read_at,
+        "sessions_read": month.sessions_read.value if month.sessions_read is not None else None,
     }
     return Event(LOOP, BUDGET_REACHED, fields)
