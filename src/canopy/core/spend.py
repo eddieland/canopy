@@ -222,7 +222,7 @@ class FirstCalls:
     #: None when none did.
     hit_rate: float | None = None
     #: The runtime's versions their sessions' records named, in the order their runs first ran on each: a second one
-    #: is an upgrade within the snapshot, which may change the prefix the runs share.
+    #: is a change of the runtime within the snapshot, which may change the prefix the runs share.
     runtime_versions: Sequence[str] = ()
 
 
