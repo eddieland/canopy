@@ -179,13 +179,9 @@ def test_log_reads_each_commit_as_records_that_no_message_or_path_can_forge(repo
     assert (merged.commit, merged.parents, merged.files) == (merge, [repo.base, empty.commit], [])
     assert (empty.message, empty.files) == ("empty", [])
     assert odd.message == f"subject\n\n{forged}".replace("\u202e", "<U+202E>")
-    assert [f.path for f in odd.files] == [
-        repo.base,
-        'a space "quoted".py',
-        "new<U+000A>line.py",
-        "tab<U+0009>name.py",
-        "ünï \U0001f600.md",
-    ]
+    # Git lists a commit's files in byte order, and the first is named for a commit, whose hash is random.
+    paths = [repo.base, 'a space "quoted".py', "new<U+000A>line.py", "tab<U+0009>name.py", "ünï \U0001f600.md"]
+    assert [f.path for f in odd.files] == sorted(paths, key=str.encode)
     assert second.commit == repo.head
     # Its text is what the model reads: the same records, as JSON after the note.
     shown = git_tools.text(log)
