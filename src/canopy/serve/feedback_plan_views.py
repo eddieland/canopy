@@ -179,12 +179,10 @@ def _said(conn: sqlite3.Connection, item: records.FeedbackPlanItem) -> records.O
     Returns:
         Its row; None once a read no longer holds it.
     """
-    return records.fetch_one(
-        conn,
-        records.ObservedReview,
-        sql.select("*")
-        .from_("observed_reviews")
-        .where("pr_url = ? AND item = ? AND id = ?", item.pr_url, item.item, item.item_id),
+    return (
+        records.select(records.ObservedReview)
+        .where("pr_url = ? AND item = ? AND id = ?", item.pr_url, item.item, item.item_id)
+        .one(conn)
     )
 
 
