@@ -230,7 +230,14 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
         observed = rules.tracker_observed
         skill = None if observed else _tracker_skill(found, rules.tracker_provider)
         text = found[_OVERSEER_FILE].decode()
-        text = render_overseer_reads(text, rules.tracker_tools, rules.tracker_provider, observed=observed)
+        server = rules.tracker_server if observed else None
+        text = render_overseer_reads(
+            text,
+            rules.tracker_tools,
+            rules.tracker_provider,
+            observed=observed,
+            server=server,
+        )
         found[_OVERSEER_FILE] = render_overseer(text, rules.overseer_prompt, skill, no_skills=observed).encode()
     if _REVIEWER_FILE in found:
         text = found[_REVIEWER_FILE].decode()
@@ -439,7 +446,14 @@ def render_bash_allows(text: str, name: str, allows: Sequence[str]) -> str:
     return text.replace(_BASH_ALLOWS_MARKER, _BASH_ALLOWS_MARKER + "".join(rules), 1)
 
 
-def render_overseer_reads(text: str, tools: McpTools | None, provider: str, *, observed: bool = False) -> str:
+def render_overseer_reads(
+    text: str,
+    tools: McpTools | None,
+    provider: str,
+    *,
+    observed: bool = False,
+    server: str | None = None,
+) -> str:
     """Return the overseer's definition with the tracker's rules at its marked line: it may only read the tracker.
 
     As for the planner, every tool of the server is denied by a wildcard and the reads allowed after it (D021): the
@@ -449,7 +463,8 @@ def render_overseer_reads(text: str, tools: McpTools | None, provider: str, *, o
     tools and GitHub's issue reads: a pattern could take a read it needs.
 
     `observed` is a `tracker` source reading the tickets, so the overseer reads no tracker at all (DESIGN §39): GitHub's
-    issue reads are denied, and the tracker's server whole, which on a GitHub tracker keeps only its reads of PRs.
+    issue reads are denied, and the tracker's server whole, which on a GitHub tracker keeps only its reads of PRs. With
+    no read tools known, `server` names the server to deny; with neither, only GitHub's issue reads are.
 
     Raises:
         DefinitionsError: `text` has no marked line to render the tracker's rules at.
@@ -458,7 +473,10 @@ def render_overseer_reads(text: str, tools: McpTools | None, provider: str, *, o
     github = provider == _GITHUB
     if observed:
         if tools is None:
-            # The tracker's server is not known by name: only GitHub's issue reads can be denied.
+            # No read tools known: deny the server by the name config gives, or, with none, GitHub's issue reads alone.
+            # On a GitHub tracker the server is the one the PRs are read through, so it is not denied whole.
+            if server is not None and not github:
+                return _render_reads(text, server, (), issue_reads=True)
             return text.replace(_READS_MARKER, _READS_MARKER + "".join(map(_deny, _GITHUB_ISSUE_READS)), 1)
         reads = [r for r in _OVERSEER_GITHUB_READS if r not in _OVERSEER_ISSUE_READS] if github else []
         return _render_reads(text, tools.server, reads, issue_reads=True)

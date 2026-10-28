@@ -1108,7 +1108,8 @@ def test_where_a_tracker_source_reads_the_overseer_may_call_no_tracker_tool_and_
     canopy_env.write_private('[connect.sources.jira]\nkind = "tracker"\ncmd = "connector jira"\n')
     ruleset = _ruleset(canopy_env, agents.OVERSEER)
     jira = config.DEFAULT_TRACKER_TOOLS["jira"]
-    for tool in (*(f"{jira.server}_{read}" for read in jira.allowed), *GITHUB_ISSUE_READS):
+    tools = (*jira.allowed, *jira.create, *jira.pr_writes, "someToolNoPatternNames")
+    for tool in (*(f"{jira.server}_{tool}" for tool in tools), *GITHUB_ISSUE_READS):
         assert _opencode_disabled(ruleset, tool), tool
     # GitHub's PRs are still read live, until the `vcs` source's observations are all it reads.
     assert not _opencode_disabled(ruleset, "github_pull_request_read")
@@ -1135,6 +1136,21 @@ def test_where_a_tracker_source_reads_and_no_tracker_tools_are_known_githubs_iss
     ruleset = _opencode_ruleset(opencode_definitions.render_overseer_reads(bundled, None, "linear", observed=True))
     for tool in GITHUB_ISSUE_READS:
         assert _opencode_disabled(ruleset, tool), tool
+    # With the server named, by config or a provider's defaults, it is denied whole, though no read tool is known.
+    named = opencode_definitions.render_overseer_reads(bundled, None, "linear", observed=True, server="linear")
+    ruleset = _opencode_ruleset(named)
+    for tool in ("linear_list_issues", "linear_create_issue", *GITHUB_ISSUE_READS):
+        assert _opencode_disabled(ruleset, tool), tool
+    assert not _opencode_disabled(ruleset, "github_pull_request_read")
+
+
+def test_a_tracker_source_denies_the_overseer_a_configured_server_with_no_read_tools(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private(
+        '[tracker]\nmcp_server = "linear"\nread_tools = []\n\n'
+        '[connect.sources.linear]\nkind = "tracker"\ncmd = "connector linear"\n',
+    )
+    ruleset = _ruleset(canopy_env, agents.OVERSEER)
+    assert _opencode_disabled(ruleset, "linear_list_issues")
 
 
 @pytest.mark.parametrize("provider", ["github", "jira"])

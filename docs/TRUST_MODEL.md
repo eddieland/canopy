@@ -906,8 +906,8 @@ returns, text and comments, before it checks for a label, so a widened query put
 operator's tracker account can see, in front of the model, where their text can try to steer it (T1). It cannot make one
 a candidate. With a `tracker` source, a ticket observed fresh that is not a candidate reaches the overseer by key and
 why alone, and its prompt says not to read it (DESIGN §30); a stale one is the harness's `wait` and never reaches it,
-and its definition denies GitHub's issue reads and, where canopy knows the tracker's tools, the tracker's server whole,
-and carries no skill for it, so its prompt reads no ticket live (DESIGN §39). Settled
+and its definition denies GitHub's issue reads and, wherever config or the provider names it, the tracker's server
+whole, and carries no skill for it, so its prompt reads no ticket live (DESIGN §39). Settled
 (2026-10-15, the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator
 who shares the workspace with people they do not trust overrides it in the private file. Requiring a `tracker` source
 would close what is left (DESIGN §35). The provider also picks the default tracker server and tools a private ticket's

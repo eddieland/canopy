@@ -102,8 +102,8 @@ that tick and stays due, so no tick owes `canopy queried`, and `canopy queried` 
 refused; the overseer's definition denies the tracker's server whole, and GitHub's issue reads, and carries no
 tracker skill, its skill tool denied (`runtime/opencode/definitions.py`). A workspace with no `tracker` source keeps
 the overseer's live reads until config requires one. Chosen conservatively, for the operator to change: a ticket a
-query found but the source has not read yet waits a poll for that read; with the tracker's tools unknown
-(`tracker.read_tools` unset off a provider canopy knows), only GitHub's issue reads are denied. Left: config requiring
+query found but the source has not read yet waits a poll for that read; with no tracker server named, by
+`tracker.mcp_server` or a provider canopy knows, only GitHub's issue reads are denied. Left: config requiring
 a `tracker` source, with the tests' workspaces given the fake one; the GitHub half (the `vcs` source reading the
 review query's and requests' PRs into the block, a stale unit the harness's `wait`, the GitHub server denied, and
 `mcp_unavailable` gone); the third bullet; and the design folded into the sections it names.

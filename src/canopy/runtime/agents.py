@@ -116,6 +116,9 @@ class Rules:
     chore_agents: Sequence[str]
     #: Whether a `tracker` source reads tickets into the journal, so the overseer reads no tracker itself (DESIGN §39).
     tracker_observed: bool
+    #: The tracker's MCP server, as config or the provider's defaults name it, even with no read tools known; None when
+    #: neither names one.
+    tracker_server: str | None
 
 
 #: How much of an MCP server's tools an agent is offered: every one, only some, or none.

@@ -60,6 +60,7 @@ PLAIN = agents.Rules(
     models={},
     chore_agents=(),
     tracker_observed=False,
+    tracker_server=None,
 )
 
 
