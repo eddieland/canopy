@@ -5,7 +5,6 @@ import json
 import os
 import re
 import threading
-import time
 from collections.abc import Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -29,8 +28,9 @@ from tests.conftest import CanopyEnv, executable, invoke
 PR = "https://github.com/acme/api/pull/7"
 HEAD = "9b2f4c6e1a7d"
 PAGE = 2
-# How long the stand-in takes to answer a `slow` operation, past the client's timeout in the tests that ask for one.
-SLOW = 0.5
+#: Set when the stand-in may answer a `slow` operation: it holds the answer while a test is `holding` it.
+RELEASED = threading.Event()
+RELEASED.set()
 
 
 @dataclass
@@ -105,7 +105,7 @@ class Fake:
 
     `fail` maps an operation to `refuse`, `500`, `lost` (carried out, but answered with a 502), `page` (an HTML page
     answered with a 200), `cut` (carried out, its reply cut off), `cut-500` (a 502 whose reply is cut off), `drop` (the
-    connection closed with no reply), or `slow` (answered after the client gives up).
+    connection closed with no reply), or `slow` (answered once a test `holding` it is done).
     """
 
     pulls: dict[tuple[str, str, int], Pull] = field(default_factory=dict)
@@ -121,7 +121,7 @@ class Fake:
     fail: dict[str, str] = field(default_factory=dict)
     # How many requests next, of any operation, are answered with GitHub's unicorn: a 502 whose page is HTML.
     unicorns: int = 0
-    # How many requests next, of any operation, are carried out and their replies cut off.
+    #: How many requests next, of any operation, are carried out and their replies cut off.
     cuts: int = 0
     # PRs' numbers a batch that names one is answered with a 502 for, as a query too heavy to answer in time is.
     heavy: set[int] = field(default_factory=set)
@@ -380,7 +380,7 @@ class _Api(BaseHTTPRequestHandler):
             self.close_connection = True
             return
         if failure == "slow":
-            time.sleep(SLOW)
+            RELEASED.wait()
         if _Api.fake.cuts or failure in {"cut", "cut-500"}:
             _Api.fake.cuts = max(_Api.fake.cuts - 1, 0)
             whole = (
@@ -461,6 +461,16 @@ def serving(handler: type[BaseHTTPRequestHandler]) -> Generator[str]:
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+@contextlib.contextmanager
+def holding() -> Generator[None]:
+    """Hold the stand-in's answers to `slow` operations until the block ends."""
+    RELEASED.clear()
+    try:
+        yield
+    finally:
+        RELEASED.set()
 
 
 @pytest.fixture
@@ -745,8 +755,9 @@ def test_a_server_error_whose_reply_is_cut_off_is_still_one() -> None:
 def test_a_query_that_times_out_is_not_sent_again() -> None:
     _Api.fake = Fake(fail={"Viewer": "slow"})
     with (
-        mock.patch.object(canopy_http, "TIMEOUT_SECONDS", SLOW / 5),
+        mock.patch.object(canopy_http, "TIMEOUT_SECONDS", 0.1),
         serving(_Api) as url,
+        holding(),
         pytest.raises(canopy_github.GitHubError, match="GitHub did not answer in time") as failed,
     ):
         canopy_github.Client(url, "t").query("query Viewer { viewer { login } }", {})

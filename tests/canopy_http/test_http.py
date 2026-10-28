@@ -2,8 +2,9 @@
 
 import contextlib
 import json
+import re
+import ssl
 import threading
-import time
 from collections.abc import Generator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -13,18 +14,31 @@ from typing import Any, ClassVar, override
 from unittest import mock
 
 import canopy_http
+import httpx2
 import pytest
-from canopy_http import Client, FailedError, NotSentError, RateLimitedError, RefusedError, Retry, TimedOutError
+from canopy_http import (
+    Client,
+    FailedError,
+    NotSentError,
+    RateLimitedError,
+    RefusedError,
+    Retry,
+    TimedOutError,
+    UntrustedError,
+)
 
-# How long the server takes over a `slow` answer, past the client's timeout in the tests that ask for one.
-SLOW = 0.5
-# No pause between tries, so a test that sends again takes no time over it.
+#: Set when a `slow` answer may be given: the server holds it until the test that asked for one is done with it.
+RELEASED = threading.Event()
+#: No pause between tries, so a test that sends again takes no time over it.
 QUICK = Retry(pauses=(0.0, 0.0))
 
 
 @dataclass
 class Answer:
-    """What the server does with one request: answer `status`, or `cut` its reply off, `drop` it, or answer `slow`."""
+    """What the server does with one request: answer `status`, or `cut` its reply off, `drop` it, or answer `slow`.
+
+    A `slow` answer waits until `RELEASED` is set, which `serving` does as it ends.
+    """
 
     status: int = 200
     body: bytes = b'{"ok": true}'
@@ -33,9 +47,9 @@ class Answer:
 
 
 class _Server(BaseHTTPRequestHandler):
-    # The answers to give, in turn; the last is given to every request after it.
+    #: The answers to give, in turn; the last is given to every request after it.
     script: ClassVar[list[Answer]] = []
-    # Each request heard: its method, path, and headers.
+    #: Each request heard: its method, path, and headers.
     heard: ClassVar[list[tuple[str, str, dict[str, str]]]] = []
 
     def do_GET(self) -> None:
@@ -52,7 +66,7 @@ class _Server(BaseHTTPRequestHandler):
             self.close_connection = True
             return
         if answer.how == "slow":
-            time.sleep(SLOW)
+            RELEASED.wait()
         self.send_response(answer.status)
         for name, value in answer.headers.items():
             self.send_header(name, value)
@@ -76,12 +90,14 @@ def serving(*script: Answer) -> Generator[str]:
     """Serve `script` on a local port until the block ends. Yields its origin."""
     _Server.script = list(script)
     _Server.heard = []
+    RELEASED.clear()
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Server)
     thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     try:
         yield f"http://127.0.0.1:{server.server_address[1]}"
     finally:
+        RELEASED.set()
         server.shutdown()
         server.server_close()
         thread.join()
@@ -223,7 +239,7 @@ def test_a_refusal_is_not_sent_again() -> None:
 
 def test_a_request_that_times_out_is_not_sent_again() -> None:
     with (
-        mock.patch.object(canopy_http, "TIMEOUT_SECONDS", SLOW / 5),
+        mock.patch.object(canopy_http, "TIMEOUT_SECONDS", 0.1),
         serving(Answer(how="slow")) as origin,
         pytest.raises(TimedOutError, match="Svc did not answer in time") as failed,
     ):
@@ -236,3 +252,25 @@ def test_an_origin_must_be_an_http_url() -> None:
     with pytest.raises(ValueError, match="is not an http or https URL"):
         Client("ftp://example.com", name="Svc")
     assert json.dumps(Client("https://example.com/api/graphql", name="Svc").origin) == '"https://example.com"'
+
+
+def test_a_certificate_that_is_not_trusted_is_not_sent_again() -> None:
+    def untrusted(*args: object, **kwargs: object) -> httpx2.Response:
+        del args, kwargs
+        try:
+            raise ssl.SSLCertVerificationError(1, "certificate verify failed: self-signed certificate")
+        except ssl.SSLError as e:
+            raise httpx2.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED]") from e
+
+    with (
+        mock.patch.object(httpx2.Client, "send", autospec=True, side_effect=untrusted) as sent,
+        mock.patch.object(canopy_http.time, "sleep", autospec=True) as slept,
+        pytest.raises(
+            UntrustedError,
+            match=re.escape("https://ghe.example.com's certificate is not trusted"),
+        ) as failed,
+    ):
+        Client("https://ghe.example.com", name="Svc").send("GET", "/", again=True)
+    assert failed.value.certain
+    assert sent.call_count == 1
+    assert not slept.called
