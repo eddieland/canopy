@@ -665,13 +665,15 @@ def test_a_first_call_that_read_little_from_the_cache_is_cold_though_it_wrote_no
         review(conn, t, "https://e.test/pr/1", None, earlier(NOW, 0, hours), 0.1)
         review_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
         db.set_run_report(conn, "review_runs", review_id, "s", first_call(50_000, 0, read), digest="d")
-    # One recorded before canopy kept the read is judged by its write, as before.
-    review(conn, t, "https://e.test/pr/1", None, earlier(NOW, 0, 0.5), 0.1)
-    review_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
-    db.set_run_report(conn, "review_runs", review_id, "s", unread_first_call(50_000, 0), digest="d")
+    # Those recorded before canopy kept the read are judged by their write, as before: cold when it was most of it.
+    for hours, written in ((0.5, 0), (0.25, 40_000)):
+        review(conn, t, "https://e.test/pr/1", None, earlier(NOW, 0, hours), 0.1)
+        review_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
+        db.set_run_report(conn, "review_runs", review_id, "s", unread_first_call(50_000, written), digest="d")
 
     [reviews] = [f for f in spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR).first_calls if f.kind == "reviews"]
-    assert (reviews.runs, reviews.cold_share) == (4, 2 / 4)  # the one that read nothing, and the one under half
+    # The one that read nothing, the one that read under half, and the old one that wrote most of what it was sent.
+    assert (reviews.runs, reviews.cold_share) == (5, 3 / 5)
     assert reviews.hit_rate == pytest.approx(50_000 / 150_000)  # the three that recorded a read
 
 
