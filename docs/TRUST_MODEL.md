@@ -169,6 +169,9 @@ Controls:
   replaces one the operator was asked to approve, or a ticket they asked a plan of by name, waits on them. The plan
   and its reason stay on file, the sinks are told, and an edit to the file needs the operator's approval. The
   backstop is the PR's review; for a feedback plan, an untrusted reviewer's items can now start a `resume` unseen.
+  The key's level, `strict`, `normal`, or `lenient`, only sets the bar the planner's prompt gives it; that no level
+  waives review of security, credentials, destructive data changes, or migrations is that prompt's word too, not a
+  guard in code.
 - An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
   `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders

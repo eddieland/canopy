@@ -42,6 +42,7 @@ from canopy.core import (
     sandboxing,
     ticket_models,
 )
+from canopy.core.config import PlannerApproval
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import PoolKind, RecordedKind, ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
@@ -1129,7 +1130,9 @@ def _spawn(
         "REASONS": prompts.reasons_note(tuple(reasons), private=plan.private),
         "FOLLOW_UPS": _follow_ups_note(ctx, key, private=plan.private),
         "PLAN_REVIEW": prompts.plan_review(
-            on=planning and cfg.policy.planner_may_approve and plan_guards.planner_may_approve(ctx, key, kind),
+            cfg.policy.planner_may_approve
+            if planning and cfg.policy.planner_approves() and plan_guards.planner_may_approve(ctx, key, kind)
+            else PlannerApproval.OFF,
             feedback=kind == policy.FEEDBACK_PLAN,
         ),
     }
