@@ -194,11 +194,15 @@ requires-dist = [
 name = "canopy-notify-slack"
 source = { editable = "packages/canopy-notify-slack" }
 dependencies = [
+    { name = "canopy-http" },
     { name = "click" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "click", specifier = ">=8.5.0" }]
+requires-dist = [
+    { name = "canopy-http", editable = "packages/canopy-http" },
+    { name = "click", specifier = ">=8.5.0" },
+]
 
 [[package]]
 name = "canopy-review-bench"
