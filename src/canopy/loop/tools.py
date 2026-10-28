@@ -1215,7 +1215,7 @@ def _refuse_raised(
     Raises:
         Refused: `reason` is one the harness raises.
     """
-    if reason not in attention.FROM_CAUSES:
+    if reason not in attention.FROM_CAUSES and reason != attention.CHECK_STUCK:
         return
     why = f"the harness raises {reason} itself while its cause holds, and ends it when the cause is gone"
     db.record_decision(ctx.conn, tick_id, key, f"refused:{RAISED}", why, repo=repo, pr=pr)
