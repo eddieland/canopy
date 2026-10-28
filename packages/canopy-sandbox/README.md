@@ -30,9 +30,9 @@ For each run it:
 3. Fills the template's placeholders (`@CWD@`, `@WORKTREES@`, `@GIT_SHARED@`, `@TMPDIR@`, and the rest the module
    docstring lists) with those paths, and writes the policy to a private directory of the run's own, beside its temp
    directory. The policy denies reading the directory that holds every run's, and the one that holds every role's
-   cache, on top of the template's `denyRead`. A template that allows reading a directory above them reads them again:
-   `srt` binds an `allowRead` path back under a denied one, so keep a template's `allowRead` to the placeholders and the
-   paths a tool needs.
+   cache, on top of the template's `denyRead`. Since `srt` binds an `allowRead` or `allowWrite` path back under a
+   denied one, a template that names one of these or a directory that holds it, such as a chore's cwd of `~`, is
+   refused.
 4. Points the command's caches at the role's own cache directory, `$XDG_CACHE_HOME/canopy/sandbox/ROLE/`, never the
    operator's, since a cache a run can write is code the host may run later. Setup shares the worker's, which it
    warms.
