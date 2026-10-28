@@ -136,7 +136,8 @@ class AttentionItem(Model):
     detail: str
     """What the operator should know, in the CLI's words: untrusted text."""
     since: datetime
-    """When the unbroken run of ticks that recorded it began."""
+    """When the unbroken run of ticks that recorded it began, or its cause did if that came first or no tick records
+    it: a task's question, or the oldest of a unit's drafts waiting."""
     finding: bool = False
     """A chore's finding rather than a ticket's item."""
     pr: str | None = None

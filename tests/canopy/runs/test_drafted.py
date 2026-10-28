@@ -211,6 +211,28 @@ def test_waiting_drafts_are_the_operators_item_alone(scenario: Scenario, github_
 
 
 @pytest.mark.usefixtures("git_pool")
+def test_drafts_are_on_the_attention_list_once_their_run_ends_not_from_the_next_tick(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    """A run's drafts are listed as soon as it ends, aged from the draft, and a tick recording them changes nothing."""
+    scenario.configures("private", trust={**APPROVE, "trusted_reviewers": ["alice"]})
+    github_has(github_state, comment(501))
+    scenario.run(WORK, worker=sends_drafts([thread(501)]))
+    ctx = context(scenario.env)
+    [draft] = all_drafts(scenario.conn)
+    [item] = [i for i in attention.listed(ctx) if i.reason == drafted.WAITING_REASON]
+    assert (item.ticket_key, item.repo, item.detail, item.since) == (
+        KEY,
+        "repo",
+        f"1 draft waits on you, for {PR}",
+        draft.created_at,
+    )
+    scenario.tick(*waits(KEY))
+    assert [i for i in attention.listed(ctx) if i.reason == drafted.WAITING_REASON] == [item]
+
+
+@pytest.mark.usefixtures("git_pool")
 def test_dropping_drafts_takes_them_off_the_attention_list_without_a_tick(
     scenario: Scenario,
     github_state: Path,
