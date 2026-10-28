@@ -135,6 +135,9 @@ class Tick(Row):
     #: Whether it ran its overseer: False when halted or when nothing was left to it (DESIGN §39); None on a tick from
     #: before that was recorded, or one that ended before it got that far.
     overseer_ran: bool | None
+    #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
+    #: canopy kept it.
+    tokens_first_cache_read: int | None
 
 
 @dataclass(frozen=True)
@@ -238,6 +241,9 @@ class ChoreRun(Row):
     tokens_first_call: int | None
     tokens_first_cache_write: int | None
     definitions_digest: str | None
+    #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
+    #: canopy kept it.
+    tokens_first_cache_read: int | None
 
 
 @dataclass(frozen=True)
@@ -308,6 +314,9 @@ class ReviewRun(Row):
     revises_version: int | None
     #: Its journal number, taken when it ended (DESIGN §35); None while it runs.
     number: int | None
+    #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
+    #: canopy kept it.
+    tokens_first_cache_read: int | None
 
 
 @dataclass(frozen=True)
@@ -376,6 +385,9 @@ class TaskRun(Row):
     message_id: int | None
     #: The SHA-256, hex, of the report it left, as `_task` kept it in the state directory; None when it left none.
     report_sha256: str | None
+    #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
+    #: canopy kept it.
+    tokens_first_cache_read: int | None
 
 
 @dataclass(frozen=True)
@@ -1486,6 +1498,9 @@ class Run(Row):
     #: The model canopy chose for its agent, from `runtime.models` (DESIGN §13), as it asked the runtime for it; None
     #: when it chose none, so the run went to the runtime's default, and for a run from before canopy chose one.
     model: str | None
+    #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
+    #: canopy kept it.
+    tokens_first_cache_read: int | None
 
 
 @dataclass(frozen=True)

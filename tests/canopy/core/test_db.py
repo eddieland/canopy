@@ -192,6 +192,7 @@ LIFECYCLE_COLUMNS = frozenset(
         "tokens_peak_context",
         "tokens_first_call",
         "tokens_first_cache_write",
+        "tokens_first_cache_read",
         "definitions_digest",
     },
 )
@@ -213,7 +214,7 @@ def test_a_report_keeps_the_first_call_and_the_snapshot_only_with_what_the_runti
 ) -> None:
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
-    usage = Usage(0.25, 10, 2, 0, 400, 50, peak_context=900, first_call=460, first_cache_write=50)
+    usage = Usage(0.25, 10, 2, 0, 400, 50, peak_context=900, first_call=460, first_cache_write=50, first_cache_read=400)
     tick = db.start_tick(conn, dry_run=True)
     db.set_tick_report(conn, tick, "ses_o1", usage, digest="0123456789abcdef")
     row = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()
@@ -223,12 +224,13 @@ def test_a_report_keeps_the_first_call_and_the_snapshot_only_with_what_the_runti
     # A plain-text overseer reported nothing: no agent canopy can tell loaded the snapshot.
     db.set_tick_report(conn, tick, None, None, digest="0123456789abcdef")
     row = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()
-    assert (row["tokens_first_call"], row["tokens_first_cache_write"], row["definitions_digest"]) == (None,) * 3
+    first = ("tokens_first_call", "tokens_first_cache_write", "tokens_first_cache_read", "definitions_digest")
+    assert tuple(row[c] for c in first) == (None,) * 4
 
     # A cost recorded before the first call was kept reads it as unknown.
     db.set_tick_report(conn, tick, "ses_o1", Usage(0.25, 10, 2, 0, 400, 50, peak_context=900))
     usage = present(db.usage_of(conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()))
-    assert (usage.first_call, usage.first_cache_write) == (None, None)
+    assert (usage.first_call, usage.first_cache_write, usage.first_cache_read) == (None, None, None)
 
 
 def test_a_report_replaces_the_tools_a_run_recorded(tmp_path: Path, journals: Journals) -> None:
