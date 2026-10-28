@@ -56,8 +56,10 @@ read git so too. `canopy _mcp --git NAME=PATH`, named `canopy_git` in a review's
 line for that run, never the agent. An argument is a revision, a path inside the repository, or text to search for
 joined to its option or after `-e`, never an option itself; git reads commits only, inherits no `GIT_*` variable, and
 runs no hook, filesystem monitor, external diff, textconv, pager, signature check, submodule, or transport; output is
-bounded. Their definitions deny bash, the planner's but for what `runtime.allow_bash` names (§13), deny `canopy_*`,
-and then allow each by exact name; every other definition denies them. Workers keep their shell, for git's writes.
+bounded. `log` answers with records, each commit's fields and files apart, as structured content and as JSON in its
+text, so no message or path in a PR can pass for another commit; the rest answer with git's text. Their definitions
+deny bash, the planner's but for what `runtime.allow_bash` names (§13), deny `canopy_*`, and then allow each by exact
+name; every other definition denies them. Workers keep their shell, for git's writes.
 
 ### The tools
 
@@ -109,6 +111,8 @@ these:
   merge replaces anything but a plain object, keeping keys canopy's entry leaves out.
 - A local server inherits OpenCode's whole environment, inline config included; its stderr is piped and never read.
 - A tool is `<server>_<tool>`, every character outside `[A-Za-z0-9_-]` made `_`.
+- The model reads a tool result's text alone: OpenCode 1 never reads its structured content, and OpenCode 2 hands it
+  only to code mode.
 - When the run ends, OpenCode signals every descendant of each local server, whatever its session or process group.
 - A local server's `timeout` bounds each request to it, connecting and calling a tool alike; without one, a tool call
   waits a minute. OpenCode 2's (2.1.4) is `timeout.execution` for a tool call, twelve hours without it.
