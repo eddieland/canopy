@@ -3,6 +3,7 @@ name = "canopy-notify-slack"
 # From the latest v* tag, as canopy's is (D085), so every package canopy ships carries its version.
 dynamic = ["version"]
 description = "canopy's Slack sink, which posts what canopy sends it, and the reader of the replies in its threads."
+readme = "README.md"
 license = "MIT"
 authors = [{ name = "eddieland" }]
 keywords = ["canopy", "notifications", "slack", "webhook"]
