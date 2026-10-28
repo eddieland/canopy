@@ -403,6 +403,13 @@ class Result(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
 
 
+class Base(Result):
+    """What `merge-base` returns: where two commits' histories meet."""
+
+    #: The merge base.
+    commit: Annotated[StrictStr, Field(description="The merge base's full id.")]
+
+
 class Changed(BaseModel):
     """A file a commit changed, as `log` lists it."""
 
@@ -565,11 +572,11 @@ def text(result: Result) -> str:
     return f"{DATA_NOTE}\n\n{result.model_dump_json()}"
 
 
-def merge_base(runner: procs.Runner, checkouts: Mapping[str, Path], request: MergeBase) -> str:
+def merge_base(runner: procs.Runner, checkouts: Mapping[str, Path], request: MergeBase) -> Base:
     """Find where `request`'s two commits' histories meet.
 
     Returns:
-        The merge base's commit id.
+        The merge base, by its id.
 
     Raises:
         Refused: The checkout or a revision is unknown, or the commits share no history.
@@ -579,7 +586,10 @@ def merge_base(runner: procs.Runner, checkouts: Mapping[str, Path], request: Mer
     done = _git(runner, where, "merge-base", "--end-of-options", base, head)
     if done.returncode == 1 and not done.stdout.strip():
         raise Refused(f"{request.base} and {request.head} share no history")
-    return _out(done, "merge-base").strip()
+    found = _out(done, "merge-base").strip()
+    if not COMMIT_ID_RE.fullmatch(found):
+        raise Refused("git merge-base printed what canopy cannot read")
+    return Base(commit=found)
 
 
 def diff(runner: procs.Runner, checkouts: Mapping[str, Path], request: Diff) -> str:

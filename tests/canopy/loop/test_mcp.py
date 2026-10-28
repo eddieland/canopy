@@ -1099,7 +1099,7 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     # A tool that reads records lists them as its output schema, every field in every result; the rest list none.
     listed = {t["name"]: t for t in served.responses[1]["result"]["tools"]}
     outputs = {name: t["outputSchema"] for name, t in listed.items() if "outputSchema" in t}
-    assert list(outputs) == ["log", "blame", "grep", "files"]
+    assert list(outputs) == ["merge-base", "log", "blame", "grep", "files"]
     for output in outputs.values():
         for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
             validator.check_schema(output)
@@ -1124,7 +1124,7 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     assert served.structured(3) is None
     assert "+while True:\n+    call()" in diff.text
     assert show.text.endswith("while True:\n    call()")
-    assert base.text == git("rev-parse", "main", cwd=seed)
+    assert records(5, "merge-base") == {"commit": git("rev-parse", "main", cwd=seed)}
     escape, option, other = (served.said(n) for n in (6, 7, 8))
     assert (escape.error, option.error, other.error) == (True, True, True)
     assert "path: a path stays inside the repository: no `..`" in escape.text
