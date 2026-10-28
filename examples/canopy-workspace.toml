@@ -19,13 +19,20 @@ summary = "Public REST API. Owns the order schema and the generated OpenAPI spec
 # Optional: a branch's page on the repository's host, with {branch} where its name goes, for the web UI's links. A
 # GitHub url gives one by default (.../tree/{branch}); set this for another host, or to "" for no links.
 # branch_url = "https://gitlab.com/acme/api/-/tree/{branch}"
-# Optional: the checks that are not CI, ones that stay pending until a person acts, such as a deploy approval. canopy
-# does not wait on them, count them red, or need them to pass. Every other check is CI.
-# human_checks = ["deploy/approval"]
 # Optional: paths from the repository's root whose change makes a review high impact whatever the reviewer says, its
 # items first on the attention list. Each covers itself and everything under it; no globs. They add to
 # .github/workflows/, which is high impact in every repository and cannot be removed. canopy's own lists its agents:
 # high_impact_paths = [".agents/", "docs/TRUST_MODEL.md"]
+
+# Optional: the checks that are not CI, each by its exact name. canopy does not wait on one, count it red, or need it to
+# pass. Every check not named here is CI. "human" waits on a person, such as a deploy approval or an ownership check,
+# and is shown with the PR's checks; "merge" gates the merge itself, such as a merge queue's status, never green on an
+# open PR; "ignore" is advisory or retired. Neither of those is shown. (`human_checks = [...]` in the table above is
+# the same as naming each "human" here; a check is named in one place only.)
+# [repos.api.checks]
+# "deploy/approval" = "human"
+# "merge-queue" = "merge"
+# "lint-legacy" = "ignore"
 
 [repos.web]
 url = "https://github.com/acme/web.git"

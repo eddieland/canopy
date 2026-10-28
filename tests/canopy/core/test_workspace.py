@@ -90,6 +90,8 @@ def load_both(root: Path, user_file: Path) -> None:
         ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "http://x.test/a/tree/{branch}"\n', "plain https://"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "https://x.test/{repo}/tree/{branch}"\n', "braces"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nhuman_checks = [""]\n', "repos.api.human_checks"),
+        ('[repos.api]\nurl = "https://x.test/a.git"\n[repos.api.checks]\n"" = "merge"\n', "repos.api.checks"),
+        ('[repos.api]\nurl = "https://x.test/a.git"\n[repos.api.checks]\nqueue = "later"\n', "'ci', 'human', 'merge'"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nhigh_impact_paths = "infra/"\n', "repos.api.high_impact_paths"),
         # The key is a repository's, in the map, never the config's.
         ('[review]\nhigh_impact_paths = ["infra/"]\n', "review.high_impact_paths"),
@@ -120,6 +122,39 @@ def test_a_repositorys_high_impact_paths_are_read_from_its_table(ws: Ws) -> None
     )
     found = {r.name: r.high_impact_paths for r in workspace.load(ws.root).repos}
     assert found == {"api": (".agents/", "docs/TRUST_MODEL.md"), "web": ()}
+
+
+def test_a_repositorys_checks_have_the_roles_its_table_gives_them_and_human_checks_are_human(ws: Ws) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(("web", "https://x.test/web.git"))
+        + '\n[repos.api]\nurl = "https://x.test/a.git"\nhuman_checks = ["deploy/approval"]\n'
+        + '[repos.api.checks]\n"merge-queue" = "merge"\nowners = "human"\n"lint-legacy" = "ignore"\nbuild = "ci"\n',
+    )
+    found = workspace.load(ws.root)
+    assert {r.name: dict(r.checks) for r in found.repos} == {
+        "api": {
+            "deploy/approval": workspace.CheckRole.HUMAN,
+            "merge-queue": workspace.CheckRole.MERGE,
+            "owners": workspace.CheckRole.HUMAN,
+            "lint-legacy": workspace.CheckRole.IGNORE,
+            "build": workspace.CheckRole.CI,
+        },
+        "web": {},
+    }
+    # A check the map does not name is CI; so is every check of a repository it does not have.
+    assert found.check_roles("api").get("test", workspace.CheckRole.CI) is workspace.CheckRole.CI
+    assert found.check_roles("docs") == {}
+
+
+def test_a_check_named_both_in_human_checks_and_checks_is_refused(ws: Ws) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text()
+        + '\n[repos.api]\nurl = "https://x.test/a.git"\nhuman_checks = ["owners", "deploy"]\n'
+        + '[repos.api.checks]\nowners = "human"\n',
+    )
+    error = r"canopy-workspace\.toml: repos\.api: .*'owners' named in both `checks` and `human_checks`"
+    with pytest.raises(config.ConfigError, match=error):
+        workspace.load(ws.root)
 
 
 def test_a_repositorys_branch_url_comes_from_its_github_url_unless_the_map_sets_one(ws: Ws) -> None:
