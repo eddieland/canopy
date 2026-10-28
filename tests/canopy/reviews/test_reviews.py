@@ -347,11 +347,12 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
     granted = scenario.operator("grant", PR, "review", "--runs", "2")
     assert "has had 2 review runs, and may now have 4." in granted.out
 
-    # The state block shows a granted PR's grants beside its review runs; a PR with none has no key.
+    # The state block shows a granted PR's grants beside its review runs. The other PR, of no ticket listed and found by
+    # no review query, is left out: no decision rests on its review (#1528).
     scenario.tick(*waits("PROJ-1"), dry_run=True)
     prs = {p["url"]: p for p in scenario.state()["reviews"]["prs"]}
     assert (prs[PR]["review_runs"], prs[PR]["granted"]) == (2, 3)
-    assert "granted" not in prs[f"{PR}0"]
+    assert f"{PR}0" not in prs
 
 
 def test_a_review_grant_reports_the_limit_of_its_own_transaction_whatever_grant_commits_beside_it(

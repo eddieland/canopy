@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from canopy.core import contract, conversation, db, feedback_plans, item_numbers, plans, pools, tasks
 from canopy.core.vocab import ResumeReason
+from canopy.reviews import view as review_view
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -332,6 +333,7 @@ def state_block(
             summary["feedback_plan"] = feedback_planned[key]
         return summary
 
+    listed = [ticket_summary(t) for t in tickets]
     state: OverseerState = {
         "repository": str(repo_root),
         "workspace": {
@@ -375,7 +377,7 @@ def state_block(
             }
             for r in workspace.repos
         ],
-        "tickets": _name_cursors([ticket_summary(t) for t in tickets], numbered or {}, tracked=tracked),
+        "tickets": _name_cursors(listed, numbered or {}, tracked=tracked),
         # Tickets the operator stopped: not candidates, whatever their labels, and owed no decision (DESIGN §22).
         "stopped": list(stopped),
         # Tickets marked done lately that the query still finds: owed no decision while the tracker shows them open
@@ -387,7 +389,7 @@ def state_block(
         **({"dispatches_to_come": dispatches_to_come} if dispatches_to_come is not None else {}),
         **({"chores": chores} if chores else {}),
         # With reviews off, nothing about them reaches the overseer (DESIGN §21).
-        **({"reviews": reviews} if reviews is not None else {}),
+        **({"reviews": _scoped(reviews, listed, observations)} if reviews is not None else {}),
         # The operator's notices, in force or lately ended: a failed check that ran while one was in force, and that it
         # explains, is held, not fixed (DESIGN §7).
         **({"notices": [_notice(n, now) for n in notices]} if notices else {}),
@@ -503,6 +505,23 @@ def _running_summary(
     if int(run["id"]) in run_reasons:
         summary["reasons"] = list(run_reasons[int(run["id"])])
     return summary
+
+
+# The reviews of the PRs the overseer may act on this tick: its listed tickets' and the review query's (DESIGN §21).
+def _scoped(reviews: ReviewsSection, listed: Sequence[TicketState], observations: ObservationsState) -> ReviewsSection:
+    query = observations.get("review_query")
+    if query is None:
+        found: frozenset[str] | None = frozenset()  # no review query: a PR of no ticket was an operator's request
+    elif query["observed"] == "fresh":
+        found = frozenset(query.get("result", []))
+    else:
+        found = None  # the overseer runs the query itself, and may find any PR reviewed lately
+    return review_view.scoped(
+        reviews,
+        tickets={t["key"] for t in listed},
+        prs={u["pr_url"] for t in listed for u in t["units"] if u["pr_url"] is not None},
+        found=found,
+    )
 
 
 def _notice(held: Notice, now: datetime) -> NoticeState:
