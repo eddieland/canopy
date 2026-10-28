@@ -56,8 +56,8 @@ read git so too. `canopy _mcp --git NAME=PATH`, named `canopy_git` in a review's
 line for that run, never the agent. An argument is a revision, a path inside the repository, or text to search for
 joined to its option or after `-e`, never an option itself; git reads commits only, inherits no `GIT_*` variable, and
 runs no hook, filesystem monitor, external diff, textconv, pager, signature check, submodule, or transport; output is
-bounded. `log`, `grep`, and `files` answer with records, each field apart, as structured content and as JSON in its
-text, so no message, path, or line in a PR can pass for another record; the rest answer with git's text. Their
+bounded. `log`, `grep`, `files`, and `blame` answer with records, each field apart, as structured content and as JSON
+in its text, so no message, path, or line in a PR can pass for another record; the rest answer with git's text. Their
 definitions deny bash, the planner's but for what `runtime.allow_bash` names (§13), deny `canopy_*`, and then allow
 each by exact name; every other definition denies them. Workers keep their shell, for git's writes.
 
