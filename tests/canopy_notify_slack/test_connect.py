@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Final, override
 from unittest import mock
 
+import canopy_notify_slack as slack
 import pytest
 from canopy_notify_slack import connect
 from click.testing import Result
@@ -43,6 +44,8 @@ class _Replies(BaseHTTPRequestHandler):
     received: ClassVar[list[tuple[str | None, dict[str, str]]]] = []
     #: Each `conversations.history` call's query.
     histories: ClassVar[list[dict[str, str]]] = []
+    #: How many replies next, to any call, are cut off halfway.
+    cuts: ClassVar[int] = 0
 
     def do_GET(self) -> None:
         url = urllib.parse.urlsplit(self.path)
@@ -80,9 +83,16 @@ class _Replies(BaseHTTPRequestHandler):
         self._send({"ok": True, "messages": page, "has_more": more, "response_metadata": meta})
 
     def _send(self, reply: Mapping[str, Any]) -> None:
+        body = json.dumps(reply).encode()
         self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(json.dumps(reply).encode())
+        if _Replies.cuts:
+            _Replies.cuts -= 1
+            self.wfile.write(body[: len(body) // 2])
+            self.close_connection = True
+            return
+        self.wfile.write(body)
 
     @override
     def log_message(self, format: str, *args: Any) -> None:
@@ -98,6 +108,7 @@ def replies() -> Generator[str]:
     _Replies.refused = {}
     _Replies.received = []
     _Replies.histories = []
+    _Replies.cuts = 0
     server = HTTPServer(("127.0.0.1", 0), _Replies)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -236,6 +247,16 @@ def test_a_long_thread_is_read_page_by_page(replies: str, tmp_path: Path, state:
     result = _read(replies, tmp_path)
     assert [body for _, _, body in _bodies(result)] == [f"part {n}" for n in range(5)]
     assert [q.get("cursor") for _, q in _Replies.received] == [None, "2", "4"]
+
+
+def test_a_read_whose_reply_is_cut_off_is_sent_again(replies: str, tmp_path: Path, state: Path) -> None:
+    _threads(state, {"PROJ-1": {"day": "2026-09-26", "ts": "1790.000001"}})
+    _Replies.threads["1790.000001"] = [_says("1790.000005", "Use the staging config.")]
+    _Replies.cuts = 2
+    with mock.patch.object(slack, "RETRY_PAUSES", (0.0, 0.0)):
+        result = _read(replies, tmp_path)
+    assert result.exit_code == 0, result.stderr
+    assert _bodies(result) == [("PROJ-1", OPERATOR, "Use the staging config.")]
 
 
 def test_a_thread_that_cannot_be_read_leaves_its_ticket_out_of_the_end(
