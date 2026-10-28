@@ -11,6 +11,9 @@ service refused it and said how long to wait (a 429, or a refusal naming `Retry-
 carried out: a server error, or a reply that broke off or is not JSON when JSON was asked for. A request that timed out
 is never sent again: it has spent its timeout once already, which a connector's run cannot spend many times over.
 
+It honors the environment's proxy (`HTTPS_PROXY`) and certificates (`SSL_CERT_FILE`), as urllib did: an operator
+behind a proxy reaches the service through it, which sees the request as it would any other of theirs.
+
 httpx2 for the transport, and nothing from canopy.
 """
 
