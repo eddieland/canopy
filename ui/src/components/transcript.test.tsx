@@ -255,6 +255,31 @@ describe('TranscriptPanel', () => {
         expect(within(call('canopy decide')).getByText('refused: capacity')).toBeDefined()
     })
 
+    it('says a decide call’s decisions on its row, and opens to each with its rationale', () => {
+        const decisions = [
+            { key: 'ABC-1', action: 'wait', rationale: 'PR 8 waits on CI' },
+            { key: 'ABC-2', action: 'done', rationale: 'merged by the operator' },
+        ]
+        const decide: TranscriptEntry = {
+            kind: 'tool',
+            call: 1,
+            at: AT,
+            tool: 'canopy_decide',
+            title: null,
+            input: JSON.stringify({ decisions }, null, 2),
+            output: 'recorded wait for ABC-1\nrecorded done for ABC-2',
+            status: 'completed',
+            duration_ms: 20,
+            cut: false,
+        }
+        render(<TranscriptPanel transcript={transcript({ entries: [decide] })} running={false} page="tick" />)
+        const row = within(call('canopy_decide'))
+        expect(row.getByText('ABC-1 wait, ABC-2 done')).toBeDefined()
+        expect(row.getByText('2 decisions')).toBeDefined()
+        const items = row.getAllByRole('listitem').map((item) => item.textContent)
+        expect(items).toEqual(['ABC-1waitPR 8 waits on CI', 'ABC-2donemerged by the operator'])
+    })
+
     it('says each model call’s tokens in and out as the CLI counts them, and a reason other than tool calls', () => {
         render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         expect(call('1.2k in · 300 out').textContent).not.toContain('tool calls')
