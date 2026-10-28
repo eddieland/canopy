@@ -138,6 +138,11 @@ Controls:
   refused recording one (`raised`), through a tool and its command alike, so a steered overseer can neither drop such
   an item nor raise a false one; a guard that refuses it a run past a limit still records the item. Residual: a
   derivation's mistake raises or ends an item wrongly until a fresh read corrects it.
+- The overseer's own three items (`needs_author`, `multi_repo`, `notice_rerun`) are recorded once and held by the harness
+  until what each names ends it, or its ticket is done or stopped (DESIGN §37): a steered overseer cannot drop one by
+  leaving it out, only by moving a cursor past the item a `needs_author` names, as it could always decline to record
+  one. No coworker's comment ends one: only the operator's own message, a cursor, or a newer run of the held check.
+  One naming nothing that could end it is refused (`unnamed`).
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal

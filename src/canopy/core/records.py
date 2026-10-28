@@ -211,6 +211,10 @@ class Decision(Row):
     pr: str | None
     #: Who made it; None on a decision recorded before the journal said (TRUST_MODEL T5).
     decider: Decider | None
+    #: Whether it is an attention item the overseer keeps, recorded once and held until what it names ends it (§37).
+    kept: bool
+    #: The journal number (§35) of what a kept item names; None for one about its ticket alone, and any other decision.
+    item: int | None
 
 
 @dataclass(frozen=True)
