@@ -100,20 +100,57 @@ def test_grep_finds_a_text_in_the_files_at_a_commit(repo: Repo) -> None:
     git("commit", "--quiet", "-m", "use it", cwd=repo.path)
     at = repo.checkouts
 
-    found = git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="retry()"))
-    assert found == f"{git_tools.DATA_NOTE}\n\nlib/use.py:2:retry()\nretry.py:1:def retry():"
+    def found(**asked: object) -> list[tuple[str, int, str]]:
+        matches = git_tools.grep(RUNNER, at, git_tools.Grep.model_validate({"rev": "feature", **asked}))
+        assert matches.cut is None
+        return [(m.path, m.line, m.text) for m in matches.matches]
+
+    assert found(text="retry()") == [("lib/use.py", 2, "retry()"), ("retry.py", 1, "def retry():")]
     # At the base, before the branch: the commit named, not the checkout's files.
-    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="main", text="return")).endswith("\n\nretry.py:2:    return 1")
-    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="RETRY", paths=["lib"])).endswith(
-        "\n\nlib/use.py:3:RETRY = 3",
+    assert found(rev="main", text="return") == [("retry.py", 2, "    return 1")]
+    assert found(text="RETRY", paths=["lib"]) == [("lib/use.py", 3, "RETRY = 3")]
+    assert [line for _, line, _ in found(text="RETRY", ignore_case=True, paths=["lib"])] == [1, 2, 3]
+    # The text as written, never a pattern or an option; and a miss is no match.
+    assert found(text="re.ry") == []
+    assert found(text="--all") == []
+
+
+def test_grep_reads_each_line_as_a_record_that_no_path_or_line_can_forge(repo: Repo) -> None:
+    """A file's name and lines are the PR's text: none of it reads as another match, a path, or a number."""
+    names = ['a space "quoted".py', "new\nline.py", "tab\tname.py", "ünï \U0001f600.md"]
+    for name in names:
+        (repo.path / name).write_text("needle\nfake.py:12:needle\r \U0001f600\t\u202e\n")
+    (repo.path / "last.txt").write_text("no line break after this needle")
+    (repo.path / "long.txt").write_text("needle" + "z" * 3000 + "\n")
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "odd files", cwd=repo.path)
+
+    found = git_tools.grep(RUNNER, repo.checkouts, git_tools.Grep(rev="feature", text="needle"))
+    assert found.cut == f"lines past {git_tools.MAX_LINE_CHARS} characters are cut"
+    shown = ['a space "quoted".py', "new<U+000A>line.py", "tab<U+0009>name.py", "ünï \U0001f600.md"]
+    assert [(m.path, m.line, m.text) for m in found.matches if m.path not in {"last.txt", "long.txt"}] == [
+        record
+        for path in shown
+        for record in ((path, 1, "needle"), (path, 2, "fake.py:12:needle<U+000D> \U0001f600\t<U+202E>"))
+    ]
+    by_path = {m.path: m.text for m in found.matches}
+    assert by_path["last.txt"] == "no line break after this needle"
+    assert by_path["long.txt"] == ("needle" + "z" * 3000)[: git_tools.MAX_LINE_CHARS]
+    assert (
+        git_tools.Matches.model_validate_json(git_tools.text(found).removeprefix(f"{git_tools.DATA_NOTE}\n\n")) == found
     )
-    either = git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="RETRY", ignore_case=True, paths=["lib"]))
-    assert either.count("lib/use.py:") == 3
-    # The text as written, never a pattern or an option; and a miss says so.
-    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="re.ry")).startswith(
-        "No file at feature holds",
-    )
-    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="--all")).startswith("No file at feature")
+
+
+def test_what_grep_returns_is_bounded_by_the_lines_it_leaves_out(repo: Repo) -> None:
+    (repo.path / "many.txt").write_text("".join(f"needle {n}\n" for n in range(100)))
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "many", cwd=repo.path)
+    with mock.patch.object(git_tools, "MAX_CHARS", 2000):
+        found = git_tools.grep(RUNNER, repo.checkouts, git_tools.Grep(rev="feature", text="needle"))
+        assert len(found.model_dump_json()) <= git_tools.MAX_CHARS
+    assert [m.text for m in found.matches] == [f"needle {n}" for n in range(len(found.matches))]
+    assert 0 < len(found.matches) < 100
+    assert found.cut == f"listed {len(found.matches)} of the 100 lines found: name fewer paths, or a longer text"
 
 
 def test_files_lists_the_paths_at_a_commit_by_name(repo: Repo) -> None:
@@ -446,7 +483,8 @@ def test_nothing_the_repository_names_runs(repo: Repo, tmp_path: Path) -> None:
     assert git_tools.merge_base(RUNNER, at, git_tools.MergeBase(base="main", head=signed)) == repo.base
     assert len(git_tools.log(RUNNER, at, git_tools.Log(range=signed, search="hello")).commits) == 1
     assert git_tools.blame(RUNNER, at, git_tools.Blame(rev=signed, path="notes.md", start=1, end=1)).endswith("hello")
-    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev=signed, text="hello")).endswith("notes.md:1:hello")
+    [hello] = git_tools.grep(RUNNER, at, git_tools.Grep(rev=signed, text="hello")).matches
+    assert (hello.path, hello.line, hello.text) == ("notes.md", 1, "hello")
     assert git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head=signed, stat=True)).endswith("retry.py")
     assert git_tools.files(RUNNER, at, git_tools.Files(rev=signed)).endswith("retry.py")
     past = git_tools.Blame(rev=signed, path="notes.md", start=1, end=1, moves=True, ignore_whitespace=True)

@@ -14,9 +14,10 @@ transport, so not the lazy fetch a promisor remote in the repository's config co
 clean filter runs. What a call returns is cut at `MAX_CHARS`, every hidden character named, as the PR's own text is
 untrusted.
 
-`log` answers with records, `Commits`, which its tool lists as its output schema and returns as structured content and,
-since the runtime shows the model only a tool's text, as JSON in its text: no commit's message or path can pass for
-another commit, or for a field. The rest answer with git's text.
+A tool that reads records answers with them, a `Result`: `log` its `Commits`, `grep` its `Matches`. Its tool lists the
+result as its output schema and returns it as structured content and, since the runtime shows the model only a tool's
+text, as JSON in its text: no commit's message, path, or line can pass for another record, or for a field. The rest
+answer with git's text.
 """
 
 from __future__ import annotations
@@ -67,6 +68,8 @@ MAX_LIMIT = 100
 MAX_SEARCH_CHARS = 200
 #: The most lines one `blame` reads.
 MAX_BLAME_LINES = 400
+#: The longest line of a file `grep` returns; past it the line is cut, and the result says so.
+MAX_LINE_CHARS = 2000
 #: How long one git command may take.
 TIMEOUT_SECONDS = 60
 #: A commit's full id, as `log` reads one: SHA-1's or SHA-256's.
@@ -453,6 +456,34 @@ class Commits(Result):
     ]
 
 
+class Match(BaseModel):
+    """A line `grep` found."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    #: The file it is in.
+    path: Annotated[StrictStr, Field(description="The file it is in, relative to the repository's root.")]
+    #: Its number in the file.
+    line: Annotated[StrictInt, Field(description="Its number in the file, counting from 1.")]
+    #: The line itself.
+    text: Annotated[StrictStr, Field(description=f"The line, cut at {MAX_LINE_CHARS} characters.")]
+
+
+class Matches(Result):
+    """What `grep` returns: each line found, by file, then by number."""
+
+    #: The lines.
+    matches: Annotated[
+        Sequence[Match],
+        Field(description="Each line found, by file, then by number; none when no file holds the text."),
+    ]
+    #: What was left out to fit, if anything.
+    cut: Annotated[
+        StrictStr | None,
+        Field(description=f"What was left out or cut to fit {MAX_CHARS} characters; null when nothing was."),
+    ]
+
+
 def text(result: Result) -> str:
     """The text a git tool that reads records returns: `DATA_NOTE`, then `result` as JSON.
 
@@ -607,12 +638,12 @@ def blame(runner: procs.Runner, checkouts: Mapping[str, Path], request: Blame) -
     return _said(_out(done, "blame"))
 
 
-def grep(runner: procs.Runner, checkouts: Mapping[str, Path], request: Grep) -> str:
+def grep(runner: procs.Runner, checkouts: Mapping[str, Path], request: Grep) -> Matches:
     """Find the lines of the files at `request.rev` that hold `request.text`, in `request.paths` if it names any.
 
     Returns:
-        Each line as `path:number:text`, cut at `MAX_CHARS`, or a line saying there is none. Files that are not text
-        are left out.
+        Each line with its file and number, every hidden character named but tabs, as many as fit `MAX_CHARS`. Files
+        that are not text are left out.
 
     Raises:
         Refused: The checkout or the revision is unknown, or git failed.
@@ -630,14 +661,20 @@ def grep(runner: procs.Runner, checkouts: Mapping[str, Path], request: Grep) -> 
         "--no-textconv",
         "--no-recurse-submodules",
         "-I",
+        "-z",
         *(("--ignore-case",) if request.ignore_case else ()),
     )
     done = _git(runner, where, "grep", *args, "-e", request.text, commit, "--", *_paths(request.paths))
     if done.returncode == 1 and not done.stdout:
-        return f"No file at {request.rev} holds that text, in what was asked."
-    # git names each line's file after the commit it searched, `<commit>:path:number:text`: the commit goes.
-    found = "".join(line.removeprefix(f"{commit}:") for line in _out(done, "grep").splitlines(keepends=True))
-    return _said(found)
+        return Matches(matches=[], cut=None)
+    found, long = _read_grep(_out(done, "grep"), commit)
+    kept = _fit(found)
+    cut: list[str] = []
+    if len(kept) < len(found):
+        cut.append(f"listed {len(kept)} of the {len(found)} lines found: name fewer paths, or a longer text")
+    if long:
+        cut.append(f"lines past {MAX_LINE_CHARS} characters are cut")
+    return Matches(matches=kept, cut="; ".join(cut) or None)
 
 
 def files(runner: procs.Runner, checkouts: Mapping[str, Path], request: Files) -> str:
@@ -716,19 +753,13 @@ def _fitted(commits: Sequence[Commit], *, more: bool) -> Commits:
     Returns:
         The commits, and what was left out, if anything.
     """
-    budget = MAX_CHARS - 500  # the fields around the commits, and the note on what was cut
-    kept: list[Commit] = []
-    used = 0
-    for commit in commits:
-        used += len(commit.model_dump_json()) + 1
-        if used > budget:
-            break
-        kept.append(commit)
+    kept = _fit(commits)
     if len(kept) == len(commits):
         return Commits(commits=kept, more=more, cut=None)
     if kept:
         cut = f"listed {len(kept)} of the {len(commits)} commits found: ask for fewer with limit, or name fewer paths"
         return Commits(commits=kept, more=True, cut=cut)
+    budget = _budget()
     newest = commits[0]
     message = newest.message[: budget // 2]
     files: list[Changed] = []
@@ -743,6 +774,63 @@ def _fitted(commits: Sequence[Commit], *, more: bool) -> Commits:
         "commits after it left out; name fewer paths"
     )
     return Commits(commits=[newest.model_copy(update={"message": message, "files": files})], more=True, cut=cut)
+
+
+def _fit[T: BaseModel](items: Sequence[T]) -> list[T]:
+    """As many of `items`, from the first, as fit `MAX_CHARS` as JSON, with room for the fields around them.
+
+    Returns:
+        Those items.
+    """
+    kept: list[T] = []
+    used = 0
+    for item in items:
+        used += len(item.model_dump_json()) + 1
+        if used > _budget():
+            break
+        kept.append(item)
+    return kept
+
+
+def _budget() -> int:
+    """How many characters of JSON a result's records may take: `MAX_CHARS`, less room for its other fields.
+
+    Returns:
+        The characters.
+    """
+    return MAX_CHARS - 500
+
+
+def _read_grep(out: str, commit: str) -> tuple[list[Match], bool]:
+    """Read what `grep -z` printed: for each line, `<commit>:`, its path and number each ended by NUL, then the line.
+
+    No path or number holds a NUL. A line ends where the next match starts, or at the end: `procs` reads a lone
+    carriage return as a line break, so a line may hold one, which it puts back. For a line to forge a match it would
+    have to hold its own commit's id, and its file a NUL past where git looks for one.
+
+    Returns:
+        The lines, each cut at `MAX_LINE_CHARS`, every hidden character named but tabs; and whether any was cut.
+
+    Raises:
+        Refused: git printed what is not in that form.
+    """
+    prefix = f"{commit}:"
+    found: list[Match] = []
+    long = False
+    at = 0
+    while at < len(out):
+        path_end = out.find("\0", at)
+        number_end = out.find("\0", path_end + 1) if path_end >= 0 else -1
+        next_at = out.find(f"\n{prefix}", number_end + 1) + 1 or len(out)
+        number = out[path_end + 1 : number_end]
+        if not out.startswith(prefix, at) or number_end < 0 or not number.isdecimal() or out[next_at - 1] != "\n":
+            raise Refused("git grep printed what canopy cannot read")
+        line = out[number_end + 1 : next_at - 1].replace("\n", "\r")
+        long |= len(line) > MAX_LINE_CHARS
+        path = visible(out[at + len(prefix) : path_end])
+        found.append(Match(path=path, line=int(number), text=_shown(line[:MAX_LINE_CHARS])))
+        at = next_at
+    return found, long
 
 
 def _checkout(checkouts: Mapping[str, Path], repo: str | None) -> Path:

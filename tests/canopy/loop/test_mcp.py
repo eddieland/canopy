@@ -8,6 +8,7 @@ import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import jsonschema
@@ -1089,28 +1090,36 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
             tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r"}]),
             tool_call("blame", rev="feature", path="retry.py", start=1, end=2),
             tool_call("log", range="feature", search="call()"),
+            tool_call("grep", rev="feature", text="call()"),
             git=[f"checkout={seed}"],
         )
     # Its own tools, wherever it runs, a running tick included, and none of the overseer's.
     assert served.listed() == ["merge-base", "diff", "log", "show", "blame", "grep", "files"]
-    # log answers with records, as structured content and as its text's JSON; the rest with text alone.
+    # A tool that reads records lists them as its output schema, every field in every result; the rest list none.
     listed = {t["name"]: t for t in served.responses[1]["result"]["tools"]}
-    assert [name for name, t in listed.items() if "outputSchema" in t] == ["log"]
-    output = listed["log"]["outputSchema"]
-    for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
-        validator.check_schema(output)
-    assert sorted(output["required"]) == ["commits", "cut", "more"]
-    assert "$ref" not in json.dumps(output)
+    outputs = {name: t["outputSchema"] for name, t in listed.items() if "outputSchema" in t}
+    assert list(outputs) == ["log", "grep"]
+    for output in outputs.values():
+        for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
+            validator.check_schema(output)
+        assert sorted(output["required"]) == sorted(output["properties"])
+    assert "$ref" not in json.dumps(outputs)
+
+    def records(request_id: int, tool: str) -> Mapping[str, Any]:
+        """The records call `request_id` answered with: structured content, held to its schema, and its text's JSON."""
+        structured = served.structured(request_id)
+        assert structured is not None
+        jsonschema.validate(structured, outputs[tool])
+        said = served.said(request_id)
+        assert said.text == f"{git_tools.DATA_NOTE}\n\n{json.dumps(structured, separators=(',', ':'))}"
+        return structured
+
     schema = listed["log"]["inputSchema"]
     assert (schema["required"], schema["additionalProperties"]) == (["range"], False)
     assert schema["properties"]["limit"]["maximum"] == git_tools.MAX_LIMIT
     log, diff, show, base = (served.said(n) for n in (2, 3, 4, 5))
     assert [said.error for said in (log, diff, show, base)] == [False] * 4
-    structured = served.structured(2)
-    assert structured is not None
-    jsonschema.validate(structured, output)
-    assert log.text == f"{git_tools.DATA_NOTE}\n\n{json.dumps(structured, separators=(',', ':'))}"
-    assert [c["commit"] for c in structured["commits"]] == [sha]
+    assert [c["commit"] for c in records(2, "log")["commits"]] == [sha]
     assert served.structured(3) is None
     assert "+while True:\n+    call()" in diff.text
     assert show.text.endswith("while True:\n    call()")
@@ -1125,9 +1134,8 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     assert (blame.error, searched.error) == (False, False)
     assert blame.text.endswith(" 2)     call()")
     assert blame.text.count(f"{sha} ") == 2
-    found = served.structured(11)
-    assert found is not None
-    assert [c["commit"] for c in found["commits"]] == [sha]
+    assert [c["commit"] for c in records(11, "log")["commits"]] == [sha]
+    assert records(12, "grep")["matches"] == [{"path": "retry.py", "line": 2, "text": "    call()"}]
     assert (served.stderr, served.returncode) == ("", 0)
 
 
