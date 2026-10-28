@@ -73,8 +73,9 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     The overseer, workers, plan runs, chores, and reviews, as the agent runtime reported each; dry runs apart from the
     live ticks, and idle ticks' share of the overseer's spend. Then the tickets marked done, the spend for each, and
     the costliest tickets, the tools whose calls put the most into context, and each kind's spend by the models its
-    sessions name, and every session the runtime keeps, canopy's apart from the rest; --json adds every ticket, PR, and
-    tool, and each kind's first model calls by definitions snapshot.
+    sessions name, each kind's first model calls by week, and every session the runtime keeps, canopy's apart from the
+    rest; --json adds every ticket, PR, and tool, each kind's first model calls by definitions snapshot, and their weeks
+    by chore and by model.
     """
     ctx = open_context(click_ctx)
     if as_json:
@@ -105,6 +106,7 @@ def render(found: Breakdown, month: Month | None = None) -> list[str]:
     lines.extend(["", *_tickets(found)])
     lines.extend(["", *_tools(found)])
     lines.extend(["", *_models(found)])
+    lines.extend(["", *_first_call_weeks(found)])
     lines.extend(["", *_sessions(found)])
     lines.extend(["", _tick_line("ticks", "count", "spent", _NO_OVERSEER)])
     lines.extend(
@@ -234,6 +236,43 @@ def _models(found: Breakdown) -> list[str]:
     )
     lines.append("A run on two models counts under each.")
     return lines
+
+
+# Each kind's first model calls by local ISO week: the median one's size, and what they all read from the cache of what
+# they were sent, with the runtime's versions and the definitions snapshots the week's runs used and the week before's
+# did not, where the prefix the runs share may have changed.
+def _first_call_weeks(found: Breakdown) -> list[str]:
+    weeks = [w for w in found.first_call_weeks if w.by == "kind"]
+    if not weeks:
+        return ["No first model call recorded."]
+    lines = [_week_line("week", "kind", "runs", "sent", "hit") + "  new"]
+    lines.extend(
+        _week_line(
+            w.week,
+            w.kind,
+            str(w.runs),
+            count_text(w.first_call),
+            "-" if w.hit_rate is None else f"{w.hit_rate:.0%}",
+        )
+        + "".join(f"  {part}" for part in _week_changes(w))
+        for w in weeks
+    )
+    lines.extend(
+        [
+            "Sent is the week's median first call, in tokens; hit is what first calls read from the cache.",
+            "--json breaks each kind's weeks down by chore and by model.",
+        ],
+    )
+    return lines
+
+
+def _week_line(week: str, kind: str, *counts: str) -> str:
+    return f"{week:<{_DAY_WIDTH}}{kind:<{_DAY_WIDTH}}" + "".join(f"{c:>{_COST_WIDTH}}" for c in counts)
+
+
+# What a week's runs used first: a runtime's version or a definitions snapshot the series' week before did not.
+def _week_changes(week: spend.FirstCallWeek) -> list[str]:
+    return [f"runtime {v}" for v in week.new_runtime_versions] + [f"snapshot {d}" for d in week.new_digests]
 
 
 # Every session the runtime keeps that started in the window, canopy's apart from the rest, and where the rest ran, as
