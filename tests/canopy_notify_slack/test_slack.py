@@ -504,17 +504,30 @@ class _Api(BaseHTTPRequestHandler):
     reply: ClassVar[dict[str, Any]] = {"ok": True}
     # The posts, counted from 1, refused as `not_in_channel`.
     refuse: ClassVar[set[int]] = set()
+    # What the next posts get instead of an answer, in turn: `cut`, made but its reply cut off; `limit`, a 429 that
+    # names no wait; or `redirect`, a 302 to a port nothing listens on.
+    hiccups: ClassVar[list[str]] = []
 
     def do_POST(self) -> None:
         length = int(self.headers["Content-Length"])
         _Api.received.append((self.headers["Authorization"], json.loads(self.rfile.read(length))))
+        hiccup = _Api.hiccups.pop(0) if _Api.hiccups else None
+        if hiccup in {"limit", "redirect"}:
+            self.send_response(429 if hiccup == "limit" else 302)
+            self.send_header("Location", "http://127.0.0.1:1/api/chat.postMessage")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         n = len(_Api.received)
         # Each post's `ts` says which it was, as the Web API names a message by its time.
         reply = {"ok": False, "error": "not_in_channel"} if n in _Api.refuse else {**_Api.reply, "ts": f"1790.{n:06d}"}
+        body = json.dumps(reply).encode()
         # Like the Web API: 200 even when the post is refused.
         self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(json.dumps(reply).encode())
+        self.wfile.write(body[: len(body) // 2] if hiccup == "cut" else body)
+        self.close_connection = True
 
     @override
     def log_message(self, format: str, *args: Any) -> None:
@@ -527,6 +540,7 @@ def api() -> Generator[str]:
     _Api.received = []
     _Api.reply = {"ok": True}
     _Api.refuse = set()
+    _Api.hiccups = []
     server = HTTPServer(("127.0.0.1", 0), _Api)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -582,6 +596,33 @@ def test_a_long_refusal_prints_only_its_start(api: str, tmp_path: Path) -> None:
     err = sent.stderr
     assert "not_in_channel" in err
     assert "x" * 1000 not in err
+
+
+def test_a_post_whose_reply_is_cut_off_is_not_sent_again(api: str, tmp_path: Path) -> None:
+    _Api.hiccups = ["cut"]
+    argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path))]
+    sent = _sink(argv, json.dumps(MESSAGE), api_url=api)
+    assert sent.exit_code == 1
+    assert "Slack refused the post: the connection to http://127.0.0.1:" in sent.stderr
+    assert len(_Api.received) == 1, "a post Slack may have made is not made again"
+
+
+def test_a_post_slacks_rate_limit_refused_is_sent_again(api: str, tmp_path: Path) -> None:
+    _Api.hiccups = ["limit"]
+    argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path))]
+    with mock.patch.object(slack, "RETRY_PAUSES", (0.0, 0.0)):
+        sent = _sink(argv, json.dumps(MESSAGE), api_url=api)
+    assert sent.exit_code == 0, sent.stderr
+    assert len(_Api.received) == 2
+
+
+def test_a_redirect_is_refused_and_the_token_does_not_follow_it(api: str, tmp_path: Path) -> None:
+    _Api.hiccups = ["redirect"]
+    argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path))]
+    sent = _sink(argv, json.dumps(MESSAGE), api_url=api)
+    assert sent.exit_code == 1
+    assert "Slack refused the post: HTTP 302" in sent.stderr
+    assert len(_Api.received) == 1
 
 
 def test_a_web_api_error_is_exit_1(api: str, tmp_path: Path) -> None:
