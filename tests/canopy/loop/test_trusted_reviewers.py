@@ -51,7 +51,7 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     # A public ticket: no `private` key, and its operator messages under `operator`.
     assert "private" not in tickets[KEY]
     operator = tickets[KEY]["operator"]
-    assert operator["message_cursor"] is None
+    assert "message_cursor" not in operator  # null, so the block leaves it out
     assert [(m["id"], m["body"]) for m in operator["new_operator_messages"]] == [(message, GO_AHEAD)]
     assert "operator" not in tickets["PROJ-2"]
 

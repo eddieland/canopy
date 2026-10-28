@@ -139,7 +139,9 @@ repositories, the tracker's labels and query, running workers, the journal's vie
 `observations`, what canopy's connectors last read of the tracker and GitHub. The journal is a cache of what the loop
 did, never live state. The observations are live state as of their age: decide a subject they mark `fresh` from them,
 and re-read the tracker or GitHub, before every decision that matters, only about one they mark `stale` or
-`unobserved` (see "Observations").
+`unobserved` (see "Observations"). In `tickets`, a key whose value would be null or an empty list or object is left
+out, at any depth: read an absent key as that, such as a cursor not yet set, a ticket's `last_run` before its first
+run, or a private ticket's `new_operator_messages` with none new.
 
 ## Tools you have
 
@@ -199,7 +201,7 @@ line; the others may break a line, sparingly, where that reads better.
   base branch. `cursors` and `context`: see "Cursors" and "Context for workers".
 
 `canopy_ticket-set`'s `title` names the ticket in canopy and its runs' sessions. Set it the first tick a ticket has
-`title` null, before you dispatch it, and again only when the ticket's own title changes: a few plain words from that
+no `title`, before you dispatch it, and again only when the ticket's own title changes: a few plain words from that
 title, at most 80 characters, such as `Add a login button`, never an instruction or a link.
 
 You can do nothing else. If you want to, record a `skip` for the ticket with a `rationale` saying what you wanted.
@@ -341,7 +343,7 @@ ticket you left out comes back next tick, so leaving one out saves nothing.
 The harness cannot check the rest, so only your care holds them:
 
 5. Every item in `attention` that is not `kept` is recorded again, unless you saw this tick that its cause is gone.
-6. Every ticket with `title` null has a title.
+6. Every ticket with no `title` has one.
 7. Every cursor you handled is advanced, and none past an item nobody has handled.
 8. With `reviews.query` set: the query ran, and every kept PR whose head has no `done` review has a review run or wait.
 
@@ -629,7 +631,7 @@ Take the first row that fits, with `newest`, `blocked`, and `changes_asked` read
 | Plan state | A ticket's plan | A feedback plan |
 |---|---|---|
 | `blocked`: its latest run asked a question the operator has not answered | phase `needs_human`, `wait`. The harness lists the question (`awaiting_reply`), on a public ticket too: never comment on the ticket about it | `wait`, as for a ticket's plan |
-| `newest` null, or `superseded` (a ticket's plan) or `spent` (a feedback plan) | the ticket otherwise `ready`: `dispatch plan`, phase `ready`. With new operator messages (such as a blocked plan's answer), the `message` cursor at the newest one's id and their ids in the context | `dispatch feedback-plan` over the repositories the `resume` would name, with the context it would get and no `reasons` or `cursors`; the phase from the table |
+| no `newest`, or `superseded` (a ticket's plan) or `spent` (a feedback plan) | the ticket otherwise `ready`: `dispatch plan`, phase `ready`. With new operator messages (such as a blocked plan's answer), the `message` cursor at the newest one's id and their ids in the context | `dispatch feedback-plan` over the repositories the `resume` would name, with the context it would get and no `reasons` or `cursors`; the phase from the table |
 | `newest.status` `proposed`, `changes_asked` false | phase `plan_proposed` and `wait`: the harness raises `plan_review`. Dispatch nothing: no slot is held while they read | the same. A stale one is planned again once its quiet period passes (above) |
 | `newest.status` `proposed`, `changes_asked` true | phase `plan_proposed`; `dispatch plan` again, with the `message` cursor at the newest message's id and the message ids in the context: the planner reads them and the plan it replaces | `dispatch feedback-plan` again, with the `message` cursor at the newest message's id |
 | `newest.status` `approved` | the phase from the table; `ready` dispatches `implement`, whose worker reads the plan. A newer operator message does not undo it: it rides the `implement` | the `resume` the table says, with its reasons, over the plan's `repos`: it follows the plan and spends it, so the next round needs a new plan |
@@ -756,9 +758,10 @@ If the state block has no `notices` key, skip this section.
 
 `notices` are the operator's notices to workers, newest first: each says something passing has gone wrong outside the
 work, such as an outage of an artifact registry or a service CI needs, with when it was set (`set_at`), until when it
-was or is in force (`until`), and whether it is in force now (`in_force`). Every worker, review, and chore dispatched
-while one is in force hears it in its own prompt, so never pass it on in `context`. A notice changes how you read a
-failed check, and nothing else.
+was or is in force (`until`), and whether it is in force now (`in_force`). One no longer in force is listed only while
+a unit shows a failed check or is not `fresh`, since only a failed check can be held. Every worker, review, and chore
+dispatched while one is in force hears it in its own prompt, so never pass it on in `context`. A notice changes how
+you read a failed check, and nothing else.
 
 - A unit's failed check is held when its run started between a notice's `set_at` and `until`, and that notice explains
   the failure. Whether it does is your judgment from the check's output and the notice's words: a dependency download

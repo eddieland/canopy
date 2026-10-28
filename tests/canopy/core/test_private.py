@@ -476,18 +476,20 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(s
     tickets = {t["key"]: t for t in scenario.state()["tickets"]}
     assert "private" not in tickets["PROJ-2"]
     private = tickets[KEY]["private"]
-    assert private["message_cursor"] is None
+    # Null, the cursor and the question waiting are left out of the block.
+    assert "message_cursor" not in private
     assert [(m["id"], m["body"], m["answers"]) for m in private["new_operator_messages"]] == [
         (question + 1, "B", question),
     ]
-    assert private["awaiting_reply"] is None
+    assert "awaiting_reply" not in private
     # A handled message moves the cursor past it.
     scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={question + 1}")
     ticket = present(db.get_ticket(conn, KEY))
     assert conversation.state_section(conn, ticket) == {
-        **private,
+        "started_at": private["started_at"],
         "message_cursor": question + 1,
         "new_operator_messages": [],
+        "awaiting_reply": None,
     }
 
 

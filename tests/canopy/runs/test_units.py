@@ -249,27 +249,19 @@ def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
     assert (ticket["phase"], ticket["branch"], ticket["cursors"]) == (
         "running",
         BRANCH,
-        {"comment": "c-1", "message": None},
+        {"comment": "c-1"},
     )
     no_limit = {"implement": 1, "resume": 0}
+    # What is null or empty, such as api's phase and cursors and either's cooldown, is left out.
     assert ticket["units"] == [
-        {
-            "repo": "api",
-            "branch": BRANCH,
-            "pr_url": PRS["api"],
-            "phase": None,
-            "cursors": {"review": None, "ci": None},
-            "attempts": no_limit,
-            "ci_cooldown_until": None,
-        },
+        {"repo": "api", "branch": BRANCH, "pr_url": PRS["api"], "attempts": no_limit},
         {
             "repo": "web",
             "branch": BRANCH,
             "pr_url": PRS["web"],
             "phase": "ci_red",
-            "cursors": {"review": None, "ci": 9},
+            "cursors": {"ci": 9},
             "attempts": no_limit,
-            "ci_cooldown_until": None,
         },
     ]
     assert ticket["last_run"]["repos"] == [{"repo": "api", "base": "main"}, {"repo": "web", "base": "main"}]

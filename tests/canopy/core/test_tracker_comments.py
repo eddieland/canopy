@@ -100,7 +100,7 @@ def test_each_observed_comment_is_recorded_once_in_its_tickets_conversation_by_i
     # The overseer copies nothing: it has no mirror, and its block no mirror cursor.
     state = scenario.state()
     assert "mirror" not in state
-    assert scenario.ticket_state()["cursors"] == {"comment": None, "message": None}
+    assert "cursors" not in scenario.ticket_state()  # neither is set, so the block leaves them out
     assert "mirror" not in {d.action for d in db.decisions_for_tick(scenario.conn, state["tick_id"])}
 
 

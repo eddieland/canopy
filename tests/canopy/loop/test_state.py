@@ -108,9 +108,13 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
                 db.set_start(conn, conversation.TICKET, key, status=StartStatus.STARTED, channel="cli")
             db.set_start(conn, conversation.TICKET, "PROJ-3", status=StartStatus.STOPPED, channel="cli")
         db.set_ticket(conn, "PROJ-4", root, title="Tidy the CLI help")
-        conn.execute(
+        # The earlier notice lapsed, and is kept: PROJ-1's PR is not observed fresh, so it may show a check it holds.
+        conn.executemany(
             "INSERT INTO notices (body, set_at, channel, lapses_at) VALUES (?, ?, 'cli', ?)",
-            ("CI is down for maintenance until noon.", stamp("09:00"), stamp("12:00")),
+            [
+                ("The registry is down.", stamp("08:00"), stamp("08:30")),
+                ("CI is down for maintenance until noon.", stamp("09:00"), stamp("12:00")),
+            ],
         )
     with clock("09:20"):
         db.finish_run(conn, "runs", split, RunStatus.DONE, None)

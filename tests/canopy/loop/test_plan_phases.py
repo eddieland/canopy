@@ -37,14 +37,8 @@ def test_under_approve_a_dry_run_tick_dispatches_a_plan_for_a_ready_ticket(scena
     scenario.configures("workspace", policy={"plan": "approve"})
     scenario.seen()
     ticked = scenario.tick(PLAN, sets_phase(KEY, Phase.READY), dry_run=True)
-    assert plan_of(scenario) == {
-        "needed": True,
-        "attempts": 0,
-        "limit": 3,
-        "newest": None,
-        "changes_asked": False,
-        "blocked": False,
-    }
+    # No plan yet: the block leaves out its null `newest`.
+    assert plan_of(scenario) == {"needed": True, "attempts": 0, "limit": 3, "changes_asked": False, "blocked": False}
     assert [(d.action, d.rationale) for d in ticked.decisions[1:]] == [
         ("dispatch:plan", f"dry run: not dispatched; would plan {KEY} over repo; label {LABEL}"),
     ]
