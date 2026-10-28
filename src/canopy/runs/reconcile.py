@@ -15,10 +15,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import conversation, db, dead_runs, definitions, pool, pools, tasks, workspace
+from canopy.core import conversation, db, dead_runs, definitions, pool, pools, workspace
 from canopy.core.vocab import PoolKind, RunStatus
 from canopy.infra import cwds, logs, procs
-from canopy.runs import desks, dispatch, task_run, tidy
+from canopy.runs import desks, dispatch, task_run, tasks, tidy
 
 if TYPE_CHECKING:
     import sqlite3

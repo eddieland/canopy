@@ -14,12 +14,12 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import drafts, observe, records, replies, review_diff, sql
+from canopy.core import observe, records, replies, review_diff, sql
 from canopy.core.config import load
 from canopy.core.vocab import DraftKind, DraftStatus, ResumeReason, ReviewItem, RunKind
 from canopy.infra import logs, procs
 from canopy.loop import attention
-from canopy.runs import drafted
+from canopy.runs import drafted, drafts
 from tests.canopy.helpers import (
     APPROVE,
     DRAFTS_PR,

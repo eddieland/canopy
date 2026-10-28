@@ -60,7 +60,7 @@ the overseer is given the server first. Nothing the overseer runs changes.
 - A run a tool starts is spawned by `canopy _mcp`'s own runner (`cli/mcp.py`), not `canopy dispatch`'s: the entry is
   removed in that runner's `unset` too.
 - The guards' refusals still name the CLI's flags and commands (`runs/dispatch.py`, `reviews/start.py`,
-  `core/review_requests.py`, `core/conversation.py`), as the decisions record them: each gets one wording that names
+  `reviews/review_requests.py`, `core/conversation.py`), as the decisions record them: each gets one wording that names
   the field, its flag in brackets, as `loop/tools.py`'s do (`repo is required (--repo): ...`).
 - The prompt names tools, not commands; a mirror's body is a field; the state block drops the heredoc delimiter.
 - TRUST_MODEL T1 and T7; DESIGN §6, §13, §22; D020 edited in place, D081 superseded.

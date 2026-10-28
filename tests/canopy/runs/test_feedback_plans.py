@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.core import conversation, db, drafts, feedback_items, feedback_plans, plans, workspace
+from canopy.core import conversation, db, plans, workspace
 from canopy.core.config import load
 from canopy.core.vocab import (
     DraftStatus,
@@ -24,6 +24,7 @@ from canopy.core.vocab import (
     RunStatus,
 )
 from canopy.infra import resources
+from canopy.runs import drafts, feedback_items, feedback_plans
 from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,

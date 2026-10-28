@@ -14,10 +14,11 @@ from canopy_artifacts import cli
 from canopy_artifacts.store import Scope, Store, agent, open_store
 from canopy_artifacts.text import Anchor
 
-from canopy.core import artifact_feed, config, observe, records, sql
+from canopy.core import config, observe, records, sql
 from canopy.core.config import Source
 from canopy.core.vocab import AnchorStatus, AuthorKind, ConnectorRunStatus, ThreadState
 from canopy.infra import logs, procs
+from canopy.runs import artifact_feed
 from tests.conftest import CanopyEnv, invoke
 
 NAMESPACE = "canopy/operator"

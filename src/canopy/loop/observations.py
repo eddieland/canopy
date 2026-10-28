@@ -24,10 +24,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict, assert_never
 
-from canopy.core import conversation, db, item_numbers, observe, records, review_requests, sql
+from canopy.core import conversation, db, item_numbers, observe, records, sql
 from canopy.core.vocab import CheckStatus, ReviewItem, ReviewState, SourceKind, TicketState
 from canopy.core.workspace import CheckRole
 from canopy.loop import phases
+from canopy.reviews import review_requests
 
 if TYPE_CHECKING:
     import sqlite3

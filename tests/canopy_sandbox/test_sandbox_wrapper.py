@@ -22,10 +22,10 @@ import canopy_sandbox
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, context, db, review_runs, tasks
+from canopy.core import config, context, db, review_runs
 from canopy.infra import lock, logs, procs
 from canopy.infra.procs import SubprocessRunner
-from canopy.runs import tasks as task_starts
+from canopy.runs import task_starts, tasks
 from tests.canopy.helpers import (
     DEAD_PID,
     InlineRunner,

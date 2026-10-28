@@ -17,11 +17,12 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, Group, open_context
-from canopy.core import conversation, drafts, drafts_manage, records, replies, sql
+from canopy.core import conversation, records, replies, sql
 from canopy.core.memory_text import visible
 from canopy.core.vocab import DraftKind, DraftStatus, Reaction, ReviewItem
 from canopy.infra import logs
 from canopy.loop import attention
+from canopy.runs import drafts, drafts_manage
 
 if TYPE_CHECKING:
     import sqlite3

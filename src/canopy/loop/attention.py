@@ -32,21 +32,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
-from canopy.core import (
-    artifact_authority,
-    chore_result,
-    chore_view,
-    connector_runs,
-    contract,
-    conversation,
-    db,
-    follow_ups,
-    kept_items,
-    memory,
-    sql,
-    task_tickets,
-    tasks,
-)
+from canopy.core import chore_result, chore_view, connector_runs, contract, conversation, db, kept_items, memory, sql
 from canopy.core.items import ACTION_PREFIX, Item, age, fingerprint, one_line, subject
 from canopy.core.vocab import Decider, RunKind, RunStatus, TickStatus
 from canopy.infra import logs
@@ -55,7 +41,7 @@ from canopy.loop import archive
 from canopy.notify import deliver
 from canopy.reviews import impact as review_impact
 from canopy.reviews import waiting as review_waiting
-from canopy.runs import drafted
+from canopy.runs import artifact_authority, drafted, follow_ups, task_tickets, tasks
 
 if TYPE_CHECKING:
     from canopy.core import records

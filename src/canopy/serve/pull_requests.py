@@ -12,8 +12,9 @@ import math
 from collections.abc import Collection, Sequence
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import contract, conversation, db, pr_list, review_drafts, review_requests, review_runs
-from canopy.serve import threads
+from canopy.core import contract, conversation, db, review_drafts, review_runs
+from canopy.reviews import review_requests
+from canopy.serve import pr_list, threads
 from canopy.serve.reviews import summaries
 from canopy.serve.schema import CostTotal
 from canopy.serve.schema.review import (

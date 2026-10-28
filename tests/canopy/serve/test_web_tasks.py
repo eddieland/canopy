@@ -7,9 +7,10 @@ the state directory as the CLI reads it.
 import json
 from pathlib import Path
 
-from canopy.core import conversation, db, pools, records, tasks
+from canopy.core import conversation, db, pools, records
 from canopy.core.context import Context
 from canopy.core.vocab import PoolKind, RunStatus
+from canopy.runs import tasks
 from canopy.serve.backend import Backend
 from canopy.serve.task_views import RUN_STANDINGS
 from tests.canopy.helpers import present

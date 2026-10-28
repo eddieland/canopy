@@ -8,8 +8,9 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import attachments, config, conversation
+from canopy.core import config, conversation
 from canopy.core.conversation import Ref
+from canopy.runs import attachments
 from tests.canopy.helpers import present
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv

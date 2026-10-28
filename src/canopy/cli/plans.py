@@ -12,8 +12,9 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import conversation, feedback_plans, personas, plan_export, plans, prompts
+from canopy.core import conversation, personas, plan_export, plans, prompts
 from canopy.infra import logs
+from canopy.runs import feedback_plans
 
 if TYPE_CHECKING:
     from collections.abc import Collection

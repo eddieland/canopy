@@ -23,7 +23,7 @@ HELD_BY: dict[str, str] = {
     "prompts/overseer.md": DEFINITION.format("canopy-overseer"),
     "prompts/worker-feedback-plan.md": "runs/__snapshots__/test_feedback_plans/test_the_feedback_planner_prompt.md",
     "prompts/reviewer.md": "reviews/__snapshots__/test_reviews/test_the_reviewer_prompt[defaults].md",
-    "prompts/task.md": "runs/__snapshots__/test_tasks/test_the_task_prompt.md",
+    "prompts/task.md": "runs/__snapshots__/test_task_starts/test_the_task_prompt.md",
     "prompts/reviser.md": "core/__snapshots__/test_review_drafts/test_the_reviser_prompt.md",
     **{
         f"prompts/worker-{kind}.md": (

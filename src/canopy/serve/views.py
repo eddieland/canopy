@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import (
     agent_models,
-    attachments,
     contract,
     conversation,
     db,
@@ -30,6 +29,7 @@ from canopy.core import (
 )
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunKind, RunStatus
+from canopy.runs import attachments
 from canopy.serve import draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,

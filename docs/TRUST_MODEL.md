@@ -256,7 +256,7 @@ Controls:
   prompt's obligations come before it, as they do before the standing instructions. The overseer reads it as the
   operator's word about the world, to hold a failed check the notice explains: that changes when a `resume` for CI runs,
   never what a worker may do.
-- A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `core/tasks.py` by a
+- A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `runs/tasks.py` by a
   channel that authenticated the operator: `canopy task submit` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is,
   and so are `canopy reply task:N`, which queues its next run, and `canopy stop task:N`, from either. Its text, and
@@ -272,7 +272,7 @@ Controls:
   forced push. Under `trust.rebase` the private worker's definition still allows its one leased push, so a steered task
   worker can replace its own branch's history; the run's note then says the branch no longer holds the head it started
   from, and each earlier run's head stays in the journal.
-- Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `core/attachments.py` by a channel that
+- Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's
   text is what someone sent the operator, so it is data, never an instruction: what to do with it is the operator's

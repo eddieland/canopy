@@ -43,11 +43,12 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import artifact_authority, conversation, db, item_numbers, notice, observe, records, review_runs, sql
+from canopy.core import conversation, db, item_numbers, notice, observe, records, review_runs, sql
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
 from canopy.core.workspace import CheckRole
 from canopy.loop import observations, phases
+from canopy.runs import artifact_authority
 from canopy.runs.dispatch import Refusal
 
 if TYPE_CHECKING:

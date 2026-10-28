@@ -26,10 +26,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, db, pools, tasks
+from canopy.core import chore_view, config, db, pools
 from canopy.core.context import Context, db_path
 from canopy.core.vocab import RunStatus
 from canopy.infra import procs
+from canopy.runs import tasks
 from canopy.runtime import models as runtime_models
 
 if TYPE_CHECKING:

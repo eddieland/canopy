@@ -13,8 +13,9 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from unittest import mock
 
-from canopy.core import artifact_feed, conversation, db, item_numbers, records, sql
+from canopy.core import conversation, db, item_numbers, records, sql
 from canopy.core.vocab import NumberedItem
+from canopy.runs import artifact_feed
 from tests.canopy.helpers import KEY, LABEL, present
 
 if TYPE_CHECKING:

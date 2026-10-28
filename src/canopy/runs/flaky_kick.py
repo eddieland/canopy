@@ -14,9 +14,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db, flaky_kicks
+from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind, RunStatus
-from canopy.runs import checkpoint
+from canopy.runs import checkpoint, flaky_kicks
 
 if TYPE_CHECKING:
     import sqlite3

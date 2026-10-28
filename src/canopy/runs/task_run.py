@@ -24,27 +24,23 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import (
     agent_models,
-    attachments,
     commit_hooks,
     contract,
     conversation,
     db,
     definitions,
-    follow_ups,
     hostgit,
     plans,
     pools,
     progress,
     run_models,
     sandboxing,
-    task_tickets,
-    tasks,
 )
 from canopy.core.config import render_command
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, procs, stopping
-from canopy.runs import checkpoint, tidy
-from canopy.runs import tasks as starts
+from canopy.runs import attachments, checkpoint, follow_ups, task_tickets, tasks, tidy
+from canopy.runs import task_starts as starts
 from canopy.runs.checkpoint import SetupError
 from canopy.runtime import project_config, stdout
 

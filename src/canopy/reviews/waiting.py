@@ -16,8 +16,9 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import records, review_drafts, review_requests, sql
+from canopy.core import records, review_drafts, sql
 from canopy.core.vocab import HoldKind, PrState, ReviewDraftStatus, ReviewRunStatus
+from canopy.reviews import review_requests
 
 if TYPE_CHECKING:
     import sqlite3

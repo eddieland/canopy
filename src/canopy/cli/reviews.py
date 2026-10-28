@@ -21,21 +21,12 @@ import click
 
 from canopy.cli.common import CliError, Group, OverseerCommand, leave_the_tick, open_context
 from canopy.cli.params import EVAL_CASE, PERSONA, PR_URL, REPO, TICKET_KEY, TextType, verb
-from canopy.core import (
-    conversation,
-    db,
-    records,
-    review_drafts,
-    review_drafts_manage,
-    review_requests,
-    review_revisions,
-    sql,
-)
+from canopy.core import conversation, db, records, review_drafts, review_drafts_manage, review_revisions, sql
 from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
 from canopy.loop import review_tools
-from canopy.reviews import evals, execute, findings, noise, view
+from canopy.reviews import evals, execute, findings, noise, review_requests, view
 
 if TYPE_CHECKING:
     import sqlite3

@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from canopy.core import conversation, db, observe, records, slack_replies, sql
+from canopy.core import conversation, db, observe, records, sql
 from canopy.core.config import Notify, Sink, Source
 from canopy.core.vocab import ConnectorRunStatus
 from canopy.infra import logs
+from canopy.loop import slack_replies
 from tests.canopy.helpers import KEY
 
 if TYPE_CHECKING:

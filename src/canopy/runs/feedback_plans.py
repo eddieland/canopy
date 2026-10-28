@@ -29,11 +29,12 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import conversation, db, feedback_items, plans, prompts, records, replies, sql
+from canopy.core import conversation, db, plans, prompts, records, replies, sql
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlanEffort, PlanItem, PlanStatus, Proposal, ResumeReason, RunKind, RunStatus
 from canopy.infra import lock
 from canopy.infra.text import printable
+from canopy.runs import feedback_items
 
 if TYPE_CHECKING:
     import sqlite3
@@ -41,8 +42,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from canopy.core.config import Config, Policy, Trust
-    from canopy.core.feedback_items import Item
     from canopy.core.workspace import Workspace
+    from canopy.runs.feedback_items import Item
 
 #: The most items one plan's result line names; past it, the rest are refused, each with a harness note.
 MAX_ITEMS = 100

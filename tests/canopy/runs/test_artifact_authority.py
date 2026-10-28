@@ -10,10 +10,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.core import artifact_authority, conversation, db, records
-from canopy.core.artifact_authority import Standing
+from canopy.core import conversation, db, records
 from canopy.core.vocab import AuthorKind, ResumeReason, RunKind
 from canopy.loop import attention
+from canopy.runs import artifact_authority
+from canopy.runs.artifact_authority import Standing
 from tests.canopy.helpers import KEY, present, waits
 from tests.canopy.observation_helpers import FRESH, artifact_comment
 from tests.canopy.scenario_helpers import dispatches, pushes

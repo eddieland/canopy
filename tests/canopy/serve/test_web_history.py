@@ -15,10 +15,10 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import chore_result, db, pr_list
+from canopy.core import chore_result, db
 from canopy.core.context import Context
 from canopy.loop import attention, web
-from canopy.serve import chore_views, live, pull_requests, reviews, spend_views, tick_views, views
+from canopy.serve import chore_views, live, pr_list, pull_requests, reviews, spend_views, tick_views, views
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from canopy.serve.mock import history as serve_history

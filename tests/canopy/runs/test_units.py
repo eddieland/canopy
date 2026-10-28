@@ -10,12 +10,13 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, pr_list
+from canopy.core import db
 from canopy.core.vocab import Phase, ResumeReason, RunKind
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runs import desks
 from canopy.runs.dispatch import DISPATCH_LOCK
+from canopy.serve import pr_list
 from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import (
     BRANCH,

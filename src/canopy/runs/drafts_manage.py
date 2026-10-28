@@ -25,7 +25,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import conversation, db, drafts, observe, records, sql
+from canopy.core import conversation, db, observe, records, sql
 from canopy.core.config import notify_words
 from canopy.core.memory_text import TextRefused
 from canopy.core.vocab import (
@@ -38,6 +38,7 @@ from canopy.core.vocab import (
     ReviewState,
 )
 from canopy.infra import logs, procs
+from canopy.runs import drafts
 
 if TYPE_CHECKING:
     from canopy.core.config import Config, Source

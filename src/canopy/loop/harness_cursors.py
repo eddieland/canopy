@@ -25,9 +25,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
-from canopy.core import conversation, db, drafts, item_numbers, records, sql
+from canopy.core import conversation, db, item_numbers, records, sql
 from canopy.core.vocab import Decider, ReviewItem, ReviewState
 from canopy.loop import harness, observations
+from canopy.runs import drafts
 
 if TYPE_CHECKING:
     import sqlite3

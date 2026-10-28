@@ -15,13 +15,15 @@ TESTS = Path(__file__).resolve().parents[1]
 MEMBERS = Path(__file__).resolve().parents[2] / "packages"
 
 # Top to bottom. A module may import from its own package and from any package in a lower layer. It may not import
-# from a higher layer or from another package in its own layer: features stay independent of each other, and shared
-# code moves down a layer instead.
+# from a higher layer or from another package in its own layer: features stay independent of each other, and code two
+# of them share moves down a layer instead. The web UI's server sits above the features, as the loop and the command
+# line do, so what only those read stays in the feature that owns it.
 LAYERS: tuple[frozenset[str], ...] = (
     frozenset({"__main__"}),
     frozenset({"cli"}),
     frozenset({"loop"}),
-    frozenset({"runs", "setup", "chores", "notify", "reviews", "serve", "memory"}),
+    frozenset({"serve"}),
+    frozenset({"runs", "setup", "chores", "notify", "reviews", "memory"}),
     frozenset({"core"}),
     frozenset({"runtime"}),
     frozenset({"infra"}),

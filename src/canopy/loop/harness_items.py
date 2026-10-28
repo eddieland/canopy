@@ -35,13 +35,13 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, feedback_plans, observe, plans, records, review_runs, sql
+from canopy.core import conversation, db, observe, plans, records, review_runs, sql
 from canopy.core.vocab import CheckStatus, Phase, PlanStatus, PrState, ResumeReason, ReviewRunStatus, RunKind
 from canopy.core.workspace import CheckRole
 from canopy.loop import attention
 from canopy.reviews import grants
 from canopy.reviews import view as review_view
-from canopy.runs import policy
+from canopy.runs import feedback_plans, policy
 
 if TYPE_CHECKING:
     import sqlite3

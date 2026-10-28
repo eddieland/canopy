@@ -58,7 +58,7 @@ from rich.live import Live
 from rich.spinner import Spinner
 from rich.text import Text
 
-from canopy.core import config, connector_runs, db, notice, pause, tasks
+from canopy.core import config, connector_runs, db, notice, pause
 from canopy.core.vocab import ConnectorRunStatus
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import (
@@ -74,6 +74,7 @@ from canopy.loop import (
     tick_now,
     tick_report,
 )
+from canopy.runs import tasks
 
 if TYPE_CHECKING:
     import sqlite3

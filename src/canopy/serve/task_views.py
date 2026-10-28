@@ -10,8 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, conversation, db, plans, run_models, sql, task_tickets, tasks
+from canopy.core import contract, conversation, db, plans, run_models, sql
 from canopy.core.vocab import RunStatus
+from canopy.runs import task_tickets, tasks
 from canopy.serve import views
 from canopy.serve.schema.task import TaskDetail, TaskReport, TaskRun, TaskRunDetail, TaskSummary, TaskTicket
 from canopy.serve.transcript_views import removed_after, session_transcript
