@@ -18,8 +18,10 @@ What it promises:
   sent, and a redirect is never followed, so a credential in its headers goes nowhere else.
 - **The system's certificates**, so an Enterprise host with its own CA works, and the environment's proxy
   (`HTTPS_PROXY`) and certificates (`SSL_CERT_FILE`).
-- **One account of what went wrong.** Every failure is an `HttpError`, and its `certain` says whether the request is
-  known not to have been carried out, so a caller knows whether sending it again could do it twice:
+- **One account of what went wrong.** Every failure of a request is an `HttpError`, and its `certain` says whether
+  the request is known not to have been carried out, so a caller knows whether sending it again could do it twice. A
+  caller's own mistake, an origin that is not an http or https URL or a URL at another origin, is a `ValueError`,
+  raised before anything is sent:
 
   | Error              | When                                                     | `certain` |
   | ------------------ | -------------------------------------------------------- | --------- |
