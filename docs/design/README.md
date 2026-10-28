@@ -175,9 +175,10 @@ cannot reach internal systems and require handing a vendor write access.
 ## 5. Components
 
 The harness is one Python package, `canopy`, in layered subpackages (D041). Top to bottom: `__main__`; `cli`; `loop`;
-the features, `runs`, `setup`, `chores`, `notify`, `reviews`, `memory`, and `serve`; `core`; `runtime`; `infra`. A
+`serve`; the features, `runs`, `setup`, `chores`, `notify`, `reviews`, and `memory`; `core`; `runtime`; `infra`. A
 module imports from its own package and lower layers only. Features never import each other; what two share moves down
-a layer. `tests/canopy/test_layers.py` enforces this and fails on a module outside the packages it lists.
+to `core`, and what only `cli`, `loop`, or `serve` read of a feature stays in it. `tests/canopy/test_layers.py`
+enforces this and fails on a module outside the packages it lists.
 
 ```text
 canopy (harness, Python)
@@ -185,13 +186,14 @@ canopy (harness, Python)
   cli/         the command line; only cli imports click, and only __main__ imports cli
   loop/        the tick (§6) and canopy loop, which drive the features below; the state block; the attention list;
                the overseer's verbs, which its commands and its MCP server share (§27)
+  serve/       the web UI's server (§22, D079), above the features it shows; the only package that imports fastapi,
+               starlette, uvicorn, or anyio
   runs/        worker runs on tickets (§8) and the operator's tasks (§36): guards, leases, the detached _run and
                _task, reconcile
   chores/      the operator's recurring chores (§19)
   notify/      notification sinks (§20)
   reviews/     adversarial reviews of PRs (§21)
   memory/      agent memory's feature (§28): proposals' expiry and its attention items
-  serve/       the web UI's server (§22, D079); the only package that imports fastapi, starlette, uvicorn, or anyio
   setup/       canopy init, the sandbox's setup, and workspace sync (§18, §24)
   core/        what every feature shares: config, the Context, the journal and its typed rows, vocabularies, contracts,
                conversations, pools
