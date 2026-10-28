@@ -13,6 +13,10 @@ the derivation's rows and the journal, and records it marked as its own, so no i
 - `plan_review`, while a plan waits on the operator, and `plan_changed`, while an approved plan's file is no longer the
   text they approved (§25, §32).
 
+Beside them it raises `check_stuck`, which the overseer never recorded: for a unit `ci_running` on one check alone,
+still pending `STUCK_AFTER` past every other check at its head finishing, which may not be CI, until it completes, the
+head moves, or its repository's map gives it a role (§30).
+
 An item that rests on what a connector observed is kept while that observation is stale: the harness records it again
 as the latest `ok` tick listed it, and it goes only once a fresh observation shows its cause gone, or its ticket is
 done, stopped, or seen closed or no longer a candidate. So a tick that could not read a cause, such as an outage's,
@@ -30,8 +34,9 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, feedback_plans, plans, records, review_runs, sql
-from canopy.core.vocab import Phase, PlanStatus, PrState, ResumeReason, ReviewRunStatus, RunKind
+from canopy.core import conversation, db, feedback_plans, observe, plans, records, review_runs, sql
+from canopy.core.vocab import CheckStatus, Phase, PlanStatus, PrState, ResumeReason, ReviewRunStatus, RunKind
+from canopy.core.workspace import CheckRole
 from canopy.loop import attention
 from canopy.reviews import grants
 from canopy.reviews import view as review_view
@@ -54,8 +59,18 @@ REVIEW_FAILED = "review_failed"
 REVIEW_LIMIT = "review_limit"
 PLAN_REVIEW = "plan_review"
 PLAN_CHANGED = "plan_changed"
+CHECK_STUCK = attention.CHECK_STUCK
+#: Every reason this module raises: those of `attention.FROM_CAUSES`, and one only the harness has ever recorded.
+REASONS: frozenset[str] = attention.FROM_CAUSES | {CHECK_STUCK}
 #: The reasons whose cause rests on what a connector observed, so a stale observation keeps their item.
-OBSERVED: frozenset[str] = frozenset({NEEDS_REVIEWER, READY_TO_MERGE, UNTRUSTED_REVIEW, ATTEMPT_LIMIT, REVIEW_LIMIT})
+OBSERVED: frozenset[str] = frozenset(
+    {NEEDS_REVIEWER, READY_TO_MERGE, UNTRUSTED_REVIEW, ATTEMPT_LIMIT, REVIEW_LIMIT, CHECK_STUCK},
+)
+#: How long a unit's one pending CI check stays so after the last of its other checks at the head finished before it
+#: raises `check_stuck`. A merge queue's status never completes on an open PR, nor a sign-off until a person acts, so
+#: any time names them; an hour names them within a working session, while CI that runs an hour past every other job
+#: is rare. A constant, not a key: the item only asks, and a check the operator leaves as CI holds the PR as before.
+STUCK_AFTER = timedelta(hours=1)
 #: The rows of §7 whose next run is a `resume` of their unit, each with the reason it would carry.
 RESUME_ROWS: Mapping[Phase, ResumeReason] = {
     Phase.PUSHED_NO_PR: ResumeReason.NO_PR,
@@ -86,7 +101,7 @@ class Raised:
 
 
 def raised(ctx: Context, derived: Sequence[Derived] | None, now: datetime) -> list[Raised]:
-    """Each item of `attention.FROM_CAUSES` whose cause holds at `now`, or rests on what could not be read fresh.
+    """Each item of `REASONS` whose cause holds at `now`, or rests on what could not be read fresh.
 
     `derived` is the tick's derivation, None when it raised: every item that rests on an observation is then kept.
 
@@ -97,7 +112,7 @@ def raised(ctx: Context, derived: Sequence[Derived] | None, now: datetime) -> li
     limits = _Limits.read(ctx)
     found: dict[tuple[str, str, str | None], Raised] = {}
     for item in (
-        *_from_rows(ctx, subjects, limits),
+        *_from_rows(ctx, subjects, limits, now),
         *_from_journal(ctx, subjects, now),
         *_kept(ctx, subjects, limits),
     ):
@@ -106,14 +121,14 @@ def raised(ctx: Context, derived: Sequence[Derived] | None, now: datetime) -> li
 
 
 def kept(conn: sqlite3.Connection) -> list[Raised]:
-    """Every open item of `attention.FROM_CAUSES`, as the latest `ok` tick listed it.
+    """Every open item of `REASONS`, as the latest `ok` tick listed it.
 
     What a tick keeps when it could read no cause at all.
 
     Returns:
         The items about a ticket or a PR.
     """
-    return [_raised(i) for i in attention.current(conn) if i.reason in attention.FROM_CAUSES and _about_work(i)]
+    return [_raised(i) for i in attention.current(conn) if i.reason in REASONS and _about_work(i)]
 
 
 @dataclass(frozen=True)
@@ -159,7 +174,7 @@ class _Subjects:
         return (repo is None or (reason == ATTEMPT_LIMIT and not pr)) and self.own[key].stale is not None
 
 
-def _from_rows(ctx: Context, subjects: _Subjects, limits: _Limits) -> Iterator[Raised]:
+def _from_rows(ctx: Context, subjects: _Subjects, limits: _Limits, now: datetime) -> Iterator[Raised]:
     """The items the derivation's rows raise: each unit's, and each ticket's `attempt_limit`.
 
     Yields:
@@ -174,12 +189,20 @@ def _from_rows(ctx: Context, subjects: _Subjects, limits: _Limits) -> Iterator[R
         for unit in units:
             url = limits.pr_of(key, unit.repo)
             if unit.stale is None and unit.phases and url is not None:
-                yield from _of_unit(ctx, key, unit, url, heads.get(url))
+                yield from _of_unit(ctx, key, unit, url, heads.get(url), now=now)
         yield from _attempt_limits(ctx, key, subjects.own[key], units, limits)
 
 
-def _of_unit(ctx: Context, key: str, unit: Derived, url: str, head: str | None) -> Iterator[Raised]:
-    """The items a unit's rows raise, from its PR at `url`, observed at `head` (DESIGN §7, §21).
+def _of_unit(
+    ctx: Context,
+    key: str,
+    unit: Derived,
+    url: str,
+    head: str | None,
+    *,
+    now: datetime,
+) -> Iterator[Raised]:
+    """The items a unit's rows raise, from its PR at `url`, observed at `head`, at `now` (DESIGN §7, §21, §30).
 
     Yields:
         Each.
@@ -189,6 +212,10 @@ def _of_unit(ctx: Context, key: str, unit: Derived, url: str, head: str | None) 
         why = f"{url} has feedback from a reviewer `trust.trusted_reviewers` does not list"
         yield Raised(key, UNTRUSTED_REVIEW, f"{why}: say what to do about it with `canopy reply {key}`", repo)
     phase: Phase | None = unit.phases[0]
+    if phase is Phase.CI_RUNNING and head is not None and repo is not None:
+        stuck = _stuck_check(ctx, repo, url, head, now)
+        if stuck is not None:
+            yield Raised(key, CHECK_STUCK, stuck, repo)
     if phase is Phase.REVIEW_PENDING:
         limited = _review_limit(ctx, key, url, head)
         if limited is None:
@@ -200,6 +227,47 @@ def _of_unit(ctx: Context, key: str, unit: Derived, url: str, head: str | None) 
         yield Raised(key, NEEDS_REVIEWER, f"{url} passes its checks and no person has approved it", repo)
     elif phase is Phase.APPROVED:
         yield Raised(key, READY_TO_MERGE, f"{url} is approved by a person and waits to be merged", repo)
+
+
+def _stuck_check(ctx: Context, repo: str, url: str, head: str, now: datetime) -> str | None:
+    """Whether one CI check of the PR at `url` in `repo` is pending at `head` `STUCK_AFTER` past its others finishing.
+
+    Every other CI check there has completed and none failed; the time runs from when a source first saw the last of
+    their runs completed. A commit status has no run whose time the journal keeps, so it counts as finished but sets
+    no time. Two pending, no run to time, or one failed, which a worker's `resume` answers, raise nothing: none of
+    those tells a check that never completes from a slow build (§30).
+
+    Returns:
+        The item's detail, naming the check and the map's key that gives it a role, or None.
+    """
+    roles = ctx.workspace.check_roles(repo)
+    query = sql.select("*").from_("observed_checks").where("pr_url = ? AND head_sha = ?", url, head)
+    checks = records.fetch_all(ctx.conn, records.ObservedCheck, query)
+    ci = [c for c in checks if roles.get(c.name, CheckRole.CI) is CheckRole.CI]
+    pending = [c.name for c in ci if c.status is not CheckStatus.COMPLETED]
+    finished = [c for c in ci if c.status is CheckStatus.COMPLETED]
+    if len(pending) != 1 or any(c.conclusion in observe.FAILED for c in finished):
+        return None
+    last = _finished_at(ctx.conn, url, [c.run_id for c in finished if c.run_id is not None])
+    if last is None or now - last < STUCK_AFTER:
+        return None
+    [name] = pending
+    return (
+        f"`{name}` is still pending on {url} at {head[:12]}, over {STUCK_AFTER // timedelta(minutes=1)} minutes after "
+        f"its other checks finished, holding it at ci_running; if it is not CI, give it a role in "
+        f'`[repos.{repo}.checks]`: `"{name}" = "merge"` for a merge queue, `"human"` for a sign-off, or `"ignore"`'
+    )
+
+
+def _finished_at(conn: sqlite3.Connection, url: str, run_ids: Iterable[int]) -> datetime | None:
+    """When a source first saw the last of the PR at `url`'s check runs `run_ids` completed.
+
+    Returns:
+        The time, or None for no run the journal kept.
+    """
+    query = sql.select("MAX(observed_at)").from_("observed_check_runs").where("pr_url = ?", url)
+    found = sql.execute(conn, query.where_in("run_id", list(run_ids))).fetchone()
+    return None if found is None or found[0] is None else db.parse_time(str(found[0]))
 
 
 def _review_limit(ctx: Context, key: str, url: str, head: str | None) -> str | None:
@@ -487,7 +555,7 @@ def _kept(ctx: Context, subjects: _Subjects, limits: _Limits) -> Iterator[Raised
     """
     for item in attention.current(ctx.conn):
         key, repo, reason = item.ticket_key, item.repo, item.reason
-        if reason not in attention.FROM_CAUSES or key is None:
+        if reason not in REASONS or key is None:
             continue
         url = limits.pr_of(key, repo)
         if not subjects.unread(key, repo, reason, pr=url is not None):

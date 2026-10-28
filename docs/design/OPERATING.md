@@ -407,8 +407,8 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 `review_failed`, `review_limit`, `review_rebuttal`, and `review_late` (§21), `awaiting_reply` (§22, §25),
 `flaky_rerun` (§23), `plan_review`, `plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`,
 and `lesson_wrong` (§28),
-`drafts_waiting` (§29), `connector_failed` (§30), `persona_missing` and `bad_persona` (§31), `model_missing` and
-`model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34),
+`drafts_waiting` (§29), `connector_failed` and `check_stuck` (§30), `persona_missing` and `bad_persona` (§31),
+`model_missing` and `model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34),
 `task_ticket_unrecorded` (§36), and `untrusted_artifact_comment` (§38). An item
 about one unit names its repository, shown as `KEY (repo)`. An item about a PR whose latest reviewed commit has a
 `high` review (§21), or about its ticket, comes first: within its reason on the list, and in a notification.
@@ -436,10 +436,11 @@ From their causes, before the overseer runs, the harness raises the phase table'
 `untrusted_review` while that row holds on a unit, `attempt_limit` for a unit or a ticket's plan whose next run is past
 its limit, `review_limit` for one of the loop's PRs unreviewed at its limit, `review_failed` while a PR's latest review
 run failed, and `plan_review` and `plan_changed` while a plan waits on the operator or its file is no longer what they
-approved. Each is open while its cause holds in the journal and the observations (§30). One resting on an observation
-is kept while that observation is stale, and goes only when a fresh one shows its cause gone, or its ticket is done,
-stopped, or seen closed or unlabeled: a tick that could not read a cause drops nothing. A guard that refuses the
-overseer a dispatch or a review past its limit records `attempt_limit` or `review_limit` too.
+approved; and `check_stuck`, which the overseer never recorded, for a unit one check holds at `ci_running` long after
+the rest finished (§30). Each is open while its cause holds in the journal and the observations (§30). One resting on
+an observation is kept while that observation is stale, and goes only when a fresh one shows its cause gone, or its
+ticket is done, stopped, or seen closed or unlabeled: a tick that could not read a cause drops nothing. A guard that
+refuses the overseer a dispatch or a review past its limit records `attempt_limit` or `review_limit` too.
 
 **Recorded by the overseer.** The overseer records the items that are judgment with its `attention` tool (§27), with a
 reason and a detail, every tick its cause holds; the tool refuses it a reason the harness raises. Items are stored as

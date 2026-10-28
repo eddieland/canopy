@@ -39,7 +39,10 @@ The items come in four groups, in this order, and within a group the one open lo
 3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, a
    lesson a worker proposed for [memory](memory), or a worker's report of follow-up tickets canopy couldn't record
    (`follow up unrecorded`), until its ticket is done or forgotten. The follow-ups it did record never land here:
-   [How the loop works](how-the-loop-works#public-and-private-tickets) says why.
+   [How the loop works](how-the-loop-works#public-and-private-tickets) says why. So is a PR held at `ci_running` by
+   one check still pending an hour after every other check on it finished (`check stuck`). It's usually a merge
+   queue's status or a sign-off, neither of which turns green on an open PR, however long you wait; the item names the
+   line to add under `[repos.<repo>.checks]` if it isn't CI. If it is, the item leaves when the build finally does.
 4. **Findings**: what your chores found.
 
 The counters above the list say how many runs are going, a task's among them, how many tickets and tasks wait on you

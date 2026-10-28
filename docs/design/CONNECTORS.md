@@ -105,6 +105,11 @@ never raises `needs_reviewer`. Each repository gives such a check a role in the 
 `ci_running`, make it `ci_red`, have to pass, or become a feedback plan's item. The overseer is shown a `human` one
 beside the checks, as waiting on a person, and neither of the others.
 
+An operator finds such a check unnamed when a PR stalls, so the harness says where: a unit held at `ci_running` by one
+check alone, still pending an hour after every other check at its head finished and none failed, raises `check_stuck`
+(§14), naming the check and its key in the map. It ends when the check completes, the head moves, or the map gives it a
+role. It only asks: the role stays the operator's, so a slow build costs a question, not a hidden failure.
+
 - The map names the exceptions, not the CI: a job left off a list of CI would hide a red build, while a check left
   off this one holds a PR where the operator sees it waiting.
 - Shared: it is a fact about the repository, and runs, spends, and authorizes nothing (TRUST_MODEL T7).
