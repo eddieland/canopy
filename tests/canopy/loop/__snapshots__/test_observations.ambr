@@ -186,7 +186,6 @@
               'mergeable': 'mergeable',
               'mergeable_state': 'blocked',
               'state': 'open',
-              'url': 'https://github.com/acme/repo/pull/7',
             }),
             'repo': 'repo',
             'reviews': list([
@@ -358,7 +357,6 @@
               'mergeable': 'mergeable',
               'mergeable_state': 'blocked',
               'state': 'open',
-              'url': 'https://github.com/acme/repo/pull/7',
             }),
             'repo': 'repo',
             'reviews': list([
