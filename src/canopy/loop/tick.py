@@ -64,8 +64,7 @@ from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
 from canopy.reviews import waiting as review_waiting
-from canopy.runs import drafted, policy, reconcile
-from canopy.runs import tasks as task_starts
+from canopy.runs import drafted, policy, reconcile, task_starts
 from canopy.runtime import project_config, servers, stdout
 
 if TYPE_CHECKING:

@@ -3,7 +3,7 @@
 Only the operator's channels write a task, and every write here refuses inside a tick or any agent's run (`inside_run`,
 TRUST_MODEL T1): the submission, and each reply (`conversation.reply`), is what authorizes a task's run, and its text
 the operator's instruction. The overseer never reads a task. The tick starts a queued one before the overseer runs
-(`runs/tasks.py`), and `_task` records how its run ended (`runs/task_run.py`), with its report and question as
+(`runs/task_starts.py`), and `_task` records how its run ended (`runs/task_run.py`), with its report and question as
 messages about the task. A run's report file is kept beside the journal, `<state_dir>/tasks/<id>/<run>.md`, as a plan
 is (§25), and the tickets it filed are recorded against the task (`task_tickets.py`). A task's runs write nothing about
 any ticket of canopy's: their rows name the task.

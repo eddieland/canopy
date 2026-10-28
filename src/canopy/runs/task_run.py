@@ -44,7 +44,7 @@ from canopy.core.config import render_command
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.runs import checkpoint, tidy
-from canopy.runs import tasks as starts
+from canopy.runs import task_starts as starts
 from canopy.runs.checkpoint import SetupError
 from canopy.runtime import project_config, stdout
 

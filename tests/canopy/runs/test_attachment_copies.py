@@ -11,8 +11,7 @@ from canopy.cli.main import main
 from canopy.core import attachments, contract, conversation, tasks
 from canopy.core.vocab import RunKind, RunStatus
 from canopy.infra import logs, procs
-from canopy.runs import tasks as task_starts
-from canopy.runs import tidy
+from canopy.runs import task_starts, tidy
 from tests.canopy.helpers import (
     BRANCH,
     KEY,

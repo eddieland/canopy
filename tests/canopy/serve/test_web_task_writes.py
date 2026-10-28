@@ -12,7 +12,7 @@ from canopy.core import tasks
 from canopy.core.context import Context
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
-from canopy.runs import tasks as task_starts
+from canopy.runs import task_starts
 from tests.canopy.helpers import in_run, in_tick, inline_context, pool_statuses, present
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
