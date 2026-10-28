@@ -422,7 +422,8 @@ def listed(ctx: Context) -> list[Item]:
 
     A chore deleted from the config, or one whose workspaces leave this one out, is not listed at all, nor is a finding
     the operator dismissed (DESIGN §19). A `drafts_waiting` item says what waits now, not at the tick that recorded
-    it, so one the operator sent or dropped every draft of is gone at once (DESIGN §29), and so do a review's
+    it, so one a run's drafts raise is listed once the run ends, and one the operator sent or dropped every draft of
+    is gone at once (DESIGN §29), and so do a review's
     `review_waiting` and `review_unsettled`, gone once the operator publishes or a read settles it (§34). So do a
     task's `awaiting_reply` and `task_ticket_unrecorded`, which no tick records (DESIGN §36). An item about a PR whose
     latest review is `high` impact, or about its ticket, comes before the rest (§21), so a notification lists it first.
@@ -497,21 +498,25 @@ def _unrecorded_item(found: task_tickets.Unrecorded) -> Item:
 def _drafts_now(conn: sqlite3.Connection, items: Iterable[Item]) -> list[Item]:
     """Check each `drafts_waiting` item against the drafts as they stand, not as the tick that recorded it saw them.
 
-    An item that starts to wait again, a drop taken back, is listed from the next tick, which records its age.
+    A unit whose drafts wait with no item recorded yet, such as a run's that ended since the latest tick, is listed
+    at once rather than from the next tick. Each item's age runs from its oldest waiting draft, or from the tick that
+    first recorded it if that came first, so a tick recording it later does not make it younger.
 
     Returns:
-        The items in order, each `drafts_waiting` one with the drafts that wait now, or left out when none still does.
+        The items in order, each `drafts_waiting` one with the drafts that wait now, or left out when none still does,
+        then one for each unit with drafts waiting that no item named.
     """
-    waiting: dict[tuple[str, str | None], str] = {}
+    waiting: dict[tuple[str, str | None], drafted.Item] = {}
     for w in drafted.waiting(conn):
         # The tick records the first of a unit's items, as `current` keeps it.
-        waiting.setdefault((w.ticket_key, w.repo), w.detail)
+        waiting.setdefault((w.ticket_key, w.repo), w)
     found: list[Item] = []
     for item in items:
         if item.reason != drafted.WAITING_REASON or item.ticket_key is None:
             found.append(item)
-        elif (detail := waiting.get((item.ticket_key, item.repo))) is not None:
-            found.append(replace(item, detail=detail))
+        elif (w := waiting.pop((item.ticket_key, item.repo), None)) is not None:
+            found.append(replace(item, detail=w.detail, since=min(item.since, w.since)))
+    found += [Item(w.ticket_key, drafted.WAITING_REASON, w.detail, w.since, w.repo) for w in waiting.values()]
     return found
 
 
