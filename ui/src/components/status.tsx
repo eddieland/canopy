@@ -42,24 +42,27 @@ export function RunDot({ state, className }: { state: RunState; className?: stri
  * A small bordered label: a reason, a kind, private or public. Pass a word from the journal as `word`: it reads with
  * spaces for underscores, and keeps its spelling, the one the CLI prints, in a `Tip`. Its `tone` is plain, or the
  * status color of the state it marks, or a feedback plan's proposal's own hue. A chip given room to shrink
- * (`min-w-0 shrink`) cuts its word to fit, and its tip then holds the word whole.
+ * (`min-w-0 shrink`) cuts its word to fit, and its tip then holds the word whole. `meaning` says in the tip, under the
+ * word, what it means (`src/lib/meanings.ts`), and makes the tip open whatever the word.
  */
 export function Chip({
     className,
     tone = 'plain',
     word,
+    meaning,
     children,
 }: {
     className?: string
     tone?: Tone | ProposalTone
     word?: string
+    meaning?: string | null
     children?: ReactNode
 }) {
     const [cutRef, cut] = useCut()
     const text = word === undefined ? undefined : readable(word)
-    const fact = word !== undefined && (word !== text || cut) ? word : null
+    const fact = word !== undefined && (word !== text || cut || Boolean(meaning)) ? word : null
     return (
-        <Tip fact={fact} mono>
+        <Tip fact={fact} mono detail={meaning}>
             <span
                 className={cn(
                     'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-mono text-2xs',
@@ -82,12 +85,22 @@ export function Chip({
 /**
  * A word from the journal in running text, not a chip: a phase, a status. It reads as words, as a chip's does
  * (`ci_failing` reads `ci failing`), with the CLI's spelling in a `Tip`. `text` stands in for a word already made
- * readable, such as a phase with what qualifies it.
+ * readable, such as a phase with what qualifies it. `meaning`, as a chip's, says in the tip what the word means.
  */
-export function Word({ word, text, className }: { word: string; text?: string; className?: string }) {
+export function Word({
+    word,
+    text,
+    meaning,
+    className,
+}: {
+    word: string
+    text?: string
+    meaning?: string | null
+    className?: string
+}) {
     const shown = text ?? readable(word)
     return (
-        <Tip fact={word === shown ? null : word} mono>
+        <Tip fact={word === shown && !meaning ? null : word} mono detail={meaning}>
             <span className={className}>{shown}</span>
         </Tip>
     )

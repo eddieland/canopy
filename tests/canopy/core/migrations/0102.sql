@@ -1,4 +1,3 @@
--- sha256 of 0102_flaky_kicks.sql: 59bc6f66aca523719404cf573ff344e380bf9f7607e5e7fbdebd0ff04f1e882c
+-- sha256 of 0102_runtime_version.sql: 4bc5089ae47f0af6564ceb7c4c1a71ca976fc4a861d6fe199fbc9a1793288ad2
 
-INSERT INTO flaky_kicks (run_id, repo, branch, from_head, to_head, kicked_at)
-VALUES (1, 'repo', 'agent/PROJ-1-work', 'a1', 'b2', 'x');
+-- Creates no table, so seeds no row.

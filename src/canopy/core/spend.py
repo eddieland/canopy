@@ -74,9 +74,11 @@ FULL = 100
 CHARS_PER_TOKEN = 4
 # The overseer's series, each from the ticks.
 _SERIES = ("overseer", "idle", "dry_run")
-# What a run's row says of its first model call, and when it started.
+# What a run's row, `r`, says of its first model call, and when it started; then the runtime's version its session's
+# record named, from the read of it (`canopy.core.run_models`), for the `?` the run's table fills.
 _FIRST_CALL: LiteralString = (
-    "definitions_digest, tokens_first_call, tokens_first_cache_write, tokens_first_cache_read, started_at"
+    "r.definitions_digest, r.tokens_first_call, r.tokens_first_cache_write, r.tokens_first_cache_read, r.started_at, "
+    "(SELECT m.runtime_version FROM run_model_reads m WHERE m.run_table = ? AND m.run_id = r.id)"
 )
 # The local day a row started on, as `YYYY-MM-DD`: SQLite reads the journal's UTC time in the local time Python does.
 _DAY = sql.frag("date(started_at, 'localtime')")
@@ -219,6 +221,9 @@ class FirstCalls:
     #: What their first calls read from the cache over what they were sent, summed over the runs that recorded both;
     #: None when none did.
     hit_rate: float | None = None
+    #: The runtime's versions their sessions' records named, in the order their runs first ran on each: a second one
+    #: is a change of the runtime within the snapshot, which may change the prefix the runs share.
+    runtime_versions: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -884,17 +889,21 @@ def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[First
     for kind in KINDS:
         table, which = KIND_TABLES[kind]
         by_digest: dict[str | None, list[tuple[int, bool, str, int | None]]] = {}
+        versions: dict[str | None, dict[str, None]] = {}
         first = (
-            sql.select(_FIRST_CALL)
-            .from_(table)
+            sql.select(_FIRST_CALL, table)
+            .from_("{} r", sql.name(table))
             .where("{}", which)
-            .where("started_at >= ? AND started_at < ? AND tokens_first_call IS NOT NULL", since, until)
-            .order_by("started_at, id")
+            .where("r.started_at >= ? AND r.started_at < ? AND r.tokens_first_call IS NOT NULL", since, until)
+            .order_by("r.started_at, r.id")
         )
-        for digest, sent, written, was_read, started in sql.execute(conn, first):
+        for digest, sent, written, was_read, started, version in sql.execute(conn, first):
             read = None if was_read is None else int(was_read)
             call = (int(sent), _cold(int(sent), int(written or 0), read), str(started), read)
-            by_digest.setdefault(None if digest is None else str(digest), []).append(call)
+            key = None if digest is None else str(digest)
+            by_digest.setdefault(key, []).append(call)
+            if version is not None:
+                versions.setdefault(key, {})[str(version)] = None
         found.extend(
             FirstCalls(
                 kind=kind,
@@ -905,6 +914,7 @@ def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[First
                 first_started=calls[0][2],
                 last_started=calls[-1][2],
                 hit_rate=_hit_rate([(sent, read) for sent, _, _, read in calls if read is not None]),
+                runtime_versions=tuple(versions.get(digest, {})),
             )
             for digest, calls in by_digest.items()
         )

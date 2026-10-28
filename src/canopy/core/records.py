@@ -878,6 +878,8 @@ class RunModelRead(Row):
     #: How many times canopy has read it.
     attempts: int
     read_at: str
+    #: The runtime's version the session's record names, kept from the last read that found it; None where none did.
+    runtime_version: str | None
 
 
 @dataclass(frozen=True)

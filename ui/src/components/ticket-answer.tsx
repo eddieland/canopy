@@ -15,6 +15,7 @@ import { TicketThread } from '@/components/ticket-thread'
 import { useUntrustedReview } from '@/hooks/use-untrusted-review'
 import { sinceForget } from '@/lib/forgotten'
 import { useListOrder } from '@/lib/list-order'
+import { phaseMeaning } from '@/lib/meanings'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 
 /**
@@ -63,7 +64,11 @@ export function TicketAnswer({
                     <span className="readout text-xs text-muted-foreground">
                         {item && (
                             <>
-                                <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} />
+                                <Word
+                                    word={phaseWord(ticket)}
+                                    text={phaseLabel(ticket)}
+                                    meaning={phaseMeaning(ticket.phase)}
+                                />
                                 {' · '}
                             </>
                         )}
