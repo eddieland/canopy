@@ -22,7 +22,8 @@ refused.
 ## `canopy-notify-slack`
 
 Reads one message in canopy's `json` format on stdin and posts it as one Slack message, in Block Kit built from the
-fields canopy sends.
+fields canopy sends. With `--threads`, it posts each part of it in the thread it is about, starting that thread first
+when it has none today, so one message can make several posts.
 
 ```toml
 [notify.sinks.slack]

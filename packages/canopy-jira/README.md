@@ -12,7 +12,9 @@ It is installed beside canopy: `uv tool install` puts it on `PATH`.
 2. Put your email and the token in a file of your own that nobody else can read, one line `EMAIL:API_TOKEN`:
 
    ```sh
-   install -m 600 /dev/null ~/.config/canopy/jira-credentials   # then write the line in it with an editor
+   mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/canopy"
+   install -m 600 /dev/null "${XDG_CONFIG_HOME:-$HOME/.config}/canopy/jira-credentials"
+   $EDITOR "${XDG_CONFIG_HOME:-$HOME/.config}/canopy/jira-credentials"
    ```
 
    The default is `$XDG_CONFIG_HOME/canopy/jira-credentials`; `--credentials-file` names another. A file that is not

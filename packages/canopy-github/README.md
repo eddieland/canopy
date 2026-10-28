@@ -6,8 +6,9 @@ and never imports them, so the harness holds no token and opens no connection (T
 
 They are installed beside canopy: `uv tool install` puts both on `PATH`. Each reads the token `gh` holds for the host
 the PR's URL or the repository's clone URL names, when it runs, and talks to that host's GraphQL API, so GitHub
-Enterprise works as github.com does. Run `gh auth login` for each host; they never take a token from argv, the
-environment, or canopy's config.
+Enterprise works as github.com does. Run `gh auth login` for each host. They take no token from argv or canopy's
+config, only the one `gh` answers for that host, once `gh auth status` names it; `gh` itself answers `GH_TOKEN` or
+`GH_ENTERPRISE_TOKEN` when one is set in the environment canopy runs them in.
 
 ## Config
 
@@ -24,7 +25,8 @@ post_cmd = "canopy-post-github"
 
 ## `canopy-connect-github`
 
-Reads, and writes nothing to GitHub. On stdin, one JSON object naming what to observe, each key optional:
+Reads, and writes nothing to GitHub. On stdin, one JSON object naming what to observe, each key optional, but
+`branch_prefix` is required once `repositories` names one:
 
 ```json
 {"prs": ["https://github.com/acme/api/pull/7"],
@@ -42,7 +44,9 @@ usable, and nothing was read.
 
 ## `canopy-post-github`
 
-Posts one PR's drafts as one review, or one ticket's as one issue comment. On stdin, one JSON object:
+Posts one PR's drafts as one review, or one ticket's as one issue comment. A reply's reaction is added on its own,
+before the review, since GitHub has no pending reaction, so drafts that are only reactions open no review. On stdin,
+one JSON object:
 
 - a PR's: `{"pr": URL, "body": TEXT | null, "replies": [{"comment": ID, "text": TEXT | null, "reaction": REACTION |
   null}, ...], "delete_pending": ID | null}`, with `commit` and `comments` for a review of a PR canopy reviewed (§34),
