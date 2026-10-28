@@ -127,6 +127,8 @@ _OVERSEER_GITHUB_READS = (
     "search_pull_requests",
     "list_branches",
 )
+# The overseer's reads of GitHub's issues, which it has no use for where a `tracker` source reads them (DESIGN §39).
+_OVERSEER_ISSUE_READS = ("issue_read", "list_issues", "search_issues")
 # GitHub's issue reads, which the overseer and the reviewer have no use for off a GitHub tracker. Rendered before the
 # tracker's rules: a read of the tracker's that one matches, such as a `list_issues` of its own, is allowed again after
 # it.
@@ -224,9 +226,19 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
             found[rel] = render_github_issues(text, rel, rules.tracker_tools, rules.tracker_provider).encode()
     _render_by_agent(found, rules)
     if _OVERSEER_FILE in found:
-        skill = _tracker_skill(found, rules.tracker_provider)
-        text = render_overseer_reads(found[_OVERSEER_FILE].decode(), rules.tracker_tools, rules.tracker_provider)
-        found[_OVERSEER_FILE] = render_overseer(text, rules.overseer_prompt, skill).encode()
+        # Where a `tracker` source reads tickets, the overseer reads no tracker (DESIGN §39): no skill says how to.
+        observed = rules.tracker_observed
+        skill = None if observed else _tracker_skill(found, rules.tracker_provider)
+        text = found[_OVERSEER_FILE].decode()
+        server = rules.tracker_server if observed else None
+        text = render_overseer_reads(
+            text,
+            rules.tracker_tools,
+            rules.tracker_provider,
+            observed=observed,
+            server=server,
+        )
+        found[_OVERSEER_FILE] = render_overseer(text, rules.overseer_prompt, skill, no_skills=observed).encode()
     if _REVIEWER_FILE in found:
         text = found[_REVIEWER_FILE].decode()
         found[_REVIEWER_FILE] = render_reviewer_reads(text, rules.tracker_tools, rules.tracker_provider).encode()
@@ -434,7 +446,14 @@ def render_bash_allows(text: str, name: str, allows: Sequence[str]) -> str:
     return text.replace(_BASH_ALLOWS_MARKER, _BASH_ALLOWS_MARKER + "".join(rules), 1)
 
 
-def render_overseer_reads(text: str, tools: McpTools | None, provider: str) -> str:
+def render_overseer_reads(
+    text: str,
+    tools: McpTools | None,
+    provider: str,
+    *,
+    observed: bool = False,
+    server: str | None = None,
+) -> str:
     """Return the overseer's definition with the tracker's rules at its marked line: it may only read the tracker.
 
     As for the planner, every tool of the server is denied by a wildcard and the reads allowed after it (D021): the
@@ -443,13 +462,26 @@ def render_overseer_reads(text: str, tools: McpTools | None, provider: str) -> s
     reads are denied first. With no tools known, the marked line stays as it is, and the overseer keeps the tracker's
     tools and GitHub's issue reads: a pattern could take a read it needs.
 
+    `observed` is a `tracker` source reading the tickets, so the overseer reads no tracker at all (DESIGN §39): GitHub's
+    issue reads are denied, and the tracker's server whole, which on a GitHub tracker keeps only its reads of PRs. With
+    no read tools known, `server` names the server to deny; with neither, only GitHub's issue reads are.
+
     Raises:
         DefinitionsError: `text` has no marked line to render the tracker's rules at.
     """
     _require_reads_marker(text, _OVERSEER_FILE)
+    github = provider == _GITHUB
+    if observed:
+        if tools is None:
+            # No read tools known: deny the server by the name config gives, or, with none, GitHub's issue reads alone.
+            # On a GitHub tracker the server is the one the PRs are read through, so it is not denied whole.
+            if server is not None and not github:
+                return _render_reads(text, server, (), issue_reads=True)
+            return text.replace(_READS_MARKER, _READS_MARKER + "".join(map(_deny, _GITHUB_ISSUE_READS)), 1)
+        reads = [r for r in _OVERSEER_GITHUB_READS if r not in _OVERSEER_ISSUE_READS] if github else []
+        return _render_reads(text, tools.server, reads, issue_reads=True)
     if tools is None:
         return text
-    github = provider == _GITHUB
     reads = _OVERSEER_GITHUB_READS if github else tools.allowed
     return _render_reads(text, tools.server, reads, issue_reads=not github)
 
@@ -482,12 +514,14 @@ def render_chore_reads(text: str, tools: McpTools | None, provider: str) -> str:
     return _render_tracker_reads(text, tools, provider, _CHORE_FILE, issue_reads=False)
 
 
-def render_overseer(text: str, prompt: str, skill: str | None) -> str:
+def render_overseer(text: str, prompt: str, skill: str | None, *, no_skills: bool = False) -> str:
     """Return the overseer's definition with `prompt`, then `skill` if given, as its body from its marked line on.
 
     The body is the agent's system prompt, so it is cached across ticks with the tools (DESIGN §6, §13). `skill` is the
     tracker's skill, its own frontmatter left out: given here, the overseer need not load it with a tool call each tick,
-    so its skill tool is denied too. Without one, the prompt has it load the tracker's skill by name.
+    so its skill tool is denied too. Without one, the prompt has it load the tracker's skill by name, unless
+    `no_skills`: a `tracker` source reads the tracker, so there is none for it to load (DESIGN §39), and the tool is
+    denied too.
 
     Raises:
         DefinitionsError: `text` has no marked line to render the prompt at, or none for the skill rule.
@@ -497,7 +531,7 @@ def render_overseer(text: str, prompt: str, skill: str | None) -> str:
         raise DefinitionsError(f"{_OVERSEER_FILE} has no line {_PROMPT_MARKER.strip()!r} to render the prompt at")
     if _SKILL_MARKER not in head:
         raise DefinitionsError(f"{_OVERSEER_FILE} has no line {_SKILL_MARKER.strip()!r} to render the skill rule at")
-    if skill is not None:
+    if skill is not None or no_skills:
         head = head.replace(_SKILL_MARKER, _SKILL_MARKER + _SKILL_RULE, 1)
     parts = [prompt] if skill is None else [prompt, skill]
     return head + "\n\n".join(part.strip("\n") for part in parts) + "\n"
