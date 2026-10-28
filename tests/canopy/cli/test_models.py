@@ -36,7 +36,26 @@ def test_canopy_models_exits_1_when_an_agents_model_is_not_listed_or_the_list_ca
     )
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
     assert scenario.operator("models", code=1).out == (
-        "could not read the models OpenCode lists (model_list_failed): `opencode models` exited 1\n"
+        "could not read the models OpenCode lists (model_list_failed): `opencode models --verbose` exited 1\n"
+    )
+
+
+def test_canopy_models_reads_a_variant_as_dispatch_does(scenario: Scenario, opencode_state: Path) -> None:
+    """A model named at a variant it lists is listed, and one at a variant it does not list is refused."""
+    opencode_state.write_text(json.dumps({"models": [OTHER, MODEL], "variants": {MODEL: ["xhigh", "high"]}}))
+    scenario.configures(runtime={"models": {"worker": f"{MODEL}@high", "reviewer": f"{MODEL}@xhigh", "chore": OTHER}})
+    assert scenario.operator("models").out == (
+        f"OpenCode lists 2 models:\n  {MODEL}  variants: high, xhigh  (runtime.models: worker@high, reviewer@xhigh)\n"
+        f"  {OTHER}  (runtime.models: chore)\n"
+    )
+    scenario.configures(runtime={"models": {"reviewer": f"{MODEL}@bogus", "chore": f"{OTHER}@high"}})
+    assert scenario.operator("models", code=1).out == (
+        f"OpenCode lists 2 models:\n  {MODEL}  variants: high, xhigh  (runtime.models: worker@high, reviewer@bogus)\n"
+        f"  {OTHER}  (runtime.models: chore@high)\n"
+        f"runtime.models.reviewer names {MODEL}@bogus, whose variant bogus OpenCode does not list (it lists high, "
+        "xhigh): its runs refuse (model_missing).\n"
+        f"runtime.models.chore names {OTHER}@high, whose variant high OpenCode does not list (it lists none for it): "
+        "its runs refuse (model_missing).\n"
     )
 
 

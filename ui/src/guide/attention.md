@@ -110,7 +110,7 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
   There's nothing to answer here; the item leaves once the command has fixed its cause. The overseer and chores take
   their models from your config alone, so when one of theirs is refused, the command is `canopy models`: it lists what
-  the runtime has, or says why it can't, and names any model in `[runtime.models]` it lacks.
+  the runtime has, or says why it can't, and names any model in `[runtime.models]` it lacks, or whose variant it lacks.
 
 An item about a ticket then shows the ticket's conversation and a box to reply in. The conversation's header wears the
 ticket's `private` or `public` chip, which says where your reply goes ([below](#replying)). The ticket's own actions
