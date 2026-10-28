@@ -147,6 +147,7 @@ export const PAGE_GUIDES = {
     '/reports/spend': 'reports#the-spend-page',
     '/memory': 'memory',
     '/search': 'overview#search',
+    '/system': 'overview#system-resources',
     '/settings': 'settings',
     '/settings_/limits': 'settings#limits-and-trust',
 } as const satisfies Record<

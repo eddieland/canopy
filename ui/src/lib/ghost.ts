@@ -198,6 +198,13 @@ export const GHOST_TIPS = {
         'Field report: a note says "it works on my machine". That is a note about the machine.',
         'Dear Traveler, a worker proposed a lesson. I proposed a shell. One of us got promoted.',
     ],
+    '/system': [
+        'Eyes up, Guardian. The machine itself. Its light is a status LED. Still counts.',
+        'Scanning... load average nominal. Disk nominal. Ghost nominal. Mostly.',
+        'Field report: a disk under the floor and the overseer stays home. Wise. I would too.',
+        'Grimoire: memory available is what is left after everyone else ate. Like loot drops.',
+        'Dear Traveler, the loop has been up for hours. I have been up since the Golden Age.',
+    ],
     '/guide/$page': [
         "Eyes up, Guardian. Documentation. I'll read it to you in a calm, soothing voice.",
         'Field report: every link in the guide goes somewhere. A test makes sure. Unlike portals.',

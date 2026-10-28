@@ -32,6 +32,7 @@ from canopy.core.vocab import RunStatus
 from canopy.infra import procs
 from canopy.runs import tasks
 from canopy.runtime import models as runtime_models
+from canopy.serve import host
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from canopy.core.items import Item
     from canopy.core.workspace import Workspace
     from canopy.runtime.report import ModelList
+    from canopy.serve.schema.host import HostResources
 
 #: Seconds the server serves a model list the runtime gave before it asks the runtime again: long enough that opening
 #: the ticket page's menus one after another starts it once, short enough to see a provider set up meanwhile.
@@ -148,6 +150,9 @@ class Backend:
     user_file: Path = field(default_factory=config.user_config_path)
     # `canopy loop --every`'s minutes, which set the pace whatever `loop.interval_minutes` says, or None.
     every: int | None = None
+    #: The machine the loop runs on, for the system resources page: read from the operating system. The mock's is a
+    #: fixed reading, so its pages show the same machine every time and the demo shows none of its host's.
+    host: Callable[[Context], HostResources] = field(default=host.read)
     #: Seconds on a clock that only moves forward, for how long a model list read from the runtime is served.
     monotonic: Callable[[], float] = field(default=time.monotonic)
     # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.

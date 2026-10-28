@@ -263,6 +263,13 @@ export const TIPS = {
         'Fun fact: recording is not using. I record everything and use none of it.',
         'Hot take: a note that says "it works on my machine" is a note about the machine.',
     ],
+    '/system': [
+        "It looks like you're checking the machine. I run on no machine. I run on vibes.",
+        'Unhelpful tip: a full disk frees itself if you stare at it. It does not. Delete something.',
+        'Fun fact: the load average is how many things want a processor. I want a hat. Same energy.',
+        'Dear diary, the loop has been up for hours. I have been up forever. Nobody makes me a counter.',
+        'Hot take: swap is memory that went to live on a farm.',
+    ],
     '/guide/$page': [
         "It looks like you're reading documentation. Would you like me to skim it for you, badly?",
         'Dear diary, they read a whole page of the guide. I read the title and felt informed.',

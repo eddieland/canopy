@@ -197,8 +197,9 @@ Rules:
 - The header carries, after its name, the stream's state (and `mock`), then at its end the loop's pause
   (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
   `status-failed` when it failed or was abandoned, its summary on hover, linking to its page; before the first, `no
-  tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), and the theme toggle, in three
-  groups with a hairline rule between each: the actions, the readouts, the theme.
+  tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), the host's readout last among
+  the readouts, and the theme toggle, in three groups with a hairline rule between each: the actions, the readouts, the
+  theme.
 - The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
   nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
   it left a hole before `live` whenever the loop was up. The word sits in a pill with a dot, as `mock` does in a pill
@@ -238,6 +239,15 @@ Rules:
   runs, and from the click until the tick it asked for starts, which the readout and the logo show as starting
   meanwhile: the loop takes the ask at its wait's next step, after a poll of the sources if one is under way. Like the
   pause it has no `Notice`, since the tick it asked for shows in the readouts, and a failure looks the same.
+- **The host's readout** (`HostReadout`) is the machine the loop runs on, which serves the page: a server's icon and
+  `host ok` in muted readout type, or its worst pressure in two words (`disk low`, `memory low`, `host busy`) in
+  `status-blocked` while worth a look and `status-failed` past what canopy works with, a disk under the tick's
+  free-space floor among it (`src/lib/host.ts` holds the thresholds). Under `lg` the header has no room for the words:
+  the icon stands alone in the pressure's color, as the strip's icons carry their counts, its words its accessible
+  name and the card's. It is a link to the system resources page, in no section, with a hover card over it: the
+  machine's name and system, what is under pressure, the load, the memory, each disk canopy writes to, and the
+  loop's process. It shows nothing until its first read lands. Its read is not on the stream, since none of it is in
+  the journal: it is read every 10 seconds while the tab is visible, as the worktrees are.
 - **The notice to workers** (`NoticeBanner`, `canopy notice`) heads the content column, above every page, only while
   one is in force: a band on a `status-blocked` tint with its border, since every run waits on what the operator said,
   the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and ghost Edit,
@@ -724,6 +734,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   already, and a stop inside it would be a control in a control. What the operator acts on is in the text, never only
   in a tip (the `canopy grant` command under its button). A `title` that explains rather than informs, a button's
   hint or what a column counts, stays a `title`.
+- **A link's page at a glance is a hover card** (`HoverCard` in `src/components/ui/hover-card.tsx`): more than a tip
+  holds, a few rows of what the page it opens shows, as the host's readout shows the machine. It opens on hover after
+  half a second, as a tip does, and on the keyboard's focus, and stays while the pointer moves onto it; a tap follows
+  the link. Like a tip it is on `surface` with a hairline, no shadow and no motion, its rows `text-xs` under
+  `panel-label`s. Nothing in it is found only there: it is a preview of the page, never a place to act.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
   PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The

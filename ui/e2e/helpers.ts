@@ -48,6 +48,7 @@ export const ROUTES = [
     'search?q=web',
     'plan-editor',
     'memory',
+    'system',
     'guide/overview',
 ] as const
 /** A page in ROUTES. */
@@ -128,13 +129,15 @@ export async function signIn(page: Page): Promise<void> {
     expect(response.status()).toBe(200)
 }
 
-/** Waits until the page is fully settled: fonts loaded, header counters filled, stream connected. */
+/** Waits until the page is fully settled: fonts loaded, header readouts filled, stream connected. */
 export async function settled(page: Page): Promise<void> {
     await page.evaluate(async () => {
         await document.fonts.ready
     })
     const readouts = page.getByTestId('live-readouts')
     await expect(readouts.locator('[data-slot=skeleton]')).toHaveCount(0)
+    // The host's readout shows once its first read lands, which the stream does not send.
+    await expect(page.getByTestId('host-readout')).toBeVisible()
     await expect(page.getByTestId('stream-status')).toHaveAttribute('data-status', 'open')
     await expect(page.locator('main [data-slot=skeleton]')).toHaveCount(0)
 }

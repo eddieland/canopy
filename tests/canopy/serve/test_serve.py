@@ -1164,6 +1164,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/ticks/{tick_id}/transcript",
         "/api/ticks/{tick_id}/output",
         "/api/worktrees",
+        "/api/host",
         "/api/search",
         "/api/events",
         "/api/loop",

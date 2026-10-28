@@ -16,6 +16,7 @@ import { Route as PlanEditorRouteImport } from './routes/plan-editor'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SpendRouteImport } from './routes/spend'
+import { Route as SystemRouteImport } from './routes/system'
 import { Route as WorktreesRouteImport } from './routes/worktrees'
 import { Route as ChoresIndexRouteImport } from './routes/chores.index'
 import { Route as ChoresNameRouteImport } from './routes/chores.$name'
@@ -80,6 +81,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SpendRoute = SpendRouteImport.update({
   id: '/spend',
   path: '/spend',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SystemRoute = SystemRouteImport.update({
+  id: '/system',
+  path: '/system',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WorktreesRoute = WorktreesRouteImport.update({
@@ -243,6 +249,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/spend': typeof SpendRoute
+  '/system': typeof SystemRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
@@ -282,6 +289,7 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/spend': typeof SpendRoute
+  '/system': typeof SystemRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
@@ -322,6 +330,7 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/spend': typeof SpendRoute
+  '/system': typeof SystemRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
@@ -363,6 +372,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/spend'
+    | '/system'
     | '/worktrees'
     | '/chores/$name'
     | '/guide/$page'
@@ -402,6 +412,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/spend'
+    | '/system'
     | '/worktrees'
     | '/chores/$name'
     | '/guide/$page'
@@ -441,6 +452,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/spend'
+    | '/system'
     | '/worktrees'
     | '/chores/$name'
     | '/guide/$page'
@@ -481,6 +493,7 @@ export interface RootRouteChildren {
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SpendRoute: typeof SpendRoute
+  SystemRoute: typeof SystemRoute
   WorktreesRoute: typeof WorktreesRoute
   ChoresNameRoute: typeof ChoresNameRoute
   GuidePageRoute: typeof GuidePageRoute
@@ -562,6 +575,13 @@ declare module '@tanstack/react-router' {
       path: '/spend'
       fullPath: '/spend'
       preLoaderRoute: typeof SpendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/system': {
+      id: '/system'
+      path: '/system'
+      fullPath: '/system'
+      preLoaderRoute: typeof SystemRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/worktrees': {
@@ -785,6 +805,7 @@ const rootRouteChildren: RootRouteChildren = {
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SpendRoute: SpendRoute,
+  SystemRoute: SystemRoute,
   WorktreesRoute: WorktreesRoute,
   ChoresNameRoute: ChoresNameRoute,
   GuidePageRoute: GuidePageRoute,

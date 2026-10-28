@@ -14,6 +14,8 @@ import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
+import { HostReadout } from './host-readout'
+
 // The stream's state, in a word.
 const STREAM_LABEL: Record<StreamStatus, string> = {
     connecting: 'opening',
@@ -36,7 +38,8 @@ const PILL_TONE = {
 
 /**
  * The header's readouts: the latest tick, or `no tick yet` before the first, `tick starting` from Tick now until the
- * tick it asked for starts, and agent memory while a tier is on. The counters are the attention page's.
+ * tick it asked for starts, agent memory while a tier is on, and the machine the loop runs on (`HostReadout`). The
+ * counters are the attention page's.
  */
 export function LiveReadouts() {
     const last = useQuery(tickQuery)
@@ -63,6 +66,7 @@ export function LiveReadouts() {
                 <LastTick tick={last.data.tick} />
             )}
             {memory !== null && <MemoryReadout memory={memory} />}
+            <HostReadout />
         </div>
     )
 }
