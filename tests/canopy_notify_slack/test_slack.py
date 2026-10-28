@@ -318,9 +318,33 @@ def test_slack_blocks_for_each_event_kind() -> None:
             "kind": "loop.budget_reached",
             "month": "2026-10",
             "budget": 300,
+            "percent": 90,
+            "spent": 270.0,
+            "runs": 270.0,
+            "outside": 0.0,
+            "sessions_read_at": None,
+        },
+        {
+            "kind": "loop.budget_reached",
+            "month": "2026-10",
+            "budget": 300,
             "percent": 100,
             "spent": 301.5,
             "projected": 410.25,
+            "runs": 201.5,
+            "outside": 100.0,
+            "sessions_read_at": "2026-10-28T13:05:00.000Z",
+        },
+        {
+            "kind": "loop.budget_reached",
+            "month": "2026-11",
+            "budget": 300,
+            "percent": 80,
+            "spent": 240.0,
+            "runs": 200.0,
+            "outside": 40.0,
+            "sessions_read_at": "2026-10-28T13:05:00.000Z",
+            "sessions_read": "failed",
         },
         {"kind": "test", "text": "canopy test message"},
         {"kind": "kind.from.a.newer.canopy", "line": "x <y>"},
@@ -337,7 +361,18 @@ def test_slack_blocks_for_each_event_kind() -> None:
         ":white_check_mark: review run 5 ended *done*: findings low · 2 findings\n<https://x.test/pr/9>",
         ":white_check_mark: *The loop recovered* after 3 failed ticks",
         ":moneybag: *Spend for 2026-10 reached 80% of its budget:* $240.00 of $300",
+        ":moneybag: *Spend for 2026-10 reached 90% of its budget:* $270.00 of $300",
+        "canopy's runs $270.00 · outside canopy not read yet",
         ":moneybag: *Spend for 2026-10 reached its budget:* $301.50 of $300; on pace for $410.25",
+        (
+            "canopy's runs $201.50 · outside canopy $100.00 · sessions read"
+            " <!date^1793192700^{date_short_pretty} {time}|2026-10-28T13:05:00.000Z>"
+        ),
+        ":moneybag: *Spend for 2026-11 reached 80% of its budget:* $240.00 of $300",
+        (
+            "canopy's runs $200.00 · outside canopy $40.00 · the last read of sessions failed"
+            " <!date^1793192700^{date_short_pretty} {time}|2026-10-28T13:05:00.000Z>"
+        ),
         ":test_tube: canopy test message",
         "x &lt;y&gt;",
     ]
@@ -398,6 +433,26 @@ def test_slack_blocks_for_plans_follow_ups_and_tasks() -> None:
         ":seedling: *P-2* · run 3 filed 3 follow-ups\n*P-9* (api), *P-10*, 1 more",
         "label or `canopy start` each one you want worked",
         ":white_check_mark: *chore:deps* · run 6 ended *ok* · no findings",
+    ]
+
+
+def test_slack_blocks_for_a_flaky_check_kicked_or_left_to_the_operator() -> None:
+    pr = "https://github.com/acme/api/pull/7"
+    flaky: dict[str, Any] = {"kind": "ci.flaky", "ticket": "P-1", "title": "Fix the build", "run": 2, "prs": [pr]}
+    events: list[dict[str, Any]] = [
+        flaky | {"kicked": ["api"], "estimate": "The runner was lost <before> any test ran.", "note": None},
+        flaky | {"run": 3, "kicked": [], "estimate": "Same again.", "note": "api: not kicked: out of kicks"},
+    ]
+    assert _texts(slack.blocks({"repo": "/r/api", "events": events}))[1:] == [
+        (
+            ":repeat: *P-1* Fix the build · run 2 left a failed check as flaky; canopy pushed `api` again to rerun it\n"
+            f"<{pr}|acme/api#7>\n> *Why:* The runner was lost &lt;before&gt; any test ran."
+        ),
+        (
+            ":grey_question: *P-1* Fix the build · run 3 left a failed check as flaky\n"
+            f"<{pr}|acme/api#7>\n> *Why:* Same again."
+        ),
+        "rerun it, or `canopy reply` that it is real · api: not kicked: out of kicks",
     ]
 
 

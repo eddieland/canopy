@@ -6,7 +6,7 @@ file of the operator's that nobody else can read, held to the Slack sink's check
 environment, or canopy's config. This module holds the site, the credentials, the client, and the reading of what
 Jira sends: its times and its rich text (Atlassian Document Format).
 
-Stdlib and click (D025) only, importing nothing from canopy.
+click (D025), canopy-http for every request (D130), and nothing from canopy.
 """
 
 from __future__ import annotations
@@ -16,22 +16,18 @@ import json
 import os
 import re
 import stat
-import urllib.error
-import urllib.parse
-import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, TextIO, override
+from typing import TextIO
 
-if TYPE_CHECKING:
-    from email.message import Message
+import canopy_http
 
-TIMEOUT_SECONDS = 30
+#: How long a read Jira answered with a server error, or whose reply broke off, waits before each new try: one try,
+#: then one more for each pause. Every request this program makes is a read (canopy-http).
+RETRY_PAUSES: Sequence[float] = (1.0, 3.0)
 #: How much of a description's or comment's text is printed. canopy bounds what it records again.
 MAX_BODY = 8000
-#: How much of Jira's reply an error quotes.
-_MAX_REPLY = 500
 #: How deep a document's nodes are read: Jira's own documents nest a few levels, and a deeper one is cut there.
 _MAX_DEPTH = 50
 _HOST = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(?::[0-9]{1,5})?")
@@ -126,30 +122,15 @@ def _header_safe(value: str) -> bool:
     return value.isascii() and not any(c.isspace() or not c.isprintable() for c in value)
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Follows no redirect: urllib would carry the request's headers, the credentials among them, wherever it went."""
-
-    @override
-    def redirect_request(
-        self,
-        req: urllib.request.Request,
-        fp: IO[bytes],
-        code: int,
-        msg: str,
-        headers: Message,
-        newurl: str,
-    ) -> None:
-        return None
-
-
 class Client:
-    """Jira Cloud's REST API at one site, with one email and API token, sent there alone: a redirect is refused."""
+    """Jira Cloud's REST API at one site, with one email and API token, sent there alone (canopy-http)."""
 
     def __init__(self, base: str, email: str, token: str) -> None:
         """Talk to the REST API under `base` as `email`, with `token`."""
-        self._base = base.removesuffix("/")
-        self._auth = base64.b64encode(f"{email}:{token}".encode()).decode()
-        self._opener = urllib.request.build_opener(_NoRedirect())
+        auth = base64.b64encode(f"{email}:{token}".encode()).decode()
+        headers = {"Authorization": f"Basic {auth}", "User-Agent": "canopy-jira"}
+        retry = canopy_http.Retry(pauses=RETRY_PAUSES)
+        self._http = canopy_http.Client(base, name="Jira", headers=headers, retry=retry)
 
     def get(self, path: str, params: Mapping[str, str | int]) -> Mapping[str, object]:
         """GET `path` with `params` in its query.
@@ -160,8 +141,7 @@ class Client:
         Raises:
             JiraError: Jira refused it, its reply is not a JSON object, or it could not be reached.
         """
-        query = urllib.parse.urlencode({k: str(v) for k, v in params.items()})
-        return self._send(urllib.request.Request(f"{self._base}{path}?{query}", method="GET"))  # noqa: S310
+        return self._send("GET", path, params={k: str(v) for k, v in params.items()})
 
     def post(self, path: str, body: Mapping[str, object]) -> Mapping[str, object]:
         """POST `body` as JSON to `path`. Jira's searches are posts; nothing here writes.
@@ -172,25 +152,28 @@ class Client:
         Raises:
             JiraError: Jira refused it, its reply is not a JSON object, or it could not be reached.
         """
-        data = json.dumps(dict(body)).encode()
-        return self._send(urllib.request.Request(f"{self._base}{path}", data=data, method="POST"))  # noqa: S310
+        return self._send("POST", path, body=dict(body))
 
-    def _send(self, request: urllib.request.Request) -> Mapping[str, object]:
-        request.add_header("Authorization", f"Basic {self._auth}")
-        request.add_header("Accept", "application/json")
-        request.add_header("Content-Type", "application/json")
-        request.add_header("User-Agent", "canopy-jira")
+    def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        body: object = None,
+    ) -> Mapping[str, object]:
+        """Send one read, sent again as canopy-http sends a read.
+
+        Returns:
+            The reply, a JSON object.
+
+        Raises:
+            JiraError: Jira refused it, its reply is not a JSON object, or it could not be reached.
+        """
         try:
-            with self._opener.open(request, timeout=TIMEOUT_SECONDS) as response:
-                reply = response.read().decode(errors="replace")
-        except urllib.error.HTTPError as e:
-            raise JiraError(f"HTTP {e.code}: {e.read().decode(errors='replace')[:_MAX_REPLY]}") from e
-        except (urllib.error.URLError, TimeoutError, OSError) as e:
-            raise JiraError(f"cannot reach {self._base}: {e}") from e
-        try:
-            parsed: object = json.loads(reply)
-        except json.JSONDecodeError as e:
-            raise JiraError(f"Jira's reply is not JSON: {reply[:_MAX_REPLY]}") from e
+            parsed = self._http.json(method, path, params=params, body=body, again=True)
+        except canopy_http.HttpError as e:
+            raise JiraError(str(e)) from e
         return obj(parsed, "reply")
 
 

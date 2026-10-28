@@ -92,7 +92,9 @@ The **Transcript** is the run's session, from its log, oldest first:
   **show N more lines** for the rest, since a model that thinks out loud rarely thinks briefly. **All open**, or a
   search that finds a line in the folded part, shows it whole;
 - each tool call, with what it did and how long it took; click one to see its input and output. A canopy command the
-  harness refused is marked `refused`, with the guard;
+  harness refused is marked `refused`, with the guard. An overseer's `decide` names each ticket and its action on its
+  row, and opens to every decision on a line of its own with its rationale, so a tick that decided twelve tickets in
+  one call doesn't leave you reading them out of a JSON array;
 - each model call, with the tokens in and out, and its cost; click one to see what it was sent and what it did. The
   first call was sent canopy's prompt, and every later one what the tools returned since. In a run that switched
   models, the first call names its model, and so does each call where the model changed, By call too, so you can see

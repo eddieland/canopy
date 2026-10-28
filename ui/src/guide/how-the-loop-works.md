@@ -116,7 +116,7 @@ it as the CLI does. The ones you'll meet most:
   and **Allow one more** on its page grants it another run.
 - `cooldown`: a resume for failed checks alone waits `policy.ci_cooldown_minutes` after the last run that worked on
   CI. A resume with review comments or your reply goes at once, and fixes the build on the way.
-- `running`: one worker per ticket. A second one would only argue with the first.
+- `running`: one run per ticket, a worker's or a planner's. A second one would only argue with the first.
 
 And the guard that never lifts: canopy never approves or merges a PR, and never moves a ticket to Done. Those stay
 yours.

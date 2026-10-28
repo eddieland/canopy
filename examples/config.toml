@@ -120,8 +120,10 @@ interval_minutes = 15
 # min_free_disk_mib = 2048
 
 [spend]
-# What a calendar month of agent runs should cost, in whole US dollars. Nothing stops at it: `canopy spend` and the web
-# UI's spend page track the month against it, and a sink that takes `loop` events hears once when the month reaches it.
+# What a calendar month of agent spend should cost, in whole US dollars: canopy's runs and every session of the runtime
+# outside canopy that `canopy loop` has read, canopy's share shown beside the whole. Nothing stops at it: `canopy spend`
+# and the web UI's spend page track the month against it, and a sink that takes `loop` events hears once when the
+# month reaches it.
 # monthly_budget_usd = 300
 # Percentages of it at which that sink also hears, each once a month: a warning at half and at four fifths, here. The
 # 100% alert is always sent. Empty by default.
@@ -156,6 +158,9 @@ comment_suffix = ""
 # Set if your repositories refuse merge commits: workers then rebase onto a base branch instead of merging it in, and
 # push the result with --force-with-lease to their own branch, never any other force (TRUST_MODEL T1).
 # rebase = false
+# How many times canopy reruns a PR's checks a worker judged flaky, for each head pushed, by rebasing the branch onto
+# its base and pushing it with --force-with-lease (DESIGN §23, TRUST_MODEL T1). 0: you rerun them yourself.
+# max_flaky_kicks = 0
 # How replies to review comments, and every other comment a worker would post, reach GitHub (DESIGN §29): "post" has
 # workers post them, marked; "approve" has them draft each one for you to read, edit, and send as your own words.
 # review_replies = "post"
