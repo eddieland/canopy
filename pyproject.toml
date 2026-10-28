@@ -269,8 +269,6 @@ banned-from = ["unittest.mock"]
 "packages/canopy-github/**" = ["TID251"]
 # The wheel's build hook runs npm (D079); it is part of packaging, not of canopy.
 "hatch_build.py" = ["S603", "TID251"]
-# The Slack sink is a separate program whose job is the network call the harness never makes (DESIGN §20).
-"packages/canopy-notify-slack/**" = ["TID251"]
 # The review bench is a separate program whose job is running git and gh against a copy of a repository.
 "packages/canopy-review-bench/**" = ["TID251"]
 # Its commands' docstrings are their --help text, so a Raises section would print there.
