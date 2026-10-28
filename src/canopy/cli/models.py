@@ -15,6 +15,7 @@ from canopy.runtime import models as runtime_models
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from canopy.runtime.agents import Model
     from canopy.runtime.report import ModelList
 
 CLI = "cli"
@@ -100,11 +101,12 @@ def cmd_models(click_ctx: click.Context) -> int:
 
     Each line names the agents [runtime.models] chooses it for. The list is the runtime's own, from its cache or the
     catalog built into it: a model on it can still fail when called. Exits 1 when the list cannot be read, or an agent's
-    model in [runtime.models] is not on it, since that agent's runs are refused until it is.
+    model in [runtime.models] is not on it, or its variant is not one the model lists, since that agent's runs are
+    refused until it is.
     """
     ctx = open_context(click_ctx)
     lines, refused = render(
-        runtime_models.listed(ctx.runner, version=ctx.config.runtime.version, cwd=ctx.workspace.root),
+        runtime_models.listed(ctx.runner, version=ctx.config.runtime.version, cwd=ctx.workspace.root, variants=True),
         ctx.config.runtime.models,
     )
     for line in lines:
@@ -148,21 +150,44 @@ def show(key: str, found: Sequence[ticket_models.Next]) -> list[str]:
 def render(listed: ModelList, models: Mapping[str, str]) -> tuple[list[str], bool]:
     """The models as `canopy models` prints them, and whether an agent's runs would be refused their model.
 
+    A model in `models`, `runtime.models`, may name a variant, `provider/model@variant`, as dispatch reads it
+    (`agent_models.parse`): it is listed when its model is, and its variant is one `listed` gives the model.
+
     Returns:
-        The lines, without line ends: a line per model, then one per model `models`, `runtime.models`, names that is
-        not listed; and True when the list could not be read or such a model is named.
+        The lines, without line ends: a line per model, with its variants and the agents given it, then one per model
+        `models` names that is not listed, or whose variant is not; and True when the list could not be read or such a
+        model is named.
     """
     if listed.error is not None:
         return [f"could not read the models {invocation.NAME} lists ({agent_models.LIST_FAILED}): {listed.error}"], True
     count = len(listed.models)
     lines = [f"{invocation.NAME} lists {count} model{'' if count == 1 else 's'}:"]
+    chosen = {role: agent_models.parse(value) for role, value in models.items()}
     for model in sorted(listed.models):
-        roles = [role for role, chosen in models.items() if chosen == model]
-        lines.append(f"  {model}  (runtime.models: {', '.join(roles)})" if roles else f"  {model}")
-    gone = [(role, chosen) for role, chosen in models.items() if chosen not in listed.models]
-    lines.extend(
-        f"runtime.models.{role} names {chosen}, which {invocation.NAME} does not list: its runs refuse "
-        f"({agent_models.MISSING})."
-        for role, chosen in gone
-    )
-    return lines, bool(gone)
+        line = f"  {model}"
+        if variants := sorted(listed.variants.get(model, ())):
+            line += f"  variants: {', '.join(variants)}"
+        roles = [_given(role, m) for role, m in chosen.items() if m.id == model]
+        lines.append(f"{line}  (runtime.models: {', '.join(roles)})" if roles else line)
+    refusals: list[str] = []
+    for role, m in chosen.items():
+        if m.id not in listed.models:
+            refusals.append(
+                f"runtime.models.{role} names {m.name}, which {invocation.NAME} does not list: its runs refuse "
+                f"({agent_models.MISSING}).",
+            )
+        elif m.variant is not None and m.variant not in listed.variants.get(m.id, ()):
+            refusals.append(
+                f"runtime.models.{role} names {m.name}, whose variant {m.variant} {invocation.NAME} does not list "
+                f"({agent_models.variants_listed(listed, m.id)}): its runs refuse ({agent_models.MISSING}).",
+            )
+    return lines + refusals, bool(refusals)
+
+
+def _given(role: str, model: Model) -> str:
+    """Name `role` as a model's line lists the agents given it: with the variant it runs the model at, if any.
+
+    Returns:
+        The words, such as `reviewer` or `reviewer@xhigh`.
+    """
+    return role if model.variant is None else f"{role}@{model.variant}"
