@@ -8,8 +8,9 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import db, feedback_items, feedback_plans
+from canopy.core import db
 from canopy.core.vocab import PlanStatus, RunKind, RunStatus
+from canopy.runs import feedback_items, feedback_plans
 from tests.canopy.helpers import DRAFTS_PR, KEY, comment, context, planner_does, present, waits
 from tests.canopy.scenario_helpers import (
     ALICES_COMMENT,

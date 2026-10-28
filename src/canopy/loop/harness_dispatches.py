@@ -26,10 +26,10 @@ from enum import IntEnum
 from typing import TYPE_CHECKING, TypedDict, assert_never
 
 from canopy.chores import start as chore_start
-from canopy.core import chore_view, conversation, db, feedback_plans, records, sql
+from canopy.core import chore_view, conversation, db, records, sql
 from canopy.core.vocab import Decider, Phase, ResumeReason, RunKind
 from canopy.loop import attention, phases
-from canopy.runs import dispatch
+from canopy.runs import dispatch, feedback_plans
 
 if TYPE_CHECKING:
     import sqlite3

@@ -23,10 +23,8 @@ from canopy.core import (
     notice,
     pause,
     reports,
-    review_requests,
     review_runs,
     run_models,
-    tasks,
 )
 from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
@@ -45,7 +43,8 @@ from canopy.loop.render import (
     spent,
 )
 from canopy.notify import deliver
-from canopy.runs import drafted
+from canopy.reviews import review_requests
+from canopy.runs import drafted, tasks
 
 if TYPE_CHECKING:
     import sqlite3

@@ -10,9 +10,9 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import drafts, drafts_manage, observe
+from canopy.core import observe
 from canopy.core.vocab import DraftStatus, Reaction, ResumeReason, RunKind
-from canopy.runs import drafted
+from canopy.runs import drafted, drafts, drafts_manage
 from tests.canopy.helpers import (
     APPROVE,
     DRAFTS_PR,

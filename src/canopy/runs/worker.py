@@ -32,17 +32,11 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, S
 
 from canopy.core import (
     agent_models,
-    artifact_feed,
-    attachments,
     commit_hooks,
     contract,
     conversation,
     db,
     definitions,
-    drafts,
-    feedback_items,
-    feedback_plans,
-    follow_ups,
     git_tools,
     hostgit,
     memory,
@@ -61,7 +55,22 @@ from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
-from canopy.runs import checkpoint, desks, dispatch, drafted, flaky_kick, plan_guards, policy, tidy
+from canopy.runs import (
+    artifact_feed,
+    attachments,
+    checkpoint,
+    desks,
+    dispatch,
+    drafted,
+    drafts,
+    feedback_items,
+    feedback_plans,
+    flaky_kick,
+    follow_ups,
+    plan_guards,
+    policy,
+    tidy,
+)
 from canopy.runs.checkpoint import SetupError
 from canopy.runtime import agents, project_config, stdout
 from canopy.runtime.watch import Watch

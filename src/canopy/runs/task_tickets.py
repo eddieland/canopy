@@ -16,8 +16,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import contract, conversation, db, follow_ups, records, sql
-from canopy.core.follow_ups import Refusal
+from canopy.core import contract, conversation, db, records, sql
+from canopy.runs import follow_ups
+from canopy.runs.follow_ups import Refusal
 
 if TYPE_CHECKING:
     import sqlite3

@@ -104,7 +104,7 @@ _REASONS = ", ".join(f"`{r}`" for r in DismissalReason)
 #: A one-off task the operator submitted (DESIGN §36), `task:N`.
 TASK = "task"
 # The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review`, `stop`, and
-# `persona` (a review request and its persona, `core/review_requests.py`), and `show`; working one is PR-scoped work
+# `persona` (a review request and its persona, `reviews/review_requests.py`), and `show`; working one is PR-scoped work
 # (ROADMAP M14).
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: (
@@ -128,7 +128,7 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     # change, or grant its draft more revisions (§34).
     REVIEW: ("dismiss", "send", "seen", "reply", "grant"),
     # Submitted with `canopy task submit`; a reply queues its next run, and stopping one ends it, and drops it while it
-    # waits (DESIGN §36). A ticket's or a task's attachments are text its runs read (§22, `core/attachments.py`).
+    # waits (DESIGN §36). A ticket's or a task's attachments are text its runs read (§22, `runs/attachments.py`).
     TASK: ("stop", "reply", "show", "attach", "detach"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.

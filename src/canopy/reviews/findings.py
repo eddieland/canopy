@@ -7,10 +7,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import contract, db, review_answers, review_requests, review_runs
+from canopy.core import contract, db, review_answers, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import HoldKind, ReviewRunStatus, SeenKind
 from canopy.infra.text import printable, quoted
+from canopy.reviews import review_requests
 
 if TYPE_CHECKING:
     import sqlite3

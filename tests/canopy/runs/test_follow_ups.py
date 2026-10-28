@@ -7,9 +7,10 @@ from typing import cast
 
 import pytest
 
-from canopy.core import contract, conversation, db, follow_ups, outbox, records, sql
+from canopy.core import contract, conversation, db, outbox, records, sql
 from canopy.loop import attention
 from canopy.notify import message
+from canopy.runs import follow_ups
 from tests.canopy.helpers import (
     KEY,
     agent_runs,

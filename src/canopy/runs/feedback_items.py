@@ -29,7 +29,7 @@ from dataclasses import astuple, dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import db, drafts, observe, records, sql
+from canopy.core import db, observe, records, sql
 from canopy.core.vocab import (
     CheckConclusion,
     CheckStatus,
@@ -41,6 +41,7 @@ from canopy.core.vocab import (
     RunStatus,
 )
 from canopy.core.workspace import CheckRole
+from canopy.runs import drafts
 
 if TYPE_CHECKING:
     import sqlite3

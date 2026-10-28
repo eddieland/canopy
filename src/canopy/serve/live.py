@@ -27,8 +27,9 @@ from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import sql, tasks
+from canopy.core import sql
 from canopy.infra import logs
+from canopy.runs import tasks
 from canopy.serve import chore_views, reviews, spend_views, task_views, tick_views, views
 from canopy.serve.schema.event import (
     AttentionUpdated,

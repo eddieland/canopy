@@ -16,10 +16,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import hostgit, sql, tasks
+from canopy.core import hostgit, sql
 from canopy.core.vocab import RunStatus
 from canopy.infra import procs
-from canopy.runs import dispatch
+from canopy.runs import dispatch, tasks
 
 if TYPE_CHECKING:
     import sqlite3

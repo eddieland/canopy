@@ -15,21 +15,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import (
-    artifact_feed,
-    connector_runs,
-    conversation,
-    db,
-    drafts,
-    drafts_manage,
-    observe,
-    review_drafts_manage,
-    review_requests,
-    slack_replies,
-    sql,
-)
+from canopy.core import connector_runs, conversation, db, observe, review_drafts_manage, sql
 from canopy.core.vocab import ConnectorRunStatus, PrState, SourceKind
-from canopy.reviews import waiting
+from canopy.loop import slack_replies
+from canopy.reviews import review_requests, waiting
+from canopy.runs import artifact_feed, drafts, drafts_manage
 
 if TYPE_CHECKING:
     import sqlite3

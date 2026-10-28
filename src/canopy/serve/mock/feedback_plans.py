@@ -18,8 +18,9 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import feedback_items, feedback_plans, plans, sql
+from canopy.core import plans, sql
 from canopy.core.vocab import Phase, PlanStatus, Proposal, ReviewItem, ReviewState, RunKind, RunStatus
+from canopy.runs import feedback_items, feedback_plans
 from canopy.serve.mock.reviews import PR_88
 
 if TYPE_CHECKING:

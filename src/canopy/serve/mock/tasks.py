@@ -16,9 +16,10 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, sql, task_tickets, tasks
+from canopy.core import conversation, sql
 from canopy.core.items import Item
 from canopy.core.vocab import RunStatus
+from canopy.runs import task_tickets, tasks
 
 if TYPE_CHECKING:
     import sqlite3

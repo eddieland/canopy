@@ -10,9 +10,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from canopy.core import db, drafts_manage
+from canopy.core import db
 from canopy.core.vocab import Reaction
 from canopy.infra import resources
+from canopy.runs import drafts_manage
 from tests.canopy.helpers import (
     APPROVE,
     DRAFTS_PR,

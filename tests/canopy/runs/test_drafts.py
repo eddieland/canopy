@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.core import drafts, replies
+from canopy.core import replies
 from canopy.core.vocab import DraftKind, DraftStance, DraftStatus, Reaction, ReplyMode
+from canopy.runs import drafts
 from tests.canopy.helpers import APPROVE, DRAFTS_PR, KEY, TRACKER_POSTS, all_drafts, present
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
 

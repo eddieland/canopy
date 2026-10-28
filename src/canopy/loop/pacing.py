@@ -15,12 +15,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, db, notice, tasks
+from canopy.core import chore_view, db, notice
 from canopy.core.items import subject
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention
 from canopy.reviews import settle
-from canopy.runs import policy
+from canopy.runs import policy, tasks
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
