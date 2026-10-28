@@ -6,6 +6,7 @@ import {
     byCall,
     contextShape,
     callLine,
+    decisionsOf,
     drawnRows,
     duration,
     elapsed,
@@ -177,10 +178,47 @@ describe('summary', () => {
         )
     })
 
+    it("is a decide call's decisions, each its ticket and action, over any title", () => {
+        const decisions = [
+            { key: 'ABC-1', action: 'wait', rationale: 'PR 8 waits on CI' },
+            { key: 'ABC-2', action: 'done', rationale: 'merged' },
+        ]
+        const call = tool('completed', { tool: 'canopy_decide', title: 'decide', input: JSON.stringify({ decisions }) })
+        expect(summary(call)).toBe('ABC-1 wait, ABC-2 done')
+        const tickWide = JSON.stringify({ decisions: [{ action: 'skip', rationale: 'mcp_unavailable: jira' }] })
+        expect(summary(tool('completed', { input: tickWide }))).toBe('this tick skip')
+    })
+
     it('is empty for an input with nothing short, or one cut short', () => {
         expect(summary(tool('completed', { input: '{"fields": []}' }))).toBe('')
         expect(summary(tool('completed', { input: '{"command": "np' }))).toBe('')
         expect(summary(tool('completed', { input: '[]' }))).toBe('')
+    })
+})
+
+describe('decisionsOf', () => {
+    it("reads a decide call's decisions in order, a tick-wide skip's key as null, a missing rationale empty", () => {
+        const input = JSON.stringify({
+            decisions: [
+                { key: 'ABC-2', action: 'skip', rationale: 'blocked' },
+                { key: 'ABC-1', action: 'wait' },
+            ],
+        })
+        expect(decisionsOf(tool('completed', { input }))).toEqual([
+            { key: 'ABC-2', action: 'skip', rationale: 'blocked' },
+            { key: 'ABC-1', action: 'wait', rationale: '' },
+        ])
+        expect(decisionsOf(tool('completed', { input: '{"decisions": [{"key": null, "action": "skip"}]}' }))).toEqual([
+            { key: null, action: 'skip', rationale: '' },
+        ])
+    })
+
+    it('is null for any other call, a list that is not decisions, or an input cut short', () => {
+        expect(decisionsOf(shell('canopy decide ABC-1 wait --rationale x', 'recorded wait for ABC-1'))).toBeNull()
+        expect(decisionsOf(tool('completed', { input: '{"decisions": []}' }))).toBeNull()
+        expect(decisionsOf(tool('completed', { input: '{"decisions": ["ABC-1 wait"]}' }))).toBeNull()
+        expect(decisionsOf(tool('completed', { input: '{"decisions": [{"key": "ABC-1"}]}' }))).toBeNull()
+        expect(decisionsOf(tool('completed', { input: '{"decisions": [{"key": "ABC-1", "act' }))).toBeNull()
     })
 })
 
