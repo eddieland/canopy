@@ -3277,10 +3277,10 @@ export type components = {
          */
         DiffLineKind: "add" | "del" | "ctx";
         /**
-         * @description Why the operator dismissed a review's finding (DESIGN §21): `wrong`, it does not hold; `intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix.
+         * @description Why the operator dismissed a review's finding (DESIGN §21): `wrong`, it does not hold; `intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix; `out_of_scope`, it holds and is worth fixing, but in another PR.
          * @enum {string}
          */
-        DismissalReasonName: "wrong" | "intentional" | "not_worth_it";
+        DismissalReasonName: "wrong" | "intentional" | "not_worth_it" | "out_of_scope";
         /**
          * Dismissed
          * @description What a dismissal left: the finding, and whether it is now dismissed.

@@ -2,12 +2,12 @@
 
 Each `done` review's findings are counted by severity, by the persona the review ran in, and by the models its session
 named, beside what became of each: the operator's dismissal by reason, or else the latest answer a worker gave it,
-`fixed` or `declined`, as the next review reads it. A `wrong` dismissal is the reviewer's noise; an `intentional` or
-`not_worth_it` one is a finding that held and was not acted on. A dismissal from before canopy asked why counts as
-`unrecorded`. The operator's dismissal wins over a worker's answer, since it is the operator's word on the finding: a
-finding both dismissed and answered counts as dismissed alone. One neither dismissed nor answered counts in the total
-only. Apart from those, a finding the harness held as a rebuttal of a worker's decline counts as one, whether the
-operator has released it or not. Read from the journal only.
+`fixed` or `declined`, as the next review reads it. A `wrong` dismissal is the reviewer's noise; an `intentional`,
+`not_worth_it`, or `out_of_scope` one is a finding that held and was not acted on here, the last left for another PR. A
+dismissal from before canopy asked why counts as `unrecorded`. The operator's dismissal wins over a worker's answer,
+since it is the operator's word on the finding: a finding both dismissed and answered counts as dismissed alone. One
+neither dismissed nor answered counts in the total only. Apart from those, a finding the harness held as a rebuttal of a
+worker's decline counts as one, whether the operator has released it or not. Read from the journal only.
 """
 
 from __future__ import annotations

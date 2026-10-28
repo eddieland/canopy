@@ -123,6 +123,7 @@ describe('useDismissReviewFinding', () => {
             'wrongIt does not hold: the reviewer misread the code',
             'intentionalIt holds, and the change means it to',
             'not worth itIt holds, and is not worth the fix',
+            'out of scopeIt holds, and belongs in another PR',
         ])
         expect(sent).toEqual([])
         fireEvent.click(reasons[0] as HTMLElement)
@@ -160,6 +161,7 @@ describe('dismissedLabel', () => {
             answer_reason: null,
         }
         expect(dismissedLabel({ ...finding, dismissed_reason: 'not_worth_it' })).toBe('dismissed: not worth it')
+        expect(dismissedLabel({ ...finding, dismissed_reason: 'out_of_scope' })).toBe('dismissed: out of scope')
         expect(dismissedLabel({ ...finding, dismissed_reason: null })).toBe('dismissed')
     })
 })
