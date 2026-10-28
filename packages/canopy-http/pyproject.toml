@@ -3,6 +3,7 @@ name = "canopy-http"
 # From the latest v* tag, as canopy's is (D085), so every package canopy ships carries its version.
 dynamic = ["version"]
 description = "canopy's HTTP client for the programs it ships: one origin, no redirects, and retries only where safe."
+readme = "README.md"
 license = "MIT"
 authors = [{ name = "eddieland" }]
 keywords = ["canopy", "http", "client"]
