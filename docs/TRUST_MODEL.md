@@ -424,12 +424,13 @@ Controls:
   poster,
   `canopy-connect-github` and `canopy-post-github` (DESIGN §29), read the token `gh` holds for the host a PR's or an
   issue's URL, or a repository's clone URL in the map, names, when they run, only once `gh` names that host as one it
-  is logged in to, and send it only to that host's API, following no redirect; canopy never reads it.
+  is logged in to, and send it only to that host's API, following no redirect, through `canopy-http` (D130), whose
+  client is bound to one origin; canopy never reads it.
   `canopy-connect-jira` (DESIGN §30) reads an email and API token from an operator-only file of its own, held to the
   Slack sink's checks, never from canopy's config, argv, journal, or logs, and sends them only to the Jira site the
   operator names, over https, following no redirect. Lint bans network modules in the harness (`urllib.request`,
-  `http.client`, `socket`) and any import of these programs, so the process that holds the journal and enforces the
-  guards never opens a connection or reads a token or a sink's secret.
+  `http.client`, `socket`), and `test_layers.py` bans `canopy-http`, httpx2, and any import of these programs, so the
+  process that holds the journal and enforces the guards never opens a connection or reads a token or a sink's secret.
 
 ### T3. Runaway agents (cost, capacity, infinite loops)
 

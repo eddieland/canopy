@@ -45,6 +45,9 @@ PROGRAMS = frozenset({"notify/desktop.py", "serve/__main__.py"})
 SEPARATE = frozenset(
     {"canopy_artifacts", "canopy_github", "canopy_jira", "canopy_notify_slack", "canopy_review_bench"},
 )
+# The HTTP stack those programs share (D130), and its transport: the harness opens no connection (TRUST_MODEL T2), as
+# ruff's ban on the stdlib's network modules keeps it from doing with those.
+NETWORK = frozenset({"canopy_http", "httpx2"})
 # The package that alone knows the agent runtime (D009), and the name that must appear in no string outside it.
 RUNTIME = "runtime"
 RUNTIME_NAME = re.compile(r"opencode", re.IGNORECASE)
@@ -117,6 +120,8 @@ def violations(path: Path, source: str) -> list[str]:
         top, _, rest = name.partition(".")
         if top in SEPARATE:
             found.append(f"{where}:{line}: imports {name}, a separate program canopy runs only as a command")
+        if top in NETWORK:
+            found.append(f"{where}:{line}: imports {name}, which opens connections the harness never opens")
         program = top == "click" and path.relative_to(PACKAGE).as_posix() in PROGRAMS
         if top in CONFINED and CONFINED[top] != own and not program:
             found.append(f"{where}:{line}: imports {name}, which only canopy.{CONFINED[top]} may import")
@@ -143,6 +148,7 @@ from canopy import cli
 from canopy.core import db
 from canopy.setup.init import run
 import canopy_notify_slack
+import httpx2
 
 if TYPE_CHECKING:
     from canopy.loop.tick import Outcome
@@ -153,6 +159,7 @@ if TYPE_CHECKING:
         "canopy.runs imports canopy.cli, which is not in a lower layer",
         "canopy.runs imports canopy.setup.init, which is not in a lower layer",
         "imports canopy_notify_slack, a separate program canopy runs only as a command",
+        "imports httpx2, which opens connections the harness never opens",
         "canopy.runs imports canopy.loop.tick, which is not in a lower layer",
     ]
 

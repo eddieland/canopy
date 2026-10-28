@@ -20,9 +20,9 @@ classifiers = [
     "Topic :: Software Development :: Version Control :: Git",
 ]
 requires-python = ">=3.12"
-# click for their command lines (D025), and nothing from canopy: canopy runs these as commands, so the harness never
-# holds a token or opens a connection (D041, DESIGN §29).
-dependencies = ["click>=8.5.0"]
+# click for their command lines (D025), canopy-http for every request they make (D130), and nothing from canopy:
+# canopy runs these as commands, so the harness never holds a token or opens a connection (D041, DESIGN §29).
+dependencies = ["canopy-http", "click>=8.5.0"]
 
 [project.scripts]
 canopy-connect-github = "canopy_github.connect:main"
