@@ -71,9 +71,9 @@ class ToolUse:
 class Usage:
     """What a run cost: dollars as the runtime priced them, tokens by kind, and the most one model call was sent.
 
-    `first_call` is what its first model call was sent, from the cache or not, and `first_cache_write` what that call
-    wrote to the cache. Each of the three is None for a run recorded before canopy kept it; the first call's are None
-    too for a run that made no model call.
+    `first_call` is what its first model call was sent, from the cache or not, `first_cache_write` what that call wrote
+    to the cache, and `first_cache_read` what it read from it. Each of these and the peak context is None for a run
+    recorded before canopy kept it; the first call's are None too for a run that made no model call.
     """
 
     cost_usd: float
@@ -85,6 +85,7 @@ class Usage:
     peak_context: int | None = None
     first_call: int | None = None
     first_cache_write: int | None = None
+    first_cache_read: int | None = None
 
     @property
     def new_tokens(self) -> int:
@@ -273,8 +274,8 @@ def total(calls: Sequence[Call]) -> Usage:
     """What a run's model calls cost together.
 
     Returns:
-        Their summed cost and tokens, the most one call was sent as the peak context, and what the first call was sent
-        and wrote to the cache; those two None when there was no call.
+        Their summed cost and tokens, the most one call was sent as the peak context, and what the first call was sent,
+        wrote to the cache, and read from it; those three None when there was no call.
     """
     first = calls[0] if calls else None
     return Usage(
@@ -287,6 +288,7 @@ def total(calls: Sequence[Call]) -> Usage:
         peak_context=max((c.sent for c in calls), default=0),
         first_call=first.sent if first is not None else None,
         first_cache_write=first.cache_write if first is not None else None,
+        first_cache_read=first.cache_read if first is not None else None,
     )
 
 

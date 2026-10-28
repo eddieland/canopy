@@ -1035,7 +1035,8 @@ def run_tools(conn: sqlite3.Connection, table: RunTable | Literal["ticks"], run_
 #: The assignments of a row's cost and token columns, a `?` for each of what `_spent` returns, in its order.
 _SPENT: LiteralString = (
     "cost_usd = ?, tokens_input = ?, tokens_output = ?, tokens_reasoning = ?, tokens_cache_read = ?, "
-    "tokens_cache_write = ?, tokens_peak_context = ?, tokens_first_call = ?, tokens_first_cache_write = ?"
+    "tokens_cache_write = ?, tokens_peak_context = ?, tokens_first_call = ?, tokens_first_cache_write = ?, "
+    "tokens_first_cache_read = ?"
 )
 
 
@@ -1103,6 +1104,9 @@ def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:
         first_cache_write=int(values["tokens_first_cache_write"])
         if values["tokens_first_cache_write"] is not None
         else None,
+        first_cache_read=int(values["tokens_first_cache_read"])
+        if values["tokens_first_cache_read"] is not None
+        else None,
     )
 
 
@@ -1116,7 +1120,7 @@ def _set_report(
     digest: str | None,
     tools: Sequence[ToolUse],
 ) -> None:
-    spent = _spent(usage) if usage is not None else (None,) * 9
+    spent = _spent(usage) if usage is not None else (None,) * 10
     # Only with a report: a template of the operator's that prints plain text may not load the snapshot at all.
     loaded = digest if session_id is not None or usage is not None else None
     report = (
@@ -1136,11 +1140,11 @@ def _set_report(
         )
 
 
-def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, int | None, int | None]:
+def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, int | None, int | None, int | None]:
     """`usage` as the cost and token columns hold it, in the order `_SPENT` sets them.
 
     Returns:
-        The cost, each kind of token, the peak context, and the first call's tokens and cache write.
+        The cost, each kind of token, the peak context, and the first call's tokens, cache write, and cache read.
     """
     return (
         usage.cost_usd,
@@ -1152,6 +1156,7 @@ def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, in
         usage.peak_context,
         usage.first_call,
         usage.first_cache_write,
+        usage.first_cache_read,
     )
 
 

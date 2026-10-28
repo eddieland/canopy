@@ -16,11 +16,13 @@ def test_the_calls_total_is_their_sum_with_the_peak_and_the_first_call() -> None
         peak_context=910,
         first_call=550,
         first_cache_write=50,
+        first_cache_read=400,
     )
 
 
 def test_no_call_costs_nothing_and_has_no_first_call() -> None:
     assert report.total([]) == Usage(0, 0, 0, 0, 0, 0, peak_context=0, first_call=None, first_cache_write=None)
+    assert report.total([]).first_cache_read is None
 
 
 def test_tool_calls_are_rolled_up_by_tool_with_what_they_returned() -> None:

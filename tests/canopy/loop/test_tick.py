@@ -390,7 +390,7 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(scenario: Scenario, la
     tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
     assert tuple(getattr(tick, c) for c in tokens) == (2000, 400, 60, 8000, 1000)
     assert tick.tokens_peak_context == 5500
-    assert (tick.tokens_first_call, tick.tokens_first_cache_write) == (5500, 500)
+    assert (tick.tokens_first_call, tick.tokens_first_cache_write, tick.tokens_first_cache_read) == (5500, 500, 4000)
     assert (scenario.env.state_dir / definitions.RUNTIME_DIR / present(tick.definitions_digest)).is_dir()
     # `canopy queried` and the echo, each a `bash` call that returned its stdout.
     [(tool, calls, _, _)] = tools_of(conn, "ticks", tick.id)

@@ -83,6 +83,7 @@ def test_finished_calls_give_the_cost_the_peak_context_and_the_first_call() -> N
         peak_context=100 + 900 + 50,
         first_call=100 + 400 + 50,
         first_cache_write=50,
+        first_cache_read=400,
     )
 
 
