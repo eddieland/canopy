@@ -363,13 +363,14 @@ def test_an_item_the_overseer_raised_stands_while_the_harness_decides_its_ticket
     notified: Path,
 ) -> None:
     scenario.operator("start", KEY)
-    [working] = scenario.tick(dispatches(label=None), raises(KEY, "needs_author"), hold=True).working
+    # An item it records every tick its cause holds, not one it keeps (DESIGN §37).
+    [working] = scenario.tick(dispatches(label=None), raises(KEY, "flaky_rerun"), hold=True).working
     branches_read(scenario.conn, at=db.now())
     scenario.conn.commit()
     # The overseer is not given the ticket, so it cannot record the item again; the item stands, and is not news.
     ticked = scenario.tick()
     assert [(d.action, d.decider) for d in ticked.decisions if d.ticket_key == KEY] == [("wait", Decider.HARNESS)]
-    assert scenario.attention() == [(KEY, "needs_author")]
+    assert scenario.attention() == [(KEY, "flaky_rerun")]
     assert scenario.state()["attention"] == []
     assert len(messages(notified)) == 1
     working.finishes()
