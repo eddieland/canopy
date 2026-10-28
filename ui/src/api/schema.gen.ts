@@ -2384,7 +2384,8 @@ export type components = {
             /**
              * Since
              * Format: date-time
-             * @description When the unbroken run of ticks that recorded it began.
+             * @description When the unbroken run of ticks that recorded it began, or its cause did if that came first or no tick records
+             *     it: a task's question, or the oldest of a unit's drafts waiting.
              */
             since: string;
             /**
