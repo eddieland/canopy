@@ -120,8 +120,10 @@ interval_minutes = 15
 # min_free_disk_mib = 2048
 
 [spend]
-# What a calendar month of agent runs should cost, in whole US dollars. Nothing stops at it: `canopy spend` and the web
-# UI's spend page track the month against it, and a sink that takes `loop` events hears once when the month reaches it.
+# What a calendar month of agent spend should cost, in whole US dollars: canopy's runs and every session of the runtime
+# outside canopy that `canopy loop` has read, canopy's share shown beside the whole. Nothing stops at it: `canopy spend`
+# and the web UI's spend page track the month against it, and a sink that takes `loop` events hears once when the
+# month reaches it.
 # monthly_budget_usd = 300
 # Percentages of it at which that sink also hears, each once a month: a warning at half and at four fifths, here. The
 # 100% alert is always sent. Empty by default.

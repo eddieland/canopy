@@ -318,9 +318,33 @@ def test_slack_blocks_for_each_event_kind() -> None:
             "kind": "loop.budget_reached",
             "month": "2026-10",
             "budget": 300,
+            "percent": 90,
+            "spent": 270.0,
+            "runs": 270.0,
+            "outside": 0.0,
+            "sessions_read_at": None,
+        },
+        {
+            "kind": "loop.budget_reached",
+            "month": "2026-10",
+            "budget": 300,
             "percent": 100,
             "spent": 301.5,
             "projected": 410.25,
+            "runs": 201.5,
+            "outside": 100.0,
+            "sessions_read_at": "2026-10-28T13:05:00.000Z",
+        },
+        {
+            "kind": "loop.budget_reached",
+            "month": "2026-11",
+            "budget": 300,
+            "percent": 80,
+            "spent": 240.0,
+            "runs": 200.0,
+            "outside": 40.0,
+            "sessions_read_at": "2026-10-28T13:05:00.000Z",
+            "sessions_read": "failed",
         },
         {"kind": "test", "text": "canopy test message"},
         {"kind": "kind.from.a.newer.canopy", "line": "x <y>"},
@@ -337,7 +361,18 @@ def test_slack_blocks_for_each_event_kind() -> None:
         ":white_check_mark: review run 5 ended *done*: findings low · 2 findings\n<https://x.test/pr/9>",
         ":white_check_mark: *The loop recovered* after 3 failed ticks",
         ":moneybag: *Spend for 2026-10 reached 80% of its budget:* $240.00 of $300",
+        ":moneybag: *Spend for 2026-10 reached 90% of its budget:* $270.00 of $300",
+        "canopy's runs $270.00 · outside canopy not read yet",
         ":moneybag: *Spend for 2026-10 reached its budget:* $301.50 of $300; on pace for $410.25",
+        (
+            "canopy's runs $201.50 · outside canopy $100.00 · sessions read"
+            " <!date^1793192700^{date_short_pretty} {time}|2026-10-28T13:05:00.000Z>"
+        ),
+        ":moneybag: *Spend for 2026-11 reached 80% of its budget:* $240.00 of $300",
+        (
+            "canopy's runs $200.00 · outside canopy $40.00 · the last read of sessions failed"
+            " <!date^1793192700^{date_short_pretty} {time}|2026-10-28T13:05:00.000Z>"
+        ),
         ":test_tube: canopy test message",
         "x &lt;y&gt;",
     ]
