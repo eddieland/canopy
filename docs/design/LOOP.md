@@ -160,7 +160,7 @@ of `attention.md` and the `text` format, and the Slack sink escapes it (§20).
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to bring the base in |
 | `ci_running` | PR open, checks pending | wait |
-| `ci_red` | PR open, checks failed, newer than cursor | dispatch `resume` for `ci`, with anything else the unit has (§8, One resume for what comes back to a PR); at the attempt limit, attention; in cooldown, wait; held for a notice, wait (§8); left by a worker as flaky, attention (§23) |
+| `ci_red` | PR open, checks failed, newer than cursor | dispatch `resume` for `ci`, with anything else the unit has (§8, One resume for what comes back to a PR); at the attempt limit, attention; in cooldown, wait; held for a notice, wait (§8); left by a worker as flaky, attention, or wait if the harness kicked it (§23) |
 | `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
 | `review_findings` | with `review.agent_prs` and `canopy:review` trusted: findings on the head's review, newer than the cursor | as comments (§7) |
 | `changes_requested` | a trusted reviewer's comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
@@ -297,6 +297,7 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
 5. If a slot's git links changed, the run is `crashed` and no git runs in its slots, which may now point at a git
    directory the worker made. Otherwise push once where the branch is not on origin, never with force (with
    `trust.rebase`, leasing what origin held at step 2). A failed push or commits on no pushed branch is `unpushed`.
+   A `resume` for `ci` that left a check flaky and pushed nothing may then be kicked (§23).
 6. Always tidy and return each slot, except after SIGKILL, which reconcile handles (§6 step 3); an untidy one is kept.
 7. Close the run with its status and validated result, noting where the harness's status differs from the worker's,
    and in the same transaction its report and question (§22), memory (§28), and drafts (§29).

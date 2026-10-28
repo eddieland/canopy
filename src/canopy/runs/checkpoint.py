@@ -154,6 +154,55 @@ def ensure_pushed(git: Git, branch: str, start: Start, log: logs.TickAdapter, *,
     return ""
 
 
+def rebase_for_kick(git: Git, branch: str, base: str, head: str) -> str:
+    """Rebase `head`, where origin has `branch`, onto origin's `base`, making every commit again (DESIGN §23).
+
+    The branch gets a new head even when the base has not moved, so its checks run on it. The base is the one the run
+    fetched as it started. The rebase must change nothing a merge of `head` into the base would not: one that drops
+    what a merge commit of the branch's own added is refused, as is one that stops, which is aborted, a timeout's too.
+
+    Returns:
+        The commit to push in `head`'s place, which the slot's HEAD is at.
+
+    Raises:
+        SetupError: the slot could not be put at `head`, the rebase stopped or would change the branch's content, or it
+            made `head` again.
+    """
+    checked_out = git.result("checkout", "--quiet", "--detach", head)
+    if not checked_out.ok:
+        raise SetupError(f"{git.where}could not check out {branch}: {_detail(checked_out)}")
+    onto = f"refs/remotes/origin/{base}"
+    try:
+        rebased = git.result("rebase", "--quiet", "--no-autostash", "--force-rebase", onto)
+    except SetupError:
+        git.result("rebase", "--abort")
+        raise
+    if not rebased.ok:
+        git.result("rebase", "--abort")
+        raise SetupError(f"{git.where}{branch} does not rebase onto {base}: {_detail(rebased)}")
+    made = git.run("rev-parse", "HEAD")
+    if made == head:
+        raise SetupError(f"{git.where}rebasing {branch} onto {base} made the same commit")
+    # A rebase replays commits and drops merges, with whatever a merge's resolution added: what merging the branch into
+    # the base gives is what the branch holds, so a rebase that differs from it would lose some of it.
+    merged = git.result("merge-tree", "--write-tree", onto, head)
+    if not merged.ok or merged.stdout.split()[:1] != [git.run("rev-parse", "HEAD^{tree}")]:
+        git.result("checkout", "--quiet", "--detach", head)
+        raise SetupError(f"{git.where}rebasing {branch} onto {base} would drop changes it holds, such as a merge's own")
+    return made
+
+
+def push_kick(git: Git, branch: str, head: str) -> None:
+    """Push the slot's HEAD, a kick's rebased commit, to `branch` with a lease on `head`, where origin had it.
+
+    Raises:
+        SetupError: the push failed, as when origin's branch moved since.
+    """
+    pushed = _push(git, branch, head)
+    if not pushed.ok:
+        raise SetupError(f"{git.where}the push failed: {_detail(pushed)}")
+
+
 def remote_head(git: Git, branch: str) -> str:
     """Return the commit `branch` is at on origin, as origin says now.
 
@@ -234,6 +283,12 @@ def ignore(git: Git, name: str) -> None:
                 f.write(f"{'' if not held or held.endswith(chr(10)) else chr(10)}{line}\n")
     except OSError as e:
         raise SetupError(f"{git.where}could not have git ignore {name}: {e}") from e
+
+
+def _detail(result: procs.Result) -> str:
+    """Return the first line a git step that failed said, cut for a note: the rest is hints."""
+    said = result.stderr.strip() or result.stdout.strip()
+    return said.splitlines()[0][:500] if said else f"exit {result.returncode}"
 
 
 def _drop_local_branch(git: Git, branch: str, target: str) -> None:

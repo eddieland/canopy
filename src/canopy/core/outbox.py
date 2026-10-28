@@ -96,6 +96,20 @@ class FollowUpsFiled(TypedDict):
     count: int
 
 
+class CiFlaky(TypedDict):
+    """A `ci.flaky` event's fields: a `resume` for `ci` left a failed check as not the change's (DESIGN §23)."""
+
+    ticket: str
+    run: int
+    prs: list[str]
+    #: The repositories whose branch canopy pushed again to rerun the check; empty when the operator reruns it.
+    kicked: list[str]
+    #: The worker's estimate of why the check is flaky, with its evidence: model text, cut to one line.
+    estimate: str
+    #: Why a repository was not kicked, in the harness's words, or None.
+    note: str | None
+
+
 class ChoreEnded(TypedDict):
     """A `chore.ended` event's fields."""
 
@@ -344,6 +358,37 @@ def follow_ups_filed(config: Config, *, key: str, run_id: int, filed: Mapping[st
         "count": len(filed),
     }
     return Event(RUNS, "follow_ups.filed", fields)
+
+
+def ci_flaky(
+    config: Config,
+    *,
+    key: str,
+    run_id: int,
+    prs: Sequence[str],
+    kicked: Sequence[str],
+    estimate: str,
+    note: str,
+) -> Event | None:
+    """Return the `ci.flaky` event for run `run_id` of `key`, which left a failed check as flaky, for the run's close.
+
+    It is a point event, kicked or not: a kicked check reruns on its own, and one that is not raises `flaky_rerun`
+    once the overseer reads it (DESIGN §23), so the sink hears the worker's estimate of why either way.
+
+    Returns:
+        The event, or None if no sink takes runs.
+    """
+    if not config.notify.takes(RUNS):
+        return None
+    fields: CiFlaky = {
+        "ticket": key,
+        "run": run_id,
+        "prs": [cut(pr, DETAIL_LIMIT) for pr in prs],
+        "kicked": list(kicked),
+        "estimate": cut(estimate, DETAIL_LIMIT),
+        "note": cut(note, DETAIL_LIMIT) if note else None,
+    }
+    return Event(RUNS, "ci.flaky", fields)
 
 
 def chore_ended(

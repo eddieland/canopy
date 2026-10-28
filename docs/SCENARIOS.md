@@ -92,6 +92,10 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   did not cause (a job that sleeps past its timeout on one run only, say). Expect the `resume` for `ci` to push nothing
   for it and end `done` with `flaky`, and the next tick to record `flaky_rerun` naming the check, not another `resume`.
   Rerun the check: green clears the item. On a PR whose failure is the change's, expect a fix and no `flaky`.
+- **S66. A flaky check, kicked** (the operator's ask, 2026-10-28). With `trust.max_flaky_kicks = 1` and the check of
+  S63 failing, expect the `resume` for `ci` to end `done` with `flaky`, its PR's branch rebased onto its base and
+  pushed once, its checks running on the new head, and the next tick to `wait`, not record `flaky_rerun`. Fail the
+  check once more: expect no second kick, and `flaky_rerun`. Check that branch protection accepted the leased push.
 - **S12. Stacked tickets** (M4, M56). Two tickets, the second blocked by the first. Expect the second to wait, then be
   dispatched with `--base` on the first's branch once its PR is open and green. Then merge the first: expect a
   `resume (retarget)` for the second, without `--base`, that points its PR at the repository's base branch.
