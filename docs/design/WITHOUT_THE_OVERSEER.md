@@ -10,7 +10,9 @@ decision](OVERSEER_PER_DECISION.md).
 Being built (ROADMAP M39). It waits on §37, and on the overnight run that tests idle pacing (SCENARIOS S27). Built, in
 §6, §11, and TRUST_MODEL T3: "When the tick runs no overseer", the query no source read and the reviews the overseer
 starts still left to it until they are the harness's; and the poll's comparison and a failed poll's wake, the latest
-tick read as it ended, so what it started wakes nothing. The rest is designed, not built: until it is, §5, §6, §11, §13,
+tick read as it ended, so what it started wakes nothing. Built too, where a `tracker` source runs, in TRUST_MODEL T1:
+the tracker's half of "What the overseer reads", the harness's `wait` on a ticket the source left stale, no query
+owed, and no `tracker_unsupported` skip. The rest is designed, not built: until it is, §5, §6, §11, §13,
 §15, §30, §37, and TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that finishes it
 changes those sections and cuts this one to what is left.
 
@@ -103,8 +105,9 @@ fingerprints the world, a second reader of what the sources observe.
 
 ### Open
 
-- Whether a `tracker` source is required (§35, Open). Recommended: required, as §35 recommends, and settled before
-  this is built, since an overseer with no MCP can do nothing with a ticket no source observes.
+- Settled (2026-10-28, the operator's choice): a `tracker` source is required, since an overseer with no MCP can do
+  nothing with a ticket no source observes. Until config refuses a workspace without one, the overseer reads the
+  tracker itself there.
 - Whether `runtime.allow_bash`'s overseer entry, which lets it run commands the operator names, such as a
   tracker's CLI while its MCP server is down, goes with the MCP servers. Recommended: it goes, that entry with it, since
   an overseer that calls no tracker or VCS tool has nothing left to run; the workers' entries stay.
