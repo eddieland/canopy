@@ -118,6 +118,9 @@ class RunState(TypedDict):
     #: Present, and true, only when the worker left a failed check as not the change's (DESIGN §23): one bit of its
     #: result, never its text (TRUST_MODEL T1).
     flaky: NotRequired[bool]
+    #: Present, and true, only when the harness pushed the branch again to rerun the checks the worker left as flaky
+    #: (DESIGN §23): their new run is on the new head.
+    kicked: NotRequired[bool]
     branch: str | None
     repos: list[RunRepo]
     started_at: str
@@ -484,8 +487,12 @@ def _run_summary(
     if run.id in run_reasons:
         summary["reasons"] = list(run_reasons[run.id])
     # Only a `resume` for `ci` is asked whether a failure was the change's: from any other run the bit means nothing.
-    if ResumeReason.CI in summary.get("reasons", ()) and contract.stored_object(run.result_json).get("flaky") is True:
+    stored = contract.stored_object(run.result_json)
+    if ResumeReason.CI in summary.get("reasons", ()) and stored.get("flaky") is True:
         summary["flaky"] = True
+        # Written by the harness alone: a worker's result keeps only the contract's fields.
+        if stored.get("kicked"):
+            summary["kicked"] = True
     return summary
 
 

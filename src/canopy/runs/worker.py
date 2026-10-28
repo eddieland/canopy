@@ -61,7 +61,7 @@ from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
-from canopy.runs import checkpoint, desks, dispatch, drafted, plan_guards, policy, tidy
+from canopy.runs import checkpoint, desks, dispatch, drafted, flaky_kick, plan_guards, policy, tidy
 from canopy.runs.checkpoint import SetupError
 from canopy.runtime import agents, project_config, stdout
 from canopy.runtime.watch import Watch
@@ -195,17 +195,22 @@ class Outcome:
     follow_ups: follow_ups.Checked | None = None
     #: What a resume's worker answered of the review findings it was handed, checked (DESIGN §21).
     answers: review_answers.Checked | None = None
+    #: The repositories whose branch the harness kicked, to rerun checks the worker judged flaky (DESIGN §23).
+    kicked: Sequence[str] = ()
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11).
 
-        A refused follow-up is kept with it, by key, for the attention item it raises (DESIGN §18).
+        A refused follow-up is kept with it, by key, for the attention item it raises (DESIGN §18), and the repositories
+        the harness kicked, for the overseer (DESIGN §23).
         """
         data: dict[str, object] = self.result.model_dump(mode="json") if self.result is not None else {}
         if self.note:
             data["harness"] = self.note
         if self.follow_ups is not None:
             data |= self.follow_ups.stored()
+        if self.kicked:
+            data["kicked"] = list(self.kicked)
         return json.dumps(data)
 
 
@@ -826,6 +831,16 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     committed += [found for slot in slots if attached and (found := _committed_attachments(slot, branch))]
     for slot, start in zip(slots, starts, strict=True):
         committed += checkpoint.unmarked(slot.git, branch, start, slot.base, marks)
+    # After the marks are read: a kick replaces the branch's commits with copies the run did not make (DESIGN §23).
+    kicks = flaky_kick.after_run(
+        ctx,
+        run,
+        status,
+        flaky=parsed is not None and parsed.flaky,
+        places=[(slot.git, slot.base, start) for slot, start in zip(slots, starts, strict=True)],
+        log=log,
+    )
+    committed += kicks.notes
     _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
     notes = "; ".join(n for n in [note, *committed, filed_note, answered_note] if n)
@@ -838,6 +853,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         drafts=drafted,
         follow_ups=filed,
         answers=answered,
+        kicked=kicks.kicked,
     )
 
 

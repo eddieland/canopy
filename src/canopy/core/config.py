@@ -682,6 +682,10 @@ class Trust(Section):
     # (TRUST_MODEL T1, D056), for repositories that refuse merge commits. Private: a shared file must not let
     # workers replace a branch's history.
     rebase: Annotated[StrictBool, Scope.PRIVATE] = False
+    #: How many times canopy reruns a PR's checks a `resume` for `ci` judged flaky, for each head a worker pushed, by
+    #: rebasing the branch onto its base and pushing it with a lease (DESIGN §23, TRUST_MODEL T1); 0 leaves every
+    #: rerun to the operator. Private: a shared file must not let canopy replace a branch's history.
+    max_flaky_kicks: Annotated[Count, Scope.PRIVATE] = 0
     # Whether workers draft the comments they would post, for the operator to send, or post them, marked (DESIGN
     # §29). Private: a shared file must not decide what is said in the operator's name.
     review_replies: Annotated[ReplyMode, Scope.PRIVATE] = ReplyMode.APPROVE

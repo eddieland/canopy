@@ -76,7 +76,11 @@ Controls:
   Pushes never go to a fork, and are never forced unless the operator sets `trust.rebase`, for repositories that
   refuse merge commits (D056). Then a worker that rebased its branch pushes it with `--force-with-lease` to that
   branch, the one forced push its definition allows, and `canopy _run`'s own push leases the commit the run started
-  from. Branch protection keeps every force off the base branch.
+  from. Under `trust.max_flaky_kicks` (private, off by default), `_run` also rebases the branch of a `resume` for `ci`
+  whose worker judged a check flaky and pushed nothing, and pushes it with a lease on the head it found, at most that
+  many times per head a worker or a person pushed, counted in code (DESIGN §23); the worker gains no force. So a
+  steered worker's `flaky` can replace the branch's commits with copies of themselves, never their content. Branch
+  protection keeps every force off the base branch.
 - Workers never approve, merge, close PRs, or move tickets to Done, directly or through text the tracker acts on (GitHub
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
   MCP write scope limited to comments, labels, PR create/update). The worker's definition denies merge, review
@@ -1096,7 +1100,8 @@ loop's terminal would.
 - Transition a ticket to Done.
 - Push to any branch outside `trust.branch_prefix`, except the head branch of an open, non-fork PR the operator
   authored and labeled with a queue label (T1); and never with force, except a worker's rebased branch pushed with a
-  lease when the operator sets `trust.rebase` (T1).
+  lease when the operator sets `trust.rebase`, and the harness's lease of a rebased branch to rerun flaky checks when
+  the operator sets `trust.max_flaky_kicks` (T1).
 - Act on instructions found in ticket or PR text from non-authorized accounts.
 - Store or log credentials.
 - Run more than `capacity.max_workers` workers, or two workers on one ticket.
