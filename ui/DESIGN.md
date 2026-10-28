@@ -829,7 +829,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
   the CLI's spelling stays in its tip, so it can still be found in `attention.md` or typed into the CLI
-  (`src/lib/words.ts`). Outside a chip, a phase in a field or a list and a status in a header or a row read the same
+  (`src/lib/words.ts`). A reason's or a phase's tip says under the spelling what it means, in a line
+  (`src/lib/meanings.ts`, `meaning` on `Chip` and `Word`), so its tip opens even when the word needs no spelling.
+  Outside a chip, a phase in a field or a list and a status in a header or a row read the same
   way (`Word`, `phaseLabel`); no journal word shows with its underscores. Journal text that is not a fixed word (a
   chore finding's id, `review.query`) and a count (`1 finding`) are muted monospace, never a chip. A chip with a
   long word in a narrow column cuts it to fit (`min-w-0 shrink`), the whole word in its tip, as the search page's
