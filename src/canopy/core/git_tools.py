@@ -14,10 +14,9 @@ transport, so not the lazy fetch a promisor remote in the repository's config co
 clean filter runs. What a call returns is cut at `MAX_CHARS`, every hidden character named, as the PR's own text is
 untrusted.
 
-A tool that reads records answers with them, a `Result`: `log` its `Commits`, `grep` its `Matches`. Its tool lists the
-result as its output schema and returns it as structured content and, since the runtime shows the model only a tool's
-text, as JSON in its text: no commit's message, path, or line can pass for another record, or for a field. The rest
-answer with git's text.
+A tool that reads records answers with a `Result`, such as `log`'s `Commits`. Its tool lists the result as its output
+schema and returns it as structured content and, since the runtime shows the model only a tool's text, as JSON in its
+text: no commit's message, path, or line can pass for another record, or for a field. The rest answer with git's text.
 """
 
 from __future__ import annotations
@@ -30,6 +29,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Annotated, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, model_validator
+from pydantic_core import to_json
 
 from canopy.core import config, hostgit
 from canopy.core.memory_text import visible
@@ -484,6 +484,21 @@ class Matches(Result):
     ]
 
 
+class Paths(Result):
+    """What `files` returns: the paths of the files found, in git's order."""
+
+    #: The paths.
+    paths: Annotated[
+        Sequence[StrictStr],
+        Field(description="Each file's path, relative to the repository's root; none when no file is named so."),
+    ]
+    #: What was left out to fit, if anything.
+    cut: Annotated[
+        StrictStr | None,
+        Field(description=f"What was left out to fit {MAX_CHARS} characters; null when nothing was."),
+    ]
+
+
 def text(result: Result) -> str:
     """The text a git tool that reads records returns: `DATA_NOTE`, then `result` as JSON.
 
@@ -677,11 +692,11 @@ def grep(runner: procs.Runner, checkouts: Mapping[str, Path], request: Grep) -> 
     return Matches(matches=kept, cut="; ".join(cut) or None)
 
 
-def files(runner: procs.Runner, checkouts: Mapping[str, Path], request: Files) -> str:
+def files(runner: procs.Runner, checkouts: Mapping[str, Path], request: Files) -> Paths:
     """List the paths of the files at `request.rev`, in `request.paths` if it names any, named as `request.name` says.
 
     Returns:
-        Each path on a line, cut at `MAX_CHARS`, or a line saying there is none.
+        The paths, every hidden character named, as many as fit `MAX_CHARS`.
 
     Raises:
         Refused: The checkout or the revision is unknown, or git failed.
@@ -692,11 +707,13 @@ def files(runner: procs.Runner, checkouts: Mapping[str, Path], request: Files) -
     # commit is a full id, never an option.
     done = _git(runner, where, "ls-tree", "-r", "--name-only", "-z", commit, "--", *_paths(request.paths))
     named = [
-        path
+        visible(path)
         for path in _out(done, "ls-tree").split("\0")
         if path and (request.name is None or fnmatch.fnmatchcase(PurePosixPath(path).name, request.name))
     ]
-    return _said("\n".join(named)) if named else f"No file at {request.rev} is named so, in what was asked."
+    kept = _fit(named)
+    cut = f"listed {len(kept)} of the {len(named)} files found: name fewer paths, or a name" if kept != named else None
+    return Paths(paths=kept, cut=cut)
 
 
 def _read_log(out: str) -> list[Commit]:
@@ -776,7 +793,7 @@ def _fitted(commits: Sequence[Commit], *, more: bool) -> Commits:
     return Commits(commits=[newest.model_copy(update={"message": message, "files": files})], more=True, cut=cut)
 
 
-def _fit[T: BaseModel](items: Sequence[T]) -> list[T]:
+def _fit[T: BaseModel | str](items: Sequence[T]) -> list[T]:
     """As many of `items`, from the first, as fit `MAX_CHARS` as JSON, with room for the fields around them.
 
     Returns:
@@ -785,7 +802,7 @@ def _fit[T: BaseModel](items: Sequence[T]) -> list[T]:
     kept: list[T] = []
     used = 0
     for item in items:
-        used += len(item.model_dump_json()) + 1
+        used += len(to_json(item)) + 1
         if used > _budget():
             break
         kept.append(item)

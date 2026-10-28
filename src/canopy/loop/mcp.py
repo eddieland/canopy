@@ -475,10 +475,11 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         ),
         _git_tool(
             git_tools.FILES,
-            "List the paths of the files as they are at a commit, under some paths if named, and only those whose own "
-            "name matches a name or a glob such as `*.py` if one is given.",
+            "List the paths of the files as they are at a commit, as JSON, under some paths if named, and only those "
+            "whose own name matches a name or a glob such as `*.py` if one is given.",
             git_tools.Files,
             git_tools.files,
+            result=git_tools.Paths,
             runner=runner,
             checkouts=checkouts,
         ),
