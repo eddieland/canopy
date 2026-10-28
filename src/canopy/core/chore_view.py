@@ -12,7 +12,7 @@ import threading
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from canopy.core import chore_result as result
 from canopy.core import chore_runs, contract, db, records
@@ -311,14 +311,14 @@ def _detail(run: records.ChoreRun) -> str:
 
 
 class LatestRun(TypedDict):
-    """A chore's latest run, as the state block's `chores` carries it."""
+    """A chore's latest run in the state block's `chores`: its id and status alone unless the chore is due."""
 
     run_id: int
     status: str
-    started_at: str
-    ended_at: str | None
-    # The harness's note on the run, or else the chore's own summary.
-    summary: str | None
+    started_at: NotRequired[str]
+    ended_at: NotRequired[str | None]
+    #: The harness's note on the run, or else the chore's own summary.
+    summary: NotRequired[str | None]
 
 
 class FindingRef(TypedDict):
@@ -330,7 +330,7 @@ class FindingRef(TypedDict):
 
 
 class ChoreSummary(TypedDict):
-    """One configured chore in the state block's `chores` (DESIGN §19)."""
+    """One configured chore in the state block's `chores` (DESIGN §19). Only one due and not running has `findings`."""
 
     name: str
     every_minutes: int
@@ -339,38 +339,48 @@ class ChoreSummary(TypedDict):
     due: bool
     running: bool
     latest_run: LatestRun | None
-    findings: list[FindingRef]
+    findings: NotRequired[list[FindingRef]]
 
 
 def state_section(states_: Iterable[ChoreState], now: datetime) -> list[ChoreSummary]:
-    """Return the state block's `chores`: each configured chore, for the overseer to run or wait on (DESIGN §19)."""
+    """Return the state block's `chores`: each configured chore, for the overseer to run or wait on (DESIGN §19).
+
+    The latest run's times and summary, and the open findings, are for a `when` to decide by, so only a chore due and
+    not running carries them: the overseer decides nothing about the rest, and their prose would fill every tick's
+    block.
+    """
     section: list[ChoreSummary] = []
     for state in states_:
-        latest = state.latest
-        latest_summary: LatestRun | None = None
-        if latest is not None:
-            stored = result.stored(latest.result_json)
-            harness = contract.stored_object(latest.result_json).get("harness")
-            latest_summary = {
-                "run_id": latest.id,
-                "status": latest.status,
-                "started_at": latest.started_at,
-                "ended_at": latest.ended_at,
-                "summary": str(harness) if harness else (stored.summary if stored is not None else None),
-            }
-        due = state.due_at(now)
-        section.append(
-            {
-                "name": state.name,
-                "every_minutes": state.chore.every_minutes,
-                "when": state.chore.when or None,
-                "due_at": db.format_time(due) if due is not None else None,
-                "due": due is None or due <= now,
-                "running": state.running is not None,
-                "latest_run": latest_summary,
-                "findings": [
-                    {"id": f.finding.id, "title": f.finding.title, "link": f.finding.link} for f in state.findings()
-                ],
-            },
-        )
+        due_at = state.due_at(now)
+        due = due_at is None or due_at <= now
+        running = state.running is not None
+        whole = due and not running
+        summary: ChoreSummary = {
+            "name": state.name,
+            "every_minutes": state.chore.every_minutes,
+            "when": state.chore.when or None,
+            "due_at": db.format_time(due_at) if due_at is not None else None,
+            "due": due,
+            "running": running,
+            "latest_run": _latest_run(state.latest, whole=whole) if state.latest is not None else None,
+        }
+        if whole:
+            summary["findings"] = [
+                {"id": f.finding.id, "title": f.finding.title, "link": f.finding.link} for f in state.findings()
+            ]
+        section.append(summary)
     return section
+
+
+def _latest_run(latest: records.ChoreRun, *, whole: bool) -> LatestRun:
+    if not whole:
+        return {"run_id": latest.id, "status": latest.status}
+    stored = result.stored(latest.result_json)
+    harness = contract.stored_object(latest.result_json).get("harness")
+    return {
+        "run_id": latest.id,
+        "status": latest.status,
+        "started_at": latest.started_at,
+        "ended_at": latest.ended_at,
+        "summary": str(harness) if harness else (stored.summary if stored is not None else None),
+    }
