@@ -41,7 +41,7 @@ In order, it:
    keeps in a cache, such as OpenCode's snapshots or Go's module sources, whose objects would then go when the run's
    directory does. A git run by its absolute path gets neither, and in a worktree cannot write objects at all.
 6. For a worker or a review, allows reading, never writing, the run's answers directory, `CANOPY_ANSWERS`, where canopy
-   writes the operator's answer to the question the run's card asks (DESIGN §41), when canopy passes one: it is the
+   writes the operator's answer to the question the run asks (DESIGN §41), when canopy passes one: it is the
    run's own, beside its other files in the workspace's `.canopy/`, which the policy denies.
 7. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
    The `srt` is the one `canopy sandbox setup` installed, pinned by `runtime/package-lock.json`, in
@@ -122,7 +122,7 @@ COMMITTING = ("worker", "setup")
 TEMPLATES = Path(__file__).resolve().parent / "templates"
 RUNTIME_SPEC = Path(__file__).resolve().parent / "runtime"
 OBJECTS_ENV = "CANOPY_GIT_OBJECTS"
-#: The run's answers directory, which canopy passes a run that keeps a card, and the roles that run one.
+#: The run's answers directory, which canopy passes a run that keeps its progress, and the roles that run one.
 ANSWERS_ENV = "CANOPY_ANSWERS"
 ANSWERING = ("worker", "review")
 #: An answers directory's name: `7.answers`, in `<state>/runs/` or `<state>/reviews/`.

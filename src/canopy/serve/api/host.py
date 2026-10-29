@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.schema.host import HostHistory, HostResources
+from canopy.serve.schema.host import HostHistory, HostProcesses, HostResources
 
 TAG = "host"
 router = APIRouter(tags=[TAG])
@@ -33,3 +33,13 @@ def samples(backend: BackendDep) -> HostHistory:
     again with none.
     """
     return backend.samples.history()
+
+
+@router.get("/host/processes", operation_id="getHostProcesses", summary="Get the host's processes")
+def processes(backend: BackendDep) -> HostProcesses:
+    """The processes on the machine the loop runs on, read now, the kernel's own threads left out.
+
+    Each with the processors it kept busy since the read before, the last ask's while a page asks every few seconds,
+    or a second's after none for a while; its memory, its state, and its command line. Off Linux, none are read.
+    """
+    return backend.processes()

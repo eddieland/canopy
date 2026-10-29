@@ -204,7 +204,7 @@ class FeedbackPlanWritten(Model):
 
 
 class CardStep(Model):
-    """A finished step on a running agent's card, with what shows it is done."""
+    """A finished step in a running agent's progress, with what shows it is done."""
 
     step: str
     """What was done."""
@@ -213,7 +213,7 @@ class CardStep(Model):
 
 
 class RunCardStep(Model):
-    """One step of a long job on a running agent's card (DESIGN §41)."""
+    """One step of a long job in a running agent's progress (DESIGN §41)."""
 
     title: str
     """The step, as the agent names it: its plan's, for a worker whose ticket has one."""
@@ -227,7 +227,7 @@ class RunCardStep(Model):
 
 
 class RunCardQuestion(Model):
-    """A decision a running agent asks the operator for on its card, which it works around meanwhile (DESIGN §41)."""
+    """A decision a running agent asks the operator for in its progress, worked around meanwhile (DESIGN §41)."""
 
     ask: str
     """The question, in the agent's words."""
@@ -236,7 +236,7 @@ class RunCardQuestion(Model):
     recommend: Literal["A", "B", "C", "D", "E"]
     """The letter of the option the agent recommends, and works toward meanwhile."""
     asked_at: datetime
-    """When canopy first recorded a card asking it."""
+    """When canopy first recorded an update asking it."""
     answer: Literal["A", "B", "C", "D", "E"] | None = None
     """The letter the operator answered with; None while it waits on them."""
     answered_at: datetime | None = None
@@ -249,7 +249,7 @@ class AnswerRequest(Model):
     letter: str
     """The letter of one of the question's options, in either case."""
     asked_at: datetime
-    """When the question the page showed was asked: a card that asks another since is refused `moved_on`."""
+    """When the question the page showed was asked: an agent that asks another since is refused `moved_on`."""
 
 
 class Answered(Model):
@@ -266,7 +266,7 @@ class Answered(Model):
 
 
 class RunCard(Model):
-    """Where a worker's, planner's, or reviewer's work stands, in its own words: its latest card (DESIGN §41).
+    """Where a worker's, planner's, or reviewer's work stands, in its own words: its progress (DESIGN §41).
 
     Each field is the agent's text, on one line: untrusted, rendered as text.
     """
@@ -274,7 +274,7 @@ class RunCard(Model):
     summary: str
     """Where the work stands, in a sentence or two."""
     now: str
-    """What the agent was doing when it wrote the card."""
+    """What the agent was doing when it wrote the update."""
     done: list[CardStep] = []
     """The steps it finished, in order, each with its proof."""
     next: list[str] = []
@@ -288,7 +288,7 @@ class RunCard(Model):
     stale: bool
     """Whether the run has gone 20 tool calls without an update to it while it runs; false once it ended."""
     stale_at: datetime | None = None
-    """While the run runs, when the card goes stale for want of an update by time, 10 minutes after `at`; None once
+    """While the run runs, when the progress goes stale for want of an update by time, 10 minutes after `at`; None once
     it ended. A page marks it stale from then, or when `stale` says so."""
     steps: list[RunCardStep] = []
     """For a long job, every step in order; empty when the agent named none."""
@@ -349,7 +349,7 @@ class Run(Model):
     """While it runs, its worker's latest tool call; None before the first, for a template that prints no events, and
     once it ends."""
     card: RunCard | None = None
-    """Its agent's card (DESIGN §41), while it runs and its last once it ends; None when it kept none."""
+    """Its agent's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none."""
     persona: str | None = None
     """The persona it ran in (DESIGN §31); None for a kind no persona reaches, or a run from before canopy recorded
     it."""

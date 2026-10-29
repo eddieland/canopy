@@ -2,7 +2,7 @@
 
 Each line says what it changed of what the run's row records: the session, once it is first named; what the run has
 spent, at the end of each model call; and the tool call it ended, with the call as the agent made it, from which the
-harness reads a card (§41). A row is written only when a line changed one.
+harness reads an update (§41). A row is written only when a line changed one.
 """
 
 from __future__ import annotations

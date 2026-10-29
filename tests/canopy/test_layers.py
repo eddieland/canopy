@@ -71,6 +71,8 @@ NAMES_RUNTIME = {
     # what the runtime prints, which the runtime package reads.
     "serve/mock/__init__.py",
     "serve/mock/transcripts.py",
+    # Its made-up machine's processes are the runtime's too, as a running run's agent is.
+    "serve/mock/host.py",
 }
 
 

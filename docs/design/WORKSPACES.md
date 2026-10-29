@@ -25,7 +25,7 @@ three places, in order of preference:
 3. **A provider skill**, `.agents/skills/tracker-<provider>/SKILL.md`, for what an agent would otherwise get wrong:
    identity fields, how "closed" is expressed, where blockers live, and text that silently triggers a tracker action.
    Skills ship for `jira` and `github`. Add one when the decisions show the loop misreading a tracker, not in advance.
-   Workers load the skill for `tracker.provider`; the overseer reads no tracker (§39), so it gets none.
+   Workers load the skill for `tracker.provider`; the overseer reads no tracker (§13), so it gets none.
 
 ### Contract
 
@@ -43,7 +43,7 @@ What the loop needs from a tracker, as capabilities, each used by the role in pa
 | Create a ticket linked to a parent (worker, optional) | follow-ups |
 
 "Label" means the tracker's tagging primitive, whatever it is called. The `tracker` source config requires (§30) reads
-the overseer's rows into the journal, and the overseer reads them there alone (§39). Without blocker relations, tickets
+the overseer's rows into the journal, and the overseer reads them there alone (§13). Without blocker relations, tickets
 are treated as unblocked. Without label history, the worker's question comment is the reference point for
 `human_replied`. A required row the source cannot read leaves its tickets stale, the harness's `wait`.
 
