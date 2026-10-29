@@ -64,7 +64,9 @@ Three stages, in order, each in its own PRs; stage 3 waits for its own go-ahead.
 
 Accept: Stage 0 recorded. Live: a worker on a toy ticket with a plan shows a card in the web UI within its first
 minutes, its steps the plan's, and its last card on the ended run; a reviewer's card shows on its review while it
-runs; over a week of real use, `MEASUREMENTS.md` records how often a running card was stale, by role.
+runs; over a week of real use, `MEASUREMENTS.md` records how often a running card was stale, by role. Stage 3, once
+built: a worker on a toy ticket, sandboxed and not, that asks a question on its card hears the letter given on its run's
+page on its next tool call, as its transcript shows, and goes on with that option.
 
 Status: in progress. Stage 0 read 2026-10-29, from the builds npm ships (`opencode-linux-x64` 1.19.3 and
 `@opencode/cli-linux-x64` 2.1.4), and leaves stage 1's shape as it is. `opencode run --format json` prints a tool
@@ -77,6 +79,15 @@ and the harness both hold the card to it, and the harness reads only a `complete
 (both versions: `content`, `status` of `pending`, `in_progress`, `completed`, or `cancelled`, and 1's `priority`)
 would not serve for steps: it has no `blocked`, no stage, no proof of what is done, and no summary or `now`, and
 every worker already has it; so steps go on canopy's card in stage 2, and `todowrite` is left as it is.
+Stages 1 and 2 built 2026-10-29 and checked against the fakes: the card is DESIGN §41, the `status` tool served by
+`canopy _mcp --status`, the nudge a job of canopy's plugin, and the card shown in `canopy status`, `canopy show`, and
+the web UI; steps, their share done, their stage, and a stuck step on top. Stage 3 built 2026-10-29, at the
+operator's go-ahead that day, and checked against the fakes: a card's question, with lettered options and the one the
+agent recommends, answered with a letter from `canopy reply run:ID` or `review:ID` or the card in the web UI, and
+written to the run's answers directory, which the sandbox lets the run read and not write, where canopy's plugin tells
+the agent on its next tool call. An answer is a letter, never words, so a forged `[canopy]` line can choose only one of
+the agent's own options (TRUST_MODEL T1). The live checks above, stage 3's among them, and the week of
+`MEASUREMENTS.md` wait on the operator.
 
 [status]: https://github.com/fullstackhouse/paseo-status
 [progress]: https://github.com/stevecastaneda/paseo-plugins/tree/main/progress

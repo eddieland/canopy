@@ -109,6 +109,15 @@ rail's. Then:
   summed or one kind's, with the same filter. Every later model call of the run reads those again, so a chatty tool
   costs more than once. The filters stay put when you switch the window, so you can watch the workers' `bash` habit
   across a month without picking it again.
+- **First calls by week**: how much of each kind's first model call the cache served, a bar per week, Monday to
+  Sunday on canopy's clock. That first call carries the prefix every run of the kind starts with, so a warm cache
+  makes it cheap, and a bar that drops is a prefix the cache no longer recognizes. The usual suspects get a rule
+  before their week and a line under the chart: a runtime version, or a definitions snapshot (canopy's prompts and
+  agent definitions, as a run loaded them), that the week's runs used and the week before's did not. A dip with no
+  rule beside it is your cue to look elsewhere. Pick the kind in the header, then **all runs**, one chore, or one
+  model under it; runs that more than one model served stay in **all runs**. The table holds each week's runs and
+  median first call. The 7 days hold one or two weeks, which is not much of a trend, so pick **30 days**; it's what
+  `canopy spend --days 30` prints, by week.
 - **Every session**: every session the runtime keeps that started in the window, in any directory: **canopy's
   runs**, a subagent's counted with the session it ran for, and **outside canopy**, then where those ran, the
   costliest directory first. Another workspace's canopy counts as outside, since its runs are in another journal. The

@@ -46,7 +46,10 @@ In order, it:
    worktrees, and unchanged anywhere else. Exported to every process, git's variables would reach a repository a tool
    keeps in a cache, such as OpenCode's snapshots or Go's module sources, whose objects would then go when the run's
    directory does. A git run by its absolute path gets neither, and in a worktree cannot write objects at all.
-7. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
+7. For a worker or a review, allows reading, never writing, the run's answers directory, `CANOPY_ANSWERS`, where canopy
+   writes the operator's answer to the question the run's card asks (DESIGN §41), when canopy passes one: it is the
+   run's own, beside its other files in the workspace's `.canopy/`, which the policy denies.
+8. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
    The `srt` is the one `canopy sandbox setup` installed, pinned by `runtime/package-lock.json`, in
    `$XDG_DATA_HOME/canopy/sandbox-runtime/` (`~/.local/share/canopy/sandbox-runtime/` when that is unset), or else
    the first on `PATH`.
@@ -129,6 +132,11 @@ COMMITTING = ("worker", "setup")
 TEMPLATES = Path(__file__).resolve().parent / "templates"
 RUNTIME_SPEC = Path(__file__).resolve().parent / "runtime"
 OBJECTS_ENV = "CANOPY_GIT_OBJECTS"
+#: The run's answers directory, which canopy passes a run that keeps a card, and the roles that run one.
+ANSWERS_ENV = "CANOPY_ANSWERS"
+ANSWERING = ("worker", "review")
+#: An answers directory's name: `7.answers`, in `<state>/runs/` or `<state>/reviews/`.
+ANSWERS_NAME = re.compile(r"[0-9]{1,18}\.answers")
 # What canopy leaves in a joint run's desk (DESIGN §18); every other entry there links to a worktree.
 DESK_MARKER = ".canopy-desk"
 # The workspace's state directory, which holds the run directories canopy passes (D016), and the directories in it
@@ -294,6 +302,7 @@ def run(argv: list[str]) -> int:
     try:
         role, reads, command = parse(argv)
         objects = objects_dir(role)
+        answers = answers_dir(role)
         cwd = Path.cwd()
         trees = worktrees(role, cwd)
         state = workspace_state(role, cwd)
@@ -324,7 +333,11 @@ def run(argv: list[str]) -> int:
             workspace=entries,
         )
         policy = fill(template, values)
-        readable = [*vendor_dirs(srt), *([bin_dir] if bin_dir is not None else [])]
+        readable = [
+            *vendor_dirs(srt),
+            *([bin_dir] if bin_dir is not None else []),
+            *([answers] if answers is not None else []),
+        ]
         operator = data_home() / credentials.RUNTIME
         # The overseer's own state directory holds the journal it writes: a rule for this role alone.
         states = state_dirs(objects, cwd) if state is None else []
@@ -542,6 +555,29 @@ def objects_dir(role: str) -> Path | None:
     path = Path(value)
     if not path.is_absolute() or not path.is_dir() or UNSAFE_PATH.search(value):
         raise SandboxError(f"{OBJECTS_ENV} is not an absolute path to a directory git can be given: {value!r}")
+    return path
+
+
+def answers_dir(role: str) -> Path | None:
+    """Return the run's answers directory, which canopy passes a worker's, a planner's, or a review's run.
+
+    Returns:
+        The directory, or None for another role, or a run canopy passes none, such as a one-off task's.
+
+    Raises:
+        SandboxError: it is not a run's answers directory in a workspace's `.canopy/`: an absolute path to a directory,
+            not a link, named `<id>.answers` in `runs/` or `reviews/` there.
+    """
+    if role not in ANSWERING:
+        return None
+    value = os.environ.get(ANSWERS_ENV, "")
+    if not value:
+        return None
+    path = Path(value)
+    placed = path.is_absolute() and path.parent.name in RUN_PARENTS and path.parent.parent.name == STATE_DIR
+    named = ANSWERS_NAME.fullmatch(path.name) is not None
+    if not (placed and named and path.is_dir() and not path.is_symlink()):
+        raise SandboxError(f"{ANSWERS_ENV} is not a run's answers directory in a workspace's {STATE_DIR}: {value!r}")
     return path
 
 

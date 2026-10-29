@@ -6,14 +6,14 @@ import sys
 
 import click
 
-from canopy.cli.common import CliError, OverseerCommand, leave_the_tick, open_context
+from canopy.cli.common import CliError, leave_the_tick, open_context
 from canopy.cli.params import REPO, SLUG, TICKET_KEY, CursorType, TextType, verb
 from canopy.core.vocab import ResumeReason
 from canopy.loop import tools
 from canopy.runs import dispatch, policy, task_run, worker
 
 
-@click.command("dispatch", cls=OverseerCommand)
+@click.command("dispatch", hidden=True)
 @click.argument("key", type=TICKET_KEY)
 # `fix-ci`, `split`, and `needs-plan` are taken only to be refused naming what replaced them, a refusal the decisions
 # record.

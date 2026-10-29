@@ -1,10 +1,11 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
 The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
-reload, a tick asked for, the attempt and review limits and their grants, a chore's try, the pools' slots, and the
-models the runtime lists are stand-ins, since the first six belong to the loop, `runs`, `reviews`, and `chores`, and
-there is no treehouse or runtime to ask (backend.py): the models are those its runs' sessions name. A try records its
-run and starts nothing, so the run stays running.
+reload, a tick asked for, the attempt and review limits and their grants, a chore's try, the pools' slots, the models
+the runtime lists, and the skills it finds are stand-ins, since the first six belong to the loop, `runs`,
+`reviews`, and `chores`, and there is no treehouse or runtime to ask (backend.py): the models are those its runs'
+sessions name, and the skills five the `skills` module makes up. A try records its run and starts nothing, so the run
+stays running.
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19), `deps` and
 `build-health`, `deps` on a model of its own (§13). Two ticks recorded decisions about tickets, a unit, a repository,
@@ -12,7 +13,8 @@ a chore, and a PR (§6). The
 workspace's policy allows one resume and two reviews, so ABC-100 is at its resume limit in web, where its run 40, a
 `fix-ci` from before a resume fixed CI, counts as one (§8), and PR 88 at its review limit (§22's grants). Run 43,
 running, is a resume for a failed check and review feedback together. The running runs 41 and 43 have the latest tool
-call on each one's row (§8).
+call on each one's row (§8). Every run on T0's day that ended reported its first model call, on the definitions snapshot
+and the runtime's version the history's last week used, so the spend page's weekly hit rate goes on from it (§13).
 Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
 memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the runs'
 transcripts, the months before T0, whose landed tickets the reports page shows, and the machine (a fixed reading).
@@ -25,9 +27,21 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, LiteralString
 
-from canopy.core import chore_runs, chore_view, config, conversation, db, pools, records, review_runs, sql, workspace
+from canopy.core import (
+    cards,
+    chore_runs,
+    chore_view,
+    config,
+    conversation,
+    db,
+    pools,
+    records,
+    review_runs,
+    sql,
+    workspace,
+)
 from canopy.core.context import db_path
 from canopy.core.items import Item
 from canopy.core.vocab import RunKind, RunStatus
@@ -44,6 +58,7 @@ from canopy.serve.mock import (
     personas,
     plans,
     reviews,
+    skills,
     tasks,
     transcripts,
 )
@@ -87,6 +102,12 @@ max_reviews_per_pr = 2
 _USER_TOML = """\
 [tracker]
 labels = ["agent-ready-mock"]
+
+# The tracker source config requires (DESIGN §30). The mock runs no tick, so it reads nothing, and `.example` names no
+# host anyway.
+[connect.sources.jira]
+kind = "tracker"
+cmd = "canopy-connect-jira --site jira.example"
 
 [capacity]
 slots_per_repo = 2
@@ -314,6 +335,7 @@ def seed(directory: Path) -> Backend:
         runner=lambda: drafts.GitHub(db_path(ws)),
         user_file=user_file,
         models=_models_listed,
+        skills=skills.listed,
         # Read when the e2e tests' frozen clock says it is (`NOW` in ui/e2e/helpers.ts), so it reads as just now.
         host=lambda _config, _workspace: host.machine(T0 + timedelta(minutes=30)),
         samples=host.samples(T0 + timedelta(minutes=30)),
@@ -331,6 +353,7 @@ def seed(directory: Path) -> Backend:
             feedback_plans.seed(ctx.conn, ws.state_dir, at, ctx.config.trust, slot_path(root, "web", 3))
             personas.seed(ctx.conn, ctx.config, at)
             tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
+            _first_calls(ctx.conn)
             _attachments(ctx.conn)
             # Last, so the messages their approvals wrote take ids after every other fixture's.
             feedback_plans.seed_states(
@@ -767,6 +790,54 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             conn,
             sql.update("runs").set(activity_tool=tool, activity=did, activity_at=at(minutes)).where("id = ?", run_id),
         )
+    # What each running run's agent says of where it stands, its card (DESIGN §41): 41's fresh, asking a question, 43's
+    # stale, gone more tool calls than `cards.STALE_CALLS` without an update.
+    said = (
+        (
+            LIVE_RUN,
+            cards.Card(
+                summary="The SSO callback is in and its tests pass; wiring the login button next.",
+                now="running the login tests",
+                done=(cards.Done(step="add the SSO callback", proof="tests pass: 12/12"),),
+                next=("wire the login button", "push", "open the PR"),
+                # The steps of ABC-101's approved plan, its sections their stages.
+                steps=(
+                    cards.Step(title="Add the SSO callback route", status="done", stage="API"),
+                    cards.Step(title="Wire the login button", status="working", stage="Web"),
+                    cards.Step(title="Remember the last provider", status="skipped", stage="Web"),
+                    cards.Step(title="Push and open the PR", status="not_started"),
+                ),
+                # A question it works around meanwhile, waiting on the operator.
+                question=cards.Question(
+                    ask="Keep the password form beside the SSO button, or hide it behind a link?",
+                    options=("keep both side by side", "hide the form behind a link", "drop the password form"),
+                    recommend="B",
+                ),
+            ),
+            24,
+            9,
+            3,
+        ),
+        (
+            43,
+            cards.Card(
+                summary="Reading the failed CI job; the queue's retry test is red on this branch alone.",
+                now="reading the CI workflow",
+                done=(cards.Done(step="read the failed job's log", proof="1 test red: test_retry_backoff"),),
+                next=("fix the backoff", "push"),
+                stuck="the CI log is cut short; reading the workflow for the step instead",
+            ),
+            12,
+            4,
+            26,
+        ),
+    )
+    for run_id, card, minutes, by_then, since in said:
+        recorded = sql.update("runs").set(card_json=card.model_dump_json(), card_at=at(minutes))
+        recorded = recorded.set(card_calls=by_then, tool_calls=by_then + since).where("id = ?", run_id)
+        working = {s.title: at(minutes) for s in card.steps if s.status == "working"}
+        recorded = recorded.set(card_asked_at=at(minutes) if card.question is not None else None)
+        sql.execute(conn, recorded.set(card_working_since=json.dumps(working) if working else None))
     # Run 39's peak is the most one model call in its transcript was sent (transcripts.py), as its page's chart shows.
     sql.execute(conn, sql.update("runs").set(tokens_peak_context=30200).where("id = 39"))
     run_slots = (
@@ -1056,4 +1127,53 @@ def _models(conn: sqlite3.Connection) -> None:
         conn,
         sql.insert_rows("run_models", ("run_table", "run_id", "model", "replies", "cost_usd")),
         served,
+    )
+
+
+# What each kind's first model call was sent on T0's day, before the run's id adds a little, and the share of it read
+# from the cache. A table's name here is fixed, never input (D125).
+_FIRST_CALLS: tuple[tuple[LiteralString, int, float], ...] = (
+    # table, sent, share read from the cache
+    ("ticks", 31_800, 0.86),
+    ("runs", 22_400, 0.88),
+    ("chore_runs", 14_200, 0.74),
+    ("review_runs", 18_600, 0.81),
+    ("task_runs", 22_100, 0.69),
+)
+
+
+def _first_calls(conn: sqlite3.Connection) -> None:
+    """What the first model call of each run on T0's day that ended was sent, read, and wrote, and what it loaded (§13).
+
+    The definitions snapshot and the runtime's version are the history's last week's, so no week of a series on the
+    spend page names a change the fixtures made.
+    """
+    day = at(-12 * 60)
+    for table, sent, hit in _FIRST_CALLS:
+        ended = "started_at >= ? AND ended_at IS NOT NULL AND cost_usd IS NOT NULL"
+        sql.execute(
+            conn,
+            sql.update(table)
+            .set_to("tokens_first_call = ? + id * 97", sent)
+            .set(definitions_digest=history.SNAPSHOT)
+            .where(ended, day),
+        )
+        sql.execute(
+            conn,
+            sql.update(table)
+            # A few points apart from run to run, so a chore's series is not its kind's.
+            .set_to("tokens_first_cache_read = CAST(tokens_first_call * (? - id % 3 * 0.03) AS INTEGER)", hit)
+            .where(ended, day),
+        )
+        sql.execute(
+            conn,
+            sql.update(table)
+            .set_to("tokens_first_cache_write = tokens_first_call - tokens_first_cache_read")
+            .where(ended, day),
+        )
+    sql.execute(
+        conn,
+        sql.update("run_model_reads")
+        .set(runtime_version=history.RUNTIME)
+        .where("status = ? AND runtime_version IS NULL", "found"),
     )

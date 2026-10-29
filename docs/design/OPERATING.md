@@ -76,6 +76,8 @@ rendered as a run would start them, to the operator alone: it is refused inside 
 the runtime what each of canopy's agents is offered, MCP servers, skills, and its own tools, once it has merged the
 operator's own runtime config into canopy's definitions, so a recommendation to deny one rests on the merge the
 runtime makes, not on canopy's files alone.
+The Skills page under Settings (§22) asks the runtime for its skills alone, with each one's file, description, and
+text, and not which agent is offered each, which would start the runtime again for every agent.
 
 ## 12. Configuration
 
@@ -119,17 +121,25 @@ secret, and a replier added through a stolen session would go on steering worker
 | Key | From the page |
 |---|---|
 | `capacity.max_workers`, `capacity.slots_per_repo`, each `capacity.repo_slots` entry | at most 32; an unmanaged pool's first count is bounded too |
-| `capacity.max_chores`, `capacity.max_reviews` | at most 16 |
+| `capacity.max_chores`, `capacity.max_reviews`, `capacity.max_tasks` | at most 16 |
 | `capacity.max_reviews_per_day` | at most 500 |
-| `policy.max_implement_attempts`, `policy.max_resume_attempts` | at most 10 |
+| `loop.min_free_disk_mib` | at least 512 |
+| `policy.max_implement_attempts`, `policy.max_resume_attempts`, `policy.max_plan_attempts`, `policy.max_revisions_per_draft` | at most 10 |
+| `policy.max_feedback_plan_attempts`, `policy.max_follow_ups` | at most 20 |
 | `policy.max_reviews_per_pr` | at most 25 |
 | `policy.ci_cooldown_minutes` | at least 5 |
-| `loop.interval_minutes`, `loop.idle_max_minutes` | at least 2 |
+| `policy.feedback_quiet_minutes`, `loop.interval_minutes`, `loop.idle_max_minutes` | at least 2 |
+| `loop.min_gap_minutes` | at least 1 |
+| `runtime.worker_timeout_minutes`, `runtime.review_timeout_minutes`, `runtime.overseer_timeout_minutes` | at most 240, 120, 60 |
 | `spend.monthly_budget_usd` | at most 10000; raising it keeps a sink from hearing the month reached it |
 | `spend.budget_alerts` | any list the loader takes; the 100% alert is sent whatever it holds |
 | `policy.stacking` | to `"never"` only |
+| `policy.plan`, `policy.feedback_plan` | to `"approve"` only |
+| `policy.planner_may_approve` | toward `"off"` only: `lenient`, `normal`, `strict`, `off` |
 | `trust.authorized_repliers`, `trust.trusted_reviewers` | entries removed, never added |
+| `trust.review_replies` | to `"approve"` only |
 | `trust.rebase` | to `false` only |
+| `trust.max_flaky_kicks` | lowered only |
 | `trust.commit_trailer` | to `true` only |
 
 The bounds sit well above what one machine runs today, so the page serves the operator's real changes; what they stop
@@ -229,9 +239,9 @@ which a file canopy cannot use refuses as `bad_prompt`; a chore's follow its own
 reaches only its own role's prompts, and a role without one has no section for them.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
-skill, which canopy puts in the overseer's definition when it ships one (§13). `tracker.query` finds candidates; it
-does not authorize them (§17). It is shared though the overseer reads every ticket it returns before checking labels,
-an exposure stated in TRUST_MODEL T7's residual.
+skill the workers load (§17). `tracker.query` finds candidates; it does not authorize them (§17). It is shared: the
+`tracker` source reads it, and a ticket it returns that is not a candidate reaches the overseer by key and why alone
+(TRUST_MODEL T7).
 
 ## 13. Agent runtime
 
@@ -324,7 +334,7 @@ private run (§22) is also refused where that config names any tool of the track
 after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
-turns none off, but for the overseer whose body holds the tracker's skill, and the operator's skill below. A
+turns none off, but for the overseer, which reads no tracker and loads no skill (§39), and the operator's skill below. A
 repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
@@ -395,7 +405,8 @@ listing sessions through the runtime's commands, which list one project's top-le
 `canopy skill` prints a skill that teaches an agent in the operator's own session the canopy CLI and how to read the
 journal read-only. canopy installs it only when asked; it is not in the snapshot and grants nothing, and every agent
 canopy ships denies it by name, wherever it is installed. Shell completion leaves out ticket keys, which would open
-the journal on every Tab, and the commands only the overseer runs.
+the journal on every Tab. `--help` and completion leave out the commands only the overseer runs, though each still
+answers its own `--help`.
 
 ## 14. Attention list
 

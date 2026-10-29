@@ -193,6 +193,13 @@ test('the settings page saves a limit and drops a trusted reviewer, but raises n
     await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
     await form.getByTestId('config-discard').click()
     await expect(workers).toHaveValue(before)
+    // A choice moves only toward stricter: one looser than the value in force is not offered, and picking the value
+    // back leaves nothing to save.
+    await expect(form.getByTestId('policy.planner_may_approve-lenient')).toBeDisabled()
+    await form.getByTestId('policy.plan-approve').click()
+    await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
+    await form.getByTestId('policy.plan-off').click()
+    await expect(form.getByTestId('config-pending')).toHaveText('No unsaved changes')
     await workers.fill('many')
     await expect(form.getByRole('alert')).toHaveText('capacity.max_workers: a whole number')
     await expect(form.getByTestId('config-save')).toBeDisabled()

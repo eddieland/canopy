@@ -131,8 +131,10 @@ permission:
   # name, after every pattern above.
   # canopy: artifact tools
   # canopy's own tools, the overseer's, the reviewer's and planner's git tools, a chore's history, and the reports, are
-  # not this agent's (DESIGN §19, §27): last, so no rule above reopens one.
+  # not this agent's (DESIGN §19, §27): denied by pattern, after every rule above, so none reopens one.
   "canopy_*": deny
+  # But canopy's `status` tool, the run's card for the operator, which writes nothing (DESIGN §41): by exact name, last.
+  "canopy_run_status": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy worker" prompt, print

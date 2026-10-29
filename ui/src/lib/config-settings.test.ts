@@ -19,6 +19,7 @@ const WORKERS: ConfigKey = {
     kind: 'limit',
     bound: 8,
     looser: 'higher',
+    choices: [],
 }
 const SLOTS: ConfigKey = {
     name: 'capacity.repo_slots',
@@ -27,6 +28,7 @@ const SLOTS: ConfigKey = {
     kind: 'limit',
     bound: 8,
     looser: 'higher',
+    choices: [],
 }
 const PER_REPO: ConfigKey = { ...WORKERS, name: 'capacity.slots_per_repo', value: null }
 const PACE: ConfigKey = { ...WORKERS, name: 'loop.interval_minutes', value: 15, bound: 5, looser: 'lower' }
@@ -37,9 +39,17 @@ const REVIEWERS: ConfigKey = {
     kind: 'stricter',
     bound: null,
     looser: null,
+    choices: [],
 }
 const REBASE: ConfigKey = { ...REVIEWERS, name: 'trust.rebase', value: true, source: 'default' }
-const STACKING: ConfigKey = { ...REVIEWERS, name: 'policy.stacking', value: 'auto', source: 'default' }
+const STACKING: ConfigKey = {
+    ...REVIEWERS,
+    name: 'policy.stacking',
+    value: 'auto',
+    source: 'default',
+    choices: ['auto', 'never'],
+}
+const KICKS: ConfigKey = { ...REVIEWERS, name: 'trust.max_flaky_kicks', value: 2 }
 const ALERTS: ConfigKey = {
     ...REVIEWERS,
     name: 'spend.budget_alerts',
@@ -77,6 +87,12 @@ describe('config settings', () => {
         })
     })
 
+    it('send a stricter count as a whole number, and name one that is not', () => {
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': '2' }).changes).toEqual({})
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': '1' }).changes).toEqual({ 'trust.max_flaky_kicks': 1 })
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': 'once' }).invalid).toEqual(['trust.max_flaky_kicks'])
+    })
+
     it('name a count that is not a whole number, and send nothing for it', () => {
         expect(configForm(KEYS, { 'capacity.max_workers': 'many', 'capacity.repo_slots': { web: '2.5' } })).toEqual({
             changes: {},
@@ -109,6 +125,7 @@ describe('config settings', () => {
         expect(boundText(WORKERS)).toBe('at most 8 from here')
         expect(boundText(PACE)).toBe('at least 5 from here')
         expect(boundText(REVIEWERS)).toBe('stricter only')
+        expect(boundText(KICKS)).toBe('only fewer from here')
     })
 
     it('say what a save wrote apart from what its reload did', () => {
@@ -156,7 +173,7 @@ describe('config groups', () => {
     it('name every key the server edits in some panel', () => {
         const named = CONFIG_GROUPS.flatMap((g) => g.keys.map((k) => k.name))
         expect(new Set(named).size).toBe(named.length)
-        expect(named).toHaveLength(22)
+        expect(named).toHaveLength(38)
     })
 
     it('count the unsaved changes', () => {

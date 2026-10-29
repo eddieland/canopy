@@ -10,12 +10,12 @@ from pathlib import Path
 
 import click
 
-from canopy.cli.common import CliError, Group, open_context
+from canopy.cli.common import CliError, open_context
 from canopy.core import conversation, items, workspace
 from canopy.loop import daemon
 
 
-@click.group("daemon", cls=Group)
+@click.group("daemon")
 def daemon_group() -> None:
     """Run `canopy loop` in the background. Nothing is installed: it does not restart itself or start at login."""
 

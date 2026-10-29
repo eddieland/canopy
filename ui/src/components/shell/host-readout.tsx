@@ -9,11 +9,13 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import {
     bytesText,
     concerns,
+    coreShare,
     diskHolds,
     diskPressure,
     hostPressure,
     hostReadout,
     loadText,
+    loadTrend,
     PRESSURE_TEXT,
     percentText,
     usedShare,
@@ -88,14 +90,7 @@ function HostCard({ host }: { host: HostResources }) {
             )}
             <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-1">
                 <CardRow label="Load">
-                    {cpu.load === null ? (
-                        'not read on this system'
-                    ) : (
-                        <>
-                            <span className="readout">{cpu.load.map(loadText).join(' ')}</span>
-                            {cpu.cores === null ? null : ` on ${cpu.cores} cores`}
-                        </>
-                    )}
+                    <LoadSummary cpu={cpu} />
                 </CardRow>
                 <CardRow label="Memory">
                     {memory.total === null ? (
@@ -130,6 +125,26 @@ function HostCard({ host }: { host: HostResources }) {
             </dl>
             <span className="text-muted-foreground">Open it for the rest.</span>
         </div>
+    )
+}
+
+/**
+ * The load as the card says it: the five minutes' average as a share of the cores, `16% of 12 cores`, and which way it
+ * is heading; the bare average where the cores are not known.
+ */
+function LoadSummary({ cpu }: { cpu: HostResources['cpu'] }) {
+    const five = cpu.load?.[1]
+    if (five === undefined) {
+        return 'not read on this system'
+    }
+    const share = coreShare(five, cpu.cores)
+    const trend = loadTrend(cpu)
+    return (
+        <>
+            <span className="readout">{share === null ? loadText(five) : percentText(share)}</span>
+            {share === null ? ' over 5 minutes' : ` of ${cpu.cores} cores over 5 minutes`}
+            {trend === null ? null : `, ${trend}`}
+        </>
     )
 }
 

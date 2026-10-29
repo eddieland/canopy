@@ -13,7 +13,7 @@ from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.reviews import review_requests
-from tests.canopy.helpers import context, operator, personas_dir
+from tests.canopy.helpers import KEY, context, operator, personas_dir, waits
 from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review_decisions, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, reviews
 from tests.canopy.web_helpers import refused, signed_in_client
@@ -391,12 +391,12 @@ def test_the_state_block_carries_the_open_requests(
     git_pool: GitPool,
 ) -> None:
     # No request, no query, and agent_prs off: nothing about reviews reaches the overseer.
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     assert "reviews" not in scenario.state()
     scenario.operator("start", PR, "--review")
     failing = reviewer_reports({"status": "failed", "summary": "Could not read the diff."})
     run_id = scenario.review(reviews(head(git_pool), PR), reviewer=failing).id
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     section = scenario.state()["reviews"]
     assert (section["agent_prs"], section.get("query")) == (False, None)
     [requested] = section["requests"]

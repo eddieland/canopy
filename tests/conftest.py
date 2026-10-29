@@ -332,17 +332,27 @@ query = "project = PROJ"
 """
 
 
+#: The name of the tests' `tracker` source, which config requires (DESIGN §30).
+TRACKER_SOURCE = "jira"
+#: Its command: the fake connector, holding every ticket it is asked open and labeled with the tests' queue label. A
+#: test that scripts its tracker sets the source's `cmd` to `connector jira` and plays it.
+TRACKER_CMD = f"connector {TRACKER_SOURCE} --labeled agent-ready-tester"
+#: Its table in the user file.
+TRACKER_TOML = f'[connect.sources.{TRACKER_SOURCE}]\nkind = "tracker"\ncmd = "{TRACKER_CMD}"\n'
+
+
 def user_toml() -> str:
-    return """\
+    return f"""\
 [tracker]
 labels = ["agent-ready-tester"]
 
 [runtime]
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-overseer {prompt}'
-worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker {prompt}'
-private_worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker-private {prompt}'
-plan_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-planner --format json {prompt}'
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-overseer {{prompt}}'
+worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker {{prompt}}'
+private_worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker-private {{prompt}}'
+plan_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-planner --format json {{prompt}}'
 
+{TRACKER_TOML}
 [paths]
 """
 

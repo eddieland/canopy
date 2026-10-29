@@ -108,8 +108,8 @@ class Derived:
     phases: Sequence[Phase] = ()
     #: The stale or missing observation the subject depends on; None when it was derived.
     stale: str | None = None
-    #: Whether `stale` is the `tracker` source's: a ticket's own observation, or a blocker's, old or never made. False
-    #: for what no source observes, and for what the `vcs` source left stale.
+    #: Whether `stale` is the `tracker` source's: a ticket's own observation, its comments, or a blocker's, old or never
+    #: made. False for what no source observes, and for what the `vcs` source left stale.
     stale_tracker: bool = False
     #: Whether `stale` is the `vcs` source's, where a `tracker` source runs too, so the overseer reads no GitHub (DESIGN
     #: §39): a unit's PR or branches, the ticket's branches, or an open blocker's PR, old or never read.
@@ -117,6 +117,8 @@ class Derived:
     #: On the ticket's own, unless stale: whether it is a candidate (§17), and whether the tracker said it is closed.
     candidate: bool | None = None
     closed: bool | None = None
+    #: Whether `stale` is what no source reads at all, so no read will come: a unit's URL that names no PR.
+    unobserved: bool = False
 
 
 def derive(ctx: Context, now: datetime) -> list[Derived]:
@@ -503,8 +505,7 @@ class _World:
                 return Derived(key, None, stale=stale, stale_tracker=self.tracked)
             seen = self.observed[key]
             closed = seen.state is TicketState.CLOSED
-            labels = {label["name"] for label in labels_of(seen)}
-            candidate = not closed and bool(labels & set(self.ctx.config.tracker.labels))
+            candidate = self._queued(seen)
             blockers_open = any(self.observed[b].state is TicketState.OPEN for b in blockers_of(seen))
         if closed:
             return Derived(key, None, candidate=False, closed=True)
@@ -527,7 +528,10 @@ class _World:
         return Derived(key, None, _in_order(phases), candidate=candidate, closed=False)
 
     def _ticket_stale(self, key: str) -> str | None:
-        """Say what a public ticket's row depends on that is stale or missing: its observation, or a blocker's.
+        """Say what a public ticket's row rests on that is stale or missing: its observation, a blocker's, or comments.
+
+        Comments are recorded only of a ticket canopy holds (§30), and a candidate's rows read them: one read before
+        canopy held it, such as one the query found that was read as another's blocker, waits for a read since.
 
         Returns:
             What, or None when everything it depends on is fresh.
@@ -542,7 +546,19 @@ class _World:
             stale = self._age(f"blocker {blocker}", self.observed.get(blocker))
             if stale is not None:
                 return stale
+        held = self.tickets.get(key)
+        if self._queued(seen) and (held is None or held.first_seen_at > seen.observed_at):
+            return f"comments of {key} not observed since canopy first held it"
         return None
+
+    def _queued(self, seen: records.ObservedTicket) -> bool:
+        """Whether an observed ticket is open and carries a queue label: a public candidate (§17).
+
+        Returns:
+            True if it is.
+        """
+        labels = {label["name"] for label in labels_of(seen)}
+        return seen.state is not TicketState.CLOSED and bool(labels & set(self.ctx.config.tracker.labels))
 
     def _age(self, what: str, seen: records.ObservedTicket | records.ObservedPr | None) -> str | None:
         if seen is None:
@@ -675,7 +691,7 @@ class _World:
             The unit's row.
         """
         if not observe.is_pr_url(url):
-            return Derived(key, repo, stale=f"{url} is not a PR's URL, so it is not observed")
+            return Derived(key, repo, stale=f"{url} is not a PR's URL, so it is not observed", unobserved=True)
         pr = self.prs.get(url)
         stale = self._age(url, pr)
         if stale is not None or pr is None:

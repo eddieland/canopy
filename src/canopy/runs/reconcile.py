@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import conversation, db, dead_runs, definitions, pool, pools, workspace
+from canopy.core import cards, conversation, db, dead_runs, definitions, pool, pools, workspace
 from canopy.core.vocab import PoolKind, RunStatus
 from canopy.infra import cwds, logs, procs
 from canopy.runs import desks, dispatch, task_run, tasks, tidy
@@ -194,6 +194,7 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
     conversation.close_run(ctx.conn, ctx.config, run, status, json.dumps({"harness": note}))
     procs.drop_lifelock(Path(run["log_path"]))
     outcomes: list[str] = []
+    cards.remove_answers(cards.answers_dir(ctx.state_dir, str(run["id"])))
     objects = tidy.objects_dir(dispatch.runs_dir(ctx), int(run["id"]))
     tidied = True
     for slot in slots:

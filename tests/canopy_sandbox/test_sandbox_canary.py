@@ -37,7 +37,17 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import InlineRunner, decisions, in_tick, pool, present, slot_of, tick_starts, worker_does
+from tests.canopy.helpers import (
+    InlineRunner,
+    decisions,
+    in_tick,
+    pool,
+    present,
+    slot_of,
+    tick_starts,
+    tracker_holds,
+    worker_does,
+)
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, git, user_toml
 
 pytestmark = pytest.mark.skipif(
@@ -392,16 +402,15 @@ def test_the_overseer_cannot_write_config_or_state_but_the_journal(canary: Canar
 def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(canary: Canary) -> None:
     """A positive control: `canopy --version`, which the tick checks, and a decision that lands in the journal."""
     canopy = Path(sys.executable).parent / "canopy"
-    skip = '--rationale "mcp_unavailable: the tracker is down"'
 
     with in_tick(canary.journal) as tick_id:
         version = canary.run(f'"{canopy}" --version', role=OVERSEER)
-        decided = canary.run(f'"{canopy}" decide skip {skip}', role=OVERSEER)
+        decided = canary.run(f'"{canopy}" decide PROJ-1 wait --rationale "checks pending"', role=OVERSEER)
 
     assert version.ok, version.stderr
     assert version.stdout.splitlines()[1].startswith("canopy ")
     assert decided.ok, decided.stderr
-    assert decisions(canary.journal, tick_id) == [("skip", "mcp_unavailable: the tracker is down")]
+    assert decisions(canary.journal, tick_id) == [("wait", "checks pending")]
 
 
 def test_a_dispatch_the_overseer_asks_for_is_recorded_and_started_by_no_process_in_its_sandbox(canary: Canary) -> None:
@@ -411,6 +420,9 @@ def test_a_dispatch_the_overseer_asks_for_is_recorded_and_started_by_no_process_
     """
     canopy = Path(sys.executable).parent / "canopy"
     ask = "dispatch PROJ-1 --repo repo --label agent-ready-tester --kind implement --slug work"
+    # The tracker holds the ticket, and the sources read it and the branches, as the tick does before its overseer.
+    with contextlib.chdir(canary.workspace):
+        tracker_holds(canary.journal)
 
     with in_tick(canary.journal) as tick_id:
         done = canary.run(f'"{canopy}" {ask}', role=OVERSEER)
@@ -670,6 +682,7 @@ def test_canopys_sandboxed_worker_is_pushed(
     canopy_env.write_user(user_toml().replace("\nworker_cmd = 'env", f"\nworker_cmd = '{prefix}"))
     conn: sqlite3.Connection = canopy_env.journal()
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
+    tracker_holds(conn)
     with worker_does(commit):
         runner = InlineRunner()
         with in_tick(conn, ends_ok=True):

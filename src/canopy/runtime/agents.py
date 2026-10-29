@@ -101,8 +101,9 @@ class Rules:
     #: Each agent's temperature by name, None to set none and leave the model's own: some models, such as OpenAI's
     #: reasoning models, refuse a request that sets one. An agent not named keeps its file's marked line as it is.
     temperatures: Mapping[str, float | None]
-    #: The overseer's prompt, and the tracker's provider, whose shipped skill, if any, follows it.
+    #: The overseer's prompt.
     overseer_prompt: str
+    #: The tracker's provider, which says whether GitHub's issue tools are the tracker's.
     tracker_provider: str
     #: The commands config allows each agent beyond its own bash rules, by agent name: each a rule the runtime matches
     #: a command line against (`canopy.runtime.definitions.BASH_ALLOW_RE`). An agent not named gets none.
@@ -114,9 +115,6 @@ class Rules:
     models: Mapping[str, Model]
     #: The chores' own copies of `CHORE` by name (`chore_agent`), each rendered as `CHORE` is, then with its own model.
     chore_agents: Sequence[str]
-    #: Whether a `tracker` source reads tickets into the journal, beside the `vcs` source, which always runs: the
-    #: overseer then reads neither the tracker nor GitHub itself (DESIGN §39).
-    observes_all: bool
     #: The tracker's MCP server, as config or the provider's defaults name it, even with no read tools known; None when
     #: neither names one.
     tracker_server: str | None
@@ -150,6 +148,30 @@ class AgentOffer:
     #: The runtime's own tools it is offered, by name: its MCP servers' are in `servers`.
     tools: Sequence[str] = ()
     #: Why the runtime could not say what the agent is offered, or None when it said.
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class SkillFile:
+    """A skill the runtime finds, as it read it: the file it is in, what it says it is for, and its instructions."""
+
+    name: str
+    #: What its front matter says it is for; None when it says nothing.
+    description: str | None
+    #: The file it was read from, as the runtime names it: an absolute path, or the runtime's own mark for a skill built
+    #: into it, such as OpenCode 1's `<built-in>`.
+    path: str
+    #: Its instructions: the file's text after its front matter.
+    body: str
+
+
+@dataclass(frozen=True)
+class Skills:
+    """Every skill the runtime finds where canopy's agents start, as it read them, or why it could not list them."""
+
+    #: Each skill, sorted by name.
+    files: Sequence[SkillFile] = ()
+    #: Why the runtime could not list them, or None when it did.
     error: str | None = None
 
 

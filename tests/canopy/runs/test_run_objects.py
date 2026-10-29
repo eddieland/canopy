@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, hostgit
+from canopy.core import cards, db, hostgit
 from canopy.core.vocab import TickStatus
 from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import (
@@ -23,6 +23,7 @@ from tests.canopy.helpers import (
     present,
     slot_of,
     tick_starts,
+    tracker_holds,
     waits,
     worker_does,
 )
@@ -42,6 +43,7 @@ WORKER = (
 
 
 def dispatch(conn: sqlite3.Connection, runner: InlineRunner) -> int:
+    tracker_holds(conn)
     with in_tick(conn) as tick_id:
         args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main([*args, "--slug", "work"], runner=runner) == 0
@@ -109,6 +111,7 @@ def sandboxed_worker_then_kill(canopy_env: CanopyEnv, conn: sqlite3.Connection, 
     git("checkout", "--quiet", "--detach", "refs/remotes/origin/main", cwd=slot)
     objects = objects_of(canopy_env, run_id)
     objects.mkdir(mode=0o700)
+    cards.make_answers(cards.answers_dir(canopy_env.state_dir, str(run_id)))
     done = SubprocessRunner().run(["sh", "-c", WORKER], cwd=slot, env={"CANOPY_GIT_OBJECTS": str(objects)})
     assert done.ok, done.stderr
     conn.execute("UPDATE runs SET pid = ? WHERE id = ?", (DEAD_PID, run_id))
@@ -142,6 +145,7 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     assert (own / "commondir").read_bytes() == hostgit.COMMONDIR_CONTENT
     assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")
     assert not objects_of(scenario.env, run_id).exists()
+    assert not cards.answers_dir(scenario.env.state_dir, str(run_id)).exists()
     assert_healthy(slot, primary)
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 

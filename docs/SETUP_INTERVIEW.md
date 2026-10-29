@@ -122,8 +122,11 @@ README "Install" step 4, and GETTING_STARTED stage 1.
 1. Make sure git can reach each repository over HTTPS without a prompt: `git ls-remote <url> HEAD`. If it asks for a
    password, the operator sets up a credential helper (`gh auth setup-git`, or another), then you check again. Use
    HTTPS URLs even if the operator usually uses SSH: a sandboxed worker cannot reach an SSH agent.
-2. Run `canopy init --provider <tracker> <url>...` in the workspace. Show what it wrote and what it printed.
+2. Run `canopy init --provider <tracker>` in the workspace. Show what it wrote and what it printed.
 3. Fill in, with the operator:
+   - the tracker source in `.canopy/config.toml`, which config requires: uncomment the table `canopy init` wrote, and
+     the `cmd` for their tracker with their Jira site or GitHub repository. Then run `canopy workspace add <url>...`,
+     which clones each repository;
    - `tracker.query` in `canopy-workspace.toml`: help them write the query that finds their candidate tickets;
    - each repository's one-line `summary` under `[repos.<name>]`, and `MAP.md` if there are several (stage 4 of
      GETTING_STARTED);

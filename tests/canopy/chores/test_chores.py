@@ -28,6 +28,7 @@ from canopy.loop import attention
 from canopy.runtime import servers
 from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
+    KEY,
     InlineRunner,
     agent_runs,
     calls,
@@ -48,6 +49,8 @@ from tests.canopy.helpers import (
     state_block,
     tick_starts,
     tools_of,
+    tracker_holds,
+    waits,
     with_events,
 )
 from tests.canopy.web_helpers import refused, signed_in_client
@@ -102,7 +105,8 @@ def test_without_chores_nothing_about_them_reaches_the_overseer(
     treehouse_state: Path,
     agent_log: Path,
 ) -> None:
-    with overseer_does():
+    tracker_holds(canopy_env.journal())
+    with overseer_does(*waits(KEY)):
         assert main(["tick", "--dry-run"]) == 0
     assert "chores" not in state_block(agent_log)
 
@@ -121,7 +125,8 @@ def test_max_chores_zero_turns_every_chore_off(
     agent_log: Path,
 ) -> None:
     canopy_env.append_user("\n[capacity]\nmax_chores = 0\n")
-    with overseer_does():
+    tracker_holds(canopy_env.journal())
+    with overseer_does(*waits(KEY)):
         assert main(["tick", "--dry-run"]) == 0
         assert "chores" not in state_block(agent_log)
 
@@ -441,8 +446,8 @@ def test_findings_not_listed_are_no_item_on_the_attention_list() -> None:
     )
 
 
-def tick(*, dry_run: bool = False) -> None:
-    with overseer_does():
+def tick(*moves: list[str], dry_run: bool = False) -> None:
+    with overseer_does(*moves):
         assert main(["tick", *(["--dry-run"] if dry_run else [])]) == 0
 
 
@@ -455,8 +460,10 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
 ) -> None:
     """M9's acceptance against the fakes: findings are listed and notified once, and leave when no longer reported."""
     conn = canopy_env.journal()
+    # A ticket left to the overseer, so each tick runs it, and it sees the chore.
+    tracker_holds(conn)
     run_inline(conn, OK)
-    tick()
+    tick(*waits(KEY))
     page = (canopy_env.state_dir / "attention.md").read_text()
     assert (
         "## chore:build-health\n\n- test_retry fails one run in five https://ci.example.test/job/checkout/90, " in page
@@ -479,7 +486,7 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
     # A failed run leaves the findings standing and raises chore_failed; still nothing new about the finding.
     backdate(conn, 120)
     run_inline(conn, {"status": "failed", "summary": "CI unreachable"})
-    tick()
+    tick(*waits(KEY))
     items = {(i.subject, i.reason) for i in attention.current(conn)}
     assert ("chore:build-health", "chore_failed") in items
     second = messages(notified)[1]
@@ -489,7 +496,7 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
     # An ok run that no longer reports it: the finding and chore_failed both resolve.
     backdate(conn, 120)
     run_inline(conn, {"status": "ok", "summary": "all clear"})
-    tick()
+    tick(*waits(KEY))
     third = messages(notified)[2]
     assert "- chore:build-health flaky/checkout/test_retry\n" in third
     assert "- chore:build-health chore_failed\n" in third

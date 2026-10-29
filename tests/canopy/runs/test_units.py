@@ -11,7 +11,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import Phase, ResumeReason, RunKind
+from canopy.core.vocab import NumberedItem, Phase, ResumeReason, RunKind
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runs import desks
@@ -28,15 +28,19 @@ from tests.canopy.helpers import (
     last_tick,
     pool_statuses,
     present,
+    tracker_holds,
     waits,
     worker_does,
 )
+from tests.canopy.observation_helpers import FRESH, number_of
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, sets_phase
 from tests.conftest import executable, git
 
 #: The branch PROJ-1's first implement names, with its slug.
 LOGIN = "agent/PROJ-1-login"
 PRS = {"api": "https://x.test/api/pull/1", "web": "https://x.test/web/pull/2", "docs": "https://x.test/docs/pull/3"}
+#: PRs the tests' `vcs` source reads, where PRS name none it can.
+READ_PRS = {"api": "https://github.com/acme/api/pull/1", "web": "https://github.com/acme/web/pull/2"}
 # Each PR's own title as the worker reports it: web's spans lines, and docs is not one of the run's repositories.
 TITLES = {"api": "PROJ-1: add the endpoint", "web": "PROJ-1: call\n  the endpoint", "docs": "PROJ-1: document it"}
 
@@ -210,6 +214,7 @@ def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(ws: Ws, tree
     """A first implement that waited for the lock sees the branch another one named meanwhile, and may not rename it."""
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
+    tracker_holds(conn)
     with in_tick(conn) as tick_id:
         codes: list[int] = []
 
@@ -233,33 +238,38 @@ def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(ws: Ws, tree
         ]
 
 
-def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
+def test_the_state_block_shows_each_unit(ws_scenario: Scenario, github_state: Path) -> None:
+    # PRs the `vcs` source reads, so the ticket is listed to the overseer (DESIGN §39), web's with a failed check.
+    failed = {"name": "build", "status": "completed", "conclusion": "failure", "run_id": 9}
+    github_state.write_text(json.dumps({"prs": {READ_PRS["api"]: {}, READ_PRS["web"]: {"checks": [failed]}}}))
     ws_scenario.run(
         dispatches(repo=("api", "web")),
-        worker=worker_does(*push_in("api"), *push_in("web"), result=done(PRS)),
+        worker=worker_does(*push_in("api"), *push_in("web"), result=done(READ_PRS)),
     )
+    ci = number_of(ws_scenario.conn, NumberedItem.CHECK_RUN, 9, subject=READ_PRS["web"])
     # The overseer records web's phase and cursor, and the ticket's own; the next tick's state block shows them.
     ws_scenario.tick(
-        sets_phase("PROJ-1", Phase.CI_RED, repo="web", cursor="ci=9"),
-        sets_phase("PROJ-1", Phase.RUNNING, cursor="comment=c-1"),
+        sets_phase("PROJ-1", Phase.CI_RED, repo="web", cursor=f"ci={ci}"),
+        sets_phase("PROJ-1", Phase.RUNNING),
         *waits("PROJ-1"),
     )
     ws_scenario.tick(*waits("PROJ-1"), dry_run=True)
 
     [ticket] = ws_scenario.state()["tickets"]
-    assert (ticket["phase"], ticket["cursors"]) == ("running", {"comment": "c-1"})
+    assert (ticket["phase"], ticket.get("cursors")) == ("running", None)
     no_limit = {"implement": 1, "resume": 0}
     # What is null or empty, such as api's phase and cursors and either's cooldown, is left out, and the branch is
     # said once, on the units.
     assert "branch" not in ticket
     assert ticket["units"] == [
-        {"repo": "api", "branch": BRANCH, "pr_url": PRS["api"], "attempts": no_limit},
+        {"repo": "api", "branch": BRANCH, "pr_url": READ_PRS["api"], "attempts": no_limit},
         {
             "repo": "web",
             "branch": BRANCH,
-            "pr_url": PRS["web"],
+            "pr_url": READ_PRS["web"],
             "phase": "ci_red",
-            "cursors": {"ci": 9},
+            "cursors": {"ci": ci},
+            "cursor_items": {"ci": f"check run 9, first observed {FRESH}"},
             "attempts": no_limit,
         },
     ]
