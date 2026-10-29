@@ -13,8 +13,8 @@ listings, the config's settings, and what each agent is offered, which those com
 its tools only where CANOPY_RUN_ID names a chore's run, and serves nothing of the overseer's. The reviewer's and the
 planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in the checkouts its command line names, the
 run's own (`core.git_tools`); it opens no workspace, and serves nothing else. A worker's, planner's, or reviewer's
-(`STATUS`, `canopy _mcp --status`) is one tool, `status`, its card (`core.cards`, DESIGN §41), listed only where
-CANOPY_RUN_ID names such a run: a call is validated and writes nothing, since the harness records the card from the
+(`STATUS`, `canopy _mcp --status`) is one tool, `status`, its progress (`core.cards`, DESIGN §41), listed only where
+CANOPY_RUN_ID names such a run: a call is validated and writes nothing, since the harness records the update from the
 call in the events the agent prints; it opens no workspace.
 
 An overseer's tool lists its result's schema as its output schema, and answers with the text the command prints and
@@ -339,30 +339,30 @@ REPORT_TOOLS = (
 
 
 def _status(arguments: Mapping[str, object], opened: Opener) -> str:
-    """Validate a card, and write nothing: the harness records it from the call in the agent's events (DESIGN §41).
+    """Validate an update, and write nothing: the harness records it from the call in the agent's events (DESIGN §41).
 
     Returns:
         What the agent is told of it.
 
     Raises:
-        tools.Refused: CANOPY_RUN_ID names no run that keeps a card.
+        tools.Refused: CANOPY_RUN_ID names no run that keeps progress.
     """
     refused = _status_refusal(opened)
     if refused is not None:
         raise tools.Refused(refused)
     cards.Card.model_validate(arguments)
-    return "Shown to the operator. Call status again, with the whole card, when where you stand changes."
+    return "Shown to the operator. Post another update, with your whole progress, when where you stand changes."
 
 
-#: A run's card, which the runtime names `canopy_run_status` (its server is `cards.SERVER`).
+#: A run's progress, which the runtime names `canopy_run_status` (its server is `cards.SERVER`).
 STATUS_TOOLS = (
     canopy_mcp.Tool(
         cards.TOOL,
-        "Say where your work stands, for the operator, who reads this card instead of your transcript. Each call is "
-        "your whole card and replaces the last: a summary, what you do now, what is done with the proof of each, what "
-        "is next, and anything in your way you are working around. Call it once you know your plan, and again "
-        "whenever where you stand changes. It changes nothing else and never waits: the operator's answer to a "
-        "question on it comes back on a later tool call's result.",
+        "Post an update of where your work stands, for the operator, who reads your progress instead of your "
+        "transcript. Each call is your whole progress and replaces the last: a summary, what you do now, what is done "
+        "with the proof of each, what is next, and anything in your way you are working around. Call it once you know "
+        "your plan, and again whenever where you stand changes. It changes nothing else and never waits: the "
+        "operator's answer to a question in it comes back on a later tool call's result.",
         cards.Card,
         _status,
         hints=canopy_mcp.Hints(read_only=False, idempotent=True),
@@ -391,7 +391,7 @@ def run_stdio(
     """Serve on this process's stdin and stdout until stdin closes, with `runner` for every process a call starts.
 
     `chore` serves a chore's run its history (`CHORE`), and `serve_reports` canopy's reports (`REPORTS`), each from the
-    workspace its run names; `status`, a worker's, planner's, or reviewer's run its card (`STATUS`); `checkouts`, a
+    workspace its run names; `status`, a worker's, planner's, or reviewer's run its progress (`STATUS`); `checkouts`, a
     review's or a plan's run read-only git in those checkouts, by name (`git_mode`); else it serves the overseer's
     verbs.
 
@@ -662,14 +662,16 @@ def _chore_refusal(opener: Opener) -> str | None:
 
 
 def _status_refusal(opener: Opener) -> str | None:  # noqa: ARG001  (CANOPY_RUN_ID alone says)
-    """Say why the card's tool is not served now: CANOPY_RUN_ID names no worker's, planner's, or review's run.
+    """Say why the progress tool is not served now: CANOPY_RUN_ID names no worker's, planner's, or review's run.
 
     Returns:
         Why, as a refusal says it, or None when it is served.
     """
     if cards.RUN_ID_RE.fullmatch(os.environ.get(conversation.RUN_ID_ENV, "")):
         return None
-    return f"status refused: {conversation.RUN_ID_ENV} names no worker's, planner's, or review's run, which keep a card"
+    return (
+        f"status refused: {conversation.RUN_ID_ENV} names no worker's, planner's, or review's run, which keep progress"
+    )
 
 
 #: The overseer's verbs, served inside a running tick and never inside a run.
@@ -678,7 +680,7 @@ OVERSEER = Mode(TOOLS, _overseer_refusal)
 CHORE = Mode(CHORE_TOOLS, _chore_refusal)
 #: canopy's read-only reports, served inside a chore's run alone, the one run the harness gives their server today.
 REPORTS = Mode(REPORT_TOOLS, _chore_refusal)
-#: A run's card, served inside a worker's, planner's, or review's run alone.
+#: A run's progress tool, served inside a worker's, planner's, or review's run alone.
 STATUS = Mode(STATUS_TOOLS, _status_refusal)
 
 
