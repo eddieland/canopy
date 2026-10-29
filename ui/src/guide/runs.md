@@ -251,7 +251,7 @@ next tool call; click another to change your mind, as long as it runs. An answer
 among its options, which is also all a line forged to look like canopy's could do. A question it can't work around
 still ends the run as `blocked`, as before.
 
-A run's page and a review's page lead with the whole of it; the runs list shows a small meter, what it's doing now,
-`asks you` while a question waits, and when it was last updated; a ticket's page shows it as a bubble under `working
-now`; and the rail puts the meter under each working ticket. Nothing in it reaches another agent, and nothing in it
-changes what canopy does: it's for you.
+A run's page and a review's page lead with the whole of it; the runs list shows what it's doing now, `asks you` while
+a question waits, and when it was last updated, after a small meter when it has steps; a ticket's page shows it as a
+bubble under `working now`; and the rail puts the meter under a working ticket whose progress has steps. Nothing in it
+reaches another agent, and nothing in it changes what canopy does: it's for you.

@@ -154,6 +154,8 @@ every MCP server but canopy's denied. The overseer's definition denies `*_*`, ev
 `<server>_<tool>`, whatever the operator's runtime config grants, and `read` of any server's resources, before it allows
 canopy's tools by name; nothing of the tracker's config is rendered into it, so none can reopen a server
 (`.agents/agents/canopy-overseer.md`). Read from OpenCode 1.19.3's source: no built-in tool the overseer uses asks a
-permission with a `_`. Left: the design folded into the sections it names.
+permission with a `_`. Built (2026-10-29): the design folded into the sections it names, §39 cut to its Open; the
+harness's `wait` on a stale or unobserved subject is §37's, a tick that runs no overseer and the polls that end the
+wait §6's. Left: Accept's live checks, S27 re-measured over a day and a night and a source stopped for a few polls.
 Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes,
 and that entry with it), the fifth bullet's.

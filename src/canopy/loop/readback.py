@@ -111,9 +111,9 @@ def read_decisions(ctx: Context, request: Decisions) -> str:
 
 
 def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
-    """Print a run, as `canopy show run:ID` prints it, with its agent's card when `card` says so.
+    """Print a run, as `canopy show run:ID` prints it, with its agent's progress when `card` says so.
 
-    The card is the operator's alone (DESIGN §41): the report a chore's agent reads leaves it out.
+    A run's progress is the operator's alone (DESIGN §41): the report a chore's agent reads leaves it out.
 
     Returns:
         The run's lines and its messages.
@@ -140,7 +140,7 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
         lines.append(f"  harness: {said}")
     session = f"session {run['session_id']}" if run["session_id"] else "no session reported"
     lines.extend([f"  {session}{spent(run)}", f"  log {run['log_path']}"])
-    # Its agent's card, while it runs and its last once it ends (DESIGN §41).
+    # Its agent's progress, while it runs and its last once it ends (DESIGN §41).
     running = run["status"] == RunStatus.RUNNING
     standing = cards.of(run)
     if card and (standing.card is not None or running):

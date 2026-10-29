@@ -49,6 +49,7 @@ export const keys = {
     worktrees: ['worktrees'] as const,
     host: ['host'] as const,
     hostSamples: ['host-samples'] as const,
+    hostProcesses: ['host-processes'] as const,
     spend: ['spend'] as const,
     // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale.
     spendBreakdown: (range: SpendBreakdownRange) =>
@@ -459,6 +460,18 @@ export const hostQuery = queryOptions({
 export const hostSamplesQuery = queryOptions({
     queryKey: keys.hostSamples,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/host/samples', { signal })),
+    refetchInterval: HOST_REFRESH_MS,
+    refetchIntervalInBackground: false,
+})
+
+/**
+ * The machine's processes, for the system resources page: each with the processors it kept busy since the server's
+ * read before, which is this query's previous fetch while the page is open. Read as the host's resources are, every 10
+ * seconds while the page shows them and its tab is visible; the server reads nothing while no page asks.
+ */
+export const hostProcessesQuery = queryOptions({
+    queryKey: keys.hostProcesses,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/host/processes', { signal })),
     refetchInterval: HOST_REFRESH_MS,
     refetchIntervalInBackground: false,
 })

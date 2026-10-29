@@ -11,7 +11,7 @@
  *
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
- * others set the neutrals, and may set the accent, over the default's: off-white, Solarized, Nord, Gruvbox, sage, and
+ * others set the neutrals and the accent over the default's: off-white, Solarized, Nord, Gruvbox, sage, and
  * Rosé Pine Dawn for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized, Gruvbox,
  * forest, plum, and Monokai for dark.
  */
@@ -217,9 +217,11 @@
     --rave-dark: oklch(0.08 0.02 275);
 }
 
-/* The light theme's other palettes: only the neutrals change, and what is drawn in them; every hue is lavender's.
- * Off-white is a warm paper, its surfaces never quite white. */
+/* The light theme's other palettes: the neutrals change, what is drawn in them, and the accent; every other hue is
+ * lavender's. Off-white is a warm paper, its surfaces never quite white, and its accent a fountain pen's blue ink. */
 :root[data-light-palette='off-white']:not(.dark) {
+    --accent: oklch(0.47 0.14 258);
+    --ring: oklch(0.47 0.14 258 / 0.55);
     --background: oklch(0.96 0.008 85);
     --surface: oklch(0.99 0.005 85);
     --surface-raised: oklch(0.952 0.01 85);
@@ -232,10 +234,12 @@
     --context-carried: oklch(0.6 0.015 80);
 }
 
-/* Solarized's light base tones: base2 the canvas, base3 a surface, base02 the text, base01 muted. The two bases are a
- * little lighter than Solarized's own, and base01 darker, so the status and section hues still read at 4.5:1 on
- * them. */
+/* Solarized's light base tones: base2 the canvas, base3 a surface, base02 the text, base01 muted, and its blue the
+ * accent. The two bases are a little lighter than Solarized's own, and base01 and the blue darker, so the status and
+ * section hues still read at 4.5:1 on them, and white on the blue. */
 :root[data-light-palette='solarized']:not(.dark) {
+    --accent: oklch(0.48 0.13 245);
+    --ring: oklch(0.48 0.13 245 / 0.55);
     --background: oklch(0.948 0.026 92);
     --surface: oklch(0.988 0.02 90);
     --surface-raised: oklch(0.962 0.026 91);
@@ -248,8 +252,11 @@
     --context-carried: oklch(0.6 0.02 205);
 }
 
-/* Nord's Snow Storm: nord6 the canvas, nord5 raised, nord4 the hairlines, nord0 the text, nord3 muted. */
+/* Nord's Snow Storm: nord6 the canvas, nord5 raised, nord4 the hairlines, nord0 the text, nord3 muted, and Frost's
+ * nord10 the accent, a shade darker so white reads on it. */
 :root[data-light-palette='nord']:not(.dark) {
+    --accent: oklch(0.48 0.09 254);
+    --ring: oklch(0.48 0.09 254 / 0.55);
     --background: oklch(0.951 0.007 261);
     --surface: oklch(0.99 0.003 261);
     --surface-raised: oklch(0.962 0.008 262);
@@ -263,8 +270,11 @@
 }
 
 /* Gruvbox light: bg0 the canvas, bg0_h a surface, bg1 the hairlines, fg1 the text, gray muted; the bases a shade
- * lighter than Gruvbox's own, as Solarized's are. */
+ * lighter than Gruvbox's own, as Solarized's are. The accent is its faded purple, a touch lighter so done reads in a
+ * selected row, rather than its orange, which would pass for blocked. */
 :root[data-light-palette='gruvbox']:not(.dark) {
+    --accent: oklch(0.5 0.12 344);
+    --ring: oklch(0.5 0.12 344 / 0.55);
     --background: oklch(0.958 0.05 96);
     --surface: oklch(0.985 0.035 101);
     --surface-raised: oklch(0.968 0.05 96);
@@ -277,8 +287,11 @@
     --context-carried: oklch(0.59 0.02 70);
 }
 
-/* Sage: a soft green canvas, the light side of Forest. */
+/* Sage: a soft green canvas, the light side of Forest, with heather for an accent, since a green one would
+ * pass for running. */
 :root[data-light-palette='sage']:not(.dark) {
+    --accent: oklch(0.5 0.14 318);
+    --ring: oklch(0.5 0.14 318 / 0.55);
     --background: oklch(0.952 0.016 150);
     --surface: oklch(0.992 0.005 150);
     --surface-raised: oklch(0.963 0.014 150);
@@ -295,8 +308,8 @@
  * love the accent. The canvas is a shade darker than Rosé Pine's own, subtle a step darker, and love darker still, so
  * every hue reads at 4.5:1 and white reads on love. */
 :root[data-light-palette='rose-pine']:not(.dark) {
-    --accent: oklch(0.52 0.12 3);
-    --ring: oklch(0.52 0.12 3 / 0.55);
+    --accent: oklch(0.5 0.12 3);
+    --ring: oklch(0.5 0.12 3 / 0.55);
     --background: oklch(0.952 0.013 72);
     --surface: oklch(0.987 0.011 77);
     --surface-raised: oklch(0.962 0.013 68);
@@ -309,9 +322,11 @@
     --context-carried: oklch(0.6 0.025 291);
 }
 
-/* The dark theme's grey palette, Mailroom's neutrals. Muted text is a step further from the canvas than Mailroom drew
- * it, and stopped one more, to read on its own tint as well. */
+/* The dark theme's grey palette, Mailroom's neutrals, with a steel blue accent. Muted text is a step further from the
+ * canvas than Mailroom drew it, and stopped one more, to read on its own tint as well. */
 .dark[data-dark-palette='grey'] {
+    --accent: oklch(0.75 0.1 232);
+    --ring: oklch(0.75 0.1 232 / 0.5);
     --background: oklch(0.169 0.004 286);
     --surface: oklch(0.206 0.006 286);
     --surface-raised: oklch(0.254 0.007 286);
@@ -325,8 +340,10 @@
     --context-carried: oklch(0.58 0.01 286);
 }
 
-/* Black: a near-black canvas, kind to an OLED screen, and colorless neutrals over it. */
+/* Black: a near-black canvas, kind to an OLED screen, colorless neutrals over it, and an ultraviolet accent. */
 .dark[data-dark-palette='black'] {
+    --accent: oklch(0.72 0.18 300);
+    --ring: oklch(0.72 0.18 300 / 0.5);
     --background: oklch(0.13 0 0);
     --surface: oklch(0.17 0 0);
     --surface-raised: oklch(0.215 0 0);
@@ -340,9 +357,12 @@
     --context-carried: oklch(0.55 0 0);
 }
 
-/* Solarized's dark base tones: base03 the canvas, base02 raised, base1 the text and base0 muted. The bases are a step
- * darker than Solarized's own, and the text brighter, so the status and section hues still read at 4.5:1 on them. */
+/* Solarized's dark base tones: base03 the canvas, base02 raised, base1 the text, base0 muted, and its blue the accent.
+ * The bases are a step darker than Solarized's own, and the text and the blue brighter, so the status and section hues
+ * still read at 4.5:1 on them. */
 .dark[data-dark-palette='solarized'] {
+    --accent: oklch(0.7 0.13 245);
+    --ring: oklch(0.7 0.13 245 / 0.5);
     --background: oklch(0.187 0.049 220);
     --surface: oklch(0.208 0.05 220);
     --surface-raised: oklch(0.229 0.052 220);
@@ -356,9 +376,12 @@
     --context-carried: oklch(0.63 0.03 215);
 }
 
-/* Gruvbox dark: bg0_h the canvas, bg0 a surface, bg1 raised, bg2 the hairlines, fg the text, gray muted. The bases are
- * a step darker than Gruvbox's own, so the status and section hues still read at 4.5:1 on them. */
+/* Gruvbox dark: bg0_h the canvas, bg0 a surface, bg1 raised, bg2 the hairlines, fg the text, gray muted, and its
+ * bright purple the accent, as light wears the faded one. The bases are a step darker than Gruvbox's own, so the status
+ * and section hues still read at 4.5:1 on them. */
 .dark[data-dark-palette='gruvbox'] {
+    --accent: oklch(0.75 0.1 350);
+    --ring: oklch(0.75 0.1 350 / 0.5);
     --background: oklch(0.171 0.005 220);
     --surface: oklch(0.207 0 90);
     --surface-raised: oklch(0.274 0.007 49);
@@ -372,8 +395,10 @@
     --context-carried: oklch(0.62 0.02 70);
 }
 
-/* Forest: a deep green canvas, the dark side of Sage. */
+/* Forest: a deep green canvas, the dark side of Sage, with a lake blue for an accent. */
 .dark[data-dark-palette='forest'] {
+    --accent: oklch(0.76 0.11 240);
+    --ring: oklch(0.76 0.11 240 / 0.5);
     --background: oklch(0.17 0.02 165);
     --surface: oklch(0.205 0.024 165);
     --surface-raised: oklch(0.25 0.028 165);
@@ -387,8 +412,10 @@
     --context-carried: oklch(0.6 0.02 160);
 }
 
-/* Plum: a dark wine-purple canvas, warmer than indigo. */
+/* Plum: a dark wine-purple canvas, warmer than indigo, and an orchid accent in its own hue, as indigo's is. */
 .dark[data-dark-palette='plum'] {
+    --accent: oklch(0.76 0.14 330);
+    --ring: oklch(0.76 0.14 330 / 0.5);
     --background: oklch(0.17 0.025 340);
     --surface: oklch(0.205 0.03 340);
     --surface-raised: oklch(0.25 0.035 340);
@@ -402,10 +429,13 @@
     --context-carried: oklch(0.6 0.025 340);
 }
 
-/* Monokai: its olive-grey background the canvas, the line highlight the hairlines, its off-white the text, and the
- * comment color muted. The bases are a step darker than Monokai's own, and the comment color brighter, so the status
- * and section hues still read at 4.5:1. */
+/* Monokai: its olive-grey background the canvas, the line highlight the hairlines, its off-white the text, the
+ * comment color muted, and its pink the accent. The bases are a step darker than Monokai's own, and the comment color
+ * brighter, so the status and section hues still read at 4.5:1; the pink is a touch softer, so the canvas reads on
+ * it, and turned toward magenta, so a link beside a failed run is not taken for it. */
 .dark[data-dark-palette='monokai'] {
+    --accent: oklch(0.72 0.2 352);
+    --ring: oklch(0.72 0.2 352 / 0.5);
     --background: oklch(0.18 0.009 115);
     --surface: oklch(0.212 0.01 115);
     --surface-raised: oklch(0.255 0.012 110);

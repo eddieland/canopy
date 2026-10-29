@@ -254,11 +254,22 @@ function Limit({ name, running, limit, fact }: { name: string; running: number; 
 }
 
 /** A filter chip, selected when it matches the validated search: an unknown value selects `all`. */
-function FilterLink({ search, selected, children }: { search: RunsSearch; selected: boolean; children: ReactNode }) {
+function FilterLink({
+    search,
+    selected,
+    title,
+    children,
+}: {
+    search: RunsSearch
+    selected: boolean
+    title?: string
+    children: ReactNode
+}) {
     return (
         <Link
             to="/runs"
             search={search}
+            title={title}
             data-selected={selected}
             className={cn(
                 'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',

@@ -357,9 +357,9 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     agent, which reads the PR and the draft and makes a new version, posting nothing, unless you change the draft first.
 
     On a running run, `run:ID` for a worker or a planner and `review:ID` for a review, TEXT is the letter of one of the
-    options its card's question offers: the agent hears it on its next tool call, and has worked around the question
+    options its question offers: the agent hears it on its next tool call, and has worked around the question
     until then. A later letter replaces it. Once a review has ended, a lone letter is refused rather than noted on its
-    draft, if its card asked a question.
+    draft, if it asked a question.
     """
     _operator("reply")
     subject = _ref(ref, "reply")
@@ -392,7 +392,7 @@ def _running_review(ctx: Context, subject: Ref) -> bool:
 
 
 def _refuse_late_answer(ctx: Context, subject: Ref, body: str) -> None:
-    """Refuse a lone letter on an ended review whose card asked a question: it was meant as an answer, not a note."""
+    """Refuse a lone letter on an ended review that asked a question: it was meant as an answer, not a note."""
     run = review_runs.get_review_run(ctx.conn, int(subject.id))
     standing = cards.of(run) if run is not None else None
     asked = standing is not None and standing.card is not None and standing.card.question is not None
@@ -970,7 +970,7 @@ def _echo_message(m: records.Message) -> None:
 
 def _show_run(ctx: Context, run_id: int) -> None:
     try:
-        # A card is the operator's alone (DESIGN §41): not printed inside one of canopy's ticks or runs.
+        # A run's progress is the operator's alone (DESIGN §41): not printed inside one of canopy's ticks or runs.
         click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id), card=conversation.is_operator()))
     except reports.Refused as e:
         raise CliError(str(e)) from None
