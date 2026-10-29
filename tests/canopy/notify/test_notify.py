@@ -25,6 +25,7 @@ from tests.canopy.helpers import (
     READ_PR,
     WORKER_DONE,
     InlineRunner,
+    Script,
     canopy,
     chore_reports,
     in_tick,
@@ -48,6 +49,11 @@ def add_sink(scenario: Scenario, script: Path, name: str, out: Path, **settings:
 
 def json_messages(out: Path) -> list[dict[str, Any]]:
     return [json.loads(m) for m in messages(out)]
+
+
+def done_with_no_pr() -> Script:
+    """The worker reports its ticket done with no PR, so its unit raises no `unobserved_pr` the sink would hear of."""
+    return worker_does(result=json.dumps({k: v for k, v in json.loads(WORKER_DONE).items() if k != "pr"}))
 
 
 def needing_reviewers(*keys: str) -> list[list[str]]:
@@ -424,12 +430,12 @@ def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
     add_sink(scenario, sink_script, "slack", out, events=["attention", "runs"], batch_minutes=30)
     scenario.tick(*needing_reviewers("PROJ-9"))  # the first delivery goes at once
     assert len(messages(out)) == 1
-    scenario.run(worker=worker_does())
+    scenario.run(worker=done_with_no_pr())
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
     assert len(messages(out)) == 1  # held: a run started and ended, and nothing needs the operator
     assert "  slack  last delivered " in scenario.operator("status").out
 
-    scenario.run(dispatches("PROJ-2"), worker=worker_does())
+    scenario.run(dispatches("PROJ-2"), worker=done_with_no_pr())
     scenario.time_passes(minutes=31)
     # PROJ-9 resolved meanwhile: resolving is not urgent either, but the window is over.
     scenario.tick(*waits("PROJ-1", "PROJ-2", "PROJ-9"))
@@ -456,14 +462,14 @@ def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held
     out = tmp_path / "slack.txt"
     add_sink(scenario, sink_script, "slack", out, events=["attention", "runs"], batch_minutes=30)
     scenario.tick(*needing_reviewers("PROJ-9"))
-    scenario.run(worker=worker_does())
+    scenario.run(worker=done_with_no_pr())
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
     assert len(messages(out)) == 1
     attention = needing_reviewers("PROJ-9")
     if urgent == "blocked":
         scenario.run(dispatches("PROJ-2"), worker=asks("Which?"))
     else:
-        scenario.run(dispatches("PROJ-2"), worker=worker_does())
+        scenario.run(dispatches("PROJ-2"), worker=done_with_no_pr())
         attention.append(raises("PROJ-8", "multi_repo"))
     scenario.tick(*attention, *waits("PROJ-1", "PROJ-2"))
     [_, sent] = json_messages(out)
@@ -505,7 +511,7 @@ def test_a_batching_sink_hears_another_sink_failing_at_once_with_what_it_held(
     add_sink(scenario, sink_script, "desk", desk, events=["attention", "loop", "runs"], batch_minutes=30)
     Path(f"{down}.exit").write_text("1")
     scenario.tick(*needing_reviewers("PROJ-9"))
-    scenario.run(worker=worker_does())
+    scenario.run(worker=done_with_no_pr())
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
     assert len(messages(desk)) == 1  # the runs are held
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))  # alerts' third failure in a row
