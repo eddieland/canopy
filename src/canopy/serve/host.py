@@ -127,13 +127,14 @@ def sample(found: HostResources) -> HostSample:
 async def sampling(read_now: Callable[[], HostResources], samples: Samples) -> None:
     """Read the machine every `samples.every` seconds into `samples`, until cancelled, starting now.
 
-    Each read is on a thread, as the routes keep their work off the event loop. One that fails is logged and skipped:
-    the graph shows a gap there rather than the server stopping its readings.
+    Each read is on a thread, as the routes keep their work off the event loop. One that fails, however, is logged and
+    skipped: the graph shows a gap there rather than the server stopping its readings, which nothing would notice.
     """
     while True:
         try:
             samples.add(await asyncio.to_thread(read_now))
-        except OSError:
+        # Any error, not only the operating system's: one escaping would end the task with no line in the log.
+        except Exception:  # noqa: BLE001
             _log.warning("could not read the host's resources", exc_info=True)
         await asyncio.sleep(samples.every)
 

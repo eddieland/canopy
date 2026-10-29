@@ -126,10 +126,10 @@ def test_a_sample_is_what_the_graphs_draw_of_a_reading(tmp_path: Path) -> None:
     assert [(d.path, d.free) for d in taken.disks] == [(d.path, d.free) for d in found.disks]
 
 
-def test_the_sampler_reads_until_cancelled_and_skips_a_read_that_fails(tmp_path: Path) -> None:
+def test_the_sampler_reads_until_cancelled_and_skips_any_read_that_fails(tmp_path: Path) -> None:
     samples = host.Samples(every=0)
     calls = 0
-    # Set as the fifth read starts: the sampler starts it once it kept the fourth's, the third that succeeded.
+    # Set as the sixth read starts: the sampler starts it once it kept the fifth's, the third that succeeded.
     read_enough = threading.Event()
 
     def read_now() -> HostResources:
@@ -137,7 +137,9 @@ def test_the_sampler_reads_until_cancelled_and_skips_a_read_that_fails(tmp_path:
         calls += 1
         if calls == 2:
             raise OSError("gone")
-        if calls >= 5:
+        if calls == 3:
+            raise ValueError("not a number")
+        if calls >= 6:
             read_enough.set()
         return _reading(tmp_path, NOW + timedelta(seconds=calls))
 
@@ -152,8 +154,8 @@ def test_the_sampler_reads_until_cancelled_and_skips_a_read_that_fails(tmp_path:
 
     kept = samples.history().samples
     assert len(kept) >= 3
-    # The second read failed, so the second sample is the third read's.
-    assert kept[1].at == NOW + timedelta(seconds=3)
+    # The second and third reads failed, the one with an error of its own as well, so the second sample is the fourth's.
+    assert kept[1].at == NOW + timedelta(seconds=4)
 
 
 def test_the_server_reads_the_machine_into_memory_from_when_it_starts(ctx: Context) -> None:
