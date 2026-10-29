@@ -239,19 +239,13 @@ def state_section(
         return None
     key = ticket.key
     needed_now = needed(policy.plan, ticket.plan_setting)
-    newest = records.fetch_one(
-        conn,
-        records.Plan,
-        sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1),
-    )
-    run = records.fetch_one(
-        conn,
-        records.Run,
-        sql.select("*")
-        .from_("runs")
+    newest = records.select(records.Plan).where("ticket_key = ?", key).order_by("id DESC").limit(1).one(conn)
+    run = (
+        records.select(records.Run)
         .where("ticket_key = ? AND kind = ? AND id > ?", key, RunKind.PLAN, ticket.forgotten_run_id or 0)
         .order_by("id DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
     if not needed_now and newest is None and run is None and attempts == 0:
         return None
@@ -283,11 +277,7 @@ def waits(conn: sqlite3.Connection, ticket: records.Ticket) -> bool:
     Returns:
         True while the newest plan waits on the operator's word.
     """
-    newest = records.fetch_one(
-        conn,
-        records.Plan,
-        sql.select("*").from_("plans").where("ticket_key = ?", ticket.key).order_by("id DESC").limit(1),
-    )
+    newest = records.select(records.Plan).where("ticket_key = ?", ticket.key).order_by("id DESC").limit(1).one(conn)
     if newest is None or newest.status is not PlanStatus.PROPOSED:
         return False
     running = db.running_run_of(conn, ticket.key)
@@ -307,11 +297,7 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
         The message's time as the journal holds it, or None.
     """
     key = ticket.key
-    newest = records.fetch_one(
-        conn,
-        records.Plan,
-        sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1),
-    )
+    newest = records.select(records.Plan).where("ticket_key = ?", key).order_by("id DESC").limit(1).one(conn)
     if newest is not None and newest.status is PlanStatus.APPROVED:
         return None
     latest_run = (
@@ -579,11 +565,7 @@ def current(conn: sqlite3.Connection, key: str) -> records.Plan | None:
     Returns:
         The plan's row, or None when the ticket has none.
     """
-    return records.fetch_one(
-        conn,
-        records.Plan,
-        sql.select("*").from_("plans").where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
-    )
+    return records.select(records.Plan).where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED).one(conn)
 
 
 def history(conn: sqlite3.Connection, key: str) -> list[records.Plan]:
@@ -592,11 +574,7 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.Plan]:
     Returns:
         The plans' rows, oldest first.
     """
-    return records.fetch_all(
-        conn,
-        records.Plan,
-        sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id"),
-    )
+    return records.select(records.Plan).where("ticket_key = ?", key).order_by("id").all(conn)
 
 
 def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str, dispatch_lock: Path) -> records.Plan:

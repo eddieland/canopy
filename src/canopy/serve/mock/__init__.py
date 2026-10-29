@@ -498,7 +498,7 @@ def _models_listed(ctx: Context) -> ModelList:
     Returns:
         Each model a run's session names, once, with its variants.
     """
-    served = records.fetch_all(ctx.conn, records.RunModel, sql.select("*").from_("run_models"))
+    served = records.select(records.RunModel).all(ctx.conn)
     models = frozenset(m.model for m in served)
     return ModelList(models, {m: _VARIANTS.get(m.partition("/")[0], frozenset()) for m in models})
 

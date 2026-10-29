@@ -52,7 +52,7 @@ def forget(conn: sqlite3.Connection, memory_id: int) -> tuple[records.Memory, Sc
             its body is already gone.
     """
     conversation.check_operator()
-    found = records.fetch_one(conn, records.Memory, sql.select("*").from_("memories").where("id = ?", memory_id))
+    found = records.select(records.Memory).where("id = ?", memory_id).one(conn)
     if found is None:
         raise conversation.Refused("unknown", f"no memory has id {memory_id}")
     if found.body is None:

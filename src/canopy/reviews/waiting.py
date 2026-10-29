@@ -175,13 +175,11 @@ def _unsettled(conn: sqlite3.Connection) -> list[Item]:
     Returns:
         The items, by PR.
     """
-    drafts = records.fetch_all(
-        conn,
-        records.ReviewDraft,
-        sql.select("*")
-        .from_("review_drafts")
+    drafts = (
+        records.select(records.ReviewDraft)
         .where_in("status", (ReviewDraftStatus.STAGED, ReviewDraftStatus.UNCONFIRMED))
-        .order_by("pr_url, id"),
+        .order_by("pr_url, id")
+        .all(conn)
     )
     by_pr: dict[str, list[str]] = defaultdict(list)
     for draft in drafts:
