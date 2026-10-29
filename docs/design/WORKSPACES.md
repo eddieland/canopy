@@ -115,9 +115,11 @@ guarantee is held by a case of the pool contract suite, run against canopy's poo
 `pools.backend`, private config, chooses whether treehouse, the default, or canopy's own pool makes the worktrees;
 callers do not know which they have. canopy's pool keeps every guarantee above. A slot goes back to the pool that made
 its lease, so switching with runs in flight is safe. A quarantined slot, in either pool, waits for the operator's
-release, since the file seeding collided with may be a run's work. Every git canopy's pool runs has D107's flags; a
-slot that does not point into its primary clone (D118), or whose processes cannot be read, is never reset, reused, or
-removed.
+release, since the file seeding collided with may be a run's work. The operator's commands reach both pools, between
+ticks: `canopy workspace slots` lists every slot and what holds it, `release` frees a quarantined slot or a lease no
+running run, review, or task holds, and `remove-slot` removes one slot only as sync's trim would. Every git canopy's
+pool runs has D107's flags; a slot that does not point into its primary clone (D118), or whose processes cannot be read,
+is never reset, reused, or removed.
 
 ### Upgrading past treehouse
 
