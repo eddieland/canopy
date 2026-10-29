@@ -7,7 +7,7 @@ the state directory as the CLI reads it.
 import json
 from pathlib import Path
 
-from canopy.core import conversation, db, pools, records, sql
+from canopy.core import conversation, db, pools, records
 from canopy.core.context import Context
 from canopy.core.vocab import PoolKind, RunStatus
 from canopy.runs import tasks
@@ -228,10 +228,14 @@ def end(
 
 def test_a_tasks_runs_name_the_models_that_served_them_so_the_runs_page_lists_them_by_model(backend: Backend) -> None:
     with backend.open() as ctx:
-        sql.execute(
-            ctx.conn,
-            sql.insert("run_models", run_table="task_runs", run_id=1, model="openai/gpt-5", replies=3, cost_usd=0.1),
-        )
+        records.insert(
+            records.RunModel,
+            run_table="task_runs",
+            run_id=1,
+            model="openai/gpt-5",
+            replies=3,
+            cost_usd=0.1,
+        ).run(ctx.conn)
     c = client(None, backend)
     assert {t["id"]: t["latest"]["served"] for t in c.get("/api/tasks").json() if t["latest"]}[1] == ["openai/gpt-5"]
     page = c.get("/api/tasks/1").json()
