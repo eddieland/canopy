@@ -839,13 +839,21 @@ def worker_result(**memory: object) -> str:
     return json.dumps({"status": "done", "branch": BRANCH, "prs": {"repo": None}, "summary": "did it", **memory})
 
 
-def worker_does(*commands: list[str], result: str = WORKER_DONE, **behavior: Unpack[Behavior]) -> Script:
-    """Until the block ends, the fake worker runs `commands` and then prints `result`.
+def worker_does(
+    *commands: list[str],
+    result: str = WORKER_DONE,
+    tools: Sequence[Called] = (),
+    **behavior: Unpack[Behavior],
+) -> Script:
+    """Until the block ends, the fake worker makes the calls `tools` names, runs `commands`, and then prints `result`.
 
     Returns:
         The worker's script, a block.
     """
-    return scripted("WORKER", {"COMMANDS": json.dumps(commands), "RESULT": result}, behavior)
+    settings = {"COMMANDS": json.dumps(commands), "RESULT": result}
+    if tools:
+        settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
+    return scripted("WORKER", settings, behavior)
 
 
 @contextmanager
@@ -1079,24 +1087,33 @@ def mcp_session(
     raw: Sequence[str] = (),
     chore: bool = False,
     reports: bool = False,
+    status: bool = False,
     git: Sequence[str] = (),
 ) -> Served:
     """Talk to `canopy _mcp` as the runtime does, here, in this environment.
 
     It talks as the runtime does for the overseer, with `chore` for a chore's run, `reports` for the server of canopy's
-    reports, or with `git`, each `NAME=PATH`, for a review's or a plan's: open the session, send each of `requests`
-    numbered from 1, then each line of `raw` as it is, and close the server's stdin.
+    reports, `status` for a worker's, planner's, or reviewer's card, or with `git`, each `NAME=PATH`, for a review's or
+    a plan's: open the session, send each of `requests` numbered from 1, then each line of `raw` as it is, and close
+    the server's stdin.
 
     The server answers one message at a time, and the session waits for it to exit, which it must on its own.
     """
     numbered = [{"jsonrpc": "2.0", "id": n, **request} for n, request in enumerate(requests, 1)]
     lines = [*(json.dumps(m) for m in (*MCP_OPENING, *numbered)), *raw]
     checkouts = [arg for checkout in git for arg in ("--git", checkout)]
-    server = (*MCP_SERVER, *(["--chore"] if chore else []), *(["--reports"] if reports else []), *checkouts)
+    flags = [*(["--chore"] if chore else []), *(["--reports"] if reports else []), *(["--status"] if status else [])]
+    server = (*MCP_SERVER, *flags, *checkouts)
     result = procs.SubprocessRunner().run(server, stdin="".join(f"{line}\n" for line in lines), timeout=60)
     assert not result.timed_out, f"canopy _mcp did not exit when its stdin closed: {result.stderr}"
     answers = [json.loads(line) for line in result.stdout.splitlines()]
     return Served({a["id"]: a for a in answers}, result.stderr, result.returncode)
+
+
+def inline_servers(run: Mapping[str, Any]) -> dict[str, list[str]]:
+    """The servers of canopy's that a fake agent run's inline config (FAKE_AGENT_LOG's `env`) gave it, with commands."""
+    inline: dict[str, Any] = json.loads(run["env"].get("OPENCODE_CONFIG_CONTENT", "{}")).get("mcp", {})
+    return {name: entry["command"] for name, entry in inline.items()}
 
 
 def ancestors(pid: int) -> list[int]:

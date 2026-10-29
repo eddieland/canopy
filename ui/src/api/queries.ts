@@ -48,6 +48,7 @@ export const keys = {
     tickDetail: (id: number) => ['ticks', id] as const,
     worktrees: ['worktrees'] as const,
     host: ['host'] as const,
+    hostSamples: ['host-samples'] as const,
     spend: ['spend'] as const,
     // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale.
     spendBreakdown: (range: SpendBreakdownRange) =>
@@ -83,6 +84,7 @@ export const keys = {
     // Under the config's key, so what marks the config stale, a save that reloads the loop, marks it stale too.
     configModels: ['config', 'models'] as const,
     models: ['models'] as const,
+    skills: ['skills'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -450,6 +452,18 @@ export const hostQuery = queryOptions({
 })
 
 /**
+ * The machine's readings over the last hour, for the system resources page's graphs: kept by the server in memory,
+ * read every 10 seconds whether a page is open or not. Read as the host's resources are, every 10 seconds while the
+ * page shows them and its tab is visible, so each read finds a new one.
+ */
+export const hostSamplesQuery = queryOptions({
+    queryKey: keys.hostSamples,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/host/samples', { signal })),
+    refetchInterval: HOST_REFRESH_MS,
+    refetchIntervalInBackground: false,
+})
+
+/**
  * The journal's rows holding every word of `q` (DESIGN §22, Search). Not on the stream: read when the query changes.
  * The previous query's hits stay on screen while the next one's load, so typing never blanks the page.
  */
@@ -509,6 +523,17 @@ export const freshModelsQuery = queryOptions({
     queryFn: async ({ signal }) =>
         unwrap(await api.GET('/api/models', { params: { query: { refresh: true } }, signal })),
     staleTime: 0,
+})
+
+/**
+ * Every skill the runtime finds for canopy's agents, with each one's file and text. Not on the stream, since a read
+ * starts the runtime: read when the skills page opens, kept for the rest of the visit, and read again when its Read
+ * again button asks.
+ */
+export const skillsQuery = queryOptions({
+    queryKey: keys.skills,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/skills', { signal })),
+    staleTime: Infinity,
 })
 
 /** The PRs the journal knows, most recent activity first. Marked stale on every tick and every ticket change. */

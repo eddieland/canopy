@@ -990,3 +990,61 @@ def test_a_sandboxed_repositorys_task_runs_in_the_wrapper_canopy_adds(canopy_env
     assert call["cwd"] == present(tasks.get_run(ctx.conn, started.run_id)).slot_path
     assert call["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "worker")
     assert call["env"]["CANOPY_GIT_OBJECTS"]
+
+
+def answers_dir(tmp_path: Path, parent: str = "runs") -> Path:
+    """A run's answers directory as `_run` or a review makes it, in the workspace's `.canopy/`."""
+    answers = tmp_path / "ws" / ".canopy" / parent / "1.answers"
+    answers.mkdir(parents=True)
+    return answers
+
+
+@pytest.mark.parametrize("role", ["worker", "review"])
+def test_a_run_reads_its_answers_directory_and_writes_none_of_it(sandbox: Sandbox, tmp_path: Path, role: str) -> None:
+    """The operator's answer to its card's question reaches the run there (DESIGN §41)."""
+    _, slot = linked_worktree(tmp_path, "repo")
+    answers = answers_dir(tmp_path, "runs" if role == "worker" else "reviews")
+    env = {"CANOPY_ANSWERS": str(answers)}
+    if role == "worker":
+        env["CANOPY_GIT_OBJECTS"] = str(objects_dir(tmp_path))
+    cwd = slot if role == "worker" else review_dir(tmp_path, slot)
+
+    done = wrap(role, "true", cwd=cwd, env=env)
+
+    assert done.ok, done.stderr
+    filesystem = sandbox.only_call()["settings"]["filesystem"]
+    assert str(answers) in filesystem["allowRead"]
+    assert all(not str(answers).startswith(p) for p in filesystem["allowWrite"])
+
+
+def test_a_chore_is_given_no_answers_directory(sandbox: Sandbox, tmp_path: Path) -> None:
+    answers = answers_dir(tmp_path)
+
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path), env={"CANOPY_ANSWERS": str(answers)}).ok
+
+    assert str(answers) not in sandbox.only_call()["settings"]["filesystem"]["allowRead"]
+
+
+@pytest.mark.parametrize("place", ["relative", "outside", "named", "link", "missing"])
+def test_an_answers_directory_that_is_not_a_runs_runs_nothing(sandbox: Sandbox, tmp_path: Path, place: str) -> None:
+    """Anything else would let the variable open a directory of the environment's choosing to the run."""
+    _, slot = linked_worktree(tmp_path, "repo")
+    answers = answers_dir(tmp_path)
+    bad = {
+        "relative": Path(".canopy/runs/1.answers"),
+        "outside": tmp_path / "1.answers",
+        "named": answers.parent / "1.objects",
+        "link": answers.parent / "2.answers",
+        "missing": answers.parent / "3.answers",
+    }[place]
+    if place == "link":
+        bad.symlink_to(tmp_path, target_is_directory=True)
+    elif place != "missing":
+        (slot / bad if place == "relative" else bad).mkdir(parents=True, exist_ok=True)
+    env = {"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path)), "CANOPY_ANSWERS": str(bad)}
+
+    done = wrap("worker", "true", cwd=slot, env=env)
+
+    assert done.returncode == 2
+    assert "CANOPY_ANSWERS is not a run's answers directory" in done.stderr
+    assert not sandbox.log.exists()

@@ -280,6 +280,31 @@ describe('TranscriptPanel', () => {
         expect(items).toEqual(['ABC-1waitPR 8 waits on CI', 'ABC-2donemerged by the operator'])
     })
 
+    it('says a ticket-set call’s settings on its row, and opens to each with what it sets', () => {
+        const tickets = [
+            { key: 'ABC-1', phase: 'approved', title: 'Fix login' },
+            { key: 'ABC-2', repo: 'web', phase: 'merged', cursors: { review: '4', ci: '9' }, done: true },
+        ]
+        const set: TranscriptEntry = {
+            kind: 'tool',
+            call: 1,
+            at: AT,
+            tool: 'canopy_ticket-set',
+            title: null,
+            input: JSON.stringify({ tickets }, null, 2),
+            output: 'updated ABC-1\nupdated ABC-2 (web)',
+            status: 'completed',
+            duration_ms: 20,
+            cut: false,
+        }
+        render(<TranscriptPanel transcript={transcript({ entries: [set] })} running={false} page="tick" />)
+        const row = within(call('canopy_ticket-set'))
+        expect(row.getByText('ABC-1 approved title, ABC-2 (web) merged done cursors')).toBeDefined()
+        expect(row.getByText('2 settings')).toBeDefined()
+        const items = row.getAllByRole('listitem').map((item) => item.textContent)
+        expect(items).toEqual(['ABC-1approvedFix login', 'ABC-2 (web)mergeddonereview 4ci 9'])
+    })
+
     it('says each model call’s tokens in and out as the CLI counts them, and a reason other than tool calls', () => {
         render(<TranscriptPanel transcript={transcript()} running={false} page="run" />)
         expect(call('1.2k in · 300 out').textContent).not.toContain('tool calls')

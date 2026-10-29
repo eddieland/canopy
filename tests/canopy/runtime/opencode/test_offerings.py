@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.infra import procs
-from canopy.runtime.agents import AgentOffer, ServerOffer
+from canopy.runtime.agents import AgentOffer, ServerOffer, SkillFile, Skills
 from canopy.runtime.opencode import offerings
 from canopy.runtime.opencode.offerings import matches
 
@@ -148,6 +148,30 @@ def test_a_deny_of_some_patterns_only_keeps_the_tool_offered() -> None:
     [worker] = offered(debug, "canopy-worker").agents
     assert worker.servers[0] == ServerOffer("github", "all")
     assert worker.denied_skills == ()
+
+
+def test_the_skills_are_listed_as_opencode_read_them_by_one_debug_command() -> None:
+    files = [
+        *SKILLS,
+        {"name": "terse", "location": "/home/me/.config/opencode/skills/terse/SKILL.md", "content": "Be brief.\n"},
+    ]
+    debug = Debug({}, skills=files)
+    found = offerings.skills(debug, cwd=Path("/ws"), definitions_dir=Path("/defs"), agents=["canopy-worker"])
+    assert found.error is None
+    assert [f.name for f in found.files] == ["customize-opencode", "terse", "tracker-github", "tracker-jira"]
+    assert found.files[0] == SkillFile("customize-opencode", "d", "<built-in>", "x")
+    # A skill whose front matter has no description says so, rather than one made up.
+    assert found.files[1] == SkillFile("terse", None, "/home/me/.config/opencode/skills/terse/SKILL.md", "Be brief.\n")
+    # OpenCode started once, with canopy's definitions, and no agent's rules read.
+    assert debug.ran == [(("opencode", "debug", "skill"), Path("/ws"), {"OPENCODE_CONFIG_DIR": "/defs"})]
+
+
+def test_skills_opencode_cannot_list_are_the_error() -> None:
+    def fail(args: Sequence[str]) -> procs.Result | None:
+        return procs.Result(tuple(args), 1, "", "Error: bad config: token = ghp_s3cret\n")
+
+    found = offerings.skills(Debug({}, fail=fail), cwd=Path("/ws"), definitions_dir=Path("/defs"), agents=[])
+    assert found == Skills(error="`opencode debug skill` exited 1; run it to see why")
 
 
 @pytest.mark.parametrize(
