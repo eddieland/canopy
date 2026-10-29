@@ -326,9 +326,21 @@ def test_a_message_in_a_roles_database_canopy_cannot_read_is_left_out(data_home:
         ("msg_2", ["a", "list"]),
         ("msg_3", assistant("anthropic", "claude-opus", -1)["info"]),
         ("msg_4", assistant("anthropic", "claude-sonnet", 0.25)["info"]),
+        ("msg_5", assistant("anthropic", "x" * 2_000, 0.25)["info"]),
+        # What canopy does not read of a message is left in the database, however long.
+        (
+            "msg_6",
+            {
+                "role": "assistant",
+                "providerID": "anthropic",
+                "modelID": "claude-sonnet",
+                "cost": 0.25,
+                "summary": "x" * 2_000_000,
+            },
+        ),
     )
 
-    assert read(NOT_FOUND).models == (ModelUse("anthropic/claude-sonnet", 1, 0.25),)
+    assert read(NOT_FOUND).models == (ModelUse("anthropic/claude-sonnet", 2, 0.5),)
 
 
 def test_a_session_no_roles_database_holds_is_missing(data_home: Path) -> None:

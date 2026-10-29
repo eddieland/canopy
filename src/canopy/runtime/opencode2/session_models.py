@@ -53,8 +53,26 @@ COMMAND = "opencode session export --sanitize"
 NOT_FOUND = "Session not found"
 #: In a sandbox role's database, the version of OpenCode that made a session, by its id.
 SESSION_SQL = "SELECT version FROM session_v2 WHERE id = ?"
-#: Its messages, by its id and at most how many, in the order OpenCode wrote them: each one's type, and its data.
-MESSAGES_SQL = "SELECT type, data FROM session_message WHERE session_id = ? ORDER BY seq LIMIT ?"
+#: Its messages, by its id and at most how many, in the order OpenCode wrote them: each one's type, and of its data, as
+#: JSON, only the fields `_Message` reads, which SQLite takes out of each, as OpenCode 1's reader does
+#: (`canopy.runtime.opencode.session_models.MESSAGES_SQL`): a reply's data holds its content, which may be long.
+MESSAGES_SQL = """
+SELECT type, data FROM (
+    SELECT type, seq, json_object(
+        'model', json_object(
+            'providerID', json_extract(data, '$.model.providerID'),
+            'id', json_extract(data, '$.model.id'),
+            'variant', json_extract(data, '$.model.variant')
+        ),
+        'cost', coalesce(json_extract(data, '$.cost'), 0)
+    ) AS data
+    FROM session_message
+    WHERE session_id = ? AND json_valid(data)
+)
+WHERE length(type) <= 64 AND length(data) <= 1024
+ORDER BY seq
+LIMIT ?
+"""
 # Where a JSON object starts a line.
 _OBJECT_RE = re.compile(r"^\{", re.MULTILINE)
 
