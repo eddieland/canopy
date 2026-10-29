@@ -35,7 +35,16 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictStr,
+    ValidationError,
+    model_validator,
+)
 
 from canopy.core import db, items, records, sql
 from canopy.core.vocab import ReviewRunStatus, RunStatus
@@ -101,6 +110,15 @@ def _line(value: str) -> str:
 
 #: A line of a card: plain text, held to `MAX_LINE` characters before its whitespace is collapsed.
 Line = Annotated[StrictStr, Field(max_length=MAX_LINE), AfterValidator(_line)]
+
+
+def _one_or_more(value: object) -> object:
+    """A lone line where a card's list of lines goes, as a list of one: an agent with one step left often sends so.
+
+    Returns:
+        The value, or a lone string as a one-item tuple.
+    """
+    return (value,) if isinstance(value, str) else value
 
 
 class Done(BaseModel):
@@ -170,7 +188,11 @@ class Card(BaseModel):
         max_length=MAX_STEPS,
         description="The steps finished so far, in order, each with its proof.",
     )
-    next: tuple[Line, ...] = Field(default=(), max_length=MAX_STEPS, description="What is left, in order.")
+    next: Annotated[tuple[Line, ...], BeforeValidator(_one_or_more)] = Field(
+        default=(),
+        max_length=MAX_STEPS,
+        description="What is left, in order.",
+    )
     stuck: Annotated[StrictStr, Field(max_length=MAX_SUMMARY), AfterValidator(_line)] | None = Field(
         default=None,
         description="What is in your way that you are working around, such as CI down or a flaky test; else omit it.",
