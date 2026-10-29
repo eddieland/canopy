@@ -98,14 +98,16 @@ Rules:
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check it
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
 - **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
-  only the neutrals over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. Light has
-  off-white, a warm paper, sage, and the light tones of Solarized, Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the
-  near-colorless neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of
-  Solarized, Gruvbox, and Monokai. A light
-  canvas is never grey, which only looks dim. Every hue, the accent's included, is the same in all, so a component never
-  knows which it is on; where a scheme's own bases would drop a hue below 4.5:1, the bases move, never the hue. A scheme
-  whose bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts`
-  measures every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
+  the neutrals over the default's, and may set the accent to its scheme's own (Rosé Pine Dawn wears its love), keyed on
+  `data-light-palette` or `data-dark-palette` on `<html>`. Light has off-white, a warm paper, sage, and the light tones
+  of Solarized, Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the near-colorless neutrals the 2026-10-19 exploration
+  drew for Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox, and Monokai. A light canvas is
+  never grey, which only looks dim. Every other hue is the same in all, so a component never knows which it is on, and
+  an accent is read through its token, never assumed indigo; where a scheme's own bases would drop a hue below 4.5:1,
+  the bases move, never the hue. A palette's accent is darkened or lightened until it reads as text there and under
+  `accent-foreground`, and sets `ring` with it. A scheme whose bases would have to move until it matched another palette
+  is left out, as Nord's dark is. `tokens.test.ts` measures every palette `src/theme/palette.ts` lists, and
+  `theme-script.test.ts` checks the inline script knows each.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
