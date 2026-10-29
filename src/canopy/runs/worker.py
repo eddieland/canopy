@@ -264,6 +264,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             if not slots:
                 raise SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
             tidy.make_objects(_objects(ctx, run))
+            cards.make_answers(_answers(ctx, run))
             outcome = _doer(kind)(ctx, run, slots, out, log)
         except stopping.Stopped as e:
             outcome = Outcome(RunStatus.CRASHED, None, str(e))
@@ -517,7 +518,13 @@ def _run_agent(
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the object
     # directory; an unsandboxed worker ignores it (DESIGN §8). A planner, which has no shell, reads its worktrees'
     # history through canopy's read-only git tools, over those worktrees alone, each named for its repository (§27).
-    env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
+    # The operator's answer to a question its card asks reaches it in its answers directory, through canopy's plugin
+    # (DESIGN §41).
+    env = {
+        conversation.RUN_ID_ENV: str(run_id),
+        tidy.OBJECTS_ENV: str(_objects(ctx, run)),
+        cards.ANSWERS_ENV: str(_answers(ctx, run)),
+    }
     # A public worker that may publish names its ticket to the store through canopy, not its own word (DESIGN §38).
     publishing = ctx.config.artifacts.publishing()
     if not read_only and publishing is not None and agents.WORKER in publishing.agents:
@@ -1168,12 +1175,13 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
 
 
 def _release(ctx: Context, run: sqlite3.Row, slots: Collection[_Slot], log: logs.TickAdapter) -> None:
-    """Remove a joint run's desk, tidy each slot, return the ones tidied, and remove the run's object directory.
+    """Remove the run's answers directory and a joint run's desk, tidy and return each slot, and remove its objects.
 
     A slot that could not be tidied is not returned, and the object directory is kept, so its objects can still be read.
     """
     if dispatch.in_desk(str(run["kind"]), slots):
         _remove_desk(ctx, str(run["ticket_key"]), log)
+    cards.remove_answers(_answers(ctx, run))
     objects = _objects(ctx, run)
     tidied = True
     for slot in slots:
@@ -1188,6 +1196,10 @@ def _release(ctx: Context, run: sqlite3.Row, slots: Collection[_Slot], log: logs
 
 def _objects(ctx: Context, run: sqlite3.Row) -> Path:
     return tidy.objects_dir(dispatch.runs_dir(ctx), int(run["id"]))
+
+
+def _answers(ctx: Context, run: sqlite3.Row) -> Path:
+    return cards.answers_dir(ctx.state_dir, str(run["id"]))
 
 
 def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdapter) -> None:

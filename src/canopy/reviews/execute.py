@@ -231,9 +231,11 @@ def _revised(ctx: Context, run: records.ReviewRun, parsed: result.RevisionResult
 
 
 def clean_up(ctx: Context, run: records.ReviewRun, log: logs.TickAdapter) -> None:
-    """Remove the reviewer's directory, never following its link, and return the slot with `--force`."""
+    """Remove the reviewer's directory, never following its link, and its answers directory; return the slot, forced."""
     with contextlib.suppress(OSError):
         shutil.rmtree(start.run_dir(ctx, run.id))
+    with contextlib.suppress(OSError):
+        cards.remove_answers(cards.answers_dir(ctx.state_dir, f"review-{run.id}"))
     if run.slot_path is None:
         return
     fields = {"review_run_id": run.id, "slot": run.slot_path}
@@ -290,6 +292,8 @@ def reviewer(
 ) -> Reviewer:
     """The reviewer's process for a review of the checkout in `slot`, named `run` to the agent, on `models`.
 
+    Makes a review run's answers directory, where the operator's answer to its card's question reaches it (DESIGN §41).
+
     Returns:
         Its argv behind the sandbox, if `repo` is sandboxed, its stdin, its environment, and its definitions.
     """
@@ -304,6 +308,11 @@ def reviewer(
         conversation.RUN_ID_ENV: run,
         **servers.env(served, version=ctx.config.runtime.version, cwd=ctx.ws.root.absolute()),
     }
+    # An eval's review keeps no card, so it is asked nothing (DESIGN §21).
+    if cards.RUN_ID_RE.fullmatch(run):
+        answers = cards.answers_dir(ctx.state_dir, run)
+        cards.make_answers(answers)
+        env[cards.ANSWERS_ENV] = str(answers)
     return Reviewer(argv, command.stdin, env, snapshot)
 
 

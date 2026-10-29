@@ -1,7 +1,9 @@
 """A running worker's or planner's card: shown on its run while it runs, and kept once it ends (DESIGN §41)."""
 
+import json
 import re
 from collections.abc import Mapping
+from typing import Any
 
 from canopy.core import cards
 from canopy.core.vocab import RunKind
@@ -144,7 +146,7 @@ def test_the_report_a_chores_agent_reads_of_a_run_leaves_its_card_out(scenario: 
     working.finishes()
 
 
-ASKING: Mapping[str, object] = {
+ASKING: Mapping[str, Any] = {
     **FIRST,
     "question": {
         "ask": "Keep the old endpoint for the mobile app, or remove it?",
@@ -162,15 +164,25 @@ def test_the_operator_answers_a_running_workers_question_by_letter(scenario: Sce
     assert re.search(rf"\n    asks you, \d+[sm]: Keep the old .+  canopy reply {ref} A-C \(recommends A\)\n", status)
     assert f"      waiting on you: canopy reply {ref} LETTER\n" in scenario.operator("show", ref).out
 
+    answers = cards.answers_dir(context(scenario.env).state_dir, str(working.id))
+    assert answers.is_dir()
+    assert not (answers / cards.ANSWER_FILE).exists()
+
     assert "(bad_answer)" in scenario.operator("reply", ref, "D", code=1).err  # no option D
     answered = scenario.operator("reply", ref, " b ")
-    assert answered.out.endswith("Answered B: remove it now.\n")
+    assert answered.out.endswith("Answered B: remove it now.\nIts agent hears it on its next tool call.\n")
+    written = json.loads((answers / cards.ANSWER_FILE).read_text())
+    assert (written["ask"], written["letter"], written["option"]) == (ASKING["question"]["ask"], "B", "remove it now")
     assert "Nothing new recorded" in scenario.operator("reply", ref, "B").out
     assert cards.of(working.row).answer == "B"
     assert "asks you" not in scenario.operator("status").out
     assert "      answered B, " in scenario.operator("show", ref).out
 
     ran = working.finishes()
+    # The run is told where its answers are, and they go with it.
+    [run] = agent_runs(scenario.agent_log)
+    assert run["env"][cards.ANSWERS_ENV] == str(answers)
+    assert not answers.exists()
     assert "(ended)" in scenario.operator("reply", f"run:{ran.id}", "A", code=1).err
     assert cards.of(ran.row).answer == "B"
 

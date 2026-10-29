@@ -357,8 +357,9 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     agent, which reads the PR and the draft and makes a new version, posting nothing, unless you change the draft first.
 
     On a running run, `run:ID` for a worker or a planner and `review:ID` for a review, TEXT is the letter of one of the
-    options its card's question offers, which the agent has worked around until then. A later letter replaces it. Once
-    a review has ended, a lone letter is refused rather than noted on its draft, if its card asked a question.
+    options its card's question offers: the agent hears it on its next tool call, and has worked around the question
+    until then. A later letter replaces it. Once a review has ended, a lone letter is refused rather than noted on its
+    draft, if its card asked a question.
     """
     _operator("reply")
     subject = _ref(ref, "reply")
@@ -411,11 +412,18 @@ def _answer(ctx: Context, subject: Ref, body: str) -> int:
         "question answered",
         extra={"subject": str(subject), "answer": answered.letter, "already": answered.already, "channel": CLI},
     )
+    run = f"review-{subject.id}" if subject.kind == conversation.REVIEW else subject.id
+    # Written again for an answer already recorded, in case the first write found the directory gone.
+    heard = cards.deliver(cards.answers_dir(ctx.state_dir, run), answered)
     said = f"{subject}'s question: {one_line(answered.question.ask)}"
     if answered.already:
         click.echo(f"{said}\nIt was already answered {answered.letter}: {answered.option}. Nothing new recorded.")
     else:
         click.echo(f"{said}\nAnswered {answered.letter}: {answered.option}.")
+    if heard:
+        click.echo("Its agent hears it on its next tool call.")
+    else:
+        click.echo("Its agent had already ended, and will not hear it.")
     return 0
 
 

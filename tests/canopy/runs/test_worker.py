@@ -77,6 +77,8 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
         **{name: w["env"][name] for name in servers.VARIABLES},
         "CANOPY_RUN_ID": str(run.id),
         "CANOPY_GIT_OBJECTS": str(objects),
+        # Where the operator's answer to a question its card asks reaches it (DESIGN §41).
+        "CANOPY_ANSWERS": str(scenario.env.state_dir / "runs" / f"{run.id}.answers"),
         "CANOPY_DEADLINE": w["env"]["CANOPY_DEADLINE"],
         "OPENCODE_CONFIG_DIR": str(snapshot),
         # The trailers canopy's git hooks add to its commits (TRUST_MODEL T5).
