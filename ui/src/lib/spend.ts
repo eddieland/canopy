@@ -18,6 +18,7 @@ import type {
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
+import type { RunsOf } from '@/lib/run-state'
 import { clockTime, stamp } from '@/lib/time'
 
 /** The window the page opens on, as `canopy spend` does: the week. */
@@ -266,6 +267,24 @@ export function modelRows(models: readonly SpendModel[], kind: SpendKind | undef
             (a.model ?? '').localeCompare(b.model ?? ''),
         ),
     )
+}
+
+/**
+ * The runs page's kind (`?kind=`) each kind of run is listed under, which By model's links carry: a plan run is a
+ * worker run there. Null for the overseer's, whose ticks it lists apart, at `/runs/ticks`, and not by model.
+ */
+export const RUNS_KIND: Record<SpendKind, RunsOf | null> = {
+    overseer: null,
+    workers: 'worker',
+    plans: 'worker',
+    chores: 'chore',
+    reviews: 'review',
+    tasks: 'task',
+}
+
+/** The models the runs page can list runs of: those that served a kind it lists by model (`RUNS_KIND`). */
+export function listedModels(models: readonly SpendModel[]): ReadonlySet<string> {
+    return new Set(models.flatMap((m) => (m.model === null || RUNS_KIND[m.kind] === null ? [] : [m.model])))
 }
 
 /** What a By model row's runs spent each, on average: its cost over its runs; null when they reported none. */
