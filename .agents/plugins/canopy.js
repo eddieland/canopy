@@ -455,11 +455,11 @@ function stale(calls) {
  *
  * A worker, a planner, or a reviewer may ask the operator a question on its card, with lettered options, and work
  * around it meanwhile (DESIGN §41). canopy writes the operator's answer, a letter, to a file in the run's answers
- * directory, which CANOPY_ANSWERS names and the run may read but not write. After each tool call, the job reads that
- * file and, for an answer this session has not been told, adds one line to the call's result, the way the clock adds
- * its line, so the agent hears it between calls. A later answer, to the same question or another, is told in turn. It
- * keeps what it last told each session, and nothing else; without the variable, or in a run that keeps no card, it has
- * no hook. A file it cannot read, or that is not an answer, tells nothing.
+ * directory, which CANOPY_ANSWERS names and a sandboxed run may read but not write. After each tool call, the job
+ * reads that file and, for an answer this session has not been told, adds one line to the call's result, the way the
+ * clock adds its line, so the agent hears it between calls. A later answer, to the same question or another, is told
+ * in turn. It keeps what it last told each session, and nothing else; without the variable, or in a run that keeps no
+ * card, it has no hook. A file it cannot read, or that is not an answer, tells nothing.
  *
  * @returns {Hooks} The answer's hooks.
  */

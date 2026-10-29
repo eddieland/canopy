@@ -45,8 +45,8 @@ letter replaces it. An answer
 is a letter, not words: the agent's own options are all an answer can choose among.
 
 The answer reaches the agent on its next tool call, as the clock's line does (§33): canopy writes it to a file in the
-run's answers directory, made before the agent starts and removed once it ends, which `CANOPY_ANSWERS` names and the
-run may read but not write, inside the sandbox too (§24); canopy's plugin reads it after each call and adds one
+run's answers directory, made before the agent starts and removed once it ends, which `CANOPY_ANSWERS` names and a
+sandboxed run may read but not write (§24); canopy's plugin reads it after each call and adds one
 `[canopy]` line naming the letter and the option, once per answer. A forged line can only choose one of the agent's
 own options (TRUST_MODEL T1).
 
