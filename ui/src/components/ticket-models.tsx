@@ -11,6 +11,7 @@ import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { sameModel } from '@/lib/models'
 import { failedText, MODEL_SOURCES, modelName, modelText } from '@/lib/outcomes'
 import { cn } from '@/lib/utils'
 
@@ -88,7 +89,10 @@ export function TicketModels({
                     // Until the ticket is read again, the row shows what the server answered rather than what it had.
                     const row = confirmed !== null && !confirmed.settled ? confirmed.now : m
                     // A session names a variant other than the model's default with it, so either may be the row's.
-                    const served = [row.model, modelId(row)].includes(row.last_served) ? null : row.last_served
+                    const served =
+                        row.last_served === null || (row.model !== null && sameModel(row.model, row.last_served))
+                            ? null
+                            : row.last_served
                     return (
                         <Field key={m.agent} label={`${m.agent} model`}>
                             <span className="flex flex-wrap items-baseline gap-x-2" data-testid="ticket-model">

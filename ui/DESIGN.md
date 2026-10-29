@@ -625,7 +625,11 @@ side.
   persona (DESIGN §31), are adjacent rows where the first of them falls (`requestGroups`), with no hairline between
   them: each keeps its own verdict, draft chip, cost, and age, and after the first, the free column says only
   `as skeptic`, at any width, in place of the PR and commit it shares, its ticket's cell empty. Rows, not a nested
-  card: the request is one entry read down its personas.
+  card: the request is one entry read down its personas. A run's model, in its row as in its Run panel
+  (`ModelsField`), takes no status color: a run the model asked for served none of reads `asked Y ≠ X`, asked first,
+  the served model in `foreground`, and one it served beside another marks only the other; `sameModel` takes `X@v`
+  asked and `X` served alike. Until its session is read the row says `model unread` (`UNREAD`), muted, why in its tip,
+  and a run with no session names no model.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or

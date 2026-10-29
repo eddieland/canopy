@@ -34,9 +34,13 @@ A subject with no title says `untitled`, which for a chore is a hint its prompt 
 A worker run's model line names the model its session says served it, without the provider unless two models in the
 list share a name, so `claude-opus-4-1` rather than `anthropic/claude-opus-4-1`, and `+1` when it switched partway.
 Hover it for each one whole, with its cost. Until canopy reads the session it names the model canopy asked for,
-`asked claude-opus-4-1`, or says `model none`, with why on hover. A run that got another model than it asked for says
-both, in amber, as [its page](#a-runs-page) does. A ticket's Runs panel shows the same line, so a canary ticket reads
-straight down its runs: opus, opus, opus, and not a sonnet slipped in where you weren't looking.
+`asked claude-opus-4-1`, or says `model unread`, with why on hover; a run with no session to read, such as a feedback
+plan's, names no model at all. A run that got none of what it asked for says so, asked first,
+`asked claude-opus-4-1 ≠ claude-sonnet-4-5`, as [its page](#a-runs-page) does; one that got it and switched partway
+leads with it and sets the `+1` apart. Neither is amber: a run that went elsewhere waits on nothing, it just bears
+knowing. Asking for `openai/gpt-5@medium`, the default effort, and being served `openai/gpt-5` is no surprise either,
+since the session names a variant only when it isn't the default. A ticket's Runs panel shows the same line, so a
+canary ticket reads straight down its runs: opus, opus, opus, and not a sonnet slipped in where you weren't looking.
 
 A long summary shows its first four lines and **show N more lines** for the rest, so one worker with a lot to say
 doesn't push the other rows off the page. In a narrow window, such as half a monitor, the cost goes first and then
@@ -78,9 +82,9 @@ that switched models partway lists each with its share of the cost. The runtime 
 canopy reads the session as the run ends, and any it missed while the loop waits between ticks; until then, or once the
 runtime has forgotten the session, the field says why it names none. When canopy chose the run's model, from
 `[runtime.models]` or the ticket's override, the field says `asked` and that model instead, from the moment it starts,
-with why none served yet on hover. Once the session is read, a model that served other than the one asked for reads
-`served X, asked Y`, in the color of a run waiting on you, since it is worth a look. Last come the places: the branch,
-its worktrees, and the path of its log, which only you can read.
+with why none served yet on hover. Once the session is read, a run the model asked for served none of reads
+`asked Y ≠ served X`, and one it served alongside another marks the other with a `≠`, its tip saying it wasn't asked
+for. Last come the places: the branch, its worktrees, and the path of its log, which only you can read.
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the
