@@ -1200,6 +1200,10 @@ def loops(
             autospec=True,
             side_effect=ticks_at,
         ),
+        # The wait looks for what ends it every half second of the fake clock, reading the journal each time: a wait of
+        # hours is tens of thousands of looks, past the tests' timeout on a busy runner. A wait still ends at its
+        # deadline, which its last sleep is cut to; an `at` action runs up to one step late.
+        mock.patch.object(repeat, "_WAIT_STEP_SECONDS", 30),
     ):
         repeat.run(
             context(scenario.env),
