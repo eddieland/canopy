@@ -157,10 +157,11 @@ find a ticket you haven't opened yet. The list lives in your browser, not the jo
 The machine the loop runs on, read every ten seconds while the page is open: it's the machine serving the page, since
 `canopy loop` serves it. Anything under pressure is listed first, in amber or red, then four counters: the load over
 five minutes, the memory in use, the free space on the fullest disk canopy writes to, and how long the loop has been
-up.
+up. The load is the processes running or waiting for a core, averaged; it reads as a share of your cores, so 100% is
+every core busy and past it work queues, and the header's card says whether it's rising or falling.
 
-Under the counters, the last hour in graphs: the load over a minute against your cores, the memory in use against all
-there is, the loop's own memory, and each disk's free space with the tick's floor drawn in. The server takes these
+Under the counters, the last hour in graphs: the load over a minute as a share of your cores, the memory in use against
+all there is, the loop's own memory, and each disk's free space with the tick's floor drawn in. The server takes these
 readings itself, every ten seconds from the moment it starts, whether or not anyone is looking, and keeps them in
 memory only. A restart starts the graphs over, and a gap in a line is a stretch the server wasn't reading. Point at a
 line to read any moment of it; the number over the graph turns into that moment's. It's the quickest way to answer
