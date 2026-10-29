@@ -11,9 +11,9 @@
  *
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
- * others set only the neutrals, over the default's: off-white, Solarized, Nord, Gruvbox, sage, and Rosé Pine Dawn for
- * light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized, Gruvbox, forest, plum, and
- * Monokai for dark.
+ * others set the neutrals, and may set the accent, over the default's: off-white, Solarized, Nord, Gruvbox, sage, and
+ * Rosé Pine Dawn for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized, Gruvbox,
+ * forest, plum, and Monokai for dark.
  */
 
 :root {
@@ -291,9 +291,12 @@
     --context-carried: oklch(0.6 0.02 155);
 }
 
-/* Rosé Pine Dawn: base the canvas, surface a surface, highlight med the hairlines, text the text, and subtle muted.
- * The canvas is a shade darker than Rosé Pine's own, and subtle a step darker, so every hue reads at 4.5:1. */
+/* Rosé Pine Dawn: base the canvas, surface a surface, highlight med the hairlines, text the text, subtle muted, and
+ * love the accent. The canvas is a shade darker than Rosé Pine's own, subtle a step darker, and love darker still, so
+ * every hue reads at 4.5:1 and white reads on love. */
 :root[data-light-palette='rose-pine']:not(.dark) {
+    --accent: oklch(0.52 0.12 3);
+    --ring: oklch(0.52 0.12 3 / 0.55);
     --background: oklch(0.952 0.013 72);
     --surface: oklch(0.987 0.011 77);
     --surface-raised: oklch(0.962 0.013 68);
