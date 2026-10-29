@@ -2,6 +2,7 @@
 
 The figures are `canopy spend`'s, by the backend's clock, with the idle ticks in the window as the ticks list has them.
 The last day's, 30 days', and all time's are all agent spend: canopy's runs and the runtime's sessions outside canopy.
+The breakdown carries each kind's first model calls by week too, for the page's chart of their cache hit rate.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from canopy.serve.schema.spend import (
     SpendCosts,
     SpendDay,
     SpendDirectory,
+    SpendFirstCallWeek,
     SpendModel,
     SpendMonth,
     SpendPullRequest,
@@ -153,6 +155,20 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> 
         ],
         month=_spend_month(month) if month is not None else None,
         sessions=_spend_sessions(found.sessions) if found.sessions is not None else None,
+        first_call_weeks=[
+            SpendFirstCallWeek(
+                kind=w.kind,
+                by=w.by,
+                name=w.name,
+                week=w.week,
+                runs=w.runs,
+                first_call=w.first_call,
+                hit_rate=w.hit_rate,
+                new_runtime_versions=list(w.new_runtime_versions),
+                new_digests=list(w.new_digests),
+            )
+            for w in found.first_call_weeks
+        ],
     )
 
 

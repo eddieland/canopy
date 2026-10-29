@@ -7600,6 +7600,14 @@ export type components = {
              */
             done: number;
             /**
+             * First Call Weeks
+             * @description Each kind's first model calls by local ISO week: the kinds in a fixed order, overseer, workers, plans, chores,
+             *     reviews, tasks, each kind's series its own first, then its chores' and its models' by name, the runs no single
+             *     model served last, and each series' weeks oldest first.
+             * @default []
+             */
+            first_call_weeks: components["schemas"]["SpendFirstCallWeek"][];
+            /**
              * Hours
              * @description How many hours it spans; None for a window in days.
              */
@@ -7785,6 +7793,66 @@ export type components = {
              * @description How many started in the window.
              */
             sessions: number;
+        };
+        /**
+         * SpendFirstCallWeek
+         * @description The first model calls of one kind's runs that started in one local ISO week of the window (DESIGN §13).
+         *
+         *     One week of a series: with `by` `kind`, every run of the kind; `chore`, those of the chore `name`; `model`, those
+         *     the model `name` alone served. A fall in `hit_rate` from one week to the next is a prefix the runs share that their
+         *     first calls no longer read from the cache, as a change of the runtime or of canopy's definitions can make, which
+         *     the week's `new_runtime_versions` and `new_digests` name.
+         */
+        SpendFirstCallWeek: {
+            /**
+             * By
+             * @description Which runs of the kind the series follows: every one, one chore's, or one model's.
+             * @enum {string}
+             */
+            by: "kind" | "chore" | "model";
+            /**
+             * First Call
+             * @description The median of what their first calls were sent, in tokens, from the cache or not: the lower middle one of an
+             *     even count.
+             */
+            first_call: number;
+            /**
+             * Hit Rate
+             * @description What their first calls read from the cache over what they were sent, from 0 to 1, summed over the runs that
+             *     recorded both; None when none did.
+             */
+            hit_rate: number | null;
+            /** @description The kind of run; the overseer's include dry runs. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Name
+             * @description The chore or the model, as `provider/model`; None for the kind's series, and for the model series of the runs
+             *     no session was read for or more than one model served.
+             */
+            name: string | null;
+            /**
+             * New Digests
+             * @description The definitions snapshots their runs loaded that those of the series' week before did not, the same way.
+             * @default []
+             */
+            new_digests: string[];
+            /**
+             * New Runtime Versions
+             * @description The runtime's versions their sessions named that the runs of the series' week before did not, in the order the
+             *     runs first ran on each: the latest earlier week in the window with runs. The series' first week names none.
+             * @default []
+             */
+            new_runtime_versions: string[];
+            /**
+             * Runs
+             * @description How many of the series' runs that started in it reported a first call.
+             */
+            runs: number;
+            /**
+             * Week
+             * @description The ISO week, `2026-W41`, in the local time of the machine canopy runs on: Monday to Sunday.
+             */
+            week: string;
         };
         /**
          * @description What a tick that ended bought (DESIGN §6, Idle pacing; §11): `idle` and `busy` are the loop's word on an `ok` tick, `hand_run` an `ok` tick no loop ran, `not_ok` a live one that closed otherwise, and `dry_run` a dry run, whatever the loop said of it.

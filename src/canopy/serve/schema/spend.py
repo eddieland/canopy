@@ -215,6 +215,39 @@ class SpendModel(Model):
     runs reported, None when none did."""
 
 
+class SpendFirstCallWeek(Model):
+    """The first model calls of one kind's runs that started in one local ISO week of the window (DESIGN §13).
+
+    One week of a series: with `by` `kind`, every run of the kind; `chore`, those of the chore `name`; `model`, those
+    the model `name` alone served. A fall in `hit_rate` from one week to the next is a prefix the runs share that their
+    first calls no longer read from the cache, as a change of the runtime or of canopy's definitions can make, which
+    the week's `new_runtime_versions` and `new_digests` name.
+    """
+
+    kind: SpendKind
+    """The kind of run; the overseer's include dry runs."""
+    by: Literal["kind", "chore", "model"]
+    """Which runs of the kind the series follows: every one, one chore's, or one model's."""
+    name: str | None = None
+    """The chore or the model, as `provider/model`; None for the kind's series, and for the model series of the runs
+    no session was read for or more than one model served."""
+    week: str
+    """The ISO week, `2026-W41`, in the local time of the machine canopy runs on: Monday to Sunday."""
+    runs: int
+    """How many of the series' runs that started in it reported a first call."""
+    first_call: int
+    """The median of what their first calls were sent, in tokens, from the cache or not: the lower middle one of an
+    even count."""
+    hit_rate: float | None = None
+    """What their first calls read from the cache over what they were sent, from 0 to 1, summed over the runs that
+    recorded both; None when none did."""
+    new_runtime_versions: list[str] = []
+    """The runtime's versions their sessions named that the runs of the series' week before did not, in the order the
+    runs first ran on each: the latest earlier week in the window with runs. The series' first week names none."""
+    new_digests: list[str] = []
+    """The definitions snapshots their runs loaded that those of the series' week before did not, the same way."""
+
+
 class SpendTicks(Model):
     """How many ended ticks of the window are in a group, and what their overseers cost."""
 
@@ -332,3 +365,7 @@ class SpendBreakdown(Model):
     is set."""
     sessions: SpendSessions | None = None
     """What every session the runtime keeps that started in the window cost, canopy's apart from the rest."""
+    first_call_weeks: list[SpendFirstCallWeek] = []
+    """Each kind's first model calls by local ISO week: the kinds in a fixed order, overseer, workers, plans, chores,
+    reviews, tasks, each kind's series its own first, then its chores' and its models' by name, the runs no single
+    model served last, and each series' weeks oldest first."""
