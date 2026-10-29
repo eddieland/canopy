@@ -27,11 +27,11 @@ the calls since it, and the run keeps its last card once it ends.
 
 ### Staleness
 
-canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, or review's run,
-it counts each session's tool calls since its last `status` call, and after 20 adds one `[canopy]` line to that call's
-result asking for an update, once per lapse, so the agent is asked between calls and never mid-thought. It keeps the
-count and whether it asked, and nothing else, as the clock keeps whether it has warned. A forged line can only ask for
-a card, so it fails safe, as the clock's do (§33).
+canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, or review's run, it
+counts each session's tool calls since its last `status` call, and after a number of them adds one `[canopy]` line to
+that call's result asking for an update, once per lapse, so the agent is asked between calls and never mid-thought. It
+keeps the count and whether it asked, and nothing else, as the clock keeps whether it has warned. A forged line can only
+ask for a card, so it fails safe, as the clock's do (§33).
 
 The card is shown to the operator and never put in another agent's prompt, so neither the overseer's cache (§6) nor
 its trust in worker text changes (TRUST_MODEL T1). Nothing on a card extends a run or holds a slot (T3).
