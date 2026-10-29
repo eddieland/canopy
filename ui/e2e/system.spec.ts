@@ -41,3 +41,20 @@ test('the page shows each disk canopy writes to, and the floor a tick needs on t
     await expect(disks.nth(1)).toContainText('the temporary directory')
     await expect(disks.nth(1)).not.toContainText('a tick runs no overseer')
 })
+
+test("the graphs draw the server's last hour of readings, and say the one under the pointer", async ({ page }) => {
+    await page.goto('system')
+    await settled(page)
+    const graphs = page.getByTestId('host-graphs').getByTestId('trend-chart')
+    // The load, the memory, the loop's own, and each of the mock's two disks.
+    await expect(graphs).toHaveCount(5)
+    const load = graphs.first()
+    await expect(load.getByTestId('trend-value')).toHaveText(/^2\.41 now · peak /u)
+    await expect(load).toContainText('60 min ago')
+
+    const plot = load.getByTestId('trend-plot')
+    const box = await plot.boundingBox()
+    expect(box).not.toBeNull()
+    await plot.hover({ position: { x: (box?.width ?? 0) / 2, y: 10 } })
+    await expect(load.getByTestId('trend-value')).toHaveText(/ at \d{2}:\d{2}$/u)
+})

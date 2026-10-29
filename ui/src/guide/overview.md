@@ -156,6 +156,13 @@ The machine the loop runs on, read every ten seconds while the page is open: it'
 five minutes, the memory in use, the free space on the fullest disk canopy writes to, and how long the loop has been
 up.
 
+Under the counters, the last hour in graphs: the load over a minute against your cores, the memory in use against all
+there is, the loop's own memory, and each disk's free space with the tick's floor drawn in. The server takes these
+readings itself, every ten seconds from the moment it starts, whether or not anyone is looking, and keeps them in
+memory only. A restart starts the graphs over, and a gap in a line is a stretch the server wasn't reading. Point at a
+line to read any moment of it; the number over the graph turns into that moment's. It's the quickest way to answer
+"was it the build at 14:05?" without a monitoring stack you'd have to babysit too.
+
 Under them, each disk canopy writes to: the workspace's, where agents check out and build; the journal's, with the
 runs' logs; and the temporary directory, which builds fill when nobody's looking. Two on one filesystem share a row,
 so their free space isn't counted twice. The workspace's and the journal's carry the floor `loop.min_free_disk_mib`
