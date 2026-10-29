@@ -6,6 +6,7 @@ import typing
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from collections.abc import Set as AbstractSet
+from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
 from unittest import mock
@@ -618,3 +619,19 @@ def test_review_drafts_rebuilt_to_be_discarded_keep_the_revisions_that_name_them
     assert [tuple(r) for r in conn.execute("SELECT id, revises FROM review_runs ORDER BY id")] == [(1, None), (2, 1)]
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     conn.execute("UPDATE review_drafts SET status = 'discarded', why = 'discarded by you through cli'")
+
+
+@pytest.mark.parametrize(
+    ("moment", "shown"),
+    [
+        ("2026-10-16T09:50:59.999Z", "2026-10-16T09:50Z"),
+        ("2026-10-16T11:50:00+02:00", "2026-10-16T09:50Z"),
+        ("2026-10-16T09:50:30", "2026-10-16T09:50Z"),
+        (datetime(2026, 10, 16, 9, 50, 30, tzinfo=UTC), "2026-10-16T09:50Z"),
+        ("not a time", "not a time"),
+        (None, None),
+    ],
+)
+def test_the_state_block_gives_a_time_to_the_minute_in_utc(moment: datetime | str | None, shown: str | None) -> None:
+    """A journal time loses its seconds, another offset becomes UTC, and a string that is no time stays as it is."""
+    assert db.to_minute(moment) == shown

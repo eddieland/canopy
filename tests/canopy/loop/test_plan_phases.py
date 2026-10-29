@@ -68,7 +68,7 @@ def test_a_proposed_plan_waits_and_a_reply_asks_for_changes(scenario: Scenario, 
         "needed": True,
         "attempts": 1,
         "limit": 3,
-        "newest": {"id": plan.id, "status": PlanStatus.PROPOSED, "created_at": plan.created_at},
+        "newest": {"id": plan.id, "status": PlanStatus.PROPOSED, "created_at": db.to_minute(plan.created_at)},
         "changes_asked": False,
         "blocked": False,
     }

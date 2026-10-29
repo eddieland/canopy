@@ -44,7 +44,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
         {
           "path": "/workspace/slots/repo-2",
           "lease_holder": "canopy:PROJ-2",
-          "leased_at": "2026-10-16T09:55:00.000Z"
+          "leased_at": "2026-10-16T09:55Z"
         }
       ]
     }
@@ -70,7 +70,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
             "implement": 1,
             "resume": 1
           },
-          "ci_cooldown_until": "2026-10-16T10:20:00.000Z",
+          "ci_cooldown_until": "2026-10-16T10:20Z",
           "granted": {
             "resume": 1
           },
@@ -83,16 +83,16 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
             ]
           },
           "cursor_items": {
-            "ci": "check run 5551, first observed 2026-10-16T09:40:00.000Z"
+            "ci": "check run 5551, first observed 2026-10-16T09:40Z"
           }
         }
       ],
-      "last_seen_at": "2026-10-16T09:40:00.000Z",
+      "last_seen_at": "2026-10-16T09:40Z",
       "last_run": {
         "run_id": 4,
         "kind": "resume",
         "status": "done",
-        "ended_at": "2026-10-16T09:50:00.000Z",
+        "ended_at": "2026-10-16T09:50Z",
         "reasons": [
           "ci",
           "review"
@@ -102,7 +102,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
         "new_operator_messages": [
           {
             "id": 2,
-            "at": "2026-10-16T09:50:00.000Z",
+            "at": "2026-10-16T09:50Z",
             "body": "Keep the retry count at three."
           }
         ]
@@ -121,19 +121,19 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
           }
         }
       ],
-      "last_seen_at": "2026-10-16T09:00:00.000Z",
+      "last_seen_at": "2026-10-16T09:00Z",
       "last_run": {
         "run_id": 3,
         "kind": "implement",
         "status": "blocked",
-        "ended_at": "2026-10-16T09:30:00.000Z"
+        "ended_at": "2026-10-16T09:30Z"
       },
       "private": {
-        "started_at": "2026-10-16T09:00:00.000Z",
+        "started_at": "2026-10-16T09:00Z",
         "awaiting_reply": {
           "message_id": 1,
           "run_id": 3,
-          "at": "2026-10-16T09:30:00.000Z"
+          "at": "2026-10-16T09:30Z"
         }
       }
     },
@@ -141,12 +141,12 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "key": "PROJ-6",
       "title": "Rework the importer",
       "phase": "split",
-      "last_seen_at": "2026-10-16T09:00:00.000Z",
+      "last_seen_at": "2026-10-16T09:00Z",
       "last_run": {
         "run_id": 2,
         "kind": "split",
         "status": "done",
-        "ended_at": "2026-10-16T09:20:00.000Z"
+        "ended_at": "2026-10-16T09:20Z"
       }
     }
   ],
@@ -205,14 +205,14 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
   "notices": [
     {
       "text": "CI is down for maintenance until noon.",
-      "set_at": "2026-10-16T09:00:00.000Z",
-      "until": "2026-10-16T12:00:00.000Z",
+      "set_at": "2026-10-16T09:00Z",
+      "until": "2026-10-16T12:00Z",
       "in_force": true
     },
     {
       "text": "The registry is down.",
-      "set_at": "2026-10-16T08:00:00.000Z",
-      "until": "2026-10-16T08:30:00.000Z",
+      "set_at": "2026-10-16T08:00Z",
+      "until": "2026-10-16T08:30Z",
       "in_force": false
     }
   ],
@@ -221,7 +221,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "ticket": "PROJ-1",
       "repo": "repo",
       "reason": "notice_rerun",
-      "since": "2026-10-16T09:40:00.000Z",
+      "since": "2026-10-16T09:40Z",
       "kept": true,
       "item": 1
     }
@@ -254,7 +254,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
           {
             "repo": "repo",
             "observed": "stale",
-            "why": "branches of repo not observed since 2026-10-16T09:30:00.000Z"
+            "why": "branches of repo not observed since 2026-10-16T09:30Z"
           }
         ]
       },
@@ -280,12 +280,12 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       ],
       "kind": "implement",
       "branch": "agent/PROJ-2-dark",
-      "started_at": "2026-10-16T09:55:00.000Z"
+      "started_at": "2026-10-16T09:55Z"
     }
   ],
   "query_due": false,
   "tick_id": 2,
-  "now": "2026-10-16T10:00:00.000Z",
+  "now": "2026-10-16T10:00Z",
   "dry_run": true
 }
 ```

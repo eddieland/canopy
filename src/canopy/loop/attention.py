@@ -405,13 +405,13 @@ def for_overseer(conn: sqlite3.Connection, *, decided: AbstractSet[str] = frozen
             **({"pr": key.removeprefix(PR_PREFIX)} if key.startswith(PR_PREFIX) else {"ticket": key}),
             **({"repo": item.repo} if item.repo is not None else {}),
             "reason": item.reason,
-            "since": item.since,
+            "since": db.to_minute(item.since),
         }
         if item.reason not in kept_items.KEPT:
             found.append(about)
             continue
         found.extend(
-            {**about, "since": r.at, "kept": True, **({"item": r.item} if r.item is not None else {})}
+            {**about, "since": db.to_minute(r.at), "kept": True, **({"item": r.item} if r.item is not None else {})}
             for r in held.get((key, item.reason, item.repo), [])
         )
     return found

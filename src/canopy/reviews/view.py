@@ -172,7 +172,7 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
                 "pr": r["pr_url"],
                 "sha": r["sha"],
                 "ticket": r["ticket_key"],
-                "started_at": r["started_at"],
+                "started_at": db.to_minute(str(r["started_at"])),
             }
             for r in db.running_runs(conn, "review_runs")
         ],
@@ -181,8 +181,8 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
             {
                 "pr": h.pr,
                 "sha": h.sha,
-                "seen_at": db.format_time(h.seen_at),
-                "settles_at": db.format_time(h.settles_at),
+                "seen_at": db.to_minute(h.seen_at),
+                "settles_at": db.to_minute(h.settles_at),
             }
             for h in settle.settling(conn, config, now)
         ],
@@ -228,15 +228,15 @@ def _wanted(wanted: review_revisions.Wanted) -> WantedRevision:
         "pr": wanted.review.pr_url,
         "sha": wanted.review.sha,
         "repo": wanted.review.repo,
-        "noted_at": wanted.notes[-1].created_at if wanted.notes else wanted.draft.created_at,
+        "noted_at": db.to_minute(wanted.notes[-1].created_at if wanted.notes else wanted.draft.created_at),
         "revisions": len(wanted.revisions),
         "limit": wanted.limit,
         "latest": (
             {
                 "run_id": latest.id,
                 "status": latest.status,
-                "started_at": latest.started_at,
-                "ended_at": latest.ended_at,
+                "started_at": db.to_minute(latest.started_at),
+                "ended_at": db.to_minute(latest.ended_at),
             }
             if latest is not None
             else None
@@ -250,7 +250,7 @@ def _requested(conn: sqlite3.Connection, request: records.ReviewRequest) -> Requ
     granted = grants.granted(conn, url)
     return {
         "url": url,
-        "requested_at": request.created_at,
+        "requested_at": db.to_minute(request.created_at),
         "review_runs": len(runs),
         **({"granted": granted} if granted else {}),
         "latest": _latest(conn, runs[0]) if runs else None,

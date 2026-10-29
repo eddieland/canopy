@@ -1003,14 +1003,14 @@ def state_section(conn: sqlite3.Connection, ticket: records.Ticket) -> PrivateSe
     forgotten = ticket.forgotten_message_id or 0
     question = latest_question(conn, key)
     return {
-        "started_at": record.started_at,
+        "started_at": db.to_minute(record.started_at),
         "message_cursor": cursor or None,
         "new_operator_messages": [
             _operator_message(m) for m in operator_messages_after(conn, key, max(cursor, forgotten))
         ],
         "awaiting_reply": None
         if question is None
-        else {"message_id": question.id, "run_id": question.run_id, "at": question.at},
+        else {"message_id": question.id, "run_id": question.run_id, "at": db.to_minute(question.at)},
     }
 
 
@@ -1042,13 +1042,14 @@ def operator_section(
     }
     if comments:
         found["artifact_comments"] = [
-            {"id": m.id, "at": m.at, "author": m.author, "comment": m.comment_id, "body": m.body} for m in comments
+            {"id": m.id, "at": db.to_minute(m.at), "author": m.author, "comment": m.comment_id, "body": m.body}
+            for m in comments
         ]
     return found
 
 
 def _operator_message(row: records.Message) -> OperatorMessage:
-    return {"id": row.id, "at": row.at, "answers": row.answers, "body": row.body}
+    return {"id": row.id, "at": db.to_minute(row.at), "answers": row.answers, "body": row.body}
 
 
 def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:

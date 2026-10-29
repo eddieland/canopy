@@ -216,7 +216,7 @@ def test_where_a_tracker_source_runs_the_prs_reviews_ask_about_are_shown_as_read
         {
             "url": PR,
             "observed": "fresh",
-            "observed_at": FRESH,
+            "observed_at": db.to_minute(FRESH),
             "pr": {
                 "state": "open",
                 "head": "abc1234",
