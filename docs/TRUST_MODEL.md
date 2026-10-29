@@ -106,10 +106,8 @@ Controls:
   `tracker` source, and the `vcs` source always runs, so the overseer reads neither world live (DESIGN §39): a candidate
   whose ticket, comments, PR, branches, or open blocker's PR a source left stale, or whose PR no source reads, is the
   harness's `wait`, the PRs its reviews ask about are shown as the `vcs` source read them, and its definition denies
-  GitHub's reads and, wherever config or the provider names it, the tracker's server, so it skips no tick over an
-  outage. Residual: the guards trust what a connector printed, and a label removed since its read authorizes until the
-  worker's check. Off a GitHub tracker, GitHub's server is denied by its tools' names, as its writes are, since its name
-  is the operator's: a tool no pattern names is still the overseer's.
+  every MCP server's tools but canopy's, so it skips no tick over an outage. Residual: the guards trust what a connector
+  printed, and a label removed since its read authorizes until the worker's check.
 - An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own, cut
   as a tracker comment is, with the store's id for each author and whether the comment is an agent's or carries every
   comment mark. A comment on an artifact whose origin names a ticket the journal holds is also recorded once in that
@@ -333,6 +331,9 @@ Controls:
   its MCP server is down. The server is named in the overseer process's environment alone, from which the harness
   removes it before any run it starts; it lists no tool and refuses every call under `CANOPY_RUN_ID` or outside a
   running tick, the overseer's definition allows each tool by exact name, and every other definition denies them all.
+  It reaches no other MCP server (DESIGN §39): its definition denies every server's tools, `<server>_<tool>` as
+  OpenCode names them, whatever the operator's runtime config grants, and every server's resources, before it allows
+  canopy's, and nothing from config is rendered there to reopen one.
   A steered overseer can still make any call its tools take, as it could run any `canopy` command before; the guards
   in the tools bound what that does. Its bash rules deny every command but those `runtime.allow_bash` names. That key
   is private (T7): only the operator widens the overseer's shell, and canopy renders each pattern last of its bash
@@ -793,7 +794,7 @@ Controls:
   reviewer under the same definition, nothing outside the version it reports. Its definition denies commenting or
   replying anywhere, submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth;
   the operator's runtime need not grant it a write tool at all. Off a GitHub tracker, the tracker's server is denied
-  whole but its read tools, allowed by name, as for the overseer, so a write there no pattern names fails closed.
+  whole but its read tools, allowed by name, as for the planner, so a write there no pattern names fails closed.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
   one tool of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs and writes nothing, and denies
   MCP write tools by name. That tool's server is named in the chore run's environment alone (DESIGN §27), lists nothing
@@ -825,12 +826,14 @@ Residual: real. An unsandboxed run can send anything it reads to any host. A san
 reads, the worktree and whatever its template re-allows, to any allowed host, with the credentials it holds: with
 `github.com` allowed and a push credential in reach, it can push or post anywhere the operator can. A sandboxed
 overseer reads the workspace's whole state, private tickets' conversations and plans among it, and can send it to its
-model provider, its tracker, or GitHub's API with the tokens its MCP servers hold. Scoping those credentials is the
-next step (HOST_ISOLATION §8); until then this risk is accepted and documented. Behind a corporate proxy, which `srt`
-forwards through, `srt` makes no address checks and the proxy's rules are the only ones. A chore steered by what it
-read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`, wherever that sends
-them, and a finding's link can carry data in its URL. A steered agent likewise chooses up to 500 characters per
-attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads its destination.
+model provider, or through a command `runtime.allow_bash` names, to its tracker or GitHub's API: its definition denies
+every MCP server but canopy's, though the runtime may still start the ones its config names, with their tokens. Scoping
+those credentials is the next step (HOST_ISOLATION §8); until then this risk is accepted and documented. Behind a
+corporate proxy, which `srt` forwards through, `srt` makes no address checks and the proxy's rules are the only ones. A
+chore steered by what it read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`,
+wherever that sends them, and a finding's link can carry data in its URL. A steered agent likewise chooses up to 500
+characters per attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads its
+destination.
 A steered reviewer can put what it read into its findings, which reach the operator and, through `resume`, a worker on
 that ticket, who can push and comment; the worker reads them as data, as it reads any review comment. A write tool
 the operator's runtime grants anyway, on GitHub's server or another the tracker's rules do not cover, under a name the
@@ -935,11 +938,11 @@ agent branches under an unexpected prefix, which branch protection (§7) still g
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
 nothing. The query cannot widen what the overseer reads: config requires a `tracker` source, which reads the query,
 and a ticket observed fresh that is not a candidate reaches the overseer by key and why alone, and its prompt says not
-to read it (DESIGN §30); a stale one is the harness's `wait` and never reaches it, and its definition denies GitHub's
-issue reads and, wherever config or the provider names it, the tracker's server whole, and carries no skill for it, so
-it reads no ticket live (DESIGN §39). Settled (2026-10-15, the operator's choice): the query stays in the workspace
-file, beside the map it is about, and an operator who shares the workspace with people they do not trust overrides it
-in the private file. The provider also picks the default tracker server and tools a private ticket's
+to read it (DESIGN §30); a stale one is the harness's `wait` and never reaches it, and its definition denies every MCP
+server but canopy's and carries no skill for the tracker, so it reads no ticket live (DESIGN §39). Settled (2026-10-15,
+the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator who shares
+the workspace with people they do not trust overrides it in the private file. The provider also picks the default
+tracker server and tools a private ticket's
 worker gets (T6): a repository that names another provider leaves the real tracker's server
 undenied in that definition. An operator who works private tickets in a repository they do not control sets
 `tracker.mcp_server` and `tracker.read_tools`, which are private, to pin them. Through the runtime's own config it can

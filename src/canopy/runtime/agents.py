@@ -115,9 +115,6 @@ class Rules:
     models: Mapping[str, Model]
     #: The chores' own copies of `CHORE` by name (`chore_agent`), each rendered as `CHORE` is, then with its own model.
     chore_agents: Sequence[str]
-    #: The tracker's MCP server, as config or the provider's defaults name it, even with no read tools known; None when
-    #: neither names one.
-    tracker_server: str | None
 
 
 #: How much of an MCP server's tools an agent is offered: every one, only some, or none.

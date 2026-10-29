@@ -59,7 +59,6 @@ PLAIN = agents.Rules(
     artifacts=None,
     models={},
     chore_agents=(),
-    tracker_server=None,
 )
 
 
@@ -81,14 +80,9 @@ def test_render_writes_the_rules_into_the_agents_it_names() -> None:
     # Both workers and the planner deny GitHub's issue tools: the tracker is not GitHub.
     for agent in ISSUE_AGENTS:
         assert f"{ISSUES_MARKER}{ISSUE_DENIALS}" in text[agent], agent
-    # The overseer reads neither, the sources reading both for it: GitHub's issue and PR reads and the tracker's server
-    # are denied whole.
-    assert (
-        f'{READS_MARKER}  "*issue_read*": deny\n  "*list_issues*": deny\n  "*search_issues*": deny\n'
-        '  "*pull_request_read*": deny\n  "*list_pull_requests*": deny\n  "*search_pull_requests*": deny\n'
-        '  "*list_branches*": deny\n  "*_get_me": deny\n  "tracker_*": deny\n'
-    ) in text[agents.OVERSEER]
-    # So does the reviewer, ahead of its patterns.
+    # The overseer is rendered nothing of the tracker's: it denies every server but canopy's as shipped (DESIGN §39).
+    assert "tracker_" not in text[agents.OVERSEER]
+    # The reviewer denies GitHub's issue reads, ahead of its patterns.
     assert (
         f'{READS_MARKER}  "*issue_read*": deny\n  "*list_issues*": deny\n  "*search_issues*": deny\n'
         '  "tracker_*": deny\n  "tracker_read": allow\n'
@@ -147,13 +141,6 @@ def test_an_overseer_definition_without_a_marked_line_is_refused(marker: str) ->
         definitions.render_overseer(bundled.replace(marker, ""), "# canopy overseer\n")
 
 
-@pytest.mark.parametrize("tools", [None, agents.McpTools("github", ("issue_read",))])
-def test_an_overseer_definition_without_its_tracker_reads_line_is_refused(tools: agents.McpTools | None) -> None:
-    bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
-    with pytest.raises(agents.DefinitionsError, match="tracker reads"):
-        definitions.render_overseer_reads(bundled.replace(READS_MARKER, ""), tools)
-
-
 #: The agents whose tracker reads are rendered as the reviewer's, and the function that renders them.
 READERS: dict[str, Callable[[str, agents.McpTools | None, str], str]] = {
     agents.REVIEWER: definitions.render_reviewer_reads,
@@ -185,15 +172,6 @@ def test_the_chore_keeps_githubs_issue_reads_off_a_github_tracker() -> None:
     rendered = definitions.render_chore_reads(bundled, agents.McpTools("atlassian", ("getJiraIssue",)), "jira")
     rules = rendered.split(READS_MARKER, 1)[1].split("  # ", 1)[0]
     assert rules == '  "atlassian_*": deny\n  "atlassian_getJiraIssue": allow\n'
-
-
-def test_a_github_tracker_denies_the_overseer_its_server_whole() -> None:
-    # The sources read the issues and the PRs for it (DESIGN §39), and the server is both.
-    bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
-    tools = agents.McpTools("gh", ("create_pull_request", "issue_read"))
-    rendered = definitions.render_overseer_reads(bundled, tools)
-    rules = rendered.split(READS_MARKER, 1)[1].split("  # ", 1)[0]
-    assert rules.endswith('  "*_get_me": deny\n  "gh_*": deny\n')
 
 
 def test_a_worker_definition_without_its_reply_lines_is_refused() -> None:

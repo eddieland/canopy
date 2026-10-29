@@ -145,7 +145,11 @@ overseer's prompt no live read of the tracker or GitHub, only the observations, 
 the loop's branches for a workspace with no `tracker` source, the comment cursor kept as the tracker's id among them,
 are gone (`loop/tick.py`, `loop/tools.py`, `loop/observations.py`, `loop/phases.py`). Kept for the journal's history:
 the `queried` decision, which the harness still records and `duties.last_queried` reads from an older release's ticks
-too; `TickStatus.SKIPPED`, which old ticks hold; and the `last_comment_id` column, no longer read. Left: every MCP
-server but canopy's denied; and the design folded into the sections it names.
+too; `TickStatus.SKIPPED`, which old ticks hold; and the `last_comment_id` column, no longer read. Built (2026-10-29):
+every MCP server but canopy's denied. The overseer's definition denies `*_*`, every tool OpenCode names
+`<server>_<tool>`, whatever the operator's runtime config grants, and `read` of any server's resources, before it allows
+canopy's tools by name; nothing of the tracker's config is rendered into it, so none can reopen a server
+(`.agents/agents/canopy-overseer.md`). Read from OpenCode 1.19.3's source: no built-in tool the overseer uses asks a
+permission with a `_`. Left: the design folded into the sections it names.
 Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes,
 and that entry with it), the fifth bullet's.
