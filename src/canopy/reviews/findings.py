@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import contract, db, review_answers, review_runs
+from canopy.core import cards, contract, db, review_answers, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import HoldKind, ReviewRunStatus, SeenKind
 from canopy.infra.text import printable, quoted
@@ -163,6 +163,10 @@ def described(conn: sqlite3.Connection, run_id: int) -> str:
     note = contract.stored_object(run.result_json).get("harness")
     if isinstance(note, str) and note:
         lines.append(f"harness: {printable(note)}")
+    # Its reviewer's card, while it runs and its last once it ends (DESIGN §41).
+    standing = cards.of(run)
+    if standing.card is not None or run.status is ReviewRunStatus.RUNNING:
+        lines += cards.lines(standing, started_at=run.started_at, running=run.status is ReviewRunStatus.RUNNING)
     if stored is not None:
         lines.append(f"verdict {stored.verdict}, impact {stored.impact}" if stored.verdict else "no verdict")
         if stored.summary:

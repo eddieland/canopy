@@ -16,16 +16,16 @@ import re
 import sqlite3
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError
 
-from canopy.core import db, records, sql
+from canopy.core import db, items, records, sql
+from canopy.infra import text
 from canopy.runtime import servers
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from canopy.runtime.report import Called
 
 #: The server of the `status` tool, as a run's inline config names it, and the tool: the agent sees it as
@@ -45,6 +45,10 @@ MAX_SUMMARY = 400
 MAX_LINE = 200
 #: How many steps `done` and `next` may each hold.
 MAX_STEPS = 20
+#: How many tool calls, or minutes, a running run may go with no update to its card before the card is shown stale.
+#: canopy's plugin asks the agent for one at the same count of calls (`.agents/plugins/canopy.js`, DESIGN §41).
+STALE_CALLS = 20
+STALE_MINUTES = 10
 
 
 def _line(value: str) -> str:
@@ -161,6 +165,62 @@ def of(row: sqlite3.Row | records.Row) -> Standing:
         return Standing(None, None, calls)
     at = db.parse_time(str(values["card_at"]))
     return Standing(card, at, max(calls - int(values["card_calls"] or 0), 0))
+
+
+def is_stale(standing: Standing, started_at: str, now: datetime | None = None) -> bool:
+    """Whether a running run's card has gone `STALE_CALLS` tool calls or `STALE_MINUTES` without an update.
+
+    A run with no card counts from its start.
+
+    Returns:
+        True when it is stale.
+    """
+    since = standing.at or db.parse_time(started_at)
+    late = (now or datetime.now(UTC)) - since >= timedelta(minutes=STALE_MINUTES)
+    return late or standing.calls_since >= STALE_CALLS
+
+
+def doing(standing: Standing, started_at: str, now: datetime | None = None) -> str | None:
+    """A running run's card on one line, for `canopy status`: what it does now, and how old the card is.
+
+    Returns:
+        `now: <now>  card 3m, 4 calls old`, marked `stale` when it is; `no card, 12m and 30 calls in` for a run with
+        none once that is stale; else None.
+    """
+    stale = is_stale(standing, started_at, now)
+    mark = "  stale" if stale else ""
+    if standing.card is None or standing.at is None:
+        if not stale:
+            return None
+        return f"no card, {items.age(started_at, now)} and {_calls(standing.calls_since)} in"
+    age = items.age(db.format_time(standing.at), now)
+    return f"now: {text.one_line(standing.card.now)}  card {age}, {_calls(standing.calls_since)} old{mark}"
+
+
+def lines(standing: Standing, *, started_at: str, running: bool, now: datetime | None = None) -> list[str]:
+    """A run's whole card, for `canopy show`: how old it is, then each field on a line of its own.
+
+    Returns:
+        The lines, indented; one saying there is none for a run with no card.
+    """
+    card = standing.card
+    if card is None or standing.at is None:
+        return ["  no card"]
+    if running:
+        stale = "  stale" if is_stale(standing, started_at, now) else ""
+        head = f"  card, {items.age(db.format_time(standing.at), now)} and {_calls(standing.calls_since)} old{stale}"
+    else:
+        head = f"  last card, {db.format_time(standing.at)}, {_calls(standing.calls_since)} before the run ended"
+    found = [head, f"    {card.summary}", f"    now: {card.now}"]
+    found.extend(f"    done: {d.step} ({d.proof})" for d in card.done)
+    found.extend(f"    next: {step}" for step in card.next)
+    if card.stuck is not None:
+        found.append(f"    stuck: {card.stuck}")
+    return found
+
+
+def _calls(count: int) -> str:
+    return "1 call" if count == 1 else f"{count} calls"
 
 
 def _parsed(raw: str) -> Card | None:

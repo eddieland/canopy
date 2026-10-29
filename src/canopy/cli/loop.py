@@ -13,6 +13,7 @@ from rich.console import Console
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.core import (
+    cards,
     chore_result,
     chore_view,
     connector_runs,
@@ -278,15 +279,24 @@ def _print_workers(ctx: Context) -> None:
         # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
         if r["session_id"]:
             click.echo(f"    session {r['session_id']}{spent(r)}{_doing(r)}")
+        _print_card(r)
     # A review holds a slot and counts toward max_workers (DESIGN §21).
     for r in db.running_runs(ctx.conn, "review_runs"):
         where = f"  {r['slot_path']}" if r["slot_path"] else ""
         click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}{where}{persona_of(r)}")
+        _print_card(r)
     # So does a task's run (DESIGN §36).
     for t in tasks.running(ctx.conn):
         click.echo(f"  task:{t.task_id}  run {t.id}  {attention.age(t.started_at)}  {t.slot_path}")
     if not busy:
         click.echo("  none")
+
+
+def _print_card(run: sqlite3.Row) -> None:
+    """What a running run's card says it does now, and how old the card is (DESIGN §41); nothing before it is stale."""
+    doing = cards.doing(cards.of(run), str(run["started_at"]))
+    if doing is not None:
+        click.echo(f"    {doing}")
 
 
 def _doing(run: sqlite3.Row) -> str:
