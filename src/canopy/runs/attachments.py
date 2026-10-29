@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import PurePath
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, plans, records, sql
+from canopy.core import conversation, db, plans, records
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
 from canopy.infra import logs
 
@@ -124,8 +124,8 @@ def attach(
     with db.transaction(conn):
         conversation.check_subject(conn, ref)
         _check_room(of(conn, ref), ref, name, len(data), limits)
-        insert = sql.insert(
-            "attachments",
+        insert = records.insert(
+            records.Attachment,
             subject_kind=ref.kind,
             subject_id=ref.id,
             name=name,
@@ -134,7 +134,7 @@ def attach(
             channel=channel,
             added_at=db.now(),
         )
-        attachment_id = int(sql.execute(conn, insert).lastrowid or 0)
+        attachment_id = int(insert.run(conn).lastrowid or 0)
         # No row is ever deleted, so an id is taken again only after a transaction that took it rolled back: a file
         # already at it is one that transaction wrote, never an attachment's.
         with contextlib.suppress(FileNotFoundError):
@@ -167,8 +167,12 @@ def remove(conn: sqlite3.Connection, state_dir: Path, ref: Ref, name: str, *, ch
         found = next((a for a in of(conn, ref) if a.name == name), None)
         if found is None:
             raise Refused("unknown", f"{ref} has no attachment named {name[:100]!r}")
-        update = sql.update("attachments").set(removed_at=db.now(), removed_channel=channel).where("id = ?", found.id)
-        sql.execute(conn, update)
+        update = (
+            records.update(records.Attachment)
+            .set(removed_at=db.now(), removed_channel=channel)
+            .where("id = ?", found.id)
+        )
+        update.run(conn)
         removed = get(conn, found.id)
     if removed is None:
         raise sqlite3.DatabaseError("the attachment's row went missing")

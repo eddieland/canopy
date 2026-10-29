@@ -1004,7 +1004,7 @@ def opened(conn: sqlite3.Connection, url: str, *, state: str | None = "open", dr
     db.set_unit(conn, KEY, "/ws", "repo", pr_url=url)
     if state is not None:
         read = {"repository": "acme/api", "number": 12, "base_ref": "main", "state": state, "draft": int(draft)}
-        sql.execute(conn, sql.insert("observed_prs", url=url, observed_at=db.now(), **read))
+        records.insert(records.ObservedPr, url=url, observed_at=db.now(), **read).run(conn)
 
 
 def test_each_ticket_and_the_export_get_an_index(

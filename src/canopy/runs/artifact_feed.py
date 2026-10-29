@@ -282,39 +282,36 @@ def _record(
                 _record_comment(conn, config, change, now)
                 _to_conversation(conn, change)
             recorded[change.kind] += 1
-        moved = sql.insert("observed_feeds", source=name, through=through, read_at=now if whole else None)
+        moved = records.insert(records.ObservedFeed, source=name, through=through, read_at=now if whole else None)
         conflict = "(source) DO UPDATE SET through = max(through, excluded.through), read_at = coalesce(?, read_at)"
-        sql.execute(conn, moved.on_conflict(conflict, now if whole else None))
+        moved.on_conflict(conflict, now if whole else None).run(conn)
     return dict(recorded)
 
 
 def _record_thread(conn: sqlite3.Connection, change: _Change, now: str) -> None:
     """Record the thread as `change` left it, unless a newer change is recorded."""
     anchor = change.anchor
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_artifact_threads",
-            id=change.thread_id,
-            artifact_id=change.artifact_id,
-            origin=json.dumps(change.origin, sort_keys=True),
-            ticket=change.ticket,
-            exact=None if anchor is None else anchor.exact,
-            prefix=None if anchor is None else anchor.prefix,
-            suffix=None if anchor is None else anchor.suffix,
-            anchored_version=change.anchored_version,
-            state=change.state,
-            anchor_status=None if anchor is None else change.anchor_status,
-            seq=change.seq,
-            observed_at=now,
-        ).on_conflict(
-            "(id) DO UPDATE SET artifact_id = excluded.artifact_id, origin = excluded.origin,"
-            " ticket = excluded.ticket, exact = excluded.exact, prefix = excluded.prefix, suffix = excluded.suffix,"
-            " anchored_version = excluded.anchored_version, state = excluded.state,"
-            " anchor_status = excluded.anchor_status, seq = excluded.seq, observed_at = excluded.observed_at"
-            " WHERE excluded.seq > seq",
-        ),
-    )
+    records.insert(
+        records.ObservedArtifactThread,
+        id=change.thread_id,
+        artifact_id=change.artifact_id,
+        origin=json.dumps(change.origin, sort_keys=True),
+        ticket=change.ticket,
+        exact=None if anchor is None else anchor.exact,
+        prefix=None if anchor is None else anchor.prefix,
+        suffix=None if anchor is None else anchor.suffix,
+        anchored_version=change.anchored_version,
+        state=change.state,
+        anchor_status=None if anchor is None else change.anchor_status,
+        seq=change.seq,
+        observed_at=now,
+    ).on_conflict(
+        "(id) DO UPDATE SET artifact_id = excluded.artifact_id, origin = excluded.origin,"
+        " ticket = excluded.ticket, exact = excluded.exact, prefix = excluded.prefix, suffix = excluded.suffix,"
+        " anchored_version = excluded.anchored_version, state = excluded.state,"
+        " anchor_status = excluded.anchor_status, seq = excluded.seq, observed_at = excluded.observed_at"
+        " WHERE excluded.seq > seq",
+    ).run(conn)
 
 
 def _record_comment(conn: sqlite3.Connection, config: Config, change: _Change, now: str) -> None:
@@ -326,31 +323,28 @@ def _record_comment(conn: sqlite3.Connection, config: Config, change: _Change, n
     """
     text = (change.body or "").strip()
     marked = conversation.worker_marked(text, config.trust.comment_prefix, config.trust.comment_suffix)
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_artifact_comments",
-            id=change.comment_id,
-            thread_id=change.thread_id,
-            author=change.author.id,
-            author_name=change.author.display_name,
-            author_kind=change.author.kind,
-            on_behalf_of=change.author.on_behalf_of,
-            via=change.via,
-            body=text[: conversation.MAX_COMMENT],
-            truncated=len(text) > conversation.MAX_COMMENT,
-            marked=marked,
-            created_at=change.created_at,
-            edited_at=change.edited_at,
-            deleted_at=change.deleted_at,
-            seq=change.seq,
-            observed_at=now,
-        ).on_conflict(
-            "(id) DO UPDATE SET body = excluded.body, truncated = excluded.truncated, marked = excluded.marked,"
-            " edited_at = excluded.edited_at, deleted_at = excluded.deleted_at, seq = excluded.seq,"
-            " observed_at = excluded.observed_at WHERE excluded.seq > seq",
-        ),
-    )
+    records.insert(
+        records.ObservedArtifactComment,
+        id=change.comment_id,
+        thread_id=change.thread_id,
+        author=change.author.id,
+        author_name=change.author.display_name,
+        author_kind=change.author.kind,
+        on_behalf_of=change.author.on_behalf_of,
+        via=change.via,
+        body=text[: conversation.MAX_COMMENT],
+        truncated=len(text) > conversation.MAX_COMMENT,
+        marked=marked,
+        created_at=change.created_at,
+        edited_at=change.edited_at,
+        deleted_at=change.deleted_at,
+        seq=change.seq,
+        observed_at=now,
+    ).on_conflict(
+        "(id) DO UPDATE SET body = excluded.body, truncated = excluded.truncated, marked = excluded.marked,"
+        " edited_at = excluded.edited_at, deleted_at = excluded.deleted_at, seq = excluded.seq,"
+        " observed_at = excluded.observed_at WHERE excluded.seq > seq",
+    ).run(conn)
 
 
 def _to_conversation(conn: sqlite3.Connection, change: _Change) -> None:

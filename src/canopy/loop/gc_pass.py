@@ -170,6 +170,6 @@ def _rows(conn: sqlite3.Connection, now: datetime, retention: Retention) -> dict
             found = row_kind.kind(conn)
             if not found.removable:
                 continue
-            deleted = sql.execute(conn, row_kind.delete()).rowcount
+            deleted = row_kind.delete().run(conn).rowcount
             removed[row_kind.name] = gc_passes.Removed(deleted, found.removable_size, unit="rows")
     return removed

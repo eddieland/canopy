@@ -165,30 +165,25 @@ def record(
         _supersede(conn, key)
         approved = reason is not None
         now = db.now()
-        [plan] = records.fetch_all(
-            conn,
+        [plan] = records.insert(
             records.FeedbackPlan,
-            sql.insert(
-                "feedback_plans",
-                ticket_key=key,
-                run_id=run_id,
-                created_at=now,
-                status=PlanStatus.APPROVED if approved else PlanStatus.PROPOSED,
-                sha256=written.sha256,
-                size=written.size,
-                approved_sha256=written.sha256 if approved else None,
-                approved_at=now if approved else None,
-                approved_channel=plans.PLANNER if approved else None,
-                approved_reason=reason,
-                effort=effort,
-            ).returning("*"),
-        )
-        sql.execute_many(
+            ticket_key=key,
+            run_id=run_id,
+            created_at=now,
+            status=PlanStatus.APPROVED if approved else PlanStatus.PROPOSED,
+            sha256=written.sha256,
+            size=written.size,
+            approved_sha256=written.sha256 if approved else None,
+            approved_at=now if approved else None,
+            approved_channel=plans.PLANNER if approved else None,
+            approved_reason=reason,
+            effort=effort,
+        ).returned(conn)
+        records.insert_rows(
+            records.FeedbackPlanItem,
+            ("plan_id", "number", "pr_url", "item", "item_id", "proposal", "reply"),
+        ).many(
             conn,
-            sql.insert_rows(
-                "feedback_plan_items",
-                ("plan_id", "number", "pr_url", "item", "item_id", "proposal", "reply"),
-            ),
             [
                 (plan.id, number, o.pr_url, o.item, o.id, n.proposal, n.reply)
                 for number, (o, n) in enumerate(kept, start=1)
@@ -410,12 +405,12 @@ def spend(conn: sqlite3.Connection, plan_id: int, run_id: int) -> bool:
     Returns:
         False when the plan is no longer approved and unspent, and nothing was recorded: the run must not start.
     """
-    row = sql.execute(
-        conn,
-        sql.update("feedback_plans")
+    row = (
+        records.update(records.FeedbackPlan)
         .set(spent_run_id=run_id)
         .where("id = ? AND status = ? AND spent_run_id IS NULL", plan_id, PlanStatus.APPROVED)
-        .returning("id"),
+        .returning("id")
+        .run(conn)
     ).fetchone()
     return row is not None
 
@@ -595,7 +590,7 @@ def approve(
         shown = feedback_items.digest(changed)
         if changed and plan.stale_shown != shown:
             # Recorded, and committed with the transaction before the refusal, so approving again approves it.
-            sql.execute(conn, sql.update("feedback_plans").set(stale_shown=shown).where("id = ?", plan.id))
+            records.update(records.FeedbackPlan).set(stale_shown=shown).where("id = ?", plan.id).run(conn)
         else:
             return _approved(conn, plan, covered, left, sha256=sha256, channel=channel, words=said_too)
     why = f"feedback plan {plan.id} of {key} is stale: {feedback_items.said(changed)}"
@@ -726,11 +721,14 @@ def _approved(
     Returns:
         The approved plan's row.
     """
-    sql.execute(conn, sql.update("feedback_plan_items").set(left_out=False).where("plan_id = ?", plan.id))
+    records.update(records.FeedbackPlanItem).set(left_out=False).where("plan_id = ?", plan.id).run(conn)
     if left:
-        sql.execute(
-            conn,
-            sql.update("feedback_plan_items").set(left_out=True).where("plan_id = ?", plan.id).where_in("number", left),
+        (
+            records.update(records.FeedbackPlanItem)
+            .set(left_out=True)
+            .where("plan_id = ?", plan.id)
+            .where_in("number", left)
+            .run(conn)
         )
     body = approval_message(
         plan.id,
@@ -748,10 +746,8 @@ def _approved(
         submission=f"feedback-plan/{plan.id}/after/{plan.approved_message_id or 0}",
         answers=False,
     )
-    [approved] = records.fetch_all(
-        conn,
-        records.FeedbackPlan,
-        sql.update("feedback_plans")
+    [approved] = (
+        records.update(records.FeedbackPlan)
         .set(
             status=PlanStatus.APPROVED,
             approved_sha256=sha256,
@@ -761,7 +757,7 @@ def _approved(
             approved_message_id=replied.message_id,
         )
         .where("id = ?", plan.id)
-        .returning("*"),
+        .returned(conn)
     )
     return approved
 
@@ -911,9 +907,9 @@ def _newest(
 
 def _supersede(conn: sqlite3.Connection, key: str) -> None:
     """Supersede the ticket's current feedback plan, if it has one. Call inside a transaction."""
-    sql.execute(
-        conn,
-        sql.update("feedback_plans")
+    (
+        records.update(records.FeedbackPlan)
         .set(status=PlanStatus.SUPERSEDED)
-        .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
+        .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED)
+        .run(conn)
     )

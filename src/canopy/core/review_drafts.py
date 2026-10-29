@@ -325,17 +325,14 @@ def _make(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | None:
     stored = review_result.stored(run.result_json)
     if stored is None:
         return None
-    cursor = sql.execute(
-        conn,
-        sql.insert(
-            "review_drafts",
-            review_run_id=run.id,
-            pr_url=run.pr_url,
-            sha=run.sha,
-            status=ReviewDraftStatus.WAITING,
-            created_at=db.now(),
-        ),
-    )
+    cursor = records.insert(
+        records.ReviewDraft,
+        review_run_id=run.id,
+        pr_url=run.pr_url,
+        sha=run.sha,
+        status=ReviewDraftStatus.WAITING,
+        created_at=db.now(),
+    ).run(conn)
     draft_id = int(cursor.lastrowid or 0)
     body, comments, refused = _first(stored, review_runs.review_dismissals(conn, run.id), diff_of(run))
     change = f"made from review run {run.id}'s body and findings"
@@ -451,21 +448,18 @@ def _insert_version(
     refused: Sequence[str],
 ) -> None:
     stored = [{**c.posted(), **({"finding": c.finding} if c.finding is not None else {})} for c in comments]
-    sql.execute(
-        conn,
-        sql.insert(
-            "review_draft_versions",
-            draft_id=draft_id,
-            version=number,
-            body=body,
-            comments=json.dumps(stored),
-            author=author,
-            channel=channel,
-            change=change,
-            refused=json.dumps(list(refused)),
-            created_at=db.now(),
-        ),
-    )
+    records.insert(
+        records.ReviewDraftVersion,
+        draft_id=draft_id,
+        version=number,
+        body=body,
+        comments=json.dumps(stored),
+        author=author,
+        channel=channel,
+        change=change,
+        refused=json.dumps(list(refused)),
+        created_at=db.now(),
+    ).run(conn)
 
 
 def _version(row: records.ReviewDraftVersion) -> Version:

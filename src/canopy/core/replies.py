@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import records, sql
+from canopy.core import records
 from canopy.core.prompts import mark_comments
 from canopy.core.vocab import Reaction, ReplyMode, RunKind
 
@@ -87,10 +87,12 @@ def render(
 
 def record_rendered(conn: sqlite3.Connection, run_id: int, rendered: Rendered) -> None:
     """Record what run `run_id`'s prompt was rendered under. Call inside the transaction that inserts the run."""
-    sql.execute(
-        conn,
-        sql.insert("run_replies", run_id=run_id, mode=rendered.mode, ticket_drafts=rendered.ticket_drafts),
-    )
+    records.insert(
+        records.RunReplies,
+        run_id=run_id,
+        mode=rendered.mode,
+        ticket_drafts=rendered.ticket_drafts,
+    ).run(conn)
 
 
 def run_replies(conn: sqlite3.Connection, run_id: int) -> records.RunReplies | None:

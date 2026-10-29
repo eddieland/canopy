@@ -18,7 +18,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import plans, sql
+from canopy.core import plans, records
 from canopy.core.vocab import Phase, PlanStatus, Proposal, ReviewItem, ReviewState, RunKind, RunStatus
 from canopy.runs import feedback_items, feedback_plans
 from canopy.serve.mock.reviews import PR_88
@@ -719,56 +719,48 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], tr
     """Insert run 46, in web's `slot`, its plan, waiting, its file and what it saw of PR 88, then bob's reply."""
     log_path = state_dir / "runs" / f"{RUN}.log"
     result = {"status": "done", "summary": "Planned PR 88's next round: leave alice's two items, change bob's."}
-    sql.execute(
-        conn,
-        sql.insert(
-            "runs",
-            id=RUN,
-            tick_id=1,
-            ticket_key=_KEY,
-            kind=RunKind.FEEDBACK_PLAN,
-            branch="agent/ABC-099-search",
-            started_at=at(_STARTED),
-            ended_at=at(_ENDED),
-            status=RunStatus.DONE,
-            result_json=json.dumps(result),
-            log_path=str(log_path),
-            private=0,
-        ),
-    )
-    sql.execute(
-        conn,
-        sql.insert(
-            "run_slots",
-            run_id=RUN,
-            repo="web",
-            slot_path=slot,
-            lease_id="lease-46",
-            lease_holder="canopy:ABC-099",
-            base_branch="main",
-        ),
-    )
+    records.insert(
+        records.Run,
+        id=RUN,
+        tick_id=1,
+        ticket_key=_KEY,
+        kind=RunKind.FEEDBACK_PLAN,
+        branch="agent/ABC-099-search",
+        started_at=at(_STARTED),
+        ended_at=at(_ENDED),
+        status=RunStatus.DONE,
+        result_json=json.dumps(result),
+        log_path=str(log_path),
+        private=0,
+    ).run(conn)
+    records.insert(
+        records.RunSlot,
+        run_id=RUN,
+        repo="web",
+        slot_path=slot,
+        lease_id="lease-46",
+        lease_holder="canopy:ABC-099",
+        base_branch="main",
+    ).run(conn)
     written = plans.write(state_dir, _KEY, RUN, _TEXT)
-    [plan_id] = sql.execute(
-        conn,
-        sql.insert(
-            "feedback_plans",
+    [plan_id] = (
+        records.insert(
+            records.FeedbackPlan,
             ticket_key=_KEY,
             run_id=RUN,
             created_at=at(_ENDED),
             status=PlanStatus.PROPOSED,
             sha256=written.sha256,
             size=written.size,
-        ).returning("id"),
-    ).fetchone()
-    sql.execute_many(
-        conn,
-        sql.insert_rows(
-            "feedback_plan_items",
-            ("plan_id", "number", "pr_url", "item", "item_id", "proposal", "reply"),
-        ),
-        [(plan_id, n, PR_88, *item) for n, item in enumerate(_ITEMS, start=1)],
+        )
+        .returning("id")
+        .run(conn)
+        .fetchone()
     )
+    records.insert_rows(
+        records.FeedbackPlanItem,
+        ("plan_id", "number", "pr_url", "item", "item_id", "proposal", "reply"),
+    ).many(conn, [(plan_id, n, PR_88, *item) for n, item in enumerate(_ITEMS, start=1)])
     given = feedback_items.offered(conn, trust, _KEY, [PR_88])
     feedback_items.record(conn, plan_id, feedback_items.take(conn, [PR_88], given, {}))
     _review(conn, at)
@@ -797,120 +789,102 @@ def seed_states(
 def _review(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
     """The review carol left, as the reader's next whole read of PR 88 holds it, with all else it read again."""
     read_at = at(-5)
-    sql.execute(conn, sql.update("observed_prs").set(observed_at=read_at).where("url = ?", PR_88))
-    sql.execute(conn, sql.update("observed_reviews").set(observed_at=read_at).where("pr_url = ?", PR_88))
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_reviews",
-            pr_url=PR_88,
-            item="review",
-            id=_CAROL,
-            author="carol",
-            bot=0,
-            state="commented",
-            created_at=at(-6),
-            body="Fine by me once the debounce is a shared constant; the filters could use it too.",
-            url=f"{PR_88}#pullrequestreview-{_CAROL}",
-            observed_at=read_at,
-        ),
-    )
+    records.update(records.ObservedPr).set(observed_at=read_at).where("url = ?", PR_88).run(conn)
+    records.update(records.ObservedReview).set(observed_at=read_at).where("pr_url = ?", PR_88).run(conn)
+    records.insert(
+        records.ObservedReview,
+        pr_url=PR_88,
+        item="review",
+        id=_CAROL,
+        author="carol",
+        bot=0,
+        state="commented",
+        created_at=at(-6),
+        body="Fine by me once the debounce is a shared constant; the filters could use it too.",
+        url=f"{PR_88}#pullrequestreview-{_CAROL}",
+        observed_at=read_at,
+    ).run(conn)
 
 
 def _ticket(conn: sqlite3.Connection, at: Callable[[int], str], state: _State, repo: str) -> None:
     """The state's ticket, its one unit, in mobile, on its PR, and the PR's title, last changed when its story ends."""
     branch = f"agent/{state.key}-{state.slug}"
-    sql.execute(
-        conn,
-        sql.insert(
-            "tickets",
-            key=state.key,
-            repo=repo,
-            first_seen_at=at(state.start - _DAY),
-            last_seen_at=at(state.ended),
-            changed_at=at(state.ended),
-            title=state.title,
-            phase=state.phase,
-            branch=branch,
-        ),
-    )
-    sql.execute(
-        conn,
-        sql.insert(
-            "ticket_units",
-            ticket_key=state.key,
-            repo="mobile",
-            branch=branch,
-            pr_url=state.url,
-            phase=state.phase,
-        ),
-    )
+    records.insert(
+        records.Ticket,
+        key=state.key,
+        repo=repo,
+        first_seen_at=at(state.start - _DAY),
+        last_seen_at=at(state.ended),
+        changed_at=at(state.ended),
+        title=state.title,
+        phase=state.phase,
+        branch=branch,
+    ).run(conn)
+    records.insert(
+        records.TicketUnit,
+        ticket_key=state.key,
+        repo="mobile",
+        branch=branch,
+        pr_url=state.url,
+        phase=state.phase,
+    ).run(conn)
     title = f"{state.key}: {state.title[0].lower()}{state.title[1:]}"
-    sql.execute(conn, sql.insert("pr_titles", pr_url=state.url, title=title, updated_at=at(state.start - _DAY)))
+    records.insert(records.PrTitle, pr_url=state.url, title=title, updated_at=at(state.start - _DAY)).run(conn)
 
 
 def _read(conn: sqlite3.Connection, at: Callable[[int], str], state: _State) -> None:
     """The reader's last whole read of the state's PR, before its plan ran: the PR, what was said, its failed check."""
     read_at = at(state.start - 5)
     head = f"{state.number:02d}" * 20
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_prs",
-            url=state.url,
-            repository="acme/mobile",
-            number=state.number,
-            head_sha=head,
-            base_ref="main",
-            state="open",
-            draft=0,
-            mergeable="mergeable",
-            author="op",
-            title=state.title,
-            observed_at=read_at,
-        ),
-    )
+    records.insert(
+        records.ObservedPr,
+        url=state.url,
+        repository="acme/mobile",
+        number=state.number,
+        head_sha=head,
+        base_ref="main",
+        state="open",
+        draft=0,
+        mergeable="mergeable",
+        author="op",
+        title=state.title,
+        observed_at=read_at,
+    ).run(conn)
     for said in state.said:
         kind = ReviewItem.REVIEW if said.thread is None else ReviewItem.COMMENT
         anchor = f"pullrequestreview-{said.id}" if said.thread is None else f"discussion_r{said.id}"
-        sql.execute(
-            conn,
-            sql.insert(
-                "observed_reviews",
-                pr_url=state.url,
-                item=kind,
-                id=said.id,
-                author=said.author,
-                bot=int(said.bot),
-                state=said.state,
-                created_at=at(state.start - said.before),
-                body=said.body,
-                url=f"{state.url}#{anchor}",
-                review_id=said.review,
-                thread_id=said.thread,
-                path=said.path,
-                line=said.line,
-                side=None if said.thread is None else "right",
-                outdated=None if said.thread is None else 0,
-                resolved=None if said.thread is None else 0,
-                observed_at=read_at,
-            ),
-        )
+        records.insert(
+            records.ObservedReview,
+            pr_url=state.url,
+            item=kind,
+            id=said.id,
+            author=said.author,
+            bot=int(said.bot),
+            state=said.state,
+            created_at=at(state.start - said.before),
+            body=said.body,
+            url=f"{state.url}#{anchor}",
+            review_id=said.review,
+            thread_id=said.thread,
+            path=said.path,
+            line=said.line,
+            side=None if said.thread is None else "right",
+            outdated=None if said.thread is None else 0,
+            resolved=None if said.thread is None else 0,
+            observed_at=read_at,
+        ).run(conn)
     if state.failed is not None:
-        sql.execute(
-            conn,
-            sql.insert(
-                "observed_checks",
-                pr_url=state.url,
-                name=state.failed,
-                head_sha=head,
-                status="completed",
-                conclusion="failure",
-                run_id=9_100_000 + state.number,
-                url=f"https://github.com/acme/mobile/actions/runs/{9_100_000 + state.number}",
-                observed_at=read_at,
-            ),
-        )
+        records.insert(
+            records.ObservedCheck,
+            pr_url=state.url,
+            name=state.failed,
+            head_sha=head,
+            status="completed",
+            conclusion="failure",
+            run_id=9_100_000 + state.number,
+            url=f"https://github.com/acme/mobile/actions/runs/{9_100_000 + state.number}",
+            observed_at=read_at,
+        ).run(conn)
 
 
 def _plan(
@@ -934,25 +908,26 @@ def _plan(
         slot=slot,
     )
     written = plans.write(state_dir, state.key, state.run, state.text)
-    [plan_id] = sql.execute(
-        conn,
-        sql.insert(
-            "feedback_plans",
+    [plan_id] = (
+        records.insert(
+            records.FeedbackPlan,
             ticket_key=state.key,
             run_id=state.run,
             created_at=at(state.written),
             status=PlanStatus.PROPOSED,
             sha256=written.sha256,
             size=written.size,
-        ).returning("id"),
-    ).fetchone()
+        )
+        .returning("id")
+        .run(conn)
+        .fetchone()
+    )
     kinds = {s.id: ReviewItem.REVIEW if s.thread is None else ReviewItem.COMMENT for s in state.said}
-    sql.execute_many(
+    records.insert_rows(
+        records.FeedbackPlanItem,
+        ("plan_id", "number", "pr_url", "item", "item_id", "proposal", "reply"),
+    ).many(
         conn,
-        sql.insert_rows(
-            "feedback_plan_items",
-            ("plan_id", "number", "pr_url", "item", "item_id", "proposal", "reply"),
-        ),
         [
             (plan_id, n, state.url, kinds[i.said], i.said, i.proposal, i.reply)
             for n, i in enumerate(state.items, start=1)
@@ -987,10 +962,9 @@ def _approve(
             [i for i in named if i[0] in approval.left],
             approval.words,
         )
-        message = sql.execute(
-            conn,
-            sql.insert(
-                "messages",
+        message = (
+            records.insert(
+                records.Message,
                 subject_kind="ticket",
                 subject_id=state.key,
                 at=when,
@@ -999,19 +973,20 @@ def _approve(
                 channel=approval.channel,
                 body=body,
                 submission=f"feedback-plan/{plan_id}/after/0",
-            ),
-        ).lastrowid
+            )
+            .run(conn)
+            .lastrowid
+        )
     if approval.left:
-        sql.execute(
-            conn,
-            sql.update("feedback_plan_items")
+        (
+            records.update(records.FeedbackPlanItem)
             .set(left_out=True)
             .where("plan_id = ?", plan_id)
-            .where_in("number", approval.left),
+            .where_in("number", approval.left)
+            .run(conn)
         )
-    sql.execute(
-        conn,
-        sql.update("feedback_plans")
+    (
+        records.update(records.FeedbackPlan)
         .set(
             status=PlanStatus.APPROVED,
             approved_sha256=sha256,
@@ -1020,7 +995,8 @@ def _approve(
             approved_reason=approval.reason,
             approved_message_id=message,
         )
-        .where("id = ?", plan_id),
+        .where("id = ?", plan_id)
+        .run(conn)
     )
 
 
@@ -1045,8 +1021,8 @@ def _spend(
         result={"summary": state.spent, "prs": {"mobile": state.url}},
         slot=slot,
     )
-    sql.execute(conn, sql.insert("run_reasons", run_id=run, reason="review"))
-    sql.execute(conn, sql.update("feedback_plans").set(spent_run_id=run).where("id = ?", plan_id))
+    records.insert(records.RunReason, run_id=run, reason="review").run(conn)
+    records.update(records.FeedbackPlan).set(spent_run_id=run).where("id = ?", plan_id).run(conn)
 
 
 def _run(
@@ -1061,32 +1037,26 @@ def _run(
     slot: str,
 ) -> None:
     """A run of the state's ticket that ended `done`, in mobile's `slot`; no session named it, so it has no cost."""
-    sql.execute(
-        conn,
-        sql.insert(
-            "runs",
-            id=run,
-            tick_id=1,
-            ticket_key=state.key,
-            kind=kind,
-            branch=f"agent/{state.key}-{state.slug}",
-            started_at=span[0],
-            ended_at=span[1],
-            status=RunStatus.DONE,
-            result_json=json.dumps(result),
-            log_path=str(state_dir / "runs" / f"{run}.log"),
-            private=0,
-        ),
-    )
-    sql.execute(
-        conn,
-        sql.insert(
-            "run_slots",
-            run_id=run,
-            repo="mobile",
-            slot_path=slot,
-            lease_id=f"lease-{run}",
-            lease_holder=f"canopy:{state.key}",
-            base_branch="main",
-        ),
-    )
+    records.insert(
+        records.Run,
+        id=run,
+        tick_id=1,
+        ticket_key=state.key,
+        kind=kind,
+        branch=f"agent/{state.key}-{state.slug}",
+        started_at=span[0],
+        ended_at=span[1],
+        status=RunStatus.DONE,
+        result_json=json.dumps(result),
+        log_path=str(state_dir / "runs" / f"{run}.log"),
+        private=0,
+    ).run(conn)
+    records.insert(
+        records.RunSlot,
+        run_id=run,
+        repo="mobile",
+        slot_path=slot,
+        lease_id=f"lease-{run}",
+        lease_holder=f"canopy:{state.key}",
+        base_branch="main",
+    ).run(conn)

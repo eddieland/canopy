@@ -116,19 +116,16 @@ def record(conn: sqlite3.Connection, page: SessionPage, *, now: str | None = Non
     with db.transaction(conn):
         for session in page.sessions:
             _record_session(conn, session, at)
-        sql.execute(
-            conn,
-            sql.insert(
-                "runtime_session_reads",
-                id=1,
-                cursor_updated_ms=updated_ms,
-                cursor_session_id=session_id,
-                status=status,
-                error=page.error if status is SessionsRead.FAILED else None,
-                skipped=(was.skipped if was is not None else 0) + page.skipped,
-                read_at=at,
-            ).or_replace(),
-        )
+        records.insert(
+            records.RuntimeSessionRead,
+            id=1,
+            cursor_updated_ms=updated_ms,
+            cursor_session_id=session_id,
+            status=status,
+            error=page.error if status is SessionsRead.FAILED else None,
+            skipped=(was.skipped if was is not None else 0) + page.skipped,
+            read_at=at,
+        ).or_replace().run(conn)
 
 
 def spend(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) -> SessionsSpend:
@@ -254,29 +251,25 @@ def _kept(was: records.RuntimeSessionRead | None) -> tuple[int | None, str | Non
 
 
 def _record_session(conn: sqlite3.Connection, session: SessionSpend, at: str) -> None:
-    sql.execute(conn, sql.delete("runtime_sessions").where("session_id = ?", session.session_id))
-    sql.execute(
+    records.delete(records.RuntimeSession).where("session_id = ?", session.session_id).run(conn)
+    records.insert(
+        records.RuntimeSession,
+        session_id=session.session_id,
+        parent_id=session.parent_id,
+        directory=session.directory,
+        started_at=_journal_time(session.created_ms),
+        updated_at=_journal_time(session.updated_ms),
+        updated_ms=session.updated_ms,
+        cost_usd=session.cost_usd,
+        tokens_input=session.input,
+        tokens_output=session.output,
+        tokens_reasoning=session.reasoning,
+        tokens_cache_read=session.cache_read,
+        tokens_cache_write=session.cache_write,
+        read_at=at,
+    ).run(conn)
+    records.insert_rows(records.RuntimeSessionModel, ("session_id", "model", "replies", "cost_usd")).many(
         conn,
-        sql.insert(
-            "runtime_sessions",
-            session_id=session.session_id,
-            parent_id=session.parent_id,
-            directory=session.directory,
-            started_at=_journal_time(session.created_ms),
-            updated_at=_journal_time(session.updated_ms),
-            updated_ms=session.updated_ms,
-            cost_usd=session.cost_usd,
-            tokens_input=session.input,
-            tokens_output=session.output,
-            tokens_reasoning=session.reasoning,
-            tokens_cache_read=session.cache_read,
-            tokens_cache_write=session.cache_write,
-            read_at=at,
-        ),
-    )
-    sql.execute_many(
-        conn,
-        sql.insert_rows("runtime_session_models", ("session_id", "model", "replies", "cost_usd")),
         [(session.session_id, m.model, m.replies, m.cost_usd) for m in session.models],
     )
 

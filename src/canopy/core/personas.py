@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
-from canopy.core import conversation, db, memory_text, records, sql
+from canopy.core import conversation, db, memory_text, records
 from canopy.core.config import DEFAULT_PERSONA, PERSONA_NAME_RE
 from canopy.core.vocab import OverrideKind, RunKind
 from canopy.infra import resources
@@ -260,20 +260,17 @@ def choose(
         check(config, name)
     where = "ticket_key = ? AND agent = ? AND kind = ?"
     with db.transaction(conn):
-        sql.execute(conn, sql.delete("ticket_overrides").where(where, ticket, agent, OverrideKind.PERSONA))
+        records.delete(records.TicketOverride).where(where, ticket, agent, OverrideKind.PERSONA).run(conn)
         if name is not None:
-            sql.execute(
-                conn,
-                sql.insert(
-                    "ticket_overrides",
-                    ticket_key=ticket,
-                    agent=agent,
-                    kind=OverrideKind.PERSONA,
-                    value=name,
-                    channel=channel,
-                    set_at=db.now(),
-                ),
-            )
+            records.insert(
+                records.TicketOverride,
+                ticket_key=ticket,
+                agent=agent,
+                kind=OverrideKind.PERSONA,
+                value=name,
+                channel=channel,
+                set_at=db.now(),
+            ).run(conn)
     return next(n for n in next_for(conn, config, ticket) if n.agent == agent)
 
 
@@ -302,19 +299,16 @@ def choose_next(
     if name is not None:
         check(config, name)
     with db.transaction(conn):
-        sql.execute(conn, sql.delete("next_run_personas").where("ticket_key = ? AND agent = ?", ticket, agent))
+        records.delete(records.NextRunPersona).where("ticket_key = ? AND agent = ?", ticket, agent).run(conn)
         if name is not None:
-            sql.execute(
-                conn,
-                sql.insert(
-                    "next_run_personas",
-                    ticket_key=ticket,
-                    agent=agent,
-                    persona=name,
-                    channel=channel,
-                    set_at=db.now(),
-                ),
-            )
+            records.insert(
+                records.NextRunPersona,
+                ticket_key=ticket,
+                agent=agent,
+                persona=name,
+                channel=channel,
+                set_at=db.now(),
+            ).run(conn)
     return next(n for n in next_for(conn, config, ticket) if n.agent == agent)
 
 
@@ -324,7 +318,7 @@ def spend_next(conn: sqlite3.Connection, ticket: str, agent: Agent, persona: str
     Only `persona`, the one the run was rendered in: one the operator chose since stays for the run after.
     """
     where = "ticket_key = ? AND agent = ? AND persona = ?"
-    sql.execute(conn, sql.delete("next_run_personas").where(where, ticket, agent, persona))
+    records.delete(records.NextRunPersona).where(where, ticket, agent, persona).run(conn)
 
 
 def check(config: Config, name: str) -> None:

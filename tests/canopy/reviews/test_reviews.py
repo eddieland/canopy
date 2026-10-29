@@ -899,20 +899,17 @@ def test_a_review_of_a_stacked_pr_runs_from_the_branch_it_merges_into(
     git("commit", "--quiet", "-m", "backoff", cwd=seed)
     git("push", "--quiet", str(git_pool.origin), "stacked", cwd=seed)
     sha = present(git_pool.remote_head("stacked"))
-    sql.execute(
-        scenario.conn,
-        sql.insert(
-            "observed_prs",
-            url=PR,
-            repository="acme/api",
-            number=7,
-            head_sha=sha,
-            base_ref="feature",
-            draft=False,
-            observed_at=db.now(),
-            labels="[]",
-        ),
-    )
+    records.insert(
+        records.ObservedPr,
+        url=PR,
+        repository="acme/api",
+        number=7,
+        head_sha=sha,
+        base_ref="feature",
+        draft=False,
+        observed_at=db.now(),
+        labels="[]",
+    ).run(scenario.conn)
     reads = [calls("canopy_git_merge-base", base="origin/feature", head="HEAD")]
     reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(CLEAN, tools=reads))
     assert (reviewed.status, reviewed.row.base_branch) == ("done", "feature"), reviewed.printed.out
@@ -1070,7 +1067,7 @@ def test_review_noise_counts_findings_by_severity_persona_and_model_and_why_each
     scenario.operator("dismiss", ref, "3", "--reason", "intentional")
     scenario.operator("dismiss", ref, "4", "--reason", "out_of_scope")
     # As a dismissal from before canopy asked why.
-    sql.execute(scenario.conn, sql.update("review_dismissals").set(reason=None).where("finding = ?", 3))
+    records.update(records.ReviewDismissal).set(reason=None).where("finding = ?", 3).run(scenario.conn)
 
     found = json.loads(scenario.operator("review", "noise", "--json").out)
     assert found["reviews"] == 1

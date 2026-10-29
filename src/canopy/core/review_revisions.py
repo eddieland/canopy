@@ -150,15 +150,15 @@ def add_note(conn: sqlite3.Connection, draft_id: int, body: str, *, channel: str
         LookupError: The note is not there once inserted, which a transaction never leaves.
     """
     at = review_drafts.newest(conn, draft_id).number
-    note = sql.insert(
-        "review_draft_notes",
+    note = records.insert(
+        records.ReviewDraftNote,
         draft_id=draft_id,
         after_version=at,
         body=body,
         channel=channel,
         created_at=db.now(),
     )
-    note_id = int(sql.execute(conn, note).lastrowid or 0)
+    note_id = int(note.run(conn).lastrowid or 0)
     found = records.select(records.ReviewDraftNote).where("id = ?", note_id).one(conn)
     if found is None:
         raise LookupError(f"review draft note {note_id} vanished")
@@ -167,7 +167,7 @@ def add_note(conn: sqlite3.Connection, draft_id: int, body: str, *, channel: str
 
 def add_grant(conn: sqlite3.Connection, draft_id: int, runs: int) -> None:
     """Record that the operator granted draft `draft_id` `runs` more revisions. Call inside a transaction."""
-    sql.execute(conn, sql.insert("review_draft_grants", draft_id=draft_id, runs=runs, granted_at=db.now()))
+    records.insert(records.ReviewDraftGrant, draft_id=draft_id, runs=runs, granted_at=db.now()).run(conn)
 
 
 @dataclass(frozen=True)

@@ -575,8 +575,8 @@ def test_a_later_run_s_prompt_carries_the_conversation(
         ("operator", "reply", "cli", None, 2, "Cache the dependencies.\nLeave the job as it is."),
     ]
     with db.transaction(conn):
-        run = sql.insert(
-            "task_runs",
+        run = records.insert(
+            records.TaskRun,
             task_id=1,
             tick_id=db.start_tick(conn, dry_run=False),
             branch=BRANCH,
@@ -591,10 +591,10 @@ def test_a_later_run_s_prompt_carries_the_conversation(
             status="blocked",
             log_path="1.log",
         )
-        sql.execute(conn, run)
+        run.run(conn)
         for n, (source, kind, channel, run_id, answers, body) in enumerate(said):
-            message = sql.insert(
-                "messages",
+            message = records.insert(
+                records.Message,
                 subject_kind="task",
                 subject_id="1",
                 at=f"2026-10-21T12:3{n}:00.000Z",
@@ -605,7 +605,7 @@ def test_a_later_run_s_prompt_carries_the_conversation(
                 answers=answers,
                 body=body,
             )
-            sql.execute(conn, message)
+            message.run(conn)
     values = {
         "TASK_ID": "1",
         "TASK": TEXT,

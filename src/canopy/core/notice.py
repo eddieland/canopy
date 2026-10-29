@@ -116,14 +116,14 @@ def set_notice(conn: sqlite3.Connection, text: str, *, minutes: int | None, chan
     with db.transaction(conn):
         moment = datetime.now(UTC)
         stamp = db.format_time(moment)
-        sql.execute(
-            conn,
-            sql.update("notices")
+        (
+            records.update(records.Notice)
             .set(ended_at=stamp, ended_channel=channel)
-            .where("ended_at IS NULL AND lapses_at > ?", stamp),
+            .where("ended_at IS NULL AND lapses_at > ?", stamp)
+            .run(conn)
         )
         lapses_at = db.format_time(moment + timedelta(minutes=lasts))
-        cur = sql.execute(conn, sql.insert("notices", body=body, set_at=stamp, channel=channel, lapses_at=lapses_at))
+        cur = records.insert(records.Notice, body=body, set_at=stamp, channel=channel, lapses_at=lapses_at).run(conn)
     [row] = records.select(records.Notice).where("id = ?", cur.lastrowid).all(conn)
     return _notice(row)
 
@@ -138,7 +138,7 @@ def clear(conn: sqlite3.Connection, *, channel: str) -> Notice | None:
         held = current(conn)
         if held is None:
             return None
-        sql.execute(conn, sql.update("notices").set(ended_at=db.now(), ended_channel=channel).where("id = ?", held.id))
+        records.update(records.Notice).set(ended_at=db.now(), ended_channel=channel).where("id = ?", held.id).run(conn)
     [row] = records.select(records.Notice).where("id = ?", held.id).all(conn)
     return _notice(row)
 

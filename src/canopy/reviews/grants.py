@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, review_runs, sql
+from canopy.core import conversation, db, records, review_runs, sql
 
 if TYPE_CHECKING:
     import sqlite3
@@ -68,5 +68,5 @@ def grant(conn: sqlite3.Connection, config: Config, ref: conversation.Ref, *, ru
         raise conversation.Refused("unknown", f"canopy has not reviewed {ref}, so it has no review limit to grant past")
     # The limit is read in the grant's own write transaction, so it counts this grant and none committed after it.
     with db.transaction(conn):
-        sql.execute(conn, sql.insert("review_grants", pr_url=ref.id, runs=runs, granted_at=db.now()))
+        records.insert(records.ReviewGrant, pr_url=ref.id, runs=runs, granted_at=db.now()).run(conn)
         return Granted(runs=reviewed, limit=limit(conn, config, ref.id))

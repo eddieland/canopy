@@ -524,24 +524,20 @@ def record(
         supersede(conn, key)
         approved = reason is not None
         now = db.now()
-        [plan] = records.fetch_all(
-            conn,
+        [plan] = records.insert(
             records.Plan,
-            sql.insert(
-                "plans",
-                ticket_key=key,
-                run_id=run_id,
-                created_at=now,
-                status=PlanStatus.APPROVED if approved else PlanStatus.PROPOSED,
-                sha256=written.sha256,
-                size=written.size,
-                approved_sha256=written.sha256 if approved else None,
-                approved_at=now if approved else None,
-                approved_channel=PLANNER if approved else None,
-                approved_reason=reason,
-                effort=effort,
-            ).returning("*"),
-        )
+            ticket_key=key,
+            run_id=run_id,
+            created_at=now,
+            status=PlanStatus.APPROVED if approved else PlanStatus.PROPOSED,
+            sha256=written.sha256,
+            size=written.size,
+            approved_sha256=written.sha256 if approved else None,
+            approved_at=now if approved else None,
+            approved_channel=PLANNER if approved else None,
+            approved_reason=reason,
+            effort=effort,
+        ).returned(conn)
         built = event(plan.id, reason) if event is not None else None
         if built is not None:
             db.record_event(conn, built)
@@ -603,10 +599,8 @@ def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str
             raise Refused("bad_plan", f"plan {plan.id} of {key} is approved, and its file has not changed since")
         if reading.problem is not None:
             raise Refused("bad_plan", f"plan {plan.id}'s file {path} is {reading.problem}, so it cannot be approved")
-        [approved] = records.fetch_all(
-            conn,
-            records.Plan,
-            sql.update("plans")
+        [approved] = (
+            records.update(records.Plan)
             .set(
                 status=PlanStatus.APPROVED,
                 approved_sha256=reading.sha256,
@@ -615,7 +609,7 @@ def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str
                 approved_reason=None,
             )
             .where("id = ?", plan.id)
-            .returning("*"),
+            .returned(conn)
         )
     return approved
 
@@ -724,12 +718,12 @@ def supersede(conn: sqlite3.Connection, key: str) -> int | None:
         The superseded plan's id, or None when the ticket had no current plan.
     """
     superseding = (
-        sql.update("plans")
+        records.update(records.Plan)
         .set(status=PlanStatus.SUPERSEDED)
         .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED)
         .returning("id")
     )
-    row = sql.execute(conn, superseding).fetchone()
+    row = superseding.run(conn).fetchone()
     return int(row[0]) if row is not None else None
 
 

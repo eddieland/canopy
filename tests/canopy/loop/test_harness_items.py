@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, plans, sql
+from canopy.core import db, plans, records
 from canopy.core.vocab import Decider, RunStatus, TickStatus
 from canopy.loop import attention, harness_items, phases
 from tests.canopy.helpers import (
@@ -215,9 +215,11 @@ def plan_changed(env: CanopyEnv, conn: sqlite3.Connection) -> None:
 def queue_stuck(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     """The PR's build passed two hours ago, and its merge queue's status still waits, as CI."""
     green(env, conn)
-    sql.execute(
-        conn,
-        sql.update("observed_check_runs").set(observed_at=db.format_time(NOW - timedelta(hours=2))).everything(),
+    (
+        records.update(records.ObservedCheckRun)
+        .set(observed_at=db.format_time(NOW - timedelta(hours=2)))
+        .everything()
+        .run(conn)
     )
     check(conn, "merge-queue", "queued", None, run_id=12)
 

@@ -39,12 +39,9 @@ def ensure_sink(conn: sqlite3.Connection, name: str) -> records.NotifySink:
     Raises:
         RuntimeError: The row is missing right after it was inserted.
     """
-    sql.execute(
-        conn,
-        sql.insert("notify_sinks", name=name, cursor=newest_event_id(conn), created_at=db.now()).on_conflict(
-            "(name) DO NOTHING",
-        ),
-    )
+    records.insert(records.NotifySink, name=name, cursor=newest_event_id(conn), created_at=db.now()).on_conflict(
+        "(name) DO NOTHING",
+    ).run(conn)
     row = sink(conn, name)
     if row is None:
         raise RuntimeError(f"sink {name} vanished")
@@ -63,8 +60,8 @@ def forget_sinks(conn: sqlite3.Connection, keep: Iterable[str]) -> list[str]:
     gone = sorted(names - kept)
     with db.transaction(conn):
         for name in gone:
-            sql.execute(conn, sql.delete("notify_sinks").where("name = ?", name))
-            sql.execute(conn, sql.delete("notifications").where("sink = ?", name))
+            records.delete(records.NotifySink).where("name = ?", name).run(conn)
+            records.delete(records.Notification).where("sink = ?", name).run(conn)
     return gone
 
 
@@ -106,12 +103,12 @@ def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
         conn,
         sql.select("coalesce(max(id), 0)").from_("notify_events").where("kind = 'loop.budget_reached'"),
     ).fetchone()[0]
-    cur = sql.execute(
-        conn,
-        sql.delete("notify_events")
+    cur = (
+        records.delete(records.NotifyEvent)
         .where("id <= ?", passed)
         .where("at < ?", db.format_time(now - KEEP_EVENTS))
-        .where("id NOT IN (?, ?)", streak, budget),
+        .where("id NOT IN (?, ?)", streak, budget)
+        .run(conn)
     )
     return cur.rowcount
 
@@ -182,29 +179,28 @@ def mark_delivered(conn: sqlite3.Connection, sink_name: str, change: Diff | None
     ts = db.now()
     with db.transaction(conn):
         if change is not None:
-            sql.execute(
-                conn,
-                sql.delete("notifications")
+            (
+                records.delete(records.Notification)
                 .where("sink = ?", sink_name)
-                .where_in("fingerprint", change.resolved_fingerprints),
+                .where_in("fingerprint", change.resolved_fingerprints)
+                .run(conn)
             )
-            sql.execute_many(
+            records.insert_rows(
+                records.Notification,
+                ("sink", "fingerprint", "ticket_key", "reason", "repo", "sent_at"),
+            ).or_replace().many(
                 conn,
-                sql.insert_rows(
-                    "notifications",
-                    ("sink", "fingerprint", "ticket_key", "reason", "repo", "sent_at"),
-                ).or_replace(),
                 [(sink_name, item_fingerprint(i), i.ticket_key, i.reason, i.repo, ts) for i in change.added],
             )
-        sql.execute(
-            conn,
-            sql.update("notify_sinks")
+        (
+            records.update(records.NotifySink)
             .set_to("cursor = max(cursor, ?)", cursor)
             .set(last_delivery_at=ts, failures=0, last_error=None)
-            .where("name = ?", sink_name),
+            .where("name = ?", sink_name)
+            .run(conn)
         )
         if digest:
-            sql.execute(conn, sql.update("notify_sinks").set(last_digest_at=ts).where("name = ?", sink_name))
+            records.update(records.NotifySink).set(last_digest_at=ts).where("name = ?", sink_name).run(conn)
 
 
 def mark_failed(conn: sqlite3.Connection, sink_name: str, error: str) -> int:
@@ -213,12 +209,12 @@ def mark_failed(conn: sqlite3.Connection, sink_name: str, error: str) -> int:
     Returns:
         How many deliveries in a row have failed, or 0 when the sink has no row.
     """
-    sql.execute(
-        conn,
-        sql.update("notify_sinks")
+    (
+        records.update(records.NotifySink)
         .set_to("failures = failures + 1")
         .set(last_error=error[-500:])
-        .where("name = ?", sink_name),
+        .where("name = ?", sink_name)
+        .run(conn)
     )
     row = sink(conn, sink_name)
     return row.failures if row is not None else 0

@@ -275,7 +275,7 @@ def record_call(conn: sqlite3.Connection, table: CardTable, run_id: int, card: C
     on the last; one newly working starts now. A question the last card asked too keeps when it was asked and its
     answer; any other starts now, with none. Nothing changes for a run not running.
     """
-    running = sql.update(table).where("id = ? AND status = ?", run_id, _RUNNING[table])
+    running = records.update(records.of_table(table)).where("id = ? AND status = ?", run_id, _RUNNING[table])
     counted = running.set_to("tool_calls = tool_calls + 1")
     with db.transaction(conn):
         if card is not None:
@@ -290,7 +290,7 @@ def record_call(conn: sqlite3.Connection, table: CardTable, run_id: int, card: C
             if not _asks_still(row, card):
                 asked = at if card.question is not None else None
                 counted = counted.set(card_asked_at=asked, card_answer=None, card_answered_at=None)
-        sql.execute(conn, counted)
+        counted.run(conn)
 
 
 def record_answer(conn: sqlite3.Connection, table: CardTable, run_id: int, letter: Letter, asked_at: datetime) -> bool:
@@ -300,12 +300,12 @@ def record_answer(conn: sqlite3.Connection, table: CardTable, run_id: int, lette
         Whether it was recorded: False once the run has ended, or its card asks no question asked then.
     """
     answered = (
-        sql.update(table)
+        records.update(records.of_table(table))
         .where("id = ? AND status = ? AND card_asked_at = ?", run_id, _RUNNING[table], db.format_time(asked_at))
         .set(card_answer=letter, card_answered_at=db.now())
     )
     with db.transaction(conn):
-        return sql.execute(conn, answered).rowcount == 1
+        return answered.run(conn).rowcount == 1
 
 
 def answers_dir(state_dir: Path, run: str) -> Path:

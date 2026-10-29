@@ -117,11 +117,11 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None) -> 
             _write(conn, writing, number, entry)
         except TextRefused as e:
             writing.refused.append(Refused(number, str(e)))
-    sql.execute(
-        conn,
-        sql.update("run_replies")
+    (
+        records.update(records.RunReplies)
         .set(refused=json.dumps([r.as_json() for r in writing.refused]))
-        .where("run_id = ?", run_id),
+        .where("run_id = ?", run_id)
+        .run(conn)
     )
     log = logs.for_tick(int(run["tick_id"]))
     for r in writing.refused:
@@ -177,37 +177,31 @@ def _write(conn: sqlite3.Connection, writing: _Writing, number: int, entry: Json
         else None
     )
     now = db.now()
-    cursor = sql.execute(
-        conn,
-        sql.insert(
-            "drafts",
-            run_id=writing.run_id,
-            number=number,
-            ticket_key=writing.ticket_key,
-            kind=kind,
-            repo=None if pr is None else writing.prs[pr],
-            pr_url=pr,
-            comment_id=comment,
-            issue_url=issue,
-            stance=stance,
-            status=status,
-            basis=writing.basis,
-            created_at=now,
-            plan_item=plan_item,
-        ),
-    )
-    sql.execute(
-        conn,
-        sql.insert(
-            "draft_versions",
-            draft_id=cursor.lastrowid,
-            version=1,
-            body=text,
-            author=DraftAuthor.WORKER,
-            created_at=now,
-            reaction=reaction,
-        ),
-    )
+    cursor = records.insert(
+        records.Draft,
+        run_id=writing.run_id,
+        number=number,
+        ticket_key=writing.ticket_key,
+        kind=kind,
+        repo=None if pr is None else writing.prs[pr],
+        pr_url=pr,
+        comment_id=comment,
+        issue_url=issue,
+        stance=stance,
+        status=status,
+        basis=writing.basis,
+        created_at=now,
+        plan_item=plan_item,
+    ).run(conn)
+    records.insert(
+        records.DraftVersion,
+        draft_id=cursor.lastrowid,
+        version=1,
+        body=text,
+        author=DraftAuthor.WORKER,
+        created_at=now,
+        reaction=reaction,
+    ).run(conn)
     if kind is DraftKind.TICKET:
         # A ticket's draft needs no read, so it supersedes the earlier ones as it is written.
         written = get(conn, int(cursor.lastrowid or 0))
@@ -469,16 +463,16 @@ def _check_one(conn: sqlite3.Connection, draft: records.Draft, now: str) -> None
         if twin is not None:
             _refuse(conn, draft, f"a second draft for the thread draft {twin['number']} answers; a thread takes one")
             return
-    sql.execute(
-        conn,
-        sql.update("drafts")
+    (
+        records.update(records.Draft)
         .set(
             status=DraftStatus.WAITING,
             thread_id=thread,
             checked_at=now,
             plan_item=_checked_plan_item(conn, draft, thread),
         )
-        .where("id = ?", draft.id),
+        .where("id = ?", draft.id)
+        .run(conn)
     )
     same = (
         sql.frag("thread_id = ?", thread)
@@ -510,9 +504,8 @@ def _supersede(conn: sqlite3.Connection, draft: records.Draft, same: sql.Composa
     Only earlier runs', and that is enough: `check` takes every unchecked draft of a PR it read, whatever its run, in
     run order, so an earlier run's draft for the PR is checked, and superseded, before a later run's replaces it.
     """
-    sql.execute(
-        conn,
-        sql.update("drafts")
+    (
+        records.update(records.Draft)
         .set(
             status=DraftStatus.SUPERSEDED,
             superseded_by=draft.id,
@@ -520,21 +513,22 @@ def _supersede(conn: sqlite3.Connection, draft: records.Draft, same: sql.Composa
         )
         .where("{}", same)
         .where("run_id < ?", draft.run_id)
-        .where_in("status", (DraftStatus.UNCHECKED, DraftStatus.WAITING)),
+        .where_in("status", (DraftStatus.UNCHECKED, DraftStatus.WAITING))
+        .run(conn)
     )
 
 
 def _refuse(conn: sqlite3.Connection, draft: records.Draft, why: str) -> None:
-    sql.execute(conn, sql.update("drafts").set(status=DraftStatus.REFUSED, why=why).where("id = ?", draft.id))
+    records.update(records.Draft).set(status=DraftStatus.REFUSED, why=why).where("id = ?", draft.id).run(conn)
     rendered = run_replies(conn, draft.run_id)
     if rendered is None:
         return
     refused = [*refused_of(rendered), Refused(draft.number, why)]
-    sql.execute(
-        conn,
-        sql.update("run_replies")
+    (
+        records.update(records.RunReplies)
         .set(refused=json.dumps([r.as_json() for r in refused]))
-        .where("run_id = ?", draft.run_id),
+        .where("run_id = ?", draft.run_id)
+        .run(conn)
     )
 
 

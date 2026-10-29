@@ -12,7 +12,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import db, records, sql
+from canopy.core import db, records
 from canopy.runtime import offerings
 
 if TYPE_CHECKING:
@@ -81,41 +81,34 @@ def record(conn: sqlite3.Connection, table: RunTable, run_id: int, offer: AgentO
     offered = [s for s in offer.servers if s.reach != "none"]
     rules = [(table, run_id, s.server, i, rule) for s in offered for i, rule in enumerate(s.exceptions)]
     with db.transaction(conn):
-        sql.execute(conn, sql.delete("run_offered_servers").where(_RUN, table, run_id))
-        sql.execute(conn, sql.delete("run_offered_server_rules").where(_RUN, table, run_id))
-        sql.execute(conn, sql.delete("run_offered_skills").where(_RUN, table, run_id))
-        sql.execute(conn, sql.delete("run_offered_tools").where(_RUN, table, run_id))
-        sql.execute_many(
+        records.delete(records.RunOfferedServer).where(_RUN, table, run_id).run(conn)
+        records.delete(records.RunOfferedServerRule).where(_RUN, table, run_id).run(conn)
+        records.delete(records.RunOfferedSkill).where(_RUN, table, run_id).run(conn)
+        records.delete(records.RunOfferedTool).where(_RUN, table, run_id).run(conn)
+        records.insert_rows(records.RunOfferedServer, ("run_table", "run_id", "server", "reach")).many(
             conn,
-            sql.insert_rows("run_offered_servers", ("run_table", "run_id", "server", "reach")),
             [(table, run_id, s.server, s.reach) for s in offered],
         )
-        sql.execute_many(
+        records.insert_rows(records.RunOfferedServerRule, ("run_table", "run_id", "server", "position", "rule")).many(
             conn,
-            sql.insert_rows("run_offered_server_rules", ("run_table", "run_id", "server", "position", "rule")),
             rules,
         )
-        sql.execute_many(
+        records.insert_rows(records.RunOfferedTool, ("run_table", "run_id", "tool")).many(
             conn,
-            sql.insert_rows("run_offered_tools", ("run_table", "run_id", "tool")),
             [(table, run_id, tool) for tool in offer.tools],
         )
-        sql.execute_many(
+        records.insert_rows(records.RunOfferedSkill, ("run_table", "run_id", "skill")).many(
             conn,
-            sql.insert_rows("run_offered_skills", ("run_table", "run_id", "skill")),
             [(table, run_id, skill) for skill in offer.skills],
         )
-        sql.execute(
-            conn,
-            sql.insert(
-                "run_offers",
-                run_table=table,
-                run_id=run_id,
-                agent=offer.agent or None,
-                error=offer.error,
-                asked_at=db.now(),
-            ).or_replace(),
-        )
+        records.insert(
+            records.RunOffer,
+            run_table=table,
+            run_id=run_id,
+            agent=offer.agent or None,
+            error=offer.error,
+            asked_at=db.now(),
+        ).or_replace().run(conn)
 
 
 def of_run(conn: sqlite3.Connection, table: RunTable, run_id: int) -> Offered | None:

@@ -198,19 +198,24 @@ If code and the design disagree, the design doc wins until a decision entry says
   migration, and applies every migration to a journal with data in it and fails on any row lost. Two PRs that take the
   same version conflict on the companion: the one merged second renumbers its migration and companion both.
 - Every query on the journal is built with `core/sql.py` (D125), or started by `records.select`, and run through
-  `sql.execute`, `sql.execute_many`, `records.fetch_all`/`fetch_one`, or a query's `all`/`one`: clause text is literal
-  SQL, each value a `?`, a piece built elsewhere a `{}`, and a table or column chosen at run time a `Literal` or
-  `sql.name`, and a value that differs per row of `sql.execute_many` a `sql.ROW`. Never an f-string, `%`, or `+` into
-  SQL.
+  `sql.execute`, `sql.execute_many`, `records.fetch_all`/`fetch_one`, a query's `all`/`one`, or a write's `run`: clause
+  text is literal SQL, each value a `?`, a piece built elsewhere a `{}`, and a table or column chosen at run time a
+  `Literal` or `sql.name`, and a value that differs per row of `sql.execute_many` a `sql.ROW`. Never an f-string, `%`,
+  or `+` into SQL.
 - A query that returns a table's whole rows reads them as that table's row type in `core/records.py`, not as
   `sqlite3.Row`: `records.select(records.Run).where(...).all(conn)`, which names the table and its columns from the row
-  type, or `records.fetch_all`/`fetch_one` for a statement built elsewhere, such as an INSERT's RETURNING. New code
-  reads a query of some columns, or of a join, as a `records.View` defined beside it, not as `sqlite3.Row`; older code
-  converts when a PR is already changing it. Every table has a row type, and a new table gets its row type in the PR
-  that adds it. `tests/canopy/core/test_records.py` holds each row type to its table, so a migration that adds a column
-  to a typed table adds the field too. A status, kind, or phase column is a field of its `core/vocab.py` enum, so the
-  row carries the member and refuses a value the vocabulary does not hold. A helper that reads the same columns from
-  several tables, some still untyped, reads them through `records.columns`.
+  type, or `records.fetch_all`/`fetch_one` for a statement built elsewhere. New code reads a query of some columns, or
+  of a join, as a `records.View` defined beside it, not as `sqlite3.Row`; older code converts when a PR is already
+  changing it. Every table has a row type, and a new table gets its row type in the PR that adds it.
+  `tests/canopy/core/test_records.py` holds each row type to its table, so a migration that adds a column to a typed
+  table adds the field too. A status, kind, or phase column is a field of its `core/vocab.py` enum, so the row carries
+  the member and refuses a value the vocabulary does not hold. A helper that reads the same columns from several tables,
+  some still untyped, reads them through `records.columns`.
+- A write starts from its table's row type too: `records.insert`, `insert_rows`, `insert_from`, `update`, or `delete`,
+  ended by its `run(conn)`, `returned(conn)` for the rows it wrote read back as the row type, or `Insert.many` for many
+  rows. Each column it names must be a field, and each value one the field reads back, a vocabulary's member included,
+  checked as the statement is built. A table chosen at run time is `records.of_table(name)` of a `Literal`. ruff's
+  banned-api rule fails the lint on `sql`'s own write builders anywhere else.
 - A run's and a tick's status, a run's kind, and a ticket's phase are closed vocabularies in `core/vocab.py`, each a
   `StrEnum`. New code writes and compares them through its members, not bare strings, and converts a value read from the
   journal where it branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value

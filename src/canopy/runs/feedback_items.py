@@ -415,17 +415,15 @@ def take(
 
 def record(conn: sqlite3.Connection, plan_id: int, snapshot: Snapshot) -> None:
     """Record `snapshot` as what feedback plan `plan_id` saw. Call inside the transaction that records the plan."""
-    sql.execute_many(
+    records.insert_rows(records.FeedbackPlanPr, ("plan_id", "pr_url", "head_sha", "conflicted", "merged_blocker")).many(
         conn,
-        sql.insert_rows("feedback_plan_prs", ("plan_id", "pr_url", "head_sha", "conflicted", "merged_blocker")),
         [
             (plan_id, pr, head, snapshot.conflicts.get(pr), snapshot.blockers.get(pr))
             for pr, head in snapshot.heads.items()
         ],
     )
-    sql.execute_many(
+    records.insert_rows(records.FeedbackPlanCheck, ("plan_id", "pr_url", "name", "conclusion")).many(
         conn,
-        sql.insert_rows("feedback_plan_checks", ("plan_id", "pr_url", "name", "conclusion")),
         [(plan_id, pr, name, conclusion) for (pr, name), conclusion in snapshot.checks.items()],
     )
     rows = [
@@ -433,14 +431,10 @@ def record(conn: sqlite3.Connection, plan_id: int, snapshot: Snapshot) -> None:
         for item in snapshot.given
         for o, answers in [(item, None), *((r, item.id) for r in item.replies)]
     ]
-    sql.execute_many(
-        conn,
-        sql.insert_rows(
-            "feedback_plan_seen",
-            ("plan_id", "pr_url", "item", "item_id", "thread_id", "author", "body_sha256", "answers"),
-        ),
-        rows,
-    )
+    records.insert_rows(
+        records.FeedbackPlanSeen,
+        ("plan_id", "pr_url", "item", "item_id", "thread_id", "author", "body_sha256", "answers"),
+    ).many(conn, rows)
 
 
 def changes(conn: sqlite3.Connection, trust: Trust, plan: records.FeedbackPlan, ws: Workspace) -> list[Change]:
@@ -550,14 +544,13 @@ def record_values(conn: sqlite3.Connection, ws: Workspace, plan_id: int, prs: Co
             for c in _checks_at(conn, pr, found.head_sha)
             if c.name not in skip.get(pr, frozenset[str]())
         )
-    sql.execute_many(
-        conn,
-        sql.insert_rows("feedback_plan_moves", ("plan_id", "pr_url", "kind", "name", "value", "seen_at")).on_conflict(
-            "(plan_id, pr_url, kind, name) DO UPDATE SET value = excluded.value, seen_at = excluded.seen_at "
-            "WHERE value != excluded.value",
-        ),
-        rows,
-    )
+    records.insert_rows(
+        records.FeedbackPlanMove,
+        ("plan_id", "pr_url", "kind", "name", "value", "seen_at"),
+    ).on_conflict(
+        "(plan_id, pr_url, kind, name) DO UPDATE SET value = excluded.value, seen_at = excluded.seen_at "
+        "WHERE value != excluded.value",
+    ).many(conn, rows)
 
 
 def moved_at(conn: sqlite3.Connection, plan_id: int, found: Iterable[Change], now: datetime) -> datetime | None:

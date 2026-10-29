@@ -29,7 +29,7 @@ def take(conn: sqlite3.Connection, kind: NumberedItem, subject: str, ident: str 
         Its number.
     """
     found = str(ident)
-    sql.execute(conn, sql.insert("item_numbers", kind=kind, subject=subject, id=found, numbered_at=at).or_ignore())
+    records.insert(records.ItemNumber, kind=kind, subject=subject, id=found, numbered_at=at).or_ignore().run(conn)
     row = sql.execute(
         conn,
         sql.select("number").from_("item_numbers").where("subject = ? AND kind = ? AND id = ?", subject, kind, found),

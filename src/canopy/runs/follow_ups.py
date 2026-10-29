@@ -236,7 +236,7 @@ def record_follow_up(conn: sqlite3.Connection, key: str, parent: str, run_id: in
     """
     if known_ticket(conn, key):
         return False
-    sql.execute(conn, sql.insert("follow_ups", key=key, parent_key=parent, run_id=run_id, repo=repo, at=db.now()))
+    records.insert(records.FollowUp, key=key, parent_key=parent, run_id=run_id, repo=repo, at=db.now()).run(conn)
     return True
 
 
@@ -299,7 +299,7 @@ def _note_late(conn: sqlite3.Connection, run_id: int, late: Iterable[str]) -> No
         "keys": [*named, *keys[:room]],
         "others": (others if isinstance(others, int) else 0) + len(keys[room:]),
     }
-    sql.execute(conn, sql.update("runs").set(result_json=json.dumps(result)).where("id = ?", run_id))
+    records.update(records.Run).set(result_json=json.dumps(result)).where("id = ?", run_id).run(conn)
 
 
 def _said(stored: Mapping[str, object]) -> str:

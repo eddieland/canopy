@@ -117,19 +117,16 @@ def edit(
     if (body, reaction) == (current.body, current.reaction):
         return current
     with db.transaction(conn):
-        sql.execute(
-            conn,
-            sql.insert(
-                "draft_versions",
-                draft_id=draft.id,
-                version=current.version + 1,
-                body=body,
-                author=DraftAuthor.OPERATOR,
-                channel=channel,
-                created_at=db.now(),
-                reaction=reaction,
-            ),
-        )
+        records.insert(
+            records.DraftVersion,
+            draft_id=draft.id,
+            version=current.version + 1,
+            body=body,
+            author=DraftAuthor.OPERATOR,
+            channel=channel,
+            created_at=db.now(),
+            reaction=reaction,
+        ).run(conn)
     return drafts.text_of(conn, draft.id)
 
 
@@ -157,7 +154,7 @@ def drop(conn: sqlite3.Connection, run_id: int, numbers: Iterable[int], *, undo:
             else:
                 _check_open(draft)
                 status, why = DraftStatus.DROPPED, "dropped by the operator"
-            sql.execute(conn, sql.update("drafts").set(status=status, why=why).where("id = ?", draft.id))
+            records.update(records.Draft).set(status=status, why=why).where("id = ?", draft.id).run(conn)
     return [d for d in (drafts.get(conn, d.id) for d in found) if d is not None]
 
 
@@ -179,11 +176,11 @@ def settle(conn: sqlite3.Connection, run_id: int, number: int, *, sent: bool) ->
         raise conversation.Refused("not_unconfirmed", f"run {run_id}'s draft {number} is {draft.status}")
     with db.transaction(conn):
         if sent:
-            sql.execute(
-                conn,
-                sql.update("drafts")
+            (
+                records.update(records.Draft)
                 .set(status=DraftStatus.SENT, sent_at=db.now(), why="settled sent by the operator")
-                .where("id = ?", draft.id),
+                .where("id = ?", draft.id)
+                .run(conn)
             )
         else:
             _unclaim(conn, [draft.id], why="settled unsent by the operator")
@@ -435,7 +432,7 @@ def _check_threads(
                     continue
                 newer = _newer_comments(conn, draft)
                 if newer:
-                    sql.execute(conn, sql.update("drafts").set(basis=newer[-1].created_at).where("id = ?", draft.id))
+                    records.update(records.Draft).set(basis=newer[-1].created_at).where("id = ?", draft.id).run(conn)
                     changed.extend(_quoted(draft, c) for c in newer)
     if changed:
         raise conversation.Refused(
@@ -503,12 +500,12 @@ def _claim(conn: sqlite3.Connection, chosen: Iterable[records.Draft], seen: Mapp
             if current != seen[draft.id]:
                 raise conversation.Refused("stale", _changed(draft, current))
             version = text.version
-            claimed = sql.execute(
-                conn,
-                sql.update("drafts")
+            claimed = (
+                records.update(records.Draft)
                 .set(status=DraftStatus.SENDING, send_started_at=now, send_version=version, sent_channel=channel)
                 .where("id = ?", draft.id)
-                .where("status = ?", DraftStatus.WAITING),
+                .where("status = ?", DraftStatus.WAITING)
+                .run(conn)
             ).rowcount
             if not claimed:
                 now_is = drafts.get(conn, draft.id)
@@ -624,7 +621,7 @@ def _reacted(
             # Only a thread's draft holds a reaction.
             reaction = versions[d.id].reaction
             if reaction is not None and lines.get(f"reaction:{d.comment_id}", {}).get("reaction") == reaction:
-                sql.execute(conn, sql.update("drafts").set(reacted=reaction, reacted_at=now).where("id = ?", d.id))
+                records.update(records.Draft).set(reacted=reaction, reacted_at=now).where("id = ?", d.id).run(conn)
 
 
 def _left_pending(conn: sqlite3.Connection, pr: str) -> str | None:
@@ -698,9 +695,8 @@ def _posted(
                     line = issue_comment
                 case _:
                     assert_never(d.kind)
-            sql.execute(
-                conn,
-                sql.update("drafts")
+            (
+                records.update(records.Draft)
                 .set(
                     status=DraftStatus.SENT,
                     sent_at=now,
@@ -711,14 +707,17 @@ def _posted(
                     pending_review_id=None,
                     why=None,
                 )
-                .where("id = ?", d.id),
+                .where("id = ?", d.id)
+                .run(conn)
             )
         pr = group[0].pr_url
         if pr is not None:
             # The pending review an earlier post left was deleted first.
-            sql.execute(
-                conn,
-                sql.update("drafts").set(pending_review=None, pending_review_id=None).where("pr_url = ?", pr),
+            (
+                records.update(records.Draft)
+                .set(pending_review=None, pending_review_id=None)
+                .where("pr_url = ?", pr)
+                .run(conn)
             )
     outcome.posted.extend(d for d in (drafts.get(conn, d.id) for d in group) if d is not None)
 
@@ -751,9 +750,8 @@ def _staged(
             comment: Mapping[str, object] = (
                 lines.get(f"comment:{d.comment_id}", {}) if d.kind is DraftKind.THREAD else {}
             )
-            sql.execute(
-                conn,
-                sql.update("drafts")
+            (
+                records.update(records.Draft)
                 .set(
                     status=DraftStatus.STAGED,
                     why=None,
@@ -762,7 +760,8 @@ def _staged(
                     sent_comment_id=_int(comment.get("id")),
                     sent_url=_str(comment.get("url")),
                 )
-                .where("id = ?", d.id),
+                .where("id = ?", d.id)
+                .run(conn)
             )
     outcome.staged.extend(d for d in (drafts.get(conn, d.id) for d in group) if d is not None)
 
@@ -779,16 +778,16 @@ def _back(
     with db.transaction(conn):
         _unclaim(conn, [d.id for d in group], why=why)
         if left is not None:
-            sql.execute(conn, sql.update("drafts").set(pending_review=left).where_in("id", [d.id for d in group]))
+            records.update(records.Draft).set(pending_review=left).where_in("id", [d.id for d in group]).run(conn)
     outcome.failed.extend((d, why) for d in group)
 
 
 def _unclaim(conn: sqlite3.Connection, ids: Sequence[int], *, why: str) -> None:
-    sql.execute(
-        conn,
-        sql.update("drafts")
+    (
+        records.update(records.Draft)
         .set(status=DraftStatus.WAITING, why=why, send_started_at=None, send_version=None, sent_channel=None)
-        .where_in("id", ids),
+        .where_in("id", ids)
+        .run(conn)
     )
 
 
@@ -802,16 +801,16 @@ def _unconfirmed(
     node = _str(pending.get("review")) if pending is not None else None
     review_id = _int(pending.get("id")) if pending is not None else None
     with db.transaction(conn):
-        sql.execute(
-            conn,
-            sql.update("drafts")
+        (
+            records.update(records.Draft)
             .set(
                 status=DraftStatus.UNCONFIRMED,
                 why="the post ended without saying whether it submitted",
                 pending_review=node,
                 pending_review_id=review_id,
             )
-            .where_in("id", [d.id for d in group]),
+            .where_in("id", [d.id for d in group])
+            .run(conn)
         )
     outcome.unconfirmed.extend(d for d in (drafts.get(conn, d.id) for d in group) if d is not None)
 
@@ -859,11 +858,11 @@ def _settle_staged(conn: sqlite3.Connection, draft: records.Draft) -> bool:
         return False
     if review is None:
         _unclaim(conn, [draft.id], why="the review you staged was deleted on GitHub")
-        sql.execute(
-            conn,
-            sql.update("drafts")
+        (
+            records.update(records.Draft)
             .set(pending_review=None, pending_review_id=None, sent_comment_id=None, sent_url=None)
-            .where("id = ?", draft.id),
+            .where("id = ?", draft.id)
+            .run(conn)
         )
         return True
     comment = None
@@ -874,9 +873,8 @@ def _settle_staged(conn: sqlite3.Connection, draft: records.Draft) -> bool:
             _comments_of(draft.pr_url, review.id).where("id = ?", draft.sent_comment_id),
         )
         if comment is None:
-            sql.execute(
-                conn,
-                sql.update("drafts")
+            (
+                records.update(records.Draft)
                 .set(
                     status=DraftStatus.DROPPED,
                     why="taken out of the review you staged before you submitted it",
@@ -885,12 +883,12 @@ def _settle_staged(conn: sqlite3.Connection, draft: records.Draft) -> bool:
                     sent_comment_id=None,
                     sent_url=None,
                 )
-                .where("id = ?", draft.id),
+                .where("id = ?", draft.id)
+                .run(conn)
             )
             return True
-    sql.execute(
-        conn,
-        sql.update("drafts")
+    (
+        records.update(records.Draft)
         .set(
             status=DraftStatus.SENT,
             sent_at=db.now(),
@@ -900,7 +898,8 @@ def _settle_staged(conn: sqlite3.Connection, draft: records.Draft) -> bool:
             pending_review_id=None,
             why="submitted by the operator on GitHub",
         )
-        .where("id = ?", draft.id),
+        .where("id = ?", draft.id)
+        .run(conn)
     )
     return True
 
@@ -910,9 +909,11 @@ def _settle_one(conn: sqlite3.Connection, draft: records.Draft) -> None:
     if review is None or review.state is ReviewState.PENDING:
         pending = draft.pending_review if review is not None else None
         _unclaim(conn, [draft.id], why="the read found nothing posted")
-        sql.execute(
-            conn,
-            sql.update("drafts").set(pending_review=pending, pending_review_id=None).where("id = ?", draft.id),
+        (
+            records.update(records.Draft)
+            .set(pending_review=pending, pending_review_id=None)
+            .where("id = ?", draft.id)
+            .run(conn)
         )
         return
     comment = None
@@ -922,9 +923,8 @@ def _settle_one(conn: sqlite3.Connection, draft: records.Draft) -> None:
             records.ObservedReview,
             _comments_of(draft.pr_url, review.id).where("thread_id = ?", draft.thread_id),
         )
-    sql.execute(
-        conn,
-        sql.update("drafts")
+    (
+        records.update(records.Draft)
         .set(
             status=DraftStatus.SENT,
             sent_at=db.now(),
@@ -935,7 +935,8 @@ def _settle_one(conn: sqlite3.Connection, draft: records.Draft) -> None:
             pending_review_id=None,
             why="settled sent by a read",
         )
-        .where("id = ?", draft.id),
+        .where("id = ?", draft.id)
+        .run(conn)
     )
 
 

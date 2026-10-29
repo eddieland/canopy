@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
-from canopy.core import contract, records, review_runs, sql
+from canopy.core import contract, records, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import FindingAnswer, ReviewRunStatus
 
@@ -124,9 +124,8 @@ def record(conn: sqlite3.Connection, run_id: int, checked: Checked | None) -> No
     """Record the answers run `run_id` gave, in the transaction that closes it."""
     if checked is None or not checked.answers:
         return
-    sql.execute_many(
+    records.insert_rows(records.ReviewAnswer, ["run_id", "review_run_id", "finding", "answer", "reason"]).many(
         conn,
-        sql.insert_rows("review_answers", ["run_id", "review_run_id", "finding", "answer", "reason"]),
         [(run_id, a.review_run_id, a.finding, a.answer, a.reason) for a in checked.answers],
     )
 

@@ -16,13 +16,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, outbox, spend, sql
+from canopy.core import contract, db, outbox, records, spend, sql
 from canopy.core.config import Sink, notify_words
 from canopy.infra import procs
 from canopy.notify import journal, message
 
 if TYPE_CHECKING:
-    from canopy.core import records
     from canopy.core.context import Context
     from canopy.core.items import Item
     from canopy.infra import logs
@@ -269,9 +268,11 @@ def _deliver(
     )
     if msg.is_empty():
         # Nothing to say; the cursor still moves past events of groups this sink does not take.
-        sql.execute(
-            ctx.conn,
-            sql.update("notify_sinks").set_to("cursor = max(cursor, ?)", cursor).where("name = ?", name),
+        (
+            records.update(records.NotifySink)
+            .set_to("cursor = max(cursor, ?)", cursor)
+            .where("name = ?", name)
+            .run(ctx.conn)
         )
         return Delivery(name, "nothing")
     fields = {
