@@ -318,11 +318,10 @@ operator's own config directory, where 1 reads both, so its snapshot links to ea
 theirs: their MCP servers, providers, and rules reach every run, as they would their own sessions. Among them:
 
 - `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
-- `canopy-overseer` gets the tracker's MCP server and only its read tools, and the overseer's prompt, or the
-  operator's override (§12), as its body, then the shipped `tracker-<provider>` skill if any, and then no skill tool,
-  having nothing left to load. The body is the system prompt the provider caches across ticks; a tick's message is its
-  state block alone (§6). An override canopy cannot read fails the tick and every run started from it, rather than
-  running without the prompt.
+- `canopy-overseer` gets the overseer's prompt, or the operator's override (§12), as its body, and nothing of the
+  tracker's, no server and no skill, its skill tool denied, since it reads no tracker (above). The body is the system
+  prompt the provider caches across ticks; a tick's message is its state block alone (§6). An override canopy cannot
+  read fails the tick and every run started from it, rather than running without the prompt.
 - Every definition gets the artifact store's MCP server denied whole, and an agent `artifacts.publish_roles` names its
   tools by exact name and its skill (§38).
 
