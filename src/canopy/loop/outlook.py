@@ -7,7 +7,8 @@ that reads again what the latest tick saw, or an edit to an item it saw, finds n
 ticket marked done or a comment a cursor passed, is no news: it leaves nothing to judge.
 
 The latest tick is read the same way, as it ends (`loop.repeat`), so what that tick itself did, such as a dispatch
-whose worker the harness then waits on, is no news to the polls after it.
+whose worker the harness then waits on, is no news to the polls after it. Feedback that waited out its time on pending
+checks is news too, though the row it ends, `ci_running`, drops out (DESIGN §7).
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from canopy.core import chore_view, conversation, db
-from canopy.core.vocab import SourceKind
+from canopy.core.vocab import Phase, SourceKind
 from canopy.loop import harness, harness_dispatches, observations, phases
 
 if TYPE_CHECKING:
@@ -82,5 +83,16 @@ def _listed(ticket: observations.TicketObservation) -> Iterator[Fact]:
     yield from (("comment", key, c["id"]) for c in ticket.get("comments", []))
     for unit in ticket.get("units", []):
         repo = unit["repo"]
-        yield from (("row", key, repo, phase) for phase in unit.get("derived", []))
+        rows = unit.get("derived", [])
+        yield from (("row", key, repo, phase) for phase in rows)
+        # Feedback that waited out `policy.feedback_ci_wait_minutes` on pending checks drops the unit's `ci_running`,
+        # which adds no row, so its end is a fact of its own: the overseer is left it with the checks still pending.
+        checks = unit.get("checks")
+        if (
+            checks is not None
+            and checks["pending"]
+            and Phase.CI_RUNNING not in rows
+            and {Phase.CHANGES_REQUESTED, Phase.REVIEW_FINDINGS} & set(rows)
+        ):
+            yield ("ci_wait_over", key, repo)
         yield from (("review", key, repo, r["item"], str(r["id"])) for r in unit.get("reviews", []))

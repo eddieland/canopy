@@ -342,6 +342,8 @@ item the harness raises, as `wait (needs_reviewer)` does, record `wait`.
   comment is the reference point for `needs_human` and `human_replied`.
 - Dispatch a `resume` only for a phase whose action is one (`changes_requested` and `review_findings` once classified
   for a worker), its `context` naming what that phase found: a `ci_running` unit has nothing new to address.
+- A unit with `changes_requested` or `review_findings` and checks still in `checks.pending`, but no `ci_running` row, is
+  feedback that waited `policy.feedback_ci_wait_minutes` on them: do not wait for them; address it now, as its row says.
 - A `ci_red` failure not newer than the `ci` cursor was already handed to a worker. If that run ended `done` with
   `flaky` true and `kicked` naming the unit's repository, canopy pushed its branch again to rerun its checks: `wait` for
   the new head's. With `flaky` true, the unit not in `kicked`, and the same check run still failing, the worker judged

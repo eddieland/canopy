@@ -527,6 +527,39 @@ def test_an_untrusted_review_waits_on_an_operator_reply_and_no_verbs_instruction
     assert not any(phases.Phase.UNTRUSTED_REVIEW in d.phases for d in derived(canopy_env))
 
 
+@pytest.mark.parametrize(
+    ("reviewer", "first_seen", "wait", "rows"),
+    [
+        ("octocat", FRESH, 30, (Phase.CI_RUNNING, Phase.CHANGES_REQUESTED)),
+        ("octocat", OLD, 30, (Phase.CHANGES_REQUESTED,)),
+        ("octocat", FRESH, 0, (Phase.CHANGES_REQUESTED,)),
+        ("stranger", OLD, 30, (Phase.CI_RUNNING, Phase.UNTRUSTED_REVIEW)),
+    ],
+    ids=["waits", "waited-out", "never-waits", "untrusted-waits"],
+)
+def test_trusted_feedback_waits_on_pending_checks_only_so_long(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    reviewer: str,
+    first_seen: str,
+    wait: int,
+    rows: tuple[Phase, ...],
+) -> None:
+    """A queue of builds holds a trusted reviewer's feedback `policy.feedback_ci_wait_minutes` from when it was seen."""
+    canopy_env.configure(
+        canopy_env.user_file,
+        {"trust": {"trusted_reviewers": ["octocat"]}, "policy": {"feedback_ci_wait_minutes": wait}},
+    )
+    unit(canopy_env, observed)
+    observe_pr(observed)
+    check(observed, status="queued", conclusion=None)
+    number = review(observed, reviewer, "changes_requested", body="Rename it.")
+    observed.execute("UPDATE item_numbers SET numbered_at = ? WHERE number = ?", (first_seen, number))
+    observed.commit()
+    [unit_row] = [d for d in derived(canopy_env) if d.repo == "repo"]
+    assert unit_row.phases == rows
+
+
 def recorded(conn: sqlite3.Connection, tick_id: int, *derived: phases.Derived) -> None:
     """Record `derived` as tick `tick_id`'s derivation."""
     phases.record(conn, tick_id, derived)
