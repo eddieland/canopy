@@ -9,6 +9,7 @@ members = [
     "canopy-github",
     "canopy-http",
     "canopy-jira",
+    "canopy-mcp",
     "canopy-notify-slack",
     "canopy-review-bench",
     "canopy-sandbox",
@@ -68,6 +69,7 @@ dependencies = [
     { name = "canopy-artifacts" },
     { name = "canopy-github" },
     { name = "canopy-jira" },
+    { name = "canopy-mcp" },
     { name = "canopy-notify-slack" },
     { name = "canopy-sandbox" },
     { name = "click" },
@@ -106,6 +108,7 @@ requires-dist = [
     { name = "canopy-artifacts", editable = "packages/canopy-artifacts" },
     { name = "canopy-github", editable = "packages/canopy-github" },
     { name = "canopy-jira", editable = "packages/canopy-jira" },
+    { name = "canopy-mcp", editable = "packages/canopy-mcp" },
     { name = "canopy-notify-slack", editable = "packages/canopy-notify-slack" },
     { name = "canopy-sandbox", editable = "packages/canopy-sandbox" },
     { name = "click", specifier = ">=8.5.0" },
@@ -142,12 +145,14 @@ dev = [
 name = "canopy-artifacts"
 source = { editable = "packages/canopy-artifacts" }
 dependencies = [
+    { name = "canopy-mcp" },
     { name = "click" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "canopy-mcp", editable = "packages/canopy-mcp" },
     { name = "click", specifier = ">=8.5.0" },
     { name = "pydantic", specifier = ">=2.14.1" },
 ]
@@ -189,6 +194,16 @@ requires-dist = [
     { name = "canopy-http", editable = "packages/canopy-http" },
     { name = "click", specifier = ">=8.5.0" },
 ]
+
+[[package]]
+name = "canopy-mcp"
+source = { editable = "packages/canopy-mcp" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.14.1" }]
 
 [[package]]
 name = "canopy-notify-slack"

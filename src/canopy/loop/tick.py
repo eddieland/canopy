@@ -15,6 +15,8 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 
+import canopy_mcp
+
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
     agent_models,
@@ -790,7 +792,7 @@ def _check_server(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | No
         "id": 0,
         "method": "initialize",
         "params": {
-            "protocolVersion": mcp.PROTOCOL_VERSIONS[0],
+            "protocolVersion": canopy_mcp.PROTOCOL_VERSIONS[0],
             "capabilities": {},
             "clientInfo": {"name": "canopy-tick", "version": db.CANOPY_VERSION},
         },
