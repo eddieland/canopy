@@ -934,7 +934,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   kinds the window has rows of. A window switch keeps both filters. By model's ids link the runs page's runs on the
   model (`?model=`), with the kind shown (`?kind=`, `RUNS_KIND`: a plan run is a worker run there); one the runs page
   lists no run of by model, the overseer's alone, is plain, why on hover. The runs page's model filter is always
-  offered: `all`, then each model its listed runs of every kind name.
+  offered, a picker of one (`ModelFilter`, below).
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
@@ -1476,7 +1476,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   chosen, picking one keeps the list open, `every repository` heads it and clears them, and what was chosen as it
   opened is listed first, so nothing moves under the pointer. It is kept in `?repo=` as names joined by commas
   (`src/lib/repo-filter.ts`), replacing the history entry as a filter field does, and a row shows when it is in any of
-  them. In a form (`RepoSelect`) it takes one, and picking it closes the list.
+  them. In a form (`RepoSelect`) it takes one, and picking it closes the list. The runs page's filter by model
+  (`ModelFilter`, `?model=`) is the same picker of one, `every model` heading it, each id whole, as a gateway can list
+  dozens; the button, list, and item are `src/components/picker.tsx`, which both build on.
 - **A config page** (`ConfigForm`, `/settings/limits`, which Settings links to from a one-line panel so Settings stays
   short): the keys in panels by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), two to a row on a
   wide window and Trust across the whole row, a key no panel names in an `Other` panel. A row is the key in words over

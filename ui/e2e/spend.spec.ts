@@ -303,11 +303,13 @@ test("a model's row opens the runs page on the runs of its kind it served", asyn
     // Run 39, which switched from opus to sonnet partway, and the seven opus served in the spring (history.py).
     await expect(page.getByTestId('runs-count')).toHaveText('8')
     await expect(page.getByTestId('run-39')).toBeVisible()
-    // The model filter stays, offering every model the runs listed name, with `all` to take it off.
-    const byModel = page.getByRole('navigation', { name: 'Filter by model' })
-    await byModel.getByRole('link', { name: 'all' }).click()
+    // The model's picker, as the repository's, offers every model the runs listed name, and takes it off.
+    await page.getByRole('button', { name: 'Filter by model: anthropic/claude-opus-4-1' }).click()
+    const models = page.getByRole('listbox', { name: 'Models' })
+    await expect(models.getByRole('option', { name: 'openai/gpt-5' })).toBeVisible()
+    await models.getByRole('option', { name: 'every model' }).click()
     await expect(page).toHaveURL(/\/runs\?kind=worker$/u)
-    await expect(byModel.getByRole('link', { name: 'claude-opus-4-1' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Filter by model: every model' })).toBeVisible()
 })
 
 test("under every kind, a model's row opens its runs of every kind, a review's among them", async ({ page }) => {
