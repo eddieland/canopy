@@ -2494,6 +2494,22 @@ export type components = {
             workers: number;
         };
         /**
+         * CardStep
+         * @description A finished step on a running agent's card, with what shows it is done.
+         */
+        CardStep: {
+            /**
+             * Proof
+             * @description What shows it: `tests pass: 42/42`, `pushed abc123`, `not pushed`.
+             */
+            proof: string;
+            /**
+             * Step
+             * @description What was done.
+             */
+            step: string;
+        };
+        /**
          * ChoreDetail
          * @description One chore: what `canopy show chore:NAME` prints.
          */
@@ -6135,6 +6151,8 @@ export type components = {
              * @description The branch the PR merges into.
              */
             base_branch: string | null;
+            /** @description Its reviewer's card (DESIGN §41), while it runs and its last once it ends; None when it kept none. */
+            card: components["schemas"]["RunCard"] | null;
             /**
              * @description None when there is no diff: a review from before diffs were kept, one whose base could not be read, or one
              *     retention removed.
@@ -7012,6 +7030,8 @@ export type components = {
              * @description The branch it works on.
              */
             branch: string | null;
+            /** @description Its agent's card (DESIGN §41), while it runs and its last once it ends; None when it kept none. */
+            card: components["schemas"]["RunCard"] | null;
             /**
              * Cost Usd
              * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
@@ -7162,6 +7182,63 @@ export type components = {
              * @description The tool's name, as the runtime names it: `bash`, `read`, an MCP server's tool.
              */
             tool: string;
+        };
+        /**
+         * RunCard
+         * @description Where a worker's, planner's, or reviewer's work stands, in its own words: its latest card (DESIGN §41).
+         *
+         *     Each field is the agent's text, on one line: untrusted, rendered as text.
+         */
+        RunCard: {
+            /**
+             * At
+             * Format: date-time
+             * @description When canopy recorded it.
+             */
+            at: string;
+            /**
+             * Calls Since
+             * @description The tool calls the agent ended since: before the run ended, once it has.
+             */
+            calls_since: number;
+            /**
+             * Done
+             * @description The steps it finished, in order, each with its proof.
+             * @default []
+             */
+            done: components["schemas"]["CardStep"][];
+            /**
+             * Next
+             * @description What it said was left, in order.
+             * @default []
+             */
+            next: string[];
+            /**
+             * Now
+             * @description What the agent was doing when it wrote the card.
+             */
+            now: string;
+            /**
+             * Stale
+             * @description Whether the run has gone 20 tool calls without an update to it while it runs; false once it ended.
+             */
+            stale: boolean;
+            /**
+             * Stale At
+             * @description While the run runs, when the card goes stale for want of an update by time, 10 minutes after `at`; None once
+             *     it ended. A page marks it stale from then, or when `stale` says so.
+             */
+            stale_at: string | null;
+            /**
+             * Stuck
+             * @description What it said is in its way and it works around; None when it said nothing.
+             */
+            stuck: string | null;
+            /**
+             * Summary
+             * @description Where the work stands, in a sentence or two.
+             */
+            summary: string;
         };
         /**
          * RunMemory
