@@ -51,9 +51,11 @@ the story says what the next command reads:
         assert action == "refused:attempt_limit"
 
 A run can be left at work while the story goes on around it: `starts`, or a tick with `hold=True`, holds each worker
-it starts before it does anything and gives the run back as `Working`. The test then says what becomes of it: it
-`finishes`, doing what its script says, or its `canopy _run` `dies`, as a crash or a shutdown would leave it, its worker
-still at work, for the next tick to find. A run still held when the test ends is stopped:
+it starts once it has made its tool calls, before its commands, and gives the run back as `Working`. canopy records
+each call a moment after the worker prints it, so a test that reads what they recorded, such as the run's card, first
+waits until it `has_called` them all. The test then says what becomes of the run: it `finishes`, doing what its script
+says, or its `canopy _run` `dies`, as a crash or a shutdown would leave it, its worker still at work, for the next tick
+to find. A run still held when the test ends is stopped:
 
     def test_a_run_whose_process_died_is_crashed_on_the_next_tick(scenario: Scenario, git_pool: GitPool) -> None:
         working = scenario.starts(worker=pushes())
@@ -142,7 +144,7 @@ from contextlib import AbstractContextManager, ExitStack, contextmanager, redire
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, Unpack, assert_never
+from typing import Any, Literal, Self, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
@@ -345,6 +347,15 @@ class Working:
         """The run's row as it stands."""
         return present(db.get_run(self.scenario.conn, self.id))
 
+    def has_called(self, calls: int) -> Self:
+        """Wait until canopy has recorded `calls` of the worker's tool calls, as `canopy _run` reads its events.
+
+        Returns:
+            The run, still at work.
+        """
+        _recorded(calls, lambda: int(self.row["tool_calls"]), str(self))
+        return self
+
     def finishes(self) -> Ran:
         """Let the worker go on to what its script says, and wait for the run to end.
 
@@ -418,6 +429,15 @@ class Reviewing:
     def row(self) -> records.ReviewRun:
         """The review run's row as it stands."""
         return present(review_runs.get_review_run(self.scenario.conn, self.id))
+
+    def has_called(self, calls: int) -> Self:
+        """Wait until canopy has recorded `calls` of the reviewer's tool calls, as `canopy _review` reads its events.
+
+        Returns:
+            The review run, still at work.
+        """
+        _recorded(calls, lambda: self.row.tool_calls, str(self))
+        return self
 
     def finishes(self) -> Reviewed:
         """Let the reviewer go on to what its script says, and wait for the review run to end.
@@ -1364,6 +1384,14 @@ def _killed(pid: int, what: str) -> None:
     deadline = time.monotonic() + HOLD_TIMEOUT
     while procs.alive(pid):
         assert time.monotonic() < deadline, f"{what} outlived its kill"
+        time.sleep(0.02)
+
+
+def _recorded(calls: int, counted: Callable[[], int], what: str) -> None:
+    # The agent prints each call's event before its gate, but its run's process records it on its own time.
+    deadline = time.monotonic() + HOLD_TIMEOUT
+    while (made := counted()) < calls:
+        assert time.monotonic() < deadline, f"{what}: {made} of {calls} tool calls recorded after {HOLD_TIMEOUT}s"
         time.sleep(0.02)
 
 
