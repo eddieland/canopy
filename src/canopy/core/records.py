@@ -328,6 +328,8 @@ class ReviewRun(Row):
     card_calls: int | None
     #: The tool calls its reviewer has ended so far.
     tool_calls: int
+    #: When each step its card names as working was first seen so, as JSON by title (DESIGN §41); None with none.
+    card_working_since: str | None
 
 
 @dataclass(frozen=True)
@@ -1537,6 +1539,8 @@ class Run(Row):
     card_calls: int | None
     #: The tool calls its agent has ended so far.
     tool_calls: int
+    #: When each step its card names as working was first seen so, as JSON by title (DESIGN §41); None with none.
+    card_working_since: str | None
 
 
 @dataclass(frozen=True)

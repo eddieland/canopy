@@ -25,6 +25,14 @@ print, as with its spend: a call the server refused, or one that does not valida
 the runtime's events keeps no card. The run counts the tool calls its agent ends, so a card is as old as the time and
 the calls since it, and the run keeps its last card once it ends.
 
+### Steps
+
+A long job's card may carry its steps, each with a title, a status (`not_started`, `working`, `blocked`, `done`,
+`skipped`), and an optional stage; canopy shows how much is done, its `done` steps' share of those not skipped, and the
+working step's stage. A worker whose ticket has an approved plan (§25) is told to take its steps from the plan, so the
+operator follows the plan they approved being done; a planner's and a reviewer's are their own. The harness keeps when
+each step was first seen working, on the card before, and one working longer than the run's last fifth is shown stuck.
+
 ### Staleness
 
 canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, or review's run,

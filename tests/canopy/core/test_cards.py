@@ -1,6 +1,7 @@
 """A running agent's card: what a `status` call says, and how a run's row keeps it (DESIGN §41)."""
 
 import sqlite3
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,8 @@ CARD: dict[str, object] = {
     "done": [{"step": "fix the parser", "proof": "tests pass: 42/42"}],
     "next": ["open the PR", "answer the review"],
 }
+#: A time long before the test runs.
+OLD = "2026-01-01T00:00:00.000Z"
 
 
 def status(card: object, *, completed: bool = True, tool: str = "canopy_run_status") -> Called:
@@ -78,3 +81,54 @@ def test_a_card_the_journal_holds_that_no_longer_reads_as_one_is_none(conn: sqli
     cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
     conn.execute('UPDATE runs SET card_json = \'{"summary": "s"}\' WHERE id = ?', (running,))
     assert cards.of(present(db.get_run(conn, running))) == cards.Standing(None, None, 1)
+
+
+def steps(*statuses: str) -> list[dict[str, object]]:
+    """A card's steps, one per status, each titled by its place and staged by the half it is in."""
+    return [
+        {"title": f"step {n}", "status": status, "stage": "first" if n <= len(statuses) // 2 else "second"}
+        for n, status in enumerate(statuses, 1)
+    ]
+
+
+def test_a_cards_steps_say_how_much_is_done_and_the_working_ones_stage() -> None:
+    card = cards.Card.model_validate({**CARD, "steps": steps("done", "skipped", "working", "not_started", "blocked")})
+    assert (cards.percent(card), cards.working_stage(card)) == (25, "second")  # 1 of the 4 not skipped
+    assert cards.percent(cards.Card.model_validate(CARD)) is None
+    assert cards.percent(cards.Card.model_validate({**CARD, "steps": steps("skipped")})) is None
+    with pytest.raises(ValidationError):
+        cards.Card.model_validate({**CARD, "steps": [{"title": "t", "status": "started"}]})
+    with pytest.raises(ValidationError):
+        cards.Card.model_validate({**CARD, "steps": steps(*["done"] * (cards.MAX_PLAN_STEPS + 1))})
+
+
+def test_a_working_step_keeps_when_it_started_working_and_is_stuck_past_the_runs_last_fifth(
+    conn: sqlite3.Connection,
+    running: int,
+) -> None:
+    def card(*statuses: str) -> cards.Card:
+        return cards.Card.model_validate({**CARD, "steps": steps(*statuses)})
+
+    cards.record_call(conn, "runs", running, card("working", "not_started"))
+    first = cards.of(present(db.get_run(conn, running)))
+    started = first.working_since["step 1"]
+    # Still working on the next card, it keeps its start; the step that starts working now starts now.
+    conn.execute("UPDATE runs SET card_working_since = json_set(card_working_since, '$.\"step 1\"', ?)", (OLD,))
+    cards.record_call(conn, "runs", running, card("working", "working"))
+    later = cards.of(present(db.get_run(conn, running)))
+    assert later.working_since["step 1"] == db.parse_time(OLD)
+    assert later.working_since["step 2"] >= started
+    # Past the last fifth of a 45-minute run, 9 minutes, it is shown stuck; the other is not yet.
+    shown = cards.lines(later, started_at=OLD, running=True, timeout_minutes=45)
+    assert shown[-3:] == [
+        "    steps:  0% done, stage first",
+        "      [>] step 1 (first)  stuck",
+        "      [>] step 2 (second)",
+    ]
+    assert cards.stuck_at(later, "step 1", 45) == db.parse_time(OLD) + timedelta(minutes=9)
+    assert cards.stuck_at(later, "step 9", 45) is None
+    # A step done, then working again, starts again; a card with none working keeps no times.
+    cards.record_call(conn, "runs", running, card("done", "working"))
+    assert "step 1" not in cards.of(present(db.get_run(conn, running))).working_since
+    cards.record_call(conn, "runs", running, card("done", "done"))
+    assert present(db.get_run(conn, running))["card_working_since"] is None
