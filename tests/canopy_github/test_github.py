@@ -65,6 +65,7 @@ class Review:
     body: str = ""
     at: str | None = "2026-10-18T10:00:00Z"
     commit: str | None = None
+    bot: bool = False
 
 
 @dataclass
@@ -79,6 +80,8 @@ class Pull:
     state: str = "OPEN"
     merge_state: str = "CLEAN"
     title: str = "Retry the upstream on a 503"
+    author: str = "me"
+    bot: bool = False
 
 
 def run(name: str, status: str = "COMPLETED", conclusion: str | None = "SUCCESS", id_: int = 1) -> dict[str, Any]:
@@ -308,7 +311,7 @@ class Fake:
             "baseRefName": "main",
             "mergeable": "MERGEABLE",
             "mergeStateStatus": pull.merge_state,
-            "author": {"login": "me"},
+            "author": {"__typename": "Bot" if pull.bot else "User", "login": pull.author},
             # A page of labels holds 100, as the reader asks, so a PR with more has another page.
             "labels": {"nodes": labels[:100], "pageInfo": {"hasNextPage": len(labels) > 100, "endCursor": "100"}},
             "reviews": page(self.review_nodes(pull), None),
@@ -326,7 +329,7 @@ class Fake:
                 "createdAt": "2026-10-18T09:00:00Z",
                 "body": r.body,
                 "url": f"{PR}#pullrequestreview-{r.id}",
-                "author": {"__typename": "User", "login": r.author},
+                "author": {"__typename": "Bot" if r.bot else "User", "login": r.author},
             }
             for r in pull.reviews
         ]
@@ -573,6 +576,31 @@ def test_the_reader_reads_every_page(github: tuple[Fake, str]) -> None:
     assert ids == [101, 102, 103, 501, 502, 503, 601, 602, 603]
     assert [line["name"] for line in lines if line["kind"] == "check"] == [f"job-{n}" for n in range(1, 6)]
     assert {"Reviews", "Threads", "ThreadComments", "Contexts"} <= set(fake.ops())
+
+
+def test_a_bots_login_ends_bot_as_githubs_rest_api_names_it(github: tuple[Fake, str]) -> None:
+    """A bot's review, review comment, and PR name it as `trust.trusted_reviewers` does, which GraphQL leaves off."""
+    fake, url = github
+    pull = fake.pulls["acme", "api", 7]
+    pull.author, pull.bot = "renovate", True
+    pull.reviews.append(Review(node="PRR_102", id=102, author="coderabbitai", state="COMMENTED", body="x", bot=True))
+    pull.threads[0].comments += [
+        Comment(id=504, body="Nit.", author="coderabbitai", bot=True),
+        # A login that already ends `[bot]` keeps one.
+        Comment(id=505, body="Nit.", author="coderabbitai[bot]", bot=True),
+    ]
+    _, lines, _ = read(url, {"prs": [PR]})
+    authors = {line.get("id"): line["author"] for line in lines if line["kind"] in {"pr", "review"}}
+    assert authors == {
+        None: "renovate[bot]",
+        101: "alice",
+        102: "coderabbitai[bot]",
+        501: "alice",
+        502: "alice",
+        503: "me",
+        504: "coderabbitai[bot]",
+        505: "coderabbitai[bot]",
+    }
 
 
 def test_a_prs_line_carries_its_labels_and_mergeable_state(github: tuple[Fake, str]) -> None:

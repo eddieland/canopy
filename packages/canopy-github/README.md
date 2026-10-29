@@ -43,7 +43,8 @@ Reads, and writes nothing to GitHub. On stdin, one JSON object naming what to ob
 On stdout, one JSON line per observation, in the shapes [DESIGN §30](../../docs/design/CONNECTORS.md) gives: for each
 PR, a `pr` line, a `check` line per check at its head, and a `review` line per review and review comment; for each
 repository, a `branch` line per branch under the prefix; last, an `end` line naming what was read whole. What could not
-be read whole prints only its error on stderr, so a cut-off read never looks like a PR with no checks.
+be read whole prints only its error on stderr, so a cut-off read never looks like a PR with no checks. A PR's or a
+review's author is its login, a bot's ending `[bot]` as in `trust.trusted_reviewers`.
 
 Exit codes: 0 everything was read; 1 something was not, as the `end` line says; 2 stdin or the command line is not
 usable, and nothing was read.
