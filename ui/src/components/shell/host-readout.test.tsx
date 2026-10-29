@@ -57,7 +57,7 @@ describe('HostReadout', () => {
         })
         const card = await waitFor(() => screen.getByTestId('host-card'))
         expect(card.textContent).toContain('build-box')
-        expect(card.textContent).toContain('2.41 1.87 1.52 on 12 cores')
+        expect(card.textContent).toContain('16% of 12 cores over 5 minutes, steady')
         expect(card.textContent).toContain('412 GiB free of 931 GiB, the workspace and the journal')
         expect(card.textContent).toContain('27 GiB free of 32 GiB, the temporary directory')
     })

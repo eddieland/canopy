@@ -18,7 +18,7 @@ test('the header says the host is ok, shows the machine on hover, and opens the 
     await readout.hover()
     const card = page.getByTestId('host-card')
     await expect(card).toContainText('build-box')
-    await expect(card).toContainText('2.41 1.87 1.52 on 12 cores')
+    await expect(card).toContainText('16% of 12 cores over 5 minutes, steady')
     await expect(card).toContainText('412 GiB free of 931 GiB, the workspace and the journal')
 
     await readout.click()
@@ -32,7 +32,7 @@ test('the page shows each disk canopy writes to, and the floor a tick needs on t
     await page.goto('system')
     await settled(page)
     await expect(page.getByTestId('host-concerns')).toHaveCount(0)
-    await expect(page.getByTestId('counter-load')).toContainText('1.87')
+    await expect(page.getByTestId('counter-load')).toContainText('16%')
     await expect(page.getByTestId('counter-disk')).toContainText('where the workspace and the journal are')
     const disks = page.getByTestId('disk-row')
     await expect(disks).toHaveCount(2)
@@ -49,7 +49,7 @@ test("the graphs draw the server's last hour of readings, and say the one under 
     // The load, the memory, the loop's own, and each of the mock's two disks.
     await expect(graphs).toHaveCount(5)
     const load = graphs.first()
-    await expect(load.getByTestId('trend-value')).toHaveText(/^2\.41 now · peak /u)
+    await expect(load.getByTestId('trend-value')).toHaveText(/^20% now · peak \d+%$/u)
     await expect(load).toContainText('60 min ago')
 
     const plot = load.getByTestId('trend-plot')
