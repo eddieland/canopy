@@ -159,8 +159,10 @@ def to_minute(moment: datetime | str | None) -> str | None:
     """A time as the overseer's state block gives it: UTC, to the minute, which is all a decision there reads.
 
     The journal keeps its milliseconds; the block, read again at every step of a tick, carries several times per
-    ticket, and the overseer passes none back. A string that is no ISO 8601 time, as a pool's lease time may be, is
-    given as it is.
+    ticket, and the overseer passes none back. The times it orders against each other keep the journal's precision,
+    since code checks the same order exactly: a run's end, the messages and comments weighed against it, the
+    needs-human label and its replies, notices, and a CI cooldown with `now`. A string that is no ISO 8601 time, as a
+    pool's lease time may be, is given as it is.
 
     Returns:
         `moment` in UTC as `YYYY-MM-DDTHH:MMZ`, or None for None.

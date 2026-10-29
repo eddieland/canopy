@@ -485,7 +485,7 @@ class Reader:
             "observed_at": db.to_minute(seen.observed_at),
             "title": seen.title,
             "state": seen.state,
-            "labels": [{"name": str(x["name"]), "added_at": db.to_minute(x.get("added_at"))} for x in labels],
+            "labels": [{"name": str(x["name"]), "added_at": x.get("added_at")} for x in labels],
             "blockers": [{"key": b, "state": self.observed[b].state} for b in phases.blockers_of(seen)],
         }
         # The repository and the slug are chosen from the body; once the ticket has a unit, its work says the rest.
@@ -537,7 +537,8 @@ class Reader:
             "number": c.number,
             "id": c.id,
             "author": c.author,
-            "at": db.to_minute(c.commented_at),
+            # Exact: the overseer orders it against a failed run's end and the needs-human label (`db.to_minute`).
+            "at": c.commented_at,
             "authorized": c.author in self.ctx.config.trust.authorized_repliers,
             "worker": c.source == "worker",
             "body": c.body,
@@ -617,7 +618,8 @@ class Reader:
             "author": r.author,
             "trusted": (r.author or "").lower() in trusted,
             "worker": conversation.worker_marked(r.body, trust.comment_prefix, trust.comment_suffix),
-            "at": db.to_minute(r.created_at),
+            # Exact: an operator message after it is the go-ahead code checks (`db.to_minute`).
+            "at": r.created_at,
             "url": r.url,
             "body": r.body,
         }

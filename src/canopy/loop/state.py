@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
@@ -311,7 +310,7 @@ def state_block(
             "phase": u.phase,
             "cursors": {cursor: getattr(u, column) for cursor, column in db.UNIT_CURSORS.items()},
             "attempts": dict(attempts.get(unit, no_attempts)),
-            "ci_cooldown_until": db.to_minute(ci_cooldowns.get(unit)),
+            "ci_cooldown_until": _exact(ci_cooldowns.get(unit)),
         }
         if unit in grants:
             summary["granted"] = dict(grants[unit])
@@ -330,7 +329,7 @@ def state_block(
             "branch": None if any(u.branch == t.branch for u in its_units) else t.branch,
             "cursors": {name: getattr(t, db.ticket_cursor(name, tracked=tracked)) for name in db.TICKET_CURSORS},
             "units": [unit_summary(key, u) for u in its_units],
-            "needs_human_since": db.to_minute(t.needs_human_since),
+            "needs_human_since": t.needs_human_since,
             "last_seen_at": db.to_minute(t.last_seen_at),
             "last_run": _run_summary(last_runs.get(key), run_slots, run_reasons, config.trust.branch_prefix),
         }
@@ -420,7 +419,7 @@ def state_block(
         # Whether this tick runs the tracker query, or works the tickets above alone (DESIGN §7, Spacing the query).
         "query_due": query_due,
         "tick_id": tick_id,
-        "now": db.to_minute(now),
+        "now": db.format_time(now),
         "dry_run": dry_run,
     }
     if dry_run:
@@ -475,12 +474,7 @@ def _name_cursors(
 
     def items(cursors: Mapping[str, str | int | None], names: Iterable[str]) -> dict[str, str]:
         found = {name: numbered.get(value) for name in names if isinstance(value := cursors[name], int)}
-        # Named as the block gives every time, to the minute.
-        return {
-            name: item_numbers.describe(replace(item, numbered_at=db.to_minute(item.numbered_at)))
-            for name, item in found.items()
-            if item is not None
-        }
+        return {name: item_numbers.describe(item) for name, item in found.items() if item is not None}
 
     for ticket in tickets:
         if named := items(ticket["cursors"], ["comment"] if tracked else []):
@@ -499,12 +493,8 @@ def _run_summary(
 ) -> RunState | None:
     if run is None:
         return None
-    summary: RunState = {
-        "run_id": run.id,
-        "kind": run.kind,
-        "status": run.status,
-        "ended_at": db.to_minute(run.ended_at),
-    }
+    # Its end keeps the journal's precision: the overseer orders messages and comments against it (`db.to_minute`).
+    summary: RunState = {"run_id": run.id, "kind": run.kind, "status": run.status, "ended_at": run.ended_at}
     slots = run_slots.get(run.id, [])
     # A stacked base is always under the prefix, as the dispatch guard checks (DESIGN §10); a repository's own is not.
     if any(_under(branch_prefix, s.base_branch) for s in slots):
@@ -605,12 +595,8 @@ def _may_hold(unit: UnitObservation) -> bool:
 
 
 def _notice(held: Notice, now: datetime) -> NoticeState:
-    return {
-        "text": held.text,
-        "set_at": db.to_minute(held.set_at),
-        "until": db.to_minute(held.until),
-        "in_force": held.in_force(now),
-    }
+    # Exact, as every time the overseer orders: a check run is held when it started between these.
+    return {"text": held.text, "set_at": held.set_at, "until": held.until, "in_force": held.in_force(now)}
 
 
 def _compact(value: object) -> object:
@@ -634,3 +620,8 @@ def _compact(value: object) -> object:
 def _empty(value: object) -> bool:
     # Neither `False` nor `0` equals `[]` or `{}`, so both stay.
     return value is None or value in ([], {})
+
+
+def _exact(moment: datetime | None) -> str | None:
+    # The overseer weighs a cooldown against `now`: both keep the journal's precision, as every time it orders does.
+    return db.format_time(moment) if moment is not None else None

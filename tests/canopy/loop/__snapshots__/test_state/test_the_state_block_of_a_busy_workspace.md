@@ -70,7 +70,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
             "implement": 1,
             "resume": 1
           },
-          "ci_cooldown_until": "2026-10-16T10:20Z",
+          "ci_cooldown_until": "2026-10-16T10:20:00.000Z",
           "granted": {
             "resume": 1
           },
@@ -83,7 +83,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
             ]
           },
           "cursor_items": {
-            "ci": "check run 5551, first observed 2026-10-16T09:40Z"
+            "ci": "check run 5551, first observed 2026-10-16T09:40:00.000Z"
           }
         }
       ],
@@ -92,7 +92,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
         "run_id": 4,
         "kind": "resume",
         "status": "done",
-        "ended_at": "2026-10-16T09:50Z",
+        "ended_at": "2026-10-16T09:50:00.000Z",
         "reasons": [
           "ci",
           "review"
@@ -102,7 +102,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
         "new_operator_messages": [
           {
             "id": 2,
-            "at": "2026-10-16T09:50Z",
+            "at": "2026-10-16T09:50:00.000Z",
             "body": "Keep the retry count at three."
           }
         ]
@@ -126,7 +126,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
         "run_id": 3,
         "kind": "implement",
         "status": "blocked",
-        "ended_at": "2026-10-16T09:30Z"
+        "ended_at": "2026-10-16T09:30:00.000Z"
       },
       "private": {
         "started_at": "2026-10-16T09:00Z",
@@ -146,7 +146,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
         "run_id": 2,
         "kind": "split",
         "status": "done",
-        "ended_at": "2026-10-16T09:20Z"
+        "ended_at": "2026-10-16T09:20:00.000Z"
       }
     }
   ],
@@ -205,14 +205,14 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
   "notices": [
     {
       "text": "CI is down for maintenance until noon.",
-      "set_at": "2026-10-16T09:00Z",
-      "until": "2026-10-16T12:00Z",
+      "set_at": "2026-10-16T09:00:00.000Z",
+      "until": "2026-10-16T12:00:00.000Z",
       "in_force": true
     },
     {
       "text": "The registry is down.",
-      "set_at": "2026-10-16T08:00Z",
-      "until": "2026-10-16T08:30Z",
+      "set_at": "2026-10-16T08:00:00.000Z",
+      "until": "2026-10-16T08:30:00.000Z",
       "in_force": false
     }
   ],
@@ -285,7 +285,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
   ],
   "query_due": false,
   "tick_id": 2,
-  "now": "2026-10-16T10:00Z",
+  "now": "2026-10-16T10:00:00.000Z",
   "dry_run": true
 }
 ```
