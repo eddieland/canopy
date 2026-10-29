@@ -511,8 +511,11 @@ def test_it_serves_the_eight_tools_and_nothing_else(client: Client) -> None:
     assert "$ref" not in schemas
     # No schema's title; the title field of artifact_publish stays.
     assert '"title": "' not in schemas
-    publish = next(t for t in tools if t["name"] == "artifact_publish")["inputSchema"]
-    assert all(field["description"] for field in publish["properties"].values())
+    # The model reads a tool's description and its fields' alone, so none is left without one.
+    assert all(field.get("description") for t in tools for field in t["inputSchema"]["properties"].values())
+    reads = {"artifact_read", "artifact_list", "thread_list", "comment_feed"}
+    assert {t["name"] for t in tools if t["annotations"]["readOnlyHint"]} == reads
+    assert not any(t["annotations"]["openWorldHint"] or t["annotations"].get("destructiveHint") for t in tools)
     create = next(t for t in tools if t["name"] == "comment_create")["inputSchema"]
     assert create["properties"]["anchor"]["anyOf"][0]["properties"].keys() == {"exact", "prefix", "suffix"}
     assert client.request("resources/list")["error"]["code"] == server.METHOD_NOT_FOUND

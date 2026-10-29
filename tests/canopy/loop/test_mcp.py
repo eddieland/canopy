@@ -736,6 +736,54 @@ def test_each_tools_input_is_its_schema_and_takes_no_other_field(overseen: Canop
     assert schemas["review-run"]["required"] == ["pr", "sha", "repo"]
 
 
+@pytest.mark.parametrize(
+    ("tools_listed", "read_only"),
+    [
+        (mcp.TOOLS, False),
+        (mcp.CHORE_TOOLS, True),
+        (mcp.REPORT_TOOLS, True),
+        (mcp.STATUS_TOOLS, False),
+        (mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")}).tools, True),
+    ],
+    ids=["overseer", "chore", "reports", "status", "git"],
+)
+def test_each_tool_describes_every_field_and_says_whether_it_only_reads(
+    tools_listed: Sequence[mcp.Tool],
+    *,
+    read_only: bool,
+) -> None:
+    """The model reads a tool's description and its fields' alone, so none is left without one."""
+    for found in tools_listed:
+        listed = found.listed()
+        assert undescribed(listed["inputSchema"]) == [], found.name
+        hints = listed["annotations"]
+        assert isinstance(hints, dict)
+        assert (hints["readOnlyHint"], hints["openWorldHint"]) == (read_only, False), found.name
+        assert ("destructiveHint" in hints) is not read_only, found.name
+
+
+def undescribed(schema: object, at: str = "") -> list[str]:
+    """Find each field of `schema`, at any depth, that has no description.
+
+    Returns:
+        Each such field's path.
+    """
+    if isinstance(schema, list):
+        return [path for item in schema for path in undescribed(item, at)]
+    if not isinstance(schema, dict):
+        return []
+    found: list[str] = []
+    for key, value in schema.items():
+        if key == "properties" and isinstance(value, dict):
+            for name, field in value.items():
+                if not (isinstance(field, dict) and field.get("description")):
+                    found.append(f"{at}{name}")
+                found += undescribed(field, f"{at}{name}.")
+        else:
+            found += undescribed(value, at)
+    return found
+
+
 def test_each_tool_lists_its_result_as_its_output_schema(overseen: CanopyEnv) -> None:
     with in_tick(overseen.journal()):
         served = mcp_session(LIST_TOOLS)

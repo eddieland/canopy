@@ -349,7 +349,11 @@ class Dispatch(Request):
         RunKind,
         BeforeValidator(_known_kind),
         WithJsonSchema({"type": "string", "enum": list(policy.DISPATCH_KINDS)}),
-        Field(description="What the worker does."),
+        Field(
+            description="What the worker does: implement builds the ticket; resume carries on its PR for the reasons "
+            "named; plan writes a plan before its first implement; feedback-plan plans the answer to what came back "
+            "on a unit's PR, before the resume that acts on it.",
+        ),
     ]
     #: The queue label read on the ticket just now; none for a ticket the operator started.
     label: Annotated[
@@ -383,7 +387,12 @@ class Dispatch(Request):
     reasons: Annotated[
         tuple[ResumeReason, ...],
         _null_left_out(tuple, tuple[ResumeReason, ...] | None),
-        Field(description="resume only, and required for it: why it runs, each once."),
+        Field(
+            description="resume only, and required for it: why it runs, each once. ci: failed checks; review: review "
+            "feedback or a canopy review's findings; reply: an authorized reply or the operator's message; conflict: "
+            "the PR conflicts with its base; no_pr: the branch is pushed and has no PR; retarget: the PR's blocker "
+            "merged, so it targets the base branch again.",
+        ),
     ] = ()
     #: What the worker should read or do: links, comment ids, check names. Never quoted text.
     context: Annotated[
@@ -671,7 +680,14 @@ class Decide(Request):
     #: The ticket; none only for a tick-wide skip.
     key: Annotated[Key | None, Field(description="The ticket; omit it only for a tick-wide skip.")] = None
     #: What was decided.
-    action: Literal["wait", "skip", "done"]
+    action: Annotated[
+        Literal["wait", "skip", "done"],
+        Field(
+            description="wait: nothing to do until something changes, such as checks still running; skip: the loop "
+            "leaves the ticket alone, such as one not labeled, or one you would act on but may not; done: its work is "
+            "over, such as a closed ticket.",
+        ),
+    ]
     #: Why, in the overseer's own words.
     rationale: Annotated[
         Text,

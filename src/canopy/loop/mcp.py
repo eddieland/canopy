@@ -73,6 +73,38 @@ type Response = dict[str, object] | None
 
 
 @dataclass(frozen=True)
+class Hints:
+    """What a tool does to the world, as MCP's tool annotations tell a client: hints for its prompts, never a guard.
+
+    Every tool works on canopy's own journal or the run's checkouts, never a world outside them, so none is open-world.
+    """
+
+    #: It changes nothing.
+    read_only: bool
+    #: It may overwrite or end what is already recorded, not only add to it. Only a tool that writes says.
+    destructive: bool = False
+    #: A second call with the same arguments changes nothing more. Only a tool that writes says.
+    idempotent: bool = False
+
+    def listed(self) -> dict[str, bool]:
+        """Describe the hints as `tools/list` lists them, under the tool's `annotations`.
+
+        Returns:
+            MCP's hints: a tool that only reads says nothing of what a write would do.
+        """
+        hints = {"readOnlyHint": self.read_only, "openWorldHint": False}
+        if not self.read_only:
+            hints |= {"destructiveHint": self.destructive, "idempotentHint": self.idempotent}
+        return hints
+
+
+#: A tool that reads and changes nothing.
+READS = Hints(read_only=True)
+#: A tool that adds to what is recorded and removes nothing.
+RECORDS = Hints(read_only=False)
+
+
+@dataclass(frozen=True)
 class Tool:
     """One of canopy's verbs as a tool."""
 
@@ -88,17 +120,20 @@ class Tool:
     call: Callable[[Mapping[str, object], Opener], str | tools.Outcome[BaseModel]]
     #: Its result, whose schema is the tool's output schema; None for a tool that answers with text alone.
     result: type[BaseModel] | None = None
+    #: What it does to the world, for a client.
+    hints: Hints = RECORDS
 
     def listed(self) -> dict[str, object]:
         """Describe the tool as `tools/list` lists it.
 
         Returns:
-            Its name, description, input schema, and output schema when it has a result.
+            Its name, description, input schema, annotations, and output schema when it has a result.
         """
         listed: dict[str, object] = {
             "name": self.name,
             "description": self.description,
             "inputSchema": schema(self.request),
+            "annotations": self.hints.listed(),
         }
         if self.result is not None:
             listed["outputSchema"] = schema(self.result, "serialization")
@@ -111,8 +146,10 @@ def tool[R: BaseModel, O: tools.Result](
     request: type[R],
     result: type[O],
     do: Callable[[Context, R], tools.Outcome[O]],
+    *,
+    hints: Hints = RECORDS,
 ) -> Tool:
-    """Make verb `do` a tool, taking `request` as its arguments and answering with `result`.
+    """Make verb `do` a tool, taking `request` as its arguments and answering with `result`, with `hints` for a client.
 
     Every call is refused inside a run, and outside a running tick, `ticket-set` included, which the command takes
     outside one.
@@ -129,91 +166,119 @@ def tool[R: BaseModel, O: tools.Result](
             tools.running_tick(ctx)
             return do(ctx, asked)
 
-    return Tool(name, description, request, call, result)
+    return Tool(name, description, request, call, result, hints)
 
+
+#: How a tool that records a run says so: the overseer's run never starts one itself (DESIGN §40).
+_STARTS_LATER = (
+    "canopy checks the guards now and records the run, which the tick starts once your run ends if they still allow "
+    "it; a dry run checks them and records nothing."
+)
+#: How each overseer tool says what its refusal is.
+_REFUSED = "A refusal is a tool error naming the field or the guard."
 
 TOOLS = (
     tool(
         "dispatch",
-        "Record a worker for a ticket, if its guards allow one now; it starts once your run ends, if they still do. A "
-        "dry run checks them and records nothing.",
+        "Record a worker run for one ticket, of the kind named: implement, resume, plan, or feedback-plan. Use it when "
+        "your procedure's step for a ticket is a dispatch; a wait, skip, or done is decide's. Its guards include "
+        f"capacity, attempt limits, the queue label, and one worker per ticket. {_STARTS_LATER} Returns the recorded "
+        f"run's id, its branch, and its repositories. {_REFUSED}",
         tools.Dispatch,
         tools.Dispatched,
         tools.dispatch_run,
     ),
     tool(
         "decide",
-        "Record decisions, one per ticket: wait, skip, or done, each with its rationale, all or none. Omit key only "
-        "for a skip of the whole tick, the only decision in its call.",
+        "Record a wait, skip, or done for tickets, each with its rationale. A dispatch, a review, an attention item, "
+        "or a refusal that its own tool recorded already counts as a ticket's decision. Decide each ticket once in a "
+        "call; the call records all its decisions or none. Omit key only to skip the whole tick when it cannot go on: "
+        "its rationale starts mcp_unavailable: or tracker_unsupported:, and it is the only decision in its call. "
+        f"Returns the decisions recorded, in order. {_REFUSED}",
         tools.Decisions,
         tools.Decided,
         tools.decide,
     ),
     tool(
         "queried",
-        "Record that this tick ran the tracker query, naming each open ticket it returned, each then owed a decision "
-        "this tick unless the state block lists it in stopped or recently_done. Name none when it returned none, and "
-        "a long result in several calls.",
+        "Record that this tick ran the tracker query, naming each open ticket it returned, labeled or not. Call it "
+        "once the query has run: each ticket named is then owed a decision this tick, unless the state block lists it "
+        "in stopped or recently_done. Name none when the query returned none, and split a long result across several "
+        f"calls. Returns the keys recorded, each once. {_REFUSED}",
         tools.Queried,
         tools.QueryRecorded,
         tools.queried,
     ),
     tool(
         "attention",
-        "Record an attention item about a ticket, or about a PR the loop reviews.",
+        "Put an item on the operator's attention list: something about a ticket, or about a PR the loop reviews, that "
+        "needs a person. Name the ticket by key, or a PR with no ticket by pr, and say in detail what the operator "
+        "needs to know. A reason the harness raises from its own causes is refused (raised), as is an item that names "
+        f"nothing that could end it (unnamed). Returns the item recorded. {_REFUSED}",
         tools.Attention,
         tools.AttentionRecorded,
         tools.attend,
     ),
     tool(
         "ticket-set",
-        "Record tickets' phases, cursors, done flags, or titles, or with repo a unit's phase and cursors, one item "
-        "per ticket or unit, all or none. A dry run advances no cursor and marks nothing done.",
+        "Update canopy's record of tickets: a ticket's phase, cursors, done flag, or title, or with repo one unit's "
+        "phase and its review and ci cursors. Use it to keep the journal in step with what you read: a phase the "
+        "tracker or a PR now shows, a cursor past the items you handled, a closed ticket marked done. One item per "
+        "ticket or unit; the call records all or none, and a dry run advances no cursor and marks nothing done. "
+        f"Returns each item as recorded. {_REFUSED}",
         tools.TicketSets,
         tools.TicketsUpdated,
         tools.ticket_set,
+        hints=Hints(read_only=False, destructive=True, idempotent=True),
     ),
     tool(
         "review-run",
-        "Record a review of a PR at a commit, if its guards allow one now; it starts once your run ends, if they still "
-        "do. A dry run checks them and records nothing.",
+        "Record a review of a PR at its head commit by canopy's reviewer: one of the loop's own PRs, named with its "
+        "ticket, or one the review query found or the operator asked for. Name the full head sha you read on the PR "
+        f"just now. {_STARTS_LATER} A PR given several personas gets a review in each still owed one. Returns each "
+        f"review run recorded, and any persona a guard held off for a later tick. {_REFUSED}",
         review_tools.ReviewRun,
         review_tools.ReviewsStarted,
         review_tools.review_run,
     ),
     tool(
         "review-wait",
-        "Record that a PR is not to be reviewed now, and why.",
+        "Record that a PR is not to be reviewed now, and why, such as checks still running or a draft. Use it for a "
+        f"PR owed a review that you hold back this tick; it starts nothing. Returns the PR recorded. {_REFUSED}",
         review_tools.ReviewWait,
         review_tools.ReviewWaitRecorded,
         review_tools.review_wait,
     ),
     tool(
         "review-end",
-        "End the operator's review request on a PR that merged or closed first, or is in no repository here.",
+        "End the operator's request for a review of a PR that no review can answer: it merged or closed first, or is "
+        "in no repository of this workspace. A requested PR that is still open is reviewed or waits instead. A dry run "
+        f"records the end and ends nothing. Returns the request ended and why. {_REFUSED}",
         review_tools.ReviewEnd,
         review_tools.ReviewEnded,
         review_tools.review_end,
+        hints=Hints(read_only=False, destructive=True),
     ),
     tool(
         "review-revise",
-        "Record a revision of a review's draft that the operator's note asks for, if its guards allow one now; it "
-        "starts once your run ends, if they still do. A dry run checks them and records nothing.",
+        "Record a revision of a review's draft that the operator's note asks for, naming the review run that "
+        f"reviews.revisions lists. {_STARTS_LATER} Returns the revision run recorded. {_REFUSED}",
         review_tools.ReviewRevise,
         review_tools.RevisionStarted,
         review_tools.review_revise,
     ),
     tool(
         "chore-run",
-        "Record a run of a chore, if its guards allow one now; it starts once your run ends, if they still do. A dry "
-        "run checks them and records nothing.",
+        "Record a run of one of the workspace's chores, such as one the state block shows due, with what it should "
+        f"look at first. {_STARTS_LATER} Returns the chore run recorded. {_REFUSED}",
         chore_tools.ChoreRun,
         chore_tools.ChoreStarted,
         chore_tools.chore_run,
     ),
     tool(
         "chore-wait",
-        "Record that a chore is due but should not run now, and why.",
+        "Record that a chore the state block shows due should not run now, and why, such as its when saying not now. "
+        f"It starts nothing. Returns the chore recorded. {_REFUSED}",
         chore_tools.ChoreWait,
         chore_tools.ChoreWaitRecorded,
         chore_tools.chore_wait,
@@ -244,9 +309,11 @@ CHORE_TOOLS = (
     Tool(
         history.TOOL,
         "List this chore's earlier runs, newest first, with what each reported; with run, one run's findings in full; "
-        "with before, the page of runs before that id.",
+        "with before, the page of runs before that id. Use it to see what earlier runs found, so what you report is "
+        "what changed since. It reads only this run's own chore, and refuses any other.",
         history.History,
         _chore_history,
+        hints=READS,
     ),
 )
 
@@ -277,7 +344,7 @@ def _report[R: BaseModel](name: str, description: str, request: type[R], do: Cal
             except reports.Refused as e:
                 raise tools.Refused(str(e)) from None
 
-    return Tool(name, description, request, call)
+    return Tool(name, description, request, call, hints=READS)
 
 
 #: canopy's read-only reports (`core.reports`), which the runtime names `canopy_reports_health` and so on. An agent
@@ -287,7 +354,7 @@ REPORT_TOOLS = (
         reports.HEALTH,
         "How canopy's ticks and runs of the last days ended, as JSON: each kind of run by status and cost "
         "(outcomes), the newest failures with an id and a note (failures), and the overseer's asks a guard refused "
-        "(refusals).",
+        "(refusals). Start here to find what went wrong: decisions and show-run read one tick or run in full.",
         reports.Health,
         reports.read_health,
     ),
@@ -382,9 +449,12 @@ STATUS_TOOLS = (
         cards.TOOL,
         "Say where your work stands, for the operator, who reads this card instead of your transcript. Each call is "
         "your whole card and replaces the last: a summary, what you do now, what is done with the proof of each, what "
-        "is next, and anything in your way you are working around. It changes nothing else, and asks no question.",
+        "is next, and anything in your way you are working around. Call it once you know your plan, and again "
+        "whenever where you stand changes. It changes nothing else and never waits: the operator's answer to a "
+        "question on it comes back on a later tool call's result.",
         cards.Card,
         _status,
+        hints=Hints(read_only=False, idempotent=True),
     ),
 )
 
@@ -449,6 +519,10 @@ def run_stdio(
     return 0
 
 
+#: What a git tool that answers with text says of a long answer.
+_CUT = f"Text past {git_tools.MAX_CHARS:,} characters is cut at a line's end, and says so."
+
+
 def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
     """Read-only git in `checkouts`, by name, for a review's or a plan's run, with `runner` for each git it runs.
 
@@ -461,7 +535,9 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
     found = (
         _git_tool(
             git_tools.MERGE_BASE,
-            "Find the commit where two commits' histories meet, such as where a branch left its base.",
+            "Find the commit where two commits' histories meet, such as where a branch left its base: the commit to "
+            "diff a branch from, so the diff holds the branch's own changes and not its base's since. Returns that "
+            "commit's full id.",
             git_tools.MergeBase,
             git_tools.merge_base,
             runner=runner,
@@ -470,7 +546,7 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         _git_tool(
             git_tools.DIFF,
             "Show the diff from one commit to another, in the paths named if any, or with stat each file changed and "
-            "its lines added and removed. Commits only, never the working tree.",
+            f"its lines added and removed. Commits only, never the working tree. {_CUT}",
             git_tools.Diff,
             git_tools.diff,
             runner=runner,
@@ -490,7 +566,8 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         ),
         _git_tool(
             git_tools.SHOW,
-            "Read a file as it is at a commit, or list a directory's entries there.",
+            "Read a file as it is at a commit, or list a directory's entries there, each with its mode, type, id, and "
+            f"name. files finds a path, and grep a line, without reading whole files. {_CUT}",
             git_tools.Show,
             git_tools.show,
             runner=runner,
@@ -510,7 +587,7 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
             git_tools.GREP,
             "Find the lines that hold an exact text in the files as they are at a commit, each as path:line:text: "
             "who calls a function, or what used a name before a branch changed it. Not a pattern; files that are not "
-            "text are left out.",
+            f"text are left out. {_CUT}",
             git_tools.Grep,
             git_tools.grep,
             runner=runner,
@@ -519,7 +596,7 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         _git_tool(
             git_tools.FILES,
             "List the paths of the files as they are at a commit, under some paths if named, and only those whose own "
-            "name matches a name or a glob such as `*.py` if one is given.",
+            f"name matches a name or a glob such as `*.py` if one is given. {_CUT}",
             git_tools.Files,
             git_tools.files,
             runner=runner,
@@ -558,7 +635,7 @@ def _git_tool[R: git_tools.Request](
             raise tools.Refused(str(r)) from None
         return found if isinstance(found, str) else tools.Outcome(git_tools.text(found), found)
 
-    return Tool(name, description, request, call, result)
+    return Tool(name, description, request, call, result, READS)
 
 
 def serve(lines: Iterable[bytes], write: Callable[[str], object], opener: Opener, mode: Mode | None = None) -> None:

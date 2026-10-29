@@ -90,15 +90,20 @@ def listed(found: Tool) -> dict[str, object]:
     """Describe a tool as `tools/list` lists it.
 
     Returns:
-        Its name, description, and input schema, every reference inlined and no title, since some models' providers
-        take no `$ref`, and a title only repeats its field's name.
+        Its name, description, input schema, and annotations, every reference inlined in the schema and no title,
+        since some models' providers take no `$ref`, and a title only repeats its field's name.
     """
     whole = found.request.model_json_schema()
     # The request's docstring is for the store's readers; the tool's description says what it does.
     whole.pop("description", None)
     definitions = whole.pop("$defs", {})
     schema = _inlined(whole, definitions if isinstance(definitions, dict) else {})
-    return {"name": found.name, "description": found.description, "inputSchema": schema}
+    return {
+        "name": found.name,
+        "description": found.description,
+        "inputSchema": schema,
+        "annotations": found.hints.listed(),
+    }
 
 
 class _Message(BaseModel):
