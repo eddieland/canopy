@@ -20,7 +20,7 @@ from canopy.serve.views import lines, message, models_served, new_tokens, run_st
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
     from canopy.core import records
@@ -52,8 +52,9 @@ def tasks_list(ctx: Context) -> list[TaskSummary]:
     waiting = {t.id for t in tasks.queued(ctx.conn)}
     asked = {a.task_id: a.message_id for a in tasks.awaiting(ctx.conn)}
     counts = _run_counts(ctx.conn)
+    served = run_models.served_by(ctx.conn, "task_runs", [r.id for r in latest.values()])
     return [
-        _summary(ctx, t, latest.get(t.id), waiting=waiting, asked=asked, runs=counts.get(t.id, 0))
+        _summary(ctx, t, latest.get(t.id), waiting=waiting, asked=asked, runs=counts.get(t.id, 0), served=served)
         for t in tasks.every(ctx.conn)
     ]
 
@@ -71,17 +72,19 @@ def task_detail(ctx: Context, task_id: int) -> TaskDetail | None:
     waiting = {t.id for t in tasks.queued(ctx.conn)}
     asked = {a.task_id: a.message_id for a in tasks.awaiting(ctx.conn)}
     root = ctx.workspace.root
+    served = run_models.served_by(ctx.conn, "task_runs", [r.id for r in runs])
+    latest = runs[-1] if runs else None
     return TaskDetail(
-        task=_summary(ctx, task, runs[-1] if runs else None, waiting=waiting, asked=asked, runs=len(runs)),
-        runs=[task_run(r, root) for r in runs],
+        task=_summary(ctx, task, latest, waiting=waiting, asked=asked, runs=len(runs), served=served),
+        runs=[task_run(r, root, served[r.id]) for r in runs],
         messages=[message(m) for m in tasks.messages_of(ctx.conn, task_id)],
         tickets=[_ticket(t) for t in task_tickets.of_task(ctx.conn, task_id)],
         attachments=views.attachments_of(ctx, conversation.Ref(conversation.TASK, str(task_id))),
     )
 
 
-def task_run(row: records.TaskRun, root: Path) -> TaskRun:
-    """One task run's row, its log's path from the workspace `root`.
+def task_run(row: records.TaskRun, root: Path, served: Sequence[str] = ()) -> TaskRun:
+    """One task run's row, its log's path from the workspace `root`, `served` the models its session named.
 
     Returns:
         The run as the API sends it.
@@ -102,6 +105,7 @@ def task_run(row: records.TaskRun, root: Path) -> TaskRun:
         new_tokens=new_tokens(row),
         peak_context=row.tokens_peak_context,
         log_path=shown_path(row.log_path, root),
+        served=list(served),
     )
 
 
@@ -118,7 +122,7 @@ def task_run_detail(ctx: Context, task_id: int, run_id: int) -> TaskRunDetail | 
     question = lines(str(stored.get("question") or "")) if row.status is RunStatus.BLOCKED else ""
     return TaskRunDetail(
         task_id=task_id,
-        run=task_run(row, ctx.workspace.root),
+        run=task_run(row, ctx.workspace.root, run_models.served_by(ctx.conn, "task_runs", [row.id])[row.id]),
         summary=lines(str(stored.get("summary") or "")) or None,
         question=question or None,
         note=lines(str(stored.get("harness") or "")) or None,
@@ -186,6 +190,7 @@ def _summary(
     waiting: AbstractSet[int],
     asked: Mapping[int, int],
     runs: int,
+    served: Mapping[int, Sequence[str]],
 ) -> TaskSummary:
     found = tasks.standing(task, latest, queued=task.id in waiting, awaiting=task.id in asked)
     return TaskSummary(
@@ -199,7 +204,7 @@ def _summary(
         stopped_at=db.parse_time(task.stopped_at) if task.stopped_at else None,
         standing=_standing(found),
         question_id=asked.get(task.id),
-        latest=task_run(latest, ctx.workspace.root) if latest is not None else None,
+        latest=task_run(latest, ctx.workspace.root, served.get(latest.id, ())) if latest is not None else None,
         runs=runs,
     )
 

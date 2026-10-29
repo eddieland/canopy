@@ -567,8 +567,9 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     // above them as a state, not a choice.
     const list = page.getByRole('listbox', { name: 'Models' })
     await expect(list.getByRole('option', { name: 'runtime default nothing sets one' })).toBeDisabled()
-    const first = list.getByRole('option', { name: /^[\w.-]+\/[\w.:@/+-]+$/u }).first()
-    const model = (await first.textContent()) ?? ''
+    // A model with variants is named at its default; the mock's every model has some.
+    const first = list.getByRole('option', { name: /^[\w.-]+\/[\w.:/+-]+ \(default\)$/u }).first()
+    const model = ((await first.getAttribute('aria-label')) ?? '').replace(/ \(default\)$/u, '')
     await first.click()
     // Confirmed in the worker's row, in place.
     await expect(worker.getByRole('status')).toHaveText(
@@ -591,7 +592,8 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     await models.getByRole('button', { name: `worker model: ${model}@high` }).click()
     await page.getByRole('combobox', { name: 'Find a model for the worker' }).fill('no such model')
     await expect(list.getByText('no model has that name')).toBeVisible()
-    await page.getByRole('option', { name: 'Clear the override' }).click()
+    // Below the list, whatever is typed in it.
+    await page.getByRole('button', { name: 'Clear the override' }).click()
     await expect(worker.getByRole('status')).toHaveText(
         "saved: ABC-104's worker runs use the runtime's default from their next run: nothing sets one.",
     )

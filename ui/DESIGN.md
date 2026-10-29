@@ -98,17 +98,18 @@ Rules:
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check it
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
 - **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
-  the neutrals over the default's, and may set the accent to its scheme's own, as Nord, Solarized, Monokai, and Rosé
-  Pine Dawn do, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. Light has off-white, a warm paper,
-  sage, and the light tones of Solarized, Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the near-colorless neutrals
-  the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox, and
-  Monokai. A light canvas is never grey, which only looks dim. Every other hue is the same in all, so a component never
-  knows which it is on, and an accent is read through its token, never assumed indigo; where a scheme's own bases would
-  drop a hue below 4.5:1, the bases move, never the hue. A palette's accent is darkened or lightened until it reads as
-  text there, on its own tint, and under `accent-foreground`, and sets `ring` with it. A scheme whose accent would pass
-  for a status keeps the default's, as Gruvbox's orange would. A scheme whose bases would have to move until it matched
-  another palette is left out, as Nord's dark is. `tokens.test.ts` measures every palette `src/theme/palette.ts` lists,
-  and `theme-script.test.ts` checks the inline script knows each.
+  the neutrals and the accent over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. A
+  scheme with an accent of its own wears it (Nord's, Solarized's, Monokai's, Rosé Pine Dawn's, and Gruvbox's purple);
+  the others take one that suits the canvas. Light has off-white, a warm paper, sage, and the light tones of Solarized,
+  Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the near-colorless neutrals the 2026-10-19 exploration drew for
+  Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox, and Monokai. A light canvas is never grey,
+  which only looks dim. Every other hue is the same in all, so a component never knows which it is on, and an accent is
+  read through its token, never assumed indigo; where a scheme's own bases would drop a hue below 4.5:1, the bases move,
+  never the hue. A palette's accent is darkened or lightened until it reads as text there, on its own tint, and under
+  `accent-foreground`, and sets `ring` with it. A scheme whose accent would pass for a status wears another of its
+  colors, as Gruvbox wears its purple, not its orange, and a green canvas never takes a green accent. A scheme whose
+  bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts` measures
+  every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
@@ -624,7 +625,11 @@ side.
   persona (DESIGN §31), are adjacent rows where the first of them falls (`requestGroups`), with no hairline between
   them: each keeps its own verdict, draft chip, cost, and age, and after the first, the free column says only
   `as skeptic`, at any width, in place of the PR and commit it shares, its ticket's cell empty. Rows, not a nested
-  card: the request is one entry read down its personas.
+  card: the request is one entry read down its personas. A run's model, in its row as in its Run panel
+  (`ModelsField`), takes no status color: a run the model asked for served none of reads `asked Y ≠ X`, asked first,
+  the served model in `foreground`, and one it served beside another marks only the other; `sameModel` takes `X@v`
+  asked and `X` served alike. Until its session is read the row says `model unread` (`UNREAD`), muted, why in its tip,
+  and a run with no session names no model.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
@@ -923,7 +928,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   and what reported no cost while no run ended. The window is a segmented control (`ToggleGroup`) in the totals' panel
   header, kept in `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
   runs page's kind filter in each one's header keeps one kind's (`?model_kind=`, `?tool_kind=`), and offers only the
-  kinds the window has rows of. A window switch keeps both filters.
+  kinds the window has rows of. A window switch keeps both filters. By model's ids link the runs page's runs on the
+  model (`?model=`), with the kind shown (`?kind=`, `RUNS_KIND`: a plan run is a worker run there); one the runs page
+  lists no run of by model, the overseer's alone, is plain, why on hover. The runs page's model filter is always
+  offered: `all`, then each model its listed runs of every kind name.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
@@ -1508,10 +1516,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
   is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
   `last served` names the model that served the agent's latest read run when it is not the button's. A variant on the
-  button follows the model's id, muted. Each model's variants are items of their own under it, indented, each
-  `@variant` to the eye and named whole for a screen reader. A choice saved is confirmed in its row, a `saved` in
-  `status-done`, so nothing below moves, until the ticket's models change after it; one that sets aside config's
-  variant says so after it in muted text. The menu offers only what the server would take: the model chosen now, when
+  button follows the model's id, muted. Each model's variants are items of their own under it, indented, in the
+  runtime's order, each `@variant` to the eye and named whole for a screen reader; a model with variants is marked a
+  muted `(default)`. The field finds each item by its own id alone, and sets the pinned item aside while it holds
+  anything, so Enter takes the first id found; a variant whose model is hidden shows its model's id before it, muted.
+  `Clear the override` is a ghost button under the list, out of its scroll. A choice saved is confirmed in its row, a
+  `saved` in `status-done`, so nothing below moves, until the ticket's models change after it; one that sets aside
+  config's variant says so after it in muted text. The menu offers only what the server would take: the model chosen
+  now, when
   it is not one, is a disabled item with why in muted text after it (`no longer listed; its next run is refused`,
   `variant no longer listed; its next run is refused`), and a model or variant gone from the list marks its trigger in
   `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a

@@ -1,5 +1,5 @@
-// The answer, the plugin's job that tells a worker, planner, or reviewer the operator's answer to the question its card
-// asks (DESIGN §41), under Node's own test runner: `make test-plugin`.
+// The answer, the plugin's job that tells a worker, planner, or reviewer the operator's answer to the question it asks
+// (DESIGN §41), under Node's own test runner: `make test-plugin`.
 // It is driven as the agent runtime drives it: loaded with the run's environment, then its hook called after each tool
 // call with the call's input and its result, which the hook changes in place. canopy writes the answer to a file in the
 // run's answers directory, which the test writes as canopy would.
@@ -17,8 +17,8 @@ const { default: canopy } = await import(pathToFileURL(plugin).href);
 
 const ASK = "Keep the old endpoint for the mobile app, or remove it?";
 const TOLD_B =
-    `[canopy] The operator answers your question "${ASK}": B, remove it now. Go on with it, and take the question` +
-    " off your card.";
+    `[canopy] The operator answers your question "${ASK}": B, remove it now. Go on with it, and drop the question` +
+    " from your next update.";
 
 let answers;
 
@@ -93,7 +93,7 @@ test("a file that is no answer of canopy's tells nothing", async () => {
     assert.equal((await after(hooks, builtin())).output, "ok");
 });
 
-test("a run that keeps no card, or names no answers directory, has no answer job", async () => {
+test("a run that keeps no progress, or names no answers directory, has no answer job", async () => {
     await answered("B", "remove it now");
     process.env.CANOPY_RUN_ID = "chore-3";
     assert.equal((await canopy.server({}))["tool.execute.after"], undefined);

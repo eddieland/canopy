@@ -38,6 +38,7 @@ from canopy.serve.views import (
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Sequence
     from datetime import datetime
 
     from canopy.core import records
@@ -81,7 +82,7 @@ def chore(backend: Backend, ctx: Context, name: str) -> ChoreDetail | None:
     state = chore_view.state_of(ctx.conn, name, defined[name], starts=ctx.finding_starts)
     return ChoreDetail(
         chore=chore_summary(ctx.conn, state, backend.clock(), ctx.workspace.root),
-        runs=[chore_run(r, ctx.workspace.root) for r in state.runs[:CHORE_RUNS]],
+        runs=_chore_runs(ctx.conn, state.runs[:CHORE_RUNS], ctx.workspace.root),
         notes=[message(m) for m in db.messages_of(ctx.conn, conversation.CHORE, name, conversation.CHORE_NOTES)],
     )
 
@@ -96,6 +97,7 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
     defined = state.chore
     running = state.running
     latest = state.latest_ended
+    served = run_models.served_by(conn, "chore_runs", [r.id for r in (running, latest) if r is not None])
     return ChoreSummary(
         name=state.name,
         title=_chore_title(defined),
@@ -104,8 +106,8 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
         hours=defined.hours,
         timezone=defined.timezone,
         when=defined.when or None,
-        running=chore_run(running, root) if running is not None else None,
-        latest=chore_run(latest, root) if latest is not None else None,
+        running=chore_run(running, root, served[running.id]) if running is not None else None,
+        latest=chore_run(latest, root, served[latest.id]) if latest is not None else None,
         due_at=state.due_at(now),
         findings=[
             ChoreFinding(
@@ -161,8 +163,8 @@ def _chore_spent(conn: sqlite3.Connection, name: str, now: datetime, hours: int)
     )
 
 
-def chore_run(row: records.ChoreRun, root: Path) -> ChoreRun:
-    """One chore run's row, its log's path from the workspace `root`.
+def chore_run(row: records.ChoreRun, root: Path, served: Sequence[str] = ()) -> ChoreRun:
+    """One chore run's row, its log's path from the workspace `root`, `served` the models its session named.
 
     Returns:
         The run as the API sends it, `done` only when it ended `ok`, with its findings counted then.
@@ -182,7 +184,18 @@ def chore_run(row: records.ChoreRun, root: Path) -> ChoreRun:
         new_tokens=new_tokens(row),
         peak_context=row.tokens_peak_context,
         log_path=shown_path(row.log_path, root),
+        served=list(served),
     )
+
+
+def _chore_runs(conn: sqlite3.Connection, rows: Sequence[records.ChoreRun], root: Path) -> list[ChoreRun]:
+    """Chore runs' rows as `chore_run` gives each, with the models each one's session named, in one read.
+
+    Returns:
+        Each run, in the order of `rows`.
+    """
+    served = run_models.served_by(conn, "chore_runs", [r.id for r in rows])
+    return [chore_run(r, root, served[r.id]) for r in rows]
 
 
 def _chore_state(status: ChoreRunStatus) -> RunState:
@@ -218,7 +231,7 @@ def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | N
     return ChoreRunDetail(
         chore=name,
         title=_chore_title(defined) if defined is not None else None,
-        run=chore_run(row, ctx.workspace.root),
+        run=_chore_runs(ctx.conn, [row], ctx.workspace.root)[0],
         summary=lines(str(stored.get("summary") or "")) or None,
         note=lines(str(stored.get("harness") or "")) or None,
         findings=[

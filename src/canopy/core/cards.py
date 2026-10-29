@@ -29,6 +29,7 @@ import re
 import shutil
 import sqlite3
 import sys
+import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -175,7 +176,7 @@ class Question(BaseModel):
 
 
 class Card(BaseModel):
-    """The input of a `status` call, the agent's whole card: each call replaces the one before."""
+    """The input of a `status` call, an update of the agent's whole progress: each call replaces the one before."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
 
@@ -204,7 +205,7 @@ class Card(BaseModel):
     )
     question: Question | None = Field(
         default=None,
-        description="A decision you need from the operator and can work around meanwhile; keep it on each card until "
+        description="A decision you need from the operator and can work around meanwhile; keep it in each update until "
         "you have the answer or no longer need it, else omit it.",
     )
 
@@ -349,7 +350,8 @@ def deliver(path: Path, answered: Answered) -> bool:
         "letter": answered.letter,
         "option": answered.option,
     }
-    staged = path / f".{ANSWER_FILE}.{os.getpid()}"
+    # Its own name in each process and thread, so two writes at once never share the file one renames over the answer.
+    staged = path / f".{ANSWER_FILE}.{os.getpid()}.{threading.get_ident()}"
     try:
         staged.write_text(json.dumps(data) + "\n", encoding="utf-8")
         staged.replace(path / ANSWER_FILE)

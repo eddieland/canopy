@@ -156,7 +156,7 @@ CHORE = "deps"
 # Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
 _POOLS = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
 # The variants the mock's runtime lists for each provider's models, which a ticket's page may choose one at.
-_VARIANTS = {"anthropic": frozenset({"high", "max"}), "openai": frozenset({"minimal", "low", "medium", "high"})}
+_VARIANTS = {"anthropic": ("high", "max"), "openai": ("minimal", "low", "medium", "high")}
 
 
 def at(minutes: int) -> str:
@@ -526,7 +526,7 @@ def _models_listed(ctx: Context) -> ModelList:
     """
     served = records.select(records.RunModel).all(ctx.conn)
     models = frozenset(m.model for m in served)
-    return ModelList(models, {m: _VARIANTS.get(m.partition("/")[0], frozenset()) for m in models})
+    return ModelList(models, {m: _VARIANTS.get(m.partition("/")[0], ()) for m in models})
 
 
 def _try_chore(ctx: Context, name: str) -> int:

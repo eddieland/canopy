@@ -15,10 +15,12 @@ Each theme also has a palette, picked apart. The defaults tint the canvas with t
 **Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, or the light side of
 **Solarized**, **Nord**, **Gruvbox**, or **Rosé Pine** (its Dawn variant). Dark can be a plain **Grey**, a near
 **Black** for an OLED screen, a deep green **Forest**, a wine-dark **Plum**, or the dark side of **Solarized**,
-**Gruvbox**, or **Monokai**. The background, surfaces, and text change, and most schemes bring their own accent:
-Nord and Solarized their blues, Monokai its hot pink, Rosé Pine its dusty one. Gruvbox keeps the indigo, since its
-orange looked like every run was blocked. Every status color stays where you learned it. Scheme purists will notice the
-bases and accents sit a shade off the spec, so everything stays readable on them.
+**Gruvbox**, or **Monokai**. The background, surfaces, text, and accent change. Schemes with an accent bring it:
+Nord and Solarized their blues, Monokai its hot pink, Rosé Pine its dusty one, Gruvbox its purple, since its orange
+looked like every run was blocked. The rest get one that suits them: ink blue on Off-white, heather on Sage,
+steel blue on Grey, ultraviolet on Black, a lake in the Forest, and orchid on Plum. Neither green one gets a green
+accent, for the same reason Gruvbox lost its orange. Every status color stays where you learned it. Scheme purists
+will notice the bases and accents sit a shade off the spec, so everything stays readable on them.
 Nord's dark side didn't make it: moved far enough for that, it was Indigo with a different name. Rosé Pine's and
 Dracula's dark sides missed out the same way.
 

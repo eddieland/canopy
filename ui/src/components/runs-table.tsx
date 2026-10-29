@@ -24,7 +24,7 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { costText } from '@/lib/cost-total'
-import { modelNames, runModelIds, unservedReason } from '@/lib/models'
+import { modelNames, runModelIds, sameModel, UNREAD, unservedReason } from '@/lib/models'
 import { choreRunRef } from '@/lib/refs'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { rowLineFrom } from '@/lib/rows'
@@ -429,23 +429,25 @@ function RunBody({
     )
 }
 
-// Whether `RunModel` has anything to say of a run: a page that lists it without its models, and no model asked for.
+// Whether `RunModel` has anything to say of a run: not when canopy asked for no model and knows of none, its page
+// listing it without its models or its run having no session to read.
 function namesModel(run: Run): boolean {
-    return run.models !== null || run.model !== null
+    return run.model !== null || (run.models !== null && run.models.status !== 'no_session')
 }
 
 /**
  * The model that served a run, as its list names it (`modelNames`), and `+1` for each other it switched to, every one
- * whole in its tip with its cost; one that served other than the model canopy asked for says both, in
- * `status-blocked`, as its page does. Until its session is read, the model canopy asked for, else `model none`, why
- * in its tip.
+ * whole in its tip with its cost. A run the model canopy asked for served none of says `asked Y ≠ X`, asked first;
+ * one it served alongside another marks only the count of the others, `+1`, in the foreground, the rest muted: worth
+ * knowing, not waiting on the operator, so no status color (`sameModel` takes `X@variant` asked and `X` served alike).
+ * Until its session is read, the model canopy asked for, else `model unread`, why in its tip; a run with no session
+ * to read names no model.
  */
 function RunModel({ run, names, className }: { run: Run; names: ModelNames; className?: string }) {
     const name = (id: string) => names.get(id) ?? id
     const asked = run.model
     const served = run.models?.status === 'found' ? run.models.models : []
-    const [first, ...rest] = served
-    if (first === undefined) {
+    if (served.length === 0) {
         const why = run.models === null ? null : unservedReason(run.models)
         if (asked !== null) {
             return (
@@ -456,18 +458,22 @@ function RunModel({ run, names, className }: { run: Run; names: ModelNames; clas
                 </Tip>
             )
         }
-        if (why === null) {
+        if (why === null || run.models?.status === 'no_session') {
             return null
         }
+        // A session read, or gone, that named no model; else one canopy has not read yet, or could not.
+        const known = run.models?.status === 'found' || run.models?.status === 'missing'
         return (
             <Tip fact={`none: ${why}`} mono>
                 <span className={cn('text-muted-foreground', className)} data-testid="run-model">
-                    model none
+                    model {known ? 'none' : UNREAD}
                 </span>
             </Tip>
         )
     }
-    const differs = asked !== null && served.some((m) => m.model !== asked)
+    // The model asked for, as it served, first; the rest are others. When it served none, every one is another.
+    const match = asked === null ? served[0] : served.find((m) => sameModel(asked, m.model))
+    const [first, ...rest] = match === undefined ? served : [match, ...served.filter((m) => m !== match)]
     const fact = [
         ...served.map(
             (m) => `${m.model} ${costText(m.cost_usd)}, ${m.replies === 1 ? '1 reply' : `${m.replies} replies`}`,
@@ -476,13 +482,23 @@ function RunModel({ run, names, className }: { run: Run; names: ModelNames; clas
     ].join('\n')
     return (
         <Tip fact={fact} mono>
-            <span
-                className={cn(differs ? 'text-status-blocked' : 'text-muted-foreground', className)}
-                data-testid="run-model"
-            >
-                model {name(first.model)}
-                {rest.length > 0 && ` +${rest.length}`}
-                {differs && `, asked ${name(asked)}`}
+            <span className={cn('text-muted-foreground', className)} data-testid="run-model">
+                {match === undefined && asked !== null ? (
+                    <>
+                        asked {name(asked)} ≠{' '}
+                        <span className="text-foreground">
+                            {name(first?.model ?? '')}
+                            {rest.length > 0 && ` +${rest.length}`}
+                        </span>
+                    </>
+                ) : (
+                    <>
+                        model {name(first?.model ?? '')}
+                        {rest.length > 0 && (
+                            <span className={cn(asked !== null && 'text-foreground')}> +{rest.length}</span>
+                        )}
+                    </>
+                )}
             </span>
         </Tip>
     )
