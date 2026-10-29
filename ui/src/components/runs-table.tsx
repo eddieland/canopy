@@ -13,6 +13,7 @@ import { None } from '@/components/none'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow, RowLine } from '@/components/rows'
+import { RunCardNow } from '@/components/run-card'
 import { RunDoing } from '@/components/run-doing'
 import { RunLink } from '@/components/run-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
@@ -403,6 +404,11 @@ function RunBody({
             {run.activity && (
                 <RowLine from={under}>
                     <RunDoing activity={run.activity} />
+                </RowLine>
+            )}
+            {run.card !== null && run.ended_at === null && (
+                <RowLine from={under}>
+                    <RunCardNow card={run.card} />
                 </RowLine>
             )}
             {(prs.length > 0 || run.worktrees.length > 0 || run.session_id || namesModel(run)) && (

@@ -10,11 +10,13 @@ it as text.
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import (
     agent_models,
+    cards,
     contract,
     conversation,
     db,
@@ -36,6 +38,7 @@ from canopy.serve.schema import (
     Attachments,
     AttentionItem,
     Capacity,
+    CardStep,
     Comment,
     CostTotal,
     Decision,
@@ -52,6 +55,7 @@ from canopy.serve.schema import (
     PauseChannel,
     Run,
     RunActivity,
+    RunCard,
     RunsSince,
     RunState,
     ServedModel,
@@ -369,11 +373,35 @@ def run(
         worktrees=worktrees or [],
         log_path=shown_path(str(row["log_path"]), root),
         activity=_activity(row) if status == "running" else None,
+        card=card(row, running=status == "running"),
         persona=str(row["persona"]) if row["persona"] is not None else None,
         persona_digest=str(row["persona_digest"]) if row["persona_digest"] is not None else None,
         model=str(row["model"]) if row["model"] is not None else None,
         models=models,
         feedback_plan=feedback_plan,
+    )
+
+
+def card(row: sqlite3.Row | records.Row, *, running: bool) -> RunCard | None:
+    """A run's or a review run's card as the API sends it (DESIGN §41), or None when it kept none.
+
+    Returns:
+        The card, with how old it is, and while the run runs whether and when it goes stale: a page judges the time.
+    """
+    standing = cards.of(row)
+    found = standing.card
+    if found is None or standing.at is None:
+        return None
+    return RunCard(
+        summary=found.summary,
+        now=found.now,
+        done=[CardStep(step=d.step, proof=d.proof) for d in found.done],
+        next=list(found.next),
+        stuck=found.stuck,
+        at=standing.at,
+        calls_since=standing.calls_since,
+        stale=running and standing.calls_since >= cards.STALE_CALLS,
+        stale_at=standing.at + timedelta(minutes=cards.STALE_MINUTES) if running else None,
     )
 
 

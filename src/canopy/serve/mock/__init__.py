@@ -27,7 +27,19 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_runs, chore_view, config, conversation, db, pools, records, review_runs, sql, workspace
+from canopy.core import (
+    cards,
+    chore_runs,
+    chore_view,
+    config,
+    conversation,
+    db,
+    pools,
+    records,
+    review_runs,
+    sql,
+    workspace,
+)
 from canopy.core.context import db_path
 from canopy.core.items import Item
 from canopy.core.vocab import RunKind, RunStatus
@@ -765,6 +777,39 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             conn,
             sql.update("runs").set(activity_tool=tool, activity=did, activity_at=at(minutes)).where("id = ?", run_id),
         )
+    # What each running run's agent says of where it stands, its card (DESIGN §41): 41's fresh, 43's stale, gone more
+    # tool calls than `cards.STALE_CALLS` without an update.
+    said = (
+        (
+            LIVE_RUN,
+            cards.Card(
+                summary="The SSO callback is in and its tests pass; wiring the login button next.",
+                now="running the login tests",
+                done=(cards.Done(step="add the SSO callback", proof="tests pass: 12/12"),),
+                next=("wire the login button", "push", "open the PR"),
+            ),
+            24,
+            9,
+            3,
+        ),
+        (
+            43,
+            cards.Card(
+                summary="Reading the failed CI job; the queue's retry test is red on this branch alone.",
+                now="reading the CI workflow",
+                done=(cards.Done(step="read the failed job's log", proof="1 test red: test_retry_backoff"),),
+                next=("fix the backoff", "push"),
+                stuck="the CI log is cut short; reading the workflow for the step instead",
+            ),
+            12,
+            4,
+            26,
+        ),
+    )
+    for run_id, card, minutes, by_then, since in said:
+        recorded = sql.update("runs").set(card_json=card.model_dump_json(), card_at=at(minutes))
+        recorded = recorded.set(card_calls=by_then, tool_calls=by_then + since).where("id = ?", run_id)
+        sql.execute(conn, recorded)
     # Run 39's peak is the most one model call in its transcript was sent (transcripts.py), as its page's chart shows.
     sql.execute(conn, sql.update("runs").set(tokens_peak_context=30200).where("id = 39"))
     run_slots = (
