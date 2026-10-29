@@ -300,6 +300,20 @@ def test_a_unit_whose_pr_no_source_reads_names_its_url(canopy_env: CanopyEnv, ob
     assert WORKER_PR in UNOBSERVED_ITEM
 
 
+def test_an_unobserved_prs_item_names_its_url_without_a_credential(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    # Notification sinks send the item on, so a token a worker left in the URL stays in the journal.
+    db.set_unit(observed, KEY, str(canopy_env.root), "repo", pr_url="https://me:token@example.test/pr/1?key=secret#x")
+    observed.commit()
+    ctx = context(canopy_env)
+    [item] = harness_items.raised(ctx, phases.derive(ctx, NOW), NOW)
+    assert f"names {WORKER_PR} as its PR" in item.detail
+    assert "token" not in item.detail
+    assert "secret" not in item.detail
+
+
 def test_a_unit_whose_pr_is_observed_raises_no_unobserved_pr(
     canopy_env: CanopyEnv,
     observed: sqlite3.Connection,

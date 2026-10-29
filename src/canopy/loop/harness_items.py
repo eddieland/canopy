@@ -36,6 +36,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit, urlunsplit
 
 from canopy.core import conversation, db, observe, plans, records, review_runs, sql
 from canopy.core.vocab import CheckStatus, Phase, PlanStatus, PrState, ResumeReason, ReviewRunStatus, RunKind
@@ -208,10 +209,20 @@ def _unobserved(key: str, repo: str, url: str) -> Raised:
         The item, about the unit.
     """
     detail = (
-        f"{key} in {repo} names {url} as its PR, which is not a PR's URL, so no source reads it and the ticket waits; "
-        f"`canopy forget {key}` drops its work, and its next implement starts over"
+        f"{key} in {repo} names {_shown(url)} as its PR, which is not a PR's URL, so no source reads it and the ticket "
+        f"waits; `canopy forget {key}` drops its work, and its next implement starts over"
     )
     return Raised(key, UNOBSERVED_PR, detail, repo)
+
+
+def _shown(url: str) -> str:
+    """The worker's `url` fit for an item, which notification sinks send on, with no credential it may hold.
+
+    Returns:
+        Its scheme, host, and path: its user, password, query, and fragment dropped, where a credential would be.
+    """
+    parts = urlsplit(url)
+    return urlunsplit(parts._replace(netloc=parts.netloc.rpartition("@")[2], query="", fragment=""))
 
 
 def _of_unit(
