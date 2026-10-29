@@ -360,9 +360,10 @@ _STATUS_EMOJI = {
 # and a number, in characters that need no escaping, so the label cannot say anything the URL does not.
 _GITHUB_PR = re.compile(r"https://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/pull/([0-9]{1,10})/?")
 
-#: The events that need the operator, shown before the rest: the loop or a sink failing, and a plan waiting on them.
-#: The same as canopy sends a batching sink at once (DESIGN §20), with a new attention item and a blocked run.
-_NEEDS_YOU = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed"})
+#: The events that need the operator, shown before the rest: the loop or a sink failing, a plan waiting on them, and a
+#: forced push canopy made. The same as canopy sends a batching sink at once (DESIGN §20), with a new attention item
+#: and a blocked run.
+_NEEDS_YOU = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed", "ci.kicked"})
 #: The events whose `blocked` run asked the operator a question: a ticket's run's, and a task's.
 _ASKING = frozenset({"run.ended", "task.ended"})
 
@@ -601,6 +602,21 @@ def _ci_flaky(e: Mapping[str, object]) -> _Shown:
     )
 
 
+def _ci_kicked(e: Mapping[str, object]) -> _Shown:
+    what = f"{_named(e.get('ticket'), e.get('title'))} · run {escape(e.get('run'))}"
+    moved = f"`{escape(str(e.get('from_head'))[:12])}` → `{escape(str(e.get('to_head'))[:12])}`"
+    return _Shown(
+        [
+            (
+                f":warning: {what}: canopy force-pushed `{escape(e.get('branch'))}` in `{escape(e.get('repo'))}` "
+                "to rerun a check left as flaky"
+            ),
+            _pr(e.get("pr")) if e.get("pr") else "",
+        ],
+        [moved, f"kick {escape(e.get('kick'))} of {escape(e.get('limit'))}"],
+    )
+
+
 def _task_ended(e: Mapping[str, object]) -> _Shown:
     head = str(e.get("head") or "")[:12]
     tickets = _lines(e.get("tickets"))
@@ -710,6 +726,7 @@ _EVENTS: dict[str, Callable[[Mapping[str, object]], _Shown]] = {
     "plan.approved": _plan_approved,
     "follow_ups.filed": _follow_ups_filed,
     "ci.flaky": _ci_flaky,
+    "ci.kicked": _ci_kicked,
     "task.ended": _task_ended,
     "chore.ended": _chore_ended,
     "review.ended": _review_ended,

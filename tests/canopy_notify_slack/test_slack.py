@@ -456,6 +456,32 @@ def test_slack_blocks_for_a_flaky_check_kicked_or_left_to_the_operator() -> None
     ]
 
 
+def test_slack_blocks_for_a_forced_push_lead_the_message() -> None:
+    pr = "https://github.com/acme/api/pull/7"
+    kicked: dict[str, Any] = {
+        "kind": "ci.kicked",
+        "ticket": "P-1",
+        "title": "Fix the build",
+        "run": 2,
+        "repo": "api",
+        "branch": "agent/P-1",
+        "pr": pr,
+        "from_head": "0123456789abcdef",
+        "to_head": "fedcba9876543210",
+        "kick": 1,
+        "limit": 2,
+    }
+    blocks = slack.blocks({"repo": "/r/api", "events": [_run("P-2", 3), kicked]})
+    assert _texts(blocks)[1:] == [
+        (
+            ":warning: *P-1* Fix the build · run 2: canopy force-pushed `agent/P-1` in `api` to rerun a check left as "
+            f"flaky\n<{pr}|acme/api#7>"
+        ),
+        "`0123456789ab` → `fedcba987654` · kick 1 of 2",
+        ":arrow_forward: *P-2* · implement run 3 started · attempt 1 of 3 · `agent/P-2`",
+    ]
+
+
 def test_a_slack_digest_is_fields() -> None:
     digest: dict[str, Any] = {
         "since": "2026-09-24T15:00:00Z",

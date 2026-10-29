@@ -31,9 +31,9 @@ TIMEOUT_SECONDS = 60
 # `loop.failing` once.
 FAILING_AFTER = 3
 _POINT_GROUPS = (outbox.LOOP, outbox.RUNS, outbox.CHORES, outbox.REVIEWS, outbox.TASKS)
-# Events a batching sink sends at once, with whatever it held: the loop or a sink failing, or a plan waiting on the
-# operator, which holds its ticket until they answer (DESIGN §25).
-_URGENT_KINDS = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed"})
+# Events a batching sink sends at once, with whatever it held: the loop or a sink failing, a plan waiting on the
+# operator, which holds its ticket until they answer (DESIGN §25), or a forced push canopy made (DESIGN §23).
+_URGENT_KINDS = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed", "ci.kicked"})
 # The events whose `blocked` run asked the operator a question: a ticket's run's, and a one-off task's (DESIGN §36).
 _ASKING_KINDS = frozenset({"run.ended", "task.ended"})
 
@@ -315,7 +315,8 @@ def _urgent(change: journal.Diff | None, events: Iterable[message.Event]) -> boo
     """Whether a message needs the operator now, so a batching sink sends it at once.
 
     Returns:
-        True for a new attention item, a blocked run's question, or the loop or a sink failing.
+        True for a new attention item, a blocked run's question, the loop or a sink failing, a proposed plan, or a
+        forced push canopy made to rerun a flaky check.
     """
     if change is not None and change.added:
         return True

@@ -872,6 +872,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         status,
         flaky=parsed is not None and parsed.flaky,
         places=[(slot.git, slot.base, start) for slot, start in zip(slots, starts, strict=True)],
+        prs=(parsed.prs if parsed is not None else None) or {},
         log=log,
     )
     committed += kicks.notes
