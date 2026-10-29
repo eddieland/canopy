@@ -115,7 +115,7 @@ def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
     ctx = open_context(click_ctx)
     if run_id is not None:
         try:
-            click.echo(findings.described(ctx.conn, run_id))
+            click.echo(findings.described(ctx.conn, run_id, card=conversation.is_operator()))
         except findings.Unusable as e:
             raise CliError(str(e)) from None
         # Seen once shown to the operator. Inside one of canopy's own runs it marks nothing, and a review still running

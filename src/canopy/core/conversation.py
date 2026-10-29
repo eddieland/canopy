@@ -211,6 +211,17 @@ def check_verb(ref: Ref, verb: str) -> None:
     raise Refused("unsupported", f"{ref} is a {ref.kind}, which takes only {', '.join(verbs)}")
 
 
+def is_operator(environ: Mapping[str, str] | None = None) -> bool:
+    """Whether this runs outside canopy's own ticks and runs, as the operator's commands do (`check_operator`).
+
+    Returns:
+        False when CANOPY_TICK_ID or CANOPY_RUN_ID is set in `environ`, or in the process's environment when `environ`
+        is None; else True.
+    """
+    env = os.environ if environ is None else environ
+    return not any(env.get(name) for name in (TICK_ID_ENV, RUN_ID_ENV))
+
+
 def check_operator(environ: Mapping[str, str] | None = None) -> None:
     """Refuse when run inside one of canopy's own ticks or runs (`inside_run`): only the operator starts or replies.
 
