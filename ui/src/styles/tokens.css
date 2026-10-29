@@ -287,11 +287,11 @@
     --context-carried: oklch(0.59 0.02 70);
 }
 
-/* Sage: a soft green canvas, the light side of Forest, with salvia's violet for an accent, since a green one would
+/* Sage: a soft green canvas, the light side of Forest, with heather for an accent, since a green one would
  * pass for running. */
 :root[data-light-palette='sage']:not(.dark) {
-    --accent: oklch(0.5 0.15 297);
-    --ring: oklch(0.5 0.15 297 / 0.55);
+    --accent: oklch(0.5 0.14 318);
+    --ring: oklch(0.5 0.14 318 / 0.55);
     --background: oklch(0.952 0.016 150);
     --surface: oklch(0.992 0.005 150);
     --surface-raised: oklch(0.963 0.014 150);
@@ -395,10 +395,10 @@
     --context-carried: oklch(0.62 0.02 70);
 }
 
-/* Forest: a deep green canvas, the dark side of Sage, with bluebells for an accent. */
+/* Forest: a deep green canvas, the dark side of Sage, with a lake blue for an accent. */
 .dark[data-dark-palette='forest'] {
-    --accent: oklch(0.74 0.13 266);
-    --ring: oklch(0.74 0.13 266 / 0.5);
+    --accent: oklch(0.76 0.11 240);
+    --ring: oklch(0.76 0.11 240 / 0.5);
     --background: oklch(0.17 0.02 165);
     --surface: oklch(0.205 0.024 165);
     --surface-raised: oklch(0.25 0.028 165);
