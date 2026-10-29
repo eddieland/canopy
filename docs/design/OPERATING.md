@@ -18,8 +18,8 @@ back. The schema is in `migrations/`, squashed once for v0.1; a journal from bef
 
 What it records, and why:
 
-- **Ticks**: each tick's status, summary, what it read up to (§6 step 3), whether it ran the overseer (§39), and, for
-  a tick `canopy loop` ran, what woke it (§6), so spend can be split by what it bought. A tick that cannot take the
+- **Ticks**: each tick's status, summary, what it read up to (§6 step 3), whether it ran the overseer (step 5), and,
+  for a tick `canopy loop` ran, what woke it (§6), so spend can be split by what it bought. A tick that cannot take the
   lock writes nothing.
 - **Tickets and units**: each ticket seen, with its derived phase, its branch, whether it is done or forgotten (§22),
   and its cursors; each unit, a ticket's work in one repository (§18), with its branch, PR, phase, and cursors (§7).
@@ -45,7 +45,9 @@ the machine canopy runs on, as the operator's own day is. A ticket counts as don
 window, `merged` and `closed` alike, since a tracker that closes a ticket when its PR merges closes most before the loop
 sees the merge. Spend per ticket done divides the window's whole spend, overseer and chores included. A tool's share of
 context is measured in characters it returned, since the runtime does not attribute tokens to tool results, and is
-labeled an estimate wherever shown (MEASUREMENTS 2026-10-13).
+labeled an estimate wherever shown (MEASUREMENTS 2026-10-13). A tick that ran no overseer costs nothing, and counts
+at nothing, never among the runs that reported no cost; ticks are split by whether it ran, beside what woke them, so
+what an idle tick costs is the overseer's runs that bought nothing.
 
 The web UI's reports page reads the same figures by local calendar month, dollars and tokens by kind and by model,
 and the sessions outside canopy beside the kinds, so a month's total is all agent spend, as the budget's is,
@@ -261,8 +263,9 @@ Agent definitions ship in `agents/`:
   canopy renders those last of its bash rules, after the deny of every other command, since the last match wins and
   its definition is merged after the operator's runtime config, and refuses one that runs a command it is given or is
   the loop's own (TRUST_MODEL T1). Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021) and
-  loses every decision not yet recorded. MCP: no server but canopy's (§39, T6), every other server's tools and
-  resources denied whatever the operator's runtime config grants.
+  loses every decision not yet recorded. MCP: no server but canopy's (T6), every other server's tools and
+  resources denied whatever the operator's runtime config grants: it reads the world from the journal alone (§30), so
+  it has no tracker or GitHub server to call.
 - `canopy-worker`: edit and bash within the worktree; `runtime.allow_bash` names commands that beat its bash denies,
   rendered last, with the overseer's checks, and the private worker's the same. MCP: the tracker (comments, labels,
   follow-ups), GitHub (open and update a PR, read reviews and checks, and its issue tools only when they are the
@@ -318,11 +321,10 @@ operator's own config directory, where 1 reads both, so its snapshot links to ea
 theirs: their MCP servers, providers, and rules reach every run, as they would their own sessions. Among them:
 
 - `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
-- `canopy-overseer` gets the tracker's MCP server and only its read tools, and the overseer's prompt, or the
-  operator's override (§12), as its body, then the shipped `tracker-<provider>` skill if any, and then no skill tool,
-  having nothing left to load. The body is the system prompt the provider caches across ticks; a tick's message is its
-  state block alone (§6). An override canopy cannot read fails the tick and every run started from it, rather than
-  running without the prompt.
+- `canopy-overseer` gets the overseer's prompt, or the operator's override (§12), as its body, and nothing of the
+  tracker's, no server and no skill, its skill tool denied, since it reads no tracker (§30). The body is the system
+  prompt the provider caches across ticks; a tick's message is its state block alone (§6). An override canopy cannot
+  read fails the tick and every run started from it, rather than running without the prompt.
 - Every definition gets the artifact store's MCP server denied whole, and an agent `artifacts.publish_roles` names its
   tools by exact name and its skill (§38).
 
@@ -334,7 +336,7 @@ private run (§22) is also refused where that config names any tool of the track
 after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
-turns none off, but for the overseer, which reads no tracker and loads no skill (§39), and the operator's skill below. A
+turns none off, but for the overseer, which reads no tracker and so loads no skill, and the operator's skill below. A
 repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
@@ -422,7 +424,7 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 and `lesson_wrong` (§28),
 `drafts_waiting` (§29), `connector_failed` and `check_stuck` (§30), `persona_missing` and `bad_persona` (§31),
 `model_missing` and `model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34),
-`task_ticket_unrecorded` (§36), `untrusted_artifact_comment` (§38), and `unobserved_pr` (§39). An item
+`task_ticket_unrecorded` (§36), `untrusted_artifact_comment` (§38), and `unobserved_pr` (§37). An item
 about one unit names its repository, shown as `KEY (repo)`. An item about a PR whose latest reviewed commit has a
 `high` review (§21), or about its ticket, comes first: within its reason on the list, and in a notification.
 
@@ -451,10 +453,11 @@ its limit, `review_limit` for one of the loop's PRs unreviewed at its limit, `re
 run failed, and `plan_review` and `plan_changed` while a plan waits on the operator or its file is no longer what they
 approved; and two the overseer never recorded: `check_stuck`, for a unit one check holds at `ci_running` long after
 the rest finished (§30), and `unobserved_pr`, for a unit whose PR URL names no PR, which no source reads, so its ticket
-waits (§39). Each is open while its cause holds in the journal and the observations (§30). One resting on
-an observation is kept while that observation is stale, and goes only when a fresh one shows its cause gone, or its
-ticket is done, stopped, or seen closed or unlabeled: a tick that could not read a cause drops nothing. A guard that
-refuses the overseer a dispatch or a review past its limit records `attempt_limit` or `review_limit` too.
+waits (§37) until the unit names a PR or the operator forgets the ticket's work. Each is open while its cause holds in
+the journal and the observations (§30). One resting on an observation is kept while that observation is stale, and
+goes only when a fresh one shows its cause gone, or its ticket is done, stopped, or seen closed or unlabeled: a tick
+that could not read a cause drops nothing. A guard that refuses the overseer a dispatch or a review past its limit
+records `attempt_limit` or `review_limit` too.
 
 **Recorded by the overseer.** The overseer records the items that are judgment with its `attention` tool (§27), with a
 reason and a detail; the tool refuses it a reason the harness raises. Items are stored as decisions, not a table of
@@ -497,7 +500,7 @@ open item is never notified twice, and an item that returns after going away is 
 - Tick code raises an unexpected exception: the tick closes `error`, its summary the exception's type and message, so
   the journal keeps the cause when the logs cannot; the traceback goes to `canopy.log`, and the loop goes on.
 - A source down: the tick raises `connector_failed` (§30), and what the source left stale is the harness's `wait`
-  (§39); the overseer, which reads no server, has no outage of its own to skip a tick over.
+  (§37); the overseer, which reads no server (§13), has no outage of its own to skip a tick over.
 - Overseer asks for something the guards refuse: the refusal is recorded as a decision with the guard's reason.
 - An unhandled error in a tick `canopy loop` runs: the traceback is logged and the loop goes on; the next tick closes
   the row as `abandoned` (§6).
