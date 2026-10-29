@@ -156,7 +156,7 @@ def test_a_card_gone_too_many_tool_calls_without_an_update_is_stale(conn: sqlite
     assert cards.is_stale(standing, started)
     doing = cards.doing(standing, started)
     assert doing is not None
-    assert doing.endswith(f", {cards.STALE_CALLS} calls old  stale")
+    assert doing.endswith(f"  no update in {cards.STALE_CALLS} tool calls")
 
 
 QUESTION: dict[str, object] = {
@@ -235,4 +235,4 @@ def test_show_lists_a_questions_options_by_letter_and_says_how_to_answer_it(
     assert cards.asking(answered, "run:7") is None
     db.finish_run(conn, "runs", running, RunStatus.DONE, "{}")
     ended = cards.lines(standing, started_at=OLD, running=False, timeout_minutes=45, ref="run:7")
-    assert ended[-1] == "      never answered"
+    assert ended[-1] == "      run ended before an answer"

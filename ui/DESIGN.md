@@ -105,11 +105,11 @@ Rules:
   Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox, and Monokai. A light canvas is never grey,
   which only looks dim. Every other hue is the same in all, so a component never knows which it is on, and an accent is
   read through its token, never assumed indigo; where a scheme's own bases would drop a hue below 4.5:1, the bases move,
-  never the hue. A palette's accent is darkened or lightened until it reads as text there and under `accent-foreground`,
-  and sets `ring` with it. A scheme whose accent would pass for a status wears another of its colors, as Gruvbox wears
-  its purple, not its orange, and a green canvas never takes a green accent. A scheme whose bases would have to move
-  until it matched another palette is left out, as Nord's dark is. `tokens.test.ts` measures every palette
-  `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
+  never the hue. A palette's accent is darkened or lightened until it reads as text there, on its own tint, and under
+  `accent-foreground`, and sets `ring` with it. A scheme whose accent would pass for a status wears another of its
+  colors, as Gruvbox wears its purple, not its orange, and a green canvas never takes a green accent. A scheme whose
+  bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts` measures
+  every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
@@ -1076,8 +1076,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   question alone: a stale update is a clock and `stale` in `foreground`, a fact about the record, never a request.
   When it was last updated, in time and tool calls, is the head line, or the right of the panel's header. A run's and
   a review's page lead with it as a `Progress` panel (`Last progress` once ended), a ticket's `WorkingNow` shows it as a
-  bubble on the worker's side, a running run's row as one line (a 4rem meter and `N/M`, what it does now, `asks you`,
-  when), and the rail's working row of a worker run as its meter under the phase line. Agent text, as text.
+  bubble on the worker's side, a running run's row as one line (a 4rem meter and `N/M` when it has steps, what it does
+  now, `asks you`, when), and the rail's working row of a worker run as its meter under the phase line, when it has
+  steps. Agent text, as text.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub

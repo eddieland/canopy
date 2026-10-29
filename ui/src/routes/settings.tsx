@@ -161,12 +161,12 @@ function ThemePanel() {
                 </ToggleGroup>
             </div>
             <PaletteRow theme="light" value={palettes.light} options={LIGHT_PALETTES}>
-                The light theme&apos;s neutrals: lavender, which tints the canvas with the accent&apos;s hue, a warm
-                off-white, a soft sage, or an editor scheme&apos;s light tones.
+                The light theme&apos;s palette: lavender, which tints the canvas with the accent&apos;s hue, a warm
+                off-white, a soft sage, or an editor scheme&apos;s light tones, each with an accent of its own.
             </PaletteRow>
             <PaletteRow theme="dark" value={palettes.dark} options={DARK_PALETTES}>
                 The dark theme&apos;s: an indigo slate, a plain grey, a near black, a deep forest green, a plum, or a
-                scheme&apos;s dark tones.
+                scheme&apos;s dark tones, each with an accent of its own.
             </PaletteRow>
         </Panel>
     )
