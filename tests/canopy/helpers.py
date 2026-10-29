@@ -68,6 +68,11 @@ UNOBSERVED = (
     f"unobserved: {WORKER_PR} is not a PR's URL, so it is not observed; no source reads it, so it waits until the "
     "operator forgets the ticket's work"
 )
+#: What the harness's `unobserved_pr` item says of KEY's unit in `repo` at WORKER_PR.
+UNOBSERVED_ITEM = (
+    f"{KEY} in repo names {WORKER_PR} as its PR, which is not a PR's URL, so no source reads it and the ticket waits; "
+    f"`canopy forget {KEY}` drops its work, and its next implement starts over"
+)
 #: The `trust` keys of the private file that hold a worker's drafts for the operator to approve:
 #: `scenario.configures("private", trust=APPROVE)`.
 APPROVE = {"review_replies": "approve"}

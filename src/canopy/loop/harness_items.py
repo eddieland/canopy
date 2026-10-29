@@ -13,9 +13,11 @@ the derivation's rows and the journal, and records it marked as its own, so no i
 - `plan_review`, while a plan waits on the operator, and `plan_changed`, while an approved plan's file is no longer the
   text they approved (§25, §32).
 
-Beside them it raises `check_stuck`, which the overseer never recorded: for a unit `ci_running` on one check alone,
-still pending `STUCK_AFTER` past every other check at its head finishing, which may not be CI, until it completes, the
-head moves, or its repository's map gives it a role (§30).
+Beside them it raises two the overseer never recorded (`attention.ONLY_FROM_CAUSES`): `check_stuck`, for a unit
+`ci_running` on one check alone, still pending `STUCK_AFTER` past every other check at its head finishing, which may not
+be CI, until it completes, the head moves, or its repository's map gives it a role (§30); and `unobserved_pr`, for a
+unit whose PR URL names no PR, which no source reads, so the harness waits on its ticket (§39), until the unit names a
+PR or the operator forgets the ticket's work.
 
 An item that rests on what a connector observed is kept while that observation is stale: the harness records it again
 as the latest `ok` tick listed it, and it goes only once a fresh observation shows its cause gone, or its ticket is
@@ -34,6 +36,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit, urlunsplit
 
 from canopy.core import conversation, db, observe, plans, records, review_runs, sql
 from canopy.core.vocab import CheckStatus, Phase, PlanStatus, PrState, ResumeReason, ReviewRunStatus, RunKind
@@ -61,8 +64,9 @@ REVIEW_LIMIT = "review_limit"
 PLAN_REVIEW = "plan_review"
 PLAN_CHANGED = "plan_changed"
 CHECK_STUCK = attention.CHECK_STUCK
-#: Every reason this module raises: those of `attention.FROM_CAUSES`, and one only the harness has ever recorded.
-REASONS: frozenset[str] = attention.FROM_CAUSES | {CHECK_STUCK}
+UNOBSERVED_PR = attention.UNOBSERVED_PR
+#: Every reason this module raises: those of `attention.FROM_CAUSES`, and those only the harness has ever recorded.
+REASONS: frozenset[str] = attention.FROM_CAUSES | attention.ONLY_FROM_CAUSES
 #: The reasons whose cause rests on what a connector observed, so a stale observation keeps their item.
 OBSERVED: frozenset[str] = frozenset(
     {NEEDS_REVIEWER, READY_TO_MERGE, UNTRUSTED_REVIEW, ATTEMPT_LIMIT, REVIEW_LIMIT, CHECK_STUCK},
@@ -189,9 +193,36 @@ def _from_rows(ctx: Context, subjects: _Subjects, limits: _Limits, now: datetime
         units = subjects.units.get(key, ())
         for unit in units:
             url = limits.pr_of(key, unit.repo)
-            if unit.stale is None and unit.phases and url is not None:
+            if unit.unobserved and unit.repo is not None and url is not None:
+                yield _unobserved(key, unit.repo, url)
+            elif unit.stale is None and unit.phases and url is not None:
                 yield from _of_unit(ctx, key, unit, url, heads.get(url), now=now)
         yield from _attempt_limits(ctx, key, subjects.own[key], units, limits)
+
+
+def _unobserved(key: str, repo: str, url: str) -> Raised:
+    """`unobserved_pr` for ticket `key`'s unit in `repo`, whose PR URL `url` names no PR, so no source reads it (§39).
+
+    The harness waits on the ticket and never lists it to the overseer (`loop.harness`); the item tells the operator.
+
+    Returns:
+        The item, about the unit.
+    """
+    detail = (
+        f"{key} in {repo} names {_shown(url)} as its PR, which is not a PR's URL, so no source reads it and the ticket "
+        f"waits; `canopy forget {key}` drops its work, and its next implement starts over"
+    )
+    return Raised(key, UNOBSERVED_PR, detail, repo)
+
+
+def _shown(url: str) -> str:
+    """The worker's `url` fit for an item, which notification sinks send on, with no credential it may hold.
+
+    Returns:
+        Its scheme, host, and path: its user, password, query, and fragment dropped, where a credential would be.
+    """
+    parts = urlsplit(url)
+    return urlunsplit(parts._replace(netloc=parts.netloc.rpartition("@")[2], query="", fragment=""))
 
 
 def _of_unit(
@@ -551,7 +582,9 @@ def _closed_prs(conn: sqlite3.Connection, cutoff: str, urls: Iterable[str]) -> s
 def _kept(ctx: Context, subjects: _Subjects, limits: _Limits) -> Iterator[Raised]:
     """The open items whose cause rests on an observation not read fresh: each as the latest `ok` tick listed it.
 
-    An item about a limit goes all the same once the journal shows the limit lifted, by a grant or a newer run.
+    An item about a limit goes all the same once the journal shows the limit lifted, by a grant or a newer run. An
+    `unobserved_pr` rests on the derivation's rows, so it is kept when the derivation raised, while its unit still names
+    no PR.
 
     Yields:
         Each.
@@ -561,6 +594,11 @@ def _kept(ctx: Context, subjects: _Subjects, limits: _Limits) -> Iterator[Raised
         if reason not in REASONS or key is None:
             continue
         url = limits.pr_of(key, repo)
+        if reason == UNOBSERVED_PR:
+            # A derivation that ran raised it afresh or not; one that raised leaves the journal to say the unit's URL.
+            if subjects.own is None and key in subjects.keys and url is not None and not observe.is_pr_url(url):
+                yield _raised(item)
+            continue
         if not subjects.unread(key, repo, reason, pr=url is not None):
             continue
         if reason == ATTEMPT_LIMIT and not limits.reached(key, repo):

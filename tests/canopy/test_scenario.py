@@ -14,7 +14,16 @@ from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
 from tests.canopy import scenario_helpers
 from tests.canopy.conftest import Ws
-from tests.canopy.helpers import DRAFTS_PR, UNOBSERVED, InlineRunner, agent_runs, last_tick, present, waits
+from tests.canopy.helpers import (
+    DRAFTS_PR,
+    UNOBSERVED,
+    UNOBSERVED_ITEM,
+    InlineRunner,
+    agent_runs,
+    last_tick,
+    present,
+    waits,
+)
 from tests.canopy.review_helpers import CLEAN, PR, head, reviewer_reports
 from tests.canopy.scenario_helpers import (
     Printed,
@@ -47,13 +56,14 @@ def test_the_story_tells_each_move_and_what_canopy_did_with_it(scenario: Scenari
         f"     PROJ-1 refused:cooldown: a resume for CI alone in PROJ-1 in repo may run again after {held}",
         "4. 1:30:00 passes",
         "5. an earlier tick saw PROJ-2",
-        "6. tick 4, exits 0: ok: 3 decisions: attention:needs_human=1, queried=1, wait=1",
+        "6. tick 4, exits 0: ok: 4 decisions: attention:needs_human=1, attention:unobserved_pr=1, queried=1, wait=1",
+        f"     PROJ-1 attention:unobserved_pr: {UNOBSERVED_ITEM}",
         f"     PROJ-1 wait: {UNOBSERVED}",
         "     - queried: the query returned no open ticket",
         "     PROJ-2 attention:needs_human: PROJ-2 detail",
         "7. the operator runs canopy grant PROJ-1 resume, which exits 0",
         "     PROJ-1 in repo has had 1 resume runs, and may now have 7. The next tick decides whether to dispatch it.",
-        "The attention list now: PROJ-2 needs_human.",
+        "The attention list now: PROJ-1 unobserved_pr, PROJ-2 needs_human.",
     ]
 
 
@@ -87,13 +97,14 @@ def test_a_held_run_is_at_work_until_the_story_says_what_becomes_of_it(scenario:
         "2. tick 2 refuses canopy dispatch PROJ-1 --repo repo --kind implement --label agent-ready-tester",
         "     PROJ-1 refused:running: run 1 is already working PROJ-1",
         "3. run 1, implement of PROJ-1: done: did it",
-        "4. tick 3, exits 0: ok: 3 decisions: dispatch:implement=1, queried=1, wait=1",
+        "4. tick 3, exits 0: ok: 4 decisions: attention:unobserved_pr=1, dispatch:implement=1, queried=1, wait=1",
+        f"     PROJ-1 attention:unobserved_pr: {UNOBSERVED_ITEM}",
         f"     PROJ-1 wait: {UNOBSERVED}",
         "     - queried: the query returned no open ticket",
         f"     PROJ-2 dispatch:implement: run 2: agent/PROJ-2-work in repo at {slot}; label agent-ready-tester",
         "     run 2, implement of PROJ-2: at work",
         "5. run 2, implement of PROJ-2: its `canopy _run` dies, its worker still at work",
-        "The attention list now: nothing.",
+        "The attention list now: PROJ-1 unobserved_pr.",
     ]
 
 

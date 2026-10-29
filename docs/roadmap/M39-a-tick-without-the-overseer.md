@@ -133,11 +133,15 @@ subject. A candidate with a unit whose PR URL names no PR, which no source reads
 source reads it, and is never listed to the overseer; so is one the `tracker` source read before canopy held it, such as
 one the query found that was read as another's blocker, whose comments it never recorded, until a read since, as the
 block already counted it stale (`loop/phases.py`, `loop/harness.py`). A ticket, blocker, PR, or repository's branches
-with no observation at all was already waited as stale. Chosen conservatively, for the operator to change: an unobserved
-unit waits until the operator forgets the ticket's work, which drops its units, and raises no item of its own; a closed
-or unlabeled ticket is still decided without its PRs; and a review's PR not read fresh stays the overseer's
-`canopy_review-wait`, taken from the read, not a live one. The tests' fake worker reports a PR no source reads, so a
-story that needs the overseer listed a ticket with a PR gives it one the fake `vcs` source reads. Built (2026-10-29):
+with no observation at all was already waited as stale. Built (2026-10-29): an item for that wait, as the operator
+decided, so it never sits silent. The harness raises `unobserved_pr` about such a unit, naming its repository and the
+URL that names no PR, while its ticket is held; it goes once the unit names a PR, the operator forgets the ticket's
+work, which drops its units, or the ticket is done, stopped, or seen closed or unlabeled, and the overseer is refused
+it (`raised`) as it is the harness's other items (`loop/harness_items.py`). Chosen conservatively, for the operator to
+change: a closed or unlabeled ticket is still decided without its PRs; and a review's PR not read fresh stays the
+overseer's `canopy_review-wait`, taken from the read, not a live one. The tests' fake worker reports a PR no source
+reads, so a story that needs the overseer listed a ticket with a PR gives it one the fake `vcs` source reads, and one
+whose sink must hear no new item has its worker report none. Built (2026-10-29):
 the paths config left unreachable removed. `canopy queried`, its tool, and the duty that owed it are gone, the harness
 recording the `tracker` source's read of the query as before; every decision names its ticket, so the tick-wide `skip`
 and DESIGN §15's case for it are gone, and no tick closes `skipped`; the state block has no `query_due`, and the

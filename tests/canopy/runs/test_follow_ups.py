@@ -154,11 +154,11 @@ def test_a_follow_up_authorizes_nothing_and_canopy_tells_the_operator_once(
         f"? {KEY} run {run.id} filed follow-ups {FOLLOW_UP} (repo), PROJ-15: "
         "label or `canopy start` each one you want worked"
     )
-    # The overseer owes it nothing, and nothing stands on the attention list: a tick that decides only the parent ends
-    # ok, records no item about the follow-ups, and tells the sinks nothing more.
+    # The overseer owes it nothing, and nothing about it stands on the attention list: a tick that decides only the
+    # parent, whose PR no source reads, ends ok, records no item about the follow-ups, and tells the sinks nothing more.
     scenario.tick(*waits(KEY))
     scenario.tick(*waits(KEY))
-    assert [i.reason for i in attention.current(scenario.conn)] == []
+    assert [(i.ticket_key, i.reason) for i in attention.current(scenario.conn)] == [(KEY, "unobserved_pr")]
     assert len(told(scenario)) == 1
     # Nothing dispatches it without a label: it is a request.
     assert scenario.refuses(dispatches(FOLLOW_UP, label=None)) == [
