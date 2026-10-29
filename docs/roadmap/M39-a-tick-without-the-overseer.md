@@ -103,9 +103,17 @@ refused; the overseer's definition denies the tracker's server whole, and GitHub
 tracker skill, its skill tool denied (`runtime/opencode/definitions.py`). A workspace with no `tracker` source keeps
 the overseer's live reads until config requires one. Chosen conservatively, for the operator to change: a ticket a
 query found but the source has not read yet waits a poll for that read; with no tracker server named, by
-`tracker.mcp_server` or a provider canopy knows, only GitHub's issue reads are denied. Left: config requiring
-a `tracker` source, with the tests' workspaces given the fake one; the GitHub half (the `vcs` source reading the
-review query's and requests' PRs into the block, a stale unit the harness's `wait`, the GitHub server denied, and
-`mcp_unavailable` gone); the third bullet; and the design folded into the sections it names.
-Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended:
-yes, and that entry with it), the fifth bullet's.
+`tracker.mcp_server` or a provider canopy knows, only GitHub's issue reads are denied. Built (2026-10-28):
+the fifth bullet's GitHub half, where a `tracker` source runs beside the `vcs` source, which always does. A candidate
+whose unit's PR or branches, its own branches, or an open blocker's PR the `vcs` source left stale or never read is the
+harness's `wait`, naming what is old (`loop/harness.py`); the `vcs` request asks for each PR the review query last
+found, and the block shows the PRs of the open review requests and the fresh query as read, in
+`observations.review_prs`, so the overseer runs no review query; a tick-wide `mcp_unavailable` skip is refused; and the
+overseer's definition denies GitHub's PR, branch, and user reads by pattern, and on a GitHub tracker its server whole.
+Chosen conservatively, for the operator to change: a review PR's checks are all counted as CI, since which repository
+it is in is the overseer's to match; a blocker not listed to the overseer is not stacked on; and off a GitHub tracker
+GitHub's server is denied by its tools' names, its own name being the operator's. Left: config requiring a `tracker`
+source, with the tests' workspaces given the fake one; the harness's `wait` on an unobserved subject; every MCP server
+but canopy's denied; the third bullet; and the design folded into the sections it names. Still open for the operator:
+whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes, and that entry with it),
+the fifth bullet's.

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { keys } from '@/api/queries'
 import { mockCapacity } from '@/api/mocks'
-import type { LoopState, MemoryState, Meta, Tick } from '@/api/types'
+import type { LoopState, MemoryState, Meta, Spend, SpendMonth, Tick } from '@/api/types'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { StreamContext } from '@/hooks/use-loop-down'
 import { renderRouted } from '@/test-utils'
@@ -51,6 +51,27 @@ const MEMORY: MemoryState = {
     proposals_waiting: 0,
 }
 
+// October 2026 a quarter gone, with a $40 budget: $15.76 spent, on pace for $63.04, over it.
+const MONTH: SpendMonth = {
+    month: '2026-10',
+    since: '2026-10-01T00:00:00Z',
+    until: '2026-11-01T00:00:00Z',
+    budget_usd: 40,
+    spent_usd: 15.76,
+    elapsed: 0.25,
+    projected_usd: 63.04,
+    alerts: [100],
+    runs_usd: 15.76,
+    outside_usd: 0,
+    sessions_read_at: null,
+}
+
+// What the last day and 30 days cost, and the month against its budget, or none set.
+function spendWith(budget: SpendMonth | null): Spend {
+    const window = { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 15.76 }
+    return { day: window, month: { ...window, hours: 720 }, total_usd: 15.76, sessions_read_at: null, budget }
+}
+
 beforeEach(() => {
     // The ages read the clock: hold it three minutes after the tick ended.
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-08T12:00:00Z') })
@@ -67,22 +88,25 @@ function renderReadouts(
         meta = META,
         tick = null,
         memory = null,
+        budget = null,
         downSince = null,
         client = new QueryClient(),
     }: {
         meta?: Meta
         tick?: Tick | null
         memory?: MemoryState | null
+        budget?: SpendMonth | null
         downSince?: number | null
         client?: QueryClient
     } = {},
 ) {
     // Nothing is fetched: each readout's data is what the test seeds, as the stream would send it.
-    for (const key of [keys.meta, keys.tick, keys.loop]) {
+    for (const key of [keys.meta, keys.tick, keys.loop, keys.host, keys.spend]) {
         client.setQueryDefaults(key, { enabled: false })
     }
     client.setQueryData(keys.meta, meta)
     client.setQueryData(keys.tick, { tick, acknowledged: null })
+    client.setQueryData(keys.spend, spendWith(budget))
     client.setQueryData<LoopState>(keys.loop, { capacity: mockCapacity, memory, notice: null, paused: null })
     return renderRouted(
         <StreamContext value={{ status: stream, downSince }}>
@@ -135,6 +159,8 @@ describe('LiveReadouts', () => {
         const client = new QueryClient()
         client.setQueryDefaults(keys.tick, { enabled: false })
         client.setQueryDefaults(keys.loop, { enabled: false })
+        client.setQueryDefaults(keys.host, { enabled: false })
+        client.setQueryDefaults(keys.spend, { enabled: false })
         await renderRouted(<LiveReadouts />, { client })
         expect(screen.queryByTestId('last-tick')).toBeNull()
 
@@ -154,7 +180,7 @@ describe('LiveReadouts', () => {
 
     it('says the tick Tick now asked for is starting until its row lands, then shows it', async () => {
         const client = new QueryClient()
-        for (const key of [keys.meta, keys.tick, keys.loop]) {
+        for (const key of [keys.meta, keys.tick, keys.loop, keys.host, keys.spend]) {
             client.setQueryDefaults(key, { enabled: false })
         }
         client.setQueryData(keys.meta, META)
@@ -242,5 +268,34 @@ describe('LiveReadouts', () => {
             await Promise.resolve()
         })
         expect(router.state.location.pathname).toBe('/memory')
+    })
+
+    it('shows no budget while none is set', async () => {
+        await renderReadouts('open')
+        expect(screen.queryByTestId('budget-readout')).toBeNull()
+    })
+
+    it.each([
+        ['on budget', { projected_usd: 31.52 }, 'under', '39%', 'On budget: $15.76 of $40 (39%), on pace for $31.52.'],
+        ['headed over', {}, 'headed', '39%', 'Headed over: $15.76 of $40 (39%), on pace for $63.04.'],
+        [
+            'over budget',
+            { spent_usd: 42.5, projected_usd: 170 },
+            'over',
+            '106%',
+            'Over budget: $42.50 of $40 (106%), on pace for $170.00.',
+        ],
+    ] as const)('says the month is %s, in words, and opens the spend page', async (_, change, state, shown, said) => {
+        const { router } = await renderReadouts('open', { budget: { ...MONTH, ...change } })
+        const link = screen.getByRole('link', { name: said })
+        expect(link.textContent).toBe(shown)
+        expect(link.title).toBe(said)
+        expect(link.dataset['state']).toBe(state)
+
+        await act(async () => {
+            fireEvent.click(link)
+            await Promise.resolve()
+        })
+        expect(router.state.location.pathname).toBe('/reports/spend')
     })
 })

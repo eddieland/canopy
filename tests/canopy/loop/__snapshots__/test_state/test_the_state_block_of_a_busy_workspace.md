@@ -54,7 +54,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "key": "PROJ-1",
       "title": "Retry flaky uploads",
       "phase": "ci_running",
-      "branch": "agent/PROJ-1-retry",
       "cursors": {
         "comment": "10001"
       },
@@ -93,14 +92,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
         "run_id": 4,
         "kind": "resume",
         "status": "done",
-        "branch": "agent/PROJ-1-retry",
-        "repos": [
-          {
-            "repo": "repo",
-            "base": "main"
-          }
-        ],
-        "started_at": "2026-10-16T09:45:00.000Z",
         "ended_at": "2026-10-16T09:50:00.000Z",
         "reasons": [
           "ci",
@@ -120,7 +111,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
     {
       "key": "PROJ-4",
       "title": "Tidy the CLI help",
-      "branch": "agent/PROJ-4-help",
       "units": [
         {
           "repo": "repo",
@@ -136,14 +126,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
         "run_id": 3,
         "kind": "implement",
         "status": "blocked",
-        "branch": "agent/PROJ-4-help",
-        "repos": [
-          {
-            "repo": "repo",
-            "base": "main"
-          }
-        ],
-        "started_at": "2026-10-16T09:20:00.000Z",
         "ended_at": "2026-10-16T09:30:00.000Z"
       },
       "private": {
@@ -164,14 +146,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
         "run_id": 2,
         "kind": "split",
         "status": "done",
-        "branch": "",
-        "repos": [
-          {
-            "repo": "repo",
-            "base": "main"
-          }
-        ],
-        "started_at": "2026-10-16T09:00:00.000Z",
         "ended_at": "2026-10-16T09:20:00.000Z"
       }
     }
@@ -219,7 +193,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
   ],
   "reviews": {
     "agent_prs": true,
-    "query": null,
     "low_impact": false,
     "limits": {
       "max_reviews": 1,
@@ -227,11 +200,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "max_reviews_per_pr": 3,
       "settle_minutes": 0,
       "started_last_24h": 0
-    },
-    "running": [],
-    "settling": [],
-    "prs": [],
-    "requests": []
+    }
   },
   "notices": [
     {

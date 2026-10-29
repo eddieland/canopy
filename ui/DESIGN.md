@@ -197,8 +197,9 @@ Rules:
 - The header carries, after its name, the stream's state (and `mock`), then at its end the loop's pause
   (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
   `status-failed` when it failed or was abandoned, its summary on hover, linking to its page; before the first, `no
-  tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), and the theme toggle, in three
-  groups with a hairline rule between each: the actions, the readouts, the theme.
+  tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), the budget's readout while a
+  budget is set, the host's readout last among the readouts, and the theme toggle, in three groups with a hairline
+  rule between each: the actions, the readouts, the theme.
 - The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
   nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
   it left a hole before `live` whenever the loop was up. The word sits in a pill with a dot, as `mock` does in a pill
@@ -238,6 +239,21 @@ Rules:
   runs, and from the click until the tick it asked for starts, which the readout and the logo show as starting
   meanwhile: the loop takes the ask at its wait's next step, after a poll of the sources if one is under way. Like the
   pause it has no `Notice`, since the tick it asked for shows in the readouts, and a failure looks the same.
+- **The budget's readout** (`BudgetReadout`) is the local month's spend against the monthly budget, while one is set:
+  a wallet's icon and the percent spent, `39%`, muted while on budget, in `status-blocked` once the month's pace heads
+  over, and in `status-failed` once it is over, the spend page's word for it and its line (`Headed over: $15.76 of $40
+  (39%), on pace for $63.04.`) on hover and as its accessible name. Short of `2xl` the icon stands alone in its color:
+  the ticker needs the room, or a tick's readout widening as the tick starts steps it out. It opens the spend page.
+  It comes with the spend on the stream, which sends it again when a cost or the budget changes.
+- **The host's readout** (`HostReadout`) is the machine the loop runs on, which serves the page: a server's icon and
+  `host ok` in muted readout type, or its worst pressure in two words (`disk low`, `memory low`, `host busy`) in
+  `status-blocked` while worth a look and `status-failed` past what canopy works with, a disk under the tick's
+  free-space floor among it (`src/lib/host.ts` holds the thresholds). Under `lg` the header has no room for the words:
+  the icon stands alone in the pressure's color, as the strip's icons carry their counts, its words its accessible
+  name and the card's. It is a link to the system resources page, in no section, with a hover card over it: the
+  machine's name and system, what is under pressure, the load, the memory, each disk canopy writes to, and the
+  loop's process. It shows nothing until its first read lands. Its read is not on the stream, since none of it is in
+  the journal: it is read every 10 seconds while the tab is visible, as the worktrees are.
 - **The notice to workers** (`NoticeBanner`, `canopy notice`) heads the content column, above every page, only while
   one is in force: a band on a `status-blocked` tint with its border, since every run waits on what the operator said,
   the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and ghost Edit,
@@ -472,15 +488,16 @@ Rules:
 
 canopy should be a little fun to use (PRODUCT.md): the header's ticker, Sprig at the foot of the rail, the empty inbox
 and the leaf a cleared item drops (an approved plan drops one too, and so does a review draft once published, not
-staged), and the lightswitch rave. Fun is ancillary, so this design holds only the rules it all keeps; what each one
-does is written in its code. None of it is journal text.
+staged), the lightswitch rave, and 2048, typed anywhere but a text field. Fun is ancillary, so this design holds only
+the rules it all keeps; what each one does is written in its code. None of it is journal text.
 
 - **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
   something; its room stays, so nothing beside it moves. The fit is measured as the layout changes (`useFits` in
-  `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in. Two exceptions, both the
+  `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in. Three exceptions, all the
   operator's call: Sprig may stand over the foot of the rail's spend by 40px rather than step out, offering tips there
-  only when clicked; and the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed.
+  only when clicked; the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed; and
+  2048 opens over the page as a dialog, only when typed, and Escape puts it away.
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`, `rave-dark`) or the accent,
   never a status color, so nothing in it reads as a run's state.
 - **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and counters.
@@ -490,7 +507,8 @@ does is written in its code. None of it is journal text.
   second, well clear of the three that WCAG 2.3.1 counts as harmful.
 - **Settings has one Fun panel**, second to last, below the settings that change how canopy works and above Session:
   an on/off for each, as checkboxes, then each one's details. Everything in it is kept in this browser (Themes, below).
-  The rave is the one without a checkbox: its switch hides in the panel's header.
+  The rave is the one without a checkbox: its switch hides in the panel's header. 2048 is not in the panel at all:
+  nothing of it shows until it is typed.
 
 ## Motion
 
@@ -682,6 +700,15 @@ Patterns names what is its own.
 - **A table holds the same numbers** wherever the chart is `aria-hidden`, for a screen reader and for a value too small
   to see.
 
+A measure over time (`TrendChart`, `src/lib/trend.ts`, the system resources page's graphs) is a line, not bars: 2px
+in the accent with round joins, the area under it the accent at 10%, from zero on a 1px `border` baseline, broken where
+no reading was taken rather than bridged. Its top is a capacity where the measure has one (all the memory, a disk's
+size) and the peak with `HEADROOM` where it has none. A threshold it is read against (the cores, the tick's floor) is
+a 1px `muted-foreground` line at 40% with its name at its right end, drawn only while it is under the top. Its label and
+its latest value head it, `now · peak` after the value; the pointer snaps a crosshair and an 8px accent dot ringed in
+`surface` to the nearest reading, whose value and time stand in the latest's place. The plot is `aria-hidden`, and a
+screen reader hears its latest value, peak, and low in words in place of a table.
+
 The context chart differs where it must: its bars are its controls, each named for its call on hover and to a screen
 reader, so no table repeats them; a call's added part is 1px at least, since it is one of two segments and never a
 sliver beside four others; and its axis names short call numbers without measuring, every one up to twelve.
@@ -722,6 +749,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   already, and a stop inside it would be a control in a control. What the operator acts on is in the text, never only
   in a tip (the `canopy grant` command under its button). A `title` that explains rather than informs, a button's
   hint or what a column counts, stays a `title`.
+- **A link's page at a glance is a hover card** (`HoverCard` in `src/components/ui/hover-card.tsx`): more than a tip
+  holds, a few rows of what the page it opens shows, as the host's readout shows the machine. It opens on hover after
+  half a second, as a tip does, and on the keyboard's focus, and stays while the pointer moves onto it; a tap follows
+  the link. Like a tip it is on `surface` with a hairline, no shadow and no motion, its rows `text-xs` under
+  `panel-label`s. Nothing in it is found only there: it is a preview of the page, never a place to act.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
   PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The

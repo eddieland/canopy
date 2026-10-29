@@ -10,12 +10,13 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, pr_list
+from canopy.core import db
 from canopy.core.vocab import Phase, ResumeReason, RunKind
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runs import desks
 from canopy.runs.dispatch import DISPATCH_LOCK
+from canopy.serve import pr_list
 from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import (
     BRANCH,
@@ -95,7 +96,7 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
     # Each PR's own title is recorded by its URL, on one line; docs's is not.
     titles = {"api": TITLES["api"], "web": "PROJ-1: call the endpoint"}
     assert json.loads(run.row["result_json"])["pr_titles"] == titles
-    assert {r["url"]: r["pr_title"] for r in pr_list.pull_requests(conn, 10)} == {PRS[r]: t for r, t in titles.items()}
+    assert {r.url: r.pr_title for r in pr_list.pull_requests(conn, 10)} == {PRS[r]: t for r, t in titles.items()}
     [(action, rationale)] = decisions(conn, int(run.row["tick_id"]))
     assert action == "dispatch:implement"
     assert rationale == f"run 1: {BRANCH} in api at {slots['api']}, web at {slots['web']}; desk {desk}; label {LABEL}"
@@ -246,13 +247,11 @@ def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
     ws_scenario.tick(*waits("PROJ-1"), dry_run=True)
 
     [ticket] = ws_scenario.state()["tickets"]
-    assert (ticket["phase"], ticket["branch"], ticket["cursors"]) == (
-        "running",
-        BRANCH,
-        {"comment": "c-1"},
-    )
+    assert (ticket["phase"], ticket["cursors"]) == ("running", {"comment": "c-1"})
     no_limit = {"implement": 1, "resume": 0}
-    # What is null or empty, such as api's phase and cursors and either's cooldown, is left out.
+    # What is null or empty, such as api's phase and cursors and either's cooldown, is left out, and the branch is
+    # said once, on the units.
+    assert "branch" not in ticket
     assert ticket["units"] == [
         {"repo": "api", "branch": BRANCH, "pr_url": PRS["api"], "attempts": no_limit},
         {
@@ -264,7 +263,8 @@ def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
             "attempts": no_limit,
         },
     ]
-    assert ticket["last_run"]["repos"] == [{"repo": "api", "base": "main"}, {"repo": "web", "base": "main"}]
+    # Unstacked, the run shows no base, and its branch is the units'.
+    assert sorted(ticket["last_run"]) == ["ended_at", "kind", "run_id", "status"]
 
 
 def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:

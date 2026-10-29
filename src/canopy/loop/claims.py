@@ -43,11 +43,12 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import artifact_authority, conversation, db, item_numbers, notice, observe, records, review_runs, sql
+from canopy.core import conversation, db, item_numbers, notice, observe, records, review_runs
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
 from canopy.core.workspace import CheckRole
 from canopy.loop import observations, phases
+from canopy.runs import artifact_authority
 from canopy.runs.dispatch import Refusal
 
 if TYPE_CHECKING:
@@ -345,8 +346,8 @@ def _check_blocker(ctx: Context, reader: observations.Reader, key: str, base: st
     Raises:
         Refusal: `stale`, naming the blocker's unit.
     """
-    query = sql.select("*").from_("tickets").where("branch = ? AND key != ?", base, key)
-    for blocker in records.fetch_all(ctx.conn, records.Ticket, query):
+    query = records.select(records.Ticket).where("branch = ? AND key != ?", base, key)
+    for blocker in query.all(ctx.conn):
         with_pr = {u.repo for u in reader.units_of.get(blocker.key, []) if u.pr_url}
         for unit in reader.units(blocker.key):
             if unit["repo"] in with_pr and unit["observed"] == "stale":
@@ -428,12 +429,13 @@ def _check_handled(
     if cursor is None:
         return
     failed = _failed_at_head(ctx, reader, pr, unit.repo)
-    query = (
-        sql.select("*")
-        .from_("observed_check_runs")
-        .where("pr_url = ? AND head_sha = ? AND number <= ?", pr["url"], pr["head"], cursor)
+    query = records.select(records.ObservedCheckRun).where(
+        "pr_url = ? AND head_sha = ? AND number <= ?",
+        pr["url"],
+        pr["head"],
+        cursor,
     )
-    runs = records.fetch_all(ctx.conn, records.ObservedCheckRun, query)
+    runs = query.all(ctx.conn)
     behind = {r.name for r in runs if r.conclusion in observe.FAILED}
     if not failed or any(c.number is None or (c.number > cursor and c.name not in behind) for c in failed):
         return

@@ -12,10 +12,11 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import chore_runs, db, pr_list, records, review_runs, sql
+from canopy.core import chore_runs, db, records, review_runs, sql
 from canopy.core.vocab import Phase, SeenKind, TickStatus
 from canopy.infra import resources
 from canopy.runtime.report import ToolUse, Usage
+from canopy.serve import pr_list
 from tests.canopy.helpers import DEAD_PID, journal_at, old_ticket, present, shipped_through, versions_after
 from tests.conftest import Journals
 
@@ -352,7 +353,7 @@ def test_a_ticket_is_active_when_it_changes_not_when_a_tick_sets_what_it_already
     def active() -> tuple[str, str, str]:
         [ticket] = db.recent_tickets(conn, 5)
         [pr] = pr_list.pull_requests(conn, 5)
-        return ticket["last_seen_at"], ticket["active_at"], pr["active_at"]
+        return ticket["last_seen_at"], ticket["active_at"], pr.active_at
 
     with mock.patch.object(db, "now", autospec=True, return_value=at(0)):
         db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, title="Sign in")

@@ -9,7 +9,7 @@ from unittest import mock
 import pytest
 
 from canopy.core import conversation, db
-from canopy.core.vocab import TickStatus
+from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import procs
 from canopy.serve import pull_requests
 from canopy.serve.backend import Backend
@@ -104,14 +104,14 @@ def test_a_prs_cost_counts_its_runs_past_the_20_its_page_lists(backend: Backend)
 def test_a_loop_pr_with_no_review_is_listed_with_the_run_working_it(backend: Backend) -> None:
     pr = "https://github.com/acme/mobile/pull/5"
     with backend.open() as ctx:
-        db.set_unit(ctx.conn, "ABC-101", ctx.repo, "mobile", phase="ci_failing", pr_url=pr)
+        db.set_unit(ctx.conn, "ABC-101", ctx.repo, "mobile", phase=Phase.CI_RED, pr_url=pr)
     c = client(None, backend)
     [listed] = [p for p in c.get("/api/pull-requests").json() if p["url"] == pr]
     # Run 41 implements ABC-101 now: it has no result yet, so the PR's page keeps it.
     assert (listed["ticket_key"], listed["running_run"], listed["reviews"]) == ("ABC-101", 41, 0)
     page = c.get("/api/pull-request", params={"url": pr}).json()
     assert [r["id"] for r in page["runs"]] == [41]
-    assert (page["pull_request"]["phase"], page["reviews"], page["decisions"]) == ("ci_failing", [], [])
+    assert (page["pull_request"]["phase"], page["reviews"], page["decisions"]) == ("ci_red", [], [])
 
 
 def test_a_run_that_reported_another_pr_is_not_this_ones(backend: Backend) -> None:

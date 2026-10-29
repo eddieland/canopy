@@ -24,9 +24,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import artifact_feed, conversation, db, records, sql
+from canopy.core import conversation, db, records, sql
 from canopy.core.vocab import AuthorKind, StartStatus
 from canopy.infra.text import printable
+from canopy.runs import artifact_feed
 
 if TYPE_CHECKING:
     import sqlite3
@@ -156,14 +157,12 @@ def _said(conn: sqlite3.Connection, key: str, after: int) -> list[_Said]:
     Returns:
         Each comment's message and observation, oldest first.
     """
-    messages = records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    messages = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND id > ?", conversation.TICKET, key, after)
         .where("channel = ? AND comment_id IS NOT NULL", conversation.ARTIFACTS)
-        .order_by("id"),
+        .order_by("id")
+        .all(conn)
     )
     comments = _observed(conn, messages)
     return [
@@ -186,11 +185,7 @@ def _observed(
     ids = {m.comment_id.removeprefix(prefix) for m in messages if m.comment_id and m.comment_id.startswith(prefix)}
     if not ids:
         return {}
-    found = records.fetch_all(
-        conn,
-        records.ObservedArtifactComment,
-        sql.select("*").from_("observed_artifact_comments").where_in("id", sorted(ids)),
-    )
+    found = records.select(records.ObservedArtifactComment).where_in("id", sorted(ids)).all(conn)
     return {f"{prefix}{c.id}": c for c in found}
 
 

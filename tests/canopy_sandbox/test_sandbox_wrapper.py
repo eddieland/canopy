@@ -22,10 +22,10 @@ import canopy_sandbox
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, context, db, review_runs, tasks
+from canopy.core import config, context, db, review_runs
 from canopy.infra import lock, logs, procs
 from canopy.infra.procs import SubprocessRunner
-from canopy.runs import tasks as task_starts
+from canopy.runs import task_starts, tasks
 from tests.canopy.helpers import (
     DEAD_PID,
     InlineRunner,
@@ -156,6 +156,13 @@ def wrap_here(*args: str, cwd: Path, ipv6: bool) -> int:
         contextlib.chdir(cwd),
     ):
         return canopy_sandbox.run(list(args))
+
+
+def chore_dir(tmp_path: Path) -> Path:
+    """A chore's own cwd: not tmp_path, which holds the test's HOME and the role caches the wrapper denies."""
+    cwd = tmp_path / "chore"
+    cwd.mkdir(exist_ok=True)
+    return cwd
 
 
 def linked_worktree(tmp_path: Path, name: str) -> tuple[Path, Path]:
@@ -411,7 +418,7 @@ def test_each_role_caches_in_a_directory_of_its_own_and_setup_in_the_workers(san
     _, slot = linked_worktree(tmp_path, "repo")
     write = ["sh", "-c", 'mkdir -p "$XDG_CACHE_HOME/tool" && echo "$1" > "$XDG_CACHE_HOME/tool/$1"', "sh"]
     operators = {"GOMODCACHE": str(tmp_path / "go-mod"), "npm_config_cache": str(tmp_path / "npm")}
-    places = {"worker": slot, "setup": slot, "chore": tmp_path, "review": review_dir(tmp_path, slot)}
+    places = {"worker": slot, "setup": slot, "chore": chore_dir(tmp_path), "review": review_dir(tmp_path, slot)}
 
     for role, cwd in places.items():
         objects = {"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path / role))} if role in {"worker", "setup"} else {}
@@ -433,7 +440,7 @@ def test_a_cache_directory_already_there_is_made_private(sandbox: Sandbox, tmp_p
     (sandbox.caches() / "chore").mkdir(parents=True, mode=0o755)
     (sandbox.caches() / "chore").chmod(0o755)
 
-    assert wrap("chore", "true", cwd=tmp_path).ok
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path)).ok
 
     assert (sandbox.caches() / "chore").stat().st_mode & 0o777 == 0o700
 
@@ -442,7 +449,7 @@ def test_a_cache_directory_that_is_a_link_runs_nothing(sandbox: Sandbox, tmp_pat
     sandbox.caches().mkdir(parents=True)
     (sandbox.caches() / "chore").symlink_to(sandbox.cache_home, target_is_directory=True)
 
-    done = wrap("chore", "true", cwd=tmp_path)
+    done = wrap("chore", "true", cwd=chore_dir(tmp_path))
 
     assert done.returncode == 2
     assert "is not a directory of this user's" in done.stderr
@@ -468,7 +475,7 @@ def test_each_role_starts_with_the_operators_logins_in_a_data_directory_of_its_o
     places = {
         "worker": slot,
         "setup": slot,
-        "chore": tmp_path,
+        "chore": chore_dir(tmp_path),
         "review": review_dir(tmp_path, slot),
         "overseer": canopy_env.root,
     }
@@ -511,7 +518,7 @@ def test_the_operators_opencode_data_is_denied_writing_wherever_it_leads(
         sandbox.data_home.mkdir(parents=True, exist_ok=True)
         sandbox.operators().symlink_to(target, target_is_directory=True)
 
-    assert wrap("chore", "true", cwd=tmp_path).ok
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path)).ok
 
     deny_write = sandbox.only_call()["settings"]["filesystem"]["denyWrite"]
     assert sandbox.operators().is_dir()
@@ -539,7 +546,7 @@ def test_a_refreshed_token_is_copied_back_and_nothing_else(sandbox: Sandbox, tmp
     }
     write = 'cd "$XDG_DATA_HOME/opencode" && printf %s "$1" > auth.json && printf %s "$2" > mcp-auth.json'
 
-    done = wrap("chore", "sh", "-c", write, "sh", json.dumps(theirs), json.dumps(theirs_mcp), cwd=tmp_path)
+    done = wrap("chore", "sh", "-c", write, "sh", json.dumps(theirs), json.dumps(theirs_mcp), cwd=chore_dir(tmp_path))
 
     assert done.ok, done.stderr
     assert operators(sandbox) == {"anthropic": {**OAUTH, **refreshed}, "openai": API, "github-copilot": OAUTH}
@@ -560,7 +567,7 @@ def test_a_killed_runs_refreshed_token_is_copied_back_by_its_roles_next_run(sand
     refreshed = {**OAUTH, "refresh": "refresh-2", "access": "access-2", "expires": 2_000}
     left.write_text(json.dumps({"anthropic": refreshed, "planted": {"type": "wellknown", "key": "k", "token": "t"}}))
 
-    done = wrap("chore", "cat", str(left), cwd=tmp_path)
+    done = wrap("chore", "cat", str(left), cwd=chore_dir(tmp_path))
 
     assert done.ok, done.stderr
     assert operators(sandbox) == {"anthropic": refreshed}
@@ -573,7 +580,7 @@ def test_a_login_the_operator_no_longer_has_is_gone_from_the_roles(sandbox: Sand
     left.parent.mkdir(parents=True)
     left.write_text(json.dumps({"jira": MCP}))
 
-    assert wrap("chore", "true", cwd=tmp_path).ok
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path)).ok
 
     assert not left.exists()
 
@@ -609,8 +616,8 @@ def test_what_a_run_leaves_in_place_of_its_logins_is_never_followed(
     (elsewhere / "big.json").write_text(json.dumps({**refreshed, "padding": "x" * (1 << 20)}))
     before = {p.name: p.read_bytes() for p in elsewhere.iterdir()}
 
-    done = wrap("chore", "sh", "-c", script, "sh", str(elsewhere), cwd=tmp_path)
-    again = wrap("chore", "cat", str(sandbox.datas() / "chore" / "opencode" / "auth.json"), cwd=tmp_path)
+    done = wrap("chore", "sh", "-c", script, "sh", str(elsewhere), cwd=chore_dir(tmp_path))
+    again = wrap("chore", "cat", str(sandbox.datas() / "chore" / "opencode" / "auth.json"), cwd=chore_dir(tmp_path))
 
     assert done.ok, done.stderr
     assert again.ok, again.stderr
@@ -622,7 +629,7 @@ def test_what_a_run_leaves_in_place_of_its_logins_is_never_followed(
 def test_a_run_that_locks_its_temp_directory_still_has_it_removed(sandbox: Sandbox, tmp_path: Path) -> None:
     lock = 'mkdir -p "$TMPDIR/a/b" && chmod 000 "$TMPDIR/a" "$TMPDIR"'
 
-    done = wrap("chore", "sh", "-c", lock, cwd=tmp_path)
+    done = wrap("chore", "sh", "-c", lock, cwd=chore_dir(tmp_path))
 
     assert done.ok, done.stderr
     assert list(sandbox.runs_root().iterdir()) == []
@@ -873,7 +880,7 @@ def test_the_srt_canopy_installed_runs_and_reads_its_own_vendor_directory(
     link.parent.mkdir()
     link.symlink_to(Path("..") / SRT_PACKAGE / "dist" / "cli.js")
 
-    assert wrap("chore", "true", cwd=tmp_path).ok
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path)).ok
 
     call = sandbox.only_call()
     assert call["settings"]["filesystem"]["allowRead"][-1] == str((package / "vendor").resolve())
@@ -884,7 +891,7 @@ def test_without_srt_nothing_runs(tmp_path: Path) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()
 
-    done = wrap("chore", "touch", str(tmp_path / "ran"), cwd=tmp_path, env={"PATH": str(empty)})
+    done = wrap("chore", "touch", str(tmp_path / "ran"), cwd=chore_dir(tmp_path), env={"PATH": str(empty)})
 
     assert done.returncode == 2
     assert "srt is not installed; run `canopy sandbox setup`" in done.stderr
@@ -897,7 +904,7 @@ def test_a_temp_directory_too_deep_for_srts_sockets_runs_nothing(sandbox: Sandbo
     deep = sandbox.tmp / ("d" * 60)
     deep.mkdir()
 
-    done = wrap("chore", "touch", str(tmp_path / "ran"), cwd=tmp_path, env={"TMPDIR": str(deep)})
+    done = wrap("chore", "touch", str(tmp_path / "ran"), cwd=chore_dir(tmp_path), env={"TMPDIR": str(deep)})
 
     assert done.returncode == 2
     assert f"the temp directory {deep} has too long a path for srt's sockets" in done.stderr
@@ -922,13 +929,13 @@ def test_on_a_host_without_ipv6_srts_bridge_listens_on_ipv4(
     with mock.patch.dict(os.environ, {canopy_sandbox.SOCAT_LISTEN: operators or ""}):
         if operators is None:
             os.environ.pop(canopy_sandbox.SOCAT_LISTEN)
-        assert wrap_here("chore", "true", cwd=tmp_path, ipv6=ipv6) == 0
+        assert wrap_here("chore", "true", cwd=chore_dir(tmp_path), ipv6=ipv6) == 0
 
     assert sandbox.only_call()["env"].get(canopy_sandbox.SOCAT_LISTEN) == listen
 
 
 def test_the_commands_exit_status_is_the_wrappers(sandbox: Sandbox, tmp_path: Path) -> None:
-    done = wrap("chore", "sh", "-c", "exit 7", cwd=tmp_path)
+    done = wrap("chore", "sh", "-c", "exit 7", cwd=chore_dir(tmp_path))
 
     assert done.returncode == 7
 
@@ -940,7 +947,7 @@ def test_a_run_directory_whose_process_is_gone_is_removed_by_the_next_run(sandbo
         (root / name / "tmp").mkdir(parents=True)
         (root / name / "pid").write_text(f"{pid}\n")
 
-    assert wrap("chore", "true", cwd=tmp_path).ok
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path)).ok
 
     assert [p.name for p in root.iterdir()] == ["run.live"]
 
@@ -988,7 +995,24 @@ def test_a_worker_outside_a_linked_worktree_runs_nothing(sandbox: Sandbox, tmp_p
         ({"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["@READ@"]}}, "denies no reads"),
         ({"network": {}, "filesystem": {"denyRead": ["~"]}}, "no network.allowedDomains list"),
         ({"network": {"allowedDomains": []}, "filesystem": {"denyRead": "~"}}, "denyRead is not a list"),
+        ({"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowWrite": "~"}}, "not a list"),
         ([], "denies no reads"),
+        # Each would bind back what the wrapper denies: the run directories, in the fixture's temp directory under
+        # /tmp, or the role caches, under HOME.
+        ({"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["/tmp"]}}, "names /tmp"),  # noqa: S108
+        ({"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["~"]}}, "names ~,"),
+        (
+            {"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowWrite": ["~/.cache"]}},
+            "names ~/",
+        ),
+        (
+            {"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["a\u0000b"]}},
+            "not a path",
+        ),
+        (
+            {"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["~no-such-user-0/x"]}},
+            "not a path",
+        ),
     ],
 )
 def test_a_template_that_would_not_confine_the_command_runs_nothing(
@@ -1003,12 +1027,21 @@ def test_a_template_that_would_not_confine_the_command_runs_nothing(
     else:
         path.write_text(template if isinstance(template, str) else json.dumps(template))
 
-    done = wrap("chore", "true", cwd=tmp_path)
+    done = wrap("chore", "true", cwd=chore_dir(tmp_path))
 
     assert done.returncode == 2
     assert error in done.stderr
     assert not sandbox.log.exists()
     assert list(sandbox.runs_root().glob("run.*")) == []
+
+
+def test_a_chore_whose_cwd_holds_the_role_caches_runs_nothing(sandbox: Sandbox, tmp_path: Path) -> None:
+    """The shipped template allows reading a chore's cwd, which srt would bind back over every role's cache in it."""
+    done = wrap("chore", "true", cwd=tmp_path)
+
+    assert done.returncode == 2
+    assert f"filesystem.allowRead names {tmp_path}, which holds {sandbox.caches()}" in done.stderr
+    assert not sandbox.log.exists()
 
 
 def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(

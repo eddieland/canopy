@@ -16,8 +16,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import contract, conversation, db, follow_ups, records, sql
-from canopy.core.follow_ups import Refusal
+from canopy.core import contract, conversation, db, records, sql
+from canopy.runs import follow_ups
+from canopy.runs.follow_ups import Refusal
 
 if TYPE_CHECKING:
     import sqlite3
@@ -115,8 +116,8 @@ def record(conn: sqlite3.Connection, task_id: int, run_id: int, keys: Iterable[s
 
 def of_task(conn: sqlite3.Connection, task_id: int) -> list[records.TaskTicket]:
     """Return the tickets recorded against task `task_id`, in the order its runs reported them."""
-    query = sql.select("*").from_("task_tickets").where("task_id = ?", task_id).order_by("id")
-    return records.fetch_all(conn, records.TaskTicket, query)
+    query = records.select(records.TaskTicket).where("task_id = ?", task_id).order_by("id")
+    return query.all(conn)
 
 
 @dataclass(frozen=True)
@@ -147,8 +148,7 @@ def unrecorded(conn: sqlite3.Connection) -> list[Unrecorded]:
         conversation.TASK,
     )
     query = (
-        sql.select("r.*")
-        .from_("task_runs r")
+        records.select(records.TaskRun, "r")
         .join("tasks t ON t.id = r.task_id")
         .where("t.stopped_at IS NULL AND r.status != 'running'")
         .where("json_valid(r.result_json)")
@@ -157,7 +157,7 @@ def unrecorded(conn: sqlite3.Connection) -> list[Unrecorded]:
         .order_by("r.task_id, r.id")
     )
     found: list[Unrecorded] = []
-    for run in records.fetch_all(conn, records.TaskRun, query):
+    for run in query.all(conn):
         stored = contract.stored_object(run.result_json).get(STORED)
         count = _count(cast("Mapping[str, object]", stored)) if isinstance(stored, dict) else 0
         if count:

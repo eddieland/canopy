@@ -6,10 +6,11 @@ import json
 from typing import TYPE_CHECKING, Any
 from unittest import mock
 
-from canopy.core import artifact_feed, conversation, db, observe, records, sql
+from canopy.core import conversation, db, observe, records, sql
 from canopy.core.config import Source
 from canopy.core.vocab import AnchorStatus, AuthorKind, ConnectorRunStatus, ThreadState
 from canopy.infra import logs
+from canopy.runs import artifact_feed
 from tests.canopy.helpers import KEY, present
 from tests.canopy.observation_helpers import artifact_change as change
 

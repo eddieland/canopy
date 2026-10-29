@@ -47,6 +47,8 @@ export const keys = {
     ticks: ['ticks'] as const,
     tickDetail: (id: number) => ['ticks', id] as const,
     worktrees: ['worktrees'] as const,
+    host: ['host'] as const,
+    hostSamples: ['host-samples'] as const,
     spend: ['spend'] as const,
     // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale.
     spendBreakdown: (range: SpendBreakdownRange) =>
@@ -423,13 +425,40 @@ export const WORKTREES_REFRESH_MS = 10_000
 /**
  * Each pool's worktrees, read from the pool by the server on every fetch. Not on the event stream: the stream marks it
  * stale when a run starts or ends (live.ts), the page reads it again on demand, and every 10 seconds while a page shows
- * it and its tab is visible. That timer is the UI's one refetch on an interval: what runs in a slot,
- * whether it is dirty, and a slot sync adds never reach the journal.
+ * it and its tab is visible. What runs in a slot, whether it is dirty, and a slot sync adds never reach the journal.
  */
 export const worktreesQuery = queryOptions({
     queryKey: keys.worktrees,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/worktrees', { signal })),
     refetchInterval: WORKTREES_REFRESH_MS,
+    refetchIntervalInBackground: false,
+})
+
+/** How often the host's resources are read again while a page shows them in a visible tab. */
+export const HOST_REFRESH_MS = 10_000
+
+/**
+ * The machine the loop runs on: its load, memory, disks, and the loop's process, read by the server on every fetch.
+ * Not on the event stream, since none of it is in the journal: read every 10 seconds while a page shows it and its tab
+ * is visible, which with the header's readout is every page. A read costs the server a few small files, less than a
+ * journal read.
+ */
+export const hostQuery = queryOptions({
+    queryKey: keys.host,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/host', { signal })),
+    refetchInterval: HOST_REFRESH_MS,
+    refetchIntervalInBackground: false,
+})
+
+/**
+ * The machine's readings over the last hour, for the system resources page's graphs: kept by the server in memory,
+ * read every 10 seconds whether a page is open or not. Read as the host's resources are, every 10 seconds while the
+ * page shows them and its tab is visible, so each read finds a new one.
+ */
+export const hostSamplesQuery = queryOptions({
+    queryKey: keys.hostSamples,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/host/samples', { signal })),
+    refetchInterval: HOST_REFRESH_MS,
     refetchIntervalInBackground: false,
 })
 

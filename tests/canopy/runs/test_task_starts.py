@@ -16,15 +16,14 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, prompts, records, run_models, spend, sql, task_tickets, tasks
+from canopy.core import config, conversation, db, prompts, records, run_models, spend, sql
 from canopy.core.context import Context
 from canopy.core.items import Item
 from canopy.core.vocab import Decider, RunStatus
 from canopy.infra import logs
 from canopy.loop import attention
 from canopy.notify import message
-from canopy.runs import reconcile
-from canopy.runs import tasks as task_starts
+from canopy.runs import reconcile, task_starts, task_tickets, tasks
 from tests.canopy.helpers import (
     DEAD_PID,
     InlineRunner,

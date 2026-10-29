@@ -295,6 +295,52 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/host": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the host's resources
+         * @description The machine the loop runs on, read now.
+         *
+         *     Its processors and their load, its memory, the disks canopy writes to, and the loop's own process.
+         */
+        get: operations["getHost"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/host/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the host's readings over the last hour
+         * @description The readings of the machine the server has kept since it started, the last hour's at most, oldest first.
+         *
+         *     Each is the load over a minute, the memory in use, the loop's own, and each disk's free space, read every
+         *     `every_seconds` whether or not a page is open. They are kept in memory alone, so a server that restarts starts
+         *     again with none.
+         */
+        get: operations["getHostSamples"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/loop": {
         parameters: {
             query?: never;
@@ -2384,7 +2430,8 @@ export type components = {
             /**
              * Since
              * Format: date-time
-             * @description When the unbroken run of ticks that recorded it began.
+             * @description When the unbroken run of ticks that recorded it began, or its cause did if that came first or no tick records
+             *     it: a task's question, or the oldest of a unit's drafts waiting.
              */
             since: string;
             /**
@@ -3132,6 +3179,22 @@ export type components = {
             runs: number;
         };
         /**
+         * Cpu
+         * @description The machine's processors and how busy they are.
+         */
+        Cpu: {
+            /**
+             * Cores
+             * @description How many processors this process may run on; None when the operating system does not say.
+             */
+            cores: number | null;
+            /**
+             * Load
+             * @description The load averages over the last 1, 5, and 15 minutes; None where the operating system keeps none.
+             */
+            load: number[] | null;
+        };
+        /**
          * Decision
          * @description One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals.
          */
@@ -3278,6 +3341,59 @@ export type components = {
          * @enum {string}
          */
         DiffLineKind: "add" | "del" | "ctx";
+        /**
+         * Disk
+         * @description One filesystem canopy writes to, in bytes, with what it keeps there.
+         */
+        Disk: {
+            /**
+             * Floor
+             * @description The free space under which a tick runs no overseer, `loop.min_free_disk_mib` in bytes (DESIGN §6), on a disk
+             *     with the workspace or the journal; None on another, or while the check is off.
+             */
+            floor: number | null;
+            /**
+             * Free
+             * @description What a process that is not root may still write.
+             */
+            free: number;
+            /**
+             * Holds
+             * @description What canopy keeps on it, in the order the page names them; two uses on one filesystem share a disk.
+             */
+            holds: components["schemas"]["DiskUse"][];
+            /**
+             * Path
+             * @description The directory read for the first of `holds`.
+             */
+            path: string;
+            /**
+             * Total
+             * @description Its size.
+             */
+            total: number;
+        };
+        /**
+         * DiskSample
+         * @description One disk's free space at a reading.
+         */
+        DiskSample: {
+            /**
+             * Free
+             * @description What a process that is not root could still write, in bytes.
+             */
+            free: number;
+            /**
+             * Path
+             * @description The disk's directory, as `Disk.path` names it, so the page finds the disk the sample is of.
+             */
+            path: string;
+        };
+        /**
+         * @description What canopy keeps on a disk: `workspace` its repositories and worktrees, `journal` the journal and the runs' logs, `temp` the temporary directory its agents and their builds write to.
+         * @enum {string}
+         */
+        DiskUse: "workspace" | "journal" | "temp";
         /**
          * @description Why the operator dismissed a review's finding (DESIGN §21): `wrong`, it does not hold; `intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix; `out_of_scope`, it holds and is worth fixing, but in another PR.
          * @enum {string}
@@ -3895,6 +4011,107 @@ export type components = {
              */
             repo?: string | null;
         };
+        /**
+         * HostHistory
+         * @description The readings of the machine the server keeps in memory, from when it started: the last hour's at most.
+         */
+        HostHistory: {
+            /**
+             * Every Seconds
+             * @description The seconds from one reading to the next.
+             */
+            every_seconds: number;
+            /**
+             * Kept
+             * @description How many readings it keeps at most; past that the oldest is dropped.
+             */
+            kept: number;
+            /**
+             * Samples
+             * @description The readings, oldest first. A gap longer than `every_seconds` is a time the server was not reading.
+             */
+            samples: components["schemas"]["HostSample"][];
+        };
+        /**
+         * HostResources
+         * @description The machine the loop runs on, as read when it was asked.
+         */
+        HostResources: {
+            /**
+             * Booted At
+             * @description When the machine started; None where only Linux's `/proc` says.
+             */
+            booted_at: string | null;
+            /** @description Its processors. */
+            cpu: components["schemas"]["Cpu"];
+            /**
+             * Disks
+             * @description Each filesystem canopy writes to, the workspace's first; one that could not be read is left out.
+             */
+            disks: components["schemas"]["Disk"][];
+            /**
+             * Hostname
+             * @description The machine's name.
+             */
+            hostname: string;
+            /**
+             * Machine
+             * @description Its processor architecture, such as `x86_64` or `arm64`.
+             */
+            machine: string;
+            /** @description Its memory. */
+            memory: components["schemas"]["Memory"];
+            /** @description The loop's own process. */
+            process: components["schemas"]["LoopProcess"];
+            /**
+             * Python
+             * @description The Python version canopy runs on.
+             */
+            python: string;
+            /**
+             * Read At
+             * Format: date-time
+             * @description When these figures were read.
+             */
+            read_at: string;
+            /**
+             * System
+             * @description Its operating system and release, as `uname` names them, such as `Linux 6.8.0`.
+             */
+            system: string;
+        };
+        /**
+         * HostSample
+         * @description What the system resources page's graphs draw of one reading of the machine.
+         */
+        HostSample: {
+            /**
+             * At
+             * Format: date-time
+             * @description When it was read.
+             */
+            at: string;
+            /**
+             * Disks
+             * @description Each disk read, in the order `HostResources.disks` has them.
+             */
+            disks: components["schemas"]["DiskSample"][];
+            /**
+             * Load
+             * @description The load average over the last minute; None where the operating system keeps none.
+             */
+            load: number | null;
+            /**
+             * Memory Used
+             * @description The memory not available to a new process, in bytes; None where only Linux's `/proc/meminfo` says.
+             */
+            memory_used: number | null;
+            /**
+             * Rss
+             * @description The memory the loop's process held, in bytes; None where only Linux's `/proc` says.
+             */
+            rss: number | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -3994,6 +4211,47 @@ export type components = {
          */
         LimitKind: "implement" | "resume" | "review";
         /**
+         * LoopProcess
+         * @description The process that serves the page, which in `canopy loop` is the loop itself.
+         */
+        LoopProcess: {
+            /**
+             * Max Open Files
+             * @description How many it may hold open at once, its soft limit; None when unlimited.
+             */
+            max_open_files: number | null;
+            /**
+             * Open Files
+             * @description How many files, sockets, and pipes it holds open; None where only Linux's `/proc` says.
+             */
+            open_files: number | null;
+            /**
+             * Peak Rss
+             * @description The most memory it has held at once, in bytes; None when the operating system does not say.
+             */
+            peak_rss: number | null;
+            /**
+             * Pid
+             * @description Its process id.
+             */
+            pid: number;
+            /**
+             * Rss
+             * @description The memory it holds now, in bytes; None where only Linux's `/proc` says.
+             */
+            rss: number | null;
+            /**
+             * Started At
+             * @description When it started; None where only Linux's `/proc` says.
+             */
+            started_at: string | null;
+            /**
+             * Threads
+             * @description How many threads it runs.
+             */
+            threads: number;
+        };
+        /**
          * LoopState
          * @description Whether the loop is paused, the notice to workers in force, agent memory's tiers, and what may run at once.
          *
@@ -4029,6 +4287,32 @@ export type components = {
              * @enum {string}
              */
             type: "loop.updated";
+        };
+        /**
+         * Memory
+         * @description The machine's memory and swap, in bytes.
+         */
+        Memory: {
+            /**
+             * Available
+             * @description What a new process could use without swapping; None where only Linux's `/proc/meminfo` says.
+             */
+            available: number | null;
+            /**
+             * Swap Free
+             * @description The swap not in use; None where only Linux's `/proc/meminfo` says.
+             */
+            swap_free: number | null;
+            /**
+             * Swap Total
+             * @description All of its swap; None where only Linux's `/proc/meminfo` says.
+             */
+            swap_total: number | null;
+            /**
+             * Total
+             * @description All of its memory; None when the operating system does not say.
+             */
+            total: number | null;
         };
         /**
          * MemoryDigest
@@ -7147,6 +7431,11 @@ export type components = {
          * @description What the last day, 30 days, and all time cost, read together, so a month never shows less than its day.
          */
         Spend: {
+            /**
+             * @description The local calendar month so far against the operator's monthly budget, as the header shows it; None when no
+             *     budget is set.
+             */
+            budget: components["schemas"]["SpendMonth"] | null;
             /** @description The last 24 hours. */
             day: components["schemas"]["SpendWindow"];
             /** @description The last 30 days. */
@@ -10378,6 +10667,136 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getHost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostResources"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getHostSamples: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostHistory"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

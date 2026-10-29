@@ -26,8 +26,9 @@ In order, it:
    the run's temp directory beside it, which is `srt`'s own TMPDIR too, so what `srt` leaves there goes with it.
    Whatever the template says, the policy denies reading the directory that holds every run's, so no run reads
    another's temp directory, and, for every role but the overseer, the workspace's `.canopy/` when the run's
-   directories name it, in case the workspace is outside the HOME the template denies. It allows reading `srt`'s own
-   `vendor/` directory, whose seccomp helper runs inside the sandbox, wherever `srt` is installed.
+   directories name it, in case the workspace is outside the HOME the template denies. A template that allows reading
+   or writing one of these, or a directory that holds one, is refused, since `srt` would bind it back. It allows reading
+   `srt`'s own `vendor/` directory, whose seccomp helper runs inside the sandbox, wherever `srt` is installed.
 4. Points the command's caches at the role's own cache directory, `$XDG_CACHE_HOME/canopy/sandbox/ROLE/` (setup
    shares the worker's, which it warms): XDG_CACHE_HOME itself, and the variables of the tools whose caches do not
    follow it everywhere. Not the operator's: OpenCode imports packages and runs programs from its cache, the
@@ -86,7 +87,9 @@ starts each once the overseer's run has ended (DESIGN §40), so none inherits th
 
 A key that starts with `#` is a comment, and is left out of the policy. The wrapper refuses a template with an unknown
 placeholder, a placeholder inside a longer string, no `filesystem.denyRead`, or no `network.allowedDomains`: `srt` runs
-a command with no restrictions outside any sandbox at all.
+a command with no restrictions outside any sandbox at all. It refuses one whose `allowRead` or `allowWrite`, once
+filled, names a directory the wrapper denies, or one that holds it, such as a chore's cwd above the role caches: `srt`
+would bind it back, and one run could read another's.
 
 The directory a run killed with SIGKILL leaves behind (canopy kills a timed-out run's whole process group) is removed
 by the next run, once the process that made it is gone, and the next run of its role copies back the tokens it
@@ -775,7 +778,13 @@ def fill(node: object, values: Mapping[str, Iterable[str]]) -> object:
     return node
 
 
-def check(policy: object, denied: Iterable[Path], readable: Iterable[Path], *, unwritable: Iterable[Path]) -> None:
+def check(
+    policy: object,
+    denied: Collection[Path],
+    readable: Iterable[Path],
+    *,
+    unwritable: Iterable[Path],
+) -> None:
     """Refuse a policy `srt` would run without a sandbox, or with the network open; deny `denied`, allow `readable`.
 
     `denied` holds the directory of every run's directory: the system temp directory is outside HOME, so without it one
@@ -787,7 +796,9 @@ def check(policy: object, denied: Iterable[Path], readable: Iterable[Path], *, u
     allows: the operator's OpenCode data directory, which a template from before `@DATA@` let it.
 
     Raises:
-        SandboxError: it denies no reads, has no network allowlist, or its allowRead or denyWrite is not a list.
+        SandboxError: it denies no reads, has no network allowlist, its allowRead, allowWrite, or denyWrite is not a
+            list, or allowRead or allowWrite names a directory in `denied`, or one that holds it, which `srt` would
+            bind back.
     """
     sections: dict[object, object] = policy if isinstance(policy, dict) else {}
     filesystem = sections.get("filesystem")
@@ -800,6 +811,16 @@ def check(policy: object, denied: Iterable[Path], readable: Iterable[Path], *, u
     if not isinstance(network, dict) or not isinstance(network.get("allowedDomains"), list):
         raise SandboxError("the policy template has no network.allowedDomains list")
     deny.extend(str(p) for p in denied if str(p) not in deny)
+    for key in ("allowWrite", "allowRead"):
+        entries: object = filesystem.get(key, [])
+        if not isinstance(entries, list):
+            raise SandboxError(f"the policy template's filesystem.{key} is not a list")
+        for entry in entries:
+            if isinstance(entry, str) and (held := _holds(entry, denied)) is not None:
+                raise SandboxError(
+                    f"the policy template's filesystem.{key} names {entry}, which holds {held}, denied to every "
+                    "run so none reads another's: name the directories the command needs instead",
+                )
     allow: object = filesystem.setdefault("allowRead", [])
     if not isinstance(allow, list):
         raise SandboxError("the policy template's filesystem.allowRead is not a list")
@@ -808,6 +829,23 @@ def check(policy: object, denied: Iterable[Path], readable: Iterable[Path], *, u
     if not isinstance(deny_write, list):
         raise SandboxError("the policy template's filesystem.denyWrite is not a list")
     deny_write.extend(str(p) for p in unwritable if str(p) not in deny_write)
+
+
+def _holds(entry: str, denied: Collection[Path]) -> Path | None:
+    """Return the directory of `denied` that `entry`, a path `srt` reads with `~` for HOME, is or holds, if any.
+
+    Raises:
+        SandboxError: `entry` is no path: it holds a NUL, or names the home of a user there is none of.
+    """
+    try:
+        place = Path(os.path.realpath(Path(entry).expanduser()))
+    except (RuntimeError, ValueError) as e:
+        raise SandboxError(f"the policy template names {entry!r}, which is not a path: {e}") from e
+    for directory in denied:
+        real = Path(os.path.realpath(directory))
+        if place == real or place in real.parents:
+            return directory
+    return None
 
 
 def state_dirs(objects: Path | None, cwd: Path) -> list[Path]:

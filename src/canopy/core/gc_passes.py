@@ -79,7 +79,7 @@ def latest(conn: sqlite3.Connection) -> records.GcPass | None:
     Returns:
         The pass, or None before the first.
     """
-    return records.fetch_one(conn, records.GcPass, sql.select("*").from_("gc_passes").order_by("id DESC").limit(1))
+    return records.select(records.GcPass).order_by("id DESC").limit(1).one(conn)
 
 
 def removed_after(conn: sqlite3.Connection, ended_at: str | None, rule: Rule) -> int | None:

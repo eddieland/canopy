@@ -15,7 +15,7 @@ running, is a resume for a failed check and review feedback together. The runnin
 call on each one's row (§8).
 Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
 memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the runs'
-transcripts, and the months before T0, whose landed tickets the reports page shows.
+transcripts, the months before T0, whose landed tickets the reports page shows, and the machine (a fixed reading).
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -39,6 +39,7 @@ from canopy.serve.mock import (
     drafts,
     feedback_plans,
     history,
+    host,
     memory,
     personas,
     plans,
@@ -313,6 +314,10 @@ def seed(directory: Path) -> Backend:
         runner=lambda: drafts.GitHub(db_path(ws)),
         user_file=user_file,
         models=_models_listed,
+        # Read when the e2e tests' frozen clock says it is (`NOW` in ui/e2e/helpers.ts), so it reads as just now.
+        host=lambda _config, _workspace: host.machine(T0 + timedelta(minutes=30)),
+        samples=host.samples(T0 + timedelta(minutes=30)),
+        sampling=False,
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())
@@ -495,7 +500,7 @@ def _models_listed(ctx: Context) -> ModelList:
     Returns:
         Each model a run's session names, once, with its variants.
     """
-    served = records.fetch_all(ctx.conn, records.RunModel, sql.select("*").from_("run_models"))
+    served = records.select(records.RunModel).all(ctx.conn)
     models = frozenset(m.model for m in served)
     return ModelList(models, {m: _VARIANTS.get(m.partition("/")[0], frozenset()) for m in models})
 

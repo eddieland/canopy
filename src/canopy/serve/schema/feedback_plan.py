@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.core import feedback_plans
+from canopy.runs import feedback_plans
 from canopy.serve.schema import Model
 
 type ProposalName = Annotated[

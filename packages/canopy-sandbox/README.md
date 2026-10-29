@@ -29,10 +29,16 @@ For each run it:
 2. Finds the worktrees the run works in and their git directories (none for a chore or the overseer).
 3. Fills the template's placeholders (`@CWD@`, `@WORKTREES@`, `@GIT_SHARED@`, `@TMPDIR@`, and the rest the module
    docstring lists) with those paths, and writes the policy to a private directory of the run's own, beside its temp
-   directory. Whatever the template says, the policy denies reading every other run's directory.
+   directory. The policy denies reading the directory that holds every run's, and the one that holds every role's
+   cache, on top of the template's `denyRead`. Since `srt` binds an `allowRead` or `allowWrite` path back under a
+   denied one, a template that names one of these or a directory that holds it, such as a chore's cwd of `~`, is
+   refused.
 4. Points the command's caches at the role's own cache directory, `$XDG_CACHE_HOME/canopy/sandbox/ROLE/`, never the
-   operator's, since a cache a run can write is code the host may run later.
-5. For a worker or setup, puts a `git` of its own first on `PATH`, which writes objects to the run's object directory.
+   operator's, since a cache a run can write is code the host may run later. Setup shares the worker's, which it
+   warms.
+5. For a worker or setup, puts a `git` of its own first on `PATH`. In one of the run's worktrees, it points git at the
+   run's object directory; anywhere else, as in a repository a tool keeps in its cache or one `git clone` makes, it
+   runs git unchanged. A git run by its absolute path skips it, and in a worktree cannot write objects at all.
 6. Runs `srt --settings POLICY -- COMMAND...`, removes the run's directory, and exits with `srt`'s status.
 
 It refuses a template with an unknown placeholder, no `filesystem.denyRead`, or no `network.allowedDomains`, since

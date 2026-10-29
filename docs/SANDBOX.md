@@ -146,7 +146,9 @@ own rules are the only ones.
 
 `filesystem.allowRead` re-allows what a run must read under `$HOME`, which `denyRead` hides. Trim the toolchains to
 the ones you build with, and add any that are missing: `~/.local/bin`, `~/.nvm`, `~/.cargo`, `~/.rustup`, `~/go`,
-and `~/.local/share/uv` are there. A toolchain is readable, not writable.
+and `~/.local/share/uv` are there. A toolchain is readable, not writable. Name each directory, never one that holds
+the role caches or the run directories, such as `~` or `/tmp`: `srt` would bind it back over them, so the wrapper
+refuses it.
 
 Caches go in `@CACHE@`, the role's cache directory, which the templates allow reading and writing. Never put one of
 your own caches in `allowWrite`: your own tools run what is in them, outside the sandbox, so a run that can write one
@@ -306,6 +308,10 @@ github.com.
 ## Troubleshooting
 
 - **`canopy-sandbox: no policy template at ...`** or **`srt is not installed`:** run `canopy sandbox setup`.
+- **`... filesystem.allowRead names ..., which holds ...`** (or `allowWrite`): the template, or a chore's `cwd`, names
+  a directory that holds the role caches, the run directories, or `.canopy/`, which would let one run read another's.
+  Name the directories the command needs instead, and give a chore a `cwd` of its own, not `$HOME` or a directory
+  above it.
 - **`CANOPY_GIT_OBJECTS is not set`:** the wrapper's `worker` or `setup` role is on a command canopy does not run as
   a worker or setup, such as `review_cmd` or a chore's. Use the `review` or `chore` role there.
 - **`... links to no worktree`:** the `review` role is on a command canopy does not run as a review, or a desk is

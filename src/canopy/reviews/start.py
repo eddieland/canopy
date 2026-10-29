@@ -31,16 +31,14 @@ from canopy.core import (
     prompts,
     recorded_runs,
     records,
-    review_requests,
     review_runs,
-    sql,
     ticket_models,
 )
 from canopy.core import review_result as result
 from canopy.core.vocab import RecordedKind, ReviewRunStatus
 from canopy.infra import lock, logs, procs
 from canopy.infra.text import quoted
-from canopy.reviews import findings, grants, settle
+from canopy.reviews import findings, grants, review_requests, settle
 
 if TYPE_CHECKING:
     import sqlite3
@@ -362,7 +360,7 @@ def _base(conn: sqlite3.Connection, pr: str) -> str | None:
     Returns:
         The PR's base branch, or None.
     """
-    found = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", pr))
+    found = records.select(records.ObservedPr).where("url = ?", pr).one(conn)
     return found.base_ref if found is not None else None
 
 

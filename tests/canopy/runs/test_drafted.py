@@ -14,12 +14,12 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import drafts, observe, records, replies, review_diff, sql
+from canopy.core import observe, records, replies, review_diff, sql
 from canopy.core.config import load
 from canopy.core.vocab import DraftKind, DraftStatus, ResumeReason, ReviewItem, RunKind
 from canopy.infra import logs, procs
 from canopy.loop import attention
-from canopy.runs import drafted
+from canopy.runs import drafted, drafts
 from tests.canopy.helpers import (
     APPROVE,
     DRAFTS_PR,
@@ -208,6 +208,28 @@ def test_waiting_drafts_are_the_operators_item_alone(scenario: Scenario, github_
     ]
     assert "drafts_waiting" not in str(scenario.state())
     assert attention.for_overseer(scenario.conn) == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_drafts_are_on_the_attention_list_once_their_run_ends_not_from_the_next_tick(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    """A run's drafts are listed as soon as it ends, aged from the draft, and a tick recording them changes nothing."""
+    scenario.configures("private", trust={**APPROVE, "trusted_reviewers": ["alice"]})
+    github_has(github_state, comment(501))
+    scenario.run(WORK, worker=sends_drafts([thread(501)]))
+    ctx = context(scenario.env)
+    [draft] = all_drafts(scenario.conn)
+    [item] = [i for i in attention.listed(ctx) if i.reason == drafted.WAITING_REASON]
+    assert (item.ticket_key, item.repo, item.detail, item.since) == (
+        KEY,
+        "repo",
+        f"1 draft waits on you, for {PR}",
+        draft.created_at,
+    )
+    scenario.tick(*waits(KEY))
+    assert [i for i in attention.listed(ctx) if i.reason == drafted.WAITING_REASON] == [item]
 
 
 @pytest.mark.usefixtures("git_pool")

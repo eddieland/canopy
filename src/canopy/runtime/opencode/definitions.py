@@ -127,12 +127,20 @@ _OVERSEER_GITHUB_READS = (
     "search_pull_requests",
     "list_branches",
 )
-# The overseer's reads of GitHub's issues, which it has no use for where a `tracker` source reads them (DESIGN §39).
-_OVERSEER_ISSUE_READS = ("issue_read", "list_issues", "search_issues")
 # GitHub's issue reads, which the overseer and the reviewer have no use for off a GitHub tracker. Rendered before the
 # tracker's rules: a read of the tracker's that one matches, such as a `list_issues` of its own, is allowed again after
 # it.
 _GITHUB_ISSUE_READS = ("*issue_read*", "*list_issues*", "*search_issues*")
+# GitHub's reads of PRs and branches, and of the signed-in user, which the overseer keeps but where the sources read
+# both the tracker and GitHub for it (DESIGN §39). Denied by pattern, as its writes are: the server's name is the
+# operator's. `get_me` is anchored at the name's end, so that another server's `get_message` or `get_member` stays.
+_GITHUB_PR_READS = (
+    "*pull_request_read*",
+    "*list_pull_requests*",
+    "*search_pull_requests*",
+    "*list_branches*",
+    "*_get_me",
+)
 # GitHub's issue tools, which only the `tracker-github` skill names, so that the workers and the planner have no use
 # for them off a GitHub tracker: the reads, and what filing or labelling an issue takes. Not its issue comment tools,
 # which comment on a PR's conversation too.
@@ -226,8 +234,8 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
             found[rel] = render_github_issues(text, rel, rules.tracker_tools, rules.tracker_provider).encode()
     _render_by_agent(found, rules)
     if _OVERSEER_FILE in found:
-        # Where a `tracker` source reads tickets, the overseer reads no tracker (DESIGN §39): no skill says how to.
-        observed = rules.tracker_observed
+        # Where the sources read the tracker and GitHub, the overseer reads neither (DESIGN §39): no skill says how to.
+        observed = rules.observes_all
         skill = None if observed else _tracker_skill(found, rules.tracker_provider)
         text = found[_OVERSEER_FILE].decode()
         server = rules.tracker_server if observed else None
@@ -462,26 +470,24 @@ def render_overseer_reads(
     reads are denied first. With no tools known, the marked line stays as it is, and the overseer keeps the tracker's
     tools and GitHub's issue reads: a pattern could take a read it needs.
 
-    `observed` is a `tracker` source reading the tickets, so the overseer reads no tracker at all (DESIGN §39): GitHub's
-    issue reads are denied, and the tracker's server whole, which on a GitHub tracker keeps only its reads of PRs. With
-    no read tools known, `server` names the server to deny; with neither, only GitHub's issue reads are.
+    `observed` is a `tracker` source reading the tickets, beside the `vcs` source, which always runs, so the overseer
+    reads neither the tracker nor GitHub (DESIGN §39): GitHub's issue, PR, and branch reads are denied by pattern, and
+    the tracker's server whole, by the name its tools give, or with none known, `server`, which on a GitHub tracker is
+    GitHub's.
 
     Raises:
         DefinitionsError: `text` has no marked line to render the tracker's rules at.
     """
     _require_reads_marker(text, _OVERSEER_FILE)
-    github = provider == _GITHUB
     if observed:
-        if tools is None:
-            # No read tools known: deny the server by the name config gives, or, with none, GitHub's issue reads alone.
-            # On a GitHub tracker the server is the one the PRs are read through, so it is not denied whole.
-            if server is not None and not github:
-                return _render_reads(text, server, (), issue_reads=True)
-            return text.replace(_READS_MARKER, _READS_MARKER + "".join(map(_deny, _GITHUB_ISSUE_READS)), 1)
-        reads = [r for r in _OVERSEER_GITHUB_READS if r not in _OVERSEER_ISSUE_READS] if github else []
-        return _render_reads(text, tools.server, reads, issue_reads=True)
+        # The tracker's server by the name its tools or config give; with neither, only GitHub's reads are denied.
+        named = tools.server if tools is not None else server
+        whole = () if named is None else (f"{named}_*",)
+        rules = "".join(map(_deny, (*_GITHUB_ISSUE_READS, *_GITHUB_PR_READS, *whole)))
+        return text.replace(_READS_MARKER, _READS_MARKER + rules, 1)
     if tools is None:
         return text
+    github = provider == _GITHUB
     reads = _OVERSEER_GITHUB_READS if github else tools.allowed
     return _render_reads(text, tools.server, reads, issue_reads=not github)
 
