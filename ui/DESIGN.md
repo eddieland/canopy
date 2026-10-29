@@ -485,8 +485,8 @@ Rules:
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
-- **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Pull
-  requests' violet to Tickets' sky. It is static.
+- **The aurora**: a 2px hairline along the header's foot, over its border, fading through the nav's colors in the
+  nav's order, Attention's rose first and Memory's last. It is static.
 
 ## Fun
 
