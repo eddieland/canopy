@@ -1,5 +1,6 @@
 import { ApiError } from '@/api/client'
 import type {
+    Answered,
     AgentModel,
     Attached,
     Detached,
@@ -192,6 +193,17 @@ export function grantedText(subject: string, granted: Granted): string {
         `${subject} in ${granted.repo ?? 'its repository'} has had ${granted.runs} ${granted.kind} runs, and may now ` +
         `have ${granted.limit}. The next tick decides whether to dispatch it.`
     )
+}
+
+/** What an answer to a running agent's question did, as `canopy reply run:ID LETTER` says it. */
+export function answeredText(answered: Answered): string {
+    const said = answered.already
+        ? `It was already answered ${answered.letter}: ${answered.option}. Nothing new recorded.`
+        : `Answered ${answered.letter}: ${answered.option}.`
+    const heard = answered.heard
+        ? 'Its agent hears it on its next tool call.'
+        : 'Its agent had already ended, and will not hear it.'
+    return `${said} ${heard}`
 }
 
 /** What a note to a chore did, as `canopy reply chore:NAME` says it: its next runs read it, not the next tick. */

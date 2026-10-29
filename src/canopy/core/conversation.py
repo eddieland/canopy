@@ -16,6 +16,7 @@ agent writes and no agent's prompt carries.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import hashlib
 import os
 import re
@@ -45,6 +46,7 @@ from canopy.infra import lock
 from canopy.infra.text import printable, quoted
 
 if TYPE_CHECKING:
+    from datetime import datetime
     from pathlib import Path
 
     from canopy.core.config import Chore, Config
@@ -434,19 +436,30 @@ def reply(
         return replied
 
 
-def answer(conn: sqlite3.Connection, ref: Ref, body: str) -> cards.Answered:
-    """Record the operator's answer to the question a running run's card asks (DESIGN §41): one of its letters.
+def answer(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    body: str,
+    *,
+    state_dir: Path,
+    asked_at: datetime | None = None,
+) -> cards.Answered:
+    """Record the operator's answer to the question a running run's card asks, and pass it to the agent (DESIGN §41).
 
-    `ref` names a worker's or a planner's run, `run:ID`, or a review's, `review:ID`; `body` is the letter, in either
-    case.
+    `ref` names a worker's or a planner's run, `run:ID`, or a review's, `review:ID`; `body` is the letter of one of the
+    question's options, in either case. With `asked_at`, when the question the operator was shown was asked, a card
+    that asks another since is refused. Once recorded, the answer is written to the run's answers directory in
+    `state_dir`, where canopy's plugin tells the agent on its next tool call; again for an answer already recorded, in
+    case the first write found the directory gone.
 
     Returns:
-        What was answered, and whether the question already had this answer.
+        What was answered, whether the question already had this answer, and whether the agent can hear it.
 
     Raises:
         Refused: `unsupported` for a subject that is neither, `unknown` for a run canopy has no record of, `ended` for
-            one no longer running, `no_question` for one whose card asks none, `bad_answer` for a body that is not the
-            letter of one of its options.
+            one no longer running, `no_question` for one whose card asks none, `moved_on` for one whose card asks
+            another question than the one asked at `asked_at`, `bad_answer` for a body that is not the letter of one of
+            its options.
     """
     if ref.kind not in (RUN, REVIEW):
         raise Refused("unsupported", f"{ref} is a {ref.kind}; a question is asked by a run, run:ID or review:ID")
@@ -463,6 +476,8 @@ def answer(conn: sqlite3.Connection, ref: Ref, body: str) -> cards.Answered:
         question = standing.card.question if standing.card is not None else None
         if question is None or standing.asked_at is None:
             raise Refused("no_question", f"{ref}'s card asks no question")
+        if asked_at is not None and asked_at != standing.asked_at:
+            raise Refused("moved_on", f"{ref}'s card asks another question now: read it again before you answer")
         letters = cards.LETTERS[: len(question.options)]
         letter = next((x for x in letters if x == body.strip().upper()), None)
         option = question.option(letter) if letter is not None else None
@@ -471,7 +486,9 @@ def answer(conn: sqlite3.Connection, ref: Ref, body: str) -> cards.Answered:
         already = standing.answer == letter
         if not already and not cards.record_answer(conn, table, run_id, letter, standing.asked_at):
             raise Refused("no_question", f"{ref}'s card asks no question")
-        return cards.Answered(question, standing.asked_at, letter, option, already=already)
+    answered = cards.Answered(question, standing.asked_at, letter, option, already=already, heard=False)
+    run = f"review-{run_id}" if ref.kind == REVIEW else str(run_id)
+    return dataclasses.replace(answered, heard=cards.deliver(cards.answers_dir(state_dir, run), answered))
 
 
 def write_reply(

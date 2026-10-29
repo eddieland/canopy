@@ -68,6 +68,7 @@ export const mockRuns: Run[] = [
             steps: [],
             percent: null,
             stage: null,
+            question: null,
         },
         persona: 'canopy',
         persona_digest: '6c1f0a3e9b2d4c5a7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d',

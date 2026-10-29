@@ -405,22 +405,19 @@ def _refuse_late_answer(ctx: Context, subject: Ref, body: str) -> None:
 
 def _answer(ctx: Context, subject: Ref, body: str) -> int:
     try:
-        answered = conversation.answer(ctx.conn, subject, body)
+        answered = conversation.answer(ctx.conn, subject, body, state_dir=ctx.state_dir)
     except conversation.Refused as r:
         raise CliError(f"reply refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info(
         "question answered",
         extra={"subject": str(subject), "answer": answered.letter, "already": answered.already, "channel": CLI},
     )
-    run = f"review-{subject.id}" if subject.kind == conversation.REVIEW else subject.id
-    # Written again for an answer already recorded, in case the first write found the directory gone.
-    heard = cards.deliver(cards.answers_dir(ctx.state_dir, run), answered)
     said = f"{subject}'s question: {one_line(answered.question.ask)}"
     if answered.already:
         click.echo(f"{said}\nIt was already answered {answered.letter}: {answered.option}. Nothing new recorded.")
     else:
         click.echo(f"{said}\nAnswered {answered.letter}: {answered.option}.")
-    if heard:
+    if answered.heard:
         click.echo("Its agent hears it on its next tool call.")
     else:
         click.echo("Its agent had already ended, and will not hear it.")

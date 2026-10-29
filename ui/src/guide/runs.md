@@ -229,6 +229,13 @@ The card says how old it is in time and in tool calls. One that has gone 10 minu
 update turns amber and says `stale`, rather than going quiet, and canopy nudges the agent for a new one. A run that
 ended keeps its last card, so you can see where it thought it was when it stopped.
 
-A run's page shows the whole card; the runs list shows what it's doing now, with the card's age; a ticket's page shows
-the card under `working now`; and a review's page shows its reviewer's. Nothing on a card reaches another agent, and
-nothing on it changes what canopy does: it's for you.
+A card may ask you a question the agent can work around while you decide: the question, two to five options lettered
+from A, and the one it recommends and works toward meanwhile. It reads `asks you` in amber until you answer. Press
+`answer` beside an option, or run `canopy reply run:ID LETTER` (`review:ID` for a review), and the agent hears your
+letter on its next tool call; press another to change your mind, as long as it runs. An answer is a letter, never
+words: you choose among its options, which is also all a line forged to look like canopy's could do. A question it
+can't work around still ends the run as `blocked`, as before.
+
+A run's page shows the whole card; the runs list shows what it's doing now, with the card's age and `asks you` while a
+question waits; a ticket's page shows the card under `working now`; and a review's page shows its reviewer's. Nothing on
+a card reaches another agent, and nothing on it changes what canopy does: it's for you.

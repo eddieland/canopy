@@ -40,7 +40,8 @@ A card may ask the operator a question the agent can work around meanwhile, as t
 mode does: the question, two to five options lettered from A, and the one it recommends and works toward. One it
 cannot work around stays a `blocked` final line (§8). A question is as old as the first card that asked it, and the
 cards after it that ask the same keep it and its answer; another question starts over. The operator answers with one
-of its letters, `canopy reply run:ID` or `review:ID`, only while the run runs, and a later letter replaces it. An answer
+of its letters, `canopy reply run:ID` or `review:ID` or the card in the web UI, only while the run runs, and a later
+letter replaces it. An answer
 is a letter, not words: the agent's own options are all an answer can choose among.
 
 The answer reaches the agent on its next tool call, as the clock's line does (§33): canopy writes it to a file in the
@@ -62,8 +63,8 @@ its trust in worker text changes (TRUST_MODEL T1). Nothing on a card extends a r
 
 ### Where it shows
 
-`canopy status` and the web UI's running runs show each running run's `now` and how old its card is, and the
-former a question waiting on the operator; `canopy show` of a run, `canopy review show` of a review, and their pages in
+`canopy status` and the web UI's running runs show each running run's `now` and how old its card is, and a question
+waiting on the operator; `canopy show` of a run, `canopy review show` of a review, and their pages in
 the web UI, the whole card, or the last one once it has ended, as a ticket's page does under the run working it. A card
 that has gone too many tool calls or minutes without an update is marked stale rather than going quiet, and `canopy
 status` names a running run that has kept none that long. No notification: the sinks hear of what a run ends with, as

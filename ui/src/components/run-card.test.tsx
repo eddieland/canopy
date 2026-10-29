@@ -1,7 +1,10 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { RunCard } from '@/api/types'
+import { api } from '@/api/client'
+import type { RunCard, RunCardQuestion } from '@/api/types'
 
 import { RunCardNow, RunCardView } from './run-card'
 
@@ -18,6 +21,7 @@ const CARD: RunCard = {
     steps: [],
     percent: null,
     stage: null,
+    question: null,
 }
 
 beforeEach(() => {
@@ -118,5 +122,111 @@ describe('RunCardView steps', () => {
     it('puts the share done on the one-line card', () => {
         render(<RunCardNow card={STEPS} />)
         expect(screen.getByTestId('run-card-now').textContent).toContain('running the login tests33%')
+    })
+})
+
+function renderQuestion(question: RunCardQuestion, running = true) {
+    return render(
+        <QueryClientProvider client={new QueryClient()}>
+            <RunCardView card={{ ...CARD, question }} running={running} answers={{ kind: 'run', id: 41 }} />
+        </QueryClientProvider>,
+    )
+}
+
+describe('RunCardView question', () => {
+    const QUESTION: RunCardQuestion = {
+        ask: 'Keep the password form beside the SSO button, or hide it behind a link?',
+        options: ['keep both side by side', 'hide the form behind a link'],
+        recommend: 'B',
+        asked_at: '2026-10-08T12:24:00Z',
+        answer: null,
+        answered_at: null,
+    }
+    // Every answer the card sends, and what the server stand-in answers next.
+    let sent: { path: string; body: unknown }[] = []
+    let replies: Response[] = []
+    const server: Middleware = {
+        async onRequest({ request }) {
+            sent.push({ path: new URL(request.url).pathname, body: await request.json() })
+            return (
+                replies.shift() ??
+                Response.json({ letter: 'B', option: QUESTION.options[1], already: false, heard: true })
+            )
+        },
+    }
+
+    beforeEach(() => {
+        vi.useRealTimers()
+        sent = []
+        replies = []
+        api.use(server)
+    })
+
+    afterEach(() => {
+        api.eject(server)
+    })
+
+    it('asks you, names each option by letter and the one recommended, and answers with the one you pick', async () => {
+        renderQuestion(QUESTION)
+        const asked = screen.getByTestId('run-card-question')
+        expect(asked.textContent).toContain('asks you')
+        expect(asked.textContent).toContain('Bhide the form behind a link · recommended')
+        fireEvent.click(screen.getByRole('button', { name: 'Answer B: hide the form behind a link' }))
+        expect(
+            await screen.findByText(
+                'Answered B: hide the form behind a link. Its agent hears it on its next tool call.',
+            ),
+        ).toBeDefined()
+        expect(sent).toEqual([{ path: '/api/runs/41/answers', body: { letter: 'B', asked_at: QUESTION.asked_at } }])
+    })
+
+    it('marks your answer, and offers the other options to change it', () => {
+        renderQuestion({ ...QUESTION, answer: 'B', answered_at: '2026-10-08T12:26:00Z' })
+        expect(screen.getByTestId('run-card-question').textContent).toContain('answered B')
+        expect(screen.getByText(/your answer/u)).toBeDefined()
+        expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+            'Answer A: keep both side by side',
+        ])
+    })
+
+    it("shows an ended run's question as never answered, with nothing to press", () => {
+        renderQuestion(QUESTION, false)
+        expect(screen.getByTestId('run-card-question').textContent).toContain('never answered')
+        expect(screen.queryAllByRole('button')).toEqual([])
+    })
+
+    it('drops what an answer said once the card asks another question', async () => {
+        const { rerender } = renderQuestion(QUESTION)
+        fireEvent.click(screen.getByRole('button', { name: 'Answer B: hide the form behind a link' }))
+        expect(await screen.findByText(/^Answered B/u)).toBeDefined()
+        rerender(
+            <QueryClientProvider client={new QueryClient()}>
+                <RunCardView
+                    card={{ ...CARD, question: { ...QUESTION, asked_at: '2026-10-08T12:29:00Z' } }}
+                    running
+                    answers={{ kind: 'run', id: 41 }}
+                />
+            </QueryClientProvider>,
+        )
+        expect(screen.queryByText(/^Answered B/u)).toBeNull()
+    })
+
+    it('names the guard that refused an answer', async () => {
+        replies = [
+            Response.json(
+                { detail: { guard: 'moved_on', reason: 'its card asks another question now' } },
+                { status: 409 },
+            ),
+        ]
+        renderQuestion(QUESTION)
+        fireEvent.click(screen.getByRole('button', { name: 'Answer A: keep both side by side' }))
+        expect((await screen.findByRole('alert')).textContent).toContain('refused (moved_on)')
+    })
+
+    it('says on the one-line card that it asks you, until you answer', () => {
+        const { rerender } = render(<RunCardNow card={{ ...CARD, question: QUESTION }} />)
+        expect(screen.getByText('asks you')).toBeDefined()
+        rerender(<RunCardNow card={{ ...CARD, question: { ...QUESTION, answer: 'A' } }} />)
+        expect(screen.queryByText('asks you')).toBeNull()
     })
 })

@@ -56,6 +56,7 @@ from canopy.serve.schema import (
     Run,
     RunActivity,
     RunCard,
+    RunCardQuestion,
     RunCardStep,
     RunsSince,
     RunState,
@@ -430,6 +431,26 @@ def card(row: sqlite3.Row | records.Row, *, running: bool, timeout_minutes: int 
         ],
         percent=cards.percent(found),
         stage=cards.working_stage(found),
+        question=_question(standing),
+    )
+
+
+def _question(standing: cards.Standing) -> RunCardQuestion | None:
+    """A card's question as the API sends it, with the operator's answer.
+
+    Returns:
+        The question; None when the card asks none.
+    """
+    question = standing.card.question if standing.card is not None else None
+    if question is None or standing.asked_at is None:
+        return None
+    return RunCardQuestion(
+        ask=question.ask,
+        options=list(question.options),
+        recommend=question.recommend,
+        asked_at=standing.asked_at,
+        answer=standing.answer,
+        answered_at=standing.answered_at,
     )
 
 

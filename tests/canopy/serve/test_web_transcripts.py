@@ -10,12 +10,12 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import gc_passes, run_models
+from canopy.core import cards, gc_passes, run_models
 from canopy.core.run_models import Due
 from canopy.core.vocab import ModelsRead
 from canopy.runtime import transcript
 from canopy.serve.backend import Backend
-from tests.canopy.web_helpers import client
+from tests.canopy.web_helpers import client, signed_in
 
 
 def test_a_run_page_is_the_run_as_the_runs_list_shows_it(backend: Backend) -> None:
@@ -371,3 +371,30 @@ def test_a_file_retention_removed_says_after_how_many_days(backend: Backend) -> 
     with backend.open() as ctx:
         ctx.conn.execute("DELETE FROM gc_passes")
     assert c.get("/api/runs/39/transcript").json()["removed_after_days"] is None
+
+
+def test_a_running_runs_card_asks_its_question_and_the_operator_answers_it_by_letter(backend: Backend) -> None:
+    c = client(None, backend)
+    question = c.get("/api/runs/41").json()["card"]["question"]
+    assert question["options"][1] == "hide the form behind a link"
+    assert (question["recommend"], question["asked_at"], question["answer"]) == ("B", "2026-10-08T12:24:00Z", None)
+    asked = question["asked_at"]
+    headers = signed_in(c)
+
+    refused = c.post("/api/runs/41/answers", json={"letter": "D", "asked_at": asked}, headers=headers)
+    assert (refused.status_code, refused.json()["detail"]["guard"]) == (409, "bad_answer")
+    moved = c.post("/api/runs/41/answers", json={"letter": "A", "asked_at": "2026-10-08T12:00:00Z"}, headers=headers)
+    assert moved.json()["detail"]["guard"] == "moved_on"  # the page showed another question
+
+    answered = c.post("/api/runs/41/answers", json={"letter": "b", "asked_at": asked}, headers=headers).json()
+    assert answered == {"letter": "B", "option": "hide the form behind a link", "already": False, "heard": False}
+    assert c.get("/api/runs/41").json()["card"]["question"]["answer"] == "B"
+    # Once its answers directory is there, as while its agent runs, the answer is written where the agent hears it.
+    with backend.open() as ctx:
+        answers = cards.answers_dir(ctx.state_dir, "41")
+    cards.make_answers(answers)
+    again = c.post("/api/runs/41/answers", json={"letter": "B", "asked_at": asked}, headers=headers).json()
+    assert (again["already"], again["heard"]) == (True, True)
+    assert json.loads((answers / cards.ANSWER_FILE).read_text())["letter"] == "B"
+    ended = c.post("/api/runs/39/answers", json={"letter": "A", "asked_at": asked}, headers=headers)
+    assert ended.json()["detail"]["guard"] == "ended"

@@ -1062,8 +1062,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   and tool calls, then the summary in prose, and `now`, `done` (each with its proof in muted mono), `next`, and `stuck`
   as label and text lines, then its steps, if any: the share done and the stage under way, then each step's status
   word in its tone (`working` `status-running`, `done` `status-done`, `blocked`, and `stuck` past its `stuck_at`,
-  `status-blocked`) and its title. On one line, for a row, it is `now`, what the agent does, the share done, and the
-  card's age. While the run
+  `status-blocked`) and its title, then its question, if any: `asks you` in `status-blocked` while it waits, `answered
+  B`, or `never answered`, its age, the question, and each option by its letter, `· recommended` and `· your answer`
+  muted and `status-done` after it, and, while the run runs, an xs outline `answer B` button on each other option. On
+  one line, for a row, it is `now`, what the agent does, the share done, `asks you` in `status-blocked` while a
+  question waits, and the card's age. While the run
   runs, a card past `stale_at` or marked `stale` turns its rule and a `stale` word `status-blocked`, judged against the
   page's clock so it turns without a new read; an ended run's last card never does. It shows on the run's page as its
   `card` field, under a ticket's `WorkingNow`, in a running run's row, and on a review's page. Agent text, as text.

@@ -17,6 +17,10 @@ export type RunsSince = Schemas['RunsSince']
 export type RunActivity = Schemas['RunActivity']
 /** Where a running agent's work stands, in its own words: its latest card (DESIGN §41). */
 export type RunCard = Schemas['RunCard']
+/** A decision a running agent asks the operator for on its card, with the answer they gave (DESIGN §41). */
+export type RunCardQuestion = Schemas['RunCardQuestion']
+/** The operator's answer to a running run's question, as recorded: what `canopy reply run:ID LETTER` says. */
+export type Answered = Schemas['Answered']
 /** Which models served an agent run, read from its session after it ended (DESIGN §13), or why none are shown. */
 export type ModelsServed = Schemas['ModelsServed']
 /** One model that wrote an agent run's replies, with how many and what they cost. */

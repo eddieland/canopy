@@ -259,7 +259,11 @@ function ReviewFields({ detail }: { detail: ReviewDetail }) {
             )}
             {detail.card !== null && (
                 <Field label="card">
-                    <RunCardView card={detail.card} running={review.ended_at === null} />
+                    <RunCardView
+                        card={detail.card}
+                        running={review.ended_at === null}
+                        answers={{ kind: 'review', id: review.id }}
+                    />
                 </Field>
             )}
             <Field label="verdict">

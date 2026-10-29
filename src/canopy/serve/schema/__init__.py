@@ -226,6 +226,45 @@ class RunCardStep(Model):
     page shows it stuck; None otherwise."""
 
 
+class RunCardQuestion(Model):
+    """A decision a running agent asks the operator for on its card, which it works around meanwhile (DESIGN §41)."""
+
+    ask: str
+    """The question, in the agent's words."""
+    options: list[str]
+    """The choices, in order: the first is A, the next B, and so on."""
+    recommend: Literal["A", "B", "C", "D", "E"]
+    """The letter of the option the agent recommends, and works toward meanwhile."""
+    asked_at: datetime
+    """When canopy first recorded a card asking it."""
+    answer: Literal["A", "B", "C", "D", "E"] | None = None
+    """The letter the operator answered with; None while it waits on them."""
+    answered_at: datetime | None = None
+    """When they answered; None while it waits."""
+
+
+class AnswerRequest(Model):
+    """The operator's answer to a running run's question, as `canopy reply run:ID LETTER` takes it."""
+
+    letter: str
+    """The letter of one of the question's options, in either case."""
+    asked_at: datetime
+    """When the question the page showed was asked: a card that asks another since is refused `moved_on`."""
+
+
+class Answered(Model):
+    """The operator's answer, as recorded: what `canopy reply run:ID LETTER` says."""
+
+    letter: Literal["A", "B", "C", "D", "E"]
+    """The letter."""
+    option: str
+    """The option it names."""
+    already: bool
+    """Whether the question already had this answer, so nothing new was recorded."""
+    heard: bool
+    """Whether it was written where the agent hears it on its next tool call: false once the agent has ended."""
+
+
 class RunCard(Model):
     """Where a worker's, planner's, or reviewer's work stands, in its own words: its latest card (DESIGN §41).
 
@@ -257,6 +296,8 @@ class RunCard(Model):
     """How much of its steps is done, of those not skipped, rounded down; None with no steps to count."""
     stage: str | None = None
     """The stage of its first working step; None when none names one."""
+    question: RunCardQuestion | None = None
+    """A question it asks the operator, with the answer they gave; None when it asks none."""
 
 
 class Run(Model):
