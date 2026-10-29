@@ -1,14 +1,18 @@
 """A running agent's card: what a `status` call says, and how a run's row keeps it (DESIGN §41)."""
 
+import functools
+import json
 import re
 import sqlite3
-from datetime import timedelta
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from pydantic import ValidationError
 
-from canopy.core import cards, db
+from canopy.core import cards, conversation, db
 from canopy.core.vocab import RunStatus
 from canopy.runtime.report import Called
 from tests.canopy.helpers import plan_run, present
@@ -208,6 +212,41 @@ def test_a_question_keeps_when_it_was_asked_and_its_answer_while_the_cards_after
     cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
     assert (standing().asked_at, standing().answer) == (None, None)
     assert present(db.get_run(conn, running))["card_asked_at"] is None
+
+
+def test_an_answer_reaches_the_agent_in_the_transaction_that_records_it(
+    conn: sqlite3.Connection,
+    running: int,
+    tmp_path: Path,
+) -> None:
+    """Two answers at once reach the agent in the order the journal recorded them, so it hears the one kept."""
+    cards.record_call(conn, "runs", running, cards.Card.model_validate({**CARD, "question": QUESTION}))
+    answers = cards.answers_dir(tmp_path, str(running))
+    cards.make_answers(answers)
+    held: list[bool] = []
+
+    def deliver(path: Path, answered: cards.Answered) -> bool:
+        held.append(conn.in_transaction)
+        return real(path, answered)
+
+    real = cards.deliver
+    with mock.patch.object(cards, "deliver", autospec=True, side_effect=deliver):
+        conversation.answer(conn, conversation.parse_ref(f"run:{running}"), "B", state_dir=tmp_path)
+    assert held == [True]
+    assert json.loads((answers / cards.ANSWER_FILE).read_text())["letter"] == "B"
+
+
+def test_answers_delivered_at_once_from_two_threads_each_land_whole(tmp_path: Path) -> None:
+    """Each thread stages its answer under a name of its own, so neither renames away the other's."""
+    question = cards.Question.model_validate(QUESTION)
+    asked = datetime(2026, 10, 8, 12, 24, tzinfo=UTC)
+    cards.make_answers(tmp_path)
+    picks = [cards.Answered(question, asked, ("A", "B")[i % 2], "x", already=False, heard=False) for i in range(200)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        heard = list(pool.map(functools.partial(cards.deliver, tmp_path), picks))
+    assert all(heard)
+    assert json.loads((tmp_path / cards.ANSWER_FILE).read_text())["letter"] in {"A", "B"}
+    assert [p.name for p in tmp_path.iterdir()] == [cards.ANSWER_FILE]
 
 
 def test_show_lists_a_questions_options_by_letter_and_says_how_to_answer_it(
