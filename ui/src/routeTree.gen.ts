@@ -32,6 +32,7 @@ import { Route as RunsIndexRouteImport } from './routes/runs.index'
 import { Route as RunsIdRouteImport } from './routes/runs.$id'
 import { Route as RunsWorktreesRouteImport } from './routes/runs.worktrees'
 import { Route as SettingsLimitsRouteImport } from './routes/settings_.limits'
+import { Route as SettingsSkillsRouteImport } from './routes/settings_.skills'
 import { Route as TasksIndexRouteImport } from './routes/tasks.index'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
 import { Route as TicketsIndexRouteImport } from './routes/tickets.index'
@@ -163,6 +164,11 @@ const SettingsLimitsRoute = SettingsLimitsRouteImport.update({
   path: '/settings/limits',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsSkillsRoute = SettingsSkillsRouteImport.update({
+  id: '/settings_/skills',
+  path: '/settings/skills',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TasksIndexRoute = TasksIndexRouteImport.update({
   id: '/tasks/',
   path: '/tasks/',
@@ -259,6 +265,7 @@ export interface FileRoutesByFullPath {
   '/runs/$id': typeof RunsIdRoute
   '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings/limits': typeof SettingsLimitsRoute
+  '/settings/skills': typeof SettingsSkillsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
@@ -299,6 +306,7 @@ export interface FileRoutesByTo {
   '/runs/$id': typeof RunsIdRoute
   '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings/limits': typeof SettingsLimitsRoute
+  '/settings/skills': typeof SettingsSkillsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
@@ -340,6 +348,7 @@ export interface FileRoutesById {
   '/runs/$id': typeof RunsIdRoute
   '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings_/limits': typeof SettingsLimitsRoute
+  '/settings_/skills': typeof SettingsSkillsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
@@ -382,6 +391,7 @@ export interface FileRouteTypes {
     | '/runs/$id'
     | '/runs/worktrees'
     | '/settings/limits'
+    | '/settings/skills'
     | '/tasks/$id'
     | '/tickets/$key'
     | '/ticks/$id'
@@ -422,6 +432,7 @@ export interface FileRouteTypes {
     | '/runs/$id'
     | '/runs/worktrees'
     | '/settings/limits'
+    | '/settings/skills'
     | '/tasks/$id'
     | '/tickets/$key'
     | '/ticks/$id'
@@ -462,6 +473,7 @@ export interface FileRouteTypes {
     | '/runs/$id'
     | '/runs/worktrees'
     | '/settings_/limits'
+    | '/settings_/skills'
     | '/tasks/$id'
     | '/tickets/$key'
     | '/ticks/$id'
@@ -503,6 +515,7 @@ export interface RootRouteChildren {
   RunsIdRoute: typeof RunsIdRoute
   RunsWorktreesRoute: typeof RunsWorktreesRoute
   SettingsLimitsRoute: typeof SettingsLimitsRoute
+  SettingsSkillsRoute: typeof SettingsSkillsRoute
   TasksIdRoute: typeof TasksIdRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
   TicksIdRoute: typeof TicksIdRoute
@@ -689,6 +702,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsLimitsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings_/skills': {
+      id: '/settings_/skills'
+      path: '/settings/skills'
+      fullPath: '/settings/skills'
+      preLoaderRoute: typeof SettingsSkillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tasks/': {
       id: '/tasks/'
       path: '/tasks'
@@ -815,6 +835,7 @@ const rootRouteChildren: RootRouteChildren = {
   RunsIdRoute: RunsIdRoute,
   RunsWorktreesRoute: RunsWorktreesRoute,
   SettingsLimitsRoute: SettingsLimitsRoute,
+  SettingsSkillsRoute: SettingsSkillsRoute,
   TasksIdRoute: TasksIdRoute,
   TicketsKeyRoute: TicketsKeyRoute,
   TicksIdRoute: TicksIdRoute,

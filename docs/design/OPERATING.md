@@ -76,6 +76,8 @@ rendered as a run would start them, to the operator alone: it is refused inside 
 the runtime what each of canopy's agents is offered, MCP servers, skills, and its own tools, once it has merged the
 operator's own runtime config into canopy's definitions, so a recommendation to deny one rests on the merge the
 runtime makes, not on canopy's files alone.
+The Skills page under Settings (§22) asks the runtime for its skills alone, with each one's file, description, and
+text, and not which agent is offered each, which would start the runtime again for every agent.
 
 ## 12. Configuration
 

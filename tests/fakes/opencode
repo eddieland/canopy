@@ -20,7 +20,8 @@ Keys of the state besides `sessions`, each optional, each read by both versions 
             Default `{"mcp": {}}`. 1's `debug config` prints it with the servers of an inline config in
             `OPENCODE_CONFIG_CONTENT`, as canopy gives a run its own, merged over its `mcp`; 2's `config.get` answers
             with it and the inline config after it, as a document of its own, as OpenCode 2 merges it last.
-    skills  the names `debug skill` lists, and the ids `skill.list` answers with. Default none.
+    skills  the names `debug skill` lists, and the ids `skill.list` answers with, each with a made-up file; or, for 1,
+            an object `debug skill` prints as it is, its `name` the name. Default none.
     agents  each agent's permission rules by name, `[permission, pattern, action]` each. 1's `debug agent NAME` prints
             them after an allow of everything; 2's `agent.list` answers with them beside every agent a definition in
             `OPENCODE_CONFIG_DIR` defines, after OpenCode 2's defaults, the permissions renamed as 2 reads 1's (`bash`
@@ -102,9 +103,8 @@ def debug(command: list[str]) -> int:
             inline = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
             printed = {**printed, "mcp": {**printed.get("mcp", {}), **inline}}
         case ["skill"]:
-            printed = [
-                {"name": name, "description": "d", "location": "x", "content": "x"} for name in state.get("skills", [])
-            ]
+            made_up = {"description": "d", "location": "x", "content": "x"}
+            printed = [s if isinstance(s, dict) else {"name": s, **made_up} for s in state.get("skills", [])]
         case ["agent", name]:
             rules = [["*", "*", "allow"], *state.get("agents", {}).get(name, [])]
             printed = {

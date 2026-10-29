@@ -45,6 +45,7 @@ export const ROUTES = [
     'reports/spend',
     'settings',
     'settings/limits',
+    'settings/skills',
     'search?q=web',
     'plan-editor',
     'memory',

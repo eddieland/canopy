@@ -84,6 +84,7 @@ export const keys = {
     // Under the config's key, so what marks the config stale, a save that reloads the loop, marks it stale too.
     configModels: ['config', 'models'] as const,
     models: ['models'] as const,
+    skills: ['skills'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -522,6 +523,17 @@ export const freshModelsQuery = queryOptions({
     queryFn: async ({ signal }) =>
         unwrap(await api.GET('/api/models', { params: { query: { refresh: true } }, signal })),
     staleTime: 0,
+})
+
+/**
+ * Every skill the runtime finds for canopy's agents, with each one's file and text. Not on the stream, since a read
+ * starts the runtime: read when the skills page opens, kept for the rest of the visit, and read again when its Read
+ * again button asks.
+ */
+export const skillsQuery = queryOptions({
+    queryKey: keys.skills,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/skills', { signal })),
+    staleTime: Infinity,
 })
 
 /** The PRs the journal knows, most recent activity first. Marked stale on every tick and every ticket change. */

@@ -6,9 +6,9 @@
 (`loop.tick_now`, as `t` does), the attempt
 and review limits `canopy grant` raises (`runs.policy`, `reviews.grants`), and trying a chore (`chores.trial`) are
 theirs, so `canopy loop` passes them in, and `python -m canopy.serve --mock` passes stand-ins over its seeded journal.
-Reading a pool is the pool's own `status` unless told otherwise, and the models the runtime lists its own list: the mock
-has no pool or runtime to ask. The server keeps the model list it read for a few minutes (`Backend.model_list`), since
-each read starts the runtime; a run's dispatch reads its own.
+Reading a pool is the pool's own `status` unless told otherwise, and the models and the skills the runtime lists its
+own answers: the mock has no pool or runtime to ask. The server keeps the model list it read for a
+few minutes (`Backend.model_list`), since each read starts the runtime; a run's dispatch reads its own.
 
 The loop's config and workspace map are read by each request as it opens, and replaced when the loop reads them again
 (`use`), so a request runs on one config throughout, the one the loop runs on.
@@ -26,12 +26,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, db, pools
+from canopy.core import chore_view, config, db, definitions, pools
 from canopy.core.context import Context, db_path
 from canopy.core.vocab import RunStatus
 from canopy.infra import procs
 from canopy.runs import tasks
+from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime import models as runtime_models
+from canopy.runtime import offerings
+from canopy.runtime.agents import Skills
 from canopy.serve import host
 from canopy.serve.host import Samples
 
@@ -56,6 +59,22 @@ def _status(ctx: Context, repo: str) -> Sequence[pools.Slot]:
 def _models(ctx: Context) -> ModelList:
     # Read in the workspace root, as a run's model is looked up (DESIGN §13), with the variants a choice may name.
     return runtime_models.listed(ctx.runner, version=ctx.config.runtime.version, cwd=ctx.workspace.root, variants=True)
+
+
+def _skills(ctx: Context) -> Skills:
+    # Asked as `canopy agents` asks, in the workspace root with canopy's definitions, but for the skills alone: no
+    # agent's rules, which on OpenCode 1 cost a start of the runtime each.
+    try:
+        snapshot = definitions.ensure(ctx.ws.state_dir, ctx.config)
+    except definitions.DefinitionsError as e:
+        return Skills(error=f"skills: {e}")
+    return offerings.skills(
+        ctx.runner,
+        version=ctx.config.runtime.version,
+        cwd=ctx.ws.root,
+        definitions_dir=snapshot,
+        agents=runtime_definitions.agent_names(),
+    )
 
 
 def _close_task_run(ctx: Context, run: records.TaskRun) -> bool:
@@ -136,6 +155,9 @@ class Backend:
     # The models the runtime lists to run an agent on, and each one's variants, for the ticket page's Model panel to
     # choose from and for a choice of one to be looked up in: what `canopy models` prints.
     models: Callable[[Context], ModelList] = field(default=_models)
+    #: Every skill the runtime finds where canopy's agents start, each with its file and text, for the skills page:
+    #: one ask of the runtime. The mock's are made up, as it has no runtime to ask.
+    skills: Callable[[Context], Skills] = field(default=_skills)
     # Now, for windows such as the spend figure's: the mock's is fixed, as its journal's times are.
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
     # Rewrite `attention.md` after a write that changes the list without a tick, such as a dismissal. The mock's
