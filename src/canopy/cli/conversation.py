@@ -26,6 +26,7 @@ from canopy.cli import tasks as tasks_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.core import (
+    cards,
     chore_view,
     conversation,
     db,
@@ -356,8 +357,8 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     agent, which reads the PR and the draft and makes a new version, posting nothing, unless you change the draft first.
 
     On a running run, `run:ID` for a worker or a planner and `review:ID` for a review, TEXT is the letter of one of the
-    options its card's question offers: the agent hears it on its next tool call, and has worked around the question
-    until then. A later letter replaces it.
+    options its card's question offers, which the agent has worked around until then. A later letter replaces it. Once
+    a review has ended, a lone letter is refused rather than noted on its draft, if its card asked a question.
     """
     _operator("reply")
     subject = _ref(ref, "reply")
@@ -366,6 +367,7 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     if subject.kind == conversation.RUN or (subject.kind == conversation.REVIEW and _running_review(ctx, subject)):
         return _answer(ctx, subject, body)
     if subject.kind == conversation.REVIEW:
+        _refuse_late_answer(ctx, subject, body)
         return _note_review(ctx, subject, body)
     try:
         chores = chore_view.defined(ctx.config, ctx.workspace)
@@ -386,6 +388,18 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
 def _running_review(ctx: Context, subject: Ref) -> bool:
     run = review_runs.get_review_run(ctx.conn, int(subject.id))
     return run is not None and run.status is ReviewRunStatus.RUNNING
+
+
+def _refuse_late_answer(ctx: Context, subject: Ref, body: str) -> None:
+    """Refuse a lone letter on an ended review whose card asked a question: it was meant as an answer, not a note."""
+    run = review_runs.get_review_run(ctx.conn, int(subject.id))
+    standing = cards.of(run) if run is not None else None
+    asked = standing is not None and standing.card is not None and standing.card.question is not None
+    if run is not None and asked and body.strip().upper() in cards.LETTERS:
+        raise CliError(
+            f"reply refused (ended): {subject} has ended ({run.status}); its agent can no longer hear an answer. A "
+            "note on its draft says more than a letter.",
+        )
 
 
 def _answer(ctx: Context, subject: Ref, body: str) -> int:
