@@ -2780,6 +2780,13 @@ export type components = {
              */
             peak_context: number | null;
             /**
+             * Served
+             * @description The models its session names as having served it, as `provider/model`, the most costly first; empty until
+             *     canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served.
+             * @default []
+             */
+            served: string[];
+            /**
              * Session Id
              * @description The runtime's session, for opening its transcript with the runtime's own tools.
              */
@@ -7174,6 +7181,13 @@ export type components = {
              */
             seen: boolean;
             /**
+             * Served
+             * @description The models its session names as having served it, as `provider/model`, the most costly first; empty until
+             *     canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served.
+             * @default []
+             */
+            served: string[];
+            /**
              * Sha
              * @description The commit it reviewed.
              */
@@ -8798,6 +8812,13 @@ export type components = {
              * @default false
              */
             reported: boolean;
+            /**
+             * Served
+             * @description The models its session names as having served it, as `provider/model`, the most costly first; empty until
+             *     canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served.
+             * @default []
+             */
+            served: string[];
             /**
              * Session Id
              * @description The runtime's session, for opening its transcript with the runtime's own tools.

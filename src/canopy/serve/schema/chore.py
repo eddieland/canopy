@@ -44,6 +44,9 @@ class ChoreRun(Model):
     or recorded it before canopy kept it."""
     log_path: str
     """Where its log is: from the workspace root when under it."""
+    served: list[str] = []
+    """The models its session names as having served it, as `provider/model`, the most costly first; empty until
+    canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served."""
 
 
 class ChoreFinding(Model):

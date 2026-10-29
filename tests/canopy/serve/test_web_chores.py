@@ -91,6 +91,18 @@ def test_a_chore_runs_page_names_the_models_that_served_it_or_why_it_cannot(back
     assert c.get("/api/chores/build-health/runs/4").json()["models"]["status"] == "running"
 
 
+def test_a_chores_runs_name_the_models_that_served_them_so_the_runs_page_lists_them_by_model(
+    backend: Backend,
+) -> None:
+    c = client(None, backend)
+    health, deps = c.get("/api/chores").json()
+    # build-health's run 4 is running, so its session is not read yet; deps' run 2's session is gone.
+    assert (health["running"]["served"], health["latest"]["served"]) == ([], ["anthropic/claude-haiku-4-5"])
+    assert deps["latest"]["served"] == []
+    assert [r["served"] for r in c.get("/api/chores/deps").json()["runs"]] == [[], ["anthropic/claude-haiku-4-5"]]
+    assert c.get("/api/chores/deps/runs/1").json()["run"]["served"] == ["anthropic/claude-haiku-4-5"]
+
+
 def test_each_chore_carries_what_its_runs_cost_in_the_last_day_and_the_last_30_days(backend: Backend) -> None:
     with backend.open() as ctx:
         for started, cost in [(-3 * 24 * 60, 0.4), (-2 * 24 * 60, None), (-31 * 24 * 60, 9.0)]:

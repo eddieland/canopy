@@ -173,6 +173,7 @@ export const mockReviews: ReviewSummary[] = [
         news: false,
         seen: false,
         draft: null,
+        served: [],
     },
 ]
 
@@ -201,6 +202,7 @@ export const mockChores: ChoreSummary[] = [
             new_tokens: 11960,
             peak_context: 14400,
             log_path: '/home/op/.canopy/chore-runs/deps/2.log',
+            served: [],
         },
         due_at: '2026-10-08T14:00:00Z',
         findings: [
@@ -241,6 +243,7 @@ export function mockTaskRun(fields: Partial<TaskRun> = {}): TaskRun {
         new_tokens: 48210,
         peak_context: 61200,
         log_path: '.canopy/task-runs/1.log',
+        served: [],
         ...fields,
     }
 }
