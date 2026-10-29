@@ -110,8 +110,10 @@ def read_decisions(ctx: Context, request: Decisions) -> str:
     return "\n".join(lines)
 
 
-def read_run(ctx: Context, request: ShowRun) -> str:
-    """Print a run, as `canopy show run:ID` prints it.
+def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
+    """Print a run, as `canopy show run:ID` prints it, with its agent's card when `card` says so.
+
+    The card is the operator's alone (DESIGN §41): the report a chore's agent reads leaves it out.
 
     Returns:
         The run's lines and its messages.
@@ -141,7 +143,7 @@ def read_run(ctx: Context, request: ShowRun) -> str:
     # Its agent's card, while it runs and its last once it ends (DESIGN §41).
     running = run["status"] == RunStatus.RUNNING
     standing = cards.of(run)
-    if standing.card is not None or running:
+    if card and (standing.card is not None or running):
         lines.extend(
             cards.lines(
                 standing,

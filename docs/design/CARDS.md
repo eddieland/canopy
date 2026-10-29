@@ -35,22 +35,23 @@ each step was first seen working, on the card before, and one working longer tha
 
 ### Staleness
 
-canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, or review's run,
-it counts each session's tool calls since its last `status` call, and after 20 adds one `[canopy]` line to that call's
-result asking for an update, once per lapse, so the agent is asked between calls and never mid-thought. It keeps the
-count and whether it asked, and nothing else, as the clock keeps whether it has warned. A forged line can only ask for
-a card, so it fails safe, as the clock's do (§33).
+canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, or review's run, it
+counts each session's tool calls since its last `status` call, and after a number of them adds one `[canopy]` line to
+that call's result asking for an update, once per lapse, so the agent is asked between calls and never mid-thought. It
+keeps the count and whether it asked, and nothing else, as the clock keeps whether it has warned. A forged line can only
+ask for a card, so it fails safe, as the clock's do (§33).
+
+The card is shown to the operator and never put in another agent's prompt, so neither the overseer's cache (§6) nor
+its trust in worker text changes (TRUST_MODEL T1). Nothing on a card extends a run or holds a slot (T3).
 
 ### Where it shows
 
 `canopy status` and the web UI's running runs show each running run's `now` and how old its card is; `canopy show` of
 a run, `canopy review show` of a review, and their pages in the web UI, the whole card, or the last one once it has
-ended, as a ticket's page does under the run working it. A card that has gone 20 tool calls or 10 minutes
-without an update is marked stale, as is a run that has kept none that long, rather than going quiet. No notification:
-the sinks hear of what a run ends with, as before (§20).
-
-The card is shown to the operator and never put in another agent's prompt, so neither the overseer's cache (§6) nor
-its trust in worker text changes (TRUST_MODEL T1). Nothing on a card extends a run or holds a slot (T3).
+ended, as a ticket's page does under the run working it. A card that has gone too many tool calls or minutes without
+an update is marked stale, as is a run that has kept none that long, rather than going quiet. No notification: the
+sinks hear of what a run ends with, as before (§20). canopy's report of a run that a chore's agent may read (§27)
+leaves the card out, so no card reaches an agent.
 
 ### Rejected
 
