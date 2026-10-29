@@ -24,22 +24,17 @@ function client(runs: Run[]): QueryClient {
     return queries
 }
 
-// Each run's row, not the entries of its progress's checklist inside it.
+// Each run's row, by the words that lead it, not the entries of its progress's checklist inside it.
 function working(): HTMLElement[] {
-    const list = screen.getByTestId('working-now')
-    return within(list)
-        .queryAllByRole('listitem')
-        .filter((item) => item.parentElement === list)
+    return within(screen.getByTestId('working-now')).queryAllByText('working now')
 }
 
 describe('WorkingNow', () => {
     it('names the run working the ticket now, what it is doing, and what it has cost', async () => {
         const other = { ...RUNNING, id: 44, ticket_key: 'ABC-200' }
         await renderRouted(<WorkingNow ticketKey="ABC-101" />, { client: client([RUNNING, other, BLOCKED]) })
-        const [row] = working()
         expect(working()).toHaveLength(1)
-        const run = within(row as HTMLElement)
-        expect(run.getByText('working now')).toBeDefined()
+        const run = within(screen.getByTestId('working-now'))
         expect(run.getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/runs/41')
         expect(run.getByText('npm test -- login')).toBeDefined()
         expect(run.getByText('$0.42')).toBeDefined()
