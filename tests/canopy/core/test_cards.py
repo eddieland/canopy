@@ -1,5 +1,6 @@
 """A running agent's card: what a `status` call says, and how a run's row keeps it (DESIGN §41)."""
 
+import re
 import sqlite3
 from datetime import timedelta
 from pathlib import Path
@@ -119,7 +120,7 @@ def test_a_working_step_keeps_when_it_started_working_and_is_stuck_past_the_runs
     assert later.working_since["step 1"] == db.parse_time(OLD)
     assert later.working_since["step 2"] >= started
     # Past the last fifth of a 45-minute run, 9 minutes, it is shown stuck; the other is not yet.
-    shown = cards.lines(later, started_at=OLD, running=True, timeout_minutes=45)
+    shown = cards.lines(later, started_at=OLD, running=True, timeout_minutes=45, ref="run:1")
     assert shown[-3:] == [
         "    steps:  0% done, stage first",
         "      [>] step 1 (first)  stuck",
@@ -147,3 +148,82 @@ def test_a_card_gone_too_many_tool_calls_without_an_update_is_stale(conn: sqlite
     doing = cards.doing(standing, started)
     assert doing is not None
     assert doing.endswith(f", {cards.STALE_CALLS} calls old  stale")
+
+
+QUESTION: dict[str, object] = {
+    "ask": "Keep the old endpoint for the mobile app, or remove it?",
+    "options": ["keep it, deprecated", "remove it now"],
+    "recommend": "A",
+}
+
+
+def test_a_question_offers_two_to_five_options_and_recommends_one_of_them() -> None:
+    card = cards.Card.model_validate({**CARD, "question": QUESTION})
+    assert card.question is not None
+    assert (card.question.option("B"), card.question.option("C")) == ("remove it now", None)
+    for wrong in (
+        {**QUESTION, "options": ["only one"]},
+        {**QUESTION, "options": ["o"] * (len(cards.LETTERS) + 1)},
+        {**QUESTION, "recommend": "C"},  # names no option
+        {**QUESTION, "recommend": "a"},
+        {**QUESTION, "ask": " "},
+        {**QUESTION, "why": "because"},
+    ):
+        with pytest.raises(ValidationError):
+            cards.Card.model_validate({**CARD, "question": wrong})
+
+
+def test_a_question_keeps_when_it_was_asked_and_its_answer_while_the_cards_after_it_ask_it(
+    conn: sqlite3.Connection,
+    running: int,
+) -> None:
+    def standing() -> cards.Standing:
+        return cards.of(present(db.get_run(conn, running)))
+
+    cards.record_call(conn, "runs", running, cards.Card.model_validate({**CARD, "question": QUESTION}))
+    asked = standing().asked_at
+    assert asked is not None
+    assert (standing().answer, standing().answered_at) == (None, None)
+    assert cards.record_answer(conn, "runs", running, "B", asked)
+    assert standing().answer == "B"
+    # Asked again, with the rest of the card changed, it keeps both.
+    cards.record_call(conn, "runs", running, cards.Card.model_validate({**CARD, "now": "x", "question": QUESTION}))
+    assert (standing().asked_at, standing().answer) == (asked, "B")
+    # An answer to the question as asked at another time is not recorded.
+    assert not cards.record_answer(conn, "runs", running, "A", asked + timedelta(seconds=1))
+    # Another question starts over, with no answer; a card that asks none clears it.
+    other = {**QUESTION, "options": ["keep it", "remove it", "ask the mobile team"]}
+    cards.record_call(conn, "runs", running, cards.Card.model_validate({**CARD, "question": other}))
+    assert standing().asked_at is not None
+    assert standing().answer is None
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
+    assert (standing().asked_at, standing().answer) == (None, None)
+    assert present(db.get_run(conn, running))["card_asked_at"] is None
+
+
+def test_show_lists_a_questions_options_by_letter_and_says_how_to_answer_it(
+    conn: sqlite3.Connection,
+    running: int,
+) -> None:
+    cards.record_call(conn, "runs", running, cards.Card.model_validate({**CARD, "question": QUESTION}))
+    standing = cards.of(present(db.get_run(conn, running)))
+    shown = cards.lines(standing, started_at=OLD, running=True, timeout_minutes=45, ref="run:7")
+    assert re.fullmatch(rf"    question, \d+s old: {re.escape(str(QUESTION['ask']))}", shown[-4])
+    assert shown[-3] == "      A  keep it, deprecated  (recommended)"
+    assert shown[-2:] == [
+        "      B  remove it now",
+        "      waiting on you: canopy reply run:7 LETTER",
+    ]
+    asking = cards.asking(standing, "run:7")
+    assert asking is not None
+    assert re.fullmatch(r"asks you, \d+s: .+\?  canopy reply run:7 A-B \(recommends A\)", asking)
+    assert standing.asked_at is not None
+    cards.record_answer(conn, "runs", running, "B", standing.asked_at)
+    answered = cards.of(present(db.get_run(conn, running)))
+    assert cards.lines(answered, started_at=OLD, running=True, timeout_minutes=45, ref="run:7")[-1].startswith(
+        "      answered B, ",
+    )
+    assert cards.asking(answered, "run:7") is None
+    db.finish_run(conn, "runs", running, RunStatus.DONE, "{}")
+    ended = cards.lines(standing, started_at=OLD, running=False, timeout_minutes=45, ref="run:7")
+    assert ended[-1] == "      never answered"
