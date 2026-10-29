@@ -55,9 +55,19 @@ LABEL = "agent-ready-tester"
 IMPLEMENT = ("--label", LABEL, "--kind", "implement")
 # An `implement` on the branch WORKER_DONE names.
 WORK = (*IMPLEMENT, "--slug", "work")
-WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": "https://example.test/pr/1", "summary": "did it"})
+#: The PR WORKER_DONE reports, as a URL that names no PR, so no source reads it.
+WORKER_PR = "https://example.test/pr/1"
+WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": WORKER_PR, "summary": "did it"})
 #: The PR a worker that sends drafts opens (`sends_drafts`).
 DRAFTS_PR = "https://github.com/acme/api/pull/7"
+#: A PR the tests' `vcs` source reads, open with nothing on it, unless a test's GitHub state says otherwise. A ticket
+#: with a unit at it reaches the overseer; one at WORKER_PR is the harness's `wait` instead (DESIGN §39).
+READ_PR = "https://github.com/acme/repo/pull/1"
+#: Why the harness waits on a candidate with a unit at WORKER_PR.
+UNOBSERVED = (
+    f"unobserved: {WORKER_PR} is not a PR's URL, so it is not observed; no source reads it, so it waits until the "
+    "operator forgets the ticket's work"
+)
 #: The `trust` keys of the private file that hold a worker's drafts for the operator to approve:
 #: `scenario.configures("private", trust=APPROVE)`.
 APPROVE = {"review_replies": "approve"}
