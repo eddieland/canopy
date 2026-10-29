@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, assert_never
 
 import click
 
-from canopy.cli.common import CliError, Group, OverseerCommand, leave_the_tick, open_context
+from canopy.cli.common import CliError, leave_the_tick, open_context
 from canopy.cli.params import EVAL_CASE, PERSONA, PR_URL, REPO, TICKET_KEY, TextType, verb
 from canopy.core import conversation, db, records, review_drafts, review_drafts_manage, review_revisions
 from canopy.core.memory_text import visible
@@ -37,12 +37,12 @@ if TYPE_CHECKING:
 CLI = "cli"
 
 
-@click.group("review", cls=Group)
+@click.group("review")
 def review_group() -> None:
     """Review PRs: `run`, `wait`, `end`, and `revise` are the overseer's; `show` is how you read what reviews found."""
 
 
-@review_group.command("run", cls=OverseerCommand)
+@review_group.command("run", hidden=True)
 @click.option("--pr", "pr", required=True, metavar="URL", help="The PR's https:// URL, as an opaque string.")
 @click.option("--sha", required=True, metavar="SHA", help="The full head commit you read on the PR just now.")
 @click.option("--ticket", type=TICKET_KEY, help="The ticket of one of the loop's own PRs.")
@@ -71,7 +71,7 @@ def cmd_review_run(
     )
 
 
-@review_group.command("wait", cls=OverseerCommand)
+@review_group.command("wait", hidden=True)
 @click.option("--pr", "pr", required=True, type=PR_URL, help="The PR's https:// URL.")
 @click.option("--ticket", type=TICKET_KEY, help="The ticket of one of the loop's own PRs.")
 @click.option(
@@ -86,7 +86,7 @@ def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, ra
     return verb(click_ctx, review_tools.review_wait, review_tools.ReviewWait, pr=pr, ticket=ticket, rationale=rationale)
 
 
-@review_group.command("end", cls=OverseerCommand)
+@review_group.command("end", hidden=True)
 @click.option("--pr", "pr", required=True, type=PR_URL, help="The requested PR's https:// URL.")
 @click.option("--reason", required=True, type=click.Choice(review_requests.OVERSEER_REASONS), help="What you read.")
 @click.pass_context
@@ -95,7 +95,7 @@ def cmd_review_end(click_ctx: click.Context, *, pr: str, reason: str) -> int:
     return verb(click_ctx, review_tools.review_end, review_tools.ReviewEnd, pr=pr, reason=reason)
 
 
-@review_group.command("revise", cls=OverseerCommand)
+@review_group.command("revise", hidden=True)
 @click.option("--run", "run_id", required=True, type=click.IntRange(min=1), help="The review whose draft to revise.")
 @click.pass_context
 def cmd_review_revise(click_ctx: click.Context, *, run_id: int) -> int:

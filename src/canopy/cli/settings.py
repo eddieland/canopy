@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli import agent_commands
-from canopy.cli.common import CliError, Group, open_context
+from canopy.cli.common import CliError, open_context
 from canopy.core import config, conversation, definitions, reports, settings
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from canopy.core.settings import Setting
 
 
-@click.group("config", cls=Group)
+@click.group("config")
 def config_group() -> None:
     """Read the config canopy runs with. Edit the files themselves to change it."""
 

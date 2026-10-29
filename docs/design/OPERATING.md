@@ -395,7 +395,8 @@ listing sessions through the runtime's commands, which list one project's top-le
 `canopy skill` prints a skill that teaches an agent in the operator's own session the canopy CLI and how to read the
 journal read-only. canopy installs it only when asked; it is not in the snapshot and grants nothing, and every agent
 canopy ships denies it by name, wherever it is installed. Shell completion leaves out ticket keys, which would open
-the journal on every Tab, and the commands only the overseer runs.
+the journal on every Tab. `--help` and completion leave out the commands only the overseer runs, though each still
+answers its own `--help`.
 
 ## 14. Attention list
 
