@@ -1509,10 +1509,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
   is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
   `last served` names the model that served the agent's latest read run when it is not the button's. A variant on the
-  button follows the model's id, muted. Each model's variants are items of their own under it, indented, each
-  `@variant` to the eye and named whole for a screen reader. A choice saved is confirmed in its row, a `saved` in
-  `status-done`, so nothing below moves, until the ticket's models change after it; one that sets aside config's
-  variant says so after it in muted text. The menu offers only what the server would take: the model chosen now, when
+  button follows the model's id, muted. Each model's variants are items of their own under it, indented, in the
+  runtime's order, each `@variant` to the eye and named whole for a screen reader; a model with variants is marked a
+  muted `(default)`. The field finds each item by its own id alone, and sets the pinned item aside while it holds
+  anything, so Enter takes the first id found; a variant whose model is hidden shows its model's id before it, muted.
+  `Clear the override` is a ghost button under the list, out of its scroll. A choice saved is confirmed in its row, a
+  `saved` in `status-done`, so nothing below moves, until the ticket's models change after it; one that sets aside
+  config's variant says so after it in muted text. The menu offers only what the server would take: the model chosen
+  now, when
   it is not one, is a disabled item with why in muted text after it (`no longer listed; its next run is refused`,
   `variant no longer listed; its next run is refused`), and a model or variant gone from the list marks its trigger in
   `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
