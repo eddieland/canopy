@@ -32,7 +32,11 @@ class Lines:
         if event is None:
             return None
         self._tally.add(event)
-        return Printed(ended_call=event["type"] == events.STEP_FINISH, did=transcript.did(event))
+        return Printed(
+            ended_call=event["type"] == events.STEP_FINISH,
+            did=transcript.did(event),
+            call=transcript.called(event),
+        )
 
     @property
     def session_id(self) -> str | None:

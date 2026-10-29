@@ -1,7 +1,8 @@
 """A running agent's output, read a line at a time as it prints it (DESIGN §8, §13).
 
 Each line says what it changed of what the run's row records: the session, once it is first named; what the run has
-spent, at the end of each model call; and the tool call it ended. A row is written only when a line changed one.
+spent, at the end of each model call; and the tool call it ended, with the call as the agent made it, from which the
+harness reads a card (§41). A row is written only when a line changed one.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from canopy.runtime.implementation import one, pick, two
 
 if TYPE_CHECKING:
     from canopy.runtime.implementation import Version
-    from canopy.runtime.report import Usage
+    from canopy.runtime.report import Called, Usage
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,8 @@ class Change:
     usage: Usage | None
     #: The tool call this line ended: its tool, and what it did, on one line each.
     did: tuple[str, str] | None
+    #: The same call as the agent made it, its tool's name and input; None where `did` is.
+    called: Called | None = None
 
 
 class Watch:
@@ -52,4 +55,4 @@ class Watch:
         usage = self._lines.usage if printed.ended_call else None
         if session == seen and usage is None and printed.did is None:
             return None
-        return Change(session, started=seen is None, usage=usage, did=printed.did)
+        return Change(session, started=seen is None, usage=usage, did=printed.did, called=printed.call)
