@@ -57,8 +57,25 @@ COMMAND = "opencode export --sanitize"
 NOT_FOUND = "Session not found"
 #: In a sandbox role's database, the version of OpenCode that made a session, by its id.
 SESSION_SQL = "SELECT version FROM session WHERE id = ?"
-#: Its messages, by its id and at most how many, in the order OpenCode wrote them: each one's id, and its info as JSON.
-MESSAGES_SQL = "SELECT id, data FROM message WHERE session_id = ? ORDER BY time_created, id LIMIT ?"
+#: Its messages, by its id and at most how many, in the order OpenCode wrote them: each one's id, and of its info, as
+#: JSON, only the fields `_Info` reads. The run wrote the database, so SQLite takes those out of each message, and a
+#: message whose id or fields are longer than any OpenCode writes is left out, so the rows canopy holds stay small.
+MESSAGES_SQL = """
+SELECT id, info FROM (
+    SELECT id, time_created, json_object(
+        'role', json_extract(data, '$.role'),
+        'providerID', json_extract(data, '$.providerID'),
+        'modelID', json_extract(data, '$.modelID'),
+        'variant', json_extract(data, '$.variant'),
+        'cost', coalesce(json_extract(data, '$.cost'), 0)
+    ) AS info
+    FROM message
+    WHERE session_id = ? AND json_valid(data)
+)
+WHERE length(id) <= 64 AND length(info) <= 1024
+ORDER BY time_created, id
+LIMIT ?
+"""
 # Where a JSON object starts a line.
 _OBJECT_RE = re.compile(r"^\{", re.MULTILINE)
 

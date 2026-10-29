@@ -181,6 +181,13 @@ def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Pat
         ("msg_2", "assistant", {k: v for k, v in assistant("anthropic", "claude-opus", 0.5).items() if k != "type"}),
         ("msg_3", "assistant", "not json"),
         ("msg_4", "assistant", {"model": {"providerID": "openai", "id": "gpt-5"}, "cost": 0.25, "type": "user"}),
+        # A reply's content, however long, is left in the database: only its model and cost are read.
+        (
+            "msg_5",
+            "assistant",
+            {"model": {"providerID": "openai", "id": "gpt-5"}, "cost": 0.25, "content": "x" * 10**6},
+        ),
+        ("msg_6", "assistant", {"model": {"providerID": "openai", "id": "x" * 2_000}, "cost": 1}),
     ]
     with contextlib.closing(sqlite3.connect(path)) as conn, conn:
         conn.executescript(SCHEMA)
@@ -194,6 +201,6 @@ def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Pat
 
     assert found == SessionModels(
         "found",
-        (ModelUse("anthropic/claude-opus", 1, 0.5), ModelUse("openai/gpt-5", 1, 0.25)),
+        (ModelUse("anthropic/claude-opus", 1, 0.5), ModelUse("openai/gpt-5", 2, 0.5)),
         runtime_version="2.1.4",
     )
