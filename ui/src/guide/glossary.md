@@ -176,6 +176,12 @@ A repository's set of worktrees, kept by treehouse, or by canopy itself when you
 `pools.backend = "canopy"`. A run leases a slot from it and hands it back when it stops working. See
 [Runs and worktrees](runs#worktrees).
 
+### Progress
+
+What a running worker, planner, or reviewer says of its own work while it runs: a summary, its steps or what's done
+and next, what it works around, and now and then a question for you. Each update replaces the last. See
+[Runs](runs#a-running-agents-progress).
+
 ### Reason
 
 Why a resume runs, named when it is dispatched: `ci` for failed checks, `review` for review feedback, `reply` for your

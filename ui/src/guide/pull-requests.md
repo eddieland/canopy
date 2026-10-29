@@ -305,8 +305,8 @@ the PR (with its other reviews, if any, on a line under it), the persona the rev
 the base branch it was read against, and when its run ended, with a link to the run. The persona carries the start of
 its text's digest, whole on hover: two reviews in one persona with different digests had it edited between them. When
 the harness decided the review's status itself, such as failing a run that never reported, its reason is the red
-**harness** note under the summary. While the reviewer works, its [card](runs#a-running-agents-card) says where it
-stands, and a review that ended keeps its last. The status is the line under the title. Then its findings, each linking
+**harness** note under the summary. While the reviewer works, its [progress](runs#a-running-agents-progress) leads the
+page, and a review that ended keeps its last. The status is the line under the title. Then its findings, each linking
 to where it sits, and the diff, a panel per file, with each finding pinned under the line it names. A finding on a line
 the diff doesn't show sits under its file's header, and one about a file the diff doesn't touch waits in a panel of its
 own after the files. A long diff shows the lines around each finding at first, with folds that open the rest. A renamed

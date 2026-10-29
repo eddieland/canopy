@@ -17,7 +17,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } fr
 import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
-import { RunCardView } from '@/components/run-card'
+import { ProgressPanel } from '@/components/run-progress'
 import { RunDoing } from '@/components/run-doing'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -84,6 +84,13 @@ function Loaded({ id }: { id: number }) {
                 {runDescription(data)} · <TicketLink ticketKey={data.ticket_key} className="align-baseline" />
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
+                {data.card !== null && (
+                    <ProgressPanel
+                        card={data.card}
+                        running={data.ended_at === null}
+                        answers={{ kind: 'run', id: data.id }}
+                    />
+                )}
                 <RunPanel run={data} transcript={transcript} onShow={view.show} />
                 <TranscriptPanel transcript={transcript} running={data.state === 'running'} page="run" view={view} />
                 <PromptPanel transcript={transcript} />
@@ -124,20 +131,14 @@ function RunPanel({
         <Panel>
             <PanelHeader label="Run" />
             <Fields>
-                <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
+                {/* Its progress says where it stands until it ends with a summary, so no `none` sits over it. */}
+                {(run.summary || run.card === null) && (
+                    <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
+                )}
                 <EndedOnField status={run.status} transcript={transcript} onShow={onShow} />
                 {run.feedback_plan !== null && (
                     <Field label="wrote" mono>
                         <WroteFeedbackPlan plan={run.feedback_plan} />
-                    </Field>
-                )}
-                {run.card !== null && (
-                    <Field label="card">
-                        <RunCardView
-                            card={run.card}
-                            running={run.ended_at === null}
-                            answers={{ kind: 'run', id: run.id }}
-                        />
                     </Field>
                 )}
                 {run.activity && (
