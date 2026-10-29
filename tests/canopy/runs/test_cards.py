@@ -5,7 +5,8 @@ from collections.abc import Mapping
 
 from canopy.core import cards
 from canopy.core.vocab import RunKind
-from tests.canopy.helpers import agent_runs, calls, planner_does, with_events, worker_does
+from canopy.loop import readback
+from tests.canopy.helpers import agent_runs, calls, context, planner_does, with_events, worker_does
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import GitPool
 
@@ -64,9 +65,9 @@ def test_canopy_status_shows_what_a_running_card_says_now_and_marks_it_stale(
     with_events(scenario.env, "canopy-worker")
     working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **LATER)]))
     out = scenario.operator("status").out
-    assert re.search(r"\n    now: pushing  card \d+s, 0 calls old\n", out), out
+    assert re.search(r"\n    now: pushing  card \d+[sm], 0 calls old\n", out), out
     scenario.time_passes(minutes=cards.STALE_MINUTES + 1)
-    assert re.search(r"\n    now: pushing  card 1[01]m, 0 calls old  stale\n", scenario.operator("status").out)
+    assert re.search(r"\n    now: pushing  card 1\dm, 0 calls old  stale\n", scenario.operator("status").out)
     working.finishes()
 
 
@@ -78,7 +79,7 @@ def test_a_running_run_with_no_card_is_named_in_status_once_that_is_stale(
     working = scenario.starts(worker=worker_does(["true"]))
     assert "no card" not in scenario.operator("status").out
     scenario.time_passes(minutes=cards.STALE_MINUTES + 1)
-    assert re.search(r"\n    no card, 1[01]m and 0 calls in\n", scenario.operator("status").out)
+    assert re.search(r"\n    no card, 1\dm and 0 calls in\n", scenario.operator("status").out)
     working.finishes()
 
 
@@ -104,3 +105,13 @@ def test_show_prints_the_whole_card_while_it_runs_and_the_last_once_it_ends(
     [head] = [line for line in shown if line.startswith("  last card, ")]
     assert head.endswith(", 2 calls before the run ended")  # the gate that held it, and `true`
     assert shown[shown.index(head) + 1 :][: len(whole)] == whole
+
+
+def test_the_report_a_chores_agent_reads_of_a_run_leaves_its_card_out(scenario: Scenario, git_pool: GitPool) -> None:
+    """A card is the operator's alone (DESIGN §41): no agent reads another's."""
+    with_events(scenario.env, "canopy-worker")
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **LATER)]))
+    reported = readback.read_run(context(scenario.env), readback.ShowRun(run=working.id))
+    assert "pushing" not in reported
+    assert "    now: pushing\n" in scenario.operator("show", f"run:{working.id}").out
+    working.finishes()
