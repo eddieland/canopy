@@ -231,6 +231,11 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   Once M48 gives the overseer `canopy _mcp`, expect its eleven tools, about 2.3k tokens (F55), and `bash` gone if its
   rules deny it whole. Then let `canopy loop` run a week and expect no run or tick whose transcript shows a
   call to a tool it was not offered (`tool not found`).
+- **S68. The derivation against the overseer** (M36, closed on real use 2026-10-29). Run `canopy loop` a day with
+  both connectors against the real queue. Record in `MEASUREMENTS.md` the agreement between `derivations` and the
+  overseer's `decisions` per row of §7's phase table, counted by distinct situation as well as by decision
+  (2026-10-15 F26), each disagreement read and attributed (the rationale says which side was right), and what the
+  connectors cost, in calls and seconds per tick, from `connector_runs`. M37 closes against it.
 
 ## Retired
 
