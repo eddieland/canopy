@@ -39,12 +39,12 @@ its trust in worker text changes (TRUST_MODEL T1). Nothing on a card extends a r
 
 ### Where it shows
 
-`canopy status` and the web UI's running runs show each running run's `now` and how old its card is; `canopy show` of
-a run, `canopy review show` of a review, and their pages in the web UI, the whole card, or the last one once it has
-ended, as a ticket's page does under the run working it. A card that has gone too many tool calls or minutes without
-an update is marked stale, as is a run that has kept none that long, rather than going quiet. No notification: the
-sinks hear of what a run ends with, as before (§20). canopy's report of a run that a chore's agent may read (§27)
-leaves the card out, so no card reaches an agent.
+`canopy status` and the web UI's running runs show each running run's `now` and how old its card is; `canopy show` of a
+run, `canopy review show` of a review, and their pages in the web UI, the whole card, or the last one once it has ended,
+as a ticket's page does under the run working it. A card that has gone too many tool calls or minutes without an update
+is marked stale rather than going quiet, and `canopy status` names a running run that has kept none that long. No
+notification: the sinks hear of what a run ends with, as before (§20). canopy's report of a run that a chore's agent may
+read (§27) leaves the card out, so no card reaches an agent.
 
 ### Rejected
 
