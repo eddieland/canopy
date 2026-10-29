@@ -232,13 +232,13 @@ describe('LiveReadouts', () => {
         expect(screen.getByTestId('last-tick').textContent).toBe('tick:12 · 3m ago')
     })
 
-    it("names the latest tick as `canopy status` does, its summary on hover, and opens the tick's page", async () => {
+    it("names the latest tick as `canopy status` does, and opens the tick's page", async () => {
         const { router } = await renderReadouts('open', { tick: TICK })
-        expect(screen.getByTitle(TICK.summary ?? '').textContent).toBe('tick:12 · 3m ago')
+        expect(screen.getByTestId('last-tick').textContent).toBe('tick:12 · 3m ago')
         expect(screen.queryByText('no tick yet')).toBeNull()
 
         await act(async () => {
-            fireEvent.click(screen.getByRole('link', { name: 'tick:12' }))
+            fireEvent.click(screen.getByRole('link', { name: 'tick:12 · 3m ago' }))
             await Promise.resolve()
         })
         expect(router.state.location.pathname).toBe('/runs/ticks/12')
@@ -250,7 +250,20 @@ describe('LiveReadouts', () => {
         ['a tick still running, for how long', { status: 'running', ended_at: null }, 'tick:12 running · for 4m'],
     ] as const)('says so for %s', async (_, change, said) => {
         await renderReadouts('open', { tick: { ...TICK, ...change } })
-        expect(screen.getByTitle(TICK.summary ?? '').textContent).toBe(said)
+        expect(screen.getByTestId('last-tick').textContent).toBe(said)
+    })
+
+    it('shows the tick at a glance in a card when it has the focus', async () => {
+        await renderReadouts('open', { tick: { ...TICK, woken_by: 'timer' } })
+        act(() => {
+            screen.getByTestId('last-tick').focus()
+        })
+        const card = await waitFor(() => screen.getByTestId('tick-card'))
+        expect(card.textContent).toContain('Dispatched ABC-101; waiting on ABC-102.')
+        expect(card.textContent).toContain(', took 1m')
+        expect(card.textContent).toContain('2 decisions')
+        expect(card.textContent).toContain('$0.12, 1.2k tokens')
+        expect(card.textContent).toContain('timer')
     })
 
     it("keeps a failed tick's status as the CLI spells it on hover", async () => {
@@ -268,6 +281,30 @@ describe('LiveReadouts', () => {
             await Promise.resolve()
         })
         expect(router.state.location.pathname).toBe('/memory')
+    })
+
+    it("shows each tier's mode and what reads it in a card, and the proposals waiting on you", async () => {
+        await renderReadouts('open', { memory: { ...MEMORY, proposals_waiting: 2 } })
+        act(() => {
+            screen.getByTestId('memory-readout').focus()
+        })
+        const card = await waitFor(() => screen.getByTestId('memory-card'))
+        expect(card.textContent).toContain('Recording only. Nothing reads it yet.')
+        expect(card.textContent).toContain('2 proposals waiting on you')
+    })
+
+    it('shows the month against its budget in a card, with what the spend is made of', async () => {
+        await renderReadouts('open', { budget: MONTH })
+        act(() => {
+            screen.getByTestId('budget-readout').focus()
+        })
+        const card = await waitFor(() => screen.getByTestId('budget-card'))
+        expect(card.textContent).toContain('October 2026')
+        expect(card.textContent).toContain('Headed over')
+        expect(card.textContent).toContain('39%, $15.76 of $40')
+        expect(card.textContent).toContain("$63.04 by the month's end")
+        expect(card.textContent).toContain('25% gone by')
+        expect(card.textContent).toContain("Canopy's runs $15.76.")
     })
 
     it('shows no budget while none is set', async () => {
@@ -289,7 +326,6 @@ describe('LiveReadouts', () => {
         const { router } = await renderReadouts('open', { budget: { ...MONTH, ...change } })
         const link = screen.getByRole('link', { name: said })
         expect(link.textContent).toBe(shown)
-        expect(link.title).toBe(said)
         expect(link.dataset['state']).toBe(state)
 
         await act(async () => {

@@ -96,12 +96,13 @@ The bar across the top of every page. From the left:
   loop opens it, after any [poll](how-the-loop-works) already under way. While a tick is running, the button waits for
   it to finish.
 - **The readouts.** The last tick, as `tick:12 · 3m ago`, with its status when it didn't end ok and `(dry run)` when
-  it was one; hover it for its summary, and click it to open the tick. Before the first one, it says `no tick yet`.
-  `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page. A wallet while you've
-  set a [monthly budget](reports#the-spend-page), with how much of it the month has spent beside it on a wide screen:
-  gray while you're on budget, amber once the month's pace heads over it, red once it's over. Hover it for the
-  numbers, and click it for the spend page. It warns, it doesn't stop anything; the loop spends on regardless. Then
-  the machine the loop runs on: `host ok`, or the worst thing about it in two words, `disk low`, `memory low`, or
+  it was one; hover it for its summary, its decisions, and what it cost, and click it to open the tick. Before the
+  first one, it says `no tick yet`. `memory: recording` or `memory: in use` while agent memory is on; hover it for
+  each tier's mode and any proposals waiting on you, and click it for the memory page. A wallet while you've set a
+  [monthly budget](reports#the-spend-page), with how much of it the month has spent beside it on a wide screen: gray
+  while you're on budget, amber once the month's pace heads over it, red once it's over. Hover it for the numbers,
+  pace included, and click it for the spend page. It warns, it doesn't stop anything; the loop spends on regardless.
+  Then the machine the loop runs on: `host ok`, or the worst thing about it in two words, `disk low`, `memory low`, or
   `host busy`, in amber when it's worth a look and red when it's past what canopy works with. Hover it for the
   machine at a glance, and click it for [the rest](#system-resources).
 - **The theme**, at the far right, which flips between light and dark; [Settings](settings#theme) has the rest.
