@@ -21,9 +21,10 @@ plain text, one line.
 The server validates a call and writes nothing; it lists its tool only where `CANOPY_RUN_ID` names a worker's,
 planner's, or review's run. The harness records the card from the call in the events it already reads as the agent
 prints them (§8), held to the same input, so nothing the agent writes reaches the journal but what canopy observes it
-print, as with its spend: a call the server refused, or one that does not validate, records nothing. A run without
-the runtime's events keeps no card. The run counts the tool calls its agent ends, so a card is as old as the time and
-the calls since it, and the run keeps its last card once it ends.
+print, as with its spend: a call the server refused, or one that does not validate, records nothing. A run without the
+runtime's events keeps no card, nor does a one-off task's run (§36), which is never given the server. The run counts the
+tool calls its agent ends, so a card is as old as the time and the calls since it, and the run keeps its last card once
+it ends.
 
 ### Staleness
 

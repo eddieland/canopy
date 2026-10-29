@@ -49,7 +49,7 @@ class LatestReview(TypedDict):
 
     Of one of the loop's own PRs reviewed in each persona of `[personas] reviewers` (DESIGN §31), a `done` one stands
     for every persona's latest `done` review of its commit together: their kept findings, the gravest impact, and the
-    time the last of them ended.
+    number the last of them took. When it started and ended no decision reads, so neither is here.
     """
 
     run_id: int
@@ -62,8 +62,6 @@ class LatestReview(TypedDict):
     #: The findings canopy holds for the operator, rebuttals of a worker's decline and late ones, which no `resume`
     #: addresses.
     held_findings: int
-    started_at: str
-    ended_at: str | None
     #: The journal number the last of them took when it ended, which the `review` cursor names (DESIGN §35); None
     #: while it runs.
     number: int | None
@@ -307,7 +305,6 @@ def _latest(
             verdicts.append(stored.verdict)
         if stored is not None and stored.impact is not None:
             impacts.append(stored.impact)
-    ended = max((r.ended_at for r in reviews if r.ended_at is not None), default=None)
     numbers = [r.number for r in reviews if r.number is not None]
     return {
         "run_id": latest.id,
@@ -318,7 +315,5 @@ def _latest(
         "findings": kept,
         "dismissed_findings": dismissed_count,
         "held_findings": held_count,
-        "started_at": latest.started_at,
-        "ended_at": ended,
         "number": max(numbers, default=None),
     }

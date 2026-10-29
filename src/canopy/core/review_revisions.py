@@ -112,12 +112,11 @@ def notes_since(conn: sqlite3.Connection, draft_id: int, version: int) -> list[r
         The notes.
     """
     query = (
-        sql.select("*")
-        .from_("review_draft_notes")
+        records.select(records.ReviewDraftNote)
         .where("draft_id = ? AND after_version >= ?", draft_id, version)
         .order_by("id")
     )
-    return records.fetch_all(conn, records.ReviewDraftNote, query)
+    return query.all(conn)
 
 
 def limit(conn: sqlite3.Connection, config: Config, draft_id: int) -> int:
@@ -160,11 +159,7 @@ def add_note(conn: sqlite3.Connection, draft_id: int, body: str, *, channel: str
         created_at=db.now(),
     )
     note_id = int(sql.execute(conn, note).lastrowid or 0)
-    found = records.fetch_one(
-        conn,
-        records.ReviewDraftNote,
-        sql.select("*").from_("review_draft_notes").where("id = ?", note_id),
-    )
+    found = records.select(records.ReviewDraftNote).where("id = ?", note_id).one(conn)
     if found is None:
         raise LookupError(f"review draft note {note_id} vanished")
     return found
