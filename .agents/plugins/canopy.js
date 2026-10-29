@@ -7,16 +7,20 @@
 // the environment, a sandboxed run's included.
 //
 // The agent runtime loads it from canopy's snapshot of its definitions, inside every agent process, sandboxed or not
-// (TRUST_MODEL T4). So it is plain JavaScript with no imports, which loads with no network, and each job does as
-// little as it can: it reads only what it is handed for that job (the clock, CANOPY_DEADLINE and the time; the split,
-// the system prompt; the nudge, CANOPY_RUN_ID and each call's tool and session), changes only what its hook is handed,
-// refuses no call, and grants no tool. Each job's hooks run
-// in its own try, in the order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the
-// jobs after it from theirs.
+// (TRUST_MODEL T4). So it is plain JavaScript that imports nothing but the runtime's own `node:fs`, and that only when
+// the answer reads its file, so it loads with no network; and each job does as little as it can: it reads only what it
+// is handed for that job (the clock, CANOPY_DEADLINE and the time; the split, the system prompt; the nudge,
+// CANOPY_RUN_ID and each call's tool and session; the answer, CANOPY_RUN_ID and the one file canopy writes in the
+// directory CANOPY_ANSWERS names), changes only what its hook is handed, writes no file, refuses no call, and grants no
+// tool. Each job's hooks run in its own try, in the order of `JOBS`, so a job that throws neither fails a call that has
+// already run nor keeps the jobs after it from theirs.
 //
 // Its third is the nudge (DESIGN §41): in a worker's, planner's, or reviewer's run, after a number of tool calls with
 // no call of canopy's `status` tool, one line on the next tool call's result asks the agent to bring its card up to
 // date.
+//
+// Its fourth is the answer (DESIGN §41): in a run that keeps a card, when the operator has answered the question its
+// card asks, one line on the next tool call's result tells the agent the letter and the option it names, once.
 //
 // Under OpenCode 2 it has one job more, its own: a session's first prompt waits until the tools of its MCP servers are
 // registered, which 2 does only after the server connects, so that the first model call is sent them (`mcpTools`).
@@ -59,6 +63,11 @@ const CARD_RUN = /^(?:review-)?[0-9]{1,18}$/;
 const STATUS_TOOL = "canopy_run_status";
 /** How many tool calls a session makes with no `status` call before the nudge asks for one. */
 const STALE_CALLS = 20;
+/** The file in a run's answers directory that holds the operator's latest answer, and the most of it read. */
+const ANSWER_FILE = "answer.json";
+const ANSWER_BYTES = 4096;
+/** The letter of a question's option. */
+const LETTER = /^[A-E]$/;
 /** The longest a session's first prompt waits on MCP servers still connecting, in milliseconds. */
 const MCP_WAIT_MS = 30_000;
 /** The longest it waits, once none is connecting, for a connected server's tools to be registered. */
@@ -81,7 +90,7 @@ const ENVIRONMENT = new RegExp(
  *
  * @type {Array<() => Hooks>}
  */
-const JOBS = [clock, split, nudge];
+const JOBS = [clock, split, nudge, answer];
 
 /**
  * The plugin, as each major version of OpenCode reads it: its id, and its entry point for each.
@@ -438,5 +447,87 @@ function stale(calls) {
     return (
         `${MARK} ${calls} tool calls since your last card: call ${STATUS_TOOL} with where your work stands now, then` +
         " go on."
+    );
+}
+
+/**
+ * The answer's hooks: the one that tells a tool call's result the operator's answer to the question the card asks.
+ *
+ * A worker, a planner, or a reviewer may ask the operator a question on its card, with lettered options, and work
+ * around it meanwhile (DESIGN §41). canopy writes the operator's answer, a letter, to a file in the run's answers
+ * directory, which CANOPY_ANSWERS names and a sandboxed run may read but not write. After each tool call, the job
+ * reads that file and, for an answer this session has not been told, adds one line to the call's result, the way the
+ * clock adds its line, so the agent hears it between calls. A later answer, to the same question or another, is told
+ * in turn. It keeps what it last told each session, and nothing else; without the variable, or in a run that keeps no
+ * card, it has no hook. A file it cannot read, or that is not an answer, tells nothing.
+ *
+ * @returns {Hooks} The answer's hooks.
+ */
+function answer() {
+    const dir = process.env.CANOPY_ANSWERS;
+    const run = process.env.CANOPY_RUN_ID;
+    if (typeof dir !== "string" || !dir.startsWith("/") || typeof run !== "string" || !CARD_RUN.test(run)) {
+        return {};
+    }
+    const file = `${dir.replace(/\/+$/, "")}/${ANSWER_FILE}`;
+    /** @type {Map<string | undefined, string>} */
+    const told = new Map();
+    return {
+        /**
+         * @param {AfterInput | undefined} input
+         * @param {BuiltinResult | McpResult | null | undefined} output
+         */
+        "tool.execute.after": async (input, output) => {
+            const said = answerLine(await readAnswer(file));
+            const session = input?.sessionID;
+            if (said !== null && told.get(session) !== said && tell(output, said)) {
+                told.set(session, said);
+            }
+        },
+    };
+}
+
+/**
+ * The answer file's text, or null when there is none to read, or it is too long to be canopy's.
+ *
+ * @param {string} file
+ * @returns {Promise<string | null>}
+ */
+async function readAnswer(file) {
+    try {
+        const { readFile } = await import("node:fs/promises");
+        const text = await readFile(file, "utf8");
+        return text.length <= ANSWER_BYTES ? text : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * The line that tells the agent the answer in `text`, or null when `text` is no answer canopy writes.
+ *
+ * @param {string | null} text
+ * @returns {string | null}
+ */
+function answerLine(text) {
+    if (text === null) {
+        return null;
+    }
+    let found;
+    try {
+        found = JSON.parse(text);
+    } catch {
+        return null;
+    }
+    if (found === null || typeof found !== "object") {
+        return null;
+    }
+    const { ask, letter, option } = found;
+    if (typeof ask !== "string" || typeof option !== "string" || typeof letter !== "string" || !LETTER.test(letter)) {
+        return null;
+    }
+    return (
+        `${MARK} The operator answers your question "${ask}": ${letter}, ${option}. Go on with it, and take the` +
+        " question off your card."
     );
 }
