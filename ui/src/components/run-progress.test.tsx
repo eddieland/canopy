@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
 import type { RunCard, RunCardQuestion } from '@/api/types'
 
-import { RunCardNow, RunCardView } from './run-card'
+import { RunProgress, RunProgressLine } from './run-progress'
 
 const CARD: RunCard = {
     summary: 'The SSO callback is in and its tests pass; see https://example.test/ci for the run.',
@@ -33,13 +33,13 @@ afterEach(() => {
     vi.useRealTimers()
 })
 
-describe('RunCardView', () => {
-    it('shows the whole card as text, its age in time and tool calls, its links as links', () => {
-        render(<RunCardView card={CARD} running />)
-        const card = screen.getByTestId('run-card')
-        expect(card.textContent).toContain('card6m ago3 tool calls since')
+describe('RunProgress', () => {
+    it('shows the whole progress as text, when it was updated in time and tool calls, its links as links', () => {
+        render(<RunProgress card={CARD} running />)
+        const card = screen.getByTestId('run-progress')
+        expect(card.textContent).toContain('updated6m ago·3 tool calls since')
         expect(screen.getByText('running the login tests')).toBeDefined()
-        expect(screen.getByText('add the SSO callback')).toBeDefined()
+        expect(screen.getAllByText('add the SSO callback')).toHaveLength(1)
         expect(screen.getByText('tests pass: 12/12')).toBeDefined()
         expect(screen.getByText('wire the login button')).toBeDefined()
         expect(screen.getByText('CI is down; running the tests here instead')).toBeDefined()
@@ -47,8 +47,8 @@ describe('RunCardView', () => {
         expect(screen.queryByText('stale')).toBeNull()
     })
 
-    it('marks a running card stale once its time comes, without a new read', () => {
-        render(<RunCardView card={CARD} running />)
+    it('marks running progress stale once its time comes, without a new read', () => {
+        render(<RunProgress card={CARD} running />)
         expect(screen.queryByText('stale')).toBeNull()
         act(() => {
             vi.advanceTimersByTime(5 * 60_000)
@@ -57,14 +57,16 @@ describe('RunCardView', () => {
     })
 
     it('marks it stale at once when the run went too many tool calls without one', () => {
-        render(<RunCardView card={{ ...CARD, stale: true, calls_since: 20 }} running />)
+        render(<RunProgress card={{ ...CARD, stale: true, calls_since: 20 }} running />)
         expect(screen.getByText('stale')).toBeDefined()
     })
 
-    it("shows an ended run's last card, which is never stale", () => {
-        render(<RunCardView card={{ ...CARD, stuck: null, stale_at: null }} running={false} />)
-        expect(screen.getByTestId('run-card').textContent).toContain('last card6m ago3 tool calls before the run ended')
-        expect(screen.queryByText('stuck')).toBeNull()
+    it("shows an ended run's last progress, which is never stale", () => {
+        render(<RunProgress card={{ ...CARD, stuck: null, stale_at: null }} running={false} />)
+        expect(screen.getByTestId('run-progress').textContent).toContain(
+            'last update6m ago·3 tool calls before the run ended',
+        )
+        expect(screen.queryByTestId('run-progress-stuck')).toBeNull()
         act(() => {
             vi.advanceTimersByTime(60 * 60_000)
         })
@@ -72,18 +74,18 @@ describe('RunCardView', () => {
     })
 })
 
-describe('RunCardNow', () => {
-    it('says what the card says it does now, and once it is stale, says so', () => {
-        render(<RunCardNow card={CARD} />)
-        expect(screen.getByTestId('run-card-now').textContent).toContain('nowrunning the login tests6m ago')
+describe('RunProgressLine', () => {
+    it('says what the agent says it does now, and once its progress is stale, says so', () => {
+        render(<RunProgressLine card={CARD} />)
+        expect(screen.getByTestId('run-progress-line').textContent).toContain('running the login tests6m ago')
         act(() => {
             vi.advanceTimersByTime(5 * 60_000)
         })
-        expect(screen.getByText('stale card')).toBeDefined()
+        expect(screen.getByText('stale')).toBeDefined()
     })
 })
 
-describe('RunCardView steps', () => {
+describe('RunProgress steps', () => {
     const STEPS: RunCard = {
         ...CARD,
         stuck: null,
@@ -98,20 +100,27 @@ describe('RunCardView steps', () => {
     }
 
     it('says how much is done and the stage under way, then each step with where it stands', () => {
-        render(<RunCardView card={STEPS} running />)
-        const steps = screen.getByTestId('run-card-steps')
-        expect(steps.textContent).toContain('33% done · stage web')
+        render(<RunProgress card={STEPS} running />)
+        expect(screen.getByTestId('run-progress').textContent).toContain('1 of 3 done · stage web')
+        expect(screen.getByText('1 of 3 steps done')).toBeDefined()
         const items = screen.getAllByRole('listitem').map((item) => item.textContent)
         expect(items).toEqual([
             'doneadd the SSO callback · api',
-            'workingwire the login button · web',
-            'skippeda dark-mode icon',
+            'workingwire the login button · webnow running the login tests',
+            'skippeda dark-mode icon · skipped',
             'to dopush',
         ])
     })
 
+    it('folds what it wrote is done and next under the steps, which say where it stands', () => {
+        render(<RunProgress card={STEPS} running />)
+        expect(screen.queryByText('tests pass: 12/12')).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Show done and next' }))
+        expect(screen.getByText('tests pass: 12/12')).toBeDefined()
+    })
+
     it('shows a working step stuck once it has worked past its time, without a new read', () => {
-        render(<RunCardView card={STEPS} running />)
+        render(<RunProgress card={STEPS} running />)
         expect(screen.queryByText('stuck')).toBeNull()
         act(() => {
             vi.advanceTimersByTime(10 * 60_000)
@@ -119,21 +128,21 @@ describe('RunCardView steps', () => {
         expect(screen.getAllByText('stuck')).toHaveLength(1)
     })
 
-    it('puts the share done on the one-line card', () => {
-        render(<RunCardNow card={STEPS} />)
-        expect(screen.getByTestId('run-card-now').textContent).toContain('running the login tests33%')
+    it('puts how many steps are done on the one-line progress', () => {
+        render(<RunProgressLine card={STEPS} />)
+        expect(screen.getByTestId('run-progress-line').textContent).toContain('1/3running the login tests')
     })
 })
 
 function renderQuestion(question: RunCardQuestion, running = true) {
     return render(
         <QueryClientProvider client={new QueryClient()}>
-            <RunCardView card={{ ...CARD, question }} running={running} answers={{ kind: 'run', id: 41 }} />
+            <RunProgress card={{ ...CARD, question }} running={running} answers={{ kind: 'run', id: 41 }} />
         </QueryClientProvider>,
     )
 }
 
-describe('RunCardView question', () => {
+describe('RunProgress question', () => {
     const QUESTION: RunCardQuestion = {
         ask: 'Keep the password form beside the SSO button, or hide it behind a link?',
         options: ['keep both side by side', 'hide the form behind a link'],
@@ -168,9 +177,9 @@ describe('RunCardView question', () => {
 
     it('asks you, names each option by letter and the one recommended, and answers with the one you pick', async () => {
         renderQuestion(QUESTION)
-        const asked = screen.getByTestId('run-card-question')
+        const asked = screen.getByTestId('run-progress-question')
         expect(asked.textContent).toContain('asks you')
-        expect(asked.textContent).toContain('Bhide the form behind a link · recommended')
+        expect(asked.textContent).toContain('Bhide the form behind a linkrecommended · working toward it')
         fireEvent.click(screen.getByRole('button', { name: 'Answer B: hide the form behind a link' }))
         expect(
             await screen.findByText(
@@ -182,26 +191,26 @@ describe('RunCardView question', () => {
 
     it('marks your answer, and offers the other options to change it', () => {
         renderQuestion({ ...QUESTION, answer: 'B', answered_at: '2026-10-08T12:26:00Z' })
-        expect(screen.getByTestId('run-card-question').textContent).toContain('answered B')
+        expect(screen.getByTestId('run-progress-question').textContent).toContain('answered B')
         expect(screen.getByText(/your answer/u)).toBeDefined()
         expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
             'Answer A: keep both side by side',
         ])
     })
 
-    it("shows an ended run's question as never answered, with nothing to press", () => {
+    it("shows an ended run's unanswered question as such, with nothing to press", () => {
         renderQuestion(QUESTION, false)
-        expect(screen.getByTestId('run-card-question').textContent).toContain('never answered')
+        expect(screen.getByTestId('run-progress-question').textContent).toContain('run ended before an answer')
         expect(screen.queryAllByRole('button')).toEqual([])
     })
 
-    it('drops what an answer said once the card asks another question', async () => {
+    it('drops what an answer said once the agent asks another question', async () => {
         const { rerender } = renderQuestion(QUESTION)
         fireEvent.click(screen.getByRole('button', { name: 'Answer B: hide the form behind a link' }))
         expect(await screen.findByText(/^Answered B/u)).toBeDefined()
         rerender(
             <QueryClientProvider client={new QueryClient()}>
-                <RunCardView
+                <RunProgress
                     card={{ ...CARD, question: { ...QUESTION, asked_at: '2026-10-08T12:29:00Z' } }}
                     running
                     answers={{ kind: 'run', id: 41 }}
@@ -223,10 +232,10 @@ describe('RunCardView question', () => {
         expect((await screen.findByRole('alert')).textContent).toContain('refused (moved_on)')
     })
 
-    it('says on the one-line card that it asks you, until you answer', () => {
-        const { rerender } = render(<RunCardNow card={{ ...CARD, question: QUESTION }} />)
+    it('says on the one-line progress that it asks you, until you answer', () => {
+        const { rerender } = render(<RunProgressLine card={{ ...CARD, question: QUESTION }} />)
         expect(screen.getByText('asks you')).toBeDefined()
-        rerender(<RunCardNow card={{ ...CARD, question: { ...QUESTION, answer: 'A' } }} />)
+        rerender(<RunProgressLine card={{ ...CARD, question: { ...QUESTION, answer: 'A' } }} />)
         expect(screen.queryByText('asks you')).toBeNull()
     })
 })

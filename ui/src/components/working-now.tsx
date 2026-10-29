@@ -3,16 +3,17 @@ import { useQuery } from '@tanstack/react-query'
 import { runsQuery } from '@/api/queries'
 import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
-import { RunCardView } from '@/components/run-card'
 import { RunDoing } from '@/components/run-doing'
 import { RunLink } from '@/components/run-link'
+import { RunProgress } from '@/components/run-progress'
 import { Chip, RunDot } from '@/components/status'
 import { workingOn } from '@/lib/run-state'
 
 /**
  * Under a ticket's conversation, on the worker's side: the run working the ticket now, if one is, as a chat shows
  * someone typing. It names the run (opening its page), its kind, its latest tool call, what it has cost so far, and
- * for how long it has worked; then, once its agent has written one, its card (DESIGN §41), whole. The runs come whole
+ * for how long it has worked; then, once its agent has written an update, its progress (DESIGN §41), whole, as a
+ * bubble of its own. The runs come whole
  * from the stream, so it appears when a run starts, follows what it does, and leaves when it ends.
  */
 export function WorkingNow({ ticketKey }: { ticketKey: string }) {
@@ -36,7 +37,15 @@ export function WorkingNow({ ticketKey }: { ticketKey: string }) {
                             <Age variant="span" started={run.started_at} ended={null} />
                         </span>
                     </span>
-                    {run.card !== null && <RunCardView card={run.card} running answers={{ kind: 'run', id: run.id }} />}
+                    {run.card !== null && (
+                        // On the worker's side of the conversation, as its own bubble: the run telling where it stands.
+                        <RunProgress
+                            card={run.card}
+                            running
+                            answers={{ kind: 'run', id: run.id }}
+                            className="rounded-md rounded-tl-xs bg-surface-raised px-3 py-2.5"
+                        />
+                    )}
                 </li>
             ))}
         </ul>

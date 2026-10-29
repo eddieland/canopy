@@ -10,6 +10,7 @@ import { Cost } from '@/components/cost'
 import { RunDot } from '@/components/status'
 import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ProgressMeter } from '@/components/run-progress'
 import { useLoopDown } from '@/hooks/use-loop-down'
 import { useClock } from '@/lib/clock'
 import type { Clock } from '@/lib/clock'
@@ -105,7 +106,8 @@ function itemKey(item: RailItem): string {
 /**
  * One row of what is working, opening its page: a dot in its state's color, what it works on (a ticket's key, a PR, a
  * chore, a task's run), how long it has run or `waiting on you`, and under it what it is: the ticket's title, the
- * review, the run, the task's first line. A worker run adds what it is doing, `planning`, on a line of its own; a
+ * review, the run, the task's first line. A worker run adds what it is doing, `planning`, on a line of its own, and
+ * while it runs, its steps' meter when its progress names any; a
  * task's run has no kind or reasons to name a phase by, and its first line is the operator's own words.
  */
 function WorkingRow({ item }: { item: RailItem }) {
@@ -123,6 +125,9 @@ function WorkingRow({ item }: { item: RailItem }) {
                     <RowHead state={run.state} subject={run.ticket_key} started={run.started_at} />
                     <TicketTitle title={run.ticket_title} className="pl-4 text-xs font-normal text-muted-foreground" />
                     <PhaseLine run={run} />
+                    {run.state === 'running' && run.card !== null && run.card.steps.length > 0 && (
+                        <ProgressMeter card={run.card} className="mt-0.5 ml-4" />
+                    )}
                 </Link>
             )
         }
