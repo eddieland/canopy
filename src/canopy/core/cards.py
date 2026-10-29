@@ -15,12 +15,14 @@ from __future__ import annotations
 import re
 import sqlite3
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError
 
 from canopy.core import db, records, sql
+from canopy.core.vocab import ReviewRunStatus, RunStatus
 from canopy.runtime import servers
 
 if TYPE_CHECKING:
@@ -39,6 +41,11 @@ SERVER_COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp", "--status")
 RUN_ID_RE = re.compile(r"(?:review-)?[0-9]{1,18}")
 #: The run tables whose runs keep a card: a worker's and a planner's, and a review's.
 type CardTable = Literal["runs", "review_runs"]
+#: Each card table's status of a run still running.
+_RUNNING: Mapping[CardTable, RunStatus | ReviewRunStatus] = {
+    "runs": RunStatus.RUNNING,
+    "review_runs": ReviewRunStatus.RUNNING,
+}
 
 #: How long the summary and what is in the way may be, and every other line, in characters.
 MAX_SUMMARY = 400
@@ -136,7 +143,7 @@ def record_call(conn: sqlite3.Connection, table: CardTable, run_id: int, card: C
 
     Nothing changes for a run not running.
     """
-    running = sql.update(table).where("id = ? AND status = 'running'", run_id)
+    running = sql.update(table).where("id = ? AND status = ?", run_id, _RUNNING[table])
     counted = running.set_to("tool_calls = tool_calls + 1")
     if card is not None:
         # Every assignment reads the row as it was, so the card's count is the calls made with this one.

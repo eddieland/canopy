@@ -591,9 +591,11 @@ class _Progress:
         if change is None:
             return
         try:
-            db.set_run_progress(self.ctx.conn, self.run_id, change.session_id, usage=change.usage, did=change.did)
-            if change.called is not None:
-                cards.record_call(self.ctx.conn, "runs", self.run_id, cards.read_call(change.called))
+            # One transaction, so a tool call's progress and its card are recorded together or not at all.
+            with db.transaction(self.ctx.conn):
+                db.set_run_progress(self.ctx.conn, self.run_id, change.session_id, usage=change.usage, did=change.did)
+                if change.called is not None:
+                    cards.record_call(self.ctx.conn, "runs", self.run_id, cards.read_call(change.called))
         except sqlite3.Error as e:
             self.log.warning("worker progress not recorded", extra={"run_id": self.run_id, "error": str(e)})
         if change.started:
