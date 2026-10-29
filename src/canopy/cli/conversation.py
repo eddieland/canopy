@@ -26,6 +26,7 @@ from canopy.cli import tasks as tasks_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.core import (
+    cards,
     chore_view,
     conversation,
     db,
@@ -397,11 +398,18 @@ def _answer(ctx: Context, subject: Ref, body: str) -> int:
         "question answered",
         extra={"subject": str(subject), "answer": answered.letter, "already": answered.already, "channel": CLI},
     )
+    run = f"review-{subject.id}" if subject.kind == conversation.REVIEW else subject.id
+    # Written again for an answer already recorded, in case the first write found the directory gone.
+    heard = cards.deliver(cards.answers_dir(ctx.state_dir, run), answered)
     said = f"{subject}'s question: {one_line(answered.question.ask)}"
     if answered.already:
         click.echo(f"{said}\nIt was already answered {answered.letter}: {answered.option}. Nothing new recorded.")
     else:
         click.echo(f"{said}\nAnswered {answered.letter}: {answered.option}.")
+    if heard:
+        click.echo("Its agent hears it on its next tool call.")
+    else:
+        click.echo("Its agent had already ended, and will not hear it.")
     return 0
 
 

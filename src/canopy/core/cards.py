@@ -13,17 +13,25 @@ The run keeps its last card once it ends. A card is as old as the time and the t
 is as old as the first card on which it was working: one working longer than the run's last fifth is shown stuck. A
 question is as old as the first card that asked it, and keeps the operator's answer, one of its letters, while the
 cards after it ask it still.
+
+The answer reaches the running agent through a file canopy writes in the run's answers directory, which the run is
+told of in `CANOPY_ANSWERS` and may read but not write, sandboxed or not: canopy's plugin reads it on each tool call and
+tells the agent once (`.agents/plugins/canopy.js`).
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
+import shutil
 import sqlite3
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
@@ -45,6 +53,9 @@ TOOL = "status"
 SERVER_COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp", "--status")
 #: A run's CANOPY_RUN_ID that names a run keeping a card: a worker's or a planner's id, or a review's, `review-7`.
 RUN_ID_RE = re.compile(r"(?:review-)?[0-9]{1,18}")
+#: The variable that names a run's answers directory, and the file in it that holds the operator's latest answer.
+ANSWERS_ENV = "CANOPY_ANSWERS"
+ANSWER_FILE = "answer.json"
 #: The run tables whose runs keep a card: a worker's and a planner's, and a review's.
 type CardTable = Literal["runs", "review_runs"]
 #: Each card table's status of a run still running.
@@ -269,6 +280,57 @@ def record_answer(conn: sqlite3.Connection, table: CardTable, run_id: int, lette
     )
     with db.transaction(conn):
         return sql.execute(conn, answered).rowcount == 1
+
+
+def answers_dir(state_dir: Path, run: str) -> Path:
+    """The answers directory of the run CANOPY_RUN_ID names `run`, a worker's or a planner's id or a review's.
+
+    Returns:
+        `<state_dir>/runs/<id>.answers` or, for `review-<id>`, `<state_dir>/reviews/<id>.answers`: beside the run's
+        own files, inside the state directory a sandbox denies, so a run reads its own and no other's (DESIGN §24).
+
+    Raises:
+        ValueError: `run` names no run that keeps a card.
+    """
+    if not RUN_ID_RE.fullmatch(run):
+        raise ValueError(f"{run!r} names no run that keeps a card")
+    review, _, run_id = run.rpartition("-")
+    return state_dir / ("reviews" if review else "runs") / f"{int(run_id)}.answers"
+
+
+def make_answers(path: Path) -> None:
+    """Make a run's empty answers directory, the operator's alone to write, before its agent starts."""
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+
+def remove_answers(path: Path) -> None:
+    """Remove a run's answers directory, once its agent has ended; nothing when it is gone."""
+    with contextlib.suppress(FileNotFoundError):
+        shutil.rmtree(path)
+
+
+def deliver(path: Path, answered: Answered) -> bool:
+    """Write `answered` as the latest answer in the answers directory at `path`, for the running agent to read.
+
+    The file is replaced whole, so a reader sees the answer before or after, never half of one: the question as it was
+    asked, when, and the letter with the option it names.
+
+    Returns:
+        Whether it was written: False when the directory is gone, its run having ended.
+    """
+    data = {
+        "asked": db.format_time(answered.asked_at),
+        "ask": answered.question.ask,
+        "letter": answered.letter,
+        "option": answered.option,
+    }
+    staged = path / f".{ANSWER_FILE}.{os.getpid()}"
+    try:
+        staged.write_text(json.dumps(data) + "\n", encoding="utf-8")
+        staged.replace(path / ANSWER_FILE)
+    except FileNotFoundError:
+        return False
+    return True
 
 
 def of(row: sqlite3.Row | records.Row) -> Standing:
