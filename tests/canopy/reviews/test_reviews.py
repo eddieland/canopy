@@ -593,8 +593,9 @@ def test_the_state_block_shows_reviewed_prs(reviewing: CanopyEnv, scenario: Scen
     scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS))
     scenario.tick(*waits("PROJ-1"), dry_run=True)
     section = scenario.state()["reviews"]
+    # What is null or empty, such as the query, the running reviews, and the settling heads, is left out.
     assert section["agent_prs"] is True
-    assert section["query"] is None
+    assert "query" not in section
     assert section["limits"] == {
         "max_reviews": 1,
         "max_reviews_per_day": 20,
@@ -602,11 +603,13 @@ def test_the_state_block_shows_reviewed_prs(reviewing: CanopyEnv, scenario: Scen
         "settle_minutes": 0,
         "started_last_24h": 1,
     }
-    assert section["running"] == []
+    assert "running" not in section
     # With settling off, no head is recorded.
-    assert section["settling"] == []
+    assert "settling" not in section
     [reviewed] = section["prs"]
-    assert (reviewed["url"], reviewed["ticket"], reviewed["review_runs"]) == (PR, "PROJ-1", 1)
+    # The PR is PROJ-1's unit's, so it is named by its ticket and repository, its URL being the unit's `pr_url`.
+    assert "url" not in reviewed
+    assert (reviewed["ticket"], reviewed["repo"], reviewed["review_runs"]) == ("PROJ-1", "repo", 1)
     latest = reviewed["latest"]
     assert (latest["status"], latest["verdict"], latest["impact"]) == ("done", "findings", "normal")
     assert latest["findings"] == ["retry never stops"]
@@ -1565,13 +1568,13 @@ def test_a_commit_waits_on_each_reviewer_and_counts_each_review_against_the_limi
     assert (pr["latest"]["run_id"], pr["owed"]) == (first.id, ["explainer"])
     second = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS))
     assert second.row.persona == "explainer"
-    # Reviewed in each: the commit's reviews read as one, their findings together, at the time the last ended.
+    # Reviewed in each: the commit's reviews read as one, their findings together, at the number the last took.
     scenario.tick(dry_run=True, code=1)
     [pr] = scenario.state()["reviews"]["prs"]
-    assert pr["owed"] == []
+    assert "owed" not in pr
     assert (pr["latest"]["run_id"], pr["latest"]["verdict"]) == (second.id, "findings")
     assert pr["latest"]["findings"] == ["retry never stops", "retry never stops"]
-    assert pr["latest"]["ended_at"] == max(str(first.row.ended_at), str(second.row.ended_at))
+    assert pr["latest"]["number"] == max(first.row.number or 0, second.row.number or 0)
     # Each review counted: at a limit of two, the next commit gets none.
     scenario.configures("workspace", policy={"max_reviews_per_pr": 2})
     assert [a for a, _ in scenario.refuses(reviews("b" * 40, ticket="PROJ-1"))] == [

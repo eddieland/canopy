@@ -445,6 +445,7 @@ def state_block(
                 {
                     **state,
                     "tickets": _compact(state["tickets"]),
+                    **({"reviews": _by_unit(state["reviews"], state["tickets"])} if "reviews" in state else {}),
                     "observations": rendered_observations(state["observations"]),
                 },
                 separators=(",", ":"),
@@ -556,6 +557,24 @@ def _scoped(
     )
 
 
+def _by_unit(reviews: ReviewsSection, tickets: Sequence[TicketState]) -> object:
+    """`reviews` as the state block renders them: empty values left out, as in `tickets`, and each URL said once.
+
+    A reviewed PR of a listed ticket's unit is named by its `ticket` and `repo`, its URL being that unit's `pr_url`;
+    any other keeps its `url`.
+
+    Returns:
+        A copy of `reviews` so cut.
+    """
+    repos = {(t["key"], u["pr_url"]): u["repo"] for t in tickets for u in t["units"] if u["pr_url"] is not None}
+    prs: list[object] = []
+    for pr in reviews["prs"]:
+        repo = repos.get((pr["ticket"], pr["url"])) if pr["ticket"] is not None else None
+        rest = {k: v for k, v in pr.items() if k not in {"url", "ticket"}}
+        prs.append(pr if repo is None else {"ticket": pr["ticket"], "repo": repo, **rest})
+    return _compact({**reviews, "prs": prs})
+
+
 def _notices(notices: Iterable[Notice], now: datetime, observations: ObservationsState) -> list[NoticeState]:
     """The notices the overseer reads: each in force, and each ended while a check it may hold could stand.
 
@@ -579,7 +598,7 @@ def _notice(held: Notice, now: datetime) -> NoticeState:
 
 
 def _compact(value: object) -> object:
-    """`value` as the state block renders a ticket: every key, at any depth, left out whose value is empty.
+    """`value` as the state block renders a ticket or `reviews`: every key, at any depth, left out whose value is empty.
 
     Empty is null, or an empty list or object, so a cursor not yet set, a plan with no `newest`, and a private ticket's
     `new_operator_messages` with none new are absent rather than spelled out. False and zero stay: a plan's and a

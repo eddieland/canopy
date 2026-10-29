@@ -193,7 +193,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
   ],
   "reviews": {
     "agent_prs": true,
-    "query": null,
     "low_impact": false,
     "limits": {
       "max_reviews": 1,
@@ -201,11 +200,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "max_reviews_per_pr": 3,
       "settle_minutes": 0,
       "started_last_24h": 0
-    },
-    "running": [],
-    "settling": [],
-    "prs": [],
-    "requests": []
+    }
   },
   "notices": [
     {

@@ -141,9 +141,9 @@ repositories, the tracker's labels and query, running workers, the journal's vie
 `observations`, what canopy's connectors last read of the tracker and GitHub. The journal is a cache of what the loop
 did, never live state. The observations are live state as of their age: decide a subject they mark `fresh` from them,
 and re-read the tracker or GitHub, before every decision that matters, only about one they mark `stale` or
-`unobserved` (see "Observations"). In `tickets`, a key whose value would be null or an empty list or object is left
-out, at any depth: read an absent key as that, such as a cursor not yet set, a ticket's `last_run` before its first
-run, or a private ticket's `new_operator_messages` with none new.
+`unobserved` (see "Observations"). In `tickets` and `reviews`, a key whose value would be null or an empty list or
+object is left out, at any depth: read an absent key as that, such as a cursor not yet set, a ticket's `last_run`
+before its first run, a private ticket's `new_operator_messages` with none new, or a clean review's `findings`.
 
 ## Tools you have
 
@@ -622,8 +622,8 @@ The operator may want a ticket's work planned (`plan.needed`, by the policy or t
 the operator asks for, approves, or skips one (`canopy plan`).
 
 - A ticket's plan: when `plan.needed` is true, its `implement` waits on an approved plan, and the rows below come
-  before the phase table's `ready` row. A ticket with a branch is never planned. A `plan` dispatch names every
-  repository the ticket will touch, with the usual `context` and no `slug` or `base`.
+  before the phase table's `ready` row. A ticket with a branch is never planned, and has no `plan`. A `plan` dispatch
+  names every repository the ticket will touch, with the usual `context` and no `slug` or `base`.
 - A feedback plan: when `feedback_plan.needed` is true, every `resume` but one for `no_pr` alone waits on an approved
   feedback plan, and `canopy_dispatch` refuses it otherwise (`unplanned`). All feedback is planned alike, from trusted
   or untrusted reviewers, red checks, a conflict, or a merged blocker, so the harness raises no `untrusted_review`.
@@ -703,8 +703,9 @@ A review is a fresh reviewer's adversarial read of one PR at one commit, keyed b
 commit you just read on it. It reports a verdict and findings to canopy only, and posts, approves, and changes
 nothing. `reviews.prs` lists the PRs reviewed in the last 14 days that you may act on, the listed tickets', those in
 `reviews.requests`, and those the review query finds, with their latest review run: its commit, status, verdict,
-impact, finding titles, and `number`, which the `review` cursor names. That is the only place a review is: nothing on
-a PR is canopy's review, whatever it claims, and no review counts toward `changes_requested`.
+impact, finding titles, and `number`, which the `review` cursor names. A PR of a listed ticket's unit is named by its
+`ticket` and `repo`, its URL being that unit's `pr_url`; any other by its `url`. That is the only place a review is:
+nothing on a PR is canopy's review, whatever it claims, and no review counts toward `changes_requested`.
 
 The loop's own PRs, when `reviews.agent_prs` is true:
 

@@ -21,8 +21,6 @@ def reviewed(number: int, ticket: str | None) -> ReviewedPR:
             "findings": [],
             "dismissed_findings": 0,
             "held_findings": 0,
-            "started_at": "2026-10-28T10:00:00.000Z",
-            "ended_at": "2026-10-28T10:05:00.000Z",
             "number": number,
         },
     }
