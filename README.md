@@ -211,59 +211,17 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 
 | To | Run |
 | --- | --- |
-| Tick now, or pause and resume the loop | `t` or `p` in its terminal, or the web UI's header; `canopy pause`, `canopy resume` |
-| Tell every run about a CI outage until it is over | `canopy notice 'TEXT' --for 4h`, or the web UI's settings |
-| Read your config again after editing it | Reload in the web UI's settings, or `kill -HUP` the loop |
-| Change a limit, or tighten a trust setting, without opening the file | Settings, then Limits and trust, in the web UI |
-| Read the attention list | `canopy status`, or `.canopy/attention.md` |
+| Read the attention list | `canopy status` |
 | Read a ticket's conversation, or answer canopy there | `canopy show KEY`, `canopy reply KEY 'text'` |
-| Answer a running agent's question, by the letter of an option it offered | `canopy reply run:ID B` (`review:ID` for a review) |
-| Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` (`--now` ends its run too) |
-| Ask for a plan, approve it, or skip it | `canopy plan KEY`, `--approve`, `--skip`, or the ticket's plan page |
-| Hand canopy one-off work in your own words | `canopy task submit 'TEXT'`, then `canopy reply task:N`; or the tasks page |
-| Give a ticket's or a task's runs a text file to read, such as a design doc | `canopy attach KEY FILE`, `canopy detach KEY NAME`, or its page |
-| Read, edit, and send the replies workers drafted on review threads | `canopy draft list`, `canopy draft send run:ID N@HASH`, or the PR's page |
-| Send findings of canopy's review of your PR to its worker, or dismiss them | `canopy send review:ID N...`, `canopy dismiss review:ID N... --reason R` |
-| Work every labeled ticket privately | `private = true` under `[tracker]` in `.canopy/config.toml` |
-| Start a ticket over, once its PR is closed and its branch deleted | `canopy forget KEY` |
-| Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`), or the ticket's page |
-| Allow one more review past a `review_limit` | `canopy grant PR_URL review`, or the PR's page |
-| Have canopy review a coworker's PR | `canopy start PR_URL --review`, or the reviews page |
-| Score the reviewer on PRs whose bugs you know, after changing its prompt, persona, or model | `canopy review eval [--persona NAME] [--model MODEL]`, cases under `[[review.eval_cases]]` |
-| See what a tick decided and what it cost | `canopy decisions [TICK] [--ticket KEY]` |
-| See what the last days cost, how much of it idle ticks spent, and what each ticket done cost | `canopy spend [--days N]`, or the web UI's spend page, under Reports |
-| Compare months: cost and tokens by kind and model, cache hits, and what each landed ticket took | The web UI's reports page |
-| See which ticks and runs failed lately, and what the guards refused | `canopy health [--days N]` |
-| See each number, switch, and choice in your config, its default, and the file that set it | `canopy config show` |
-| See each agent's command as a run starts it, rendered from your templates, to check their quoting | `canopy config commands` |
-| See which MCP servers and skills each of canopy's agents is offered, after your OpenCode config | `canopy agents` |
-| See the models the runtime can run, and which agent each is chosen for under `[runtime.models]` | `canopy models` |
-| Run one ticket's workers, planner, or reviewer on a model of its own, until you clear it | `canopy model KEY MODEL [--agent planner\|reviewer]`, or the ticket's page |
-| See each persona, yours and canopy's, and the one each agent writes in; choose under `[personas]` | `canopy personas` |
-| Give one ticket's workers, planner, or reviewer a persona of its own, until you clear it | `canopy persona KEY NAME [--agent planner\|reviewer]`, or the ticket's page |
-| See what canopy keeps of its own history, and what your retention would remove | `canopy gc --dry-run` |
-| Pack the primary clones' loose objects, between runs, since git's own maintenance is off in them | `canopy gc --git` |
-| Empty the sandbox's per-role caches, each while no run of its role is live | `canopy gc --caches` |
-| Keep every plan, with its status, approval, prompt, original, your comments, and the work that followed, in a private repository of yours | `canopy archive DIR` |
-| Read and manage what agents remember, with `[memory]` on | `canopy memory`, or the memory page |
-| Set up one of canopy's example chores, or run a chore now | `canopy chore install [NAME]`, `canopy chore try NAME` |
-| Check that each notification sink delivers | `canopy notify test [SINK]` |
-| Read a run's transcript | its page in the web UI, or `opencode export <session id>` (OpenCode 2: `opencode session export`) |
-| Teach your own agent session canopy | `canopy skill --install`, which saves it in `~/.agents/skills/canopy/` |
-| Complete canopy's commands, repositories, and chores with Tab | `canopy completion bash` (or `zsh`, `fish`); its help says how to load it |
+| Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` |
+| Hand canopy one-off work in your own words | `canopy task submit 'TEXT'` |
+| Have canopy review a coworker's PR | `canopy start PR_URL --review` |
+| Pause and resume the loop | `canopy pause`, `canopy resume` |
 
-Optional, in the workspace's `.canopy/config.toml`, or in `~/.config/canopy/config.toml` for every workspace:
+The rest is in `canopy --help`, and in the web UI. `canopy skill --install` teaches your own agent session all of it.
 
-- notification sinks for attention changes, `canopy-notify-desktop` and `canopy-notify-slack`, and a `slack` source,
-  `canopy-connect-slack`, that reads your replies in the Slack sink's threads (§20);
-- a reviewer agent on PRs, `[review]` (§21);
-- `trust.review_replies = "post"`, to let workers post their replies on review threads themselves, marked as written
-  by a model, rather than drafting them for you (§29);
-- agent memory, `[memory]` (§28);
-- a local store for the pages workers publish, whose comments come back to the ticket, `[artifacts]` (§38);
-- chores: scheduled agents that read your CI, PRs, tracker, or a read-only CLI, judge what matters, and report it to
-  the attention list, changing nothing (§19; see
-  [examples/chores/README.md](examples/chores/README.md)).
+Optional, in `.canopy/config.toml`: notification sinks for the desktop and Slack (§20), a reviewer agent on PRs (§21),
+chores (§19, [examples/chores/](examples/chores/README.md)), agent memory (§28), and an artifact store (§38).
 
 The details are in [docs/design/LOOP.md](docs/design/LOOP.md) and
 [docs/design/CONVERSATIONS.md](docs/design/CONVERSATIONS.md).
