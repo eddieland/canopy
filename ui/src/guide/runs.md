@@ -40,7 +40,8 @@ plan's, names no model at all. A run that got none of what it asked for says so,
 leads with it and sets the `+1` apart. Neither is amber: a run that went elsewhere waits on nothing, it just bears
 knowing. Asking for `openai/gpt-5@medium`, the default effort, and being served `openai/gpt-5` is no surprise either,
 since the session names a variant only when it isn't the default. A ticket's Runs panel shows the same line, so a
-canary ticket reads straight down its runs: opus, opus, opus, and not a sonnet slipped in where you weren't looking.
+ticket with a model override reads straight down its runs: opus, opus, opus, and not a sonnet slipped in where you
+weren't looking.
 
 A long summary shows its first four lines and **show N more lines** for the rest, so one worker with a lot to say
 doesn't push the other rows off the page. In a narrow window, such as half a monitor, the cost goes first and then

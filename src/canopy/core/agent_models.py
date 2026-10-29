@@ -17,8 +17,8 @@ Before a worker run on a chosen model starts, the model is looked up in the list
 read in the workspace root, since a repository's own runtime config could change the list; with a variant, the
 model's variants too, since a runtime may drop a variant the model lacks without a word, or fail the run on it. A
 model or variant the list lacks refuses the run as `model_missing`, and a list that cannot be read as
-`model_list_failed`: never the runtime's default instead, since a canary's run on a model nobody chose would read as
-the canary's.
+`model_list_failed`: never the runtime's default instead, since a run on a model nobody chose would read as the one
+the operator chose.
 """
 
 from __future__ import annotations
