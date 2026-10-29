@@ -251,8 +251,8 @@ Agent definitions ship in `agents/`:
   canopy renders those last of its bash rules, after the deny of every other command, since the last match wins and
   its definition is merged after the operator's runtime config, and refuses one that runs a command it is given or is
   the loop's own (TRUST_MODEL T1). Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021) and
-  loses every decision not yet recorded. MCP: the tracker's read tools only (T6); of GitHub, its reads of PRs and
-  branches, and of issues only when they are the tickets.
+  loses every decision not yet recorded. MCP: no server but canopy's (§39, T6), every other server's tools and
+  resources denied whatever the operator's runtime config grants.
 - `canopy-worker`: edit and bash within the worktree; `runtime.allow_bash` names commands that beat its bash denies,
   rendered last, with the overseer's checks, and the private worker's the same. MCP: the tracker (comments, labels,
   follow-ups), GitHub (open and update a PR, read reviews and checks, and its issue tools only when they are the

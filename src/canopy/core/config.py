@@ -552,15 +552,6 @@ class Tracker(Section):
     # must not.
     private: Annotated[StrictBool, Scope.PRIVATE] = False
 
-    def server(self) -> str | None:
-        """The tracker's MCP server, as config names it or else the provider's default, even with no read tools known.
-
-        Returns:
-            The server's name, or None when neither names one.
-        """
-        default = DEFAULT_TRACKER_TOOLS.get(self.provider)
-        return self.mcp_server or (default.server if default is not None else None)
-
     def tools(self) -> McpTools | None:
         """The server and tools a private worker gets, or None if neither config nor a default names any.
 
