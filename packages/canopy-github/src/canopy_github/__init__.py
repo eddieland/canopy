@@ -368,6 +368,25 @@ def number(value: object) -> int | None:
     return None
 
 
+def login(author: object) -> str | None:
+    """An author's login as GitHub's REST API names it, so a bot's ends `[bot]`, which GraphQL leaves off.
+
+    `trust.trusted_reviewers`, the agents, and GitHub's own pages name a bot as `name[bot]`, and match logins in full,
+    so a bare `name` from GraphQL would match no entry.
+
+    Returns:
+        The login; None for content with no author, as a deleted account's has.
+    """
+    if not isinstance(author, dict):
+        return None
+    fields = obj(author, "author")
+    found = text(fields.get("login"))
+    if found is None:
+        return None
+    bot = fields.get("__typename") == "Bot" and not found.endswith("[bot]")
+    return f"{found}[bot]" if bot else found
+
+
 def cut(body: object) -> str:
     """`body` cut at `MAX_BODY` characters; anything but a string is empty.
 
