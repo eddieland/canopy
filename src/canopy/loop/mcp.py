@@ -391,7 +391,7 @@ def run_stdio(
     """Serve on this process's stdin and stdout until stdin closes, with `runner` for every process a call starts.
 
     `chore` serves a chore's run its history (`CHORE`), and `serve_reports` canopy's reports (`REPORTS`), each from the
-    workspace its run names; `status`, a worker's, planner's, or reviewer's run its card (`STATUS`); `checkouts`, a
+    workspace its run names; `status`, a worker's, planner's, or reviewer's run its progress (`STATUS`); `checkouts`, a
     review's or a plan's run read-only git in those checkouts, by name (`git_mode`); else it serves the overseer's
     verbs.
 
