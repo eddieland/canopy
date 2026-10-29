@@ -103,7 +103,7 @@ Controls:
   cursors the overseer leaves out default in code to the newest items shown that these checks let it cover (DESIGN §37).
   A dispatch resting on a public ticket or a PR observed longer ago than `connect.max_age_minutes` is refused `stale`. A
   private ticket and a subject no source covers keep their claims, checked by the worker as before. Config requires a
-  `tracker` source, and the `vcs` source always runs, so the overseer reads neither world live (DESIGN §39): a candidate
+  `tracker` source, and the `vcs` source always runs, so the overseer reads neither world live (DESIGN §37): a candidate
   whose ticket, comments, PR, branches, or open blocker's PR a source left stale, or whose PR no source reads, is the
   harness's `wait`, the PRs its reviews ask about are shown as the `vcs` source read them, and its definition denies
   every MCP server's tools but canopy's, so it skips no tick over an outage. Residual: the guards trust what a connector
@@ -331,7 +331,7 @@ Controls:
   its MCP server is down. The server is named in the overseer process's environment alone, from which the harness
   removes it before any run it starts; it lists no tool and refuses every call under `CANOPY_RUN_ID` or outside a
   running tick, the overseer's definition allows each tool by exact name, and every other definition denies them all.
-  It reaches no other MCP server (DESIGN §39): its definition denies every server's tools, `<server>_<tool>` as
+  It reaches no other MCP server (DESIGN §13): its definition denies every server's tools, `<server>_<tool>` as
   OpenCode names them, whatever the operator's runtime config grants, and every server's resources, before it allows
   canopy's, and nothing from config is rendered there to reopen one.
   A steered overseer can still make any call its tools take, as it could run any `canopy` command before; the guards
@@ -499,10 +499,10 @@ Controls in code, not prompts:
   every limit, cooldown, and capacity, and none in a dry run. An overseer's dispatch that would leave fewer workers
   free than the harness's runs ranked above it in §7's order hold is refused `reserved`, so new work cannot take the
   capacity of work in flight.
-- A tick whose block leaves the overseer nothing to judge runs none and spends nothing (DESIGN §39): it makes only the
+- A tick whose block leaves the overseer nothing to judge runs none and spends nothing (DESIGN §6): it makes only the
   harness's dispatches, under the guards above, and the disk check still holds them. It is paced as any tick is, by
   `loop.min_gap_minutes` and every wake, and leaves idle pacing's count as it was.
-- The loop's polls (DESIGN §39): a poll ends the wait only when a tick would record or list what the latest tick did
+- The loop's polls (DESIGN §6): a poll ends the wait only when a tick would record or list what the latest tick did
   not, or once when a source fails, never again until a poll reads every source whole; the tick it wakes is held by
   `loop.min_gap_minutes`, as every wake is, so the polls cannot spin the loop.
 - Tracker comments: each body cut at 2000 characters where the tracker source records it (DESIGN §30).
@@ -939,7 +939,7 @@ leading to an `https://` site other than the tracker: the UI shows each link's a
 nothing. The query cannot widen what the overseer reads: config requires a `tracker` source, which reads the query,
 and a ticket observed fresh that is not a candidate reaches the overseer by key and why alone, and its prompt says not
 to read it (DESIGN §30); a stale one is the harness's `wait` and never reaches it, and its definition denies every MCP
-server but canopy's and carries no skill for the tracker, so it reads no ticket live (DESIGN §39). Settled (2026-10-15,
+server but canopy's and carries no skill for the tracker, so it reads no ticket live (DESIGN §13). Settled (2026-10-15,
 the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator who shares
 the workspace with people they do not trust overrides it in the private file. The provider also picks the default
 tracker server and tools a private ticket's

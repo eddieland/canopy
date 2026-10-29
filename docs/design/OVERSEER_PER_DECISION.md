@@ -8,11 +8,11 @@ stands](CARDS.md).
 ## 40. The overseer per decision
 
 Built in part (ROADMAP M40): the tick starts every run (below), and §6, §8, §27, and TRUST_MODEL T3 and T4 say so. The
-runs per subject are designed, not built, and wait on §39; until they are, §5, §6, §8, §11, §13, §15, and TRUST_MODEL
+runs per subject are designed, not built; until they are, §5, §6, §8, §11, §13, §15, and TRUST_MODEL
 describe canopy as it is, this section says what changes, and the PR that finishes it changes those sections and cuts
 this one to what is left.
 
-Once the harness decides what needs no judgment (§37) and the overseer runs only when something is left (§39), its
+Once the harness decides what needs no judgment (§37) and the overseer runs only when something is left (§6), its
 runs on a quiet queue come hours apart, past the provider's cache of its prompt (§6 step 4), and each is handed every
 ticket left. One run per ticket makes a cold run pay for the prompt and one ticket, not the queue, and keeps text on one
 ticket out of the context of every decision about another (TRUST_MODEL T1).
@@ -20,7 +20,7 @@ ticket out of the context of every decision about another (TRUST_MODEL T1).
 ### One run per subject
 
 The harness runs the overseer once for each subject left to it (§37): each ticket, each PR whose review is still its to
-start (§39), and the due chores with a `when`, together, since none needs a ticket. A run's message is the state block
+start (§21), and the due chores with a `when`, together, since none needs a ticket. A run's message is the state block
 cut to its subject: the part every run of the tick shares, then that subject's observations, items, and messages, and
 nothing of any other, its key included. A decision, dispatch, attention item, or change it records about anything but
 its subject is refused `decided`, as §37 refuses one about a ticket not listed to the overseer, through a tool and its
@@ -32,9 +32,9 @@ work was a fraction of a percent of overseer spend (MEASUREMENTS 2026-10-15).
   same byte for byte in each of its runs; the subject, and the capacity it may use, come after. A tick's runs go one
   after another, so the first writes the cache and the rest read it, and a run cold after a long gap writes the prompt
   and one subject.
-- **No run sees the queue.** The `tracker` source reads the query (§39), and a ticket it finds is a subject like any
-  other, given its own run or the harness's `skip`. This rests on §39's overseer that reads the journal alone, and so
-  on its Open on a `tracker` source: a run given one ticket can neither run a query nor read a ticket no source
+- **No run sees the queue.** The `tracker` source reads the query (§7), and a ticket it finds is a subject like any
+  other, given its own run or the harness's `skip`. This rests on an overseer that reads the journal alone, and on the
+  `tracker` source config requires (§30): a run given one ticket can neither run a query nor read a ticket no source
   observes.
 - **One at a time, in §7's order.** Runs go by the first row each subject holds, the chores' last. Each is told the
   capacity left after the harness's dispatches ranked above it (§37) and the runs those before it recorded. Once none
@@ -56,7 +56,7 @@ or leaves its duty undone, leaves its subject undecided: what it recorded stands
 than one run a tick.
 
 A tick records each run: the subject it was given, how it ended, its session, what it cost, and the models that served
-(§13); whether it ran the overseer (§39) becomes how many runs it made. A run's cost counts toward its ticket, so
+(§13); whether it ran the overseer (§6 step 5) becomes how many runs it made. A run's cost counts toward its ticket, so
 `canopy spend` and the spend page read what the overseer spent on a ticket from that ticket's runs (§11), not from a
 share of each tick that decided it.
 
