@@ -11,10 +11,12 @@ measured against the one before it, which is the page's previous ask, ten second
 recent, it reads twice, a second apart, so the first answer is already a measure and not a lifetime's average. Nothing
 is read while no page asks.
 
-The kernel's own threads, process 2 and its children, are left out: they are hundreds on a busy machine, have no
-command line, and are nothing the operator can stop. A command line holds whatever its program was given, a token
-passed as an argument included; the page is behind the listener secret (TRUST_MODEL T8), and `ps` shows the same to
-anyone on the machine.
+The kernel's own threads, which its flags mark, are left out: they are hundreds on a busy machine, have no command
+line, and are nothing the operator can stop. Not process 2 and its children, as on a machine's own: in a container's
+process namespace, process 2 may be anything, the loop's parent among them.
+
+A command line holds whatever its program was given, a token passed as an argument included; the page is behind the
+listener secret (TRUST_MODEL T8), and `ps` shows the same to anyone on the machine.
 """
 
 from __future__ import annotations
@@ -44,8 +46,8 @@ STALE_SECONDS = 60.0
 #: Seconds within which another ask is answered with the last answer: two tabs open, or a page and its refetch, would
 #: otherwise measure over a moment too short to mean anything.
 FRESH_SECONDS = 1.0
-#: The kernel's thread that starts its others.
-_KTHREADD = 2
+#: The flag `/proc/<pid>/stat` sets on a kernel thread (`PF_KTHREAD`).
+_KERNEL_THREAD = 0x00200000
 #: `/proc/<pid>/stat`'s state letters, as the page names them; any other is `other`.
 _STATES: Mapping[str, ProcessState] = {
     "R": "running",
@@ -109,7 +111,7 @@ class ProcessWatch:
             if not entry.name.isdigit():
                 continue
             seen = _seen(entry, page)
-            if seen is not None and _KTHREADD not in {seen.pid, seen.parent}:
+            if seen is not None and not seen.kernel:
                 found[seen.pid, seen.start] = seen
         return _Read(at=self._clock(), found=found)
 
@@ -163,6 +165,8 @@ class _Seen:
     command: str
     uid: int
     state: ProcessState
+    #: Whether it is one of the kernel's own threads.
+    kernel: bool
     #: Its processor time so far, its own and the kernel's for it, in clock ticks.
     ticks: int
     rss: int
@@ -189,7 +193,8 @@ def _seen(directory: Path, page: int) -> _Seen | None:
     except OSError:
         return None
     # The second field, the name, is in parentheses and may hold spaces and parentheses itself, so it runs to the last
-    # closing one, and the fields after it are counted from there: the state is the third field, the first after it.
+    # closing one, and the fields after it are counted from there: the state is the third field, the first after it,
+    # and the flags the ninth.
     head, _, tail = stat.rpartition(")")
     fields = tail.split()
     try:
@@ -200,6 +205,7 @@ def _seen(directory: Path, page: int) -> _Seen | None:
             command=_command(argv),
             uid=uid,
             state=_STATES.get(fields[0], "other"),
+            kernel=bool(int(fields[6]) & _KERNEL_THREAD),
             ticks=int(fields[11]) + int(fields[12]),
             rss=int(fields[21]) * page,
             threads=int(fields[17]),

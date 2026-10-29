@@ -45,12 +45,15 @@ def write_process(
     threads: int = 1,
     start: int = 500,
     argv: bytes = b"worker\0",
+    flags: int = 0,
 ) -> None:
     """Write `/proc/<pid>`'s `stat` and `cmdline` as Linux does, its processor time all its own."""
     directory = proc / str(pid)
     directory.mkdir(parents=True, exist_ok=True)
-    # Fields 3 to 24: state, parent, then ten not read, utime and stime, eight more, the start, vsize, and rss.
-    fields = [state, str(parent), *["0"] * 9, str(ticks), "0", *["0"] * 4, str(threads), "0", str(start), "0"]
+    # Fields 3 to 24: state, parent, four not read, the flags, four more, utime and stime, eight more, the start, vsize,
+    # and rss.
+    fields = [state, str(parent), *["0"] * 4, str(flags), *["0"] * 4, str(ticks), "0", *["0"] * 4, str(threads), "0"]
+    fields += [str(start), "0"]
     (directory / "stat").write_text(f"{pid} ({name}) {' '.join(fields)} {rss_pages} 0 0\n")
     (directory / "cmdline").write_bytes(argv)
 
@@ -151,9 +154,10 @@ def test_a_process_that_took_an_ended_ones_pid_counts_its_own_time_alone(tmp_pat
 def test_the_kernels_threads_and_what_cannot_be_read_are_left_out(tmp_path: Path) -> None:
     proc = fake_proc(tmp_path / "proc")
     clock = FakeClock()
+    kernel = 0x00208040
     write_process(proc, 1, parent=0, name="init")
-    write_process(proc, 2, parent=0, name="kthreadd", argv=b"")
-    write_process(proc, 3, parent=2, name="kworker/0:0", state="I", argv=b"")
+    write_process(proc, 2, parent=0, name="kthreadd", argv=b"", flags=kernel)
+    write_process(proc, 3, parent=2, name="kworker/0:0", state="I", argv=b"", flags=kernel)
     (proc / "4").mkdir()
     (proc / "self").mkdir()
     watch = processes.ProcessWatch(proc, clock=clock, wait=clock.wait, now=lambda: NOW)
@@ -162,6 +166,21 @@ def test_the_kernels_threads_and_what_cannot_be_read_are_left_out(tmp_path: Path
 
     assert found.processes is not None
     assert [p.name for p in found.processes] == ["init"]
+
+
+def test_in_a_containers_namespace_process_2_and_its_children_are_kept(tmp_path: Path) -> None:
+    proc = fake_proc(tmp_path / "proc")
+    clock = FakeClock()
+    # An init such as tini is process 1, and the program it starts, the loop's shell here, process 2.
+    write_process(proc, 1, parent=0, name="tini")
+    write_process(proc, 2, parent=1, name="bash")
+    write_process(proc, 7, parent=2, name="canopy")
+    watch = processes.ProcessWatch(proc, clock=clock, wait=clock.wait, now=lambda: NOW)
+
+    found = watch.read()
+
+    assert found.processes is not None
+    assert [p.name for p in found.processes] == ["tini", "bash", "canopy"]
 
 
 def test_a_name_and_a_command_line_are_kept_to_one_line_of_text(tmp_path: Path) -> None:
