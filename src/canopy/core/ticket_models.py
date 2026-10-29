@@ -5,9 +5,9 @@ An agent's next run for a ticket runs on the ticket's override for that agent, e
 `canopy model` and the ticket's page both call, refuses inside one of canopy's ticks or runs, and refuses a model the
 runtime does not list, or a variant the model does not. It is a `ticket_overrides` row of kind `model`, spelled as
 config spells a model, `provider/model` or `provider/model@variant`, which may be set before canopy has seen the
-ticket and outlasts `canopy forget`, and covers every run of its agent for the ticket until it is cleared, so a canary
-ticket stays on one model. It takes the place of config's whole model, its variant too: one naming none runs at the
-model's default. The overseer and chores work on no one ticket, so only their default reaches them.
+ticket and outlasts `canopy forget`, and covers every run of its agent for the ticket until it is cleared, so the
+ticket stays on the model it names. It takes the place of config's whole model, its variant too: one naming none
+runs at the model's default. The overseer and chores work on no one ticket, so only their default reaches them.
 """
 
 from __future__ import annotations

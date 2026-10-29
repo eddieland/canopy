@@ -290,18 +290,19 @@ trivial, without the operator having to say what that means (2026-10-19), and le
 the operator first. When it is unsure, or fails, the work is planned as before. A waived change canopy's own reviewer
 judges high impact is called out to the operator; its size alone is not, since size says little about risk.
 
-### R23. Canary a model on one ticket
+### R23. Override a ticket's model
 
-Partial (M58, §13, Each agent's model): each agent's default model is set in `[runtime.models]`, a worker run records
-it and the models that served it, and a template's `--model` is refused, so a session runs the model asked for or
-fails before its first call. The per-ticket override, the canary itself, is still to come.
+Partial (M58, §13, Each agent's model): each agent's default model is set in `[runtime.models]`, and the operator alone
+overrides it per ticket (`canopy model`, or the ticket's page), checked against the runtime's list. A run records the
+model it asked for and the models that served it, spend splits by model, and a template's `--model` is refused, so a
+session runs the model asked for or fails before its first call. M58's live checks remain.
 Written down 2026-10-19, from issue #418. The operator wants to try a model change on one ticket before
 every worker takes it, by running that ticket's workers on another model and comparing the result. Today a worker's
 model is OpenCode's default unless the operator's command template names one, which then applies to every worker run,
 and the journal does not record which model a run used. canopy should choose the model itself: a default the operator
 sets, and an override per ticket that only the operator can set, never the overseer or a worker, checked against the
 models OpenCode has. Each run should record the model it was given, and the one that served it where OpenCode says so,
-and spend should split by model, so that the canary can be compared.
+and spend should split by model, so that a ticket's runs on its override can be compared.
 
 ### R24. Personas for planning, reviews, and implementation
 
