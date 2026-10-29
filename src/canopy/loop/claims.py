@@ -29,9 +29,9 @@ overseer passes one only to stop shorter, and the checks above hold it to the sa
 items, so a cursor on one may move no further than the items it already passed. A unit with no PR is unobserved, since
 no source reads checks or reviews but a PR's.
 
-A private ticket, which its start record authorizes (§22), is not checked; nor is a subject no source covers, such as
-every ticket without a `tracker` source: its claims stay claims, checked again by the worker (D051). Neither, nor a
-stale subject, gets a default cursor, since none can be read from a fresh observation. A cursor is a
+A private ticket, which its start record authorizes (§22), is not checked; nor is a subject no source can read, such as
+a unit whose PR is not a PR's URL: its claims stay claims, checked again by the worker (D051). Neither, nor a stale
+subject, gets a default cursor, since none can be read from a fresh observation. A cursor is a
 journal number (§35): it names an item by the number it took when first observed, or a review run by the one it took
 when it ended.
 """
@@ -88,11 +88,10 @@ def check(
         return
     reader = observations.Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, [record])
     units = {u["repo"]: u for u in reader.units(key)}
-    tracked = _check_subjects(ctx, reader, key, kind=kind, label=label, repos=repos, units=units, base=base)
+    _check_subjects(ctx, reader, key, kind=kind, label=label, repos=repos, units=units, base=base)
     one = repos[0] if len(set(repos)) == 1 else None
     pr = _fresh_pr(units.get(one)) if one is not None else None
-    if tracked:
-        _check_comment(reader, record, cursors.get("comment"))
+    _check_comment(reader, record, cursors.get("comment"))
     if pr is not None:
         _check_ci(reader, pr, cursors.get("ci"))
     unit = next((u for u in reader.units_of.get(key, []) if one is not None and u.repo == one), None)
@@ -102,7 +101,7 @@ def check(
         return
     if set(reasons) == {ResumeReason.CI} and pr is not None and unit is not None:
         _check_handled(ctx, reader, pr, unit)
-    if tracked and ResumeReason.REPLY in reasons:
+    if ResumeReason.REPLY in reasons:
         _check_reply(ctx, reader, record, cursors)
     gated = ResumeReason.REVIEW in reasons and ctx.config.policy.feedback_plan != "approve"
     if gated and pr is not None:
@@ -132,8 +131,7 @@ def check_cursors(
     if record is None:
         return
     reader = observations.Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, [record])
-    if reader.ticket(key)["observed"] != "unobserved":
-        _check_comment(reader, record, cursors.get("comment"))
+    _check_comment(reader, record, cursors.get("comment"))
     unit = next((u for u in reader.units_of.get(key, []) if repo is not None and u.repo == repo), None)
     seen = next((u for u in reader.units(key) if u["repo"] == repo), None)
     if unit is None or unit.pr_url is None or seen is None or seen["observed"] == "unobserved":
@@ -274,26 +272,21 @@ def _check_subjects(
     repos: Sequence[str],
     units: Mapping[str, observations.UnitObservation],
     base: str | None,
-) -> bool:
+) -> None:
     """Refuse a dispatch that rests on a stale subject, or names a label not observed on its ticket.
-
-    Returns:
-        Whether the ticket is observed fresh; False when no source covers it, so its label and replies stay claims.
 
     Raises:
         Refusal: `stale` or `unauthorized`.
     """
     ticket = reader.ticket(key)
-    if ticket["observed"] == "stale":
+    if ticket["observed"] != "fresh":
         raise Refusal("stale", _stale(key, ticket.get("why")))
-    tracked = ticket["observed"] == "fresh"
-    if tracked and label is not None:
+    if label is not None:
         _check_label(reader.observed[key], key, label)
     if kind == RunKind.RESUME:
         _check_units(reader, key, repos, units)
     if base is not None:
         _check_blocker(ctx, reader, key, base)
-    return tracked
 
 
 def _stale(what: str, why: str | None) -> str:

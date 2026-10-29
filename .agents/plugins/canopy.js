@@ -16,11 +16,11 @@
 // already run nor keeps the jobs after it from theirs.
 //
 // Its third is the nudge (DESIGN §41): in a worker's, planner's, or reviewer's run, after a number of tool calls with
-// no call of canopy's `status` tool, one line on the next tool call's result asks the agent to bring its card up to
-// date.
+// no call of canopy's `status` tool, one line on the next tool call's result asks the agent to post an update of its
+// progress.
 //
-// Its fourth is the answer (DESIGN §41): in a run that keeps a card, when the operator has answered the question its
-// card asks, one line on the next tool call's result tells the agent the letter and the option it names, once.
+// Its fourth is the answer (DESIGN §41): in a run that keeps its progress, when the operator has answered the question
+// it asks, one line on the next tool call's result tells the agent the letter and the option it names, once.
 //
 // Under OpenCode 2 it has one job more, its own: a session's first prompt waits until the tools of its MCP servers are
 // registered, which 2 does only after the server connects, so that the first model call is sent them (`mcpTools`).
@@ -57,9 +57,9 @@ const SHARE = 5;
 const MOST_SECONDS = 600;
 /** What every line of canopy's starts with, as the prompts name it. */
 const MARK = "[canopy]";
-/** A run that keeps a card, as CANOPY_RUN_ID names it: a worker's or a planner's id, or a review's, `review-7`. */
+/** A run that keeps progress, as CANOPY_RUN_ID names it: a worker's or a planner's id, or a review's, `review-7`. */
 const CARD_RUN = /^(?:review-)?[0-9]{1,18}$/;
-/** canopy's tool that updates the card, as the runtime names it. */
+/** canopy's tool that posts an update of the run's progress, as the runtime names it. */
 const STATUS_TOOL = "canopy_run_status";
 /** How many tool calls a session makes with no `status` call before the nudge asks for one. */
 const STALE_CALLS = 20;
@@ -395,10 +395,10 @@ function split() {
 }
 
 /**
- * The nudge's hooks: the one that asks for a card once a session has gone `STALE_CALLS` tool calls without one.
+ * The nudge's hooks: the one that asks for an update once a session has gone `STALE_CALLS` tool calls without one.
  *
- * A worker, a planner, or a reviewer keeps a card of where its work stands for the operator (DESIGN §41), through
- * canopy's `status` tool; one that forgets leaves the operator a card that says less each call. The nudge counts each
+ * A worker, a planner, or a reviewer keeps its progress, where its work stands, for the operator (DESIGN §41), through
+ * canopy's `status` tool; one that forgets leaves the operator progress that says less each call. The nudge counts each
  * session's tool calls since its last successful `status` call, or since it started, and at `STALE_CALLS` adds one line
  * to that call's result asking for an update, the way the clock adds its line, so the agent hears it between calls and
  * never mid-thought. It asks once per lapse: not again until the agent has called `status`. It keeps the count and
@@ -422,7 +422,7 @@ function nudge() {
          */
         "tool.execute.after": async (input, output) => {
             const session = input?.sessionID;
-            // A `status` call the server refused, which has no result, leaves the card as old as it was.
+            // A `status` call the server refused, which has no result, leaves the last update as old as it was.
             if (input?.tool === STATUS_TOOL && output !== null && output !== undefined) {
                 since.delete(session);
                 asked.delete(session);
@@ -445,21 +445,21 @@ function nudge() {
  */
 function stale(calls) {
     return (
-        `${MARK} ${calls} tool calls since your last card: call ${STATUS_TOOL} with where your work stands now, then` +
-        " go on."
+        `${MARK} ${calls} tool calls since your last update: call ${STATUS_TOOL} with where your work stands now,` +
+        " then go on."
     );
 }
 
 /**
- * The answer's hooks: the one that tells a tool call's result the operator's answer to the question the card asks.
+ * The answer's hooks: the one that tells a tool call's result the operator's answer to the question the run asks.
  *
- * A worker, a planner, or a reviewer may ask the operator a question on its card, with lettered options, and work
+ * A worker, a planner, or a reviewer may ask the operator a question in its progress, with lettered options, and work
  * around it meanwhile (DESIGN §41). canopy writes the operator's answer, a letter, to a file in the run's answers
  * directory, which CANOPY_ANSWERS names and a sandboxed run may read but not write. After each tool call, the job
  * reads that file and, for an answer this session has not been told, adds one line to the call's result, the way the
  * clock adds its line, so the agent hears it between calls. A later answer, to the same question or another, is told
  * in turn. It keeps what it last told each session, and nothing else; without the variable, or in a run that keeps no
- * card, it has no hook. A file it cannot read, or that is not an answer, tells nothing.
+ * progress, it has no hook. A file it cannot read, or that is not an answer, tells nothing.
  *
  * @returns {Hooks} The answer's hooks.
  */
@@ -527,7 +527,7 @@ function answerLine(text) {
         return null;
     }
     return (
-        `${MARK} The operator answers your question "${ask}": ${letter}, ${option}. Go on with it, and take the` +
-        " question off your card."
+        `${MARK} The operator answers your question "${ask}": ${letter}, ${option}. Go on with it, and drop the` +
+        " question from your next update."
     );
 }

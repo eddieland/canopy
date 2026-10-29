@@ -21,7 +21,7 @@ import { FindingCard, HELD, ReviewDiffPanels } from '@/components/review-diff'
 import type { Wanted } from '@/components/review-diff'
 import { ReviewDraftPanel, ReviewDraftState, ReviewPointCard } from '@/components/review-draft'
 import { RichText } from '@/components/rich-text'
-import { RunCardView } from '@/components/run-card'
+import { ProgressPanel } from '@/components/run-progress'
 import { ReviewLink, ReviewsCrumb } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip } from '@/components/status'
@@ -121,6 +121,13 @@ function Loaded({ id }: { id: number }) {
                 </PageHeader>
             )}
             <div className="stagger flex flex-col gap-6">
+                {data.card !== null && (
+                    <ProgressPanel
+                        card={data.card}
+                        running={data.review.ended_at === null}
+                        answers={{ kind: 'review', id: data.review.id }}
+                    />
+                )}
                 {draft === null ? (
                     <>
                         <ReviewPanel detail={data} />
@@ -255,15 +262,6 @@ function ReviewFields({ detail }: { detail: ReviewDetail }) {
             {detail.note !== null && (
                 <Field label="harness">
                     <span className="text-status-failed">{detail.note}</span>
-                </Field>
-            )}
-            {detail.card !== null && (
-                <Field label="card">
-                    <RunCardView
-                        card={detail.card}
-                        running={review.ended_at === null}
-                        answers={{ kind: 'review', id: review.id }}
-                    />
                 </Field>
             )}
             <Field label="verdict">

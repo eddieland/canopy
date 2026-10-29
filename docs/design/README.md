@@ -113,15 +113,18 @@ not go in the middle of the sequence.
   - [37. The harness decides what needs no judgment](HARNESS_DECIDES.md#37-the-harness-decides-what-needs-no-judgment)
 - [Artifacts](ARTIFACTS.md): pages workers publish, the comments people leave on them, and how those come back.
   - [38. Artifacts and Louvre](ARTIFACTS.md#38-artifacts-and-louvre)
-- [A tick without the overseer](WITHOUT_THE_OVERSEER.md): the tick that runs no overseer when nothing is left to
-  judge, and the loop that ticks when the connectors see a change.
+- [A tick without the overseer](WITHOUT_THE_OVERSEER.md): what is still open of the tick that runs no overseer when
+  nothing is left to judge.
   - [39. A tick without the overseer](WITHOUT_THE_OVERSEER.md#39-a-tick-without-the-overseer)
 - [The overseer per decision](OVERSEER_PER_DECISION.md): one overseer run for each subject left to judgment, and the
   runs it asks for, which the tick starts outside its process tree.
   - [40. The overseer per decision](OVERSEER_PER_DECISION.md#40-the-overseer-per-decision)
-- [Where a running agent stands](CARDS.md): the card a running worker, planner, or reviewer keeps of where its work
-  stands, for the operator.
-  - [41. Where a running agent stands](CARDS.md#41-where-a-running-agent-stands)
+- [Where a running agent stands](PROGRESS.md): the progress a running worker, planner, or reviewer keeps of where its
+  work stands, for the operator.
+  - [41. Where a running agent stands](PROGRESS.md#41-where-a-running-agent-stands)
+- [The operator's checklist](CHECKLIST.md): the operator's rules no linter checks, asked of a worker's diff before
+  it finishes, and of a PR by a second review when that is not enough.
+  - [42. The operator's checklist](CHECKLIST.md#42-the-operators-checklist)
 
 ## 1. Problem
 
@@ -160,7 +163,7 @@ cannot reach internal systems and require handing a vendor write access.
    treehouse owns worktrees and leases. The SQLite journal owns facts about the loop: what it saw, decided,
    dispatched, and what came back. What it saw is an observation, a dated copy of a world fact (§30), never the fact
    itself: an action that matters rests on one observed within `connect.max_age_minutes`, or no dispatch (§7), and a
-   subject no source observes is re-read live. Drift is then a stale cache, not a correctness bug.
+   stale one waits for the next whole read (§37). Drift is then a stale cache, not a correctness bug.
 2. **Policy in prompts, guards in code.** What to do about a ticket is decided
    by the overseer prompt. What the loop may never do (exceed capacity, run two
    workers on one ticket, merge, retry forever) is enforced by the harness.
@@ -215,8 +218,9 @@ skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands, such as the Slack sink
-                 (§20) and the sandbox wrapper (§24); canopy-http, the HTTP client those programs share (D130); and
-                 the review bench, a dev tool canopy neither ships nor runs
+                 (§20) and the sandbox wrapper (§24); canopy-http, the HTTP client those programs share (D130);
+                 canopy-mcp, the MCP protocol canopy's servers share (D124); and the review bench, a dev tool canopy
+                 neither ships nor runs
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 ```
 
@@ -238,12 +242,12 @@ Where later work goes:
 
 Roles:
 
-- **Harness**: schedules, locks, guards, journals, renders. Runs the overseer once per tick and workers on demand.
-- **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations, and through MCP
-  only about a subject they leave stale or unobserved (§30), decides one next action per ticket, and acts only through
-  `canopy dispatch`, `canopy decide`, `canopy queried`, `canopy attention`, `canopy chore run`, `canopy chore wait`
-  (§19), `canopy review run`, and `canopy review wait` (§21). Read-only everywhere else. What it owes every tick is
-  checked when it ends (§6 step 5).
+- **Harness**: schedules, locks, guards, journals, renders. Runs the overseer on a tick that leaves it something to
+  judge (§6), and workers on demand.
+- **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations alone (§30),
+  decides one next action per ticket, and acts only through `canopy dispatch`, `canopy decide`, `canopy attention`,
+  `canopy chore run`, `canopy chore wait` (§19), `canopy review run`, and `canopy review wait` (§21). Read-only
+  everywhere else. What it owes every tick is checked when it ends (§6 step 5).
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
   opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
   to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).

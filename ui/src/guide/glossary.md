@@ -176,6 +176,12 @@ A repository's set of worktrees, kept by treehouse, or by canopy itself when you
 `pools.backend = "canopy"`. A run leases a slot from it and hands it back when it stops working. See
 [Runs and worktrees](runs#worktrees).
 
+### Progress
+
+What a running worker, planner, or reviewer says of its own work while it runs: a summary, its steps or what's done
+and next, what it works around, and now and then a question for you. Each update replaces the last. See
+[Runs](runs#a-running-agents-progress).
+
 ### Reason
 
 Why a resume runs, named when it is dispatched: `ci` for failed checks, `review` for review feedback, `reply` for your
@@ -243,6 +249,8 @@ grants another.
 
 Someone in `trust.trusted_reviewers`, whose review may send a worker back to a PR on its own say-so. Anyone else's
 waits as `untrusted review` for your word, and that includes canopy's own reviewer until you list `canopy:review`.
+While the PR's checks are still running, their review waits for them, so one worker can fix the build and the comments
+together, but only `policy.feedback_ci_wait_minutes` (30 by default): a backed-up CI queue doesn't get to hold it.
 
 ### Verdict
 

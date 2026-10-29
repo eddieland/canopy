@@ -4,6 +4,25 @@ import type { ModelsServed, Run } from '@/api/types'
 export const FAILED_READ = 'its session could not be read, tried again later'
 
 /**
+ * The word for a run whose session canopy has not read yet, or could not, so it knows no model that served it: shown
+ * muted, why in its tip, never `none`, which would say it ran on nothing.
+ */
+export const UNREAD = 'unread'
+
+/**
+ * Whether a session naming `served` ran on the model canopy `asked` for, as `provider/model[@variant]`: the same id, or
+ * `asked` at a variant and `served` the model alone, since a session names a variant only when it is not the model's
+ * default, and a run whose variant the runtime no longer lists is refused before it starts.
+ */
+export function sameModel(asked: string, served: string): boolean {
+    if (served === asked) {
+        return true
+    }
+    const at = asked.lastIndexOf('@')
+    return at > asked.indexOf('/') && asked.slice(0, at) === served
+}
+
+/**
  * Why no model is named as having served a run, by how canopy's last read of its session went (DESIGN §13), why a
  * failed read failed after it in parentheses; null once a model is named.
  */

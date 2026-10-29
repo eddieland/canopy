@@ -34,9 +34,13 @@ A subject with no title says `untitled`, which for a chore is a hint its prompt 
 A worker run's model line names the model its session says served it, without the provider unless two models in the
 list share a name, so `claude-opus-4-1` rather than `anthropic/claude-opus-4-1`, and `+1` when it switched partway.
 Hover it for each one whole, with its cost. Until canopy reads the session it names the model canopy asked for,
-`asked claude-opus-4-1`, or says `model none`, with why on hover. A run that got another model than it asked for says
-both, in amber, as [its page](#a-runs-page) does. A ticket's Runs panel shows the same line, so a canary ticket reads
-straight down its runs: opus, opus, opus, and not a sonnet slipped in where you weren't looking.
+`asked claude-opus-4-1`, or says `model unread`, with why on hover; a run with no session to read, such as a feedback
+plan's, names no model at all. A run that got none of what it asked for says so, asked first,
+`asked claude-opus-4-1 ≠ claude-sonnet-4-5`, as [its page](#a-runs-page) does; one that got it and switched partway
+leads with it and sets the `+1` apart. Neither is amber: a run that went elsewhere waits on nothing, it just bears
+knowing. Asking for `openai/gpt-5@medium`, the default effort, and being served `openai/gpt-5` is no surprise either,
+since the session names a variant only when it isn't the default. A ticket's Runs panel shows the same line, so a
+canary ticket reads straight down its runs: opus, opus, opus, and not a sonnet slipped in where you weren't looking.
 
 A long summary shows its first four lines and **show N more lines** for the rest, so one worker with a lot to say
 doesn't push the other rows off the page. In a narrow window, such as half a monitor, the cost goes first and then
@@ -47,10 +51,12 @@ The chips filter by kind, `workers`, `reviews`, `chores`, or `tasks`, and by the
 `reviews` then `failed` is every PR whose latest review failed. A cost of `–` means the runtime reported none, which
 is not the same as free.
 
-A model on [the spend page](reports#the-spend-page) opens this page filtered to it, `?model=`: the worker runs it
-served, or, until their sessions are read, the ones that asked for it, each ticket's latest of those leading its row.
-Reviews and chores drop out, since this list doesn't name their models, and so do runs older than the recent ones the
-page keeps. **all** beside the model takes the filter off.
+The **every model** picker beside the filters lists every model the runs listed name, under a field that narrows them,
+as the repository pickers elsewhere do. Pick one, or click a model on [the spend page](reports#the-spend-page), and the
+page keeps the runs it served (`?model=`): worker runs, or, until their sessions are read, the ones that asked for it;
+reviews; a chore by its running or latest run; a task by its newest. Each subject's latest of those leads its row. Runs
+older than the recent ones the page keeps drop out, which is why a model Spend counts a dozen runs of can come up a few
+short here. **every model** takes the filter off.
 
 Under the page's description, one line says how full each limit is, counted the way canopy counts it before it starts
 anything: `workers 2 of 2` is `capacity.max_workers`, which reviews and task runs count toward (its hover says how
@@ -64,10 +70,11 @@ line usually explains why. A limit of 0 reads `off`.
 The line under the title says how the run ended, its kind, and its ticket, whose key opens the ticket's page. Each
 of those is said there and nowhere else on the page, so the panels under it can get on with the rest.
 
-The **Run** panel leads with its summary, the run's own account of what it did, then, for a `feedback-plan` run,
-**wrote**: the plan it wrote, `feedback-plan:7`, which opens the PR's page at the plan, with the PR and where the
-plan stands now. Then its **card**, where the agent says its work stands in its own words, and its **last call** while
-it runs (both [below](#a-running-agents-card)), then its PRs, then **when**: when it started and ended and
+While its agent has written any, a **Progress** panel leads the page: where the run's work stands, in the agent's own
+words ([below](#a-running-agents-progress)). The **Run** panel under it leads with its summary, the run's own account of
+what it did, then, for a `feedback-plan` run, **wrote**: the plan it wrote, `feedback-plan:7`, which opens the PR's page
+at the plan, with the PR and where the plan stands now. Then its **last call** while it runs, then its PRs, then
+**when**: when it started and ended and
 how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m`
 while it runs. **spent** gives its cost, the tokens it used, and its peak context, the most one model call was sent.
 **persona** is the voice it wrote in, with the start of its text's digest: two runs in one persona with different
@@ -77,9 +84,9 @@ that switched models partway lists each with its share of the cost. The runtime 
 canopy reads the session as the run ends, and any it missed while the loop waits between ticks; until then, or once the
 runtime has forgotten the session, the field says why it names none. When canopy chose the run's model, from
 `[runtime.models]` or the ticket's override, the field says `asked` and that model instead, from the moment it starts,
-with why none served yet on hover. Once the session is read, a model that served other than the one asked for reads
-`served X, asked Y`, in the color of a run waiting on you, since it is worth a look. Last come the places: the branch,
-its worktrees, and the path of its log, which only you can read.
+with why none served yet on hover. Once the session is read, a run the model asked for served none of reads
+`asked Y ≠ served X`, and one it served alongside another marks the other with a `≠`, its tip saying it wasn't asked
+for. Last come the places: the branch, its worktrees, and the path of its log, which only you can read.
 
 A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
 last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the
@@ -199,8 +206,9 @@ A slot is:
 - `broken`: the pool can't vouch for it; hover over it, or Tab to it, for the pool's own word, such as `damaged` or
   `unverified`.
 
-The chips filter by state. A slot held by no running run is marked as such: the next tick returns it. A pool larger
-than its declared size says so, and `canopy workspace sync` removes the idle slots over it.
+The chips filter by state. A slot held by no running run is marked as such: the next tick returns it, or the
+`canopy workspace release` command its note gives you returns it now. A pool larger than its declared size says so,
+and `canopy workspace sync` removes the idle slots over it. In a terminal, `canopy workspace slots` lists the same.
 
 A dirty slot is the one to look at. The pool never reuses it and counts it as busy, so it quietly shrinks the pool until
 someone deals with it, and once the rest are busy the next lease is refused. Nothing in canopy cleans it for you,
@@ -217,27 +225,33 @@ This page only reads, and it's the one page not kept current by the stream: it r
 while you're looking, and **Read again** rereads them now. Each read checks every slot of every pool, and under
 treehouse takes each pool's lock for a moment, which is why it doesn't do so constantly.
 
-## A running agent's card
+## A running agent's progress
 
-A worker, a planner, or a reviewer keeps a card while it runs: a summary for someone who skipped the transcript, what
-it's doing now, what it finished with the proof of each (`tests pass: 42/42`, `pushed abc123`, or the honest `not
-pushed`), what's left, and anything in its way it's working around. A long job adds its steps, each `to do`,
-`working`, `blocked`, `done`, or `skipped`, with the share done and the stage under way; a worker with an approved plan
-takes them from the plan, so you watch the plan you approved being done, or not. A step working longer than a fifth of
-the run's time limit reads `stuck`. Each update replaces the whole card. It's the
-agent's own account, so read it as you'd read a colleague's standup: useful, and checked against the diff.
+A worker, a planner, or a reviewer posts updates on its progress while it runs: a summary for someone who skipped the
+transcript, what it's doing now, what it finished with the proof of each (`tests pass: 42/42`, `pushed abc123`, or the
+honest `not pushed`), what's left, and anything in its way it's working around. A long job adds its steps, each `to
+do`, `working`, `blocked`, `done`, or `skipped`, and a meter fills in a segment per step, with how many are done and the
+stage under way; a worker with an approved plan takes them from the plan, so you watch the plan you approved being
+done, or not. A step working longer than a fifth of the run's time limit reads `stuck`. Each update replaces the last.
+It's the agent's own account, so read it as you'd read a colleague's standup: useful, and checked against the diff.
 
-The card says how old it is in time and in tool calls. One that has gone 10 minutes, or 20 tool calls, without an
-update turns amber and says `stale`, rather than going quiet, and canopy nudges the agent for a new one. A run that
-ended keeps its last card, so you can see where it thought it was when it stopped.
+It reads as one checklist: the steps, the working one pulsing with what the agent says it's doing now under it, or,
+for a job without steps, what's done, what it's doing, and what's next, in that order. With steps, what it wrote is
+done and next folds away under **Show done and next**, proofs and all.
 
-A card may ask you a question the agent can work around while you decide: the question, two to five options lettered
-from A, and the one it recommends and works toward meanwhile. It reads `asks you` in amber until you answer. Press
-`answer` beside an option, or run `canopy reply run:ID LETTER` (`review:ID` for a review), and the agent hears your
-letter on its next tool call; press another to change your mind, as long as it runs. An answer is a letter, never
-words: you choose among its options, which is also all a line forged to look like canopy's could do. A question it
-can't work around still ends the run as `blocked`, as before.
+Progress says when it was last updated, in time and in tool calls. One that has gone 10 minutes, or 20 tool calls,
+without an update says `stale` beside a clock, rather than going quiet, and canopy nudges the agent for a new one.
+Stale isn't amber: that's for what waits on you, and an agent that's slow to write is, so far, only slow. A run that
+ended keeps its last progress, so you can see where it thought it was when it stopped.
 
-A run's page shows the whole card; the runs list shows what it's doing now, with the card's age and `asks you` while a
-question waits; a ticket's page shows the card under `working now`; and a review's page shows its reviewer's. Nothing on
-a card reaches another agent, and nothing on it changes what canopy does: it's for you.
+The agent may ask you a question it can work around while you decide: the question, two to five options lettered from
+A, and the one it recommends and works toward meanwhile. It sits in an amber box reading `asks you` until you answer.
+Click an option, or run `canopy reply run:ID LETTER` (`review:ID` for a review), and the agent hears your letter on its
+next tool call; click another to change your mind, as long as it runs. An answer is a letter, never words: you choose
+among its options, which is also all a line forged to look like canopy's could do. A question it can't work around
+still ends the run as `blocked`, as before.
+
+A run's page and a review's page lead with the whole of it; the runs list shows what it's doing now, `asks you` while
+a question waits, and when it was last updated, after a small meter when it has steps; a ticket's page shows it as a
+bubble under `working now`; and the rail puts the meter under a working ticket whose progress has steps. Nothing in it
+reaches another agent, and nothing in it changes what canopy does: it's for you.

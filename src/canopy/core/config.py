@@ -552,15 +552,6 @@ class Tracker(Section):
     # must not.
     private: Annotated[StrictBool, Scope.PRIVATE] = False
 
-    def server(self) -> str | None:
-        """The tracker's MCP server, as config names it or else the provider's default, even with no read tools known.
-
-        Returns:
-            The server's name, or None when neither names one.
-        """
-        default = DEFAULT_TRACKER_TOOLS.get(self.provider)
-        return self.mcp_server or (default.server if default is not None else None)
-
     def tools(self) -> McpTools | None:
         """The server and tools a private worker gets, or None if neither config nor a default names any.
 
@@ -613,6 +604,10 @@ class Policy(Section):
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 6
     # How long a `resume` whose only reason is `ci` waits after the unit's last run that worked on CI ended.
     ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
+    #: How long a trusted reviewer's new feedback waits on a PR's pending checks, from when a source first observed it,
+    #: before the unit is no longer `ci_running` and the feedback is addressed with them still pending (DESIGN §7). A
+    #: queue of builds otherwise holds it as long as the queue lasts; at 0 feedback never waits on them.
+    feedback_ci_wait_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
     #: The most follow-up tickets one run's result has recorded, the first in its order (DESIGN §18). At 0 workers are
     #: told to file none, and none is recorded.
     max_follow_ups: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 5
@@ -1411,26 +1406,6 @@ class Connect(Section):
         """
         found = self._of("vcs")
         return found or Source(kind="vcs", cmd=GITHUB_READER, post_cmd=GITHUB_POSTER)
-
-    def observes_tickets(self) -> bool:
-        """Whether a `tracker` source reads tickets: without one, a ticket's comments have no journal numbers (§35).
-
-        Returns:
-            True if one does.
-        """
-        return any(s.kind == "tracker" for s in self.named().values())
-
-    def observes_all(self) -> bool:
-        """Whether a `tracker` and a `vcs` source both read, so the overseer reads neither world itself (DESIGN §39).
-
-        A `vcs` source always reads, canopy's own when none is configured (`named`), so both do where a `tracker`
-        source does.
-
-        Returns:
-            True if both do.
-        """
-        kinds = {s.kind for s in self.named().values()}
-        return {"tracker", "vcs"} <= kinds
 
     def tracker(self) -> Source:
         """The `tracker` source, which config requires (`_one_per_kind`); canopy configures none of its own.

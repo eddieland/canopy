@@ -6,7 +6,7 @@
 # The body is rendered: canopy puts the overseer's prompt at its marked line (DESIGN §6, §13).
 # Its temperature is rendered at the marked line from `runtime.overseer_temperature`, unless that is -1: some models,
 # such as OpenAI's reasoning models, refuse a request that sets one.
-description: canopy overseer. Reads tracker and GitHub state, records decisions, dispatches workers through canopy's tools. Read-only otherwise.
+description: canopy overseer. Reads the state block, records decisions, dispatches workers through canopy's tools. Read-only otherwise.
 mode: primary
 # canopy: model
 # canopy: temperature
@@ -42,51 +42,20 @@ permission:
     # The artifact store's skill is for the agents that publish to it (DESIGN §38).
     "canopy-artifacts": deny
     # canopy: skill rule
-  # The overseer reads neither the tracker nor GitHub: the `tracker` source config requires and the `vcs` source read
-  # both for it (DESIGN §39, TRUST_MODEL T6). At the marked line canopy renders the GitHub reads kept below denied by
-  # pattern, and the tracker's server whole where it knows it. The denials below come after.
-  # canopy: tracker reads
-  # GitHub's MCP tools are permissioned by name, `<server>_<tool>`, and the server's name is the operator's, so each
-  # tool is denied by its own: OpenCode sends no tool a rule denies whole, which cuts each tick's request. Kept are the
-  # reads the prompt makes, PRs (with their checks, reviews, comments, and merge state) and branches; issues, when they
-  # are the tickets; and the signed-in user, too small to matter. Every write is denied (TRUST_MODEL T6).
-  "*merge_pull_request*": deny
-  "*create_pull_request*": deny
-  "*update_pull_request*": deny
-  "*pull_request_review_write*": deny
-  "*add_comment_to_pending_review*": deny
-  "*add_reply_to_pull_request_comment*": deny
-  "*add_issue_comment*": deny
-  "*update_issue_comment*": deny
-  "*issue_write*": deny
-  "*create_branch*": deny
-  "*create_or_update_file*": deny
-  "*push_files*": deny
-  "*delete_file*": deny
-  "*create_repository*": deny
-  "*fork_repository*": deny
-  "*copilot*": deny
-  # Reads the prompt has no use for: commits, code and files, what creating an issue takes, and the tools below that
-  # no canopy prompt asks for.
-  "*get_commit*": deny
-  "*list_commits*": deny
-  "*search_commits*": deny
-  "*search_code*": deny
-  "*get_file_contents*": deny
-  "*get_label*": deny
-  "*list_issue_types*": deny
-  "*list_issue_fields*": deny
-  "*get_teams*": deny
-  "*get_team_members*": deny
-  "*search_users*": deny
-  "*ui_get*": deny
-  "*list_releases*": deny
-  "*get_latest_release*": deny
-  "*get_release_by_tag*": deny
-  "*list_tags*": deny
-  "*get_tag*": deny
-  "*search_repositories*": deny
-  "*list_repository_collaborators*": deny
+  # The overseer reaches no MCP server but canopy's (DESIGN §39, TRUST_MODEL T6), whatever servers the operator's
+  # runtime config grants: the `tracker` source config requires and the `vcs` source read the tracker and GitHub for
+  # it. Read from OpenCode 1.19.3's source: an MCP tool's name, and the permission it asks for, is `<server>_<tool>`,
+  # joined by one `_` (`McpCatalog.toolName`, src/mcp/catalog.ts; src/session/tools.ts), and a tool whose last matching
+  # rule denies `*` is not sent (`Permission.disabled`, src/permission/index.ts). No built-in tool's permission the
+  # overseer uses holds a `_`: `disabled` checks `apply_patch` as `edit` and the MCP resource tools as `read`. So `*_*`
+  # denies every server's tools, and catches besides only `external_directory`, denied above, `doom_loop`, which
+  # `opencode run` rejects as an `ask`, and the experimental `plan_exit`, which the overseer has no use for. canopy's
+  # own tools are allowed after it, by name.
+  "*_*": deny
+  # The MCP resource tools read any server's resources and ask `read` for `mcp:<server>:<uri>`
+  # (src/session/tools.ts): denied, leaving `read` of a file as it was. canopy's server has no resources.
+  read:
+    "mcp:*": deny
   # The artifact store's MCP server, `artifacts.mcp_server`, is for the agents `artifacts.publish_roles` names
   # (DESIGN §38): canopy renders it denied whole at the marked line.
   # canopy: artifact tools
@@ -97,7 +66,6 @@ permission:
   "canopy_*": deny
   "canopy_dispatch": allow
   "canopy_decide": allow
-  "canopy_queried": allow
   "canopy_attention": allow
   "canopy_ticket-set": allow
   "canopy_review-run": allow

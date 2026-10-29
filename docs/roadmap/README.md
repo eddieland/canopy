@@ -102,6 +102,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M63. Attachments on tickets and tasks](M63-attachments.md): in progress.
 - [M64. Slack replies](M64-slack-replies.md): in progress.
 - [M65. Running agents say where they stand](M65-running-agents-say-where-they-stand.md): in progress.
+- [M66. The checklist, asked before the push](M66-the-checklist.md): not started.
 
 ## Deferred, with the trigger that would unblock each
 

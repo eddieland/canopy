@@ -68,6 +68,11 @@ UNOBSERVED = (
     f"unobserved: {WORKER_PR} is not a PR's URL, so it is not observed; no source reads it, so it waits until the "
     "operator forgets the ticket's work"
 )
+#: What the harness's `unobserved_pr` item says of KEY's unit in `repo` at WORKER_PR.
+UNOBSERVED_ITEM = (
+    f"{KEY} in repo names {WORKER_PR} as its PR, which is not a PR's URL, so no source reads it and the ticket waits; "
+    f"`canopy forget {KEY}` drops its work, and its next implement starts over"
+)
 #: The `trust` keys of the private file that hold a worker's drafts for the operator to approve:
 #: `scenario.configures("private", trust=APPROVE)`.
 APPROVE = {"review_replies": "approve"}
@@ -702,22 +707,16 @@ def overseer_does(
     *commands: list[str],
     tools: Sequence[Called] = (),
     result: str = TICK_DONE,
-    queried: str | None = None,
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
     """Until the block ends, the fake overseer makes the calls `tools` names, runs `commands`, and prints `result`.
 
     `result` by default ends its tick. A ticket they name that the journal does not know yet, the tests' tracker holds
     and reads first (`holds_listed`), so the overseer is listed it.
-
-    `queried`, if given, is what it records when the tracker query is due, with the `canopy_queried` tool when it calls
-    any; see FAKE_AGENT_QUERIED in the fake.
     """
     holds_listed([*commands, *tools])
     settings = {"COMMANDS": json.dumps(commands), "RESULT": result}
     settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
-    if queried is not None:
-        settings["QUERIED"] = queried
     with scripted("OVERSEER", settings, behavior):
         yield
 

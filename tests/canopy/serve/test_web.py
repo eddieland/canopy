@@ -441,10 +441,10 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         return c.post(f"/api/tickets/{KEY}/models", json=body, headers=headers)
 
     # The Model panel's choices, read from the runtime when it opens, in the workspace root, each model's variants
-    # with them.
+    # with them, in the runtime's order.
     assert c.get("/api/models").json() == {
         "models": ["acme/fake-model-1", "acme/fake-model-2"],
-        "variants": {"acme/fake-model-1": ["high", "low"]},
+        "variants": {"acme/fake-model-1": ["low", "high"]},
         "error": None,
     }
     # The CLI's guards hold, and a ticket canopy has not seen may have one.

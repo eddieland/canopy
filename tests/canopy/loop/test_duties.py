@@ -1,4 +1,4 @@
-"""The overseer's duties, checked when a tick ends (DESIGN §6 step 5), and `canopy queried`, which records the query."""
+"""The overseer's duties, checked when a tick ends (DESIGN §6 step 5), and the query the harness records for it."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention, duties
@@ -16,8 +15,6 @@ from tests.conftest import TRACKER_SOURCE, CanopyEnv
 
 #: A `tracker` source the fake connector plays, so the query is read by a source (DESIGN §30).
 TRACKER = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}}}
-#: How a tick that owed the query and did not record it ends.
-UNQUERIED = "overseer left duties undone: the tracker query was due and no `canopy queried` recorded it"
 
 
 @pytest.fixture
@@ -39,7 +36,7 @@ def observed(key: str) -> dict[str, object]:
 
 def test_a_tick_that_does_every_duty_closes_ok(scenario: Scenario) -> None:
     scenario.seen("PROJ-1")
-    ticked = scenario.tick(*waits("PROJ-1", "PROJ-2"), queried=["PROJ-1", "PROJ-2"])
+    ticked = scenario.tick(*waits("PROJ-1", "PROJ-2"))
     assert ticked.tick.status == "ok"
 
 
@@ -49,15 +46,15 @@ def test_a_query_not_due_needs_no_record(scenario: Scenario) -> None:
     assert [(t.tick.query_due, t.tick.status) for t in ticks] == [(True, "ok"), (False, "ok")]
 
 
-def test_a_query_a_source_read_is_recorded_by_the_harness_and_owes_no_canopy_queried(
+def test_a_query_a_source_read_is_recorded_by_the_harness(
     scenario: Scenario,
     tracker: Path,
 ) -> None:
     reads(tracker, query=["PROJ-9", "PROJ-2", "PROJ-9"], lines=[observed("PROJ-2")])
     scenario.seen("PROJ-2")
-    ticked = scenario.tick(*waits("PROJ-2"), queried=None)
+    ticked = scenario.tick(*waits("PROJ-2"))
     assert ticked.tick.status == "ok"
-    # Recorded before the overseer ran, as `canopy queried` would, each ticket touched into the journal.
+    # Recorded before the overseer ran, each ticket touched into the journal.
     assert [(d.action, d.rationale) for d in ticked.decisions if d.action == "queried"] == [
         ("queried", "the query returned these open tickets: PROJ-9 PROJ-2"),
     ]
@@ -71,7 +68,7 @@ def test_a_query_a_source_read_is_recorded_by_the_harness_and_owes_no_canopy_que
 def test_each_ticket_a_source_read_query_returned_is_owed_a_decision(scenario: Scenario, tracker: Path) -> None:
     reads(tracker, query=["PROJ-9"], lines=[observed("PROJ-9")])
     scenario.seen("PROJ-9")
-    failed = scenario.tick(queried=None, code=1)
+    failed = scenario.tick(code=1)
     assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-9"
 
 
@@ -87,48 +84,42 @@ def test_a_query_no_source_read_this_tick_is_not_run_and_stays_due(
     tracker: Path,
     run: dict[str, Any],
 ) -> None:
-    """The overseer reads no tracker where a source does (DESIGN §39): it owes no `canopy queried` for it to run."""
+    """The overseer reads no tracker (DESIGN §39): a query the source did not read is not run, and owes it nothing."""
     reads(tracker, **run)
-    ticked = scenario.tick(queried=None)
+    ticked = scenario.tick()
     assert (ticked.tick.status, ticked.tick.query_due) == ("ok", False)
     assert ticked.actions == ["attention:connector_failed"]
     # Not counted as run, so the next tick runs it, once a read is whole.
     scenario.configures(tracker={"query_every_minutes": 60})
     reads(tracker, query=["PROJ-9"])
-    ticked = scenario.tick(queried=None)
+    ticked = scenario.tick()
     assert ticked.tick.query_due is True
     assert "queried" in ticked.actions
 
 
 def test_a_query_read_longer_ago_than_its_age_is_not_run(scenario: Scenario, tracker: Path) -> None:
     reads(tracker, query=[])
-    scenario.tick(queried=None)
+    scenario.tick()
     scenario.time_passes(minutes=31)
     reads(tracker, end=None)
-    ticked = scenario.tick(queried=None)
+    ticked = scenario.tick()
     assert (ticked.tick.status, ticked.tick.query_due) == ("ok", False)
     assert "queried" not in ticked.actions
 
 
-def test_the_overseer_may_record_no_query_and_skip_no_tick_where_a_source_reads(
-    scenario: Scenario,
-    tracker: Path,
-) -> None:
-    """It reads no tracker, nor GitHub, which the `vcs` source reads beside it (DESIGN §39): no outage is its own."""
-    reads(tracker, query=[])
-    refused = scenario.overseer("queried", "PROJ-1", code=1)
-    assert "a `tracker` source reads the query" in refused.err
-    refused = scenario.overseer("decide", "skip", "--rationale", "tracker_unsupported: no labels", code=1)
-    assert "no tick is skipped 'tracker_unsupported'" in refused.err
-    refused = scenario.overseer("decide", "skip", "--rationale", "mcp_unavailable: github", code=1)
-    assert "no tick is skipped 'mcp_unavailable'" in refused.err
-    assert scenario.conn.execute("SELECT count(*) FROM decisions WHERE ticket_key IS NULL").fetchone()[0] == 0
+def test_the_overseer_records_no_query_and_skips_no_tick(scenario: Scenario) -> None:
+    """It reads no tracker nor GitHub, which the sources read (DESIGN §39): the query is canopy's, no outage its own."""
+    with scenario.ticking() as tick_id:
+        refused = scenario.overseer("decide", "skip", "--rationale", "mcp_unavailable: github", code=2)
+        assert "expected KEY ACTION for each of 1 --rationale; got 1 arguments" in refused.err
+        assert "No such command 'queried'" in scenario.overseer("queried", "PROJ-1", code=2).err
+    assert db.decisions_for_tick(scenario.conn, tick_id) == []
 
 
 def test_a_query_not_due_is_not_recorded_though_a_source_read_it(scenario: Scenario, tracker: Path) -> None:
     scenario.configures(tracker={"query_every_minutes": 60})
     reads(tracker, query=["PROJ-9"])
-    ticks = [scenario.tick(*waits("PROJ-9"), queried=None), scenario.tick(*waits("PROJ-9"), queried=None)]
+    ticks = [scenario.tick(*waits("PROJ-9")), scenario.tick(*waits("PROJ-9"))]
     assert [(t.tick.query_due, sorted(t.actions)) for t in ticks] == [(True, ["queried", "wait"]), (False, ["wait"])]
 
 
@@ -157,7 +148,11 @@ def test_a_ticket_the_query_found_is_owed_a_decision_and_kept_for_the_next_tick(
     assert [t["key"] for t in scenario.state()["tickets"]] == ["PROJ-9"]
 
 
-def test_stopped_and_recently_done_tickets_are_owed_nothing(scenario: Scenario, canopy_env: CanopyEnv) -> None:
+def test_stopped_and_recently_done_tickets_are_owed_nothing(
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    connector_state: Path,
+) -> None:
     conn = scenario.conn
     with in_tick(conn) as tick_id:
         db.record_decision(conn, tick_id, None, duties.QUERIED_ACTION, duties.queried_rationale(["PROJ-2"]))
@@ -166,8 +161,14 @@ def test_stopped_and_recently_done_tickets_are_owed_nothing(scenario: Scenario, 
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
     scenario.operator("start", "PROJ-1")
     scenario.operator("stop", "PROJ-1")
-    # The query still finds both open in the tracker, and the overseer names them as it found them.
-    assert scenario.tick(queried=["PROJ-1", "PROJ-2"]).tick.status == "ok"
+    # The query still finds both open in the tracker, and the harness records them as it found them.
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"query": ["PROJ-1", "PROJ-2"]}}))
+    ticked = scenario.tick()
+    assert ticked.tick.status == "ok"
+    assert duties.queried_keys(next(d.rationale for d in ticked.decisions if d.action == "queried")) == [
+        "PROJ-1",
+        "PROJ-2",
+    ]
 
 
 def test_a_done_ticket_the_last_query_left_out_is_owed_a_decision_once_found(
@@ -203,7 +204,6 @@ def test_decisions_before_the_overseer_ran_are_the_harnesss(canopy_env: CanopyEn
         owed = duties.owed(
             conn,
             tick_id,
-            query_due=False,
             tickets=db.open_tickets(conn),
             stopped=[],
             recently_done=[],
@@ -221,20 +221,9 @@ def test_a_long_list_of_tickets_left_out_is_counted(canopy_env: CanopyEnv) -> No
         owed = duties.owed(
             conn,
             tick_id,
-            query_due=False,
             tickets=db.open_tickets(conn),
             stopped=[],
             recently_done=[],
             chores=[],
         )
         assert duties.undone(conn, tick_id, owed) == [f"no decision for {', '.join(keys[:10])} and 2 more"]
-
-
-def test_queried_refuses_outside_a_tick_a_bad_key_and_a_result_too_long_for_one_call(scenario: Scenario) -> None:
-    conn = scenario.conn
-    assert main(["queried", "PROJ-1"]) == 1  # no tick named: not the overseer's
-    with scenario.ticking() as tick_id:
-        scenario.overseer("queried", "PROJ-1;rm", code=2)
-        scenario.overseer("queried", *(f"PROJ-{n}" for n in range(300)), code=2)
-    assert db.decisions_for_tick(conn, tick_id) == []
-    assert db.open_tickets(conn) == []

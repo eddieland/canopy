@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
 
+import canopy_mcp
 import jsonschema
 import pytest
 
@@ -52,7 +53,6 @@ REQUESTED = "https://github.com/acme/api/pull/8"
 TOOL_NAMES = [
     "dispatch",
     "decide",
-    "queried",
     "attention",
     "ticket-set",
     "review-run",
@@ -386,24 +386,6 @@ def test_each_tool_records_what_its_command_records(
 
 REFUSALS = [
     pytest.param(
-        # The sources read the tracker and GitHub for it (DESIGN §39): it has no outage to skip a tick over.
-        Verb(
-            "decide",
-            {"decisions": [{"action": "skip", "rationale": "mcp_unavailable: the tracker"}]},
-            ["decide", "skip", "--rationale", "mcp_unavailable: the tracker"],
-        ),
-        "no tick is skipped 'mcp_unavailable'",
-        1,
-        id="decide-tick-wide",
-    ),
-    pytest.param(
-        # The `tracker` source reads the query, which canopy records itself (DESIGN §39).
-        Verb("queried", {"keys": ["PROJ-2", "PROJ-3"]}, ["queried", "PROJ-2", "PROJ-3"]),
-        "queried refused: a `tracker` source reads the query",
-        1,
-        id="queried",
-    ),
-    pytest.param(
         Verb(
             "decide",
             {"decisions": [{"key": "PROJ-1", "action": "wait", "rationale": "r"}]},
@@ -413,32 +395,6 @@ REFUSALS = [
         "no tick is running (CANOPY_TICK_ID is not set); the overseer's verbs run only inside one",
         1,
         id="no-tick",
-    ),
-    pytest.param(
-        Verb("decide", {"decisions": [{"action": "wait", "rationale": "r"}]}, ["decide", "wait", "--rationale", "r"]),
-        "'wait' needs a ticket key; only a tick-wide 'skip' may omit it",
-        2,
-        id="decide-without-a-key",
-    ),
-    pytest.param(
-        Verb(
-            "decide",
-            {"decisions": [{"action": "skip", "rationale": "relabel"}]},
-            ["decide", "skip", "--rationale", "relabel"],
-        ),
-        "a skip about one ticket names its key",
-        2,
-        id="decide-a-tick-wide-skip-without-its-reason",
-    ),
-    pytest.param(
-        Verb(
-            "decide",
-            {"decisions": [{"key": "PROJ-1", "action": "skip", "rationale": "mcp_unavailable: down"}]},
-            ["decide", "PROJ-1", "skip", "--rationale", "mcp_unavailable: down"],
-        ),
-        "'mcp_unavailable' skips the whole tick, so it names no key: leave key out",
-        2,
-        id="decide-a-tick-wide-reason-under-a-key",
     ),
     pytest.param(
         Verb(
@@ -464,22 +420,6 @@ REFUSALS = [
         "decide each ticket once in a call: PROJ-1 decided twice",
         2,
         id="decide-a-ticket-twice",
-    ),
-    pytest.param(
-        Verb(
-            "queried",
-            {"keys": [f"PROJ-{n}" for n in range(1000, 1300)]},
-            ["queried", *(f"PROJ-{n}" for n in range(1000, 1300))],
-        ),
-        "300 keys do not fit in one call: name them in several",
-        2,
-        id="queried-too-many",
-    ),
-    pytest.param(
-        Verb("queried", {"keys": ["PROJ 1"]}, ["queried", "PROJ 1"]),
-        "invalid ticket key 'PROJ 1': must match",
-        2,
-        id="queried-a-bad-key",
     ),
     pytest.param(
         Verb(
@@ -652,7 +592,7 @@ def test_a_refusal_is_a_tool_error_and_the_server_goes_on(overseen: CanopyEnv) -
             {"method": "resources/list"},
             {"method": "ping"},
         )
-    assert served.said(1) == ("decisions.0: 'wait' needs a ticket key; only a tick-wide 'skip' may omit it", True)
+    assert served.said(1) == ("decisions.0.key: Field required", True)
     # An unknown field is refused, not dropped: named, with nothing recorded for the call.
     assert served.said(2) == ("decisions.0.colour: Extra inputs are not permitted", True)
     assert served.said(3) == ("recorded wait for PROJ-1", False)
@@ -665,7 +605,7 @@ def test_a_refusal_is_a_tool_error_and_the_server_goes_on(overseen: CanopyEnv) -
 
 
 def test_a_batch_of_decisions_is_refused_whole_for_its_form(overseen: CanopyEnv) -> None:
-    """A tick-wide skip among other decisions, or no decision at all, records nothing."""
+    """A decision without its ticket among others, or no decision at all, records nothing."""
     conn = overseen.journal()
     with in_tick(conn) as tick_id:
         served = mcp_session(
@@ -678,10 +618,7 @@ def test_a_batch_of_decisions_is_refused_whole_for_its_form(overseen: CanopyEnv)
             ),
             tool_call("decide", decisions=[]),
         )
-    assert served.said(1) == (
-        "a skip with no key skips the whole tick, so it is the only decision in its call",
-        True,
-    )
+    assert served.said(1) == ("decisions.1.key: Field required", True)
     assert served.said(2) == ("name at least one decision", True)
     assert db.decisions_for_tick(conn, tick_id) == []
 
@@ -739,6 +676,75 @@ def test_each_tools_input_is_its_schema_and_takes_no_other_field(overseen: Canop
     assert schemas["dispatch"]["required"] == ["key", "kind", "repos"]
     assert "default" not in schemas["dispatch"]["properties"]["repos"]
     assert schemas["review-run"]["required"] == ["pr", "sha", "repo"]
+
+
+@pytest.mark.parametrize(
+    ("tools_listed", "read_only"),
+    [
+        (mcp.TOOLS, False),
+        (mcp.CHORE_TOOLS, True),
+        (mcp.REPORT_TOOLS, True),
+        (mcp.STATUS_TOOLS, False),
+        (mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")}).tools, True),
+    ],
+    ids=["overseer", "chore", "reports", "status", "git"],
+)
+def test_each_tool_describes_every_field_and_says_whether_it_only_reads(
+    tools_listed: Sequence[mcp.Tool],
+    *,
+    read_only: bool,
+) -> None:
+    """The model reads a tool's description and its fields' alone, so none is left without one."""
+    for found in tools_listed:
+        listed = found.listed()
+        assert undescribed(listed["inputSchema"]) == [], found.name
+        hints = listed["annotations"]
+        assert isinstance(hints, dict)
+        assert (hints["readOnlyHint"], hints["openWorldHint"]) == (read_only, False), found.name
+        if not read_only:
+            # (destructive, idempotent): only these overwrite or end what is recorded, and only these may be repeated.
+            expected = {"ticket-set": (True, True), "review-end": (True, False), "status": (False, True)}
+            wrote = (hints["destructiveHint"], hints["idempotentHint"])
+            assert wrote == expected.get(found.name, (False, False)), found.name
+
+
+def undescribed(schema: object, at: str = "") -> list[str]:
+    """Find each field of `schema`, at any depth, that has no description.
+
+    Returns:
+        Each such field's path.
+    """
+    if isinstance(schema, list):
+        return [path for item in schema for path in undescribed(item, at)]
+    if not isinstance(schema, dict):
+        return []
+    found: list[str] = []
+    for key, value in schema.items():
+        if key == "properties" and isinstance(value, dict):
+            for name, field in value.items():
+                if not (isinstance(field, dict) and field.get("description")):
+                    found.append(f"{at}{name}")
+                found += undescribed(field, f"{at}{name}.")
+        else:
+            found += undescribed(value, at)
+    return found
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [mcp.OVERSEER, mcp.CHORE, mcp.REPORTS, mcp.STATUS, mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")})],
+    ids=["overseer", "chore", "reports", "status", "git"],
+)
+def test_each_mode_gives_its_instructions_at_initialize(mode: mcp.Mode) -> None:
+    """Each mode says how its tools fit together, and that what they return is data, not instructions."""
+    hello = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}}
+    # initialize opens no workspace, so the opener is never called.
+    response = mcp.answer(json.dumps(hello).encode(), lambda: mcp.opened(procs.SubprocessRunner(), Path.cwd()), mode)
+    assert response is not None
+    result = response["result"]
+    assert isinstance(result, dict)
+    assert result["instructions"] == mode.instructions
+    assert len(mode.instructions) <= 600, "instructions ride every request: keep them to how the tools fit together"
 
 
 def test_each_tool_lists_its_result_as_its_output_schema(overseen: CanopyEnv) -> None:
@@ -808,7 +814,7 @@ def test_the_server_answers_in_the_version_asked_or_its_newest_writes_no_stderr_
     assert served.responses[0]["result"]["protocolVersion"] == "2025-06-18"
     assert served.responses[0]["result"]["capabilities"] == {"tools": {"listChanged": False}}
     assert served.responses[1]["result"]["protocolVersion"] == "2024-11-05"
-    assert served.responses[2]["result"]["protocolVersion"] == mcp.PROTOCOL_VERSIONS[0]
+    assert served.responses[2]["result"]["protocolVersion"] == canopy_mcp.PROTOCOL_VERSIONS[0]
     assert served.responses[9]["error"]["code"] == -32600
     assert served.responses[None]["error"]["code"] in (-32700, -32600)
     assert (served.stderr, served.returncode) == ("", 0)

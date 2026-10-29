@@ -98,14 +98,18 @@ Rules:
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check it
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
 - **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
-  only the neutrals over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. Light has
-  off-white, a warm paper, sage, and the light tones of Solarized, Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the
-  near-colorless neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of
-  Solarized, Gruvbox, and Monokai. A light
-  canvas is never grey, which only looks dim. Every hue, the accent's included, is the same in all, so a component never
-  knows which it is on; where a scheme's own bases would drop a hue below 4.5:1, the bases move, never the hue. A scheme
-  whose bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts`
-  measures every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
+  the neutrals and the accent over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. A
+  scheme with an accent of its own wears it (Nord's, Solarized's, Monokai's, Rosé Pine Dawn's, and Gruvbox's purple);
+  the others take one that suits the canvas. Light has off-white, a warm paper, sage, and the light tones of Solarized,
+  Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the near-colorless neutrals the 2026-10-19 exploration drew for
+  Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox, and Monokai. A light canvas is never grey,
+  which only looks dim. Every other hue is the same in all, so a component never knows which it is on, and an accent is
+  read through its token, never assumed indigo; where a scheme's own bases would drop a hue below 4.5:1, the bases move,
+  never the hue. A palette's accent is darkened or lightened until it reads as text there, on its own tint, and under
+  `accent-foreground`, and sets `ring` with it. A scheme whose accent would pass for a status wears another of its
+  colors, as Gruvbox wears its purple, not its orange, and a green canvas never takes a green accent. A scheme whose
+  bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts` measures
+  every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
@@ -196,10 +200,11 @@ Rules:
 - Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
 - The header carries, after its name, the stream's state (and `mock`), then at its end the loop's pause
   (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
-  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page; before the first, `no
+  `status-failed` when it failed or was abandoned, one link to its page, with a hover card of its summary, when it
+  started and how long it took, its decisions, its overseer's cost, and what woke the loop; before the first, `no
   tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), the budget's readout while a
   budget is set, the host's readout last among the readouts, and the theme toggle, in three groups with a hairline
-  rule between each: the actions, the readouts, the theme.
+  rule between each: the actions, the readouts, the theme. Every readout that opens a page has a hover card of it.
 - The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
   nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
   it left a hole before `live` whenever the loop was up. The word sits in a pill with a dot, as `mock` does in a pill
@@ -242,7 +247,8 @@ Rules:
 - **The budget's readout** (`BudgetReadout`) is the local month's spend against the monthly budget, while one is set:
   a wallet's icon and the percent spent, `39%`, muted while on budget, in `status-blocked` once the month's pace heads
   over, and in `status-failed` once it is over, the spend page's word for it and its line (`Headed over: $15.76 of $40
-  (39%), on pace for $63.04.`) on hover and as its accessible name. Short of `2xl` the icon stands alone in its color:
+  (39%), on pace for $63.04.`) as its accessible name, and a hover card of the month: what it spent, its pace, how
+  much of it has gone by, and what the spend is made of. Short of `2xl` the icon stands alone in its color:
   the ticker needs the room, or a tick's readout widening as the tick starts steps it out. It opens the spend page.
   It comes with the spend on the stream, which sends it again when a cost or the budget changes.
 - **The host's readout** (`HostReadout`) is the machine the loop runs on, which serves the page: a server's icon and
@@ -269,7 +275,8 @@ Rules:
   note, and it leaves once a run fits.
 - **Agent memory** (docs/design §28) shows only while a tier is on, and always says each tier's mode in words, never by
   color alone, so recorded memory is never taken for memory in use. The header's readout, after the latest tick, is
-  `memory: recording` or `memory: in use` in muted readout type, each tier's mode on hover and to a screen reader,
+  `memory: recording` or `memory: in use` in muted readout type, each tier's mode to a screen reader and, with what
+  reads it and the proposals waiting, in a hover card,
   opening the memory page, which is in no section and so reached from there. A tier's **band** heads its panel there and
   on a ticket's page: a chip naming the tier and its mode (the running tone at `use`, plain while recording) and the
   server's sentence on what reads it. A ticket's page reads its notes far less than it decides, so its Memory panel,
@@ -481,8 +488,8 @@ Rules:
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
-- **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Pull
-  requests' violet to Tickets' sky. It is static.
+- **The aurora**: a 2px hairline along the header's foot, over its border, fading through the nav's colors in the
+  nav's order, Attention's rose first and Memory's last. It is static.
 
 ## Fun
 
@@ -621,7 +628,11 @@ side.
   persona (DESIGN §31), are adjacent rows where the first of them falls (`requestGroups`), with no hairline between
   them: each keeps its own verdict, draft chip, cost, and age, and after the first, the free column says only
   `as skeptic`, at any width, in place of the PR and commit it shares, its ticket's cell empty. Rows, not a nested
-  card: the request is one entry read down its personas.
+  card: the request is one entry read down its personas. A run's model, in its row as in its Run panel
+  (`ModelsField`), takes no status color: a run the model asked for served none of reads `asked Y ≠ X`, asked first,
+  the served model in `foreground`, and one it served beside another marks only the other; `sameModel` takes `X@v`
+  asked and `X` served alike. Until its session is read the row says `model unread` (`UNREAD`), muted, why in its tip,
+  and a run with no session names no model.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
@@ -750,10 +761,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   in a tip (the `canopy grant` command under its button). A `title` that explains rather than informs, a button's
   hint or what a column counts, stays a `title`.
 - **A link's page at a glance is a hover card** (`HoverCard` in `src/components/ui/hover-card.tsx`): more than a tip
-  holds, a few rows of what the page it opens shows, as the host's readout shows the machine. It opens on hover after
-  half a second, as a tip does, and on the keyboard's focus, and stays while the pointer moves onto it; a tap follows
-  the link. Like a tip it is on `surface` with a hairline, no shadow and no motion, its rows `text-xs` under
-  `panel-label`s. Nothing in it is found only there: it is a preview of the page, never a place to act.
+  holds, a few rows of what the page it opens shows, as each header readout shows its page (`ReadoutCard`). It opens
+  on hover after half a second, as a tip does, and on the keyboard's focus, and stays while the pointer moves onto
+  it; a tap follows the link. Like a tip it is on `surface` with a hairline, no shadow and no motion, its rows
+  `text-xs` under `panel-label`s. Nothing in it is found only there: it is a preview of the page, never a place to act.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
   PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The
@@ -920,7 +931,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   and what reported no cost while no run ended. The window is a segmented control (`ToggleGroup`) in the totals' panel
   header, kept in `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
   runs page's kind filter in each one's header keeps one kind's (`?model_kind=`, `?tool_kind=`), and offers only the
-  kinds the window has rows of. A window switch keeps both filters.
+  kinds the window has rows of. A window switch keeps both filters. By model's ids link the runs page's runs on the
+  model (`?model=`), with the kind shown (`?kind=`, `RUNS_KIND`: a plan run is a worker run there); one the runs page
+  lists no run of by model, the overseer's alone, is plain, why on hover. The runs page's model filter is always
+  offered, a picker of one (`ModelFilter`, below).
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
@@ -1057,19 +1071,24 @@ sliver beside four others; and its axis names short call numbers without measuri
   in `status-running`, what the call did muted (a shell call's command, else the runtime's title; cut to fit, whole on
   hover), and how long ago. A running run's row has it where an ended run's summary goes, `WorkingNow` after the
   kind, and the run's page as its `last call` field. It is agent output, rendered as text.
-- **A running agent's card** (`RunCardView`, `RunCardNow`, `src/components/run-card.tsx`, DESIGN §41): the agent's
-  own account of where its work stands. Whole, it is a block with a left rule: a muted line of how old it is, in time
-  and tool calls, then the summary in prose, and `now`, `done` (each with its proof in muted mono), `next`, and `stuck`
-  as label and text lines, then its steps, if any: the share done and the stage under way, then each step's status
-  word in its tone (`working` `status-running`, `done` `status-done`, `blocked`, and `stuck` past its `stuck_at`,
-  `status-blocked`) and its title, then its question, if any: `asks you` in `status-blocked` while it waits, `answered
-  B`, or `never answered`, its age, the question, and each option by its letter, `· recommended` and `· your answer`
-  muted and `status-done` after it, and, while the run runs, an xs outline `answer B` button on each other option. On
-  one line, for a row, it is `now`, what the agent does, the share done, `asks you` in `status-blocked` while a
-  question waits, and the card's age. While the run
-  runs, a card past `stale_at` or marked `stale` turns its rule and a `stale` word `status-blocked`, judged against the
-  page's clock so it turns without a new read; an ended run's last card never does. It shows on the run's page as its
-  `card` field, under a ticket's `WorkingNow`, in a running run's row, and on a review's page. Agent text, as text.
+- **A running agent's progress** (`RunProgress`, `ProgressPanel`, `RunProgressLine`, `ProgressMeter`,
+  `src/components/run-progress.tsx`, DESIGN §41): the agent's own account of where its work stands, which the operator
+  reads to know what a run is up to now, so it leads wherever it shows. Whole, it is the summary in `font-medium`, a
+  meter of its steps if it has any (a segment each, 2px apart: done `status-done`, working `status-running`, blocked
+  or stuck `muted-foreground`, to do the bare `border` track) with `N of M done · stage S`, its question, then its work
+  as one checklist, each entry led by a 12px mark: a `status-done` check, the pulsing running dot, an hourglass, a
+  dash for skipped, an empty ring to do. The steps are the list when it has any, `now` under the working one, and what
+  it wrote is done and next folds under a disclosure; without steps, done (each with its proof in muted mono), now,
+  and next are the list. What it works around follows, after an hourglass. Its question is a box on
+  `status-blocked/8` with a `status-blocked/40` border while it waits (muted on `surface-raised` once answered or
+  ended): `asks you`, the question, and each option a full-width row that answers with its letter on a click, its
+  letter in a small square, `recommended · working toward it` after the one the agent works toward. Amber means that
+  question alone: a stale update is a clock and `stale` in `foreground`, a fact about the record, never a request.
+  When it was last updated, in time and tool calls, is the head line, or the right of the panel's header. A run's and
+  a review's page lead with it as a `Progress` panel (`Last progress` once ended), a ticket's `WorkingNow` shows it as a
+  bubble on the worker's side, a running run's row as one line (a 4rem meter and `N/M` when it has steps, what it does
+  now, `asks you`, when), and the rail's working row of a worker run as its meter under the phase line, when it has
+  steps. Agent text, as text.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub
@@ -1457,7 +1476,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   chosen, picking one keeps the list open, `every repository` heads it and clears them, and what was chosen as it
   opened is listed first, so nothing moves under the pointer. It is kept in `?repo=` as names joined by commas
   (`src/lib/repo-filter.ts`), replacing the history entry as a filter field does, and a row shows when it is in any of
-  them. In a form (`RepoSelect`) it takes one, and picking it closes the list.
+  them. In a form (`RepoSelect`) it takes one, and picking it closes the list. The runs page's filter by model
+  (`ModelFilter`, `?model=`) is the same picker of one, `every model` heading it, each id whole, as a gateway can list
+  dozens; the button, list, and item are `src/components/picker.tsx`, which both build on.
 - **A config page** (`ConfigForm`, `/settings/limits`, which Settings links to from a one-line panel so Settings stays
   short): the keys in panels by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), two to a row on a
   wide window and Trust across the whole row, a key no panel names in an `Other` panel. A row is the key in words over
@@ -1500,10 +1521,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
   is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
   `last served` names the model that served the agent's latest read run when it is not the button's. A variant on the
-  button follows the model's id, muted. Each model's variants are items of their own under it, indented, each
-  `@variant` to the eye and named whole for a screen reader. A choice saved is confirmed in its row, a `saved` in
-  `status-done`, so nothing below moves, until the ticket's models change after it; one that sets aside config's
-  variant says so after it in muted text. The menu offers only what the server would take: the model chosen now, when
+  button follows the model's id, muted. Each model's variants are items of their own under it, indented, in the
+  runtime's order, each `@variant` to the eye and named whole for a screen reader; a model with variants is marked a
+  muted `(default)`. The field finds each item by its own id alone, and sets the pinned item aside while it holds
+  anything, so Enter takes the first id found; a variant whose model is hidden shows its model's id before it, muted.
+  `Clear the override` is a ghost button under the list, out of its scroll. A choice saved is confirmed in its row, a
+  `saved` in `status-done`, so nothing below moves, until the ticket's models change after it; one that sets aside
+  config's variant says so after it in muted text. The menu offers only what the server would take: the model chosen
+  now, when
   it is not one, is a disabled item with why in muted text after it (`no longer listed; its next run is refused`,
   `variant no longer listed; its next run is refused`), and a model or variant gone from the list marks its trigger in
   `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
@@ -1742,6 +1767,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   the ticket stands now in its state's color (waiting on you, its plan waiting, its run) or its phase muted, and for a
   ticket viewed, how long ago. What was viewed, a ticket's page or its plan's, is this browser's alone: localStorage
   (`src/lib/recent-tickets.ts`), never the journal, and a ticket the journal no longer holds leaves it.
+- **The review dialog** (`ReviewDialog`, `src/components/shell/review-dialog.tsx`) asks for a review from anywhere:
+  `R`, with no modifier, from anywhere but a text field or the plan editor (the rule `/` follows), or a GitHub PR's URL
+  pasted outside a field, which it fills in, opens it; on a PR's page, `R` fills in that PR's. It never opens over
+  another dialog. It is a `Dialog` placed as the jump palette is, titled `Review a PR` in a panel's header, holding the
+  reviews page's form (`ReviewRequestForm`), one component for both so they cannot drift. The focus starts in the URL
+  field, or in the notes once the URL is filled in. A request that goes through closes it and opens the PR's page; a
+  refusal keeps it open, its `Notice` naming the guard. What is written outlives closing it, kept in the tab's
+  `sessionStorage` (`src/lib/review-request-draft.ts`) until a request goes through or the operator signs out.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.
   Signed out by a 401 to an action, the card says under its heading, in `status-failed`, that the action was not sent
   (`unsentQuery`). A reply being written outlives the page that held it: the reply form keeps what is written, with its

@@ -48,12 +48,10 @@ CANOPY_VERSION = version("canopy")
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
 # review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a ticket's,
-# over journal message ids (DESIGN §22); the rest are journal numbers (§35), but for the comment cursor of a ticket no
-# tracker source observes, which has none to name: it is the tracker's comment id, in `UNTRACKED_COMMENT`.
+# over journal message ids (DESIGN §22); the rest are journal numbers (§35).
 TICKET_CURSORS: Mapping[str, LiteralString] = {"comment": "comment_cursor", "message": "last_message_id"}
 UNIT_CURSORS: Mapping[str, LiteralString] = {"review": "review_cursor", "ci": "ci_cursor"}
 CURSOR_COLUMNS: Mapping[str, LiteralString] = {**TICKET_CURSORS, **UNIT_CURSORS}
-UNTRACKED_COMMENT: LiteralString = "last_comment_id"
 #: The columns of a ticket whose change is activity, as `change_ticket` sets them. A column name in SQL comes from
 #: here, never from input.
 type TicketChange = Literal["phase", "title", "done", "plan_setting"]
@@ -534,12 +532,8 @@ def set_ticket(
     cursors: Mapping[str, str] | None = None,
     done: bool = False,
     title: str | None = None,
-    tracked: bool = True,
 ) -> None:
-    """Record a ticket's own phase, its cursors, its done flag, or its title in one transaction.
-
-    With `tracked` False, no tracker source observes the ticket, so its comment cursor is the tracker's id.
-    """
+    """Record a ticket's own phase, its cursors, its done flag, or its title in one transaction."""
     with transaction(conn):
         touch_ticket(conn, key, repo)
         if phase is not None:
@@ -547,19 +541,10 @@ def set_ticket(
         if title is not None:
             change_ticket(conn, key, "title", title)
         for name, value in (cursors or {}).items():
-            cursor = sql.name(ticket_cursor(name, tracked=tracked))
+            cursor = sql.name(TICKET_CURSORS[name])
             sql.execute(conn, sql.update("tickets").set_to("{} = ?", cursor, value).where("key = ?", key))
         if done:
             change_ticket(conn, key, "done", 1)
-
-
-def ticket_cursor(name: str, *, tracked: bool) -> LiteralString:
-    """The column a ticket's cursor `name` is in: the comment cursor's is the tracker's id where `tracked` is False.
-
-    Returns:
-        The column's name.
-    """
-    return UNTRACKED_COMMENT if name == "comment" and not tracked else TICKET_CURSORS[name]
 
 
 def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str) -> None:
