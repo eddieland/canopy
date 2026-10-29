@@ -70,9 +70,11 @@ Write the plan as markdown to `{{SLOT}}/{{PLAN_OUT}}` with your file writing too
 
 - `# Feedback plan: {{KEY}} <the ticket's title>`, the title on the heading's own line.
 - `## Summary`: in a few sentences, what this round of feedback asks for, and what the plan does about it.
-- `## Items`: a `### Item <id>: <proposal>` heading for each item you cover, in the order of your result line, saying
-  who wrote it and whether they are trusted, or which check failed, what conflicts, or which blocker merged, what it
-  asks, what you propose and why, and for a `change`, which files and tests it touches and the test that proves it.
+- `## Items`: a `### Item <id>: <proposal>, <what it does>` heading for each item you cover, such as `### Item 501:
+  change, rename load to fetch`, in the order of your result line: the worker's progress lists the items by these
+  headings, so keep each one short line. Under it, say who wrote it and whether they are trusted, or which check failed,
+  what conflicts, or which blocker merged, what it asks, what you propose and why, and for a `change`, which files and
+  tests it touches and the test that proves it.
 - `## Risks`: what the changes could break, and what to watch in review.
 
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not
@@ -146,15 +148,21 @@ quote it in the plan.
   state changes. The plan stays in canopy, and the replies it proposes are the operator's to send.
 - Write no file but `{{PLAN_OUT}}`, and run no commands but those the operator's standing instructions name.
 - Keep your progress current for the operator, who reads it instead of your transcript: call `canopy_run_status` once
-  you know what the ticket asks, after each step you finish, and when what you are doing changes. Each call is an
+  you know what the feedback asks, after each of your steps, and when what you are doing changes. Each call is an
   update, your whole progress, and replaces the last: `summary`, `now`, `done` (each step with its proof, such as `read
-  api/routes.py` or `plan written`), `next`, and `stuck` only for something in your way that you work around. It changes
-  nothing by itself. A decision you need from the operator but can work around meanwhile goes in it as `question`:
-  `ask`, two to five `options`, lettered A, B, and on, and the one you `recommend`; work toward that one meanwhile, and
-  keep the question in each update until the answer comes, a line starting `[canopy]` naming one of your options by its
-  letter. Then go on with that option and drop the question from your next update. A question you cannot work around
-  still goes in your result, as `blocked`. For a long job, add `steps`, every step in order with its status and stage.
-  After many tool calls with no update, a line starting `[canopy]` asks for one.
+  the feedback: 6 items` or `plan written: 3 changes`), `next`, and `stuck` only for something in your way that you work
+  around. It changes nothing by itself. Its `steps` are your own work, the same three from your first update on: `Read
+  the feedback`, `Read the code`, and `Write the plan`, one `working` at a time; reading more code while you write keeps
+  `Write the plan` working, with the item you are on as its `stage`. After many tool calls with no update, a line
+  starting `[canopy]` asks for one.
+- A question about one item is its `ask`, which the operator settles as they review the plan. Ask in your progress
+  only when the answer would reshape much of the plan, across items: `question`, with `ask`, two to five `options`,
+  lettered A, B, and on, and the one you `recommend`. Meanwhile, go on with what does not depend on it, and write the
+  plan along the option you recommend; keep the question in each update until the answer comes, a line starting
+  `[canopy]` naming one of your options by its letter. Then make the plan follow that option, say in `Summary` that it
+  was chosen in your progress, and drop the question from your next update. With no answer by the time the plan is
+  done, `Summary` names your recommendation as the choice, saying you asked. A question you cannot plan around is
+  `blocked`, below.
 - Time limit: {{TIMEOUT_MINUTES}} minutes, which is ample for this job: work at your usual pace, and never cut scope or
   skip a check to save time. Near the end, canopy adds the minutes left to your tool calls' results, in a line starting
   `[canopy]`; until then, the time is not yours to watch. It asks only that you wrap up: if the plan is not finished,
