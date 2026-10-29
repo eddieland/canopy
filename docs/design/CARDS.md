@@ -37,6 +37,14 @@ ask for a card, so it fails safe, as the clock's do (§33).
 The card is shown to the operator and never put in another agent's prompt, so neither the overseer's cache (§6) nor
 its trust in worker text changes (TRUST_MODEL T1). Nothing on a card extends a run or holds a slot (T3).
 
+### Where it shows
+
+`canopy status` shows each running run's `now` and how old its card is; `canopy show` of a run, and `canopy review
+show` of a review, the whole card, or the last one once it has ended. A card that has gone too many tool calls or
+minutes without an update is marked stale, as is a run that has kept none that long, rather than going quiet. No
+notification: the sinks hear of what a run ends with, as before (§20). canopy's report of a run that a chore's agent
+may read (§27) leaves the card out, so no card reaches an agent.
+
 ### Rejected
 
 - A model summarising the transcript every few minutes: a run per summary, and it can misread what the agent knows.
