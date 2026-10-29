@@ -77,6 +77,10 @@ and the harness both hold the card to it, and the harness reads only a `complete
 (both versions: `content`, `status` of `pending`, `in_progress`, `completed`, or `cancelled`, and 1's `priority`)
 would not serve for steps: it has no `blocked`, no stage, no proof of what is done, and no summary or `now`, and
 every worker already has it; so steps go on canopy's card in stage 2, and `todowrite` is left as it is.
+Stages 1 and 2 built 2026-10-29 and checked against the fakes: the card is DESIGN §41, the `status` tool served by
+`canopy _mcp --status`, the nudge a job of canopy's plugin, and the card shown in `canopy status`, `canopy show`, and
+the web UI; steps, their share done, their stage, and a stuck step on top. The live checks above and the week of
+`MEASUREMENTS.md` wait on the operator; stage 3 waits for its own go-ahead.
 
 [status]: https://github.com/fullstackhouse/paseo-status
 [progress]: https://github.com/stevecastaneda/paseo-plugins/tree/main/progress

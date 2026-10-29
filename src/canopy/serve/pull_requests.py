@@ -72,7 +72,10 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
     return PullRequestDetail(
         pull_request=found,
         review_limit=limit(reviewed, repo=found.repo) if reviewed is not None else None,
-        runs=[run(r, ctx.workspace.root, models=m) for r, m in zip(shown, runs_served(ctx.conn, shown), strict=True)],
+        runs=[
+            run(r, ctx.workspace.root, models=m, timeout_minutes=ctx.config.runtime.worker_timeout_minutes)
+            for r, m in zip(shown, runs_served(ctx.conn, shown), strict=True)
+        ],
         reviews=summaries(ctx.conn, reviews),
         decisions=[decision(d) for d in decisions],
         cost=_cost(runs, reviews),

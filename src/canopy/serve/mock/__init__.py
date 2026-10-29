@@ -789,6 +789,13 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 now="running the login tests",
                 done=(cards.Done(step="add the SSO callback", proof="tests pass: 12/12"),),
                 next=("wire the login button", "push", "open the PR"),
+                # The steps of ABC-101's approved plan, its sections their stages.
+                steps=(
+                    cards.Step(title="Add the SSO callback route", status="done", stage="API"),
+                    cards.Step(title="Wire the login button", status="working", stage="Web"),
+                    cards.Step(title="Remember the last provider", status="skipped", stage="Web"),
+                    cards.Step(title="Push and open the PR", status="not_started"),
+                ),
             ),
             24,
             9,
@@ -811,7 +818,8 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     for run_id, card, minutes, by_then, since in said:
         recorded = sql.update("runs").set(card_json=card.model_dump_json(), card_at=at(minutes))
         recorded = recorded.set(card_calls=by_then, tool_calls=by_then + since).where("id = ?", run_id)
-        sql.execute(conn, recorded)
+        working = {s.title: at(minutes) for s in card.steps if s.status == "working"}
+        sql.execute(conn, recorded.set(card_working_since=json.dumps(working) if working else None))
     # Run 39's peak is the most one model call in its transcript was sent (transcripts.py), as its page's chart shows.
     sql.execute(conn, sql.update("runs").set(tokens_peak_context=30200).where("id = 39"))
     run_slots = (

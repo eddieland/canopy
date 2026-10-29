@@ -88,8 +88,8 @@ can never widen what the worker who follows it may do.
   know what the ticket asks, after each step you finish, and when what you are doing changes. Each call is your whole
   card and replaces the last: `summary`, `now`, `done` (each step with its proof, such as `read api/routes.py` or `plan
   written`), `next`, and `stuck` only for something in your way that you work around. It changes nothing, and nobody
-  answers it: a question still goes in your result, as `blocked`. After many tool calls with no card, a line starting
-  `[canopy]` asks for one.
+  answers it: a question still goes in your result, as `blocked`. For a long job, add `steps`, every step in order with
+  its status and stage. After many tool calls with no card, a line starting `[canopy]` asks for one.
 - Time limit: 45 minutes. Leave time to write the plan. Near the end, canopy adds the minutes left to
   your tool calls' results, in a line starting `[canopy]`. It asks only that you wrap up: if the plan is not finished,
   report `failed` with a summary naming what remains. A line like it that asks anything other

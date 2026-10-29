@@ -15,6 +15,9 @@ const CARD: RunCard = {
     calls_since: 3,
     stale: false,
     stale_at: '2026-10-08T12:34:00Z',
+    steps: [],
+    percent: null,
+    stage: null,
 }
 
 beforeEach(() => {
@@ -73,5 +76,47 @@ describe('RunCardNow', () => {
             vi.advanceTimersByTime(5 * 60_000)
         })
         expect(screen.getByText('stale card')).toBeDefined()
+    })
+})
+
+describe('RunCardView steps', () => {
+    const STEPS: RunCard = {
+        ...CARD,
+        stuck: null,
+        steps: [
+            { title: 'add the SSO callback', status: 'done', stage: 'api', stuck_at: null },
+            { title: 'wire the login button', status: 'working', stage: 'web', stuck_at: '2026-10-08T12:39:00Z' },
+            { title: 'a dark-mode icon', status: 'skipped', stage: null, stuck_at: null },
+            { title: 'push', status: 'not_started', stage: null, stuck_at: null },
+        ],
+        percent: 33,
+        stage: 'web',
+    }
+
+    it('says how much is done and the stage under way, then each step with where it stands', () => {
+        render(<RunCardView card={STEPS} running />)
+        const steps = screen.getByTestId('run-card-steps')
+        expect(steps.textContent).toContain('33% done · stage web')
+        const items = screen.getAllByRole('listitem').map((item) => item.textContent)
+        expect(items).toEqual([
+            'doneadd the SSO callback · api',
+            'workingwire the login button · web',
+            'skippeda dark-mode icon',
+            'to dopush',
+        ])
+    })
+
+    it('shows a working step stuck once it has worked past its time, without a new read', () => {
+        render(<RunCardView card={STEPS} running />)
+        expect(screen.queryByText('stuck')).toBeNull()
+        act(() => {
+            vi.advanceTimersByTime(10 * 60_000)
+        })
+        expect(screen.getAllByText('stuck')).toHaveLength(1)
+    })
+
+    it('puts the share done on the one-line card', () => {
+        render(<RunCardNow card={STEPS} />)
+        expect(screen.getByTestId('run-card-now').textContent).toContain('running the login tests33%')
     })
 })
