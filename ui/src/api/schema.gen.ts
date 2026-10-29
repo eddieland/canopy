@@ -1586,6 +1586,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/spend/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the spend by model, of every run or a ticket's
+         * @description What the window's runs spent on each model, by kind, as the breakdown's `models` lists it, or one ticket's.
+         */
+        get: operations["getSpendModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks": {
         parameters: {
             query?: never;
@@ -8107,6 +8127,41 @@ export type components = {
              * @description How many of those runs it wrote a reply of: a run on two models counts under each.
              */
             runs: number;
+        };
+        /**
+         * SpendModels
+         * @description What the runs that started in a window spent on each model, every run's or one ticket's (DESIGN §13).
+         *
+         *     The spend page's By model reads it narrowed to a ticket, and a ticket's page reads it twice, its own and the
+         *     workspace's, to set its workers' cost per run on each model beside everyone's: a canary's comparison.
+         */
+        SpendModels: {
+            /**
+             * Days
+             * @description How many days it spans; None for a window in hours.
+             */
+            days: number | null;
+            /**
+             * Hours
+             * @description How many hours it spans; None for a window in days.
+             */
+            hours: number | null;
+            /**
+             * Models
+             * @description Each kind's spend on each model, as a breakdown's `models` lists it.
+             */
+            models: components["schemas"]["SpendModel"][];
+            /**
+             * Since
+             * Format: date-time
+             * @description When the window starts: local midnight on its first day, or the start of its first hour.
+             */
+            since: string;
+            /**
+             * Ticket
+             * @description The ticket whose runs it counts, of the kinds that work on one (workers, plans, reviews); None for every run.
+             */
+            ticket: string | null;
         };
         /**
          * SpendMonth
@@ -15867,6 +15922,87 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SpendBreakdown"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getSpendModels: {
+        parameters: {
+            query?: {
+                /** @description How many local days to read, today's so far included: 1 to 366; 7 when neither this nor hours is given. */
+                days?: number | null;
+                /** @description How many clock hours to read, by the hour, the current one so far included: 1 to 168. Not with days. */
+                hours?: number | null;
+                /** @description Count only this ticket's runs, of the kinds that work on one: workers, plans, reviews. */
+                ticket?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendModels"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

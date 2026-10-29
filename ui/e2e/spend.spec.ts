@@ -328,6 +328,33 @@ test("the overseer's models are not linked, as the runs page lists no tick by mo
     await expect(table.getByRole('link')).toHaveCount(0)
 })
 
+test("a canary ticket's worker cost by model opens By model narrowed to its workers", async ({ page }) => {
+    await page.goto('tickets/ABC-099')
+    // Run 39 switched from opus to sonnet partway, so two models served its workers.
+    const canary = page.getByTestId('ticket-canary')
+    await expect(canary.getByTestId('ticket-canary-model')).toHaveText([
+        /^anthropic\/claude-opus-4-11 run, \$1\.65\/run · workspace \$[\d.]+\/run$/u,
+        /^anthropic\/claude-sonnet-4-51 run, \$0\.66\/run · workspace \$[\d.]+\/run$/u,
+    ])
+    await canary.getByRole('link', { name: 'Its last 30 days by model, on Spend' }).click()
+    await expect(page).toHaveURL(/\/reports\/spend\?days=30&ticket=ABC-099$/u)
+    await settled(page)
+    // Its workers' rows alone, its reviewer's gpt-5 left out until its kind is picked.
+    const models = page.getByTestId('spend-model-table').getByTestId('spend-model')
+    await expect(models.getByRole('rowheader')).toHaveText([
+        'anthropic/claude-opus-4-1',
+        'anthropic/claude-sonnet-4-5',
+        'none: no session named one',
+    ])
+    await expect(page.getByTestId('spend-model_kind').getByRole('link', { name: 'all' })).toHaveCount(0)
+    await page.getByTestId('spend-model_kind').getByRole('link', { name: 'reviews' }).click()
+    await expect(models.getByRole('rowheader')).toHaveText(['openai/gpt-5'])
+    // `all` beside the ticket takes it off: every run's again.
+    await page.getByTestId('spend-ticket').getByRole('link', { name: 'all' }).click()
+    await expect(page).toHaveURL(/\/reports\/spend\?days=30&model_kind=reviews$/u)
+    await expect(page.getByTestId('spend-ticket')).toHaveCount(0)
+})
+
 test.describe('on a wide monitor', () => {
     test.use({ viewport: { width: 1440, height: 900 } })
 

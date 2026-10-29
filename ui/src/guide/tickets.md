@@ -178,10 +178,17 @@ your pick with a trailing `…` until it's saved, then a green **saved** beside 
 jumps. It stays until the ticket's models change again.
 The override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
 **Clear the override**, below the list, where no amount of scrolling hides it. That is the canary: one ticket on the new
-model, the rest on the one you trust, and [the spend page](reports#the-spend-page) splits what each cost by model once
-they ran. Each run names the model it asked for while it works, then the model that served it, and both when they
-differ, on its page and in the ticket's Runs panel, so a canary ticket reads straight down the panel and you can check
-the canary actually sang.
+model, the rest on the one you trust. Each run names the model it asked for while it works, then the model that served
+it, and both when they differ, on its page and in the ticket's Runs panel, so a canary ticket reads straight down the
+panel and you can check the canary actually sang.
+
+Whether it sang well is the **worker cost** line under the pickers. Once more than one model has served the ticket's
+workers in the last 30 days, or while this ticket overrides its worker's model, it lists each model with its worker
+runs and their cost per run, and beside it what every worker run on that same model cost per run across the
+workspace: `openai/gpt-5@high 2 runs, $1.10/run · workspace $0.88/run`. Workers only, so the reviewer's model doesn't
+muddy the sum. Per run is fair between two models on this ticket; against the workspace it's a hint, not a verdict,
+since your canary ticket may simply be the hard one. Its link opens [the spend page](reports#the-spend-page)'s By model
+narrowed to this ticket, for the reviews and plans too.
 
 Under each model sit the variants the runtime lists for it, in the runtime's order, `@high` and the like for a reasoning
 effort; the model's own row, marked **(default)**, is the effort it runs at when no variant is named. So the canary you

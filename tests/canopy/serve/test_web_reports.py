@@ -59,3 +59,20 @@ def test_each_month_counts_the_sessions_outside_canopy_as_the_budget_does(backen
     assert after["sessions_read_at"] == "2026-10-08T12:00:00Z"
     spent = c.get("/api/spend/breakdown", params={"days": 30}).json()["month"]["spent_usd"]
     assert october["cost_usd"] == pytest.approx(spent)
+
+
+def test_the_spend_by_model_narrows_to_a_tickets_runs_for_its_canary_line(backend: Backend) -> None:
+    c = client(None, backend)
+    found = c.get("/api/spend/models", params={"days": 30, "ticket": "ABC-099"}).json()
+    assert (found["days"], found["ticket"]) == (30, "ABC-099")
+    # Run 39 switched from opus to sonnet partway, so counts under each; its reviewer ran on gpt-5.
+    assert [(m["kind"], m["model"], m["runs"]) for m in found["models"]] == [
+        ("workers", "anthropic/claude-opus-4-1", 1),
+        ("workers", "anthropic/claude-sonnet-4-5", 1),
+        ("workers", None, 2),
+        ("reviews", "openai/gpt-5", 2),
+    ]
+    # Every run's, the overseer's among them, as the breakdown over the same window lists them.
+    every = c.get("/api/spend/models", params={"days": 30}).json()["models"]
+    assert every == c.get("/api/spend/breakdown", params={"days": 30}).json()["models"]
+    assert c.get("/api/spend/models", params={"days": 1, "hours": 1}).status_code == 422

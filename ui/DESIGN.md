@@ -929,7 +929,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   kinds the window has rows of. A window switch keeps both filters. By model's ids link the runs page's runs on the
   model (`?model=`), with the kind shown (`?kind=`, `RUNS_KIND`: a plan run is a worker run there); one the runs page
   lists no run of by model, the overseer's alone, is plain, why on hover. The runs page's model filter is always
-  offered: `all`, then each model its listed runs of every kind name.
+  offered: `all`, then each model its listed runs of every kind name. `?ticket=` narrows By model to that ticket's
+  runs, a `ticket` chip beside `all` in its header, and its kind filter to one kind at a time, `workers` first, with no
+  `all`, so a reviewer's model never sums into a worker canary's.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
@@ -1525,7 +1527,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   `variant no longer listed; its next run is refused`), and a model or variant gone from the list marks its trigger in
   `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
   `Read again` item. While a choice saves, its trigger names it with a trailing `…` and is `aria-busy`; a refusal's
-  `Notice` names the agent before its guard.
+  `Notice` names the agent before its guard. Under the ticket page's rows (not an attention item's), a `worker cost`
+  field (`TicketCanary`) is the canary's read, once two models served its workers in 30 days or while it overrides
+  the worker's: a line per model, its id, then muted its runs and, in `foreground`, its cost per run, then the
+  workspace's worker runs' on the same model, and a link to By model narrowed to the ticket (`?ticket=`), both from
+  `GET /spend/models`.
 - **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, under the
   verbs at the foot of a ticket's or a task's conversation, beside the reply that says what to do with them: each file a
   row of its name in monospace, its size muted, and a ghost `icon-xs` ✕ named `Remove NAME`; an outline `xs` **Attach a

@@ -11,7 +11,7 @@ from canopy.core import spend as spending
 from canopy.serve import spend_views, views
 from canopy.serve.api.deps import BackendDep, SpaDep
 from canopy.serve.schema import AttentionItem, Meta
-from canopy.serve.schema.spend import Spend, SpendBreakdown
+from canopy.serve.schema.spend import Spend, SpendBreakdown, SpendModels
 
 TAG = "overview"
 router = APIRouter(tags=[TAG])
@@ -48,32 +48,33 @@ def spend(backend: BackendDep) -> Spend:
         return spend_views.spend(backend, ctx)
 
 
+# The window a spend read takes, in local days or clock hours, as the spend page's window control names it.
+_Days = Annotated[
+    int | None,
+    Query(
+        ge=1,
+        le=spending.MAX_DAYS,
+        description=(
+            f"How many local days to read, today's so far included: 1 to {spending.MAX_DAYS}; "
+            f"{spending.DEFAULT_DAYS} when neither this nor hours is given."
+        ),
+    ),
+]
+_Hours = Annotated[
+    int | None,
+    Query(
+        ge=1,
+        le=spending.MAX_HOURS,
+        description=(
+            f"How many clock hours to read, by the hour, the current one so far included: 1 to "
+            f"{spending.MAX_HOURS}. Not with days."
+        ),
+    ),
+]
+
+
 @router.get("/spend/breakdown", operation_id="getSpendBreakdown", summary="Get the spend by day and by what it bought")
-def spend_breakdown(
-    backend: BackendDep,
-    days: Annotated[
-        int | None,
-        Query(
-            ge=1,
-            le=spending.MAX_DAYS,
-            description=(
-                f"How many local days to read, today's so far included: 1 to {spending.MAX_DAYS}; "
-                f"{spending.DEFAULT_DAYS} when neither this nor hours is given."
-            ),
-        ),
-    ] = None,
-    hours: Annotated[
-        int | None,
-        Query(
-            ge=1,
-            le=spending.MAX_HOURS,
-            description=(
-                f"How many clock hours to read, by the hour, the current one so far included: 1 to "
-                f"{spending.MAX_HOURS}. Not with days."
-            ),
-        ),
-    ] = None,
-) -> SpendBreakdown:
+def spend_breakdown(backend: BackendDep, days: _Days = None, hours: _Hours = None) -> SpendBreakdown:
     """What each day, or hour, of the window cost, by kind; the ticks by what they bought; and the newest idle ticks."""
     if days is not None and hours is not None:
         raise HTTPException(status_code=422, detail="give days or hours, not both")
@@ -81,3 +82,34 @@ def spend_breakdown(
         if hours is not None:
             return spend_views.spend_breakdown_hours(backend, ctx, hours)
         return spend_views.spend_breakdown(backend, ctx, spending.DEFAULT_DAYS if days is None else days)
+
+
+@router.get(
+    "/spend/models",
+    operation_id="getSpendModels",
+    summary="Get the spend by model, of every run or a ticket's",
+)
+def spend_models(
+    backend: BackendDep,
+    days: _Days = None,
+    hours: _Hours = None,
+    ticket: Annotated[
+        str | None,
+        Query(
+            min_length=1,
+            max_length=200,
+            description="Count only this ticket's runs, of the kinds that work on one: workers, plans, reviews.",
+        ),
+    ] = None,
+) -> SpendModels:
+    """What the window's runs spent on each model, by kind, as the breakdown's `models` lists it, or one ticket's."""
+    if days is not None and hours is not None:
+        raise HTTPException(status_code=422, detail="give days or hours, not both")
+    with backend.open() as ctx:
+        return spend_views.spend_models(
+            backend,
+            ctx,
+            days=spending.DEFAULT_DAYS if days is None and hours is None else days,
+            hours=hours,
+            ticket=ticket,
+        )

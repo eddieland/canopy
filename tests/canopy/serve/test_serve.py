@@ -1138,6 +1138,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/tickets/{key}/memory",
         "/api/spend",
         "/api/spend/breakdown",
+        "/api/spend/models",
         "/api/reports/monthly",
         "/api/tick",
         "/api/tickets",

@@ -24,6 +24,7 @@ import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, Word } from '@/components/status'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
+import { TicketCanary } from '@/components/ticket-canary'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
 import { TicketModels } from '@/components/ticket-models'
@@ -188,11 +189,14 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             personas={detail.personas}
                             names={detail.persona_names}
                         />
-                        <TicketModels
-                            ticketKey={ticket.key}
-                            models={detail.models}
-                            className="border-t @3xl:border-t-0 @3xl:border-l"
-                        />
+                        <div className="border-t @3xl:border-t-0 @3xl:border-l">
+                            <TicketModels ticketKey={ticket.key} models={detail.models} />
+                            {/* The canary's read: its workers' cost per run on each model, beside the workspace's. */}
+                            <TicketCanary
+                                ticketKey={ticket.key}
+                                override={detail.models.some((m) => m.agent === 'worker' && m.source === 'ticket')}
+                            />
+                        </div>
                     </div>
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the

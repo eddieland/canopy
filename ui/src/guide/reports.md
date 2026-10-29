@@ -105,7 +105,11 @@ rail's. Then:
   is read as it ends, and the loop reads the stragglers while it waits between ticks, so **none** is mostly runs from
   before canopy read models, and it shrinks while the loop idles. Click a model to see [its runs](runs#the-runs-page),
   of the kind the table shows, or of every kind under **all**. The overseer's models aren't links: the runs page lists
-  ticks apart, under Ticks, and not by model. This is the table to read before and after you canary a model.
+  ticks apart, under Ticks, and not by model. Across tickets, this is the table to read before and after you change a
+  model in your config. For one canary ticket, its page's **worker cost** line sets its workers' cost per run beside
+  the workspace's, and links here with `?ticket=`: By model then counts that ticket's runs alone, its workers' until
+  you pick **plans** or **reviews**, with no **all**, since summing its reviewer in with its workers is what the
+  canary was trying to avoid. **all** beside the ticket takes it off.
 - **By tool**: which tools put the most into the runs' context, by the characters their calls returned, every kind
   summed or one kind's, with the same filter. Every later model call of the run reads those again, so a chatty tool
   costs more than once. The filters stay put when you switch the window, so you can watch the workers' `bash` habit
