@@ -104,9 +104,10 @@ Controls:
   shown that these checks let it cover (DESIGN §37). A dispatch resting on a public ticket or a PR observed past that
   age is refused `stale`. A private ticket and a subject no source covers keep their claims, checked by the worker as
   before. Config requires a `tracker` source, and the `vcs` source always runs, so the overseer reads neither world
-  live (DESIGN §39): a candidate whose ticket, PR, branches, or open blocker's PR a source left stale is the harness's
-  `wait`, the PRs its reviews ask about are shown as the `vcs` source read them, and its definition denies GitHub's
-  reads and, wherever config or the provider names it, the tracker's server, so it skips no tick over an outage.
+  live (DESIGN §39): a candidate whose ticket, comments, PR, branches, or open blocker's PR a source left stale, or
+  whose PR no source reads, is the harness's `wait`, the PRs its reviews ask about are shown as the `vcs` source
+  read them, and its definition denies GitHub's reads and, wherever config or the provider names it, the tracker's
+  server, so it skips no tick over an outage.
   Residual: the guards trust what a connector printed, and a label removed since its read authorizes until the
   worker's check. Off a GitHub tracker, GitHub's server is denied by its tools' names, as its writes are, since its
   name is the operator's: a tool no pattern names is still the overseer's.

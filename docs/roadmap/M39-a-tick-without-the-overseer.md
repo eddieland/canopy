@@ -123,8 +123,18 @@ live tick takes the observed path above; the tests' workspaces run the fake conn
 ticket they work open and labeled. The overseer's definition loses the tracker's skill and read tools on every
 path. Chosen conservatively, for the operator to change: `canopy init` writes the table commented out, since only the
 operator knows their site or repository and a guess would send their credentials to someone else's, so a new
-workspace's config does not load, nor `canopy init` clone its repositories, until they fill it in. Left: the
-harness's `wait` on an unobserved subject; every MCP server but canopy's denied; the third bullet; the paths config
+workspace's config does not load, nor `canopy init` clone its repositories, until they fill it in. Built
+(2026-10-29): the harness's `wait` on an unobserved subject. A candidate with a unit whose PR URL names no PR, which
+no source reads, is the harness's `wait`, saying no source reads it, and is never listed to the overseer; so is one the
+`tracker` source read before canopy held it, such as one the query found that was read as another's blocker, whose
+comments it never recorded, until a read since, as the block already counted it stale (`loop/phases.py`,
+`loop/harness.py`). A ticket, blocker, PR, or repository's branches with no observation at all was already waited as
+stale. Chosen conservatively, for the operator to change: an unobserved unit waits until the operator forgets the
+ticket's work, which drops its units, and raises no item of its own; a closed or unlabeled ticket is still decided
+without its PRs; and a review's PR not read fresh stays the overseer's `canopy_review-wait`, taken from the read, not
+a live one. The tests' fake worker reports a PR no source reads, so a story that needs the overseer listed a ticket
+with a PR gives it one the fake `vcs` source reads. Left: every MCP server but canopy's denied; the third bullet; the
+paths config
 now leaves unreachable removed, the overseer prompt's live reads and tick-wide skips, `canopy queried` and its tool,
 and the loop's branches for a workspace with no `tracker` source; and the design folded into the sections it names.
 Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes,
