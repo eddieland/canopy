@@ -808,8 +808,8 @@ def _check_model(ctx: Context, key: str, kind: str, *, private: bool) -> str | N
     The model is the one ticket `key`'s override chooses for the run's agent, else the one `runtime.models` chooses for
     the agent the run's template runs, which canopy writes into that agent's definition. The list is read in the
     workspace root, not a repository's clone or slot, whose own runtime config could change it. It is never fallen back
-    from: a canary's run on a model nobody chose would read as the canary's. A refusal spends no attempt and leases no
-    slot, and raises an attention item of its guard's name, since only the operator can fix it.
+    from: a run on a model nobody chose would read as the one the operator chose. A refusal spends no attempt and leases
+    no slot, and raises an attention item of its guard's name, since only the operator can fix it.
 
     Returns:
         The model as the run records it, `provider/model` or `provider/model@variant`, or None when neither the

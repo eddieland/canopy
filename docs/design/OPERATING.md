@@ -351,7 +351,7 @@ Built: each agent's default in `[runtime.models]`, a chore's own model, variants
 `canopy model` or the ticket's page, the check of a model and its variant before every run the loop starts and a
 tick's overseer, and recording what served (REQUIREMENTS R23).
 
-The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
+The operator wants to try a model on one ticket, running its workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
 promises:
 
@@ -380,7 +380,7 @@ promises:
   and its variant against the model's, since OpenCode drops an unlisted variant without a word. An unlisted model or
   variant, or a list that cannot be read, refuses the run with an attention item, spending no attempt and leasing no
   slot, so the work resumes once the model is back: a task waits, and a tick closes without its overseer (§6 step 5).
-  It never falls back to the default, since a canary's run on a model nobody chose would read as the canary's.
+  It never falls back to the default, since a run on a model nobody chose would read as the one the operator chose.
 
 The PR that builds the choosing proposes T1, T5, T7, and T8 to match. Rejected: a model chosen by the overseer or
 ticket labels (T1); a list of models shipped with canopy; one override for all of a ticket's agents; recording only the
