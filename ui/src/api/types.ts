@@ -15,6 +15,12 @@ export type Run = Schemas['Run']
 export type RunsSince = Schemas['RunsSince']
 /** A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8). */
 export type RunActivity = Schemas['RunActivity']
+/** Where a running agent's work stands, in its own words: its latest card (DESIGN §41). */
+export type RunCard = Schemas['RunCard']
+/** A decision a running agent asks the operator for on its card, with the answer they gave (DESIGN §41). */
+export type RunCardQuestion = Schemas['RunCardQuestion']
+/** The operator's answer to a running run's question, as recorded: what `canopy reply run:ID LETTER` says. */
+export type Answered = Schemas['Answered']
 /** Which models served an agent run, read from its session after it ended (DESIGN §13), or why none are shown. */
 export type ModelsServed = Schemas['ModelsServed']
 /** One model that wrote an agent run's replies, with how many and what they cost. */
@@ -79,6 +85,12 @@ export type ChoreModel = Schemas['ChoreModel']
 export type PersonaChoice = Schemas['PersonaChoice']
 /** Every persona a run could get, and the one a review request that chooses none is reviewed in (DESIGN §31). */
 export type PersonaList = Schemas['PersonaList']
+/** Every skill the runtime finds for canopy's agents, with each one's file and text (DESIGN §13). */
+export type SkillList = Schemas['SkillList']
+/** A skill the runtime finds: its file, where that is, and its text. */
+export type Skill = Schemas['Skill']
+/** Where a skill's file is: canopy's own, the workspace's, the operator's home, the runtime's, or elsewhere. */
+export type SkillSource = Schemas['SkillSource']
 /** What trying a chore started: its recorded run, going on in the background (DESIGN §19). */
 export type ChoreTried = Schemas['ChoreTried']
 /** The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended. */
@@ -105,6 +117,10 @@ export type HostResources = Schemas['HostResources']
 export type Disk = Schemas['Disk']
 /** What canopy keeps on a disk. */
 export type DiskUse = Schemas['DiskUse']
+/** The readings of the machine the server keeps in memory, the last hour's at most, oldest first. */
+export type HostHistory = Schemas['HostHistory']
+/** What the system resources page's graphs draw of one reading of the machine. */
+export type HostSample = Schemas['HostSample']
 /** What the last day and the last 30 days cost, read together, so a month never shows less than its day. */
 export type Spend = Schemas['Spend']
 /** What the agent runtime reported spending in the last `hours` hours (DESIGN §13). */
@@ -125,6 +141,8 @@ export type SpendPullRequest = Schemas['SpendPullRequest']
 export type SpendTool = Schemas['SpendTool']
 /** What one kind's runs in a spend window spent on one model, as their sessions say; a null model for the unnamed. */
 export type SpendModel = Schemas['SpendModel']
+/** One week of a kind's first model calls, or one chore's or one model's of the kind: their size and cache hit rate. */
+export type SpendFirstCallWeek = Schemas['SpendFirstCallWeek']
 /** The local month so far against the operator's monthly budget. */
 export type SpendMonth = Schemas['SpendMonth']
 /** What every session the runtime keeps that started in a spend window cost, canopy's apart from the rest. */

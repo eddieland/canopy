@@ -124,6 +124,7 @@ function SettingsPage() {
             <NoticePanel />
             <LimitsPanel />
             <ModelsPanel />
+            <SkillsPanel />
             <ConfigPanel />
             {/* Second to last: below what changes how canopy works, above signing out. */}
             <FunPanel />
@@ -705,6 +706,27 @@ function LimitsPanel() {
                 </p>
                 <Button asChild variant="outline" data-testid="limits-open">
                     <Link to="/settings/limits">
+                        Open
+                        <ChevronRight />
+                    </Link>
+                </Button>
+            </div>
+        </Panel>
+    )
+}
+
+/** Where the skills the runtime offers canopy's agents are read: a page of their own, as each read asks the runtime. */
+function SkillsPanel() {
+    return (
+        <Panel>
+            <PanelHeader label="Skills" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-muted-foreground">
+                    Every skill the runtime finds for canopy&apos;s agents: where its file is, and what it says. Read
+                    from the runtime when the page opens.
+                </p>
+                <Button asChild variant="outline" data-testid="skills-open">
+                    <Link to="/settings/skills">
                         Open
                         <ChevronRight />
                     </Link>

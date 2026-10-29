@@ -16,7 +16,7 @@ import pytest
 from canopy.chores import history
 from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
-from canopy.core import chore_runs, db, git_tools, recorded_runs, reports
+from canopy.core import cards, chore_runs, db, git_tools, recorded_runs, reports
 from canopy.core.vocab import ChoreRunStatus, RunKind, TickStatus
 from canopy.infra import procs
 from canopy.loop import mcp, tools
@@ -32,6 +32,7 @@ from tests.canopy.helpers import (
     chore_toml,
     in_run,
     in_tick,
+    inline_servers,
     mcp_session,
     operator,
     present,
@@ -1170,6 +1171,67 @@ def test_the_git_server_takes_absolute_checkouts_and_serves_nothing_else() -> No
     assert {"S", "GIT_DIR"} <= runner.unset
 
 
+# A worker's, planner's, or reviewer's run: `canopy _mcp --status` serves it its card's one tool, which writes nothing
+# (DESIGN §41).
+
+#: A card the status tool takes.
+CARD: Mapping[str, object] = {
+    "summary": "Fixing the parser; the tests pass and the branch is pushed.",
+    "now": "writing the PR body",
+    "done": [{"step": "fix the parser", "proof": "tests pass: 42/42"}, {"step": "push", "proof": "pushed abc123"}],
+    "next": ["open the PR"],
+}
+
+
+@pytest.mark.parametrize("run", ["7", "review-3"])
+def test_a_workers_or_a_reviews_run_is_served_its_status_tool_alone(overseen: CanopyEnv, run: str) -> None:
+    conn = overseen.journal()
+    before = recorded(conn)
+    overlong = {**CARD, "now": "x" * (cards.MAX_LINE + 1)}
+    with in_run(run):
+        served = mcp_session(
+            LIST_TOOLS,
+            tool_call("status", **CARD),
+            tool_call("status", summary="no now"),
+            tool_call("status", **overlong),
+            tool_call("status", **CARD, extra="no"),
+            tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r"}]),
+            status=True,
+        )
+    assert served.listed() == ["status"]
+    listed = served.responses[1]["result"]["tools"][0]
+    assert "outputSchema" not in listed
+    assert (listed["inputSchema"]["required"], listed["inputSchema"]["additionalProperties"]) == (
+        ["summary", "now"],
+        False,
+    )
+    text, error = served.said(2)
+    assert (text.startswith("Shown to the operator."), error) == (True, False)
+    # An invalid or overlong card is a tool error naming the field, and the server goes on.
+    assert [served.said(n)[1] for n in (3, 4, 5)] == [True, True, True]
+    assert "now" in served.said(3)[0]
+    assert "now" in served.said(4)[0]
+    assert "extra" in served.said(5)[0]
+    assert served.responses[6]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
+    # The server writes nothing: the harness records the card from the call the agent prints.
+    assert recorded(conn) == before
+
+
+@pytest.mark.parametrize("run", [None, "chore-2", "task-1", "7x", "review-"])
+def test_the_status_tool_is_served_nowhere_else(overseen: CanopyEnv, run: str | None) -> None:
+    with in_run(run) if run is not None else contextlib.nullcontext():
+        served = mcp_session(LIST_TOOLS, tool_call("status", **CARD), status=True)
+    assert served.listed() == []
+    text, error = served.said(2)
+    assert error
+    assert text.startswith("status refused: CANOPY_RUN_ID names no worker's, planner's, or review's run")
+
+
+def test_the_status_server_serves_nothing_else() -> None:
+    assert main(["_mcp", "--status", "--chore"]) == 2
+    assert main(["_mcp", "--status", "--git", "checkout=/repo"]) == 2
+
+
 def test_a_chore_run_a_tool_asks_for_is_recorded_and_the_server_starts_nothing(overseen: CanopyEnv) -> None:
     # The tick starts it once the overseer's run ends, so no run is the server's descendant (DESIGN §40).
     conn = overseen.journal()
@@ -1223,7 +1285,8 @@ def test_a_worker_starts_without_the_overseers_server(scenario: Scenario, door: 
     assert [run.status for run in ticked.runs] == ["done"]
     overseer, worker = agent_runs(scenario.agent_log)
     assert overseer["env"].keys() >= servers.VARIABLES
-    assert servers.VARIABLES.isdisjoint(worker["env"])
+    # The worker's own inline config gives it canopy's `status` server alone (DESIGN §41).
+    assert inline_servers(worker).keys() == {cards.SERVER}
     assert "CANOPY_TICK_ID" not in worker["env"]
 
 

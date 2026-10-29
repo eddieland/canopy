@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, TextIO
 
 from canopy.core import (
     agent_models,
+    cards,
     conversation,
     db,
     definitions,
@@ -50,7 +51,7 @@ from canopy.core.config import render_command
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import impact, late, start
-from canopy.runtime import project_config, stdout
+from canopy.runtime import project_config, servers, stdout
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -230,9 +231,11 @@ def _revised(ctx: Context, run: records.ReviewRun, parsed: result.RevisionResult
 
 
 def clean_up(ctx: Context, run: records.ReviewRun, log: logs.TickAdapter) -> None:
-    """Remove the reviewer's directory, never following its link, and return the slot with `--force`."""
+    """Remove the reviewer's directory, never following its link, and its answers directory; return the slot, forced."""
     with contextlib.suppress(OSError):
         shutil.rmtree(start.run_dir(ctx, run.id))
+    with contextlib.suppress(OSError):
+        cards.remove_answers(cards.answers_dir(ctx.state_dir, f"review-{run.id}"))
     if run.slot_path is None:
         return
     fields = {"review_run_id": run.id, "slot": run.slot_path}
@@ -289,6 +292,8 @@ def reviewer(
 ) -> Reviewer:
     """The reviewer's process for a review of the checkout in `slot`, named `run` to the agent, on `models`.
 
+    Makes a review run's answers directory, where the operator's answer to its card's question reaches it (DESIGN §41).
+
     Returns:
         Its argv behind the sandbox, if `repo` is sandboxed, its stdin, its environment, and its definitions.
     """
@@ -296,15 +301,18 @@ def reviewer(
     command = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
     argv = sandboxing.wrap(ctx.config.runtime, [repo], "review", command.argv, snapshot)
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). The reviewer reads its checkout's history
-    # through canopy's read-only git tools, over that checkout alone, named as its link is (DESIGN §27).
+    # through canopy's read-only git tools, over that checkout alone, named as its link is (DESIGN §27), and says
+    # where its review stands through the `status` tool (§41).
+    served = {git_tools.SERVER: git_tools.command({start.CHECKOUT_LINK: slot}), cards.SERVER: cards.SERVER_COMMAND}
     env = {
         conversation.RUN_ID_ENV: run,
-        **git_tools.run_env(
-            {start.CHECKOUT_LINK: slot},
-            version=ctx.config.runtime.version,
-            cwd=ctx.ws.root.absolute(),
-        ),
+        **servers.env(served, version=ctx.config.runtime.version, cwd=ctx.ws.root.absolute()),
     }
+    # An eval's review keeps no card, so it is asked nothing (DESIGN §21).
+    if cards.RUN_ID_RE.fullmatch(run):
+        answers = cards.answers_dir(ctx.state_dir, run)
+        cards.make_answers(answers)
+        env[cards.ANSWERS_ENV] = str(answers)
     return Reviewer(argv, command.stdin, env, snapshot)
 
 

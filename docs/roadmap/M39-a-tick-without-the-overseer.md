@@ -112,13 +112,19 @@ found, and the block shows the PRs of the open review requests and the fresh que
 overseer's definition denies GitHub's PR, branch, and user reads by pattern, and on a GitHub tracker its server whole.
 Chosen conservatively, for the operator to change: a review PR's checks are all counted as CI, since which repository
 it is in is the overseer's to match; a blocker not listed to the overseer is not stacked on; and off a GitHub tracker
-GitHub's server is denied by its tools' names, its own name being the operator's. Built (2026-10-29): §30's `tracker`
-connector for GitHub Issues, `canopy-connect-github --repo OWNER/NAME` (`canopy_github/issues.py`), so a workspace on
-GitHub Issues has a source to require: `GH-N` is issue N, read as `canopy-connect-jira` reads Jira's. Chosen
-conservatively, for the operator to change: a blocker is an issue dependency or a `Blocked by #N` line of the body,
-either; a ticket an open issue of another repository blocks, which no key names, is not read whole, so it stays stale;
-and a query that returns another repository's issue is not read. Left: config requiring a `tracker` source, with the
-tests' workspaces given the fake one; the harness's `wait` on an unobserved subject; every MCP server
-but canopy's denied; the third bullet; and the design folded into the sections it names. Still open for the operator:
+GitHub's server is denied by its tools' names, its own name being the operator's. Built (2026-10-29): the third
+bullet. The count was already the overseer's alone; what was left was a tick a poll woke, which counted as idle
+and lengthened the wait after it. It is idle no more (`pacing.idle`): a poll wakes the loop only for what is new, so
+the wait lengthens after the overseer's second looks at what it was left and waited on, which the timer brings, and
+not after its first look at what a poll found. Chosen conservatively, for the operator to change: a failed poll's
+wake, and the whole read after one, count as any poll's; the operator's tick-now counts as before. Built
+(2026-10-29): §30's `tracker` connector for GitHub Issues, `canopy-connect-github --repo OWNER/NAME`
+(`canopy_github/issues.py`), so a workspace on GitHub Issues has a source to require: `GH-N` is issue N, read as
+`canopy-connect-jira` reads Jira's. Chosen conservatively, for the operator to change: a blocker is an issue dependency
+or a `Blocked by #N` line of the body, either; a ticket an open issue of another repository blocks, which no key names,
+is not read whole, so it stays stale; and a query that returns another repository's issue is not read. Left: config
+requiring a `tracker` source, with the tests' workspaces given the fake one; the harness's `wait` on an unobserved
+subject; every MCP server but canopy's denied; and the design folded into the sections it names. Still open for the
+operator:
 whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes, and that entry with it),
 the fifth bullet's.

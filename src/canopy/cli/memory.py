@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, assert_never
 
 import click
 
-from canopy.cli.common import CliError, Group, open_context
+from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO, TICKET_KEY
 from canopy.core import conversation, db, memory, memory_manage, records, reports
 from canopy.core import memory_search as search
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 _INDENT = "      "
 
 
-@click.group("memory", cls=Group)
+@click.group("memory")
 def memory_group() -> None:
     """Read and manage agent memory: ticket notes, proposals, and lessons, while `[memory]` turns them on."""
 
