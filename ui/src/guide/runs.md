@@ -66,7 +66,8 @@ of those is said there and nowhere else on the page, so the panels under it can 
 
 The **Run** panel leads with its summary, the run's own account of what it did, then, for a `feedback-plan` run,
 **wrote**: the plan it wrote, `feedback-plan:7`, which opens the PR's page at the plan, with the PR and where the
-plan stands now. Then, while it runs, its **last call**, then its PRs, then **when**: when it started and ended and
+plan stands now. Then its **card**, where the agent says its work stands in its own words, and its **last call** while
+it runs (both [below](#a-running-agents-card)), then its PRs, then **when**: when it started and ended and
 how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m`
 while it runs. **spent** gives its cost, the tokens it used, and its peak context, the most one model call was sent.
 **persona** is the voice it wrote in, with the start of its text's digest: two runs in one persona with different
@@ -94,7 +95,9 @@ The **Transcript** is the run's session, from its log, oldest first:
 - each tool call, with what it did and how long it took; click one to see its input and output. A canopy command the
   harness refused is marked `refused`, with the guard. An overseer's `decide` names each ticket and its action on its
   row, and opens to every decision on a line of its own with its rationale, so a tick that decided twelve tickets in
-  one call doesn't leave you reading them out of a JSON array;
+  one call doesn't leave you reading them out of a JSON array. Its `ticket-set` does the same: each ticket, or
+  `ABC-1 (web)` for a unit, with what it sets on the row, and opened, each on a line with its phase, `done`, every
+  cursor and the item it passes, and the title;
 - each model call, with the tokens in and out, and its cost; click one to see what it was sent and what it did. The
   first call was sent canopy's prompt, and every later one what the tools returned since. In a run that switched
   models, the first call names its model, and so does each call where the model changed, By call too, so you can see
@@ -213,3 +216,28 @@ the same thing.
 This page only reads, and it's the one page not kept current by the stream: it rereads the pools every 10 seconds
 while you're looking, and **Read again** rereads them now. Each read checks every slot of every pool, and under
 treehouse takes each pool's lock for a moment, which is why it doesn't do so constantly.
+
+## A running agent's card
+
+A worker, a planner, or a reviewer keeps a card while it runs: a summary for someone who skipped the transcript, what
+it's doing now, what it finished with the proof of each (`tests pass: 42/42`, `pushed abc123`, or the honest `not
+pushed`), what's left, and anything in its way it's working around. A long job adds its steps, each `to do`,
+`working`, `blocked`, `done`, or `skipped`, with the share done and the stage under way; a worker with an approved plan
+takes them from the plan, so you watch the plan you approved being done, or not. A step working longer than a fifth of
+the run's time limit reads `stuck`. Each update replaces the whole card. It's the
+agent's own account, so read it as you'd read a colleague's standup: useful, and checked against the diff.
+
+The card says how old it is in time and in tool calls. One that has gone 10 minutes, or 20 tool calls, without an
+update turns amber and says `stale`, rather than going quiet, and canopy nudges the agent for a new one. A run that
+ended keeps its last card, so you can see where it thought it was when it stopped.
+
+A card may ask you a question the agent can work around while you decide: the question, two to five options lettered
+from A, and the one it recommends and works toward meanwhile. It reads `asks you` in amber until you answer. Press
+`answer` beside an option, or run `canopy reply run:ID LETTER` (`review:ID` for a review), and the agent hears your
+letter on its next tool call; press another to change your mind, as long as it runs. An answer is a letter, never
+words: you choose among its options, which is also all a line forged to look like canopy's could do. A question it
+can't work around still ends the run as `blocked`, as before.
+
+A run's page shows the whole card; the runs list shows what it's doing now, with the card's age and `asks you` while a
+question waits; a ticket's page shows the card under `working now`; and a review's page shows its reviewer's. Nothing on
+a card reaches another agent, and nothing on it changes what canopy does: it's for you.

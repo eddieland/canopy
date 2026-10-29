@@ -34,21 +34,17 @@ permission:
     # canopy: bash allows
   # Nothing to plan across calls: a tick's work is its decisions, each recorded as it is made.
   todowrite: deny
-  # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents. With the
-  # tracker's skill in its body, canopy renders `"*": deny` at the marked line, last, so the tool is denied whole: the
-  # overseer has nothing to load. Otherwise the prompt has it load the skill by name, if there is one.
+  # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents. canopy
+  # renders `"*": deny` at the marked line, last, so the tool is denied whole: the overseer reads no tracker, so it has
+  # no skill to load (DESIGN §39).
   skill:
     "canopy": deny
     # The artifact store's skill is for the agents that publish to it (DESIGN §38).
     "canopy-artifacts": deny
     # canopy: skill rule
-  # The overseer only reads the tracker (TRUST_MODEL T6). At the marked line canopy renders the tracker's server denied
-  # by a wildcard, then each of its read tools allowed by name: for GitHub, whose server it shares, the reads kept
-  # below. Off a GitHub tracker, GitHub's issue reads are denied first, and an allow after them reopens a read of the
-  # tracker's they match. The denials below come after, so no allow reopens a write they close. With no read tools
-  # known, the line stays as it is. Where a `tracker` source runs, beside the `vcs` source, the overseer reads neither
-  # (DESIGN §39): canopy renders there the GitHub reads kept below denied by pattern, and the tracker's server whole
-  # where it knows it.
+  # The overseer reads neither the tracker nor GitHub: the `tracker` source config requires and the `vcs` source read
+  # both for it (DESIGN §39, TRUST_MODEL T6). At the marked line canopy renders the GitHub reads kept below denied by
+  # pattern, and the tracker's server whole where it knows it. The denials below come after.
   # canopy: tracker reads
   # GitHub's MCP tools are permissioned by name, `<server>_<tool>`, and the server's name is the operator's, so each
   # tool is denied by its own: OpenCode sends no tool a rule denies whole, which cuts each tick's request. Kept are the

@@ -55,6 +55,7 @@ a deny list of secret paths, which always misses one.
 | The git common dir, except this slot's own directory | yes | no | Shared by every slot (Git state). |
 | This slot's own directory, except `config.worktree`, `commondir`, `gitdir` | yes | yes | Its HEAD, index, reflog. |
 | The run's object directory, its temp directory, the role's cache | yes | yes | Commits (§8), scratch, caches. |
+| A worker's or a review's answers directory | yes | no | The operator's answer to its card's question (§41). |
 | The role's own runtime data, and the runtime's state | yes | yes | Sessions, and a copy of the logins (below). |
 | The operator's runtime data | no | no | The host's runtime acts on what is in it (below). |
 | Toolchains, the runtime's config, canopy's agent definitions | yes | no | Tests; a worker must not rewrite its permissions (D040). |

@@ -25,6 +25,7 @@ from tests.canopy.helpers import (
     present,
     slot_of,
     tick_starts,
+    tracker_holds,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, pool_state
@@ -36,6 +37,7 @@ def test_dispatch_leases_records_and_spawns(
     treehouse_state: Path,
     conn: sqlite3.Connection,
 ) -> None:
+    tracker_holds(conn)
     with in_tick(conn) as tick_id:
         runner = InlineRunner()
         assert (
@@ -170,7 +172,11 @@ def test_bad_slugs_are_usage_errors(scenario: Scenario, slug: str) -> None:
     ("label", "reason"),
     [
         (None, "label is required (--label): name the queue label you read on PROJ-1"),
-        ("agent-ready-someone-else", "'agent-ready-someone-else' is not a configured queue label"),
+        # The tracker source read the ticket, so the label is checked against what it observed (D051).
+        (
+            "agent-ready-someone-else",
+            "'agent-ready-someone-else' was not on PROJ-1 when the tracker source last read it",
+        ),
     ],
 )
 def test_dispatch_without_a_configured_label_is_unauthorized(
@@ -181,7 +187,7 @@ def test_dispatch_without_a_configured_label_is_unauthorized(
     kind: RunKind,
     mode: str,
 ) -> None:
-    # canopy cannot read labels; the overseer must name the one it read, and only a configured one passes (D051).
+    # The overseer must name a queue label, and only one configured and observed on the ticket passes (D051).
     conn = scenario.conn
     db.touch_ticket(conn, "PROJ-1", str(scenario.env.root))
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = 'PROJ-1'")  # so a resume could
@@ -268,6 +274,7 @@ def test_spawn_failure_returns_the_slot_and_closes_the_run(
     treehouse_state: Path,
     conn: sqlite3.Connection,
 ) -> None:
+    tracker_holds(conn)
     with in_tick(conn) as tick_id:
         runner = InlineRunner(spawn_error=procs.ProcError("no processes left"))
         assert (
@@ -286,6 +293,7 @@ def test_spawn_failure_returns_the_slot_and_closes_the_run(
 
 
 def test_dry_run_still_starts_nothing(canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection) -> None:
+    tracker_holds(conn)
     with in_tick(conn, dry_run=True):
         runner = InlineRunner()
         assert (
@@ -328,6 +336,7 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
         past_run("COOL", "fix-ci", "done")  # just ended, so a resume for CI alone is in its cooldown
         past_run("BUSY", "implement", "running")
 
+    tracker_holds(conn, "LIMIT", "COOL", "BUSY", "NEW", "OTHER")
     with in_tick(conn, dry_run=True) as tick_id:
         runner = InlineRunner()
         for args, code in [

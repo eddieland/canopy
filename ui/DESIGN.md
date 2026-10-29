@@ -88,7 +88,7 @@ Rules:
   and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no
   section (the 404) takes the accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the spend page's
-  chart and its legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
+  charts and the legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
   beside a swatch. Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on
   `surface` in both themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
@@ -921,6 +921,16 @@ sliver beside four others; and its axis names short call numbers without measuri
   header, kept in `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
   runs page's kind filter in each one's header keeps one kind's (`?model_kind=`, `?tool_kind=`), and offers only the
   kinds the window has rows of. A window switch keeps both filters.
+- **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
+  bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
+  the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
+  bar's rate over it, since there are six at most and the eye compares neighbours. A week whose runs recorded no cache
+  read is a stub with a dash. A week whose runs used a runtime version or definitions snapshot the week before's did
+  not has a 1px `muted-foreground` rule down the gap before its bar, and a line under the chart names what it used, in
+  `canopy spend`'s words, so a screen reader hears it beside the table of each week's runs, median first call, and
+  rate. The axis names each week's Monday. The kind filter has no `all`, since kinds' prefixes do not sum
+  (`?first_kind=`, the first kind with a week by default), and the chips over the chart pick the kind's runs, a
+  chore's, or a model's (`?first_series=`); a kind switch goes back to all its runs.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
@@ -1047,6 +1057,19 @@ sliver beside four others; and its axis names short call numbers without measuri
   in `status-running`, what the call did muted (a shell call's command, else the runtime's title; cut to fit, whole on
   hover), and how long ago. A running run's row has it where an ended run's summary goes, `WorkingNow` after the
   kind, and the run's page as its `last call` field. It is agent output, rendered as text.
+- **A running agent's card** (`RunCardView`, `RunCardNow`, `src/components/run-card.tsx`, DESIGN §41): the agent's
+  own account of where its work stands. Whole, it is a block with a left rule: a muted line of how old it is, in time
+  and tool calls, then the summary in prose, and `now`, `done` (each with its proof in muted mono), `next`, and `stuck`
+  as label and text lines, then its steps, if any: the share done and the stage under way, then each step's status
+  word in its tone (`working` `status-running`, `done` `status-done`, `blocked`, and `stuck` past its `stuck_at`,
+  `status-blocked`) and its title, then its question, if any: `asks you` in `status-blocked` while it waits, `answered
+  B`, or `never answered`, its age, the question, and each option by its letter, `· recommended` and `· your answer`
+  muted and `status-done` after it, and, while the run runs, an xs outline `answer B` button on each other option. On
+  one line, for a row, it is `now`, what the agent does, the share done, `asks you` in `status-blocked` while a
+  question waits, and the card's age. While the run
+  runs, a card past `stale_at` or marked `stale` turns its rule and a `stale` word `status-blocked`, judged against the
+  page's clock so it turns without a new read; an ended run's last card never does. It shows on the run's page as its
+  `card` field, under a ticket's `WorkingNow`, in a running run's row, and on a review's page. Agent text, as text.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub

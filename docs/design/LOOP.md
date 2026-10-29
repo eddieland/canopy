@@ -130,9 +130,9 @@ run a cheaper pre-check agent, or take webhooks (TRUST_MODEL T8); the connectors
 their own programs, and wake it only for what a tick would newly record or list (§39).
 
 A tick is **idle** when it closed `ok`, dispatched nothing (a dry run paces as a live one would), and nothing reached
-the journal after the previous tick read it (step 3): no run started or ended, and the operator did nothing. Rejected:
-idle as a tick that changed nothing, since records that repeat on unchanging state kept any tick from counting
-(MEASUREMENTS 2026-10-14).
+the journal after the previous tick read it (step 3): no run started or ended, no poll ended the wait (§39), and the
+operator did nothing. Rejected: idle as a tick that changed nothing, since records that repeat on unchanging state kept
+any tick from counting (MEASUREMENTS 2026-10-14).
 
 After each idle tick in a row the wait doubles, up to `loop.idle_max_minutes` and never below the base wait; a tick that
 ran no overseer (§39) leaves the count as it was. Whatever pacing chose, the wait ends at the earliest harness gate
@@ -292,7 +292,8 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
    overseer. A ticket stopped or started privately since dispatch ends the run `stopped`.
 2. Record each slot's git links, check out the branch or base at a detached HEAD, never a local branch, since a pool's
    slots share branch refs (D109), and put an approved plan in place (§25).
-3. Run the worker in the slot, or a joint run's desk (§18), until its timeout, recording its session and spend.
+3. Run the worker in the slot, or a joint run's desk (§18), until its timeout, recording its session, spend, and card
+   (§41).
 4. Parse the result contract (§13); missing or invalid is `unknown`. A plan (§25) pushes nothing.
 5. If a slot's git links changed, the run is `crashed` and no git runs in its slots, which may now point at a git
    directory the worker made. Otherwise push once where the branch is not on origin, never with force (with

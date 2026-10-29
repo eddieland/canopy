@@ -10,12 +10,12 @@ decision](OVERSEER_PER_DECISION.md).
 Being built (ROADMAP M39). It waits on §37, and on the overnight run that tests idle pacing (SCENARIOS S27). Built, in
 §6, §11, and TRUST_MODEL T3: "When the tick runs no overseer", the query no source read and the reviews the overseer
 starts still left to it until they are the harness's; and the poll's comparison and a failed poll's wake, the latest
-tick read as it ended, so what it started wakes nothing. Built too, where a `tracker` source runs, in TRUST_MODEL T1:
-"What the overseer reads", but for an unobserved subject and every server but canopy's denied: the harness's `wait` on
-a ticket the `tracker` or `vcs` source left stale, no query owed, the reviews' PRs read for the overseer, and no
-tick-wide skip. The rest is designed, not built: until it is, §5, §6, §11, §13, §15, §30, §37, and TRUST_MODEL
-describe canopy as it is; this section says what changes, and the PR that finishes it changes those sections and cuts
-this one to what is left.
+tick read as it ended, so what it started wakes nothing. Built too, in TRUST_MODEL T1: "What the overseer reads", but
+for every server but canopy's denied: the harness's `wait` on a ticket the `tracker` or `vcs` source left stale, or
+with a PR no source reads, no query owed, the reviews' PRs read for the overseer, no tick-wide skip, and the `tracker`
+source config requires (§30). The rest is designed, not built: until it is, §5, §6, §11, §13, §15, §30, §37, and
+TRUST_MODEL describe canopy as it is; this section says what changes, and the PR that finishes it changes those
+sections and cuts this one to what is left.
 
 Once the harness decides what needs no judgment (§37), most ticks leave the overseer nothing: overnight, while PRs wait
 on a human, after a run ends with nothing to classify. The connectors' polls (§6) already read the world every few
@@ -54,8 +54,8 @@ grants: it has canopy's tools (§27), or its `canopy` commands until those reach
   is `connector_failed`, and a ticket it would have found waits for the read that finds it.
 - With nothing to read, the overseer has no outage to skip a tick over: its tick-wide `skip` and §15's case for an MCP
   server down go. A source down is `connector_failed`, and what it left stale waits.
-- An overseer that cannot read a ticket can do nothing with one no source observes, so this needs a `tracker` source,
-  and the build waits until that is settled (Open).
+- An overseer that cannot read a ticket can do nothing with one no source observes, so config requires a `tracker`
+  source (§30).
 
 ### Ticking when the observations change
 
@@ -106,9 +106,6 @@ fingerprints the world, a second reader of what the sources observe.
 
 ### Open
 
-- Settled (2026-10-28, the operator's choice): a `tracker` source is required, since an overseer with no MCP can do
-  nothing with a ticket no source observes. Until config refuses a workspace without one, the overseer reads the
-  tracker itself there.
 - Whether `runtime.allow_bash`'s overseer entry, which lets it run commands the operator names, such as a
   tracker's CLI while its MCP server is down, goes with the MCP servers. Recommended: it goes, that entry with it, since
   an overseer that calls no tracker or VCS tool has nothing left to run; the workers' entries stay.

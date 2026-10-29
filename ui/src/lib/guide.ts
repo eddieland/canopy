@@ -150,6 +150,7 @@ export const PAGE_GUIDES = {
     '/system': 'overview#system-resources',
     '/settings': 'settings',
     '/settings_/limits': 'settings#limits-and-trust',
+    '/settings_/skills': 'settings#skills',
 } as const satisfies Record<
     Exclude<
         keyof FileRoutesById,

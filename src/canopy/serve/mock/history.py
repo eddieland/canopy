@@ -1,9 +1,10 @@
 """The mock journal's months before T0, for the reports page (DESIGN §11): the tickets the loop landed since April.
 
 The workspace took up canopy in April 2026, on Opus for a ticket's first run; it moved its workers to Sonnet in June,
-and its cache hit rate rose as its prompts settled. Each landed ticket has its worker runs, its PR merged, and what
-people other than its author said on the PR, so each month has its cost by model, its landed tickets, and their
-iterations, comments, reviews, and waits. Two more tickets were closed without a merge.
+and its cache hit rate rose as its prompts settled. In September a prompt change made a new definitions snapshot, whose
+week's first calls read little from the cache, and the runtime was upgraded the week after. Each landed ticket has its
+worker runs, its PR merged, and what people other than its author said on the PR, so each month has its cost by model,
+its landed tickets, and their iterations, comments, reviews, and waits. Two more tickets were closed without a merge.
 
 Every run started before October, so October's cost is still the fixtures' day alone, against its budget, and the
 spend page's week holds none of it; the two tickets October landed did so on its first day.
@@ -412,6 +413,24 @@ TICKETS: Sequence[Ticket] = (
 # What a run's tokens are per dollar it cost, as the fixtures' runs are, but for the cache read, which grew as the
 # prompts settled: by the month the run started in.
 _CACHE_READ_PER_USD = {4: 90_000, 5: 140_000, 6: 220_000, 7: 300_000, 8: 330_000, 9: 380_000}
+#: The definitions snapshot the runs loaded until a prompt change on Monday Sep 21, and the one after it, which the
+#: fixtures' runs load too: a smaller prefix, which the week of the change read little of from the cache.
+FIRST_SNAPSHOT = "3c9e1f07a2b84d65"
+SNAPSHOT = "a81d2c4e9f306b17"
+_SNAPSHOT_FROM = _on(9, 21, 0)
+#: The runtime's version the runs' sessions named until an upgrade on Monday Sep 28, and the one after, the fixtures'
+#: too.
+FIRST_RUNTIME = "1.0.98"
+RUNTIME = "1.0.104"
+_RUNTIME_FROM = _on(9, 28, 0)
+# What a run's first model call was sent, by its kind, before the prompt change took this much off it.
+_FIRST_SENT = {RunKind.IMPLEMENT: 24_200, RunKind.RESUME: 25_100, RunKind.FIX_CI: 23_600}
+_SNAPSHOT_SAVED = 1_800
+# The share of it read from the cache, by the month the run started in, which grew as the prompts settled; from
+# September on, but for the week of the prompt change, and the runtime's upgrade the week after.
+_FIRST_HIT = {4: 0.31, 5: 0.47, 6: 0.64, 7: 0.76, 8: 0.82, 9: 0.85}
+_FIRST_HIT_CHANGED = 0.57
+_FIRST_HIT_UPGRADED = 0.79
 _REVIEW_IDS = 4_100_100_000
 _COMMENT_IDS = 2_460_100_000
 
@@ -500,6 +519,8 @@ def _run(conn: sqlite3.Connection, root: Path, run_id: int, ticket: Ticket, run:
     elif run.status in {RunStatus.FAILED, RunStatus.TIMEOUT}:
         result = {"harness": run.summary}
     cost = run.cost_usd
+    sent, hit = _first_call(run.kind, started)
+    read = round(sent * hit)
     sql.execute(
         conn,
         sql.insert(
@@ -522,18 +543,40 @@ def _run(conn: sqlite3.Connection, root: Path, run_id: int, ticket: Ticket, run:
             tokens_cache_read=int(cost * _CACHE_READ_PER_USD[started.month]),
             tokens_cache_write=int(cost * 8_000),
             tokens_peak_context=int(cost * 60_000),
+            tokens_first_call=sent,
+            tokens_first_cache_write=sent - read,
+            tokens_first_cache_read=read,
+            definitions_digest=SNAPSHOT if started >= _SNAPSHOT_FROM else FIRST_SNAPSHOT,
         ),
     )
     read_at = db.format_time(started + timedelta(minutes=run.minutes + 1))
     sql.execute(
         conn,
-        sql.insert("run_model_reads", run_table="runs", run_id=run_id, status="found", attempts=1, read_at=read_at),
+        sql.insert(
+            "run_model_reads",
+            run_table="runs",
+            run_id=run_id,
+            status="found",
+            attempts=1,
+            read_at=read_at,
+            runtime_version=RUNTIME if started >= _RUNTIME_FROM else FIRST_RUNTIME,
+        ),
     )
     replies = max(1, round(cost * 30))
     sql.execute(
         conn,
         sql.insert("run_models", run_table="runs", run_id=run_id, model=run.model, replies=replies, cost_usd=cost),
     )
+
+
+# What a run's first model call was sent, and the share of it read from the cache.
+def _first_call(kind: RunKind, started: datetime) -> tuple[int, float]:
+    sent = _FIRST_SENT.get(kind, _FIRST_SENT[RunKind.IMPLEMENT])
+    if started < _SNAPSHOT_FROM:
+        return sent, _FIRST_HIT[started.month]
+    if started < _RUNTIME_FROM:
+        return sent - _SNAPSHOT_SAVED, _FIRST_HIT_CHANGED
+    return sent - _SNAPSHOT_SAVED, _FIRST_HIT_UPGRADED
 
 
 def _said(conn: sqlite3.Connection, ticket: Ticket, n: int, said: Said) -> None:

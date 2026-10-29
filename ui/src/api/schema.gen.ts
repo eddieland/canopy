@@ -998,6 +998,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reviews/{run_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer a running review's question
+         * @description `canopy reply review:ID LETTER` on a running review: the answer to the question its reviewer's card asks (§41).
+         *
+         *     Refused `moved_on` when its card asks another question than the one asked at `asked_at`, which the page showed.
+         */
+        post: operations["answerReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews/{run_id}/dismissals": {
         parameters: {
             query?: never;
@@ -1285,6 +1307,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer a run's question
+         * @description `canopy reply run:ID LETTER`: the operator's answer to the question the running run's card asks.
+         *
+         *     Refused `moved_on` when its card asks another question than the one asked at `asked_at`, which the page showed.
+         */
+        post: operations["answerRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/drafts/{number}/drop": {
         parameters: {
             query?: never;
@@ -1477,6 +1521,26 @@ export type paths = {
          * @description Clear the session cookie in this browser. Other browsers stay signed in until the secret changes.
          */
         delete: operations["signOut"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the skills
+         * @description Every skill the runtime finds in the workspace root, with where its file is and its text.
+         */
+        get: operations["listSkills"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2326,6 +2390,50 @@ export type components = {
             source: "ticket" | "config" | "default";
         };
         /**
+         * Answered
+         * @description The operator's answer, as recorded: what `canopy reply run:ID LETTER` says.
+         */
+        Answered: {
+            /**
+             * Already
+             * @description Whether the question already had this answer, so nothing new was recorded.
+             */
+            already: boolean;
+            /**
+             * Heard
+             * @description Whether it was written where the agent hears it on its next tool call: false once the agent has ended.
+             */
+            heard: boolean;
+            /**
+             * Letter
+             * @description The letter.
+             * @enum {string}
+             */
+            letter: "A" | "B" | "C" | "D" | "E";
+            /**
+             * Option
+             * @description The option it names.
+             */
+            option: string;
+        };
+        /**
+         * AnswerRequest
+         * @description The operator's answer to a running run's question, as `canopy reply run:ID LETTER` takes it.
+         */
+        AnswerRequest: {
+            /**
+             * Asked At
+             * Format: date-time
+             * @description When the question the page showed was asked: a card that asks another since is refused `moved_on`.
+             */
+            asked_at: string;
+            /**
+             * Letter
+             * @description The letter of one of the question's options, in either case.
+             */
+            letter: string;
+        };
+        /**
          * Attached
          * @description What `canopy attach` recorded: the attachment, as its subject's page lists it.
          */
@@ -2492,6 +2600,22 @@ export type components = {
              * @description `max_workers`: worker runs and review runs together (DESIGN §21).
              */
             workers: number;
+        };
+        /**
+         * CardStep
+         * @description A finished step on a running agent's card, with what shows it is done.
+         */
+        CardStep: {
+            /**
+             * Proof
+             * @description What shows it: `tests pass: 42/42`, `pushed abc123`, `not pushed`.
+             */
+            proof: string;
+            /**
+             * Step
+             * @description What was done.
+             */
+            step: string;
         };
         /**
          * ChoreDetail
@@ -2928,13 +3052,20 @@ export type components = {
         ConfigKey: {
             /**
              * Bound
-             * @description A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes. The file can set any.
+             * @description A limit's loosest value from the page: a count's ceiling, or a pace's floor. The file can set any.
              */
             bound: number | null;
             /**
+             * Choices
+             * @description A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
+             *     key.
+             */
+            choices: string[];
+            /**
              * Kind
-             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries). `free`:
-             *     set whole to anything the config loader takes (`spend.budget_alerts`, beside the 100% alert always sent).
+             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries, a count
+             *     only goes down, a choice only moves later in `choices`). `free`: set whole to anything the config loader takes
+             *     (`spend.budget_alerts`, beside the 100% alert always sent).
              * @enum {string}
              */
             kind: "limit" | "stricter" | "free";
@@ -6135,6 +6266,8 @@ export type components = {
              * @description The branch the PR merges into.
              */
             base_branch: string | null;
+            /** @description Its reviewer's card (DESIGN §41), while it runs and its last once it ends; None when it kept none. */
+            card: components["schemas"]["RunCard"] | null;
             /**
              * @description None when there is no diff: a review from before diffs were kept, one whose base could not be read, or one
              *     retention removed.
@@ -7012,6 +7145,8 @@ export type components = {
              * @description The branch it works on.
              */
             branch: string | null;
+            /** @description Its agent's card (DESIGN §41), while it runs and its last once it ends; None when it kept none. */
+            card: components["schemas"]["RunCard"] | null;
             /**
              * Cost Usd
              * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
@@ -7162,6 +7297,147 @@ export type components = {
              * @description The tool's name, as the runtime names it: `bash`, `read`, an MCP server's tool.
              */
             tool: string;
+        };
+        /**
+         * RunCard
+         * @description Where a worker's, planner's, or reviewer's work stands, in its own words: its latest card (DESIGN §41).
+         *
+         *     Each field is the agent's text, on one line: untrusted, rendered as text.
+         */
+        RunCard: {
+            /**
+             * At
+             * Format: date-time
+             * @description When canopy recorded it.
+             */
+            at: string;
+            /**
+             * Calls Since
+             * @description The tool calls the agent ended since: before the run ended, once it has.
+             */
+            calls_since: number;
+            /**
+             * Done
+             * @description The steps it finished, in order, each with its proof.
+             * @default []
+             */
+            done: components["schemas"]["CardStep"][];
+            /**
+             * Next
+             * @description What it said was left, in order.
+             * @default []
+             */
+            next: string[];
+            /**
+             * Now
+             * @description What the agent was doing when it wrote the card.
+             */
+            now: string;
+            /**
+             * Percent
+             * @description How much of its steps is done, of those not skipped, rounded down; None with no steps to count.
+             */
+            percent: number | null;
+            /** @description A question it asks the operator, with the answer they gave; None when it asks none. */
+            question: components["schemas"]["RunCardQuestion"] | null;
+            /**
+             * Stage
+             * @description The stage of its first working step; None when none names one.
+             */
+            stage: string | null;
+            /**
+             * Stale
+             * @description Whether the run has gone 20 tool calls without an update to it while it runs; false once it ended.
+             */
+            stale: boolean;
+            /**
+             * Stale At
+             * @description While the run runs, when the card goes stale for want of an update by time, 10 minutes after `at`; None once
+             *     it ended. A page marks it stale from then, or when `stale` says so.
+             */
+            stale_at: string | null;
+            /**
+             * Steps
+             * @description For a long job, every step in order; empty when the agent named none.
+             * @default []
+             */
+            steps: components["schemas"]["RunCardStep"][];
+            /**
+             * Stuck
+             * @description What it said is in its way and it works around; None when it said nothing.
+             */
+            stuck: string | null;
+            /**
+             * Summary
+             * @description Where the work stands, in a sentence or two.
+             */
+            summary: string;
+        };
+        /**
+         * RunCardQuestion
+         * @description A decision a running agent asks the operator for on its card, which it works around meanwhile (DESIGN §41).
+         */
+        RunCardQuestion: {
+            /**
+             * Answer
+             * @description The letter the operator answered with; None while it waits on them.
+             */
+            answer: ("A" | "B" | "C" | "D" | "E") | null;
+            /**
+             * Answered At
+             * @description When they answered; None while it waits.
+             */
+            answered_at: string | null;
+            /**
+             * Ask
+             * @description The question, in the agent's words.
+             */
+            ask: string;
+            /**
+             * Asked At
+             * Format: date-time
+             * @description When canopy first recorded a card asking it.
+             */
+            asked_at: string;
+            /**
+             * Options
+             * @description The choices, in order: the first is A, the next B, and so on.
+             */
+            options: string[];
+            /**
+             * Recommend
+             * @description The letter of the option the agent recommends, and works toward meanwhile.
+             * @enum {string}
+             */
+            recommend: "A" | "B" | "C" | "D" | "E";
+        };
+        /**
+         * RunCardStep
+         * @description One step of a long job on a running agent's card (DESIGN §41).
+         */
+        RunCardStep: {
+            /**
+             * Stage
+             * @description The stage it belongs to; None when the agent named none.
+             */
+            stage: string | null;
+            /**
+             * Status
+             * @description Where it stands, as the agent says.
+             * @enum {string}
+             */
+            status: "not_started" | "working" | "blocked" | "done" | "skipped";
+            /**
+             * Stuck At
+             * @description While the run runs and the step is working, when it has worked longer than the run's last fifth, from which a
+             *     page shows it stuck; None otherwise.
+             */
+            stuck_at: string | null;
+            /**
+             * Title
+             * @description The step, as the agent names it: its plan's, for a worker whose ticket has one.
+             */
+            title: string;
         };
         /**
          * RunMemory
@@ -7427,6 +7703,58 @@ export type components = {
             secret: string;
         };
         /**
+         * Skill
+         * @description A skill the runtime finds where the loop starts its agents: where its file is, and what it says.
+         */
+        Skill: {
+            /**
+             * Body
+             * @description Its instructions, the file after its front matter: untrusted text, rendered as text.
+             */
+            body: string;
+            /**
+             * Description
+             * @description What its front matter says it is for: what an agent reads to decide whether to load it; None when it says
+             *     nothing.
+             */
+            description: string | null;
+            /**
+             * Name
+             * @description The skill's name, as an agent loads it and the runtime's rules match it.
+             */
+            name: string;
+            /**
+             * Path
+             * @description Its file: under the workspace's root relative to it, under the operator's home from `~/`, and otherwise as the
+             *     runtime names it.
+             */
+            path: string;
+            /** @description Where its file is. */
+            source: components["schemas"]["SkillSource"];
+        };
+        /**
+         * SkillList
+         * @description Every skill the runtime finds, as `canopy agents` asks it, with each one's file and text.
+         */
+        SkillList: {
+            /**
+             * Error
+             * @description Why the runtime could not list its skills, in canopy's words; None when it did.
+             */
+            error: string | null;
+            /**
+             * Skills
+             * @description Each skill, by name; none when the runtime could not list them.
+             * @default []
+             */
+            skills: components["schemas"]["Skill"][];
+        };
+        /**
+         * @description Where a skill's file is (DESIGN §13): `canopy` for the skills canopy ships, in its definitions snapshot; `workspace` for one under the workspace's root; `home` for one under the operator's home; `built-in` for one the runtime carries itself; `other` for any other file.
+         * @enum {string}
+         */
+        SkillSource: "canopy" | "workspace" | "home" | "built-in" | "other";
+        /**
          * Spend
          * @description What the last day, 30 days, and all time cost, read together, so a month never shows less than its day.
          */
@@ -7471,6 +7799,14 @@ export type components = {
              * @default 0
              */
             done: number;
+            /**
+             * First Call Weeks
+             * @description Each kind's first model calls by local ISO week: the kinds in a fixed order, overseer, workers, plans, chores,
+             *     reviews, tasks, each kind's series its own first, then its chores' and its models' by name, the runs no single
+             *     model served last, and each series' weeks oldest first.
+             * @default []
+             */
+            first_call_weeks: components["schemas"]["SpendFirstCallWeek"][];
             /**
              * Hours
              * @description How many hours it spans; None for a window in days.
@@ -7657,6 +7993,66 @@ export type components = {
              * @description How many started in the window.
              */
             sessions: number;
+        };
+        /**
+         * SpendFirstCallWeek
+         * @description The first model calls of one kind's runs that started in one local ISO week of the window (DESIGN §13).
+         *
+         *     One week of a series: with `by` `kind`, every run of the kind; `chore`, those of the chore `name`; `model`, those
+         *     the model `name` alone served. A fall in `hit_rate` from one week to the next is a prefix the runs share that their
+         *     first calls no longer read from the cache, as a change of the runtime or of canopy's definitions can make, which
+         *     the week's `new_runtime_versions` and `new_digests` name.
+         */
+        SpendFirstCallWeek: {
+            /**
+             * By
+             * @description Which runs of the kind the series follows: every one, one chore's, or one model's.
+             * @enum {string}
+             */
+            by: "kind" | "chore" | "model";
+            /**
+             * First Call
+             * @description The median of what their first calls were sent, in tokens, from the cache or not: the lower middle one of an
+             *     even count.
+             */
+            first_call: number;
+            /**
+             * Hit Rate
+             * @description What their first calls read from the cache over what they were sent, from 0 to 1, summed over the runs that
+             *     recorded both; None when none did.
+             */
+            hit_rate: number | null;
+            /** @description The kind of run; the overseer's include dry runs. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Name
+             * @description The chore or the model, as `provider/model`; None for the kind's series, and for the model series of the runs
+             *     no session was read for or more than one model served.
+             */
+            name: string | null;
+            /**
+             * New Digests
+             * @description The definitions snapshots their runs loaded that those of the series' week before did not, the same way.
+             * @default []
+             */
+            new_digests: string[];
+            /**
+             * New Runtime Versions
+             * @description The runtime's versions their sessions named that the runs of the series' week before did not, in the order the
+             *     runs first ran on each: the latest earlier week in the window with runs. The series' first week names none.
+             * @default []
+             */
+            new_runtime_versions: string[];
+            /**
+             * Runs
+             * @description How many of the series' runs that started in it reported a first call.
+             */
+            runs: number;
+            /**
+             * Week
+             * @description The ISO week, `2026-W41`, in the local time of the machine canopy runs on: Monday to Sunday.
+             */
+            week: string;
         };
         /**
          * @description What a tick that ended bought (DESIGN §6, Idle pacing; §11): `idle` and `busy` are the loop's word on an `ok` tick, `hand_run` an `ok` tick no loop ran, `not_ok` a live one that closed otherwise, and `dry_run` a dry run, whatever the loop said of it.
@@ -13144,6 +13540,96 @@ export interface operations {
             };
         };
     };
+    answerReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Answered"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     dismissReviewFinding: {
         parameters: {
             query?: never;
@@ -14273,6 +14759,96 @@ export interface operations {
             };
         };
     };
+    answerRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run's id, as `run:ID` names it. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Answered"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     dropDraft: {
         parameters: {
             query?: never;
@@ -15110,6 +15686,71 @@ export interface operations {
             };
             /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillList"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

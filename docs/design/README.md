@@ -119,6 +119,9 @@ not go in the middle of the sequence.
 - [The overseer per decision](OVERSEER_PER_DECISION.md): one overseer run for each subject left to judgment, and the
   runs it asks for, which the tick starts outside its process tree.
   - [40. The overseer per decision](OVERSEER_PER_DECISION.md#40-the-overseer-per-decision)
+- [Where a running agent stands](CARDS.md): the card a running worker, planner, or reviewer keeps of where its work
+  stands, for the operator.
+  - [41. Where a running agent stands](CARDS.md#41-where-a-running-agent-stands)
 
 ## 1. Problem
 
@@ -144,8 +147,9 @@ cannot reach internal systems and require handing a vendor write access.
 - A hosted service, a service installed with the OS, or a workflow DSL. `canopy loop` (§6) runs where the operator
   started it, in the foreground or detached by `canopy daemon`, and nothing restarts it. A listener is allowed only on
   loopback or the operator's private network, behind the operator's secret (TRUST_MODEL T8, D055); none is built yet.
-- Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
-  provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
+- Tracker-specific code. Any issue tracker with an MCP server and a connector works (§30), canopy shipping Jira's
+  and GitHub Issues'; provider differences live in config and optional provider skills (§17). A second VCS host is
+  likewise a prompt and config concern, not code.
 - A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), which canopy adds
   itself only for the repositories the operator lists; beyond that, the harness never learns whether a run is
   sandboxed (D118).
@@ -166,8 +170,9 @@ cannot reach internal systems and require handing a vendor write access.
 4. **Deterministic core, judgment at the edges.** Python never calls an LLM.
    The overseer and workers are agent processes the harness runs and observes.
 5. **Connectivity through the agent runtime.** The tracker (Jira, GitHub Issues, Linear, anything with an MCP server)
-   and GitHub are reached via the runtime's MCP servers. The harness contains no tracker or VCS host code and never
-   handles their credentials. It knows the tracker only as the strings in `[tracker]`.
+   and GitHub are reached via the runtime's MCP servers, and read into the journal by connectors, separate programs
+   (§30). The harness contains no tracker or VCS host code and never handles their credentials. It knows the tracker
+   only as the strings in `[tracker]`.
 6. **Smallest surface that works.** Five install steps. Coworkers' daily surface is labels, ticket comments, and PR
    review. The operator's is the web UI `canopy loop` serves (§22): one attention list, the runs, and every ticket's
    conversation, with the CLI's verbs for the same.

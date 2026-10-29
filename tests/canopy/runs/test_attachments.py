@@ -77,7 +77,7 @@ def test_a_ticket_canopy_knows_takes_an_attachment_and_one_it_does_not_is_refuse
     ("ref", "said"),
     [
         ("chore:lint", "attach refused (unsupported): chore:lint is a chore, which takes only reply, dismiss, show"),
-        ("run:1", "attach refused (unsupported): run:1 is a run, which takes only show"),
+        ("run:1", "attach refused (unsupported): run:1 is a run, which takes only show, reply"),
         ("task:9", "attach refused (unknown): canopy has no task:9"),
     ],
 )

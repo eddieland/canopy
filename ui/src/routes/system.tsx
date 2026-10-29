@@ -16,6 +16,7 @@ import { HEADROOM } from '@/lib/chart'
 import {
     bytesText,
     concerns,
+    coreShare,
     diskHolds,
     diskPressure,
     loadPressure,
@@ -142,16 +143,19 @@ function HostCounters({ host }: { host: HostResources }) {
     const now = useNow()
     const { cpu, memory, process } = host
     const five = cpu.load?.[1]
+    const share = five === undefined ? null : coreShare(five, cpu.cores)
     // The workspace's disk, where agents build, unless another is under more pressure.
     const least = host.disks.toSorted((a, b) => RANK[diskPressure(b)] - RANK[diskPressure(a)])[0]
     return (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3" data-testid="host-counters">
             <Counter
                 label="Load"
-                value={five === undefined ? '–' : loadText(five)}
+                value={five === undefined ? '–' : share === null ? loadText(five) : percentText(share)}
                 tone={PRESSURE_TONE[loadPressure(cpu)]}
             >
-                {cpu.cores === null ? 'over 5 minutes' : `over 5 minutes, on ${cpu.cores} cores`}
+                {five === undefined || share === null
+                    ? 'over 5 minutes'
+                    : `of ${cpu.cores} cores over 5 minutes, a load of ${loadText(five)}`}
             </Counter>
             <Counter
                 label="Memory used"
@@ -234,20 +238,21 @@ function Graphs({ host, history }: { host: HostResources; history: HostHistory }
     )
 }
 
-// The graphs of `history`: the load against the cores, the memory against all there is, the loop's own memory, and
-// each disk's free space against its size, with the tick's floor where it has one.
+// The graphs of `history`: the load as a share of the cores (the bare average where they are not known), the memory
+// against all there is, the loop's own memory, and each disk's free space against its size, with the tick's floor
+// where it has one.
 function graphsOf(host: HostResources, history: HostHistory): Graph[] {
     const graphs: Graph[] = []
-    const load = trend(history, (s) => s.load)
+    const cores = host.cpu.cores
+    const load = trend(history, (s) => (s.load === null ? null : (coreShare(s.load, cores) ?? s.load)))
     if (load !== null) {
-        const cores = host.cpu.cores
         graphs.push({
             label: 'Load',
-            detail: 'over a minute',
+            detail: cores === null ? 'over a minute' : `of ${cores} cores, over a minute`,
             trend: load,
             top: headroom(load.peak),
-            format: loadText,
-            reference: cores === null ? undefined : { value: cores, label: `${cores} cores` },
+            format: cores === null ? loadText : percentText,
+            reference: cores === null ? undefined : { value: 1, label: 'all busy' },
         })
     }
     const memory = trend(history, (s) => s.memory_used)
@@ -332,7 +337,10 @@ function Processors({ host }: { host: HostResources }) {
                     ) : (
                         <>
                             <span className="readout">{cpu.load.map(loadText).join('  ')}</span>
-                            <span className="text-muted-foreground"> over 1, 5, and 15 minutes</span>
+                            <span className="text-muted-foreground">
+                                {' '}
+                                processes running or waiting for a core, on average over 1, 5, and 15 minutes
+                            </span>
                         </>
                     )}
                 </Field>
