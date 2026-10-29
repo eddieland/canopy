@@ -17,6 +17,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } fr
 import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
+import { RunCardView } from '@/components/run-card'
 import { RunDoing } from '@/components/run-doing'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -128,6 +129,11 @@ function RunPanel({
                 {run.feedback_plan !== null && (
                     <Field label="wrote" mono>
                         <WroteFeedbackPlan plan={run.feedback_plan} />
+                    </Field>
+                )}
+                {run.card !== null && (
+                    <Field label="card">
+                        <RunCardView card={run.card} running={run.ended_at === null} />
                     </Field>
                 )}
                 {run.activity && (

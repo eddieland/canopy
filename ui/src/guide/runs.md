@@ -66,7 +66,8 @@ of those is said there and nowhere else on the page, so the panels under it can 
 
 The **Run** panel leads with its summary, the run's own account of what it did, then, for a `feedback-plan` run,
 **wrote**: the plan it wrote, `feedback-plan:7`, which opens the PR's page at the plan, with the PR and where the
-plan stands now. Then, while it runs, its **last call**, then its PRs, then **when**: when it started and ended and
+plan stands now. Then its **card**, where the agent says its work stands in its own words, and its **last call** while
+it runs (both [below](#a-running-agents-card)), then its PRs, then **when**: when it started and ended and
 how long that took, `Oct 8 10:30 → 10:59 · 29m`, or `for 3m`
 while it runs. **spent** gives its cost, the tokens it used, and its peak context, the most one model call was sent.
 **persona** is the voice it wrote in, with the start of its text's digest: two runs in one persona with different
@@ -213,3 +214,18 @@ the same thing.
 This page only reads, and it's the one page not kept current by the stream: it rereads the pools every 10 seconds
 while you're looking, and **Read again** rereads them now. Each read checks every slot of every pool, and under
 treehouse takes each pool's lock for a moment, which is why it doesn't do so constantly.
+
+## A running agent's card
+
+A worker, a planner, or a reviewer keeps a card while it runs: a summary for someone who skipped the transcript, what
+it's doing now, what it finished with the proof of each (`tests pass: 42/42`, `pushed abc123`, or the honest `not
+pushed`), what's left, and anything in its way it's working around. Each update replaces the whole card. It's the
+agent's own account, so read it as you'd read a colleague's standup: useful, and checked against the diff.
+
+The card says how old it is in time and in tool calls. One that has gone 10 minutes, or 20 tool calls, without an
+update turns amber and says `stale`, rather than going quiet, and canopy nudges the agent for a new one. A run that
+ended keeps its last card, so you can see where it thought it was when it stopped.
+
+A run's page shows the whole card; the runs list shows what it's doing now, with the card's age; a ticket's page shows
+the card under `working now`; and a review's page shows its reviewer's. Nothing on a card reaches another agent, and
+nothing on it changes what canopy does: it's for you.

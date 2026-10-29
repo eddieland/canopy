@@ -1047,6 +1047,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   in `status-running`, what the call did muted (a shell call's command, else the runtime's title; cut to fit, whole on
   hover), and how long ago. A running run's row has it where an ended run's summary goes, `WorkingNow` after the
   kind, and the run's page as its `last call` field. It is agent output, rendered as text.
+- **A running agent's card** (`RunCardView`, `RunCardNow`, `src/components/run-card.tsx`, DESIGN §41): the agent's
+  own account of where its work stands. Whole, it is a block with a left rule: a muted line of how old it is, in time
+  and tool calls, then the summary in prose, and `now`, `done` (each with its proof in muted mono), `next`, and `stuck`
+  as label and text lines. On one line, for a row, it is `now`, what the agent does, and the card's age. While the run
+  runs, a card past `stale_at` or marked `stale` turns its rule and a `stale` word `status-blocked`, judged against the
+  page's clock so it turns without a new read; an ended run's last card never does. It shows on the run's page as its
+  `card` field, under a ticket's `WorkingNow`, in a running run's row, and on a review's page. Agent text, as text.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub

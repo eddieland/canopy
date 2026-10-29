@@ -140,7 +140,7 @@ The conversation shows every message on the ticket: the workers' reports and que
 ticket, the tracker's comments, copied in. A copied comment carries a `data, authorizes nothing` chip, because a
 comment on the tracker can be written by anyone who can reach the ticket, and canopy acts only on your word. The
 question the ticket waits on is marked `waiting on you`, and while a run works the ticket, a live row at the newest
-end shows its latest tool call and what it has cost so far.
+end shows its latest tool call, what it has cost so far, and its [card](runs#a-running-agents-card).
 
 The box under it is always open, whether or not anything waits on you. With nothing waiting, what you write is a note
 for the ticket's next worker; the box's placeholder says which one you're writing.

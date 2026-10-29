@@ -12,7 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.serve.schema import CostTotal, Decision, Limit, Model, ModelsServed, Run, RunState
+from canopy.serve.schema import CostTotal, Decision, Limit, Model, ModelsServed, Run, RunCard, RunState
 
 type ReviewVerdict = Annotated[Literal["clean", "findings"], Field(description="A review run's verdict (DESIGN §21).")]
 type ReviewImpact = Annotated[
@@ -428,6 +428,8 @@ class ReviewDetail(Model):
     """The sha256 of the persona's text as its prompt carried it, in hex."""
     models: ModelsServed
     """Which models served it."""
+    card: RunCard | None = None
+    """Its reviewer's card (DESIGN §41), while it runs and its last once it ends; None when it kept none."""
 
 
 class ReviewRequest(Model):
