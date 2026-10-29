@@ -43,7 +43,9 @@ def _skill(found: SkillFile, ctx: Context) -> Skill:
 # canopy's definitions may link to the operator's own config, whose skills are theirs. The state directory, where the
 # snapshot is, is under the workspace root, and the root may be under the home.
 def _where(named: str, *, state_dir: Path, root: Path, home: Path) -> tuple[SkillSource, str]:
-    # A runtime's mark, such as `<built-in>`, is no path.
+    # A skill the runtime names no file for is not one it carries: only its own mark, such as `<built-in>`, says so.
+    if not named:
+        return "other", named
     if not Path(named).is_absolute():
         return "built-in", named
     path = Path(named).resolve()

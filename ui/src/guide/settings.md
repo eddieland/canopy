@@ -2,9 +2,9 @@
 
 A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your limits and
 trust settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
-skills the runtime finds. It opens
-from the rail's foot, beside the guide. The theme, the clock, the send key, your review personas, and the fun are kept
-in this browser; everything else canopy reads from its config files, as it always did.
+skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, the send key, your
+review personas, and the fun are kept in this browser; everything else canopy reads from its config files, as it always
+did.
 
 ## Theme
 

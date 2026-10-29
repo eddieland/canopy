@@ -120,8 +120,9 @@ function SkillRow({ skill }: { skill: Skill }) {
                 <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                     <h3 className="font-mono text-sm font-medium">{skill.name}</h3>
                     <Chip word={skill.source} meaning={SOURCE_MEANING[skill.source]} />
-                    {/* A built-in skill has no file to show: its chip says all its mark would. */}
-                    {skill.source !== 'built-in' && (
+                    {/* No file to show for a built-in skill, its chip saying all its mark would, nor for one the
+                        runtime named no file for. */}
+                    {skill.source !== 'built-in' && skill.path !== '' && (
                         <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
                             <span className="truncate font-mono" title={skill.path}>
                                 {skill.path}

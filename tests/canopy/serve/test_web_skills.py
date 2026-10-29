@@ -27,6 +27,8 @@ def test_each_skill_is_listed_with_its_file_and_its_text_from_one_start_of_the_r
         {"name": "terse", "location": str(linked / "terse" / "SKILL.md"), "content": "Be brief.\n"},
         {"name": "tracker-jira", "location": str(ctx.ws.state_dir / "defs" / "skills" / "tracker-jira" / "SKILL.md")},
         {"name": "outside", "location": "/opt/skills/outside/SKILL.md"},
+        # A file the runtime did not name: not mistaken for one it carries.
+        {"name": "unplaced", "location": ""},
         "customize-opencode",
     ]
     opencode_state.write_text(json.dumps({"skills": skills}))
@@ -35,13 +37,14 @@ def test_each_skill_is_listed_with_its_file_and_its_text_from_one_start_of_the_r
     found = c.get("/api/skills").json()
     assert found["error"] is None
     by_name = {s["name"]: s for s in found["skills"]}
-    assert list(by_name) == ["customize-opencode", "outside", "release-notes", "terse", "tracker-jira"]
+    assert list(by_name) == ["customize-opencode", "outside", "release-notes", "terse", "tracker-jira", "unplaced"]
     assert [(s["source"], s["path"]) for s in found["skills"]] == [
         ("built-in", "x"),
         ("other", "/opt/skills/outside/SKILL.md"),
         ("workspace", ".opencode/skills/release-notes/SKILL.md"),
         ("home", "~/.config/opencode/skills/terse/SKILL.md"),
         ("canopy", ".canopy/defs/skills/tracker-jira/SKILL.md"),
+        ("other", ""),
     ]
     notes = by_name["release-notes"]
     assert (notes["description"], notes["body"]) == (release["description"], release["content"])
